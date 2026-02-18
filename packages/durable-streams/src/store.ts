@@ -373,7 +373,7 @@ export class StreamStore {
       this.notifyLongPollsClosed(path)
     }
 
-    this.notifyLongPolls(path)
+    this.notifyLongPolls(path, message)
 
     if (producerResult || options.close) {
       return { message, producerResult, streamClosed: options.close }
@@ -664,13 +664,12 @@ export class StreamStore {
     return lo < messages.length ? lo : -1
   }
 
-  private notifyLongPolls(path: string): void {
+  private notifyLongPolls(path: string, newMessage: StreamMessage): void {
     const set = this.pendingLongPolls.get(path)
     if (!set) return
     for (const pending of set) {
-      const { messages } = this.read(path, pending.offset)
-      if (messages.length > 0) {
-        pending.resolve(messages)
+      if (newMessage.offset > pending.offset) {
+        pending.resolve([newMessage])
       }
     }
   }
