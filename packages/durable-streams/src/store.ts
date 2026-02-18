@@ -8,6 +8,8 @@ import type {
 } from "./types"
 
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
 export function normalizeContentType(contentType: string | undefined): string {
   if (!contentType) return ``
@@ -18,7 +20,7 @@ export function processJsonAppend(
   data: Uint8Array,
   isInitialCreate = false
 ): Uint8Array {
-  const text = new TextDecoder().decode(data)
+  const text = decoder.decode(data)
 
   let parsed: unknown
   try {
@@ -41,22 +43,22 @@ export function processJsonAppend(
     result = JSON.stringify(parsed) + `,`
   }
 
-  return new TextEncoder().encode(result)
+  return encoder.encode(result)
 }
 
 export function formatJsonResponse(data: Uint8Array): Uint8Array {
   if (data.length === 0) {
-    return new TextEncoder().encode(`[]`)
+    return encoder.encode(`[]`)
   }
 
-  let text = new TextDecoder().decode(data)
+  let text = decoder.decode(data)
   text = text.trimEnd()
   if (text.endsWith(`,`)) {
     text = text.slice(0, -1)
   }
 
   const wrapped = `[${text}]`
-  return new TextEncoder().encode(wrapped)
+  return encoder.encode(wrapped)
 }
 
 /**

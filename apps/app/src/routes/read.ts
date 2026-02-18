@@ -21,6 +21,9 @@ import {
   CURSOR_QUERY_PARAM,
 } from "../lib/constants"
 
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
+
 export async function handleRead(
   ctx: ServerContext,
   request: Request,
@@ -291,12 +294,11 @@ function handleSSE(
         const injected =
           `event: ${fault.injectSseEvent.eventType}\n` +
           `data: ${fault.injectSseEvent.data}\n\n`
-        controller.enqueue(new TextEncoder().encode(injected))
+        controller.enqueue(encoder.encode(injected))
       }
 
       let currentOffset = initialOffset
       let isConnected = true
-      const decoder = new TextDecoder()
 
       const cleanup = () => {
         isConnected = false
@@ -318,7 +320,7 @@ function handleSSE(
             }
 
             controller.enqueue(
-              new TextEncoder().encode(
+              encoder.encode(
                 `event: data\n` + encodeSSEData(dataPayload)
               )
             )
@@ -352,7 +354,7 @@ function handleSSE(
           }
 
           controller.enqueue(
-            new TextEncoder().encode(
+            encoder.encode(
               `event: control\n` + encodeSSEData(JSON.stringify(controlData))
             )
           )
@@ -368,7 +370,7 @@ function handleSSE(
                 [SSE_CLOSED_FIELD]: true,
               }
               controller.enqueue(
-                new TextEncoder().encode(
+                encoder.encode(
                   `event: control\n` +
                     encodeSSEData(JSON.stringify(finalControlData))
                 )
@@ -390,7 +392,7 @@ function handleSSE(
                 [SSE_CLOSED_FIELD]: true,
               }
               controller.enqueue(
-                new TextEncoder().encode(
+                encoder.encode(
                   `event: control\n` +
                     encodeSSEData(JSON.stringify(finalControlData))
                 )
@@ -411,7 +413,7 @@ function handleSSE(
                   [SSE_CLOSED_FIELD]: true,
                 }
                 controller.enqueue(
-                  new TextEncoder().encode(
+                  encoder.encode(
                     `event: control\n` +
                       encodeSSEData(JSON.stringify(closedControlData))
                   )
@@ -425,7 +427,7 @@ function handleSSE(
                 [SSE_UP_TO_DATE_FIELD]: true,
               }
               controller.enqueue(
-                new TextEncoder().encode(
+                encoder.encode(
                   `event: control\n` +
                     encodeSSEData(JSON.stringify(keepAliveData))
                 )
