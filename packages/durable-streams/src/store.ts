@@ -61,7 +61,7 @@ export function formatJsonResponse(data: Uint8Array): Uint8Array {
 
 export class StreamStore {
   private streams = new Map<string, Stream>()
-  private pendingLongPolls: Array<PendingLongPoll> = []
+  private pendingLongPolls = new Map<string, Set<PendingLongPoll>>()
   private producerLocks = new Map<string, Promise<unknown>>()
 
   private isExpired(stream: Stream): boolean {
@@ -549,7 +549,12 @@ export class StreamStore {
         timeoutId,
       }
 
-      this.pendingLongPolls.push(pending)
+      let set = this.pendingLongPolls.get(path)
+      if (!set) {
+        set = new Set()
+        this.pendingLongPolls.set(path, set)
+      }
+      set.add(pending)
     })
   }
 
@@ -558,20 +563,24 @@ export class StreamStore {
   }
 
   clear(): void {
-    for (const pending of this.pendingLongPolls) {
-      clearTimeout(pending.timeoutId)
-      pending.resolve([])
+    for (const set of this.pendingLongPolls.values()) {
+      for (const pending of set) {
+        clearTimeout(pending.timeoutId)
+        pending.resolve([])
+      }
     }
-    this.pendingLongPolls = []
+    this.pendingLongPolls.clear()
     this.streams.clear()
   }
 
   cancelAllWaits(): void {
-    for (const pending of this.pendingLongPolls) {
-      clearTimeout(pending.timeoutId)
-      pending.resolve([])
+    for (const set of this.pendingLongPolls.values()) {
+      for (const pending of set) {
+        clearTimeout(pending.timeoutId)
+        pending.resolve([])
+      }
     }
-    this.pendingLongPolls = []
+    this.pendingLongPolls.clear()
   }
 
   list(): Array<string> {
@@ -628,8 +637,9 @@ export class StreamStore {
   }
 
   private notifyLongPolls(path: string): void {
-    const toNotify = this.pendingLongPolls.filter((p) => p.path === path)
-    for (const pending of toNotify) {
+    const set = this.pendingLongPolls.get(path)
+    if (!set) return
+    for (const pending of set) {
       const { messages } = this.read(path, pending.offset)
       if (messages.length > 0) {
         pending.resolve(messages)
@@ -638,25 +648,30 @@ export class StreamStore {
   }
 
   private notifyLongPollsClosed(path: string): void {
-    const toNotify = this.pendingLongPolls.filter((p) => p.path === path)
-    for (const pending of toNotify) {
+    const set = this.pendingLongPolls.get(path)
+    if (!set) return
+    for (const pending of set) {
       pending.resolve([])
     }
   }
 
   private cancelLongPollsForStream(path: string): void {
-    const toCancel = this.pendingLongPolls.filter((p) => p.path === path)
-    for (const pending of toCancel) {
+    const set = this.pendingLongPolls.get(path)
+    if (!set) return
+    for (const pending of set) {
       clearTimeout(pending.timeoutId)
       pending.resolve([])
     }
-    this.pendingLongPolls = this.pendingLongPolls.filter((p) => p.path !== path)
+    this.pendingLongPolls.delete(path)
   }
 
   private removePendingLongPoll(pending: PendingLongPoll): void {
-    const index = this.pendingLongPolls.indexOf(pending)
-    if (index !== -1) {
-      this.pendingLongPolls.splice(index, 1)
+    const set = this.pendingLongPolls.get(pending.path)
+    if (set) {
+      set.delete(pending)
+      if (set.size === 0) {
+        this.pendingLongPolls.delete(pending.path)
+      }
     }
   }
 }
