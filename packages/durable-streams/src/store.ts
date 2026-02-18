@@ -611,10 +611,20 @@ export class StreamStore {
   }
 
   private findOffsetIndex(stream: Stream, offset: string): number {
-    for (let i = 0; i < stream.messages.length; i++) {
-      if (stream.messages[i]!.offset > offset) return i
+    const messages = stream.messages
+    let lo = 0
+    let hi = messages.length
+
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (messages[mid]!.offset > offset) {
+        hi = mid
+      } else {
+        lo = mid + 1
+      }
     }
-    return -1
+
+    return lo < messages.length ? lo : -1
   }
 
   private notifyLongPolls(path: string): void {
