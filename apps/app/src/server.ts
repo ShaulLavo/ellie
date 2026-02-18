@@ -88,11 +88,11 @@ export function createDurableStreamServer(options: {
       try {
         switch (method) {
           case `PUT`:
-            return handleCreate(ctx, request, path)
+            return handleCreate(ctx, request, path, url)
           case `HEAD`:
             return handleHead(ctx, path)
           case `GET`:
-            return handleRead(ctx, request, path, bodyFault)
+            return handleRead(ctx, request, path, url, bodyFault)
           case `POST`:
             return handleAppend(ctx, request, path)
           case `DELETE`:

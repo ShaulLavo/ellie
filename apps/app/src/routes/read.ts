@@ -28,6 +28,7 @@ export async function handleRead(
   ctx: ServerContext,
   request: Request,
   path: string,
+  url: URL,
   fault: InjectedFault | null
 ): Promise<Response> {
   const stream = ctx.store.get(path)
@@ -38,7 +39,6 @@ export async function handleRead(
     })
   }
 
-  const url = new URL(request.url)
   const offset = url.searchParams.get(OFFSET_QUERY_PARAM) ?? undefined
   const live = url.searchParams.get(LIVE_QUERY_PARAM)
   const cursor = url.searchParams.get(CURSOR_QUERY_PARAM) ?? undefined

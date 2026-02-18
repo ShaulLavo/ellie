@@ -9,7 +9,8 @@ import {
 export async function handleCreate(
   ctx: ServerContext,
   request: Request,
-  path: string
+  path: string,
+  url: URL
 ): Promise<Response> {
   let contentType = request.headers.get(`content-type`)
   if (
@@ -87,7 +88,6 @@ export async function handleCreate(
   }
 
   const stream = ctx.store.get(path)!
-  const url = new URL(request.url)
 
   const headers = new Headers({
     "content-type": contentType,

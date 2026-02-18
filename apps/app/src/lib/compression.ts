@@ -1,5 +1,3 @@
-import { gzipSync, deflateSync } from "node:zlib"
-
 export const COMPRESSION_THRESHOLD = 1024
 
 export function getCompressionEncoding(
@@ -29,8 +27,8 @@ export function compressData(
   encoding: `gzip` | `deflate`
 ): Uint8Array {
   if (encoding === `gzip`) {
-    return gzipSync(data)
+    return Bun.gzipSync(data)
   } else {
-    return deflateSync(data)
+    return Bun.deflateSync(data)
   }
 }
