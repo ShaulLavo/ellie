@@ -1,4 +1,4 @@
-export { StreamStore, normalizeContentType, formatJsonResponse } from "./store"
+export { StreamStore, normalizeContentType, formatJsonResponse, formatSingleJsonMessage } from "./store"
 export {
   calculateCursor,
   generateResponseCursor,

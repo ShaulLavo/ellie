@@ -1,4 +1,4 @@
-import { generateResponseCursor } from "@ellie/durable-streams"
+import { generateResponseCursor, formatSingleJsonMessage } from "@ellie/durable-streams"
 import type { ServerContext, InjectedFault } from "../lib/context"
 import { encodeSSEData } from "../lib/sse"
 import {
@@ -312,8 +312,7 @@ function handleSSE(
             if (useBase64) {
               dataPayload = Buffer.from(message.data).toString(`base64`)
             } else if (isJsonStream) {
-              const jsonBytes = ctx.store.formatResponse(path, [message])
-              dataPayload = decoder.decode(jsonBytes)
+              dataPayload = formatSingleJsonMessage(message.data)
             } else {
               dataPayload = decoder.decode(message.data)
             }

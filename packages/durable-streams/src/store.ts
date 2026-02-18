@@ -59,6 +59,32 @@ export function formatJsonResponse(data: Uint8Array): Uint8Array {
   return new TextEncoder().encode(wrapped)
 }
 
+/**
+ * Lightweight JSON format for a single message's raw data.
+ * Avoids the allocations of formatResponse (no getIfNotExpired,
+ * no Uint8Array concatenation, no decode/trim/re-encode round-trip).
+ *
+ * Expects `data` to already be in the internal comma-terminated JSON
+ * format produced by processJsonAppend (e.g. `{"foo":1},`).
+ * Returns the string `[{"foo":1}]` suitable for SSE data payload.
+ */
+export function formatSingleJsonMessage(data: Uint8Array): string {
+  // Fast path: strip trailing comma directly from bytes
+  let end = data.length
+  // trim trailing whitespace
+  while (end > 0 && (data[end - 1] === 0x20 || data[end - 1] === 0x0a || data[end - 1] === 0x0d || data[end - 1] === 0x09)) {
+    end--
+  }
+  // strip trailing comma (0x2c)
+  if (end > 0 && data[end - 1] === 0x2c) {
+    end--
+  }
+
+  // Decode only the needed portion and wrap
+  const inner = new TextDecoder().decode(end === data.length ? data : data.subarray(0, end))
+  return `[${inner}]`
+}
+
 export class StreamStore {
   private streams = new Map<string, Stream>()
   private pendingLongPolls = new Map<string, Set<PendingLongPoll>>()
