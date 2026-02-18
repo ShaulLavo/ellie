@@ -1,0 +1,20 @@
+{
+  "name": "app",
+  "version": "1.0.50",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "test": "bun test",
+    "test:conformance": "bun test test/conformance.test.ts"
+  },
+  "dependencies": {
+    "elysia": "latest",
+    "@ellie/durable-streams": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "@durable-streams/server-conformance-tests": "0.2.1",
+    "@durable-streams/client": "0.2.1",
+    "vitest": "^3.0.0"
+  },
+  "module": "src/index.js"
+}
