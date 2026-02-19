@@ -8,7 +8,7 @@ import { openDatabase } from "./init"
 import { initCoreTables } from "./tables"
 import { LogFile, streamPathToFilename } from "./log"
 
-export type JsonlStoreDB = ReturnType<typeof drizzle<typeof schema>>
+export type JsonlEngineDB = ReturnType<typeof drizzle<typeof schema>>
 
 export interface JsonlMessage {
   data: Uint8Array
@@ -22,8 +22,8 @@ export interface JsonlMessage {
  * Write path: append to JSONL file -> insert metadata into SQLite
  * Read path: query SQLite index -> seek into JSONL file
  */
-export class JsonlStore {
-  readonly db: JsonlStoreDB
+export class JsonlEngine {
+  readonly db: JsonlEngineDB
   readonly sqlite: Database
   private logDir: string
   private openLogs = new Map<string, LogFile>()

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createDB, isVecAvailable } from "./index"
 import { LogFile, streamPathToFilename } from "./log"
-import { JsonlStore, formatOffset } from "./jsonl-store"
+import { JsonlEngine, formatOffset } from "./jsonl-store"
 import { typedLog } from "./typed-log"
 import { z } from "zod"
 import { eq, and, sql } from "drizzle-orm"
@@ -208,20 +208,20 @@ describe("streamPathToFilename", () => {
 })
 
 // ════════════════════════════════════════════════════════════════════════════
-// JsonlStore — hybrid JSONL + SQLite
+// JsonlEngine — hybrid JSONL + SQLite
 // ════════════════════════════════════════════════════════════════════════════
 
-describe("JsonlStore", () => {
+describe("JsonlEngine", () => {
   let tmpDir: string
   let dbPath: string
   let logDir: string
-  let store: JsonlStore
+  let store: JsonlEngine
 
   beforeEach(() => {
     tmpDir = makeTempDir("ellie-store-")
     dbPath = join(tmpDir, "test.db")
     logDir = join(tmpDir, "logs")
-    store = new JsonlStore(dbPath, logDir)
+    store = new JsonlEngine(dbPath, logDir)
   })
 
   afterEach(() => {
@@ -423,7 +423,7 @@ describe("JsonlStore", () => {
       expect(parsed[2]).toEqual({ event: "keydown", key: "a" })
 
       // Reopen for afterEach close
-      store = new JsonlStore(dbPath, logDir)
+      store = new JsonlEngine(dbPath, logDir)
     })
 
     it("JSONL file is grep-able", () => {
@@ -441,7 +441,7 @@ describe("JsonlStore", () => {
         .filter((l) => l.includes('"error"'))
       expect(errorLines).toHaveLength(2)
 
-      store = new JsonlStore(dbPath, logDir)
+      store = new JsonlEngine(dbPath, logDir)
     })
   })
 
@@ -504,7 +504,7 @@ describe("JsonlStore", () => {
       store.close()
 
       // Reopen
-      store = new JsonlStore(dbPath, logDir)
+      store = new JsonlEngine(dbPath, logDir)
 
       const messages = store.read("/persist")
       expect(messages).toHaveLength(2)
@@ -522,7 +522,7 @@ describe("JsonlStore", () => {
       const firstOffset = store.getCurrentOffset("/resume")!
       store.close()
 
-      store = new JsonlStore(dbPath, logDir)
+      store = new JsonlEngine(dbPath, logDir)
       store.append("/resume", new TextEncoder().encode('{"n":2}'))
 
       const messages = store.read("/resume")
@@ -830,13 +830,13 @@ describe("FTS5", () => {
   let tmpDir: string
   let dbPath: string
   let logDir: string
-  let store: JsonlStore
+  let store: JsonlEngine
 
   beforeEach(() => {
     tmpDir = makeTempDir("ellie-fts-")
     dbPath = join(tmpDir, "test.db")
     logDir = join(tmpDir, "logs")
-    store = new JsonlStore(dbPath, logDir)
+    store = new JsonlEngine(dbPath, logDir)
   })
 
   afterEach(() => {
@@ -844,7 +844,7 @@ describe("FTS5", () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it("messages_fts table is created by JsonlStore", () => {
+  it("messages_fts table is created by JsonlEngine", () => {
     const tables = store.sqlite
       .prepare("SELECT name FROM sqlite_master WHERE name='messages_fts'")
       .all() as { name: string }[]
@@ -985,7 +985,7 @@ describe("typedLog", () => {
   let tmpDir: string
   let dbPath: string
   let logDir: string
-  let store: JsonlStore
+  let store: JsonlEngine
 
   const testSchema = z.object({
     event: z.string(),
@@ -997,7 +997,7 @@ describe("typedLog", () => {
     tmpDir = makeTempDir("ellie-typed-")
     dbPath = join(tmpDir, "test.db")
     logDir = join(tmpDir, "logs")
-    store = new JsonlStore(dbPath, logDir)
+    store = new JsonlEngine(dbPath, logDir)
   })
 
   afterEach(() => {
@@ -1082,7 +1082,7 @@ describe("typedLog", () => {
     }
 
     // Reopen for afterEach close
-    store = new JsonlStore(dbPath, logDir)
+    store = new JsonlEngine(dbPath, logDir)
   })
 
   it("count reflects appends", () => {
@@ -1135,7 +1135,7 @@ describe("typedLog", () => {
     log.append({ event: "restart", value: 2 })
     store.close()
 
-    store = new JsonlStore(dbPath, logDir)
+    store = new JsonlEngine(dbPath, logDir)
     const log2 = typedLog(store, "/typed/persist", testSchema)
 
     const records = log2.read()
