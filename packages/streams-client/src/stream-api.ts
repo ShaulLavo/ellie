@@ -18,8 +18,8 @@ import { BackoffDefaults, createFetchWithBackoff } from "./fetch"
 import { StreamResponseImpl } from "./response"
 import {
   handleErrorResponse,
-  resolveHeaders,
-  resolveParams,
+  resolveFromSplit,
+  splitRecord,
   warnIfUsingHttpInBrowser,
 } from "./utils"
 import type { LiveMode, Offset, StreamOptions, StreamResponse } from "./types"
@@ -129,6 +129,10 @@ async function streamInternal<TJson = unknown>(
   // Warn if using HTTP in browser (can cause connection limit issues)
   warnIfUsingHttpInBrowser(url, options.warnOnHttp)
 
+  // Split headers/params once — static values are returned directly on each resolve
+  const headersSplit = splitRecord(options.headers)
+  const paramsSplit = splitRecord(options.params, true)
+
   // Build the first request
   const fetchUrl = new URL(url)
 
@@ -144,13 +148,13 @@ async function streamInternal<TJson = unknown>(
   }
 
   // Add custom params
-  const params = await resolveParams(options.params)
+  const params = await resolveFromSplit(paramsSplit)
   for (const [key, value] of Object.entries(params)) {
     fetchUrl.searchParams.set(key, value)
   }
 
   // Build headers
-  const headers = await resolveHeaders(options.headers)
+  const headers = await resolveFromSplit(headersSplit)
 
   // Create abort controller
   const abortController = new AbortController()
@@ -236,12 +240,12 @@ async function streamInternal<TJson = unknown>(
     }
 
     // Resolve params per-request (for dynamic values)
-    const nextParams = await resolveParams(options.params)
+    const nextParams = await resolveFromSplit(paramsSplit)
     for (const [key, value] of Object.entries(nextParams)) {
       nextUrl.searchParams.set(key, value)
     }
 
-    const nextHeaders = await resolveHeaders(options.headers)
+    const nextHeaders = await resolveFromSplit(headersSplit)
 
     const response = await fetchClient(nextUrl.toString(), {
       method: `GET`,
@@ -272,12 +276,12 @@ async function streamInternal<TJson = unknown>(
           }
 
           // Resolve params per-request (for dynamic values)
-          const sseParams = await resolveParams(options.params)
+          const sseParams = await resolveFromSplit(paramsSplit)
           for (const [key, value] of Object.entries(sseParams)) {
             sseUrl.searchParams.set(key, value)
           }
 
-          const sseHeaders = await resolveHeaders(options.headers)
+          const sseHeaders = await resolveFromSplit(headersSplit)
 
           const response = await fetchClient(sseUrl.toString(), {
             method: `GET`,

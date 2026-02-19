@@ -4,30 +4,96 @@
 
 import { STREAM_CLOSED_HEADER, STREAM_OFFSET_HEADER } from "./constants"
 import { DurableStreamError, StreamClosedError } from "./error"
-import type { HeadersRecord, MaybePromise } from "./types"
+import type { HeadersRecord, MaybePromise, ParamsRecord } from "./types"
+
+// ============================================================================
+// SplitRecord — resolve static headers/params once, avoid per-request overhead
+// ============================================================================
 
 /**
- * Resolve headers from HeadersRecord (supports async functions).
- * Unified implementation used by both stream() and DurableStream.
+ * A header/param record split into static string values and dynamic functions.
+ * Created once at session start; the static portion is returned directly on
+ * the hot path (zero allocation, O(1)) when no dynamic entries exist.
  */
-export async function resolveHeaders(
-  headers?: HeadersRecord
-): Promise<Record<string, string>> {
-  const resolved: Record<string, string> = {}
+export interface SplitRecord {
+  readonly statics: Readonly<Record<string, string>>
+  readonly dynamics: ReadonlyArray<
+    readonly [string, () => MaybePromise<string>]
+  >
+  readonly isStatic: boolean
+}
 
-  if (!headers) {
-    return resolved
+const EMPTY_SPLIT: SplitRecord = {
+  statics: Object.freeze({}),
+  dynamics: [],
+  isStatic: true,
+}
+
+/**
+ * Split a HeadersRecord or ParamsRecord into static and dynamic parts.
+ * Call once at session/construction time; pass the result to `resolveFromSplit`
+ * on every request.
+ *
+ * @param record - The headers or params record to split
+ * @param skipUndefined - When true (use for ParamsRecord), skip undefined values
+ */
+export function splitRecord(
+  record: HeadersRecord | ParamsRecord | undefined,
+  skipUndefined?: boolean
+): SplitRecord {
+  if (!record) {
+    return EMPTY_SPLIT
   }
 
-  for (const [key, value] of Object.entries(headers)) {
+  const statics: Record<string, string> = {}
+  const dynamics: Array<[string, () => MaybePromise<string>]> = []
+
+  for (const [key, value] of Object.entries(record)) {
+    if (skipUndefined && value === undefined) {
+      continue
+    }
     if (typeof value === `function`) {
-      resolved[key] = await value()
+      dynamics.push([key, value])
     } else {
-      resolved[key] = value
+      statics[key] = value as string
     }
   }
 
-  return resolved
+  return {
+    statics,
+    dynamics,
+    isStatic: dynamics.length === 0,
+  }
+}
+
+/**
+ * Resolve a SplitRecord to a plain `Record<string, string>`.
+ *
+ * - **Static fast path** (95% case): returns the cached `statics` object
+ *   directly — zero allocation, no iteration, no awaits.
+ * - **Dynamic path**: copies statics via spread, then resolves each dynamic
+ *   function entry.
+ *
+ * Callers that need to **mutate** the result (e.g. adding `content-type`)
+ * must spread it themselves: `{ ...await resolveFromSplit(split) }`.
+ */
+export function resolveFromSplit(
+  split: SplitRecord
+): Record<string, string> | Promise<Record<string, string>> {
+  if (split.isStatic) {
+    return split.statics as Record<string, string>
+  }
+  return resolveFromSplitAsync(split)
+}
+
+async function resolveFromSplitAsync(
+  split: SplitRecord
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = { ...split.statics }
+  for (const [key, fn] of split.dynamics) {
+    result[key] = await fn()
+  }
+  return result
 }
 
 /**
@@ -75,30 +141,6 @@ export async function handleErrorResponse(
   throw await DurableStreamError.fromResponse(response, url)
 }
 
-/**
- * Resolve params from ParamsRecord (supports async functions).
- */
-export async function resolveParams(
-  params?: Record<string, string | (() => MaybePromise<string>) | undefined>
-): Promise<Record<string, string>> {
-  const resolved: Record<string, string> = {}
-
-  if (!params) {
-    return resolved
-  }
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
-      if (typeof value === `function`) {
-        resolved[key] = await value()
-      } else {
-        resolved[key] = value
-      }
-    }
-  }
-
-  return resolved
-}
 
 /**
  * Resolve a value that may be a function returning a promise.

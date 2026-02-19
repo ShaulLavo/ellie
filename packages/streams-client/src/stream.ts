@@ -31,10 +31,11 @@ import {
 import { stream as streamFn } from "./stream-api"
 import {
   handleErrorResponse,
-  resolveHeaders,
-  resolveParams,
+  resolveFromSplit,
+  splitRecord,
   warnIfUsingHttpInBrowser,
 } from "./utils"
+import type { SplitRecord } from "./utils"
 import { StreamResponseImpl } from "./response"
 import type { BackoffOptions } from "./fetch"
 import type { queueAsPromised } from "fastq"
@@ -164,6 +165,8 @@ export class DurableStream {
   readonly #fetchClient: typeof fetch
   readonly #transport?: StreamTransport
   #onError?: StreamErrorHandler
+  readonly #headersSplit: SplitRecord
+  readonly #paramsSplit: SplitRecord
 
   // Batching infrastructure
   #batchingEnabled: boolean
@@ -181,6 +184,8 @@ export class DurableStream {
     this.#options = { ...opts, url: urlStr }
     this.#transport = opts.transport
     this.#onError = opts.onError
+    this.#headersSplit = splitRecord(opts.headers)
+    this.#paramsSplit = splitRecord(opts.params, true)
 
     // Set contentType from options if provided (for IdempotentProducer and other use cases)
     if (opts.contentType) {
@@ -1083,11 +1088,12 @@ export class DurableStream {
     requestHeaders: Record<string, string>
     fetchUrl: URL
   }> {
-    const requestHeaders = await resolveHeaders(this.#options.headers)
+    // Spread because callers mutate requestHeaders (content-type, seq, etc.)
+    const requestHeaders = { ...(await resolveFromSplit(this.#headersSplit)) }
     const fetchUrl = new URL(this.url)
 
     // Add params
-    const params = await resolveParams(this.#options.params)
+    const params = await resolveFromSplit(this.#paramsSplit)
     for (const [key, value] of Object.entries(params)) {
       fetchUrl.searchParams.set(key, value)
     }

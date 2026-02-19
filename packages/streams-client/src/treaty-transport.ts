@@ -30,7 +30,7 @@ import {
   STREAM_EXPIRES_AT_HEADER,
   STREAM_TTL_HEADER,
 } from "./constants"
-import { handleErrorResponse, resolveHeaders, resolveParams } from "./utils"
+import { handleErrorResponse, resolveFromSplit, splitRecord } from "./utils"
 import type {
   StreamTransport,
   TransportAppendOptions,
@@ -198,8 +198,12 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async stream(opts: TransportStreamOptions): Promise<TransportStreamResult> {
-    const resolvedHeaders = await resolveHeaders(opts.headers)
-    const resolvedParams = await resolveParams(opts.params)
+    // Split headers/params once — static values are returned directly on each resolve
+    const headersSplit = splitRecord(opts.headers)
+    const paramsSplit = splitRecord(opts.params, true)
+
+    const resolvedHeaders = await resolveFromSplit(headersSplit)
+    const resolvedParams = await resolveFromSplit(paramsSplit)
 
     // Build query params
     const query: Record<string, string> = {
@@ -254,8 +258,8 @@ export class TreatyStreamTransport implements StreamTransport {
       }
 
       // Re-resolve dynamic headers/params per-request
-      const nextHeaders = await resolveHeaders(opts.headers)
-      const nextParams = await resolveParams(opts.params)
+      const nextHeaders = await resolveFromSplit(headersSplit)
+      const nextParams = await resolveFromSplit(paramsSplit)
       Object.assign(nextQuery, nextParams)
 
       const result = await endpoint.get({
@@ -289,8 +293,8 @@ export class TreatyStreamTransport implements StreamTransport {
               sseQuery[`cursor`] = cursor
             }
 
-            const sseHeaders = await resolveHeaders(opts.headers)
-            const sseParams = await resolveParams(opts.params)
+            const sseHeaders = await resolveFromSplit(headersSplit)
+            const sseParams = await resolveFromSplit(paramsSplit)
             Object.assign(sseQuery, sseParams)
 
             const result = await endpoint.get({
