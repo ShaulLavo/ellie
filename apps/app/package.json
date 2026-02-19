@@ -9,9 +9,7 @@
   },
   "dependencies": {
     "@ellie/db": "workspace:*",
-    "@ellie/durable-streams": "workspace:*",
-    "@elysiajs/eden": "^1.4.8",
-    "elysia": "latest"
+    "@ellie/durable-streams": "workspace:*"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

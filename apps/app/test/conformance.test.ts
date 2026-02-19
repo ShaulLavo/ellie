@@ -1,35 +1,35 @@
-import { Elysia } from "elysia"
 import { afterAll, beforeAll, describe } from "bun:test"
 import { runConformanceTests } from "@durable-streams/server-conformance-tests"
 import {
   createServerContext,
   shutdown,
-  setDurableStreamHeaders,
 } from "@ellie/durable-streams/server"
-import { streamRoutes } from "../src/routes/streams"
+import { handleStreamRequest } from "../src/routes/streams"
 
-describe(`Elysia Durable Streams Server`, () => {
-  let app: { listen: (port: number) => { server?: { port?: number } | null }; stop: () => void }
+describe(`Bun.serve Durable Streams Server`, () => {
+  let server: ReturnType<typeof Bun.serve>
   let ctx: ReturnType<typeof createServerContext>
   const config = { baseUrl: `` }
 
   beforeAll(async () => {
     ctx = createServerContext({ longPollTimeout: 500 })
 
-    app = new Elysia()
-      .onRequest(({ set }) => {
-        setDurableStreamHeaders(set.headers as Record<string, string>)
-      })
-      .use(streamRoutes(ctx))
+    server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url)
+        const response = handleStreamRequest(ctx, req, url.pathname)
+        if (response) return response
+        return new Response(`Not found`, { status: 404 })
+      },
+    })
 
-    const instance = app.listen(0)
-    const port = instance.server?.port
-    config.baseUrl = `http://localhost:${port}/streams`
+    config.baseUrl = `http://localhost:${server.port}/streams`
   })
 
   afterAll(async () => {
     shutdown(ctx)
-    app.stop()
+    server.stop(true)
   })
 
   runConformanceTests(config)

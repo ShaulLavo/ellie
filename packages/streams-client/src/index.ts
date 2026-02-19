@@ -38,12 +38,9 @@ export type {
 } from "./transport"
 
 export {
-  TreatyStreamTransport,
-  type TreatyStreamTransportOptions,
-  type TreatyEndpointTransportOptions,
-  type TreatyStreamsTransportOptions,
-  type TreatyWithStreams,
-} from "./treaty-transport"
+  FetchStreamTransport,
+  type FetchStreamTransportOptions,
+} from "./fetch-transport"
 
 // ============================================================================
 // Idempotent Producer

@@ -1,9 +1,8 @@
-import { Elysia } from "elysia";
 import { resolve } from "node:path";
 import { createServerContext } from "@ellie/durable-streams/server";
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
-import { streamRoutes } from "./routes/streams";
+import { handleStreamRequest } from "./routes/streams";
 
 const port = parseInt(Bun.env.PORT ?? `4437`);
 const DATA_DIR = Bun.env.DATA_DIR ?? "./data";
@@ -12,7 +11,7 @@ console.log(`[server] DATA_DIR=${DATA_DIR}`);
 
 const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
 const durableStore = new DurableStore(engine);
-const ctx = createServerContext({ store: durableStore });
+export const ctx = createServerContext({ store: durableStore });
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
@@ -23,31 +22,39 @@ const STUDIO_PUBLIC = resolve(import.meta.dir, "../../studio/public");
 // In production: pre-bundled with all assets.
 const html = await import(resolve(STUDIO_PUBLIC, "index.html"));
 
-// ── Build the app ─────────────────────────────────────────────────
-const app = new Elysia()
-  .onAfterResponse(({ request, response }) => {
-    const url = new URL(request.url);
-    const status = response instanceof Response ? response.status : response;
-    const method = request.method;
+// ── Request handler ───────────────────────────────────────────────
 
-    const isPolling =
-      (method === "GET" && status === 304) ||
-      (method === "PUT" && status === 200);
-    const tag = isPolling ? "[poll]" : "[server]";
+function logRequest(req: Request, status: number): void {
+  const url = new URL(req.url);
+  const method = req.method;
 
-    console.log(`${tag} ${method} ${url.pathname} ${status}`);
-  })
-  .use(streamRoutes(ctx))
-  // Serve the React app at root and as SPA fallback for client-side routes.
-  // API routes above take priority over this catch-all.
-  // html.default is a Bun HTMLBundle — Bun's serve() knows how to render it
-  // with the bundled JS/CSS and HMR client injected.
-  .get("/", html.default)
-  .get("/*", html.default);
+  const isPolling =
+    (method === "GET" && status === 304) ||
+    (method === "PUT" && status === 200);
+  const tag = isPolling ? "[poll]" : "[server]";
 
-app.listen(port);
+  console.log(`${tag} ${method} ${url.pathname} ${status}`);
+}
+
+async function fetch(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  const path = url.pathname;
+
+  let response: Response;
+
+  const streamResponse = handleStreamRequest(ctx, req, path);
+  if (streamResponse) {
+    response = await streamResponse;
+  } else {
+    // SPA fallback — serve React app for all non-API routes
+    response = new Response(html.default);
+  }
+
+  logRequest(req, response.status);
+  return response;
+}
+
+// ── Start server ──────────────────────────────────────────────────
+Bun.serve({ fetch, port });
 
 console.log(`[server] listening on http://localhost:${port}`);
-
-export { app, ctx };
-export type App = typeof app;

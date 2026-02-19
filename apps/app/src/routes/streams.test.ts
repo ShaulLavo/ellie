@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { t } from "elysia"
+import { Type as t } from "@sinclair/typebox"
 import { decodeAndValidate } from "./streams"
 import type { StreamMessage } from "@ellie/durable-streams"
 
