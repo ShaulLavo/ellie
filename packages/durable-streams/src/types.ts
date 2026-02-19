@@ -4,11 +4,16 @@ export interface StreamMessage {
   timestamp: number
 }
 
+export interface InternalOffset {
+  readSeq: number
+  byteOffset: number
+}
+
 export interface Stream {
   path: string
   contentType?: string
   messages: Array<StreamMessage>
-  currentOffset: string
+  currentOffset: InternalOffset
   lastSeq?: string
   ttlSeconds?: number
   expiresAt?: string

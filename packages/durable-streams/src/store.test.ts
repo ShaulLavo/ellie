@@ -5,6 +5,18 @@ function makeOffset(readSeq: number, byteOffset: number): string {
   return `${String(readSeq).padStart(16, "0")}_${String(byteOffset).padStart(16, "0")}`
 }
 
+describe("append return type", () => {
+  it("always returns AppendResult with message property", () => {
+    const store = new StreamStore()
+    store.create("/test", { contentType: "application/octet-stream" })
+    const result = store.append("/test", new TextEncoder().encode("hello"), {})
+    expect(result).toHaveProperty("message")
+    expect(result.message).not.toBeNull()
+    expect(result.message!.offset).toBeDefined()
+    expect(result.message!.data).toBeInstanceOf(Uint8Array)
+  })
+})
+
 describe("findOffsetIndex (via read)", () => {
   function createStreamWithMessages(count: number) {
     const store = new StreamStore()

@@ -1,4 +1,4 @@
-export { StreamStore, normalizeContentType, formatJsonResponse, formatSingleJsonMessage } from "./store"
+export { StreamStore, normalizeContentType, formatJsonResponse, formatSingleJsonMessage, formatOffset, formatInternalOffset } from "./store"
 export {
   calculateCursor,
   generateResponseCursor,
@@ -9,6 +9,7 @@ export {
 export type {
   Stream,
   StreamMessage,
+  InternalOffset,
   PendingLongPoll,
   AppendOptions,
   AppendResult,

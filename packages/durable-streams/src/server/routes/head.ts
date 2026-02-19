@@ -1,3 +1,4 @@
+import { formatInternalOffset } from "../../store"
 import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
@@ -16,8 +17,10 @@ export function handleHead(
     })
   }
 
+  const streamOffset = formatInternalOffset(stream.currentOffset)
+
   const headers = new Headers({
-    [STREAM_OFFSET_HEADER]: stream.currentOffset,
+    [STREAM_OFFSET_HEADER]: streamOffset,
     "cache-control": `no-store`,
   })
 
@@ -32,7 +35,7 @@ export function handleHead(
   const closedSuffix = stream.closed ? `:c` : ``
   headers.set(
     `etag`,
-    `"${btoa(path)}:-1:${stream.currentOffset}${closedSuffix}"`
+    `"${btoa(path)}:-1:${streamOffset}${closedSuffix}"`
   )
 
   return new Response(null, { status: 200, headers })

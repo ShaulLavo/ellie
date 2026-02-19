@@ -1,6 +1,7 @@
 import type {
   AppendOptions,
   AppendResult,
+  InternalOffset,
   PendingLongPoll,
   ProducerValidationResult,
   Stream,
@@ -10,6 +11,14 @@ import type {
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
+
+export function formatOffset(readSeq: number, byteOffset: number): string {
+  return `${String(readSeq).padStart(16, `0`)}_${String(byteOffset).padStart(16, `0`)}`
+}
+
+export function formatInternalOffset(offset: InternalOffset): string {
+  return formatOffset(offset.readSeq, offset.byteOffset)
+}
 
 export function normalizeContentType(contentType: string | undefined): string {
   if (!contentType) return ``
@@ -29,7 +38,6 @@ export function processJsonAppend(
     throw new Error(`Invalid JSON`)
   }
 
-  let result: string
   if (Array.isArray(parsed)) {
     if (parsed.length === 0) {
       if (isInitialCreate) {
@@ -37,13 +45,18 @@ export function processJsonAppend(
       }
       throw new Error(`Empty arrays are not allowed`)
     }
+    // Arrays must be split into individual messages — stringify each element
     const elements = parsed.map((item) => JSON.stringify(item))
-    result = elements.join(`,`) + `,`
-  } else {
-    result = JSON.stringify(parsed) + `,`
+    const result = elements.join(`,`) + `,`
+    return encoder.encode(result)
   }
 
-  return encoder.encode(result)
+  // Single value: validation passed above, append comma byte to raw bytes.
+  // Avoids stringify round-trip and preserves original formatting.
+  const out = new Uint8Array(data.length + 1)
+  out.set(data)
+  out[data.length] = 0x2c // comma
+  return out
 }
 
 export function formatJsonResponse(data: Uint8Array): Uint8Array {
@@ -59,6 +72,50 @@ export function formatJsonResponse(data: Uint8Array): Uint8Array {
 
   const wrapped = `[${text}]`
   return encoder.encode(wrapped)
+}
+
+/**
+ * Build a JSON array response directly from message data into a single buffer.
+ * Avoids the decode → string ops → re-encode round-trip of formatJsonResponse.
+ * Each message's data is comma-terminated (from processJsonAppend).
+ * Output: [msg1,msg2,...,msgN] with the last comma replaced by ']'.
+ */
+function formatJsonResponseDirect(messages: Array<StreamMessage>): Uint8Array {
+  if (messages.length === 0) {
+    return encoder.encode(`[]`)
+  }
+
+  // Total: '[' (1 byte) + all message data bytes (already comma-terminated)
+  // The last comma gets replaced with ']', so total size = 1 + totalDataSize
+  let totalDataSize = 0
+  for (const msg of messages) {
+    totalDataSize += msg.data.length
+  }
+
+  const result = new Uint8Array(1 + totalDataSize)
+  result[0] = 0x5b // '['
+
+  let offset = 1
+  for (const msg of messages) {
+    result.set(msg.data, offset)
+    offset += msg.data.length
+  }
+
+  // Replace trailing comma with ']'. Trim trailing whitespace first.
+  let end = offset
+  while (end > 1 && (result[end - 1] === 0x20 || result[end - 1] === 0x0a || result[end - 1] === 0x0d || result[end - 1] === 0x09)) {
+    end--
+  }
+  if (end > 1 && result[end - 1] === 0x2c) {
+    result[end - 1] = 0x5d // ']'
+    return end < result.length ? result.subarray(0, end) : result
+  }
+
+  // Fallback: no trailing comma found, append ']'
+  const withBracket = new Uint8Array(offset + 1)
+  withBracket.set(result.subarray(0, offset))
+  withBracket[offset] = 0x5d // ']'
+  return withBracket
 }
 
 /**
@@ -83,14 +140,14 @@ export function formatSingleJsonMessage(data: Uint8Array): string {
   }
 
   // Decode only the needed portion and wrap
-  const inner = new TextDecoder().decode(end === data.length ? data : data.subarray(0, end))
+  const inner = decoder.decode(end === data.length ? data : data.subarray(0, end))
   return `[${inner}]`
 }
 
 export class StreamStore {
   private streams = new Map<string, Stream>()
   private pendingLongPolls = new Map<string, Set<PendingLongPoll>>()
-  private producerLocks = new Map<string, Promise<unknown>>()
+  private producerLockTails = new Map<string, Promise<void>>()
 
   private isExpired(stream: Stream): boolean {
     const now = Date.now()
@@ -157,7 +214,7 @@ export class StreamStore {
       path,
       contentType: options.contentType,
       messages: [],
-      currentOffset: `0000000000000000_0000000000000000`,
+      currentOffset: { readSeq: 0, byteOffset: 0 },
       ttlSeconds: options.ttlSeconds,
       expiresAt: options.expiresAt,
       createdAt: Date.now(),
@@ -266,33 +323,33 @@ export class StreamStore {
     }
   }
 
-  private async acquireProducerLock(
+  private acquireProducerLock(
     path: string,
     producerId: string
   ): Promise<() => void> {
     const lockKey = `${path}:${producerId}`
+    const previousTail = this.producerLockTails.get(lockKey) ?? Promise.resolve()
 
-    while (this.producerLocks.has(lockKey)) {
-      await this.producerLocks.get(lockKey)
-    }
-
-    let releaseLock: () => void
-    const lockPromise = new Promise<void>((resolve) => {
-      releaseLock = resolve
+    let releaseLock!: () => void
+    const newTail = new Promise<void>((resolve) => {
+      releaseLock = () => {
+        if (this.producerLockTails.get(lockKey) === newTail) {
+          this.producerLockTails.delete(lockKey)
+        }
+        resolve()
+      }
     })
-    this.producerLocks.set(lockKey, lockPromise)
 
-    return () => {
-      this.producerLocks.delete(lockKey)
-      releaseLock!()
-    }
+    this.producerLockTails.set(lockKey, newTail)
+
+    return previousTail.then(() => releaseLock)
   }
 
   append(
     path: string,
     data: Uint8Array,
     options: AppendOptions = {}
-  ): StreamMessage | AppendResult {
+  ): AppendResult {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
       throw new Error(`Stream not found: ${path}`)
@@ -375,11 +432,7 @@ export class StreamStore {
 
     this.notifyLongPolls(path, message)
 
-    if (producerResult || options.close) {
-      return { message, producerResult, streamClosed: options.close }
-    }
-
-    return message
+    return { message, producerResult, streamClosed: options.close }
   }
 
   async appendWithProducer(
@@ -388,16 +441,12 @@ export class StreamStore {
     options: AppendOptions
   ): Promise<AppendResult> {
     if (!options.producerId) {
-      const result = this.append(path, data, options)
-      if (`message` in result) return result
-      return { message: result }
+      return this.append(path, data, options)
     }
 
     const releaseLock = await this.acquireProducerLock(path, options.producerId)
     try {
-      const result = this.append(path, data, options)
-      if (`message` in result) return result
-      return { message: result }
+      return this.append(path, data, options)
     } finally {
       releaseLock()
     }
@@ -413,7 +462,7 @@ export class StreamStore {
     stream.closed = true
     this.notifyLongPollsClosed(path)
 
-    return { finalOffset: stream.currentOffset, alreadyClosed }
+    return { finalOffset: formatInternalOffset(stream.currentOffset), alreadyClosed }
   }
 
   async closeStreamWithProducer(
@@ -442,14 +491,14 @@ export class StreamStore {
           stream.closedBy.seq === options.producerSeq
         ) {
           return {
-            finalOffset: stream.currentOffset,
+            finalOffset: formatInternalOffset(stream.currentOffset),
             alreadyClosed: true,
             producerResult: { status: `duplicate`, lastSeq: options.producerSeq },
           }
         }
 
         return {
-          finalOffset: stream.currentOffset,
+          finalOffset: formatInternalOffset(stream.currentOffset),
           alreadyClosed: true,
           producerResult: { status: `stream_closed` },
         }
@@ -464,7 +513,7 @@ export class StreamStore {
 
       if (producerResult.status !== `accepted`) {
         return {
-          finalOffset: stream.currentOffset,
+          finalOffset: formatInternalOffset(stream.currentOffset),
           alreadyClosed: stream.closed ?? false,
           producerResult,
         }
@@ -481,7 +530,7 @@ export class StreamStore {
       this.notifyLongPollsClosed(path)
 
       return {
-        finalOffset: stream.currentOffset,
+        finalOffset: formatInternalOffset(stream.currentOffset),
         alreadyClosed: false,
         producerResult,
       }
@@ -511,25 +560,20 @@ export class StreamStore {
     return { messages: stream.messages.slice(offsetIndex), upToDate: true }
   }
 
-  formatResponse(path: string, messages: Array<StreamMessage>): Uint8Array {
-    const stream = this.getIfNotExpired(path)
-    if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+  formatResponse(contentType: string | undefined, messages: Array<StreamMessage>): Uint8Array {
+    if (normalizeContentType(contentType) === `application/json`) {
+      return formatJsonResponseDirect(messages)
     }
 
+    // Binary: concatenate all message data
     const totalSize = messages.reduce((sum, m) => sum + m.data.length, 0)
-    const concatenated = new Uint8Array(totalSize)
+    const result = new Uint8Array(totalSize)
     let offset = 0
     for (const msg of messages) {
-      concatenated.set(msg.data, offset)
+      result.set(msg.data, offset)
       offset += msg.data.length
     }
-
-    if (normalizeContentType(stream.contentType) === `application/json`) {
-      return formatJsonResponse(concatenated)
-    }
-
-    return concatenated
+    return result
   }
 
   async waitForMessages(
@@ -551,7 +595,7 @@ export class StreamStore {
       return { messages, timedOut: false }
     }
 
-    if (stream.closed && offset === stream.currentOffset) {
+    if (stream.closed && offset === formatInternalOffset(stream.currentOffset)) {
       return { messages: [], timedOut: false, streamClosed: true }
     }
 
@@ -587,7 +631,8 @@ export class StreamStore {
   }
 
   getCurrentOffset(path: string): string | undefined {
-    return this.getIfNotExpired(path)?.currentOffset
+    const stream = this.getIfNotExpired(path)
+    return stream ? formatInternalOffset(stream.currentOffset) : undefined
   }
 
   clear(): void {
@@ -628,12 +673,8 @@ export class StreamStore {
       if (processedData.length === 0) return null
     }
 
-    const parts = stream.currentOffset.split(`_`).map(Number)
-    const readSeq = parts[0]!
-    const byteOffset = parts[1]!
-
-    const newByteOffset = byteOffset + processedData.length
-    const newOffset = `${String(readSeq).padStart(16, `0`)}_${String(newByteOffset).padStart(16, `0`)}`
+    const newByteOffset = stream.currentOffset.byteOffset + processedData.length
+    const newOffset = formatOffset(stream.currentOffset.readSeq, newByteOffset)
 
     const message: StreamMessage = {
       data: processedData,
@@ -642,7 +683,7 @@ export class StreamStore {
     }
 
     stream.messages.push(message)
-    stream.currentOffset = newOffset
+    stream.currentOffset = { readSeq: stream.currentOffset.readSeq, byteOffset: newByteOffset }
 
     return message
   }
@@ -666,19 +707,41 @@ export class StreamStore {
 
   private notifyLongPolls(path: string, newMessage: StreamMessage): void {
     const set = this.pendingLongPolls.get(path)
-    if (!set) return
+    if (!set || set.size === 0) return
+
+    const toResolve: PendingLongPoll[] = []
     for (const pending of set) {
       if (newMessage.offset > pending.offset) {
-        pending.resolve([newMessage])
+        toResolve.push(pending)
       }
+    }
+
+    if (toResolve.length === 0) return
+
+    for (const pending of toResolve) {
+      set.delete(pending)
+    }
+    if (set.size === 0) {
+      this.pendingLongPolls.delete(path)
+    }
+
+    const messages = [newMessage]
+    for (const pending of toResolve) {
+      pending.resolve(messages)
     }
   }
 
   private notifyLongPollsClosed(path: string): void {
     const set = this.pendingLongPolls.get(path)
-    if (!set) return
-    for (const pending of set) {
-      pending.resolve([])
+    if (!set || set.size === 0) return
+
+    const toResolve = Array.from(set)
+    set.clear()
+    this.pendingLongPolls.delete(path)
+
+    const empty: StreamMessage[] = []
+    for (const pending of toResolve) {
+      pending.resolve(empty)
     }
   }
 

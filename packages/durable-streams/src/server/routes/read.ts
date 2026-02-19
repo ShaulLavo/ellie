@@ -1,5 +1,5 @@
 import { generateResponseCursor } from "../../cursor"
-import { formatSingleJsonMessage } from "../../store"
+import { formatSingleJsonMessage, formatInternalOffset } from "../../store"
 import type { ServerContext, InjectedFault } from "../lib/context"
 import { encodeSSEData } from "../lib/sse"
 import {
@@ -88,19 +88,21 @@ export async function handleRead(
     useBase64 = !isTextCompatible
   }
 
+  const streamOffset = formatInternalOffset(stream.currentOffset)
+
   // Handle SSE mode
   if (live === `sse`) {
-    const sseOffset = offset === `now` ? stream.currentOffset : offset!
+    const sseOffset = offset === `now` ? streamOffset : offset!
     return handleSSE(ctx, path, stream, sseOffset, cursor, useBase64, fault)
   }
 
   // For offset=now, convert to tail offset
-  const effectiveOffset = offset === `now` ? stream.currentOffset : offset
+  const effectiveOffset = offset === `now` ? streamOffset : offset
 
   // Handle catch-up offset=now (not long-poll)
   if (offset === `now` && live !== `long-poll`) {
     const headers = new Headers({
-      [STREAM_OFFSET_HEADER]: stream.currentOffset,
+      [STREAM_OFFSET_HEADER]: streamOffset,
       [STREAM_UP_TO_DATE_HEADER]: `true`,
       "cache-control": `no-store`,
     })
@@ -124,14 +126,14 @@ export async function handleRead(
 
   // Long-poll wait logic
   const clientIsCaughtUp =
-    (effectiveOffset && effectiveOffset === stream.currentOffset) ||
+    (effectiveOffset && effectiveOffset === streamOffset) ||
     offset === `now`
   if (live === `long-poll` && clientIsCaughtUp && messages.length === 0) {
     if (stream.closed) {
       return new Response(null, {
         status: 204,
         headers: {
-          [STREAM_OFFSET_HEADER]: stream.currentOffset,
+          [STREAM_OFFSET_HEADER]: streamOffset,
           [STREAM_UP_TO_DATE_HEADER]: `true`,
           [STREAM_CLOSED_HEADER]: `true`,
         },
@@ -140,7 +142,7 @@ export async function handleRead(
 
     const result = await ctx.store.waitForMessages(
       path,
-      effectiveOffset ?? stream.currentOffset,
+      effectiveOffset ?? streamOffset,
       ctx.config.longPollTimeout
     )
 
@@ -152,7 +154,7 @@ export async function handleRead(
       return new Response(null, {
         status: 204,
         headers: {
-          [STREAM_OFFSET_HEADER]: effectiveOffset ?? stream.currentOffset,
+          [STREAM_OFFSET_HEADER]: effectiveOffset ?? streamOffset,
           [STREAM_UP_TO_DATE_HEADER]: `true`,
           [STREAM_CURSOR_HEADER]: responseCursor,
           [STREAM_CLOSED_HEADER]: `true`,
@@ -167,7 +169,7 @@ export async function handleRead(
       )
       const currentStream = ctx.store.get(path)
       const timeoutHeaders: Record<string, string> = {
-        [STREAM_OFFSET_HEADER]: effectiveOffset ?? stream.currentOffset,
+        [STREAM_OFFSET_HEADER]: effectiveOffset ?? streamOffset,
         [STREAM_UP_TO_DATE_HEADER]: `true`,
         [STREAM_CURSOR_HEADER]: responseCursor,
       }
@@ -189,7 +191,7 @@ export async function handleRead(
   }
 
   const lastMessage = messages[messages.length - 1]
-  const responseOffset = lastMessage?.offset ?? stream.currentOffset
+  const responseOffset = lastMessage?.offset ?? streamOffset
   headers.set(STREAM_OFFSET_HEADER, responseOffset)
 
   if (live === `long-poll`) {
@@ -204,7 +206,8 @@ export async function handleRead(
   }
 
   const currentStream = ctx.store.get(path)
-  const clientAtTail = responseOffset === currentStream?.currentOffset
+  const currentStreamOffset = currentStream ? formatInternalOffset(currentStream.currentOffset) : undefined
+  const clientAtTail = responseOffset === currentStreamOffset
   if (currentStream?.closed && clientAtTail && upToDate) {
     headers.set(STREAM_CLOSED_HEADER, `true`)
   }
@@ -227,7 +230,7 @@ export async function handleRead(
   }
 
   // Format response data
-  let responseData = ctx.store.formatResponse(path, messages)
+  let responseData = ctx.store.formatResponse(stream?.contentType, messages)
 
   // Compression
   if (
@@ -338,12 +341,13 @@ function handleSSE(
           }
 
           const currentStream = ctx.store.get(path)
+          const currentStreamOff = formatInternalOffset(currentStream!.currentOffset)
           const controlOffset =
             messages[messages.length - 1]?.offset ??
-            currentStream!.currentOffset
+            currentStreamOff
 
           const streamIsClosed = currentStream?.closed ?? false
-          const clientAtTail = controlOffset === currentStream!.currentOffset
+          const clientAtTail = controlOffset === currentStreamOff
 
           const responseCursor = generateResponseCursor(
             cursor,

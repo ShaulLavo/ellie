@@ -1,3 +1,4 @@
+import { formatInternalOffset } from "../../store"
 import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
@@ -91,7 +92,7 @@ export async function handleCreate(
 
   const headers = new Headers({
     "content-type": contentType,
-    [STREAM_OFFSET_HEADER]: stream.currentOffset,
+    [STREAM_OFFSET_HEADER]: formatInternalOffset(stream.currentOffset),
   })
 
   if (isNew) {
