@@ -14,6 +14,9 @@ const durableStore = new DurableStore(engine);
 const ctx = createServerContext({ store: durableStore });
 
 const app = new Elysia()
+  // TODO: Delete this onAfterResponse hook — it constructs new URL(request.url) on every
+  // response just for logging, and infers "polling" from HTTP status codes. Logging shouldn't
+  // be on the hot path. May not be relevant anymore.
   .onAfterResponse(({ request, response }) => {
     const url = new URL(request.url);
     const status = response instanceof Response ? response.status : response;
