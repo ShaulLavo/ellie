@@ -1,4 +1,5 @@
 import { formatInternalOffset } from "../../store"
+import { StoreError, STORE_ERROR_STATUS } from "../../errors"
 import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
@@ -222,37 +223,11 @@ export async function handleAppend(
       result = ctx.store.append(path, body, appendOptions)
     }
   } catch (err) {
-    if (err instanceof Error) {
-      if (err.message.includes(`not found`)) {
-        return new Response(`Stream not found`, {
-          status: 404,
-          headers: { "content-type": `text/plain` },
-        })
-      }
-      if (err.message.includes(`Sequence conflict`)) {
-        return new Response(`Sequence conflict`, {
-          status: 409,
-          headers: { "content-type": `text/plain` },
-        })
-      }
-      if (err.message.includes(`Content-type mismatch`)) {
-        return new Response(`Content-type mismatch`, {
-          status: 409,
-          headers: { "content-type": `text/plain` },
-        })
-      }
-      if (err.message.includes(`Invalid JSON`)) {
-        return new Response(`Invalid JSON`, {
-          status: 400,
-          headers: { "content-type": `text/plain` },
-        })
-      }
-      if (err.message.includes(`Empty arrays are not allowed`)) {
-        return new Response(`Empty arrays are not allowed`, {
-          status: 400,
-          headers: { "content-type": `text/plain` },
-        })
-      }
+    if (err instanceof StoreError) {
+      return new Response(err.message, {
+        status: STORE_ERROR_STATUS[err.code],
+        headers: { "content-type": `text/plain` },
+      })
     }
     throw err
   }

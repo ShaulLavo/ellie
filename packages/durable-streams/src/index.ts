@@ -1,4 +1,5 @@
 export { StreamStore, normalizeContentType, formatJsonResponse, formatSingleJsonMessage, formatOffset, formatInternalOffset } from "./store"
+export { StoreError, STORE_ERROR_STATUS, type StoreErrorCode } from "./errors"
 export {
   calculateCursor,
   generateResponseCursor,

@@ -7,6 +7,7 @@ import type {
   Stream,
   StreamMessage,
 } from "./types"
+import { StoreError } from "./errors"
 
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const encoder = new TextEncoder()
@@ -35,7 +36,7 @@ export function processJsonAppend(
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error(`Invalid JSON`)
+    throw new StoreError(`invalid_json`, `Invalid JSON`)
   }
 
   if (Array.isArray(parsed)) {
@@ -43,7 +44,7 @@ export function processJsonAppend(
       if (isInitialCreate) {
         return new Uint8Array(0)
       }
-      throw new Error(`Empty arrays are not allowed`)
+      throw new StoreError(`empty_array`, `Empty arrays are not allowed`)
     }
     // Arrays must be split into individual messages — stringify each element
     const elements = parsed.map((item) => JSON.stringify(item))
@@ -204,7 +205,8 @@ export class StreamStore {
       if (contentTypeMatches && ttlMatches && expiresMatches && closedMatches) {
         return existing
       } else {
-        throw new Error(
+        throw new StoreError(
+          `already_exists`,
           `Stream already exists with different configuration: ${path}`
         )
       }
@@ -352,7 +354,7 @@ export class StreamStore {
   ): AppendResult {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+      throw new StoreError(`not_found`, `Stream not found: ${path}`)
     }
 
     if (stream.closed) {
@@ -376,7 +378,8 @@ export class StreamStore {
       const providedType = normalizeContentType(options.contentType)
       const streamType = normalizeContentType(stream.contentType)
       if (providedType !== streamType) {
-        throw new Error(
+        throw new StoreError(
+          `content_type_mismatch`,
           `Content-type mismatch: expected ${stream.contentType}, got ${options.contentType}`
         )
       }
@@ -402,7 +405,8 @@ export class StreamStore {
 
     if (options.seq !== undefined) {
       if (stream.lastSeq !== undefined && options.seq <= stream.lastSeq) {
-        throw new Error(
+        throw new StoreError(
+          `sequence_conflict`,
           `Sequence conflict: ${options.seq} <= ${stream.lastSeq}`
         )
       }
@@ -545,7 +549,7 @@ export class StreamStore {
   ): { messages: Array<StreamMessage>; upToDate: boolean } {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+      throw new StoreError(`not_found`, `Stream not found: ${path}`)
     }
 
     if (!offset || offset === `-1`) {
@@ -587,7 +591,7 @@ export class StreamStore {
   }> {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+      throw new StoreError(`not_found`, `Stream not found: ${path}`)
     }
 
     const { messages } = this.read(path, offset)
