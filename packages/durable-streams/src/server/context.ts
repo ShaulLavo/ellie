@@ -1,4 +1,5 @@
-import { StreamStore, type CursorOptions } from "@ellie/durable-streams"
+import { StreamStore } from "../store"
+import type { CursorOptions } from "../cursor"
 
 export interface ServerConfig {
   longPollTimeout: number

@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./store": "./src/store.ts",
     "./cursor": "./src/cursor.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./server": "./src/server/index.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"

@@ -1,4 +1,4 @@
-import type { ServerContext } from "../lib/context"
+import type { ServerContext } from "./context"
 
 export async function handleTestInjectError(
   ctx: ServerContext,

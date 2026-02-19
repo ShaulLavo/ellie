@@ -77,7 +77,7 @@ export const app = new Elysia()
 Recommended to generate `.d.ts` file for production when using OpenAPI Type Gen
 ```typescript
 references: fromTypes(
-  process.env.NODE_ENV === 'production'
+  Bun.env.NODE_ENV === 'production'
     ? 'dist/index.d.ts'
     : 'src/index.ts'
 )

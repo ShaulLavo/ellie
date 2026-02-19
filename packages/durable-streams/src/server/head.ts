@@ -1,8 +1,8 @@
-import type { ServerContext } from "../lib/context"
+import type { ServerContext } from "./context"
 import {
   STREAM_OFFSET_HEADER,
   STREAM_CLOSED_HEADER,
-} from "../lib/constants"
+} from "./constants"
 
 export function handleHead(
   ctx: ServerContext,

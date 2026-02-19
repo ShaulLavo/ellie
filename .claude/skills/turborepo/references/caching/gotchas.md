@@ -109,7 +109,7 @@ Task uses an env var not listed in `env`:
 
 ```javascript
 // build.js
-const apiUrl = process.env.API_URL;  // not tracked!
+const apiUrl = Bun.env.API_URL;  // not tracked!
 ```
 
 Fix: add to task config:
