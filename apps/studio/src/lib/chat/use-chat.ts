@@ -79,7 +79,7 @@ export function useChat(chatId: string) {
         },
       });
 
-      await db.stream.append(event);
+      await db.stream.append(JSON.stringify(event));
     },
     [],
   );
