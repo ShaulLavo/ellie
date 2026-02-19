@@ -394,6 +394,22 @@ function handleSSE(
         ctx.activeSSEResponses.delete(controller)
       }
 
+      const emitMessages = (messages: Array<{ data: Uint8Array; offset: string }>) => {
+        for (const message of messages) {
+          let dataPayload: string
+          if (useBase64) {
+            dataPayload = Buffer.from(message.data).toString(`base64`)
+          } else if (isJsonStream) {
+            dataPayload = formatSingleJsonMessage(message.data)
+          } else {
+            dataPayload = decoder.decode(message.data)
+          }
+
+          controller.enqueue(encodeSSEFrame(SSE_EVENT_DATA_PREFIX, dataPayload))
+          currentOffset = message.offset
+        }
+      }
+
       /** Check if stream is closed at tail and emit closed control if so. Returns true to break. */
       const checkClosed = (): boolean => {
         const s = ctx.store.get(path)
@@ -404,68 +420,58 @@ function handleSSE(
       }
 
       try {
+        // Initial catch-up read
+        {
+          const { messages } = ctx.store.read(path, currentOffset)
+          emitMessages(messages)
+        }
+
         while (isConnected && !ctx.isShuttingDown) {
-          // 1. Read + send messages
-          const { messages, upToDate } = ctx.store.read(path, currentOffset)
-
-          for (const message of messages) {
-            let dataPayload: string
-            if (useBase64) {
-              dataPayload = Buffer.from(message.data).toString(`base64`)
-            } else if (isJsonStream) {
-              dataPayload = formatSingleJsonMessage(message.data)
-            } else {
-              dataPayload = decoder.decode(message.data)
-            }
-
-            controller.enqueue(encodeSSEFrame(SSE_EVENT_DATA_PREFIX, dataPayload))
-            currentOffset = message.offset
-          }
-
-          // 2. Emit control event with current state
+          // Emit control event with current state
           const currentStream = ctx.store.get(path)
           const currentStreamOff = formatInternalOffset(currentStream!.currentOffset)
-          const controlOffset = messages[messages.length - 1]?.offset ?? currentStreamOff
-          currentOffset = controlOffset
-
-          const streamIsClosed = (currentStream?.closed ?? false) && controlOffset === currentStreamOff
+          const streamIsClosed = (currentStream?.closed ?? false) && currentOffset === currentStreamOff
           const responseCursor = generateResponseCursor(cursor, ctx.config.cursorOptions)
 
           if (emitControlEvent(controller, {
-            offset: controlOffset,
+            offset: currentOffset,
             closed: streamIsClosed,
             cursor: responseCursor,
-            upToDate,
+            upToDate: true,
           })) break
 
-          // 3. If caught up, wait for new messages or timeout
-          if (upToDate) {
+          if (checkClosed()) break
+
+          const result = await waitForStoreMessages(
+            ctx,
+            path,
+            currentOffset,
+            ctx.config.longPollTimeout
+          )
+
+          if (ctx.isShuttingDown || !isConnected) break
+
+          // After wait: check closed (covers streamClosed + race)
+          if (result.streamClosed || checkClosed()) break
+
+          // Timeout keepalive
+          if (result.timedOut) {
             if (checkClosed()) break
-
-            const result = await waitForStoreMessages(
-              ctx,
-              path,
-              currentOffset,
-              ctx.config.longPollTimeout
-            )
-
-            if (ctx.isShuttingDown || !isConnected) break
-
-            // After wait: check closed (covers streamClosed + race)
-            if (result.streamClosed || checkClosed()) break
-
-            // 4. Timeout keepalive
-            if (result.timedOut) {
-              if (checkClosed()) break
-              const keepAliveCursor = generateResponseCursor(cursor, ctx.config.cursorOptions)
-              emitControlEvent(controller, {
-                offset: currentOffset,
-                closed: false,
-                cursor: keepAliveCursor,
-                upToDate: true,
-              })
-            }
+            const keepAliveCursor = generateResponseCursor(cursor, ctx.config.cursorOptions)
+            emitControlEvent(controller, {
+              offset: currentOffset,
+              closed: false,
+              cursor: keepAliveCursor,
+              upToDate: true,
+            })
+            continue
           }
+
+          // waitForMessages returned new messages — emit them directly
+          // then read() to catch any additional messages that arrived after the long-poll resolved
+          emitMessages(result.messages)
+          const { messages: catchUp } = ctx.store.read(path, currentOffset)
+          emitMessages(catchUp)
         }
       } catch {
         // Client disconnected or error
