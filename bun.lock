@@ -87,10 +87,21 @@
     "packages/streams-client": {
       "name": "@ellie/streams-client",
       "version": "0.1.0",
+      "dependencies": {
+        "fastq": "^1.19.1",
+      },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
         "typescript": "^5.0.0",
       },
+      "peerDependencies": {
+        "@elysiajs/eden": "*",
+        "elysia": "*",
+      },
+      "optionalPeers": [
+        "@elysiajs/eden",
+        "elysia",
+      ],
     },
     "packages/typescript-config": {
       "name": "@repo/typescript-config",
