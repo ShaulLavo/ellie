@@ -124,7 +124,9 @@ export function createFetchWithBackoff(
 
         if (options?.signal?.aborted) {
           throw new FetchBackoffAbortError()
-        } else if (
+        }
+
+        if (
           e instanceof FetchError &&
           !HTTP_RETRY_STATUS_CODES.includes(e.status) &&
           e.status >= 400 &&
@@ -132,46 +134,46 @@ export function createFetchWithBackoff(
         ) {
           // Client errors (except 429) cannot be backed off on
           throw e
-        } else {
-          // Check max retries
-          attempt++
-          if (attempt > maxRetries) {
-            if (debug) {
-              console.log(
-                `Max retries reached (${attempt}/${maxRetries}), giving up`
-              )
-            }
-            throw e
-          }
+        }
 
-          // Calculate wait time honoring server-driven backoff as a floor
-          // Parse server-provided Retry-After (if present)
-          const serverMinimumMs =
-            e instanceof FetchError
-              ? parseRetryAfterHeader(e.headers[`retry-after`])
-              : 0
-
-          // Calculate client backoff with full jitter strategy
-          // Full jitter: random_between(0, min(cap, exponential_backoff))
-          const jitter = Math.random() * delay
-          const clientBackoffMs = Math.min(jitter, maxDelay)
-
-          // Server minimum is the floor, client cap is the ceiling
-          const waitMs = Math.max(serverMinimumMs, clientBackoffMs)
-
+        // Check max retries
+        attempt++
+        if (attempt > maxRetries) {
           if (debug) {
-            const source = serverMinimumMs > 0 ? `server+client` : `client`
             console.log(
-              `Retry attempt #${attempt} after ${waitMs}ms (${source}, serverMin=${serverMinimumMs}ms, clientBackoff=${clientBackoffMs}ms)`
+              `Max retries reached (${attempt}/${maxRetries}), giving up`
             )
           }
-
-          // Wait for the calculated duration
-          await new Promise((resolve) => setTimeout(resolve, waitMs))
-
-          // Increase the delay for the next attempt (capped at maxDelay)
-          delay = Math.min(delay * multiplier, maxDelay)
+          throw e
         }
+
+        // Calculate wait time honoring server-driven backoff as a floor
+        // Parse server-provided Retry-After (if present)
+        const serverMinimumMs =
+          e instanceof FetchError
+            ? parseRetryAfterHeader(e.headers[`retry-after`])
+            : 0
+
+        // Calculate client backoff with full jitter strategy
+        // Full jitter: random_between(0, min(cap, exponential_backoff))
+        const jitter = Math.random() * delay
+        const clientBackoffMs = Math.min(jitter, maxDelay)
+
+        // Server minimum is the floor, client cap is the ceiling
+        const waitMs = Math.max(serverMinimumMs, clientBackoffMs)
+
+        if (debug) {
+          const source = serverMinimumMs > 0 ? `server+client` : `client`
+          console.log(
+            `Retry attempt #${attempt} after ${waitMs}ms (${source}, serverMin=${serverMinimumMs}ms, clientBackoff=${clientBackoffMs}ms)`
+          )
+        }
+
+        // Wait for the calculated duration
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+
+        // Increase the delay for the next attempt (capped at maxDelay)
+        delay = Math.min(delay * multiplier, maxDelay)
       }
     }
   }

@@ -761,23 +761,21 @@ export class IdempotentProducer {
       const expectedSeqStr = response.headers.get(PRODUCER_EXPECTED_SEQ_HEADER)
       const expectedSeq = expectedSeqStr ? parseInt(expectedSeqStr, 10) : 0
 
-      // If our seq is ahead of expectedSeq, wait for earlier sequences to complete then retry
-      // This handles HTTP request reordering with maxInFlight > 1
-      if (expectedSeq < seq) {
-        // Wait for all sequences from expectedSeq to seq-1
-        const waitPromises: Array<Promise<void>> = []
-        for (let s = expectedSeq; s < seq; s++) {
-          waitPromises.push(this.#waitForSeq(epoch, s))
-        }
-        await Promise.all(waitPromises)
-        // Retry now that earlier sequences have completed
-        return this.#doSendBatch(batch, seq, epoch)
+      // If expectedSeq >= seq, something is wrong (shouldn't happen) - throw error
+      if (expectedSeq >= seq) {
+        const receivedSeqStr = response.headers.get(PRODUCER_RECEIVED_SEQ_HEADER)
+        const receivedSeq = receivedSeqStr ? parseInt(receivedSeqStr, 10) : seq
+        throw new SequenceGapError(expectedSeq, receivedSeq)
       }
 
-      // If expectedSeq >= seq, something is wrong (shouldn't happen) - throw error
-      const receivedSeqStr = response.headers.get(PRODUCER_RECEIVED_SEQ_HEADER)
-      const receivedSeq = receivedSeqStr ? parseInt(receivedSeqStr, 10) : seq
-      throw new SequenceGapError(expectedSeq, receivedSeq)
+      // Wait for all sequences from expectedSeq to seq-1 then retry
+      // This handles HTTP request reordering with maxInFlight > 1
+      const waitPromises: Array<Promise<void>> = []
+      for (let s = expectedSeq; s < seq; s++) {
+        waitPromises.push(this.#waitForSeq(epoch, s))
+      }
+      await Promise.all(waitPromises)
+      return this.#doSendBatch(batch, seq, epoch)
     }
 
     if (response.status === 400) {

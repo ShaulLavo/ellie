@@ -373,6 +373,16 @@ function applyFaultBodyModification(
   return modified
 }
 
+function formatMessagePayload(
+  data: Uint8Array,
+  useBase64: boolean,
+  isJsonStream: boolean | undefined
+): string {
+  if (useBase64) return encodeBase64(data)
+  if (isJsonStream) return formatSingleJsonMessage(data)
+  return decoder.decode(data)
+}
+
 function handleSSE(
   ctx: ServerContext,
   path: string,
@@ -409,15 +419,7 @@ function handleSSE(
 
       const emitMessages = (messages: Array<{ data: Uint8Array; offset: string }>) => {
         for (const message of messages) {
-          let dataPayload: string
-          if (useBase64) {
-            dataPayload = encodeBase64(message.data)
-          } else if (isJsonStream) {
-            dataPayload = formatSingleJsonMessage(message.data)
-          } else {
-            dataPayload = decoder.decode(message.data)
-          }
-
+          const dataPayload = formatMessagePayload(message.data, useBase64, isJsonStream)
           controller.enqueue(encodeSSEFrame(SSE_EVENT_DATA_PREFIX, dataPayload))
           currentOffset = message.offset
         }

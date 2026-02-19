@@ -808,6 +808,82 @@ export class StreamResponseImpl<
   }
 
   /**
+   * Handle pause/resume state for SSE mode.
+   * Returns the (possibly reconnected) iterator, or null if the stream should close.
+   */
+  async #handleSSEPauseResume(
+    sseEventIterator: AsyncGenerator<SSEEvent, void, undefined>,
+    controller: ReadableStreamDefaultController<Response>
+  ): Promise<AsyncGenerator<SSEEvent, void, undefined> | null> {
+    if (this.#state !== `pause-requested` && this.#state !== `paused`) {
+      return sseEventIterator
+    }
+
+    this.#state = `paused`
+    if (this.#pausePromise) {
+      await this.#pausePromise
+    }
+
+    if (this.#abortController.signal.aborted) {
+      this.#markClosed()
+      controller.close()
+      return null
+    }
+
+    const newIterator = await this.#trySSEReconnect()
+    if (!newIterator) {
+      this.#markClosed()
+      controller.close()
+      return null
+    }
+    return newIterator
+  }
+
+  /**
+   * Handle long-poll continuation with pause/resume support.
+   * Returns true if a response was enqueued, false if the stream should close.
+   */
+  async #handleLongPollContinuation(
+    controller: ReadableStreamDefaultController<Response>
+  ): Promise<boolean> {
+    if (!this.#shouldContinueLive()) return false
+
+    if (this.#state === `pause-requested` || this.#state === `paused`) {
+      this.#state = `paused`
+      if (this.#pausePromise) {
+        await this.#pausePromise
+      }
+      if (this.#abortController.signal.aborted) {
+        this.#markClosed()
+        controller.close()
+        return true // already handled close
+      }
+    }
+
+    if (this.#abortController.signal.aborted) {
+      this.#markClosed()
+      controller.close()
+      return true
+    }
+
+    const resumingFromPause = this.#justResumedFromPause
+    this.#justResumedFromPause = false
+
+    this.#requestAbortController = new AbortController()
+
+    const response = await this.#fetchNext(
+      this.offset,
+      this.cursor,
+      this.#requestAbortController.signal,
+      resumingFromPause
+    )
+
+    this.#updateStateFromResponse(response)
+    controller.enqueue(response)
+    return true
+  }
+
+  /**
    * Create the core ReadableStream<Response> that yields responses.
    * This is consumed once - all consumption methods use this same stream.
    *
@@ -860,29 +936,9 @@ export class StreamResponseImpl<
 
           // SSE mode: process events from the SSE stream
           if (sseEventIterator) {
-            // Check for pause state before processing SSE events
-            if (this.#state === `pause-requested` || this.#state === `paused`) {
-              this.#state = `paused`
-              if (this.#pausePromise) {
-                await this.#pausePromise
-              }
-              // After resume, check if we should still continue
-              if (this.#abortController.signal.aborted) {
-                this.#markClosed()
-                controller.close()
-                return
-              }
-              // Reconnect SSE after resume
-              const newIterator = await this.#trySSEReconnect()
-              if (newIterator) {
-                sseEventIterator = newIterator
-              } else {
-                // Could not reconnect - close the stream
-                this.#markClosed()
-                controller.close()
-                return
-              }
-            }
+            const iterator = await this.#handleSSEPauseResume(sseEventIterator, controller)
+            if (!iterator) return
+            sseEventIterator = iterator
 
             // Keep reading events until we get data or stream ends
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -917,47 +973,7 @@ export class StreamResponseImpl<
           }
 
           // Long-poll mode: continue with live updates if needed
-          if (this.#shouldContinueLive()) {
-            // If paused or pause-requested, await the pause promise
-            // This blocks pull() until resume() is called, avoiding deadlock
-            if (this.#state === `pause-requested` || this.#state === `paused`) {
-              this.#state = `paused`
-              if (this.#pausePromise) {
-                await this.#pausePromise
-              }
-              // After resume, check if we should still continue
-              if (this.#abortController.signal.aborted) {
-                this.#markClosed()
-                controller.close()
-                return
-              }
-            }
-
-            if (this.#abortController.signal.aborted) {
-              this.#markClosed()
-              controller.close()
-              return
-            }
-
-            // Consume the single-shot resume flag (only first fetch after resume skips live param)
-            const resumingFromPause = this.#justResumedFromPause
-            this.#justResumedFromPause = false
-
-            // Create a new AbortController for this request (so we can abort on pause)
-            this.#requestAbortController = new AbortController()
-
-            const response = await this.#fetchNext(
-              this.offset,
-              this.cursor,
-              this.#requestAbortController.signal,
-              resumingFromPause
-            )
-
-            this.#updateStateFromResponse(response)
-            controller.enqueue(response)
-            // Let the next pull() decide whether to close based on upToDate
-            return
-          }
+          if (await this.#handleLongPollContinuation(controller)) return
 
           // No more data
           this.#markClosed()
