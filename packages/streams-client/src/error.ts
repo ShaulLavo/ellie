@@ -36,7 +36,7 @@ export class FetchError extends Error {
     url: string
   ): Promise<FetchError> {
     const status = response.status
-    const headers = Object.fromEntries([...response.headers.entries()])
+    const headers = Object.fromEntries(response.headers.entries())
     let text: string | undefined = undefined
     let json: object | undefined = undefined
 

@@ -219,7 +219,7 @@ export function createFetchWithConsumedBody(
         res.status,
         undefined,
         undefined,
-        Object.fromEntries([...res.headers.entries()]),
+        Object.fromEntries(res.headers.entries()),
         url.toString(),
         err instanceof Error
           ? err.message

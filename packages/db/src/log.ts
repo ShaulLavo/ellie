@@ -117,6 +117,7 @@ export function streamPathToFilename(streamPath: string): string {
   }
 
   // Reject OS-unsafe characters (colons, backslashes, control chars)
+  // eslint-disable-next-line no-control-regex
   if (/[:\\<>|"?\x00-\x1f]/.test(streamPath)) {
     throw new Error(`Stream path contains unsafe characters: ${streamPath}`)
   }

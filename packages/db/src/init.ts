@@ -79,7 +79,7 @@ export function openDatabase(dbPath: string): Database {
       const sqliteVec = require("sqlite-vec") as typeof import("sqlite-vec")
       sqliteVec.load(db)
       vecAvailable = true
-    } catch (err) {
+    } catch {
       vecAvailable = false
       console.warn(
         `[db] sqlite-vec package not found. Install it with: bun add sqlite-vec`,
