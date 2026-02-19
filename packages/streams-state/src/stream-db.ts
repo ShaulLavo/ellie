@@ -834,7 +834,10 @@ function createConsumer(
   return {
     start: () => {
       if (!consumerPromise) {
-        consumerPromise = startInternal()
+        consumerPromise = startInternal().catch((err) => {
+          consumerPromise = null
+          throw err
+        })
       }
       return consumerPromise
     },
@@ -932,7 +935,6 @@ export function createStreamDB<
     },
   } as unknown as StreamDB<TDef>
   console.log(`[StreamDB] db.collections:`, Object.keys(db.collections))
-  console.log(`[StreamDB] db.collections.events:`, db.collections.events)
 
   if (actionsFactory) {
     return {
