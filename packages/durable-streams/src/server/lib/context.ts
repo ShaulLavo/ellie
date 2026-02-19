@@ -59,6 +59,7 @@ export interface IStreamStore {
   getCurrentOffset(path: string): string | undefined
   cancelAllSubscriptions(): void
   list(): Array<string>
+  close?(): void
 }
 
 export interface ServerConfig {
@@ -117,6 +118,7 @@ export function createServerContext(options: {
  */
 export function shutdown(ctx: ServerContext): void {
   ctx.isShuttingDown = true
+  ctx.store.close?.()
   ctx.store.cancelAllSubscriptions()
   ctx.activeSSEResponses.forEach((controller) => {
     try {
