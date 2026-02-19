@@ -28,7 +28,7 @@ describe(`Elysia Durable Streams Server`, () => {
 
   afterAll(async () => {
     ctx.isShuttingDown = true
-    ctx.store.cancelAllWaits()
+    ctx.store.cancelAllSubscriptions()
     for (const controller of ctx.activeSSEResponses) {
       try {
         controller.close()
