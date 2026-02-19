@@ -61,15 +61,15 @@ export const producers = sqliteTable(
   ]
 )
 
-// -- Virtual tables (created via raw DDL in LogStore.initTables) ---------------
+// -- Virtual tables (created via raw DDL in JsonlEngine.initTables) -----------
 //
 // These can't be defined in Drizzle — drizzle-orm has no virtual table support.
-// They are bootstrapped by LogStore at runtime:
+// Bootstrapped at runtime:
 //
-//   messages_fts  — FTS5 virtual table (id, stream_path, content) with porter stemming
-//   messages_vec  — vec0 virtual table (id INTEGER PK, embedding float[384]) — optional
+//   messages_fts  — FTS5 (id, stream_path, content) with porter stemming
+//   messages_vec  — vec0 (id INTEGER PK, embedding float[384]) — optional
 //
-// See log-store.ts:initTables() for the DDL.
+// TODO: wire these into the append path and implement search/embedding queries
 
 // -- Type exports -------------------------------------------------------------
 
