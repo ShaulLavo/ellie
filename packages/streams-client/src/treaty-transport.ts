@@ -51,7 +51,7 @@ import type { Offset } from "./types"
  * This avoids coupling to a specific Elysia App type.
  */
 interface TreatyStreamEndpoint {
-  get: (opts?: TreatyRequestOptions) => Promise<TreatyResult>
+  get: (opts?: TreatyGetOptions) => Promise<TreatyResult | Response>
   put: (body: unknown, opts?: TreatyRequestOptions) => Promise<TreatyResult>
   post: (body: unknown, opts?: TreatyRequestOptions) => Promise<TreatyResult>
   head: (opts?: TreatyRequestOptions) => Promise<TreatyResult>
@@ -62,6 +62,17 @@ interface TreatyRequestOptions {
   headers?: Record<string, string>
   query?: Record<string, string>
   fetch?: RequestInit
+}
+
+/**
+ * Treaty GET options. Supports `getRaw` to bypass body consumption —
+ * essential for streaming responses where the body must remain unread.
+ */
+interface TreatyGetOptions extends TreatyRequestOptions {
+  $query?: Record<string, string>
+  $headers?: Record<string, string>
+  $fetch?: RequestInit
+  getRaw?: boolean
 }
 
 interface TreatyResult {
@@ -126,6 +137,42 @@ export class TreatyStreamTransport implements StreamTransport {
     return this.#endpointFactory()
   }
 
+  /**
+   * Call a Treaty method and return the raw Response.
+   *
+   * Treaty tries to JSON-parse every response body, which throws on empty
+   * or non-JSON bodies (e.g. a 201 with no body from PUT create). When that
+   * happens, we surface a descriptive error rather than the cryptic
+   * "Cannot read properties of undefined".
+   */
+  async #call(
+    fn: () => Promise<TreatyResult>,
+    operation: string,
+  ): Promise<Response> {
+    let result: TreatyResult | undefined
+    try {
+      result = await fn()
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Error(
+        `[TreatyStreamTransport] ${operation} failed for "${this.#name}": ${detail}`,
+      )
+    }
+
+    if (result.response) return result.response
+
+    let detail = `no response`
+    if (result.error instanceof Error) {
+      detail = result.error.message
+    } else if (result.error) {
+      detail = JSON.stringify(result.error)
+    }
+
+    throw new Error(
+      `[TreatyStreamTransport] ${operation} failed for "${this.#name}": ${detail}`,
+    )
+  }
+
   // --------------------------------------------------------------------------
   // PUT — create stream
   // --------------------------------------------------------------------------
@@ -145,12 +192,13 @@ export class TreatyStreamTransport implements StreamTransport {
       headers[STREAM_CLOSED_HEADER] = `true`
     }
 
-    const result = await this.#endpoint().put(opts.body ?? null, {
-      headers,
-      fetch: { signal: opts.signal },
-    })
-
-    return result.response
+    return this.#call(
+      () => this.#endpoint().put(opts.body ?? null, {
+        headers,
+        fetch: { signal: opts.signal },
+      }),
+      `create`,
+    )
   }
 
   // --------------------------------------------------------------------------
@@ -158,11 +206,12 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async head(opts: TransportHeadOptions): Promise<Response> {
-    const result = await this.#endpoint().head({
-      fetch: { signal: opts.signal },
-    })
-
-    return result.response
+    return this.#call(
+      () => this.#endpoint().head({
+        fetch: { signal: opts.signal },
+      }),
+      `head`,
+    )
   }
 
   // --------------------------------------------------------------------------
@@ -170,12 +219,13 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async append(opts: TransportAppendOptions): Promise<Response> {
-    const result = await this.#endpoint().post(opts.body, {
-      headers: opts.headers,
-      fetch: { signal: opts.signal },
-    })
-
-    return result.response
+    return this.#call(
+      () => this.#endpoint().post(opts.body, {
+        headers: opts.headers,
+        fetch: { signal: opts.signal },
+      }),
+      `append`,
+    )
   }
 
   // --------------------------------------------------------------------------
@@ -183,12 +233,13 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async close(opts: TransportCloseOptions): Promise<Response> {
-    const result = await this.#endpoint().post(opts.body ?? null, {
-      headers: opts.headers,
-      fetch: { signal: opts.signal },
-    })
-
-    return result.response
+    return this.#call(
+      () => this.#endpoint().post(opts.body ?? null, {
+        headers: opts.headers,
+        fetch: { signal: opts.signal },
+      }),
+      `close`,
+    )
   }
 
   // --------------------------------------------------------------------------
@@ -196,11 +247,12 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async delete(opts: TransportDeleteOptions): Promise<Response> {
-    const result = await this.#endpoint().delete({
-      fetch: { signal: opts.signal },
-    })
-
-    return result.response
+    return this.#call(
+      () => this.#endpoint().delete({
+        fetch: { signal: opts.signal },
+      }),
+      `delete`,
+    )
   }
 
   // --------------------------------------------------------------------------
@@ -226,20 +278,18 @@ export class TreatyStreamTransport implements StreamTransport {
       query[LIVE_QUERY_PARAM] = live
     }
 
-    // Make first request via Treaty
-    const firstResult = await this.#endpoint().get({
-      headers: resolvedHeaders,
-      query,
-      fetch: { signal: opts.signal },
-    })
-
-    const firstResponse = firstResult.response
+    // Use getRaw to get the raw Response without Treaty consuming the body.
+    // This is essential — Treaty would otherwise call .json() or .text() on
+    // the response, destroying the body stream that DurableStream needs.
+    const firstResponse = await this.#endpoint().get({
+      $headers: resolvedHeaders,
+      $query: query,
+      $fetch: { signal: opts.signal },
+      getRaw: true,
+    }) as Response
 
     if (!firstResponse.ok) {
-      await handleErrorResponse(
-        firstResponse,
-        this.#name
-      )
+      await handleErrorResponse(firstResponse, this.#name)
     }
 
     // Build fetchNext callback for long-poll continuation
@@ -272,17 +322,18 @@ export class TreatyStreamTransport implements StreamTransport {
       const nextParams = await resolveFromSplit(paramsSplit)
       Object.assign(nextQuery, nextParams)
 
-      const result = await endpoint.get({
-        headers: nextHeaders,
-        query: nextQuery,
-        fetch: { signal },
-      })
+      const response = await endpoint.get({
+        $headers: nextHeaders,
+        $query: nextQuery,
+        $fetch: { signal },
+        getRaw: true,
+      }) as Response
 
-      if (!result.response.ok) {
-        await handleErrorResponse(result.response, this.#name)
+      if (!response.ok) {
+        await handleErrorResponse(response, this.#name)
       }
 
-      return result.response
+      return response
     }
 
     // Build startSSE callback for SSE mode
@@ -307,20 +358,18 @@ export class TreatyStreamTransport implements StreamTransport {
             const sseParams = await resolveFromSplit(paramsSplit)
             Object.assign(sseQuery, sseParams)
 
-            const result = await endpoint.get({
-              headers: sseHeaders,
-              query: sseQuery,
-              fetch: { signal },
-            })
+            const response = await endpoint.get({
+              $headers: sseHeaders,
+              $query: sseQuery,
+              $fetch: { signal },
+              getRaw: true,
+            }) as Response
 
-            if (!result.response.ok) {
-              await handleErrorResponse(
-                result.response,
-                this.#name
-              )
+            if (!response.ok) {
+              await handleErrorResponse(response, this.#name)
             }
 
-            return result.response
+            return response
           }
         : undefined
 

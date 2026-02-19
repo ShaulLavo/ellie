@@ -1,4 +1,6 @@
 import { Elysia } from "elysia";
+import { resolve, join } from "node:path";
+import { existsSync } from "node:fs";
 import { createServerContext } from "@ellie/durable-streams/server";
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
@@ -13,16 +15,24 @@ const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
 const durableStore = new DurableStore(engine);
 const ctx = createServerContext({ store: durableStore });
 
+// ── Resolve studio dist path ──────────────────────────────────────
+// import.meta.dir = .../apps/app/src/
+const STUDIO_DIST = resolve(import.meta.dir, "../../studio/dist");
+const hasStudioDist = existsSync(STUDIO_DIST);
+
+if (hasStudioDist) {
+  console.log(`[server] serving studio from ${STUDIO_DIST}`);
+} else {
+  console.log(`[server] studio dist not found at ${STUDIO_DIST}, skipping static files`);
+}
+
+// ── Build the app ─────────────────────────────────────────────────
 const app = new Elysia()
-  // TODO: Delete this onAfterResponse hook — it constructs new URL(request.url) on every
-  // response just for logging, and infers "polling" from HTTP status codes. Logging shouldn't
-  // be on the hot path. May not be relevant anymore.
   .onAfterResponse(({ request, response }) => {
     const url = new URL(request.url);
     const status = response instanceof Response ? response.status : response;
     const method = request.method;
 
-    // Label polling vs real requests
     const isPolling =
       (method === "GET" && status === 304) ||
       (method === "PUT" && status === 200);
@@ -30,7 +40,28 @@ const app = new Elysia()
 
     console.log(`${tag} ${method} ${url.pathname} ${status}`);
   })
-  .use(streamRoutes(ctx));
+  .use(streamRoutes(ctx))
+  // ── Static file serving for studio dist ─────────────────────────
+  // Serves the Vite-built React app. API routes above take priority.
+  // SPA fallback: any unmatched GET returns index.html for client-side routing.
+  .get("/*", ({ params }) => {
+    if (!hasStudioDist) return new Response("Not Found", { status: 404 });
+
+    // Try to serve the exact file requested
+    const filePath = join(STUDIO_DIST, params["*"]);
+    const file = Bun.file(filePath);
+
+    // Security: prevent path traversal
+    if (!filePath.startsWith(STUDIO_DIST)) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    return file.exists().then((exists) => {
+      if (exists) return new Response(file);
+      // SPA fallback: serve index.html for client-side routes
+      return new Response(Bun.file(join(STUDIO_DIST, "index.html")));
+    });
+  });
 
 app.listen(port);
 

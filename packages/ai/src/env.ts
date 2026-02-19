@@ -16,11 +16,7 @@ export function getEnvApiKey(provider: ProviderName): string | undefined {
 	const envVar = ENV_KEY_MAP[provider];
 	if (!envVar) return undefined;
 
-	const env =
-		typeof process !== "undefined" ? process.env : (undefined as any);
-	if (!env) return undefined;
-
-	return env[envVar] || undefined;
+	return Bun.env[envVar] || undefined;
 }
 
 /** Check if a provider has an API key available in the environment. */

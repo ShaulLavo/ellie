@@ -158,14 +158,10 @@ export async function resolveValue<T>(
 const warnedOrigins = new Set<string>()
 
 /**
- * Safely read NODE_ENV without triggering "process is not defined" errors.
- * Works in both browser and Node.js environments.
+ * Safely read NODE_ENV.
  */
 function getNodeEnvSafely(): string | undefined {
-  if (typeof process === `undefined`) return undefined
-  // Use optional chaining for process.env in case it's undefined (e.g., in some bundler environments)
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  return process.env?.NODE_ENV
+  return Bun.env.NODE_ENV
 }
 
 /**
