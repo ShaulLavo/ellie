@@ -20,7 +20,7 @@ describe(`Elysia Durable Streams Server`, () => {
       .onRequest(({ set }) => {
         setDurableStreamHeaders(set.headers as Record<string, string>)
       })
-      .use(streamRoutes(ctx, true))
+      .use(streamRoutes(ctx))
 
     const instance = app.listen(0)
     const port = instance.server?.port
