@@ -1,4 +1,5 @@
 import { formatInternalOffset } from "../../store"
+import { StoreError } from "../../errors"
 import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
@@ -76,14 +77,11 @@ export async function handleCreate(
       closed: createClosed,
     })
   } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message.includes(`already exists with different configuration`)
-    ) {
-      return new Response(
-        `Stream already exists with different configuration`,
-        { status: 409, headers: { "content-type": `text/plain` } }
-      )
+    if (err instanceof StoreError && err.code === `already_exists`) {
+      return new Response(err.message, {
+        status: 409,
+        headers: { "content-type": `text/plain` },
+      })
     }
     throw err
   }
