@@ -30,9 +30,7 @@ import {
   STREAM_EXPIRES_AT_HEADER,
   STREAM_TTL_HEADER,
 } from "./constants"
-import { BackoffDefaults, createFetchWithBackoff } from "./fetch"
 import { handleErrorResponse, resolveHeaders, resolveParams } from "./utils"
-import type { BackoffOptions } from "./fetch"
 import type {
   StreamTransport,
   TransportAppendOptions,
@@ -99,10 +97,6 @@ export interface TreatyStreamTransportOptions {
    */
   streamId: string
 
-  /**
-   * Optional backoff options for retry behavior.
-   */
-  backoffOptions?: BackoffOptions
 }
 
 // ============================================================================
@@ -112,12 +106,10 @@ export interface TreatyStreamTransportOptions {
 export class TreatyStreamTransport implements StreamTransport {
   readonly #treaty: TreatyWithStreams
   readonly #encodedId: string
-  readonly #backoffOptions: BackoffOptions
 
   constructor(opts: TreatyStreamTransportOptions) {
     this.#treaty = opts.treaty
     this.#encodedId = encodeURIComponent(opts.streamId)
-    this.#backoffOptions = opts.backoffOptions ?? BackoffDefaults
   }
 
   #endpoint(): TreatyStreamEndpoint {
@@ -220,13 +212,6 @@ export class TreatyStreamTransport implements StreamTransport {
       query[LIVE_QUERY_PARAM] = live
     }
 
-    // We need fetch with backoff for streaming reads
-    const baseFetch = fetch
-    const fetchWithBackoff = createFetchWithBackoff(
-      baseFetch,
-      opts.backoffOptions ?? this.#backoffOptions
-    )
-
     // Make first request via Treaty
     const firstResult = await this.#endpoint().get({
       headers: resolvedHeaders,
@@ -235,6 +220,13 @@ export class TreatyStreamTransport implements StreamTransport {
     })
 
     const firstResponse = firstResult.response
+
+    if (!firstResponse.ok) {
+      await handleErrorResponse(
+        firstResponse,
+        `streams/${this.#encodedId}`
+      )
+    }
 
     // Build fetchNext callback for long-poll continuation
     const endpoint = this.#endpoint()

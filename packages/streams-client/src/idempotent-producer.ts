@@ -25,6 +25,12 @@ import type { DurableStream } from "./stream"
 import type { CloseResult, IdempotentProducerOptions, Offset } from "./types"
 
 /**
+ * Maximum number of auto-claim retry attempts before throwing StaleEpochError.
+ * Prevents unbounded recursion if a competing producer continuously claims higher epochs.
+ */
+const MAX_AUTO_CLAIM_RETRIES = 5
+
+/**
  * Error thrown when a producer's epoch is stale (zombie fencing).
  */
 export class StaleEpochError extends Error {
@@ -390,7 +396,10 @@ export class IdempotentProducer {
    * Actually close the stream with optional final message.
    * Uses producer headers for idempotency.
    */
-  async #doClose(finalMessage?: Uint8Array | string): Promise<CloseResult> {
+  async #doClose(
+    finalMessage?: Uint8Array | string,
+    _claimAttempt = 0
+  ): Promise<CloseResult> {
     const contentType = this.#stream.contentType ?? `application/octet-stream`
     const isJson = normalizeContentType(contentType) === `application/json`
 
@@ -456,13 +465,16 @@ export class IdempotentProducer {
         : this.#epoch
 
       if (this.#autoClaim) {
+        if (_claimAttempt >= MAX_AUTO_CLAIM_RETRIES) {
+          throw new StaleEpochError(currentEpoch)
+        }
         // Auto-claim: retry with epoch+1
         const newEpoch = currentEpoch + 1
         this.#epoch = newEpoch
         // Reset sequence for new epoch - set to 0 so the recursive call uses seq 0
         // (the first operation in a new epoch should be seq 0)
         this.#nextSeq = 0
-        return this.#doClose(finalMessage)
+        return this.#doClose(finalMessage, _claimAttempt + 1)
       }
 
       throw new StaleEpochError(currentEpoch)
@@ -663,7 +675,8 @@ export class IdempotentProducer {
   async #doSendBatch(
     batch: Array<PendingEntry>,
     seq: number,
-    epoch: number
+    epoch: number,
+    _claimAttempt = 0
   ): Promise<{ offset: Offset; duplicate: boolean }> {
     const contentType = this.#stream.contentType ?? `application/octet-stream`
     const isJson = normalizeContentType(contentType) === `application/json`
@@ -728,13 +741,16 @@ export class IdempotentProducer {
         : epoch
 
       if (this.#autoClaim) {
+        if (_claimAttempt >= MAX_AUTO_CLAIM_RETRIES) {
+          throw new StaleEpochError(currentEpoch)
+        }
         // Auto-claim: retry with epoch+1
         const newEpoch = currentEpoch + 1
         this.#epoch = newEpoch
         this.#nextSeq = 1 // This batch will use seq 0
 
         // Retry with new epoch, starting at seq 0
-        return this.#doSendBatch(batch, 0, newEpoch)
+        return this.#doSendBatch(batch, 0, newEpoch, _claimAttempt + 1)
       }
 
       throw new StaleEpochError(currentEpoch)

@@ -14,7 +14,7 @@
  * `asAsyncIterableReadableStream()` helper to patch derived streams:
  *
  * ```typescript
- * import { asAsyncIterableReadableStream } from "@durable-streams/client"
+ * import { asAsyncIterableReadableStream } from "@ellie/streams-client"
  *
  * const derived = res.bodyStream().pipeThrough(myTransform)
  * const iterable = asAsyncIterableReadableStream(derived)

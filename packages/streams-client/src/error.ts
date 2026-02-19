@@ -40,15 +40,15 @@ export class FetchError extends Error {
 
     const contentType = response.headers.get(`content-type`)
     if (!response.bodyUsed) {
+      const rawText = await response.text()
       if (contentType && contentType.includes(`application/json`)) {
         try {
-          json = (await response.json()) as object
+          json = JSON.parse(rawText) as object
         } catch {
-          // If JSON parsing fails, fall back to text
-          text = await response.text()
+          text = rawText
         }
       } else {
-        text = await response.text()
+        text = rawText
       }
     }
 
@@ -111,14 +111,15 @@ export class DurableStreamError extends Error {
 
     const contentType = response.headers.get(`content-type`)
     if (!response.bodyUsed) {
+      const rawText = await response.text()
       if (contentType && contentType.includes(`application/json`)) {
         try {
-          details = await response.json()
+          details = JSON.parse(rawText)
         } catch {
-          details = await response.text()
+          details = rawText
         }
       } else {
-        details = await response.text()
+        details = rawText
       }
     }
 

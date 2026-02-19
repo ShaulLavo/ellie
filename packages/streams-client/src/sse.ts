@@ -119,8 +119,23 @@ export async function* parseSSEStream(
       buffer += remaining
     }
 
-    // Process any final event
-    if (buffer && currentEvent.type && currentEvent.data.length > 0) {
+    // Process remaining buffer as a final line (unterminated by \n)
+    if (buffer) {
+      if (buffer.startsWith(`event:`)) {
+        const eventType = buffer.slice(6)
+        currentEvent.type = eventType.startsWith(` `)
+          ? eventType.slice(1)
+          : eventType
+      } else if (buffer.startsWith(`data:`)) {
+        const content = buffer.slice(5)
+        currentEvent.data.push(
+          content.startsWith(` `) ? content.slice(1) : content
+        )
+      }
+    }
+
+    // Yield any final pending event
+    if (currentEvent.type && currentEvent.data.length > 0) {
       const dataStr = currentEvent.data.join(`\n`)
       if (currentEvent.type === `data`) {
         yield { type: `data`, data: dataStr }

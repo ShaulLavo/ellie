@@ -7,6 +7,7 @@
 import fastq from "fastq"
 
 import {
+  DurableStreamError,
   InvalidSignalError,
   MissingStreamUrlError,
   StreamClosedError,
@@ -823,6 +824,13 @@ export class DurableStream {
       | AsyncIterable<Uint8Array | string>,
     opts?: AppendOptions
   ): Promise<void> {
+    if (this.#transport) {
+      throw new DurableStreamError(
+        `appendStream is not supported with custom transports. Use append() instead.`,
+        `BAD_REQUEST`
+      )
+    }
+
     const { requestHeaders, fetchUrl } = await this.#buildRequest()
 
     const contentType =
@@ -1022,11 +1030,15 @@ export class DurableStream {
       const abortController = new AbortController()
       const signal = options?.signal ?? this.#options.signal
       if (signal) {
-        signal.addEventListener(
-          `abort`,
-          () => abortController.abort(signal.reason),
-          { once: true }
-        )
+        if (signal.aborted) {
+          abortController.abort(signal.reason)
+        } else {
+          signal.addEventListener(
+            `abort`,
+            () => abortController.abort(signal.reason),
+            { once: true }
+          )
+        }
       }
 
       return new StreamResponseImpl<TJson>({

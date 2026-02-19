@@ -155,11 +155,15 @@ async function streamInternal<TJson = unknown>(
   // Create abort controller
   const abortController = new AbortController()
   if (options.signal) {
-    options.signal.addEventListener(
-      `abort`,
-      () => abortController.abort(options.signal?.reason),
-      { once: true }
-    )
+    if (options.signal.aborted) {
+      abortController.abort(options.signal.reason)
+    } else {
+      options.signal.addEventListener(
+        `abort`,
+        () => abortController.abort(options.signal?.reason),
+        { once: true }
+      )
+    }
   }
 
   // Get fetch client with backoff
