@@ -119,12 +119,13 @@ export async function handleDurableStreamRequest(
     return applyCorsHeaders(response)
   } catch (err) {
     if (err instanceof StoreError) {
+      console.error(`[handler] StoreError ${method} ${path}: ${err.code} ${err.message}`)
       return applyCorsHeaders(new Response(err.message, {
         status: STORE_ERROR_STATUS[err.code],
         headers: { "content-type": `text/plain` },
       }))
     }
-    console.error(`Request error:`, err instanceof Error ? err.message : JSON.stringify(err))
+    console.error(`[handler] error ${method} ${path}:`, err instanceof Error ? err.message : JSON.stringify(err))
     return applyCorsHeaders(new Response(`Internal server error`, {
       status: 500,
       headers: { "content-type": `text/plain` },

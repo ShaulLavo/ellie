@@ -7,15 +7,31 @@ import { streamRoutes } from "./routes/streams";
 const port = parseInt(Bun.env.PORT ?? `4437`);
 const DATA_DIR = Bun.env.DATA_DIR ?? "./data";
 
+console.log(`[server] DATA_DIR=${DATA_DIR}`);
+
 const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
 const durableStore = new DurableStore(engine);
 const ctx = createServerContext({ store: durableStore });
 
-const app = new Elysia().use(streamRoutes(ctx));
+const app = new Elysia()
+  .onAfterResponse(({ request, response }) => {
+    const url = new URL(request.url);
+    const status = response instanceof Response ? response.status : response;
+    const method = request.method;
+
+    // Label polling vs real requests
+    const isPolling =
+      (method === "GET" && status === 304) ||
+      (method === "PUT" && status === 200);
+    const tag = isPolling ? "[poll]" : "[server]";
+
+    console.log(`${tag} ${method} ${url.pathname} ${status}`);
+  })
+  .use(streamRoutes(ctx));
 
 app.listen(port);
 
-console.log(`server running at http://localhost:${port}`);
+console.log(`[server] listening on http://localhost:${port}`);
 
 export { app, ctx };
 export type App = typeof app;

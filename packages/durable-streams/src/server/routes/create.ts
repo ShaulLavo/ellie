@@ -68,6 +68,8 @@ export async function handleCreate(
   const body = new Uint8Array(await request.arrayBuffer())
   const isNew = !ctx.store.has(path)
 
+  if (isNew) console.log(`[create] ${path} contentType=${contentType}`)
+
   try {
     ctx.store.create(path, {
       contentType,
@@ -78,6 +80,7 @@ export async function handleCreate(
     })
   } catch (err) {
     if (err instanceof StoreError && err.code === `already_exists`) {
+      console.error(`[create] ${path} conflict: already exists with different config`)
       return new Response(err.message, {
         status: 409,
         headers: { "content-type": `text/plain` },

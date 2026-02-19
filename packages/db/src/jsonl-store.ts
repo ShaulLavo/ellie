@@ -32,6 +32,8 @@ export class JsonlEngine {
     this.logDir = logDir
     mkdirSync(logDir, { recursive: true })
 
+    console.log(`[engine] init dbPath=${dbPath} logDir=${logDir}`)
+
     this.sqlite = openDatabase(dbPath)
     this.db = drizzle(this.sqlite, { schema })
     this.initTables()
@@ -62,11 +64,13 @@ export class JsonlEngine {
       .onConflictDoNothing()
       .run()
 
-    return this.db
+    const result = this.db
       .select()
       .from(schema.streams)
       .where(eq(schema.streams.path, streamPath))
       .get()!
+
+    return result
   }
 
   getStream(streamPath: string): schema.StreamRow | undefined {
