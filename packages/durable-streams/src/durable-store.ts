@@ -1,5 +1,5 @@
 import { eq, and, lt } from "drizzle-orm"
-import type { JsonlStore } from "@ellie/db"
+import type { JsonlEngine } from "@ellie/db"
 import { schema } from "@ellie/db"
 import { StoreError } from "./errors"
 import {
@@ -38,12 +38,12 @@ interface Subscription {
 type StreamRow = (typeof schema)["streams"]["$inferSelect"]
 
 export class DurableStore implements IStreamStore {
-  private jsonlStore: JsonlStore
+  private engine: JsonlEngine
   private subscriptions = new Map<string, Set<Subscription>>()
   private producerLockTails = new Map<string, Promise<void>>()
 
-  constructor(jsonlStore: JsonlStore) {
-    this.jsonlStore = jsonlStore
+  constructor(engine: JsonlEngine) {
+    this.engine = engine
   }
 
   // -- Public API (IStreamStore) --------------------------------------------
@@ -89,14 +89,14 @@ export class DurableStore implements IStreamStore {
       }
     }
 
-    this.jsonlStore.createStream(path, {
+    this.engine.createStream(path, {
       contentType: options.contentType,
       ttlSeconds: options.ttlSeconds,
       expiresAt: options.expiresAt,
     })
 
     if (options.closed) {
-      this.jsonlStore.db
+      this.engine.db
         .update(schema.streams)
         .set({ closed: true })
         .where(eq(schema.streams.path, path))
@@ -179,7 +179,7 @@ export class DurableStore implements IStreamStore {
         updateData.closedByEpoch = options.producerEpoch
         updateData.closedBySeq = options.producerSeq
       }
-      this.jsonlStore.db
+      this.engine.db
         .update(schema.streams)
         .set(updateData)
         .where(eq(schema.streams.path, path))
@@ -213,7 +213,7 @@ export class DurableStore implements IStreamStore {
     path: string,
     offset?: string
   ): { messages: Array<StreamMessage>; upToDate: boolean } {
-    const row = this.jsonlStore.db
+    const row = this.engine.db
       .select()
       .from(schema.streams)
       .where(eq(schema.streams.path, path))
@@ -226,7 +226,7 @@ export class DurableStore implements IStreamStore {
     // offset === '-1' means "from beginning" (same as undefined)
     const afterOffset = !offset || offset === `-1` ? undefined : offset
 
-    const messages = this.jsonlStore.read(path, afterOffset).map((m) => ({
+    const messages = this.engine.read(path, afterOffset).map((m) => ({
       data: m.data,
       offset: m.offset,
       timestamp: m.timestamp,
@@ -286,7 +286,7 @@ export class DurableStore implements IStreamStore {
     const finalOffset = formatInternalOffset(stream.currentOffset)
 
     if (!alreadyClosed) {
-      this.jsonlStore.db
+      this.engine.db
         .update(schema.streams)
         .set({ closed: true })
         .where(eq(schema.streams.path, path))
@@ -350,7 +350,7 @@ export class DurableStore implements IStreamStore {
 
       this.commitProducerState(path, producerResult)
 
-      this.jsonlStore.db
+      this.engine.db
         .update(schema.streams)
         .set({
           closed: true,
@@ -371,7 +371,7 @@ export class DurableStore implements IStreamStore {
 
   delete(path: string): boolean {
     this.notifySubscribersDeleted(path)
-    this.jsonlStore.deleteStream(path)
+    this.engine.deleteStream(path)
     return true
   }
 
@@ -395,7 +395,7 @@ export class DurableStore implements IStreamStore {
   }
 
   getCurrentOffset(path: string): string | undefined {
-    return this.jsonlStore.getCurrentOffset(path)
+    return this.engine.getCurrentOffset(path)
   }
 
   cancelAllSubscriptions(): void {
@@ -408,7 +408,7 @@ export class DurableStore implements IStreamStore {
   }
 
   list(): Array<string> {
-    return this.jsonlStore.listStreams().map((r) => r.path)
+    return this.engine.listStreams().map((r) => r.path)
   }
 
   // -- Private helpers -------------------------------------------------------
@@ -454,7 +454,7 @@ export class DurableStore implements IStreamStore {
   }
 
   private getIfNotExpired(path: string): Stream | undefined {
-    const row = this.jsonlStore.getStream(path)
+    const row = this.engine.getStream(path)
     if (!row) return undefined
     if (this.isExpired(row)) {
       this.delete(path)
@@ -475,7 +475,7 @@ export class DurableStore implements IStreamStore {
       if (processedData.length === 0) return null
     }
 
-    const result = this.jsonlStore.append(path, processedData)
+    const result = this.engine.append(path, processedData)
 
     return {
       data: processedData,
@@ -493,7 +493,7 @@ export class DurableStore implements IStreamStore {
     const now = Date.now()
 
     // Clean up expired producer state for this stream
-    this.jsonlStore.db
+    this.engine.db
       .delete(schema.producers)
       .where(
         and(
@@ -503,7 +503,7 @@ export class DurableStore implements IStreamStore {
       )
       .run()
 
-    const state = this.jsonlStore.db
+    const state = this.engine.db
       .select()
       .from(schema.producers)
       .where(
@@ -570,7 +570,7 @@ export class DurableStore implements IStreamStore {
 
     const { producerId, proposedState } = result
 
-    this.jsonlStore.db
+    this.engine.db
       .insert(schema.producers)
       .values({
         streamPath: path,

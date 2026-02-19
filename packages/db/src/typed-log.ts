@@ -1,5 +1,5 @@
 import type { z } from "zod"
-import type { JsonlStore as LogStore } from "./jsonl-store"
+import type { JsonlEngine as LogStore } from "./jsonl-store"
 
 // -- Types --------------------------------------------------------------------
 

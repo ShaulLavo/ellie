@@ -23,7 +23,7 @@ export function createDB(dbPath: string) {
 export { openDatabase, isVecAvailable } from "./init"
 export { initCoreTables } from "./tables"
 export { LogFile, streamPathToFilename } from "./log"
-export { JsonlStore, formatOffset } from "./jsonl-store"
+export { JsonlEngine, formatOffset } from "./jsonl-store"
 export type { JsonlMessage } from "./jsonl-store"
 export { typedLog } from "./typed-log"
 export type { TypedLog, TypedLogRecord, TypedLogReadOptions } from "./typed-log"
