@@ -1,4 +1,4 @@
-export const DEFAULT_CURSOR_EPOCH: Date = new Date(`2024-10-09T00:00:00.000Z`)
+export const DEFAULT_CURSOR_EPOCH = 1728432000000 // 2024-10-09T00:00:00.000Z
 export const DEFAULT_CURSOR_INTERVAL_SECONDS = 20
 
 const MAX_JITTER_SECONDS = 3600
@@ -6,16 +6,15 @@ const MIN_JITTER_SECONDS = 1
 
 export interface CursorOptions {
   intervalSeconds?: number
-  epoch?: Date
+  epoch?: number
 }
 
 export function calculateCursor(options: CursorOptions = {}): string {
   const intervalSeconds =
     options.intervalSeconds ?? DEFAULT_CURSOR_INTERVAL_SECONDS
-  const epoch = options.epoch ?? DEFAULT_CURSOR_EPOCH
+  const epochMs = options.epoch ?? DEFAULT_CURSOR_EPOCH
 
   const now = Date.now()
-  const epochMs = epoch.getTime()
   const intervalMs = intervalSeconds * 1000
 
   const intervalNumber = Math.floor((now - epochMs) / intervalMs)
