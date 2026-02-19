@@ -5,20 +5,19 @@
  * delegates to a Treaty client which provides type-safe RPC calls that resolve
  * to the same Response objects the protocol expects.
  *
- * Usage:
+ * Usage (endpoint factory — preferred):
  * ```typescript
- * import { treaty } from "@elysiajs/eden"
- * import type { App } from "./server"
+ * const transport = new TreatyStreamTransport({
+ *   endpoint: () => api.chat({ id: "room-1" }),
+ *   name: "chat/room-1",
+ * })
+ * ```
  *
- * const api = treaty<App>("http://localhost:4437")
+ * Usage (legacy — streams({ id }) shape):
+ * ```typescript
  * const transport = new TreatyStreamTransport({
  *   treaty: api,
  *   streamId: "chat/room-1",
- * })
- *
- * const stream = await DurableStream.create({
- *   url: "http://localhost:4437/streams/chat%2Froom-1",
- *   transport,
  * })
  * ```
  */
@@ -84,36 +83,47 @@ export interface TreatyWithStreams {
 // Constructor options
 // ============================================================================
 
-export interface TreatyStreamTransportOptions {
-  /**
-   * The Treaty client instance.
-   * Must have `streams({ id })` route matching the server.
-   */
-  treaty: TreatyWithStreams
-
-  /**
-   * The logical stream path (e.g. "chat/room-1").
-   * Will be URL-encoded for the Treaty route param.
-   */
-  streamId: string
-
+/** Direct endpoint factory — works with any Treaty route shape. */
+export interface TreatyEndpointTransportOptions {
+  /** Factory that returns a TreatyStreamEndpoint. Called for each operation. */
+  endpoint: () => TreatyStreamEndpoint
+  /** Descriptive name for error messages (e.g. "chat/room-1"). */
+  name?: string
 }
+
+/** Legacy: derive endpoint from `treaty.streams({ id })`. */
+export interface TreatyStreamsTransportOptions {
+  /** The Treaty client instance with `streams({ id })` route. */
+  treaty: TreatyWithStreams
+  /** The logical stream path (e.g. "chat/room-1"). URL-encoded for the route param. */
+  streamId: string
+}
+
+export type TreatyStreamTransportOptions =
+  | TreatyEndpointTransportOptions
+  | TreatyStreamsTransportOptions
 
 // ============================================================================
 // Implementation
 // ============================================================================
 
 export class TreatyStreamTransport implements StreamTransport {
-  readonly #treaty: TreatyWithStreams
-  readonly #encodedId: string
+  readonly #endpointFactory: () => TreatyStreamEndpoint
+  readonly #name: string
 
   constructor(opts: TreatyStreamTransportOptions) {
-    this.#treaty = opts.treaty
-    this.#encodedId = encodeURIComponent(opts.streamId)
+    if (`endpoint` in opts) {
+      this.#endpointFactory = opts.endpoint
+      this.#name = opts.name ?? `treaty-stream`
+    } else {
+      const encodedId = encodeURIComponent(opts.streamId)
+      this.#endpointFactory = () => opts.treaty.streams({ id: encodedId })
+      this.#name = opts.streamId
+    }
   }
 
   #endpoint(): TreatyStreamEndpoint {
-    return this.#treaty.streams({ id: this.#encodedId })
+    return this.#endpointFactory()
   }
 
   // --------------------------------------------------------------------------
@@ -228,7 +238,7 @@ export class TreatyStreamTransport implements StreamTransport {
     if (!firstResponse.ok) {
       await handleErrorResponse(
         firstResponse,
-        `streams/${this.#encodedId}`
+        this.#name
       )
     }
 
@@ -269,7 +279,7 @@ export class TreatyStreamTransport implements StreamTransport {
       })
 
       if (!result.response.ok) {
-        await handleErrorResponse(result.response, `streams/${this.#encodedId}`)
+        await handleErrorResponse(result.response, this.#name)
       }
 
       return result.response
@@ -306,7 +316,7 @@ export class TreatyStreamTransport implements StreamTransport {
             if (!result.response.ok) {
               await handleErrorResponse(
                 result.response,
-                `streams/${this.#encodedId}`
+                this.#name
               )
             }
 

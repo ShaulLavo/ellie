@@ -46,16 +46,34 @@ export function decodeAndValidate<T extends TSchema>(
 /**
  * Factory: create a typed Elysia plugin for a named stream.
  *
- * GET returns an async generator — Treaty infers `AsyncGenerator<T>` from the
- * yield type, giving clients full type-safe `for await` consumption.
- * PUT/POST/HEAD/DELETE delegate to the raw durable stream protocol handler.
+ * Two modes:
+ *  - **Static** (default): single stream at the prefix path.
+ *    GET returns an async generator for direct Treaty `for await` consumption.
+ *  - **Parameterized** (`parameterized: true`): `:id` sub-routes.
+ *    All methods (including GET) delegate to handleDurableStreamRequest so
+ *    TreatyStreamTransport receives raw Response objects with protocol headers.
+ *    Treaty shape: `api.chat({ id: "demo" }).get()`, etc.
  */
 function createTypedStreamRoute<T extends TSchema>(
   ctx: ServerContext,
   streamPath: string,
   schema: T,
+  options?: { parameterized?: boolean },
 ) {
   const prefix = streamPath.slice(1)
+
+  if (options?.parameterized) {
+    const handle = (request: Request, id: string) =>
+      handleDurableStreamRequest(ctx, request, `${streamPath}/${id}`)
+
+    return new Elysia({ prefix })
+      .get(`/:id`, ({ request, params }) => handle(request, params.id))
+      .put(`/:id`, ({ request, params }) => handle(request, params.id))
+      .post(`/:id`, ({ request, params }) => handle(request, params.id))
+      .head(`/:id`, ({ request, params }) => handle(request, params.id))
+      .delete(`/:id`, ({ request, params }) => handle(request, params.id))
+  }
+
   const handle = (request: Request) =>
     handleDurableStreamRequest(ctx, request, streamPath)
 
@@ -101,13 +119,13 @@ export function streamRoutes(ctx: ServerContext) {
     handleDurableStreamRequest(ctx, request, `/${path}`)
 
   return new Elysia()
-    // ── Named typed routes (Treaty: api.chat.get(), etc.) ───────────
+    // ── Named typed routes (Treaty: api.chat({ id }).get(), etc.) ──
     .use(createTypedStreamRoute(ctx, `/chat`, t.Object({
       role: t.String(),
       content: t.String(),
-    })))
+    }), { parameterized: true }))
     // Add more named routes here as needed:
-    // .use(createTypedStreamRoute(ctx, `/presence`, t.Object({...})))
+    // .use(createTypedStreamRoute(ctx, `/presence`, presenceSchema, { parameterized: true }))
 
     // ── Generic transport routes (for TreatyStreamTransport / raw HTTP) ──
     .group(`/streams`, (app) => app

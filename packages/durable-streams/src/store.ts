@@ -198,15 +198,16 @@ export class StreamStore {
   ): Stream {
     const existing = this.getIfNotExpired(path)
     if (existing) {
-      const contentTypeMatches =
-        (normalizeContentType(options.contentType) ||
-          `application/octet-stream`) ===
-        (normalizeContentType(existing.contentType) ||
-          `application/octet-stream`)
+      const newContentType =
+        normalizeContentType(options.contentType) || `application/octet-stream`
+      const existingContentType =
+        normalizeContentType(existing.contentType) || `application/octet-stream`
+      const contentTypeMatches = newContentType === existingContentType
       const ttlMatches = options.ttlSeconds === existing.ttlSeconds
       const expiresMatches = options.expiresAt === existing.expiresAt
-      const closedMatches =
-        (options.closed ?? false) === (existing.closed ?? false)
+      const newClosed = options.closed ?? false
+      const existingClosed = existing.closed ?? false
+      const closedMatches = newClosed === existingClosed
 
       if (contentTypeMatches && ttlMatches && expiresMatches && closedMatches) {
         return existing
