@@ -3,7 +3,7 @@ import { useChat } from "./lib/chat/use-chat";
 
 function App() {
   const [chatId] = useState("demo");
-  const { messages, isLoading, error, sendMessage } = useChat(chatId);
+  const { messages, isLoading, error, sendMessage, clearChat } = useChat(chatId);
   const [input, setInput] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -16,7 +16,16 @@ function App() {
 
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", padding: 24 }}>
-      <h1>studio</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>studio</h1>
+        <button
+          onClick={clearChat}
+          disabled={isLoading || messages.length === 0}
+          style={{ padding: "4px 12px", cursor: "pointer" }}
+        >
+          Clear
+        </button>
+      </div>
 
       {error && <p style={{ color: "red" }}>{error.message}</p>}
 

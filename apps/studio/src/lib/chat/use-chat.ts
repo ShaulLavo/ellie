@@ -84,10 +84,36 @@ export function useChat(chatId: string) {
     [],
   );
 
+  const clearChat = useCallback(async () => {
+    const db = streamDbRef.current;
+    if (!db) return;
+
+    await db.stream.delete();
+    db.close();
+    streamDbRef.current = null;
+
+    // Re-create the stream DB from scratch
+    setState({ status: "loading" });
+    const newDb = createChatStreamDB(chatId);
+    streamDbRef.current = newDb;
+
+    try {
+      await newDb.stream.create({ contentType: "application/json" });
+      await newDb.preload();
+      setState({ status: "ready", db: newDb });
+    } catch (err) {
+      setState({
+        status: "error",
+        error: err instanceof Error ? err : new Error("Failed to reload chat"),
+      });
+    }
+  }, [chatId]);
+
   return {
     messages,
     isLoading: state.status === "loading",
     error: state.status === "error" ? state.error : null,
     sendMessage,
+    clearChat,
   };
 }
