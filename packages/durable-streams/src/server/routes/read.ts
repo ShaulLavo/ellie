@@ -43,6 +43,18 @@ function encodeSSEFrame(
   return frame
 }
 
+/** Portable base64 encoding — prefers native Buffer (Node/Bun) with btoa fallback (Edge/Workers/Deno). */
+function encodeBase64(data: Uint8Array): string {
+  if (typeof Buffer !== `undefined`) {
+    return Buffer.from(data).toString(`base64`)
+  }
+  let binary = ``
+  for (let i = 0; i < data.length; i++) {
+    binary += String.fromCharCode(data[i])
+  }
+  return btoa(binary)
+}
+
 /** Build and enqueue a control event. Returns true if the stream is closed (caller should break). */
 function emitControlEvent(
   controller: ReadableStreamDefaultController<Uint8Array>,
@@ -96,6 +108,7 @@ export function waitForStoreMessages(
       if (settled) return
       settled = true
       unsubscribe()
+      // Fresh lookup intentional: stream may have been closed during the wait by another request.
       const s = ctx.store.get(path)
       resolve({ messages: [], timedOut: true, streamClosed: s?.closed ?? false })
     }, timeoutMs)
@@ -398,7 +411,7 @@ function handleSSE(
         for (const message of messages) {
           let dataPayload: string
           if (useBase64) {
-            dataPayload = Buffer.from(message.data).toString(`base64`)
+            dataPayload = encodeBase64(message.data)
           } else if (isJsonStream) {
             dataPayload = formatSingleJsonMessage(message.data)
           } else {
