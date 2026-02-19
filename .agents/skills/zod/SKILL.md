@@ -544,7 +544,7 @@ const EnvSchema = z.object({
 });
 
 // Validate on startup
-const env = EnvSchema.parse(process.env);
+const env = EnvSchema.parse(Bun.env);
 
 // Now use typed env
 console.log(env.PORT); // number

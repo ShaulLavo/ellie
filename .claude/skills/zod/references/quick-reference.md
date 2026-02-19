@@ -296,7 +296,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
 });
 
-const env = EnvSchema.parse(process.env);
+const env = EnvSchema.parse(Bun.env);
 ```
 
 ### API Request

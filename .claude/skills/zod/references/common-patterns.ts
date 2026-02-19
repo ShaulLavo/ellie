@@ -27,7 +27,7 @@ export const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 // Usage: Validate on app startup
-// const env = EnvSchema.parse(process.env);
+// const env = EnvSchema.parse(Bun.env);
 
 // ============================================================================
 // API REQUEST/RESPONSE VALIDATION

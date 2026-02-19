@@ -55,7 +55,7 @@ new Elysia()
     .use(
         jwt({
             name: 'myJWTNamespace',
-            secret: process.env.JWT_SECRETS!
+            secret: Bun.env.JWT_SECRETS!
         })
     )
     .get('/sign/:name', ({ myJWTNamespace, params }) => {

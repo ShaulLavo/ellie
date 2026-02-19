@@ -4,11 +4,14 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "oxlint --ignore-path .gitignore apps packages",
+    "lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "@sinclair/typebox": "^0.34.48",
+    "oxlint": "^1.48.0",
     "prettier": "^3.7.4",
     "turbo": "^2.8.10",
     "typescript": "5.9.2"

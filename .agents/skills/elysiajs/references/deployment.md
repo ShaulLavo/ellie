@@ -142,10 +142,10 @@ import { Elysia } from 'elysia'
 
 const app = new Elysia()
   .get('/env', () => ({
-    env: process.env.NODE_ENV,
-    port: process.env.PORT
+    env: Bun.env.NODE_ENV,
+    port: Bun.env.PORT
   }))
-  .listen(parseInt(process.env.PORT || '3000'))
+  .listen(parseInt(Bun.env.PORT || '3000'))
 ```
 
 ## Platform-Specific Deployments
@@ -155,7 +155,7 @@ const app = new Elysia()
 // Railway assigns random PORT via env variable
 new Elysia()
   .get('/', () => 'Hello Railway')
-  .listen(process.env.PORT ?? 3000)
+  .listen(Bun.env.PORT ?? 3000)
 ```
 
 ### Vercel
@@ -354,14 +354,14 @@ export const app = new Elysia({
   nativeStaticResponse: true
 })
   .use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+    origin: Bun.env.CORS_ORIGIN || 'http://localhost:3000'
   }))
   .use(opentelemetry({
     serviceName: 'my-service'
   }))
   .get('/health', () => ({ status: 'ok' }))
   .get('/', () => 'Hello Production')
-  .listen(parseInt(process.env.PORT || '3000'))
+  .listen(parseInt(Bun.env.PORT || '3000'))
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
