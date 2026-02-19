@@ -1,12 +1,15 @@
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
+import { migrate } from "drizzle-orm/bun-sqlite/migrator"
 import { eq, and, gt, sql } from "drizzle-orm"
 import { join } from "path"
 import { mkdirSync, unlinkSync } from "fs"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
-import { initCoreTables } from "./tables"
 import { LogFile, streamPathToFilename } from "./log"
+
+/** Resolved path to the drizzle migrations folder shipped with this package. */
+const MIGRATIONS_DIR = join(import.meta.dir, "..", "drizzle")
 
 export type JsonlEngineDB = ReturnType<typeof drizzle<typeof schema>>
 
@@ -261,8 +264,8 @@ export class JsonlEngine {
   }
 
   private initTables(): void {
-    // Core tables (shared with createDB)
-    initCoreTables(this.sqlite)
+    // Core tables — applied via Drizzle migrations (single source of truth: schema.ts)
+    migrate(this.db, { migrationsFolder: MIGRATIONS_DIR })
 
     // FTS5 for full-text search on message content
     // (virtual tables can't be defined in Drizzle schema — raw DDL required)
