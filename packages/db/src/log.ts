@@ -5,6 +5,9 @@ import { constants } from "fs"
 // Pre-allocated newline byte — avoids per-append allocation
 const NEWLINE = new Uint8Array([0x0a])
 
+// eslint-disable-next-line no-control-regex
+const UNSAFE_PATH_CHARS = /[:\\<>|"?\x00-\x1f]/
+
 /**
  * JSONL log file writer/reader.
  *
@@ -40,13 +43,11 @@ export class LogFile {
   append(data: Uint8Array): { bytePos: number; length: number } {
     const bytePos = this.currentSize
 
-    // Write data + newline as a single write (O_APPEND makes this atomic on POSIX)
-    const record = new Uint8Array(data.length + 1)
-    record.set(data)
-    record.set(NEWLINE, data.length)
-
-    writeSync(this.fd, record)
-    this.currentSize += record.length
+    // Two writeSync calls are safe: writeSync blocks the event loop,
+    // so no other JS can interleave in this single-threaded process.
+    writeSync(this.fd, data)
+    writeSync(this.fd, NEWLINE)
+    this.currentSize += data.length + 1
 
     return { bytePos, length: data.length }
   }
@@ -117,8 +118,7 @@ export function streamPathToFilename(streamPath: string): string {
   }
 
   // Reject OS-unsafe characters (colons, backslashes, control chars)
-  // eslint-disable-next-line no-control-regex
-  if (/[:\\<>|"?\x00-\x1f]/.test(streamPath)) {
+  if (UNSAFE_PATH_CHARS.test(streamPath)) {
     throw new Error(`Stream path contains unsafe characters: ${streamPath}`)
   }
 
