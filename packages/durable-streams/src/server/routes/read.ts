@@ -424,6 +424,13 @@ function handleSSE(
         {
           const { messages } = ctx.store.read(path, currentOffset)
           emitMessages(messages)
+          // If offset was "-1" (from-beginning) and stream was empty, advance
+          // currentOffset to the stream's actual tail so control events report
+          // the correct offset rather than the sentinel "-1" value.
+          if (currentOffset === `-1`) {
+            const s = ctx.store.get(path)
+            if (s) currentOffset = formatInternalOffset(s.currentOffset)
+          }
         }
 
         while (isConnected && !ctx.isShuttingDown) {

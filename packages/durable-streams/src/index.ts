@@ -1,4 +1,5 @@
 export { StreamStore, normalizeContentType, formatJsonResponse, formatSingleJsonMessage, formatOffset, formatInternalOffset } from "./store"
+export { DurableStore } from "./durable-store"
 export { StoreError, STORE_ERROR_STATUS, type StoreErrorCode } from "./errors"
 export {
   calculateCursor,
@@ -17,3 +18,4 @@ export type {
   ProducerValidationResult,
   ProducerState,
 } from "./types"
+export type { IStreamStore } from "./server/lib/context"

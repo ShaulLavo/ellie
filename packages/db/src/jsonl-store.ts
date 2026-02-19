@@ -8,9 +8,9 @@ import { openDatabase } from "./init"
 import { initCoreTables } from "./tables"
 import { LogFile, streamPathToFilename } from "./log"
 
-export type LogStoreDB = ReturnType<typeof drizzle<typeof schema>>
+export type JsonlStoreDB = ReturnType<typeof drizzle<typeof schema>>
 
-export interface LogMessage {
+export interface JsonlMessage {
   data: Uint8Array
   offset: string
   timestamp: number
@@ -22,8 +22,8 @@ export interface LogMessage {
  * Write path: append to JSONL file -> insert metadata into SQLite
  * Read path: query SQLite index -> seek into JSONL file
  */
-export class LogStore {
-  readonly db: LogStoreDB
+export class JsonlStore {
+  readonly db: JsonlStoreDB
   readonly sqlite: Database
   private logDir: string
   private openLogs = new Map<string, LogFile>()
@@ -165,7 +165,7 @@ export class LogStore {
    * Read messages from a stream, optionally after a given offset.
    * Uses SQLite index to find byte positions, then reads from JSONL file.
    */
-  read(streamPath: string, afterOffset?: string): LogMessage[] {
+  read(streamPath: string, afterOffset?: string): JsonlMessage[] {
     // Check if stream exists before opening a log file
     const streamExists = this.db
       .select({ path: schema.streams.path })
