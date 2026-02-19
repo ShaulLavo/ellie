@@ -22,12 +22,7 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-
-    "paths": {
-      "elysia": ["../app/node_modules/elysia/dist/index.d.ts"],
-      "elysia/*": ["../app/node_modules/elysia/dist/*"]
-    }
+    "noUncheckedSideEffectImports": true
   },
   "include": ["src"]
 }
