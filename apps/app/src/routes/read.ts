@@ -242,7 +242,7 @@ export async function handleRead(
     responseData = applyFaultBodyModification(fault, responseData)
   }
 
-  return new Response(responseData, { status: 200, headers })
+  return new Response(responseData as unknown as BodyInit, { status: 200, headers })
 }
 
 function applyFaultBodyModification(
@@ -285,8 +285,12 @@ function handleSSE(
 ): Response {
   const isJsonStream = stream?.contentType?.includes(`application/json`)
 
+  let isConnected = true
+  let controllerRef: ReadableStreamDefaultController<Uint8Array>
+
   const readable = new ReadableStream({
     async start(controller) {
+      controllerRef = controller
       ctx.activeSSEResponses.add(controller)
 
       // Inject SSE fault event if configured
@@ -298,7 +302,6 @@ function handleSSE(
       }
 
       let currentOffset = initialOffset
-      let isConnected = true
 
       const cleanup = () => {
         isConnected = false
@@ -447,7 +450,8 @@ function handleSSE(
       }
     },
     cancel() {
-      // Client disconnected
+      isConnected = false
+      ctx.activeSSEResponses.delete(controllerRef)
     },
   })
 

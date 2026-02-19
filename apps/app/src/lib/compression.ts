@@ -11,15 +11,27 @@ export function getCompressionEncoding(
     .map((e) => e.trim())
 
   for (const encoding of encodings) {
-    const name = encoding.split(`;`)[0]?.trim()
-    if (name === `gzip`) return `gzip`
+    const parts = encoding.split(`;`)
+    const name = parts[0]?.trim()
+    if (name === `gzip` && !hasQZero(parts)) return `gzip`
   }
   for (const encoding of encodings) {
-    const name = encoding.split(`;`)[0]?.trim()
-    if (name === `deflate`) return `deflate`
+    const parts = encoding.split(`;`)
+    const name = parts[0]?.trim()
+    if (name === `deflate` && !hasQZero(parts)) return `deflate`
   }
 
   return null
+}
+
+function hasQZero(parts: string[]): boolean {
+  for (let i = 1; i < parts.length; i++) {
+    const param = parts[i]!.trim()
+    if (param.startsWith(`q=`)) {
+      return parseFloat(param.slice(2)) === 0
+    }
+  }
+  return false
 }
 
 export function compressData(
