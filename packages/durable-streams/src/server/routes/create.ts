@@ -92,6 +92,7 @@ export async function handleCreate(
   const stream = ctx.store.get(path)!
 
   const headers = new Headers({
+    "content-type": contentType,
     [STREAM_OFFSET_HEADER]: formatInternalOffset(stream.currentOffset),
   })
 
