@@ -805,14 +805,22 @@ export function createStreamDB<
   // Stream consumer state (lazy initialization)
   let streamResponse: StreamResponse<StateEvent> | null = null
   const abortController = new AbortController()
-  let consumerStarted = false
+  let consumerPromise: Promise<void> | null = null
 
   /**
-   * Start the stream consumer (called lazily on first preload)
+   * Start the stream consumer (called lazily on first preload).
+   * Uses promise caching to prevent concurrent calls from starting
+   * multiple consumers — the check-and-assign is synchronous (no
+   * await in between) so it's safe against concurrent callers.
    */
-  const startConsumer = async (): Promise<void> => {
-    if (consumerStarted) return
-    consumerStarted = true
+  const startConsumer = (): Promise<void> => {
+    if (!consumerPromise) {
+      consumerPromise = startConsumerInternal()
+    }
+    return consumerPromise
+  }
+
+  const startConsumerInternal = async (): Promise<void> => {
 
     // Start streaming (this is where the connection actually happens)
     streamResponse = await stream.stream<StateEvent>({
