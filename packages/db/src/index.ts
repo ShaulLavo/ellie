@@ -6,7 +6,8 @@ import { openDatabase, isVecAvailable } from "./init"
 export type DB = ReturnType<typeof createDB>
 
 /**
- * Create and initialize a database at the given path.
+ * Create and initialize a raw database at the given path.
+ * For direct Drizzle access without the log file layer.
  * Tables are created automatically on first run.
  */
 export function createDB(dbPath: string) {
@@ -43,7 +44,8 @@ function initTables(sqlite: Database): void {
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       stream_path TEXT NOT NULL REFERENCES streams(path) ON DELETE CASCADE,
-      data BLOB NOT NULL,
+      byte_pos INTEGER NOT NULL,
+      length INTEGER NOT NULL,
       offset TEXT NOT NULL,
       timestamp INTEGER NOT NULL
     )
@@ -70,6 +72,11 @@ function initTables(sqlite: Database): void {
 
 // Re-exports
 export { openDatabase, isVecAvailable } from "./init"
+export { LogFile, streamPathToFilename } from "./log"
+export { LogStore, formatOffset } from "./log-store"
+export type { LogMessage } from "./log-store"
+export { typedLog } from "./typed-log"
+export type { TypedLog, TypedLogRecord, TypedLogReadOptions } from "./typed-log"
 export * as schema from "./schema"
 export type {
   StreamRow,

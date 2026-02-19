@@ -2,7 +2,6 @@ import {
   sqliteTable,
   text,
   integer,
-  blob,
   index,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core"
@@ -32,7 +31,8 @@ export const messages = sqliteTable(
     streamPath: text("stream_path")
       .notNull()
       .references(() => streams.path, { onDelete: "cascade" }),
-    data: blob("data").notNull(),
+    bytePos: integer("byte_pos").notNull(),
+    length: integer("length").notNull(),
     offset: text("offset").notNull(),
     timestamp: integer("timestamp").notNull(),
   },

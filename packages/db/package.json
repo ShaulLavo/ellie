@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./typed-log": "./src/typed-log.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",
@@ -16,6 +17,14 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   },
   "optionalDependencies": {
     "sqlite-vec": "^0.1.6"
