@@ -1,5 +1,6 @@
 import { generateResponseCursor } from "../../cursor"
 import { formatSingleJsonMessage, formatInternalOffset } from "../../store"
+import type { StreamMessage } from "../../types"
 import type { ServerContext, InjectedFault } from "../lib/context"
 import { encodeSSEData } from "../lib/sse"
 import {
@@ -25,6 +26,81 @@ import {
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
+
+// Pre-encoded static SSE frame prefixes
+const SSE_EVENT_DATA_PREFIX = encoder.encode(`event: data\n`)
+const SSE_EVENT_CONTROL_PREFIX = encoder.encode(`event: control\n`)
+
+/** Encode an SSE frame (event prefix + data payload) into a single Uint8Array */
+function encodeSSEFrame(
+  prefix: Uint8Array,
+  payload: string
+): Uint8Array {
+  const encoded = encoder.encode(encodeSSEData(payload))
+  const frame = new Uint8Array(prefix.length + encoded.length)
+  frame.set(prefix)
+  frame.set(encoded, prefix.length)
+  return frame
+}
+
+/** Build and enqueue a control event. Returns true if the stream is closed (caller should break). */
+function emitControlEvent(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  opts: {
+    offset: string
+    closed: boolean
+    cursor?: string
+    upToDate?: boolean
+  }
+): boolean {
+  const data: Record<string, string | boolean> = {
+    [SSE_OFFSET_FIELD]: opts.offset,
+  }
+
+  if (opts.closed) {
+    data[SSE_CLOSED_FIELD] = true
+  } else {
+    if (opts.cursor) data[SSE_CURSOR_FIELD] = opts.cursor
+    if (opts.upToDate) data[SSE_UP_TO_DATE_FIELD] = true
+  }
+
+  controller.enqueue(encodeSSEFrame(SSE_EVENT_CONTROL_PREFIX, JSON.stringify(data)))
+  return opts.closed
+}
+
+function waitForStoreMessages(
+  ctx: ServerContext,
+  path: string,
+  offset: string,
+  timeoutMs: number
+): Promise<{
+  messages: Array<StreamMessage>
+  timedOut: boolean
+  streamClosed: boolean
+}> {
+  return new Promise((resolve) => {
+    let settled = false
+
+    const unsubscribe = ctx.store.subscribe(path, offset, (event) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeoutHandle)
+      resolve({
+        messages: event.messages,
+        timedOut: false,
+        streamClosed: event.type === `closed` || event.type === `deleted`,
+      })
+    })
+
+    const timeoutHandle = setTimeout(() => {
+      if (settled) return
+      settled = true
+      unsubscribe()
+      const s = ctx.store.get(path)
+      resolve({ messages: [], timedOut: true, streamClosed: s?.closed ?? false })
+    }, timeoutMs)
+  })
+}
 
 export async function handleRead(
   ctx: ServerContext,
@@ -140,7 +216,8 @@ export async function handleRead(
       })
     }
 
-    const result = await ctx.store.waitForMessages(
+    const result = await waitForStoreMessages(
+      ctx,
       path,
       effectiveOffset ?? streamOffset,
       ctx.config.longPollTimeout
@@ -240,7 +317,7 @@ export async function handleRead(
     const acceptEncoding = request.headers.get(`accept-encoding`)
     const compressionEncoding = getCompressionEncoding(acceptEncoding ?? undefined)
     if (compressionEncoding) {
-      responseData = compressData(responseData, compressionEncoding)
+      responseData = await compressData(responseData, compressionEncoding)
       headers.set(`content-encoding`, compressionEncoding)
       headers.set(`vary`, `accept-encoding`)
     }
@@ -328,14 +405,18 @@ function handleSSE(
             dataPayload = decoder.decode(message.data)
           }
 
-          controller.enqueue(
-            encoder.encode(
-              `event: data\n` + encodeSSEData(dataPayload)
-            )
-          )
-
+          controller.enqueue(encodeSSEFrame(SSE_EVENT_DATA_PREFIX, dataPayload))
           currentOffset = message.offset
         }
+      }
+
+      /** Check if stream is closed at tail and emit closed control if so. Returns true to break. */
+      const checkClosed = (): boolean => {
+        const s = ctx.store.get(path)
+        if (!s?.closed) return false
+        const off = formatInternalOffset(s.currentOffset)
+        if (currentOffset !== off) return false
+        return emitControlEvent(controller, { offset: currentOffset, closed: true })
       }
 
       try {
@@ -346,51 +427,23 @@ function handleSSE(
         }
 
         while (isConnected && !ctx.isShuttingDown) {
+          // Emit control event with current state
           const currentStream = ctx.store.get(path)
           const currentStreamOff = formatInternalOffset(currentStream!.currentOffset)
-          const controlOffset = currentOffset
+          const streamIsClosed = (currentStream?.closed ?? false) && currentOffset === currentStreamOff
+          const responseCursor = generateResponseCursor(cursor, ctx.config.cursorOptions)
 
-          const streamIsClosed = currentStream?.closed ?? false
-          const clientAtTail = controlOffset === currentStreamOff
+          if (emitControlEvent(controller, {
+            offset: currentOffset,
+            closed: streamIsClosed,
+            cursor: responseCursor,
+            upToDate: true,
+          })) break
 
-          const responseCursor = generateResponseCursor(
-            cursor,
-            ctx.config.cursorOptions
-          )
-          const controlData: Record<string, string | boolean> = {
-            [SSE_OFFSET_FIELD]: controlOffset,
-          }
+          if (checkClosed()) break
 
-          if (streamIsClosed && clientAtTail) {
-            controlData[SSE_CLOSED_FIELD] = true
-          } else {
-            controlData[SSE_CURSOR_FIELD] = responseCursor
-            controlData[SSE_UP_TO_DATE_FIELD] = true
-          }
-
-          controller.enqueue(
-            encoder.encode(
-              `event: control\n` + encodeSSEData(JSON.stringify(controlData))
-            )
-          )
-
-          if (streamIsClosed && clientAtTail) break
-
-          if (currentStream?.closed) {
-            const finalControlData: Record<string, string | boolean> = {
-              [SSE_OFFSET_FIELD]: currentOffset,
-              [SSE_CLOSED_FIELD]: true,
-            }
-            controller.enqueue(
-              encoder.encode(
-                `event: control\n` +
-                  encodeSSEData(JSON.stringify(finalControlData))
-              )
-            )
-            break
-          }
-
-          const result = await ctx.store.waitForMessages(
+          const result = await waitForStoreMessages(
+            ctx,
             path,
             currentOffset,
             ctx.config.longPollTimeout
@@ -398,52 +451,19 @@ function handleSSE(
 
           if (ctx.isShuttingDown || !isConnected) break
 
-          if (result.streamClosed) {
-            const finalControlData: Record<string, string | boolean> = {
-              [SSE_OFFSET_FIELD]: currentOffset,
-              [SSE_CLOSED_FIELD]: true,
-            }
-            controller.enqueue(
-              encoder.encode(
-                `event: control\n` +
-                  encodeSSEData(JSON.stringify(finalControlData))
-              )
-            )
-            break
-          }
+          // After wait: check closed (covers streamClosed + race)
+          if (result.streamClosed || checkClosed()) break
 
+          // Timeout keepalive
           if (result.timedOut) {
-            const keepAliveCursor = generateResponseCursor(
-              cursor,
-              ctx.config.cursorOptions
-            )
-
-            const streamAfterWait = ctx.store.get(path)
-            if (streamAfterWait?.closed) {
-              const closedControlData: Record<string, string | boolean> = {
-                [SSE_OFFSET_FIELD]: currentOffset,
-                [SSE_CLOSED_FIELD]: true,
-              }
-              controller.enqueue(
-                encoder.encode(
-                  `event: control\n` +
-                    encodeSSEData(JSON.stringify(closedControlData))
-                )
-              )
-              break
-            }
-
-            const keepAliveData: Record<string, string | boolean> = {
-              [SSE_OFFSET_FIELD]: currentOffset,
-              [SSE_CURSOR_FIELD]: keepAliveCursor,
-              [SSE_UP_TO_DATE_FIELD]: true,
-            }
-            controller.enqueue(
-              encoder.encode(
-                `event: control\n` +
-                  encodeSSEData(JSON.stringify(keepAliveData))
-              )
-            )
+            if (checkClosed()) break
+            const keepAliveCursor = generateResponseCursor(cursor, ctx.config.cursorOptions)
+            emitControlEvent(controller, {
+              offset: currentOffset,
+              closed: false,
+              cursor: keepAliveCursor,
+              upToDate: true,
+            })
             continue
           }
 

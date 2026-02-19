@@ -2,11 +2,12 @@ import type {
   AppendOptions,
   AppendResult,
   InternalOffset,
-  PendingLongPoll,
+  SubscriptionEvent,
   ProducerValidationResult,
   Stream,
   StreamMessage,
 } from "./types"
+import { StoreError } from "./errors"
 
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const encoder = new TextEncoder()
@@ -35,7 +36,7 @@ export function processJsonAppend(
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error(`Invalid JSON`)
+    throw new StoreError(`invalid_json`, `Invalid JSON`)
   }
 
   if (Array.isArray(parsed)) {
@@ -43,7 +44,7 @@ export function processJsonAppend(
       if (isInitialCreate) {
         return new Uint8Array(0)
       }
-      throw new Error(`Empty arrays are not allowed`)
+      throw new StoreError(`empty_array`, `Empty arrays are not allowed`)
     }
     // Arrays must be split into individual messages — stringify each element
     const elements = parsed.map((item) => JSON.stringify(item))
@@ -144,9 +145,15 @@ export function formatSingleJsonMessage(data: Uint8Array): string {
   return `[${inner}]`
 }
 
+interface Subscription {
+  path: string
+  offset: string
+  callback: (event: SubscriptionEvent) => void
+}
+
 export class StreamStore {
   private streams = new Map<string, Stream>()
-  private pendingLongPolls = new Map<string, Set<PendingLongPoll>>()
+  private subscriptions = new Map<string, Set<Subscription>>()
   private producerLockTails = new Map<string, Promise<void>>()
 
   private isExpired(stream: Stream): boolean {
@@ -204,7 +211,8 @@ export class StreamStore {
       if (contentTypeMatches && ttlMatches && expiresMatches && closedMatches) {
         return existing
       } else {
-        throw new Error(
+        throw new StoreError(
+          `already_exists`,
           `Stream already exists with different configuration: ${path}`
         )
       }
@@ -238,7 +246,7 @@ export class StreamStore {
   }
 
   delete(path: string): boolean {
-    this.cancelLongPollsForStream(path)
+    this.notifySubscribersDeleted(path)
     return this.streams.delete(path)
   }
 
@@ -352,7 +360,7 @@ export class StreamStore {
   ): AppendResult {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+      throw new StoreError(`not_found`, `Stream not found: ${path}`)
     }
 
     if (stream.closed) {
@@ -376,7 +384,8 @@ export class StreamStore {
       const providedType = normalizeContentType(options.contentType)
       const streamType = normalizeContentType(stream.contentType)
       if (providedType !== streamType) {
-        throw new Error(
+        throw new StoreError(
+          `content_type_mismatch`,
           `Content-type mismatch: expected ${stream.contentType}, got ${options.contentType}`
         )
       }
@@ -402,7 +411,8 @@ export class StreamStore {
 
     if (options.seq !== undefined) {
       if (stream.lastSeq !== undefined && options.seq <= stream.lastSeq) {
-        throw new Error(
+        throw new StoreError(
+          `sequence_conflict`,
           `Sequence conflict: ${options.seq} <= ${stream.lastSeq}`
         )
       }
@@ -427,10 +437,10 @@ export class StreamStore {
           seq: options.producerSeq!,
         }
       }
-      this.notifyLongPollsClosed(path)
+      this.notifySubscribersClosed(path)
     }
 
-    this.notifyLongPolls(path, message)
+    this.notifySubscribers(path, message)
 
     return { message, producerResult, streamClosed: options.close }
   }
@@ -460,7 +470,7 @@ export class StreamStore {
 
     const alreadyClosed = stream.closed ?? false
     stream.closed = true
-    this.notifyLongPollsClosed(path)
+    this.notifySubscribersClosed(path)
 
     return { finalOffset: formatInternalOffset(stream.currentOffset), alreadyClosed }
   }
@@ -527,7 +537,7 @@ export class StreamStore {
         seq: options.producerSeq,
       }
 
-      this.notifyLongPollsClosed(path)
+      this.notifySubscribersClosed(path)
 
       return {
         finalOffset: formatInternalOffset(stream.currentOffset),
@@ -545,7 +555,7 @@ export class StreamStore {
   ): { messages: Array<StreamMessage>; upToDate: boolean } {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+      throw new StoreError(`not_found`, `Stream not found: ${path}`)
     }
 
     if (!offset || offset === `-1`) {
@@ -576,58 +586,44 @@ export class StreamStore {
     return result
   }
 
-  async waitForMessages(
+  subscribe(
     path: string,
     offset: string,
-    timeoutMs: number
-  ): Promise<{
-    messages: Array<StreamMessage>
-    timedOut: boolean
-    streamClosed?: boolean
-  }> {
+    callback: (event: SubscriptionEvent) => void
+  ): () => void {
     const stream = this.getIfNotExpired(path)
     if (!stream) {
-      throw new Error(`Stream not found: ${path}`)
+      throw new StoreError(`not_found`, `Stream not found: ${path}`)
     }
 
     const { messages } = this.read(path, offset)
     if (messages.length > 0) {
-      return { messages, timedOut: false }
+      queueMicrotask(() => callback({ type: `messages`, messages }))
+      return () => {}
     }
 
     if (stream.closed && offset === formatInternalOffset(stream.currentOffset)) {
-      return { messages: [], timedOut: false, streamClosed: true }
+      queueMicrotask(() => callback({ type: `closed`, messages: [] }))
+      return () => {}
     }
 
-    return new Promise((resolve) => {
-      const timeoutId = setTimeout(() => {
-        this.removePendingLongPoll(pending)
-        const currentStream = this.getIfNotExpired(path)
-        const streamClosed = currentStream?.closed ?? false
-        resolve({ messages: [], timedOut: true, streamClosed })
-      }, timeoutMs)
+    const sub = { path, offset, callback }
+    let set = this.subscriptions.get(path)
+    if (!set) {
+      set = new Set()
+      this.subscriptions.set(path, set)
+    }
+    set.add(sub)
 
-      const pending: PendingLongPoll = {
-        path,
-        offset,
-        resolve: (msgs) => {
-          clearTimeout(timeoutId)
-          this.removePendingLongPoll(pending)
-          const currentStream = this.getIfNotExpired(path)
-          const streamClosed =
-            currentStream?.closed && msgs.length === 0 ? true : undefined
-          resolve({ messages: msgs, timedOut: false, streamClosed })
-        },
-        timeoutId,
+    return () => {
+      const s = this.subscriptions.get(path)
+      if (s) {
+        s.delete(sub)
+        if (s.size === 0) {
+          this.subscriptions.delete(path)
+        }
       }
-
-      let set = this.pendingLongPolls.get(path)
-      if (!set) {
-        set = new Set()
-        this.pendingLongPolls.set(path, set)
-      }
-      set.add(pending)
-    })
+    }
   }
 
   getCurrentOffset(path: string): string | undefined {
@@ -636,24 +632,22 @@ export class StreamStore {
   }
 
   clear(): void {
-    for (const set of this.pendingLongPolls.values()) {
-      for (const pending of set) {
-        clearTimeout(pending.timeoutId)
-        pending.resolve([])
+    for (const set of this.subscriptions.values()) {
+      for (const sub of set) {
+        sub.callback({ type: `deleted`, messages: [] })
       }
     }
-    this.pendingLongPolls.clear()
+    this.subscriptions.clear()
     this.streams.clear()
   }
 
-  cancelAllWaits(): void {
-    for (const set of this.pendingLongPolls.values()) {
-      for (const pending of set) {
-        clearTimeout(pending.timeoutId)
-        pending.resolve([])
+  cancelAllSubscriptions(): void {
+    for (const set of this.subscriptions.values()) {
+      for (const sub of set) {
+        sub.callback({ type: `deleted`, messages: [] })
       }
     }
-    this.pendingLongPolls.clear()
+    this.subscriptions.clear()
   }
 
   list(): Array<string> {
@@ -705,63 +699,54 @@ export class StreamStore {
     return lo < messages.length ? lo : -1
   }
 
-  private notifyLongPolls(path: string, newMessage: StreamMessage): void {
-    const set = this.pendingLongPolls.get(path)
+  private notifySubscribers(path: string, newMessage: StreamMessage): void {
+    const set = this.subscriptions.get(path)
     if (!set || set.size === 0) return
 
-    const toResolve: PendingLongPoll[] = []
-    for (const pending of set) {
-      if (newMessage.offset > pending.offset) {
-        toResolve.push(pending)
+    const toNotify: Subscription[] = []
+    for (const sub of set) {
+      if (newMessage.offset > sub.offset) {
+        toNotify.push(sub)
       }
     }
 
-    if (toResolve.length === 0) return
+    if (toNotify.length === 0) return
 
-    for (const pending of toResolve) {
-      set.delete(pending)
+    for (const sub of toNotify) {
+      set.delete(sub)
     }
     if (set.size === 0) {
-      this.pendingLongPolls.delete(path)
+      this.subscriptions.delete(path)
     }
 
     const messages = [newMessage]
-    for (const pending of toResolve) {
-      pending.resolve(messages)
+    for (const sub of toNotify) {
+      sub.callback({ type: `messages`, messages })
     }
   }
 
-  private notifyLongPollsClosed(path: string): void {
-    const set = this.pendingLongPolls.get(path)
+  private notifySubscribersClosed(path: string): void {
+    const set = this.subscriptions.get(path)
     if (!set || set.size === 0) return
 
-    const toResolve = Array.from(set)
+    const toNotify = Array.from(set)
     set.clear()
-    this.pendingLongPolls.delete(path)
+    this.subscriptions.delete(path)
 
-    const empty: StreamMessage[] = []
-    for (const pending of toResolve) {
-      pending.resolve(empty)
+    for (const sub of toNotify) {
+      sub.callback({ type: `closed`, messages: [] })
     }
   }
 
-  private cancelLongPollsForStream(path: string): void {
-    const set = this.pendingLongPolls.get(path)
+  private notifySubscribersDeleted(path: string): void {
+    const set = this.subscriptions.get(path)
     if (!set) return
-    for (const pending of set) {
-      clearTimeout(pending.timeoutId)
-      pending.resolve([])
-    }
-    this.pendingLongPolls.delete(path)
-  }
 
-  private removePendingLongPoll(pending: PendingLongPoll): void {
-    const set = this.pendingLongPolls.get(pending.path)
-    if (set) {
-      set.delete(pending)
-      if (set.size === 0) {
-        this.pendingLongPolls.delete(pending.path)
-      }
+    const toNotify = Array.from(set)
+    this.subscriptions.delete(path)
+
+    for (const sub of toNotify) {
+      sub.callback({ type: `deleted`, messages: [] })
     }
   }
 }

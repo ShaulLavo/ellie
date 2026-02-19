@@ -7,6 +7,7 @@ import { handleTestInjectError } from "./routes/test-control"
 import { consumeInjectedFault } from "./lib/context"
 import type { ServerContext } from "./lib/context"
 import { setDurableStreamHeaders } from "./lib/constants"
+import { StoreError, STORE_ERROR_STATUS } from "../errors"
 
 function applyCorsHeaders(response: Response): Response {
   const h: Record<string, string> = {}
@@ -19,6 +20,7 @@ function applyCorsHeaders(response: Response): Response {
 
 export {
   createServerContext,
+  shutdown,
   consumeInjectedFault,
   type ServerContext,
   type ServerConfig,
@@ -116,43 +118,11 @@ export async function handleDurableStreamRequest(
     }
     return applyCorsHeaders(response)
   } catch (err) {
-    if (err instanceof Error) {
-      if (err.message.includes(`not found`)) {
-        return applyCorsHeaders(new Response(`Stream not found`, {
-          status: 404,
-          headers: { "content-type": `text/plain` },
-        }))
-      }
-      if (err.message.includes(`already exists with different configuration`)) {
-        return applyCorsHeaders(new Response(`Stream already exists with different configuration`, {
-          status: 409,
-          headers: { "content-type": `text/plain` },
-        }))
-      }
-      if (err.message.includes(`Sequence conflict`)) {
-        return applyCorsHeaders(new Response(`Sequence conflict`, {
-          status: 409,
-          headers: { "content-type": `text/plain` },
-        }))
-      }
-      if (err.message.includes(`Content-type mismatch`)) {
-        return applyCorsHeaders(new Response(`Content-type mismatch`, {
-          status: 409,
-          headers: { "content-type": `text/plain` },
-        }))
-      }
-      if (err.message.includes(`Invalid JSON`)) {
-        return applyCorsHeaders(new Response(`Invalid JSON`, {
-          status: 400,
-          headers: { "content-type": `text/plain` },
-        }))
-      }
-      if (err.message.includes(`Empty arrays are not allowed`)) {
-        return applyCorsHeaders(new Response(`Empty arrays are not allowed`, {
-          status: 400,
-          headers: { "content-type": `text/plain` },
-        }))
-      }
+    if (err instanceof StoreError) {
+      return applyCorsHeaders(new Response(err.message, {
+        status: STORE_ERROR_STATUS[err.code],
+        headers: { "content-type": `text/plain` },
+      }))
     }
     console.error(`Request error:`, err instanceof Error ? err.message : JSON.stringify(err))
     return applyCorsHeaders(new Response(`Internal server error`, {

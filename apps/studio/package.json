@@ -11,8 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@durable-streams/client": "https://pkg.pr.new/durable-streams/durable-streams/@durable-streams/client@187",
-    "@durable-streams/state": "https://pkg.pr.new/durable-streams/durable-streams/@durable-streams/state@187",
+    "@ellie/streams-client": "workspace:*",
+    "@ellie/streams-state": "workspace:*",
     "@elysiajs/eden": "^1.4.8",
     "@tanstack/ai": "^0.5.1",
     "@tanstack/db": "^0.5.27",

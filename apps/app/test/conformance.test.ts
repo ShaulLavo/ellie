@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe } from "vitest"
 import { runConformanceTests } from "@durable-streams/server-conformance-tests"
 import {
   createServerContext,
+  shutdown,
   setDurableStreamHeaders,
 } from "@ellie/durable-streams/server"
 import { streamRoutes } from "../src/routes/streams"
@@ -27,16 +28,7 @@ describe(`Elysia Durable Streams Server`, () => {
   })
 
   afterAll(async () => {
-    ctx.isShuttingDown = true
-    ctx.store.cancelAllWaits()
-    for (const controller of ctx.activeSSEResponses) {
-      try {
-        controller.close()
-      } catch {
-        // Already closed
-      }
-    }
-    ctx.activeSSEResponses.clear()
+    shutdown(ctx)
     app.stop()
   })
 
