@@ -1,9 +1,9 @@
 /**
  * TreatyStreamTransport — StreamTransport implementation using Elysia Treaty RPC.
  *
- * Instead of building raw HTTP requests with URLs and headers, this transport
- * delegates to a Treaty client which provides type-safe RPC calls that resolve
- * to the same Response objects the protocol expects.
+ * All HTTP methods go through Treaty. The caller must provide a custom `fetcher`
+ * (via `treaty(origin, { fetcher })`) that clones the response body so
+ * `result.response` remains readable after Treaty consumes the clone.
  *
  * Usage (endpoint factory — preferred):
  * ```typescript
@@ -47,32 +47,20 @@ import type { Offset } from "./types"
 // ============================================================================
 
 /**
- * Minimal treaty endpoint shape — we only need the HTTP method functions.
- * This avoids coupling to a specific Elysia App type.
+ * Minimal treaty endpoint shape.
+ *
+ * Treaty v2 (eden 1.4+) uses unprefixed option keys: `headers`, `query`, `fetch`.
+ *
+ * GET/HEAD: `(options?) => Promise<TreatyResult>`
+ * PUT/POST/DELETE: `(body?, options?) => Promise<TreatyResult>`
+ *
+ * The preserving fetcher configured at treaty construction time ensures
+ * `result.response` has an intact body for all methods.
  */
-interface TreatyStreamEndpoint {
-  get: (opts?: TreatyGetOptions) => Promise<TreatyResult | Response>
-  put: (body: unknown, opts?: TreatyRequestOptions) => Promise<TreatyResult>
-  post: (body: unknown, opts?: TreatyRequestOptions) => Promise<TreatyResult>
-  head: (opts?: TreatyRequestOptions) => Promise<TreatyResult>
-  delete: (opts?: TreatyRequestOptions) => Promise<TreatyResult>
-}
-
-interface TreatyRequestOptions {
-  headers?: Record<string, string>
-  query?: Record<string, string>
+interface TreatyCallOptions {
   fetch?: RequestInit
-}
-
-/**
- * Treaty GET options. Supports `getRaw` to bypass body consumption —
- * essential for streaming responses where the body must remain unread.
- */
-interface TreatyGetOptions extends TreatyRequestOptions {
-  $query?: Record<string, string>
-  $headers?: Record<string, string>
-  $fetch?: RequestInit
-  getRaw?: boolean
+  headers?: Record<string, unknown>
+  query?: Record<string, unknown>
 }
 
 interface TreatyResult {
@@ -81,6 +69,14 @@ interface TreatyResult {
   status: number
   response: Response
   headers: HeadersInit | Record<string, string> | undefined
+}
+
+interface TreatyStreamEndpoint {
+  get: (opts?: TreatyCallOptions) => Promise<TreatyResult>
+  put: (body?: unknown, opts?: TreatyCallOptions) => Promise<TreatyResult>
+  post: (body?: unknown, opts?: TreatyCallOptions) => Promise<TreatyResult>
+  head: (opts?: TreatyCallOptions) => Promise<TreatyResult>
+  delete: (body?: unknown, opts?: TreatyCallOptions) => Promise<TreatyResult>
 }
 
 /**
@@ -138,39 +134,40 @@ export class TreatyStreamTransport implements StreamTransport {
   }
 
   /**
-   * Call a Treaty method and return the raw Response.
-   *
-   * Treaty tries to JSON-parse every response body, which throws on empty
-   * or non-JSON bodies (e.g. a 201 with no body from PUT create). When that
-   * happens, we surface a descriptive error rather than the cryptic
-   * "Cannot read properties of undefined".
+   * Call a Treaty method for GET/HEAD (single-arg: options only).
    */
-  async #call(
-    fn: () => Promise<TreatyResult>,
-    operation: string,
+  async #callGet(
+    method: `get` | `head`,
+    opts?: TreatyCallOptions,
   ): Promise<Response> {
-    let result: TreatyResult | undefined
     try {
-      result = await fn()
+      const result = await this.#endpoint()[method](opts)
+      return result.response
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Error(
-        `[TreatyStreamTransport] ${operation} failed for "${this.#name}": ${detail}`,
+        `[TreatyStreamTransport] ${method.toUpperCase()} failed for "${this.#name}": ${detail}`,
       )
     }
+  }
 
-    if (result.response) return result.response
-
-    let detail = `no response`
-    if (result.error instanceof Error) {
-      detail = result.error.message
-    } else if (result.error) {
-      detail = JSON.stringify(result.error)
+  /**
+   * Call a Treaty method for PUT/POST/DELETE (two-arg: body + options).
+   */
+  async #callBody(
+    method: `put` | `post` | `delete`,
+    body?: unknown,
+    opts?: TreatyCallOptions,
+  ): Promise<Response> {
+    try {
+      const result = await this.#endpoint()[method](body, opts)
+      return result.response
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Error(
+        `[TreatyStreamTransport] ${method.toUpperCase()} failed for "${this.#name}": ${detail}`,
+      )
     }
-
-    throw new Error(
-      `[TreatyStreamTransport] ${operation} failed for "${this.#name}": ${detail}`,
-    )
   }
 
   // --------------------------------------------------------------------------
@@ -192,13 +189,10 @@ export class TreatyStreamTransport implements StreamTransport {
       headers[STREAM_CLOSED_HEADER] = `true`
     }
 
-    return this.#call(
-      () => this.#endpoint().put(opts.body ?? null, {
-        headers,
-        fetch: { signal: opts.signal },
-      }),
-      `create`,
-    )
+    return this.#callBody(`put`, opts.body, {
+      headers,
+      fetch: { signal: opts.signal },
+    })
   }
 
   // --------------------------------------------------------------------------
@@ -206,12 +200,9 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async head(opts: TransportHeadOptions): Promise<Response> {
-    return this.#call(
-      () => this.#endpoint().head({
-        fetch: { signal: opts.signal },
-      }),
-      `head`,
-    )
+    return this.#callGet(`head`, {
+      fetch: { signal: opts.signal },
+    })
   }
 
   // --------------------------------------------------------------------------
@@ -219,13 +210,10 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async append(opts: TransportAppendOptions): Promise<Response> {
-    return this.#call(
-      () => this.#endpoint().post(opts.body, {
-        headers: opts.headers,
-        fetch: { signal: opts.signal },
-      }),
-      `append`,
-    )
+    return this.#callBody(`post`, opts.body, {
+      headers: opts.headers,
+      fetch: { signal: opts.signal },
+    })
   }
 
   // --------------------------------------------------------------------------
@@ -233,13 +221,10 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async close(opts: TransportCloseOptions): Promise<Response> {
-    return this.#call(
-      () => this.#endpoint().post(opts.body ?? null, {
-        headers: opts.headers,
-        fetch: { signal: opts.signal },
-      }),
-      `close`,
-    )
+    return this.#callBody(`post`, opts.body, {
+      headers: opts.headers,
+      fetch: { signal: opts.signal },
+    })
   }
 
   // --------------------------------------------------------------------------
@@ -247,12 +232,9 @@ export class TreatyStreamTransport implements StreamTransport {
   // --------------------------------------------------------------------------
 
   async delete(opts: TransportDeleteOptions): Promise<Response> {
-    return this.#call(
-      () => this.#endpoint().delete({
-        fetch: { signal: opts.signal },
-      }),
-      `delete`,
-    )
+    return this.#callBody(`delete`, undefined, {
+      fetch: { signal: opts.signal },
+    })
   }
 
   // --------------------------------------------------------------------------
@@ -278,15 +260,11 @@ export class TreatyStreamTransport implements StreamTransport {
       query[LIVE_QUERY_PARAM] = live
     }
 
-    // Use getRaw to get the raw Response without Treaty consuming the body.
-    // This is essential — Treaty would otherwise call .json() or .text() on
-    // the response, destroying the body stream that DurableStream needs.
-    const firstResponse = await this.#endpoint().get({
-      $headers: resolvedHeaders,
-      $query: query,
-      $fetch: { signal: opts.signal },
-      getRaw: true,
-    }) as Response
+    const firstResponse = await this.#callGet(`get`, {
+      headers: resolvedHeaders,
+      query,
+      fetch: { signal: opts.signal },
+    })
 
     if (!firstResponse.ok) {
       await handleErrorResponse(firstResponse, this.#name)
@@ -322,12 +300,20 @@ export class TreatyStreamTransport implements StreamTransport {
       const nextParams = await resolveFromSplit(paramsSplit)
       Object.assign(nextQuery, nextParams)
 
-      const response = await endpoint.get({
-        $headers: nextHeaders,
-        $query: nextQuery,
-        $fetch: { signal },
-        getRaw: true,
-      }) as Response
+      let response: Response
+      try {
+        const result = await endpoint.get({
+          headers: nextHeaders,
+          query: nextQuery,
+          fetch: { signal },
+        })
+        response = result.response
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err)
+        throw new Error(
+          `[TreatyStreamTransport] GET (fetchNext) failed for "${this.#name}": ${detail}`,
+        )
+      }
 
       if (!response.ok) {
         await handleErrorResponse(response, this.#name)
@@ -358,12 +344,20 @@ export class TreatyStreamTransport implements StreamTransport {
             const sseParams = await resolveFromSplit(paramsSplit)
             Object.assign(sseQuery, sseParams)
 
-            const response = await endpoint.get({
-              $headers: sseHeaders,
-              $query: sseQuery,
-              $fetch: { signal },
-              getRaw: true,
-            }) as Response
+            let response: Response
+            try {
+              const result = await endpoint.get({
+                headers: sseHeaders,
+                query: sseQuery,
+                fetch: { signal },
+              })
+              response = result.response
+            } catch (err) {
+              const detail = err instanceof Error ? err.message : String(err)
+              throw new Error(
+                `[TreatyStreamTransport] GET (SSE) failed for "${this.#name}": ${detail}`,
+              )
+            }
 
             if (!response.ok) {
               await handleErrorResponse(response, this.#name)

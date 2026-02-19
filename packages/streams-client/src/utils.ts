@@ -159,9 +159,11 @@ const warnedOrigins = new Set<string>()
 
 /**
  * Safely read NODE_ENV.
+ * process.env is isomorphic — works in Node, Bun, and browsers (bundlers shim it).
  */
 function getNodeEnvSafely(): string | undefined {
-  return Bun.env.NODE_ENV
+  if (typeof process !== `undefined`) return process.env.NODE_ENV
+  return undefined
 }
 
 /**

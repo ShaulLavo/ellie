@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
-import { resolve, join } from "node:path";
-import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { createServerContext } from "@ellie/durable-streams/server";
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
@@ -15,16 +14,14 @@ const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
 const durableStore = new DurableStore(engine);
 const ctx = createServerContext({ store: durableStore });
 
-// ── Resolve studio dist path ──────────────────────────────────────
+// ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
-const STUDIO_DIST = resolve(import.meta.dir, "../../studio/dist");
-const hasStudioDist = existsSync(STUDIO_DIST);
+const STUDIO_PUBLIC = resolve(import.meta.dir, "../../studio/public");
 
-if (hasStudioDist) {
-  console.log(`[server] serving studio from ${STUDIO_DIST}`);
-} else {
-  console.log(`[server] studio dist not found at ${STUDIO_DIST}, skipping static files`);
-}
+// Import index.html through Bun's HTML bundler.
+// In dev (`--hot`): Bun injects HMR client, bundles TSX on the fly.
+// In production: pre-bundled with all assets.
+const html = await import(resolve(STUDIO_PUBLIC, "index.html"));
 
 // ── Build the app ─────────────────────────────────────────────────
 const app = new Elysia()
@@ -41,27 +38,12 @@ const app = new Elysia()
     console.log(`${tag} ${method} ${url.pathname} ${status}`);
   })
   .use(streamRoutes(ctx))
-  // ── Static file serving for studio dist ─────────────────────────
-  // Serves the Vite-built React app. API routes above take priority.
-  // SPA fallback: any unmatched GET returns index.html for client-side routing.
-  .get("/*", ({ params }) => {
-    if (!hasStudioDist) return new Response("Not Found", { status: 404 });
-
-    // Try to serve the exact file requested
-    const filePath = join(STUDIO_DIST, params["*"]);
-    const file = Bun.file(filePath);
-
-    // Security: prevent path traversal
-    if (!filePath.startsWith(STUDIO_DIST)) {
-      return new Response("Forbidden", { status: 403 });
-    }
-
-    return file.exists().then((exists) => {
-      if (exists) return new Response(file);
-      // SPA fallback: serve index.html for client-side routes
-      return new Response(Bun.file(join(STUDIO_DIST, "index.html")));
-    });
-  });
+  // Serve the React app at root and as SPA fallback for client-side routes.
+  // API routes above take priority over this catch-all.
+  // html.default is a Bun HTMLBundle — Bun's serve() knows how to render it
+  // with the bundled JS/CSS and HMR client injected.
+  .get("/", html.default)
+  .get("/*", html.default);
 
 app.listen(port);
 
