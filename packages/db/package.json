@@ -1,0 +1,29 @@
+{
+  "name": "@ellie/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "build": "./scripts/build-sqlite.sh",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1"
+  },
+  "optionalDependencies": {
+    "sqlite-vec": "^0.1.6"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "drizzle-kit": "^0.31.8",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}
