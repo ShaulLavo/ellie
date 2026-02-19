@@ -214,6 +214,22 @@ interface CollectionSyncHandler {
 }
 
 /**
+ * Detect TanStack DB's known groupBy bug where commit() throws because
+ * a derived row "already exists in the collection" from a "live-query" source.
+ *
+ * String-match workaround — TanStack DB does not expose structured error codes.
+ * If TanStack changes the message, this stops matching and the error propagates
+ * normally (fail-safe: throws rather than silently swallows).
+ */
+function isTanStackGroupByBug(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(`already exists in the collection`) &&
+    error.message.includes(`live-query`)
+  )
+}
+
+/**
  * Internal event dispatcher that routes stream events to collection handlers
  */
 class EventDispatcher {
@@ -369,24 +385,13 @@ class EventDispatcher {
       try {
         handler.commit()
       } catch (error) {
-        console.error(`[StreamDB] Error in handler.commit():`, error)
-
-        // WORKAROUND for TanStack DB groupBy bug
-        // If it's the known "already exists in collection live-query" error, log and continue
-        if (
-          error instanceof Error &&
-          error.message.includes(`already exists in the collection`) &&
-          error.message.includes(`live-query`)
-        ) {
+        if (isTanStackGroupByBug(error)) {
           console.warn(
-            `[StreamDB] Known TanStack DB groupBy bug detected - continuing despite error`
+            `[StreamDB] Known TanStack DB groupBy bug detected - queries with groupBy may show stale data`
           )
-          console.warn(
-            `[StreamDB] Queries with groupBy may show stale data until fixed`
-          )
-          continue // Don't throw, let other handlers commit
+          continue
         }
-
+        console.error(`[StreamDB] Error in handler.commit():`, error)
         throw error
       }
     }
@@ -726,54 +731,13 @@ export function createStateSchema<
 }
 
 /**
- * Create a stream-backed database with TanStack DB collections
- *
- * This function is synchronous - it creates the stream handle and collections
- * but does not start the stream connection. Call `db.preload()` to connect
- * and sync initial data.
- *
- * @example
- * ```typescript
- * const stateSchema = createStateSchema({
- *   users: { schema: userSchema, type: "user", primaryKey: "id" },
- *   messages: { schema: messageSchema, type: "message", primaryKey: "id" },
- * })
- *
- * // Create a stream DB (synchronous - stream is created lazily on preload)
- * const db = createStreamDB({
- *   streamOptions: {
- *     url: "https://api.example.com/streams/my-stream",
- *     contentType: "application/json",
- *   },
- *   state: stateSchema,
- * })
- *
- * // preload() creates the stream and loads initial data
- * await db.preload()
- * const user = await db.collections.users.get("123")
- * ```
+ * Create TanStack DB collections for each state definition
  */
-export function createStreamDB<
-  TDef extends StreamStateDefinition,
-  TActions extends Record<string, ActionDefinition<any>> = Record<
-    string,
-    never
-  >,
->(
-  options: CreateStreamDBOptions<TDef, TActions>
-): TActions extends Record<string, never>
-  ? StreamDB<TDef>
-  : StreamDBWithActions<TDef, TActions> {
-  const { streamOptions, state, actions: actionsFactory } = options
-
-  // Create a stream handle (lightweight, doesn't connect until stream() is called)
-  const stream = new DurableStreamClass(streamOptions)
-
-  // Create the event dispatcher
-  const dispatcher = new EventDispatcher()
-
-  // Create TanStack DB collections for each definition
-  const collectionInstances: Record<string, Collection<object, string>> = {}
+function createCollections(
+  state: StreamStateDefinition,
+  dispatcher: EventDispatcher
+): Record<string, Collection<object, string>> {
+  const collections: Record<string, Collection<object, string>> = {}
 
   for (const [name, definition] of Object.entries(state)) {
     const collection = createCollection({
@@ -785,7 +749,7 @@ export function createStreamDB<
         dispatcher,
         definition.primaryKey
       ),
-      startSync: true, // Start syncing immediately
+      startSync: true,
       // Disable GC - we manage lifecycle via db.close()
       // DB would otherwise clean up the collections independently of each other, we
       // cant recover one and not the others from a single log.
@@ -799,30 +763,31 @@ export function createStreamDB<
       hasSize: `size` in collection,
     })
 
-    collectionInstances[name] = collection
+    collections[name] = collection
   }
 
-  // Stream consumer state (lazy initialization)
+  return collections
+}
+
+interface ConsumerHandle {
+  start: () => Promise<void>
+  close: () => void
+}
+
+/**
+ * Create a stream consumer with lazy initialization and promise-cached start.
+ * The consumer connects to the stream on first start() call and processes
+ * batches of events through the dispatcher.
+ */
+function createConsumer(
+  stream: DurableStreamClass,
+  dispatcher: EventDispatcher
+): ConsumerHandle {
+  let consumerPromise: Promise<void> | null = null
   let streamResponse: StreamResponse<StateEvent> | null = null
   const abortController = new AbortController()
-  let consumerPromise: Promise<void> | null = null
 
-  /**
-   * Start the stream consumer (called lazily on first preload).
-   * Uses promise caching to prevent concurrent calls from starting
-   * multiple consumers — the check-and-assign is synchronous (no
-   * await in between) so it's safe against concurrent callers.
-   */
-  const startConsumer = (): Promise<void> => {
-    if (!consumerPromise) {
-      consumerPromise = startConsumerInternal()
-    }
-    return consumerPromise
-  }
-
-  const startConsumerInternal = async (): Promise<void> => {
-
-    // Start streaming (this is where the connection actually happens)
+  const startInternal = async (): Promise<void> => {
     streamResponse = await stream.stream<StateEvent>({
       live: true,
       signal: abortController.signal,
@@ -867,11 +832,8 @@ export function createStreamDB<
       } catch (error) {
         console.error(`[StreamDB] Error processing batch:`, error)
         console.error(`[StreamDB] Failed batch:`, batch)
-        // Reject all waiting preload promises
         dispatcher.rejectAll(error as Error)
-        // Abort the stream to stop further processing
         abortController.abort()
-        // Don't rethrow - we've already rejected the promise
       }
       return Promise.resolve()
     })
@@ -891,23 +853,87 @@ export function createStreamDB<
     })
   }
 
-  // Build the StreamDB object with methods
-  const dbMethods: StreamDBMethods = {
-    stream,
-    preload: async () => {
-      await startConsumer()
-      await dispatcher.waitForUpToDate()
+  return {
+    start: () => {
+      if (!consumerPromise) {
+        consumerPromise = startInternal()
+      }
+      return consumerPromise
     },
     close: () => {
-      // Reject all pending operations before aborting
       dispatcher.rejectAll(new Error(`StreamDB closed`))
       abortController.abort()
     },
-    utils: {
-      awaitTxId: (txid: string, timeout?: number) =>
-        dispatcher.awaitTxId(txid, timeout),
-    },
   }
+}
+
+/**
+ * Wrap action definitions with optimistic action creators
+ */
+function wrapActions<
+  TDef extends StreamStateDefinition,
+  TActions extends Record<string, ActionDefinition<any>>,
+>(
+  actionsFactory: ActionFactory<TDef, TActions>,
+  db: StreamDB<TDef>,
+  stream: DurableStream
+): Record<string, ReturnType<typeof createOptimisticAction>> {
+  const actionDefs = actionsFactory({ db, stream })
+  const wrapped: Record<string, ReturnType<typeof createOptimisticAction>> = {}
+  for (const [name, def] of Object.entries(actionDefs)) {
+    wrapped[name] = createOptimisticAction({
+      onMutate: def.onMutate,
+      mutationFn: def.mutationFn,
+    })
+  }
+  return wrapped
+}
+
+/**
+ * Create a stream-backed database with TanStack DB collections
+ *
+ * This function is synchronous - it creates the stream handle and collections
+ * but does not start the stream connection. Call `db.preload()` to connect
+ * and sync initial data.
+ *
+ * @example
+ * ```typescript
+ * const stateSchema = createStateSchema({
+ *   users: { schema: userSchema, type: "user", primaryKey: "id" },
+ *   messages: { schema: messageSchema, type: "message", primaryKey: "id" },
+ * })
+ *
+ * // Create a stream DB (synchronous - stream is created lazily on preload)
+ * const db = createStreamDB({
+ *   streamOptions: {
+ *     url: "https://api.example.com/streams/my-stream",
+ *     contentType: "application/json",
+ *   },
+ *   state: stateSchema,
+ * })
+ *
+ * // preload() creates the stream and loads initial data
+ * await db.preload()
+ * const user = await db.collections.users.get("123")
+ * ```
+ */
+export function createStreamDB<
+  TDef extends StreamStateDefinition,
+  TActions extends Record<string, ActionDefinition<any>> = Record<
+    string,
+    never
+  >,
+>(
+  options: CreateStreamDBOptions<TDef, TActions>
+): TActions extends Record<string, never>
+  ? StreamDB<TDef>
+  : StreamDBWithActions<TDef, TActions> {
+  const { streamOptions, state, actions: actionsFactory } = options
+
+  const stream = new DurableStreamClass(streamOptions)
+  const dispatcher = new EventDispatcher()
+  const collectionInstances = createCollections(state, dispatcher)
+  const consumer = createConsumer(stream, dispatcher)
 
   // Combine collections with methods
   console.log(
@@ -916,28 +942,24 @@ export function createStreamDB<
   )
   const db = {
     collections: collectionInstances,
-    ...dbMethods,
+    stream,
+    preload: async () => {
+      await consumer.start()
+      await dispatcher.waitForUpToDate()
+    },
+    close: () => consumer.close(),
+    utils: {
+      awaitTxId: (txid: string, timeout?: number) =>
+        dispatcher.awaitTxId(txid, timeout),
+    },
   } as unknown as StreamDB<TDef>
   console.log(`[StreamDB] db.collections:`, Object.keys(db.collections))
   console.log(`[StreamDB] db.collections.events:`, db.collections.events)
 
-  // If actions factory is provided, wrap actions and return db with actions
   if (actionsFactory) {
-    const actionDefs = actionsFactory({ db, stream })
-    const wrappedActions: Record<
-      string,
-      ReturnType<typeof createOptimisticAction>
-    > = {}
-    for (const [name, def] of Object.entries(actionDefs)) {
-      wrappedActions[name] = createOptimisticAction({
-        onMutate: def.onMutate,
-        mutationFn: def.mutationFn,
-      })
-    }
-
     return {
       ...db,
-      actions: wrappedActions,
+      actions: wrapActions(actionsFactory, db, stream),
     } as any
   }
 
