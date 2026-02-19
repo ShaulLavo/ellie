@@ -134,6 +134,10 @@ export class StreamResponseImpl<
   // --- SSE Encoding State ---
   #encoding?: `base64`
 
+  // --- Pull state (used by #createResponseStream) ---
+  #firstResponseYielded = false
+  #sseEventIterator: AsyncGenerator<SSEEvent, void, undefined> | null = null
+
   // Core primitive: a ReadableStream of Response objects
   #responseStream: ReadableStream<Response>
 
@@ -668,6 +672,47 @@ export class StreamResponseImpl<
   }
 
   /**
+   * Handle SSE stream end — try to reconnect or close/error.
+   */
+  async #handleSSEStreamEnd(): Promise<
+    | { type: `continue`; newIterator: AsyncGenerator<SSEEvent, void, undefined> }
+    | { type: `closed` }
+    | { type: `error`; error: Error }
+  > {
+    try {
+      const newIterator = await this.#trySSEReconnect()
+      if (newIterator) return { type: `continue`, newIterator }
+      return { type: `closed` }
+    } catch (err) {
+      return {
+        type: `error`,
+        error: err instanceof Error ? err : new Error(`SSE reconnection failed`),
+      }
+    }
+  }
+
+  /**
+   * Try to reconnect SSE and return a response result with the new iterator,
+   * or an error result if reconnection fails.
+   */
+  async #reconnectOrYield(
+    response: Response
+  ): Promise<
+    | { type: `response`; response: Response; newIterator?: AsyncGenerator<SSEEvent, void, undefined> }
+    | { type: `error`; error: Error }
+  > {
+    try {
+      const newIterator = await this.#trySSEReconnect()
+      return { type: `response`, response, newIterator: newIterator ?? undefined }
+    } catch (err) {
+      return {
+        type: `error`,
+        error: err instanceof Error ? err : new Error(`SSE reconnection failed`),
+      }
+    }
+  }
+
+  /**
    * Process SSE events from the iterator.
    * Returns an object indicating the result:
    * - { type: 'response', response, newIterator? } - yield this response
@@ -693,20 +738,7 @@ export class StreamResponseImpl<
     const { done, value: event } = await sseEventIterator.next()
 
     if (done) {
-      // SSE stream ended - try to reconnect
-      try {
-        const newIterator = await this.#trySSEReconnect()
-        if (newIterator) {
-          return { type: `continue`, newIterator }
-        }
-      } catch (err) {
-        return {
-          type: `error`,
-          error:
-            err instanceof Error ? err : new Error(`SSE reconnection failed`),
-        }
-      }
-      return { type: `closed` }
+      return this.#handleSSEStreamEnd()
     }
 
     if (event.type === `data`) {
@@ -770,22 +802,7 @@ export class StreamResponseImpl<
           this.upToDate,
           this.streamClosed
         )
-
-        // Try to reconnect
-        try {
-          const newIterator = await this.#trySSEReconnect()
-          return {
-            type: `response`,
-            response,
-            newIterator: newIterator ?? undefined,
-          }
-        } catch (err) {
-          return {
-            type: `error`,
-            error:
-              err instanceof Error ? err : new Error(`SSE reconnection failed`),
-          }
-        }
+        return this.#reconnectOrYield(response)
       }
 
       if (controlEvent.type === `control`) {
@@ -891,116 +908,12 @@ export class StreamResponseImpl<
    * For SSE mode: yields synthetic Response objects created from SSE data events.
    */
   #createResponseStream(firstResponse: Response): ReadableStream<Response> {
-    let firstResponseYielded = false
-    let sseEventIterator: AsyncGenerator<SSEEvent, void, undefined> | null =
-      null
-
     return new ReadableStream<Response>({
       pull: async (controller) => {
         try {
-          // First, yield the held first response (for non-SSE modes)
-          // For SSE mode, the first response IS the SSE stream, so we start parsing it
-          if (!firstResponseYielded) {
-            firstResponseYielded = true
-
-            // Check if this is an SSE response
-            const isSSE =
-              firstResponse.headers
-                .get(`content-type`)
-                ?.includes(`text/event-stream`) ?? false
-
-            if (isSSE && firstResponse.body) {
-              // Track SSE connection start for resilience monitoring
-              this.#markSSEConnectionStart()
-              // Create per-request abort controller for SSE connection
-              this.#requestAbortController = new AbortController()
-              // Start parsing SSE events
-              sseEventIterator = parseSSEStream(
-                firstResponse.body,
-                this.#requestAbortController.signal
-              )
-              // Fall through to SSE processing below
-            } else {
-              // Regular response - enqueue it
-              controller.enqueue(firstResponse)
-
-              // If upToDate and not continuing live, we're done
-              if (this.upToDate && !this.#shouldContinueLive()) {
-                this.#markClosed()
-                controller.close()
-                return
-              }
-              return
-            }
-          }
-
-          // SSE mode: process events from the SSE stream
-          if (sseEventIterator) {
-            const iterator = await this.#handleSSEPauseResume(sseEventIterator, controller)
-            if (!iterator) return
-            sseEventIterator = iterator
-
-            // Keep reading events until we get data or stream ends
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            while (true) {
-              const result = await this.#processSSEEvents(sseEventIterator)
-
-              switch (result.type) {
-                case `response`:
-                  if (result.newIterator) {
-                    sseEventIterator = result.newIterator
-                  }
-                  controller.enqueue(result.response)
-                  return
-
-                case `closed`:
-                  this.#markClosed()
-                  controller.close()
-                  return
-
-                case `error`:
-                  this.#markError(result.error)
-                  controller.error(result.error)
-                  return
-
-                case `continue`:
-                  if (result.newIterator) {
-                    sseEventIterator = result.newIterator
-                  }
-                  continue
-              }
-            }
-          }
-
-          // Long-poll mode: continue with live updates if needed
-          if (await this.#handleLongPollContinuation(controller)) return
-
-          // No more data
-          this.#markClosed()
-          controller.close()
+          await this.#pullNext(firstResponse, controller)
         } catch (err) {
-          // Check if this was a pause-triggered abort
-          // Treat PAUSE_STREAM aborts as benign regardless of current state
-          // (handles race where resume() was called before abort completed)
-          if (
-            this.#requestAbortController?.signal.aborted &&
-            this.#requestAbortController.signal.reason === PAUSE_STREAM
-          ) {
-            // Only transition to paused if we're still in pause-requested state
-            if (this.#state === `pause-requested`) {
-              this.#state = `paused`
-            }
-            // Return - either we're paused, or already resumed and next pull will proceed
-            return
-          }
-
-          if (this.#abortController.signal.aborted) {
-            this.#markClosed()
-            controller.close()
-          } else {
-            this.#markError(err instanceof Error ? err : new Error(String(err)))
-            controller.error(err)
-          }
+          this.#handlePullError(err, controller)
         }
       },
 
@@ -1010,6 +923,128 @@ export class StreamResponseImpl<
         this.#markClosed()
       },
     })
+  }
+
+  /**
+   * Core pull logic — routes to first-response init, SSE loop, or long-poll.
+   */
+  async #pullNext(
+    firstResponse: Response,
+    controller: ReadableStreamDefaultController<Response>
+  ): Promise<void> {
+    if (!this.#firstResponseYielded) {
+      this.#firstResponseYielded = true
+      if (this.#initFirstResponse(firstResponse, controller)) return
+      // initFirstResponse returns false only when SSE was initialized — fall through
+    }
+
+    if (this.#sseEventIterator) {
+      await this.#processSSELoop(controller)
+      return
+    }
+
+    // Long-poll mode: continue with live updates if needed
+    if (await this.#handleLongPollContinuation(controller)) return
+
+    // No more data
+    this.#markClosed()
+    controller.close()
+  }
+
+  /**
+   * Initialize from the first response. Returns true if pull should return
+   * (either enqueued a regular response or closed). Returns false if SSE was
+   * initialized and processing should continue.
+   */
+  #initFirstResponse(
+    firstResponse: Response,
+    controller: ReadableStreamDefaultController<Response>
+  ): boolean {
+    const isSSE =
+      firstResponse.headers
+        .get(`content-type`)
+        ?.includes(`text/event-stream`) ?? false
+
+    if (isSSE && firstResponse.body) {
+      this.#markSSEConnectionStart()
+      this.#requestAbortController = new AbortController()
+      this.#sseEventIterator = parseSSEStream(
+        firstResponse.body,
+        this.#requestAbortController.signal
+      )
+      return false // Fall through to SSE processing
+    }
+
+    // Regular response - enqueue it
+    controller.enqueue(firstResponse)
+    if (this.upToDate && !this.#shouldContinueLive()) {
+      this.#markClosed()
+      controller.close()
+    }
+    return true
+  }
+
+  /**
+   * Process SSE events in a loop until a response is yielded, stream closes, or error.
+   */
+  async #processSSELoop(
+    controller: ReadableStreamDefaultController<Response>
+  ): Promise<void> {
+    const iterator = await this.#handleSSEPauseResume(this.#sseEventIterator!, controller)
+    if (!iterator) return
+    this.#sseEventIterator = iterator
+
+    // Keep reading events until we get data or stream ends
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    while (true) {
+      const result = await this.#processSSEEvents(this.#sseEventIterator!)
+      if (result.type === `response`) {
+        if (result.newIterator) this.#sseEventIterator = result.newIterator
+        controller.enqueue(result.response)
+        return
+      }
+      if (result.type === `closed`) {
+        this.#markClosed()
+        controller.close()
+        return
+      }
+      if (result.type === `error`) {
+        this.#markError(result.error)
+        controller.error(result.error)
+        return
+      }
+      // type === `continue`
+      if (result.newIterator) this.#sseEventIterator = result.newIterator
+    }
+  }
+
+  /**
+   * Handle errors from pull(). Treats pause-triggered aborts as benign.
+   */
+  #handlePullError(
+    err: unknown,
+    controller: ReadableStreamDefaultController<Response>
+  ): void {
+    // Treat PAUSE_STREAM aborts as benign regardless of current state
+    // (handles race where resume() was called before abort completed)
+    if (
+      this.#requestAbortController?.signal.aborted &&
+      this.#requestAbortController.signal.reason === PAUSE_STREAM
+    ) {
+      if (this.#state === `pause-requested`) {
+        this.#state = `paused`
+      }
+      return
+    }
+
+    if (this.#abortController.signal.aborted) {
+      this.#markClosed()
+      controller.close()
+      return
+    }
+
+    this.#markError(err instanceof Error ? err : new Error(String(err)))
+    controller.error(err)
   }
 
   /**
