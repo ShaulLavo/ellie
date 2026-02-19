@@ -1,27 +1,31 @@
+import { join } from "path"
 import { drizzle } from "drizzle-orm/bun-sqlite"
+import { migrate } from "drizzle-orm/bun-sqlite/migrator"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
-import { initCoreTables } from "./tables"
+
+/** Resolved path to the drizzle migrations folder shipped with this package. */
+const MIGRATIONS_DIR = join(import.meta.dir, "..", "drizzle")
 
 export type DB = ReturnType<typeof createDB>
 
 /**
  * Create and initialize a raw database at the given path.
  * For direct Drizzle access without the log file layer.
- * Tables are created automatically on first run.
+ * Tables are created automatically on first run via Drizzle migrations.
  */
 export function createDB(dbPath: string) {
   const sqlite = openDatabase(dbPath)
   const db = drizzle(sqlite, { schema })
 
-  initCoreTables(sqlite)
+  migrate(db, { migrationsFolder: MIGRATIONS_DIR })
 
   return { db, sqlite, schema }
 }
 
 // Re-exports
 export { openDatabase, isVecAvailable } from "./init"
-export { initCoreTables } from "./tables"
+export { MIGRATIONS_DIR }
 export { LogFile, streamPathToFilename } from "./log"
 export { JsonlEngine, formatOffset } from "./jsonl-store"
 export type { JsonlMessage } from "./jsonl-store"
