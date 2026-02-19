@@ -79,7 +79,15 @@ export function useChat(chatId: string) {
         },
       });
 
-      await db.stream.append(JSON.stringify(event));
+      try {
+        await db.stream.append(JSON.stringify(event));
+      } catch (err) {
+        console.error(
+          "[useChat] Failed to send message:",
+          err instanceof Error ? err.message : JSON.stringify(err),
+        );
+        throw err;
+      }
     },
     [],
   );
@@ -88,7 +96,16 @@ export function useChat(chatId: string) {
     const db = streamDbRef.current;
     if (!db) return;
 
-    await db.stream.delete();
+    // Best effort — if delete fails (e.g. stream already gone), we still
+    // want to recreate so the user isn't stuck with a broken chat.
+    try {
+      await db.stream.delete();
+    } catch (err) {
+      console.error(
+        "[useChat] Failed to delete stream:",
+        err instanceof Error ? err.message : JSON.stringify(err),
+      );
+    }
     db.close();
     streamDbRef.current = null;
 

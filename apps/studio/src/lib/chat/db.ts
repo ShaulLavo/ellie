@@ -12,6 +12,9 @@ export type ChatStreamDB = StreamDB<typeof chatStateSchema>;
 export function createChatStreamDB(chatId: string): ChatStreamDB {
   return createStreamDB({
     streamOptions: {
+      // Full stream path encoded into a single URL segment so it matches the
+      // backend `:id` route (not the wildcard). Elysia auto-decodes path params,
+      // so `chat%2Fdemo` → `chat/demo`. See: apps/app/src/routes/streams.ts
       url: `${window.location.origin}/streams/${encodeURIComponent(`chat/${chatId}`)}`,
       contentType: "application/json",
     },
