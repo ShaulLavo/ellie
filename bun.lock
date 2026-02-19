@@ -34,6 +34,7 @@
       "name": "studio",
       "version": "0.0.0",
       "dependencies": {
+        "@ellie/api-types": "workspace:*",
         "@ellie/streams-client": "workspace:*",
         "@ellie/streams-state": "workspace:*",
         "@elysiajs/eden": "^1.4.8",
@@ -73,6 +74,15 @@
       },
       "peerDependencies": {
         "@tanstack/ai": ">=0.5.0",
+      },
+    },
+    "packages/api-types": {
+      "name": "@ellie/api-types",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "elysia": ">=1.0.0",
+        "typescript": "^5.0.0",
       },
     },
     "packages/db": {
@@ -202,6 +212,8 @@
     "@durable-streams/state": ["@durable-streams/state@0.2.1", "", { "dependencies": { "@durable-streams/client": "0.2.1", "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@tanstack/db": ">=0.5.0" } }, "sha512-8piCcw/y1Jz6QJn0vOf+yhovFlp3xvRbzWRWtF51ndlorofJi3pOfCXnEINuvSueuNMIJosmKOg0AEvpMKfoCw=="],
 
     "@ellie/ai": ["@ellie/ai@workspace:packages/ai"],
+
+    "@ellie/api-types": ["@ellie/api-types@workspace:packages/api-types"],
 
     "@ellie/db": ["@ellie/db@workspace:packages/db"],
 
@@ -894,6 +906,8 @@
     "zod-validation-error": ["zod-validation-error@4.0.2", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ=="],
 
     "@ellie/ai/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@ellie/api-types/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@ellie/db/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

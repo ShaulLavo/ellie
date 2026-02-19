@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ellie/api-types": "workspace:*",
     "@ellie/streams-client": "workspace:*",
     "@ellie/streams-state": "workspace:*",
     "@elysiajs/eden": "^1.4.8",
