@@ -1,4 +1,4 @@
-import { createStreamDB, type StreamDB } from "@durable-streams/state";
+import { createStreamDB, type StreamDB } from "@ellie/streams-state";
 import { chatStateSchema } from "./schema";
 
 export type ChatStreamDB = StreamDB<typeof chatStateSchema>;

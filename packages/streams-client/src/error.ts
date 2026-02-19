@@ -9,13 +9,14 @@ export class FetchError extends Error {
   text?: string
   json?: object
   headers: Record<string, string>
+  readonly url: string
 
   constructor(
     status: number,
     text: string | undefined,
     json: object | undefined,
     headers: Record<string, string>,
-    public url: string,
+    url: string,
     message?: string
   ) {
     super(
@@ -27,6 +28,7 @@ export class FetchError extends Error {
     this.text = text
     this.json = json
     this.headers = headers
+    this.url = url
   }
 
   static async fromResponse(

@@ -1,4 +1,4 @@
-import { createStateSchema } from "@durable-streams/state";
+import { createStateSchema } from "@ellie/streams-state";
 import { z } from "zod";
 
 export const messageSchema = z.object({

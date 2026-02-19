@@ -7,11 +7,11 @@ export type StoreErrorCode =
   | 'empty_array'
 
 export class StoreError extends Error {
-  constructor(
-    public readonly code: StoreErrorCode,
-    message: string
-  ) {
+  readonly code: StoreErrorCode
+
+  constructor(code: StoreErrorCode, message: string) {
     super(message)
+    this.code = code
     this.name = 'StoreError'
   }
 }
