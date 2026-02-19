@@ -25,7 +25,8 @@ import type { IStreamStore } from "./server/lib/context"
 // write-through cache) to avoid repeated SQLite + JSONL seeks on hot streams.
 
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
-const PRODUCER_CLEANUP_INTERVAL_MS = 5 * 60_000
+// TODO: Replace setInterval with a proper cron job for producer cleanup
+const PRODUCER_CLEANUP_INTERVAL_MS = 60 * 60_000
 
 const encoder = new TextEncoder()
 
