@@ -25,6 +25,7 @@ import type { IStreamStore } from "./server/lib/context"
 // write-through cache) to avoid repeated SQLite + JSONL seeks on hot streams.
 
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const PRODUCER_CLEANUP_INTERVAL_MS = 60_000
 
 const encoder = new TextEncoder()
 
@@ -40,9 +41,20 @@ export class DurableStore implements IStreamStore {
   private engine: JsonlEngine
   private subscriptions = new Map<string, Set<Subscription>>()
   private producerLockTails = new Map<string, Promise<void>>()
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(engine: JsonlEngine) {
     this.engine = engine
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredProducers()
+    }, PRODUCER_CLEANUP_INTERVAL_MS)
+  }
+
+  close(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval)
+      this.cleanupInterval = null
+    }
   }
 
   // -- Public API (IStreamStore) --------------------------------------------
@@ -491,17 +503,6 @@ export class DurableStore implements IStreamStore {
   ): ProducerValidationResult {
     const now = Date.now()
 
-    // Clean up expired producer state for this stream
-    this.engine.db
-      .delete(schema.producers)
-      .where(
-        and(
-          eq(schema.producers.streamPath, path),
-          lt(schema.producers.lastUpdated, now - PRODUCER_STATE_TTL_MS)
-        )
-      )
-      .run()
-
     const state = this.engine.db
       .select()
       .from(schema.producers)
@@ -586,6 +587,13 @@ export class DurableStore implements IStreamStore {
           lastUpdated: proposedState.lastUpdated,
         },
       })
+      .run()
+  }
+
+  private cleanupExpiredProducers(): void {
+    this.engine.db
+      .delete(schema.producers)
+      .where(lt(schema.producers.lastUpdated, Date.now() - PRODUCER_STATE_TTL_MS))
       .run()
   }
 
