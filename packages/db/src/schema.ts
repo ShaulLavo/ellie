@@ -2,17 +2,18 @@ import {
   sqliteTable,
   text,
   integer,
-  blob,
   index,
-  uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/sqlite-core"
 
-// ── Stream metadata ──────────────────────────────────────────────────────────
+// -- Stream metadata ----------------------------------------------------------
 
 export const streams = sqliteTable("streams", {
   path: text("path").primaryKey(),
   contentType: text("content_type"),
   ttlSeconds: integer("ttl_seconds"),
+  // Intentionally text (not integer) — stores ISO-8601 strings for
+  // timezone-aware expiration, human-readable JSONL grep output, etc.
   expiresAt: text("expires_at"),
   createdAt: integer("created_at").notNull(),
   closed: integer("closed", { mode: "boolean" }).notNull().default(false),
@@ -23,7 +24,7 @@ export const streams = sqliteTable("streams", {
   currentByteOffset: integer("current_byte_offset").notNull().default(0),
 })
 
-// ── Stream messages (append-only log) ────────────────────────────────────────
+// -- Stream messages (append-only log index) ----------------------------------
 
 export const messages = sqliteTable(
   "messages",
@@ -32,7 +33,8 @@ export const messages = sqliteTable(
     streamPath: text("stream_path")
       .notNull()
       .references(() => streams.path, { onDelete: "cascade" }),
-    data: blob("data").notNull(),
+    bytePos: integer("byte_pos").notNull(),
+    length: integer("length").notNull(),
     offset: text("offset").notNull(),
     timestamp: integer("timestamp").notNull(),
   },
@@ -41,7 +43,7 @@ export const messages = sqliteTable(
   ]
 )
 
-// ── Producer state (idempotency tracking) ────────────────────────────────────
+// -- Producer state (idempotency tracking) ------------------------------------
 
 export const producers = sqliteTable(
   "producers",
@@ -55,11 +57,21 @@ export const producers = sqliteTable(
     lastUpdated: integer("last_updated").notNull(),
   },
   (table) => [
-    uniqueIndex("idx_producers_pk").on(table.streamPath, table.producerId),
+    primaryKey({ columns: [table.streamPath, table.producerId] }),
   ]
 )
 
-// ── Type exports ─────────────────────────────────────────────────────────────
+// -- Virtual tables (created via raw DDL in LogStore.initTables) ---------------
+//
+// These can't be defined in Drizzle — drizzle-orm has no virtual table support.
+// They are bootstrapped by LogStore at runtime:
+//
+//   messages_fts  — FTS5 virtual table (id, stream_path, content) with porter stemming
+//   messages_vec  — vec0 virtual table (id INTEGER PK, embedding float[384]) — optional
+//
+// See log-store.ts:initTables() for the DDL.
+
+// -- Type exports -------------------------------------------------------------
 
 export type StreamRow = typeof streams.$inferSelect
 export type NewStreamRow = typeof streams.$inferInsert
