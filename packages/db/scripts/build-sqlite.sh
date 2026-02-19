@@ -19,6 +19,20 @@ BUILD_DIR="$PKG_DIR/.build-sqlite"
 OUT_DIR="$PKG_DIR/dist"
 
 # Versions — pin these for reproducibility
+#
+# To update SQLite:
+#   1. Visit https://www.sqlite.org/download.html
+#   2. Find the "amalgamation" zip under "Source Code"
+#   3. The URL contains the year and version number:
+#      https://www.sqlite.org/{YEAR}/sqlite-amalgamation-{VERSION}.zip
+#      e.g. 3450300 = 3.45.3 (major*1000000 + minor*1000 + patch*100)
+#   4. Update SQLITE_YEAR and SQLITE_VERSION below
+#
+# To update sqlite-vec:
+#   1. Visit https://github.com/asg017/sqlite-vec/releases
+#   2. Update SQLITE_VEC_VERSION to the latest release tag (without 'v' prefix)
+#
+# After updating, run: FORCE_REBUILD=1 ./scripts/build-sqlite.sh
 SQLITE_YEAR="${SQLITE_YEAR:-2024}"
 SQLITE_VERSION="${SQLITE_VERSION:-3450300}"
 SQLITE_VEC_VERSION="${SQLITE_VEC_VERSION:-0.1.6}"
@@ -130,8 +144,20 @@ echo "[build-sqlite] Built: $OUT_LIB ($(du -h "$OUT_LIB" | cut -f1))"
 # --- Verify ---
 echo "[build-sqlite] Verifying symbols..."
 case "$OS" in
-  Darwin) nm -gU "$OUT_LIB" | grep -q sqlite3_vec_init && echo "[build-sqlite] sqlite3_vec_init found" ;;
-  Linux)  nm -D "$OUT_LIB" | grep -q sqlite3_vec_init && echo "[build-sqlite] sqlite3_vec_init found" ;;
+  Darwin)
+    if ! nm -gU "$OUT_LIB" | grep -q sqlite3_vec_init; then
+      echo "[build-sqlite] ERROR: sqlite3_vec_init not found in $OUT_LIB" >&2
+      exit 1
+    fi
+    echo "[build-sqlite] sqlite3_vec_init found"
+    ;;
+  Linux)
+    if ! nm -D "$OUT_LIB" | grep -q sqlite3_vec_init; then
+      echo "[build-sqlite] ERROR: sqlite3_vec_init not found in $OUT_LIB" >&2
+      exit 1
+    fi
+    echo "[build-sqlite] sqlite3_vec_init found"
+    ;;
 esac
 
 echo "[build-sqlite] Done."

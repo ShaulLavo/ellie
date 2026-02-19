@@ -2,6 +2,9 @@ import { openSync, closeSync, writeSync, readSync, statSync, mkdirSync } from "f
 import { dirname } from "path"
 import { constants } from "fs"
 
+// Pre-allocated newline byte — avoids per-append allocation
+const NEWLINE = new Uint8Array([0x0a])
+
 /**
  * JSONL log file writer/reader.
  *
@@ -40,10 +43,9 @@ export class LogFile {
     const bytePos = this.currentSize
 
     // Write data + newline as a single write (O_APPEND makes this atomic on POSIX)
-    const newline = new Uint8Array([0x0a]) // "\n"
     const record = new Uint8Array(data.length + 1)
     record.set(data)
-    record.set(newline, data.length)
+    record.set(NEWLINE, data.length)
 
     writeSync(this.fd, record)
     this.currentSize += record.length
@@ -63,7 +65,7 @@ export class LogFile {
 
   /**
    * Read multiple records by their byte positions.
-   * More efficient than calling readAt in a loop when the entries are sorted.
+   * Convenience wrapper — calls readAt for each entry.
    */
   readRange(
     entries: Array<{ bytePos: number; length: number }>
@@ -100,10 +102,31 @@ export class LogFile {
 
 /**
  * Convert a stream path to a safe filename.
- * `/chat/session-123` → `chat__session-123.jsonl`
+ * `/chat/session-123` -> `chat__session-123.jsonl`
+ *
+ * Rejects paths with null bytes, path traversal (`..`), or other unsafe characters.
  */
 export function streamPathToFilename(streamPath: string): string {
-  // Strip leading slash, replace remaining slashes with __
-  const normalized = streamPath.replace(/^\//, "").replace(/\//g, "__")
+  // Reject null bytes
+  if (streamPath.includes("\0")) {
+    throw new Error(`Stream path contains null bytes: ${streamPath}`)
+  }
+
+  // Reject path traversal
+  const segments = streamPath.split("/").filter(Boolean)
+  if (segments.some((s) => s === ".." || s === ".")) {
+    throw new Error(`Stream path contains path traversal: ${streamPath}`)
+  }
+
+  // Reject OS-unsafe characters (colons, backslashes, control chars)
+  if (/[:\\<>|"?\x00-\x1f]/.test(streamPath)) {
+    throw new Error(`Stream path contains unsafe characters: ${streamPath}`)
+  }
+
+  if (segments.length === 0) {
+    throw new Error(`Stream path is empty`)
+  }
+
+  const normalized = segments.join("__")
   return `${normalized}.jsonl`
 }

@@ -1,7 +1,7 @@
 import type { z } from "zod"
 import type { LogStore } from "./log-store"
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 export interface TypedLogRecord<T> {
   data: T
@@ -25,7 +25,7 @@ export interface TypedLog<T> {
     timestamp: number
   }
 
-  /** Read records, optionally after an offset. */
+  /** Read records, optionally after an offset. Silently skips corrupted lines. */
   read(options?: TypedLogReadOptions): TypedLogRecord<T>[]
 
   /** Number of records in this log. */
@@ -35,7 +35,7 @@ export interface TypedLog<T> {
   readonly streamPath: string
 }
 
-// ── Implementation ──────────────────────────────────────────────────────────
+// -- Implementation -----------------------------------------------------------
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -81,17 +81,26 @@ export function typedLog<S extends z.ZodType>(
 
     read(opts?: TypedLogReadOptions): TypedLogRecord<z.infer<S>>[] {
       const messages = store.read(streamPath, opts?.after)
+      const results: TypedLogRecord<z.infer<S>>[] = []
 
-      return messages.map((msg) => {
-        const json = decoder.decode(msg.data)
-        const parsed = JSON.parse(json)
+      for (const msg of messages) {
+        try {
+          const json = decoder.decode(msg.data)
+          const parsed = JSON.parse(json)
+          const data = opts?.validate ? schema.parse(parsed) : parsed
 
-        return {
-          data: opts?.validate ? schema.parse(parsed) : parsed,
-          offset: msg.offset,
-          timestamp: msg.timestamp,
+          results.push({
+            data,
+            offset: msg.offset,
+            timestamp: msg.timestamp,
+          })
+        } catch {
+          // Skip corrupted/malformed lines — don't abort the entire read
+          continue
         }
-      })
+      }
+
+      return results
     },
 
     count() {

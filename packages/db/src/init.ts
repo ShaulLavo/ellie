@@ -7,6 +7,8 @@ import { resolve } from "path"
 const EXT = process.platform === "darwin" ? "dylib" : "so"
 const CUSTOM_LIB = resolve(import.meta.dirname, `../dist/libsqlite3-vec.${EXT}`)
 
+// macOS-only Homebrew fallback paths. On Linux, the custom-compiled lib
+// (dist/libsqlite3-vec.*) must be provided — there is no automatic fallback.
 const FALLBACK_PATHS = [
   "/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib", // macOS ARM (Homebrew)
   "/usr/local/opt/sqlite3/lib/libsqlite3.dylib", // macOS Intel (Homebrew)
@@ -39,7 +41,8 @@ export function initCustomSQLite(): void {
     if (existsSync(p)) {
       Database.setCustomSQLite(p)
       needsLoadExtension = true
-      vecAvailable = true
+      // Don't set vecAvailable here — it's only confirmed when sqlite-vec
+      // actually loads successfully in openDatabase()
       return
     }
   }
@@ -75,6 +78,7 @@ export function openDatabase(dbPath: string): Database {
     try {
       const sqliteVec = require("sqlite-vec") as typeof import("sqlite-vec")
       sqliteVec.load(db)
+      vecAvailable = true
     } catch (err) {
       vecAvailable = false
       console.warn(

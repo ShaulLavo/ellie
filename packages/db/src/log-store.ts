@@ -2,9 +2,10 @@ import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import { eq, and, gt, sql } from "drizzle-orm"
 import { join } from "path"
-import { mkdirSync } from "fs"
+import { mkdirSync, unlinkSync } from "fs"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
+import { initCoreTables } from "./tables"
 import { LogFile, streamPathToFilename } from "./log"
 
 export type LogStoreDB = ReturnType<typeof drizzle<typeof schema>>
@@ -18,8 +19,8 @@ export interface LogMessage {
 /**
  * Hybrid log store: JSONL files for data, SQLite for index.
  *
- * Write path: append to JSONL file → insert metadata into SQLite
- * Read path: query SQLite index → seek into JSONL file
+ * Write path: append to JSONL file -> insert metadata into SQLite
+ * Read path: query SQLite index -> seek into JSONL file
  */
 export class LogStore {
   readonly db: LogStoreDB
@@ -36,7 +37,7 @@ export class LogStore {
     this.initTables()
   }
 
-  // ── Stream operations ──────────────────────────────────────────────────
+  // -- Stream operations ----------------------------------------------------
 
   createStream(
     streamPath: string,
@@ -48,15 +49,7 @@ export class LogStore {
   ): schema.StreamRow {
     const now = Date.now()
 
-    // Check if stream already exists
-    const existing = this.db
-      .select()
-      .from(schema.streams)
-      .where(eq(schema.streams.path, streamPath))
-      .get()
-
-    if (existing) return existing
-
+    // Idempotent insert — ignore conflict if stream already exists
     this.db
       .insert(schema.streams)
       .values({
@@ -66,6 +59,7 @@ export class LogStore {
         expiresAt: options.expiresAt,
         createdAt: now,
       })
+      .onConflictDoNothing()
       .run()
 
     return this.db
@@ -99,9 +93,18 @@ export class LogStore {
       log.close()
       this.openLogs.delete(streamPath)
     }
+
+    // Remove the JSONL file from disk
+    const filename = streamPathToFilename(streamPath)
+    const filePath = join(this.logDir, filename)
+    try {
+      unlinkSync(filePath)
+    } catch (e: any) {
+      if (e.code !== "ENOENT") throw e
+    }
   }
 
-  // ── Append ─────────────────────────────────────────────────────────────
+  // -- Append ---------------------------------------------------------------
 
   /**
    * Append a message to a stream.
@@ -156,14 +159,21 @@ export class LogStore {
     return { offset, bytePos, length, timestamp }
   }
 
-  // ── Read ───────────────────────────────────────────────────────────────
+  // -- Read -----------------------------------------------------------------
 
   /**
    * Read messages from a stream, optionally after a given offset.
    * Uses SQLite index to find byte positions, then reads from JSONL file.
    */
   read(streamPath: string, afterOffset?: string): LogMessage[] {
-    const log = this.getOrOpenLog(streamPath)
+    // Check if stream exists before opening a log file
+    const streamExists = this.db
+      .select({ path: schema.streams.path })
+      .from(schema.streams)
+      .where(eq(schema.streams.path, streamPath))
+      .get()
+
+    if (!streamExists) return []
 
     // Query the index
     let rows: schema.MessageRow[]
@@ -188,6 +198,11 @@ export class LogStore {
         .orderBy(schema.messages.offset)
         .all()
     }
+
+    if (rows.length === 0) return []
+
+    // Only open the log file when we actually have rows to read
+    const log = this.getOrOpenLog(streamPath)
 
     // Read data from the JSONL file
     return rows.map((row) => ({
@@ -218,7 +233,7 @@ export class LogStore {
     return result?.count ?? 0
   }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────
+  // -- Lifecycle ------------------------------------------------------------
 
   close(): void {
     for (const log of this.openLogs.values()) {
@@ -228,7 +243,7 @@ export class LogStore {
     this.sqlite.close()
   }
 
-  // ── Private helpers ────────────────────────────────────────────────────
+  // -- Private helpers ------------------------------------------------------
 
   private getOrOpenLog(streamPath: string): LogFile {
     let log = this.openLogs.get(streamPath)
@@ -242,52 +257,11 @@ export class LogStore {
   }
 
   private initTables(): void {
-    this.sqlite.run(`
-      CREATE TABLE IF NOT EXISTS streams (
-        path TEXT PRIMARY KEY,
-        content_type TEXT,
-        ttl_seconds INTEGER,
-        expires_at TEXT,
-        created_at INTEGER NOT NULL,
-        closed INTEGER NOT NULL DEFAULT 0,
-        closed_by_producer_id TEXT,
-        closed_by_epoch INTEGER,
-        closed_by_seq INTEGER,
-        current_read_seq INTEGER NOT NULL DEFAULT 0,
-        current_byte_offset INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-
-    this.sqlite.run(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        stream_path TEXT NOT NULL REFERENCES streams(path) ON DELETE CASCADE,
-        byte_pos INTEGER NOT NULL,
-        length INTEGER NOT NULL,
-        offset TEXT NOT NULL,
-        timestamp INTEGER NOT NULL
-      )
-    `)
-
-    this.sqlite.run(
-      `CREATE INDEX IF NOT EXISTS idx_messages_stream_offset ON messages(stream_path, offset)`
-    )
-
-    this.sqlite.run(`
-      CREATE TABLE IF NOT EXISTS producers (
-        stream_path TEXT NOT NULL REFERENCES streams(path) ON DELETE CASCADE,
-        producer_id TEXT NOT NULL,
-        epoch INTEGER NOT NULL,
-        last_seq INTEGER NOT NULL,
-        last_updated INTEGER NOT NULL
-      )
-    `)
-
-    this.sqlite.run(
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_producers_pk ON producers(stream_path, producer_id)`
-    )
+    // Core tables (shared with createDB)
+    initCoreTables(this.sqlite)
 
     // FTS5 for full-text search on message content
+    // (virtual tables can't be defined in Drizzle schema — raw DDL required)
     this.sqlite.run(`
       CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
       USING fts5(id, stream_path, content, tokenize='porter')
@@ -305,7 +279,7 @@ export class LogStore {
   }
 }
 
-// ── Offset formatting ──────────────────────────────────────────────────────
+// -- Offset formatting --------------------------------------------------------
 
 export function formatOffset(readSeq: number, byteOffset: number): string {
   return `${String(readSeq).padStart(16, "0")}_${String(byteOffset).padStart(16, "0")}`
