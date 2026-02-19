@@ -45,3 +45,6 @@ data/
 # Misc
 .DS_Store
 *.pem
+
+# Claude worktrees
+.claude/worktrees/
