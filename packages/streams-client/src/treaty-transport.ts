@@ -69,7 +69,7 @@ interface TreatyResult {
   error: unknown
   status: number
   response: Response
-  headers: Record<string, string>
+  headers: HeadersInit | Record<string, string> | undefined
 }
 
 /**

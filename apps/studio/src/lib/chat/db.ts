@@ -1,4 +1,6 @@
 import { createStreamDB, type StreamDB } from "@ellie/streams-state";
+import { TreatyStreamTransport } from "@ellie/streams-client";
+import { api } from "../api";
 import { chatStateSchema } from "./schema";
 
 export type ChatStreamDB = StreamDB<typeof chatStateSchema>;
@@ -6,17 +8,23 @@ export type ChatStreamDB = StreamDB<typeof chatStateSchema>;
 /**
  * Create a StreamDB instance for a chat session.
  *
- * Connects to the durable streams endpoint via the Vite dev proxy.
- * The stream path matches what the backend chat route creates: `/chat/{chatId}`
+ * Uses Eden Treaty RPC through the named `/chat/:id` route for full
+ * type-safe communication. The transport delegates to `api.chat({ id })`
+ * which maps to the parameterized route on the backend.
  */
 export function createChatStreamDB(chatId: string): ChatStreamDB {
+  const transport = new TreatyStreamTransport({
+    endpoint: () => api.chat({ id: chatId }),
+    name: `chat/${chatId}`,
+  });
+
   return createStreamDB({
     streamOptions: {
-      // Full stream path encoded into a single URL segment so it matches the
-      // backend `:id` route (not the wildcard). Elysia auto-decodes path params,
-      // so `chat%2Fdemo` → `chat/demo`. See: apps/app/src/routes/streams.ts
-      url: `${window.location.origin}/streams/${encodeURIComponent(`chat/${chatId}`)}`,
+      // URL is required by DurableStream validation but not used for networking
+      // when a transport is provided — it serves as a descriptive identifier.
+      url: `${window.location.origin}/chat/${chatId}`,
       contentType: "application/json",
+      transport,
     },
     state: chatStateSchema,
   });

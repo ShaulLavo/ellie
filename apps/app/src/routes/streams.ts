@@ -1,7 +1,6 @@
-import { Elysia, t } from "elysia"
+import { Elysia } from "elysia"
 import {
   handleDurableStreamRequest,
-  waitForStoreMessages,
   type ServerContext,
 } from "@ellie/durable-streams/server"
 import type { TSchema } from "@sinclair/typebox"
@@ -44,72 +43,26 @@ export function decodeAndValidate<T extends TSchema>(
 }
 
 /**
- * Factory: create a typed Elysia plugin for a named stream.
+ * Factory: create a parameterized Elysia plugin for a named stream with `:id` sub-routes.
  *
- * Two modes:
- *  - **Static** (default): single stream at the prefix path.
- *    GET returns an async generator for direct Treaty `for await` consumption.
- *  - **Parameterized** (`parameterized: true`): `:id` sub-routes.
- *    All methods (including GET) delegate to handleDurableStreamRequest so
- *    TreatyStreamTransport receives raw Response objects with protocol headers.
- *    Treaty shape: `api.chat({ id: "demo" }).get()`, etc.
+ * All methods (including GET) delegate to handleDurableStreamRequest so that
+ * TreatyStreamTransport receives raw Response objects with protocol headers.
+ * Treaty shape: `api.chat({ id: "demo" }).get()`, etc.
  */
-function createTypedStreamRoute<T extends TSchema>(
+function createParamStreamRoute(
   ctx: ServerContext,
   streamPath: string,
-  schema: T,
-  options?: { parameterized?: boolean },
 ) {
   const prefix = streamPath.slice(1)
-
-  if (options?.parameterized) {
-    const handle = (request: Request, id: string) =>
-      handleDurableStreamRequest(ctx, request, `${streamPath}/${id}`)
-
-    return new Elysia({ prefix })
-      .get(`/:id`, ({ request, params }) => handle(request, params.id))
-      .put(`/:id`, ({ request, params }) => handle(request, params.id))
-      .post(`/:id`, ({ request, params }) => handle(request, params.id))
-      .head(`/:id`, ({ request, params }) => handle(request, params.id))
-      .delete(`/:id`, ({ request, params }) => handle(request, params.id))
-  }
-
-  const handle = (request: Request) =>
-    handleDurableStreamRequest(ctx, request, streamPath)
+  const handle = (request: Request, id: string) =>
+    handleDurableStreamRequest(ctx, request, `${streamPath}/${id}`)
 
   return new Elysia({ prefix })
-    .get(`/`, async function* ({ query }) {
-      const offset = query?.offset ?? `-1`
-      let currentOffset = offset
-
-      // Catch-up: yield existing messages
-      const { messages } = ctx.store.read(streamPath, currentOffset)
-      for (const msg of messages) {
-        yield decodeAndValidate(msg, schema)
-        currentOffset = msg.offset
-      }
-
-      // Live: subscribe and yield new messages as they arrive
-      while (true) {
-        const result = await waitForStoreMessages(
-          ctx, streamPath, currentOffset, ctx.config.longPollTimeout
-        )
-        if (result.streamClosed) break
-        if (result.timedOut) continue
-        for (const msg of result.messages) {
-          yield decodeAndValidate(msg, schema)
-          currentOffset = msg.offset
-        }
-      }
-    }, {
-      query: t.Optional(t.Object({
-        offset: t.Optional(t.String()),
-      })),
-    })
-    .put(`/`, ({ request }) => handle(request))
-    .post(`/`, ({ request }) => handle(request))
-    .head(`/`, ({ request }) => handle(request))
-    .delete(`/`, ({ request }) => handle(request))
+    .get(`/:id`, ({ request, params }) => handle(request, params.id))
+    .put(`/:id`, ({ request, params }) => handle(request, params.id))
+    .post(`/:id`, ({ request, params }) => handle(request, params.id))
+    .head(`/:id`, ({ request, params }) => handle(request, params.id))
+    .delete(`/:id`, ({ request, params }) => handle(request, params.id))
 }
 
 // ── Route registration ──────────────────────────────────────────────
@@ -119,13 +72,10 @@ export function streamRoutes(ctx: ServerContext) {
     handleDurableStreamRequest(ctx, request, `/${path}`)
 
   return new Elysia()
-    // ── Named typed routes (Treaty: api.chat({ id }).get(), etc.) ──
-    .use(createTypedStreamRoute(ctx, `/chat`, t.Object({
-      role: t.String(),
-      content: t.String(),
-    }), { parameterized: true }))
+    // ── Named parameterized routes (Treaty: api.chat({ id }).get(), etc.) ──
+    .use(createParamStreamRoute(ctx, `/chat`))
     // Add more named routes here as needed:
-    // .use(createTypedStreamRoute(ctx, `/presence`, presenceSchema, { parameterized: true }))
+    // .use(createParamStreamRoute(ctx, `/presence`))
 
     // ── Generic transport routes (for TreatyStreamTransport / raw HTTP) ──
     .group(`/streams`, (app) => app
