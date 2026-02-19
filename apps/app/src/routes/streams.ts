@@ -4,9 +4,8 @@ import {
   type ServerContext,
 } from "@ellie/durable-streams/server"
 
-export function streamRoutes(ctx: ServerContext, enabled: boolean) {
+export function streamRoutes(ctx: ServerContext) {
   const handle = (request: Request, path: string) => {
-    if (!enabled) return new Response(`Not found`, { status: 404 })
     return handleDurableStreamRequest(ctx, request, `/${path}`)
   }
 
