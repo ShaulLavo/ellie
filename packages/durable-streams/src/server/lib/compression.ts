@@ -34,13 +34,29 @@ function hasQZero(parts: string[]): boolean {
   return false
 }
 
-export function compressData(
+export async function compressData(
   data: Uint8Array,
   encoding: `gzip` | `deflate`
-): Uint8Array {
-  if (encoding === `gzip`) {
-    return Bun.gzipSync(data)
-  } else {
-    return Bun.deflateSync(data)
+): Promise<Uint8Array> {
+  const cs = new CompressionStream(encoding)
+  const writer = cs.writable.getWriter()
+  writer.write(data as unknown as BufferSource)
+  writer.close()
+  const reader = cs.readable.getReader()
+  const chunks: Uint8Array[] = []
+  let totalLength = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    totalLength += value.length
   }
+  if (chunks.length === 1) return chunks[0]!
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const chunk of chunks) {
+    result.set(chunk, offset)
+    offset += chunk.length
+  }
+  return result
 }
