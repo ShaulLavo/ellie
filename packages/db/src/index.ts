@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import * as schema from "./schema"
-import { openDatabase, isVecAvailable } from "./init"
+import { openDatabase } from "./init"
 import { initCoreTables } from "./tables"
 
 export type DB = ReturnType<typeof createDB>

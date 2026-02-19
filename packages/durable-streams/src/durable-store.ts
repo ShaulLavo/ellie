@@ -14,7 +14,6 @@ import type {
   AppendResult,
   SubscriptionEvent,
   ProducerValidationResult,
-  InternalOffset,
 } from "./types"
 import type { IStreamStore } from "./server/lib/context"
 

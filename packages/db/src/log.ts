@@ -16,11 +16,9 @@ const NEWLINE = new Uint8Array([0x0a])
  */
 export class LogFile {
   private fd: number
-  private filePath: string
   private currentSize: number
 
   constructor(filePath: string) {
-    this.filePath = filePath
 
     // Ensure parent directory exists
     mkdirSync(dirname(filePath), { recursive: true })
@@ -58,9 +56,9 @@ export class LogFile {
    * Returns the raw bytes (without the trailing newline).
    */
   readAt(bytePos: number, length: number): Uint8Array {
-    const buf = Buffer.alloc(length)
+    const buf = new Uint8Array(length)
     readSync(this.fd, buf, 0, length, bytePos)
-    return new Uint8Array(buf)
+    return buf
   }
 
   /**
@@ -81,9 +79,9 @@ export class LogFile {
     const remaining = this.currentSize - bytePos
     if (remaining <= 0) return new Uint8Array(0)
 
-    const buf = Buffer.alloc(remaining)
+    const buf = new Uint8Array(remaining)
     readSync(this.fd, buf, 0, remaining, bytePos)
-    return new Uint8Array(buf)
+    return buf
   }
 
   /** Current file size in bytes. */
