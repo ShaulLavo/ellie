@@ -68,7 +68,7 @@ function emitControlEvent(
   return opts.closed
 }
 
-function waitForStoreMessages(
+export function waitForStoreMessages(
   ctx: ServerContext,
   path: string,
   offset: string,
