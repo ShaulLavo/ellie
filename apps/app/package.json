@@ -17,8 +17,7 @@
     "@repo/typescript-config": "workspace:*",
     "bun-types": "latest",
     "@durable-streams/server-conformance-tests": "0.2.1",
-    "@durable-streams/client": "0.2.1",
-    "vitest": "^3.0.0"
+    "@durable-streams/client": "0.2.1"
   },
   "module": "src/server.ts"
 }

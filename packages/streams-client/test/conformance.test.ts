@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { runConformanceTests } from "@durable-streams/client-conformance-tests"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"

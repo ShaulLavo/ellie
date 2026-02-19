@@ -1,5 +1,5 @@
 import { Elysia } from "elysia"
-import { afterAll, beforeAll, describe } from "vitest"
+import { afterAll, beforeAll, describe } from "bun:test"
 import { runConformanceTests } from "@durable-streams/server-conformance-tests"
 import {
   createServerContext,
