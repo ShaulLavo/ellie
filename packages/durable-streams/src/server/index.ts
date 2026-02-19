@@ -15,6 +15,14 @@ export {
   type InjectedFault,
 } from "./lib/context"
 
+export { setDurableStreamHeaders } from "./lib/constants"
+export { handleCreate } from "./routes/create"
+export { handleHead } from "./routes/head"
+export { handleRead } from "./routes/read"
+export { handleAppend } from "./routes/append"
+export { handleDelete } from "./routes/delete"
+export { handleTestInjectError } from "./routes/test-control"
+
 /**
  * Handle a raw Durable Streams protocol request.
  * Maps HTTP methods to stream operations (PUT=create, POST=append, GET=read, etc).

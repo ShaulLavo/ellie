@@ -1,35 +1,43 @@
+import { Elysia } from "elysia"
 import { afterAll, beforeAll, describe } from "vitest"
 import { runConformanceTests } from "@durable-streams/server-conformance-tests"
-import { createDurableStreamServer } from "../src/server"
+import {
+  createServerContext,
+  setDurableStreamHeaders,
+} from "@ellie/durable-streams/server"
+import { streamRoutes } from "../src/routes/streams"
 
 describe(`Elysia Durable Streams Server`, () => {
-  let server: ReturnType<typeof createDurableStreamServer>
+  let app: { listen: (port: number) => { server?: { port?: number } | null }; stop: () => void }
+  let ctx: ReturnType<typeof createServerContext>
   const config = { baseUrl: `` }
 
   beforeAll(async () => {
-    server = createDurableStreamServer({
-      port: 0,
-      longPollTimeout: 500,
-    })
+    ctx = createServerContext({ longPollTimeout: 500 })
 
-    // Listen on random port
-    const instance = server.app.listen(0)
+    app = new Elysia()
+      .onRequest(({ set }) => {
+        setDurableStreamHeaders(set.headers as Record<string, string>)
+      })
+      .use(streamRoutes(ctx, true))
+
+    const instance = app.listen(0)
     const port = instance.server?.port
     config.baseUrl = `http://localhost:${port}/streams`
   })
 
   afterAll(async () => {
-    server.ctx.isShuttingDown = true
-    server.ctx.store.cancelAllWaits()
-    for (const controller of server.ctx.activeSSEResponses) {
+    ctx.isShuttingDown = true
+    ctx.store.cancelAllWaits()
+    for (const controller of ctx.activeSSEResponses) {
       try {
         controller.close()
       } catch {
         // Already closed
       }
     }
-    server.ctx.activeSSEResponses.clear()
-    server.app.stop()
+    ctx.activeSSEResponses.clear()
+    app.stop()
   })
 
   runConformanceTests(config)

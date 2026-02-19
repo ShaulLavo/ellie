@@ -20,6 +20,7 @@ import {
   OFFSET_QUERY_PARAM,
   LIVE_QUERY_PARAM,
   CURSOR_QUERY_PARAM,
+  setDurableStreamHeaders,
 } from "../lib/constants"
 
 const encoder = new TextEncoder()
@@ -460,10 +461,8 @@ function handleSSE(
     "content-type": `text/event-stream`,
     "cache-control": `no-cache`,
     connection: `keep-alive`,
-    "access-control-allow-origin": `*`,
-    "x-content-type-options": `nosniff`,
-    "cross-origin-resource-policy": `cross-origin`,
   }
+  setDurableStreamHeaders(sseHeaders)
 
   if (useBase64) {
     sseHeaders[STREAM_SSE_DATA_ENCODING_HEADER] = `base64`
