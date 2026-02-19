@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ellie/streams-client": "workspace:*",
+    "@ellie/streams-rpc": "workspace:*",
     "@ellie/streams-state": "workspace:*",
     "@tanstack/ai": "^0.5.1",
     "@tanstack/db": "^0.5.27",

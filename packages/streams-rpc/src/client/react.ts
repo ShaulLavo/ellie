@@ -1,0 +1,157 @@
+import { useEffect, useRef, useState, useCallback } from "react"
+import { useLiveQuery } from "@tanstack/react-db"
+import type { Collection } from "@tanstack/db"
+import type { SubscriptionHandle } from "../types"
+
+// ============================================================================
+// useStream Hook
+// ============================================================================
+
+/**
+ * Subscribe to a collection from the RPC client, with automatic lifecycle management.
+ *
+ * - Calls subscribe() on mount → creates/reuses StreamDB, increments ref count
+ * - Calls unsubscribe() on unmount → decrements ref count, cleans up when 0
+ * - Uses useLiveQuery() internally for reactive updates
+ * - Returns typed data array + mutation helpers
+ *
+ * @example
+ * ```typescript
+ * import { createRpcClient } from "@ellie/streams-rpc/client"
+ * import { useStream } from "@ellie/streams-rpc/react"
+ * import { appRouter, type AppRouter } from "app/src/rpc/router"
+ *
+ * const rpc = createRpcClient<AppRouter>(appRouter, { baseUrl: origin })
+ *
+ * function ChatMessages({ chatId }: { chatId: string }) {
+ *   const { data, isLoading, insert } = useStream(
+ *     rpc.chat.messages,
+ *     { chatId }
+ *   )
+ *
+ *   const send = async (content: string) => {
+ *     await insert({
+ *       id: crypto.randomUUID(),
+ *       role: "user",
+ *       content,
+ *       createdAt: new Date().toISOString(),
+ *     })
+ *   }
+ *
+ *   if (isLoading) return <div>Loading...</div>
+ *   return <div>{data.map(m => <p key={m.id}>{m.content}</p>)}</div>
+ * }
+ * ```
+ */
+export function useStream<
+  TItem,
+  TParams extends Record<string, string>,
+>(
+  collectionClient: {
+    subscribe(params: TParams): SubscriptionHandle<TItem>
+    insert(params: TParams & { value: TItem }): Promise<void>
+    update(params: TParams & { value: TItem }): Promise<void>
+    delete(params: TParams & { key: string }): Promise<void>
+    upsert(params: TParams & { value: TItem }): Promise<void>
+  },
+  params: TParams
+) {
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const handleRef = useRef<SubscriptionHandle<TItem> | null>(null)
+  const [collection, setCollection] = useState<Collection<
+    TItem & object,
+    string
+  > | null>(null)
+
+  // Serialize params for dependency tracking
+  const paramsKey = JSON.stringify(params)
+
+  useEffect(() => {
+    let cancelled = false
+    setIsLoading(true)
+    setError(null)
+
+    const handle = collectionClient.subscribe(params)
+    handleRef.current = handle
+    setCollection(handle.collection as Collection<TItem & object, string>)
+
+    handle.ready
+      .then(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err : new Error(`Failed to sync stream`)
+          )
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      handle.unsubscribe()
+      handleRef.current = null
+      setCollection(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey])
+
+  // Live query: reactively subscribe to the TanStack DB collection
+  const { data } = useLiveQuery(
+    (q) => (collection ? q.from({ items: collection }) : null),
+    [collection]
+  )
+
+  // Mutation helpers — merge params automatically
+  const insert = useCallback(
+    async (value: TItem) => {
+      await collectionClient.insert({ ...params, value } as TParams & {
+        value: TItem
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paramsKey]
+  )
+
+  const update = useCallback(
+    async (value: TItem) => {
+      await collectionClient.update({ ...params, value } as TParams & {
+        value: TItem
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paramsKey]
+  )
+
+  const del = useCallback(
+    async (key: string) => {
+      await collectionClient.delete({ ...params, key } as TParams & {
+        key: string
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paramsKey]
+  )
+
+  const upsert = useCallback(
+    async (value: TItem) => {
+      await collectionClient.upsert({ ...params, value } as TParams & {
+        value: TItem
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paramsKey]
+  )
+
+  return {
+    data: (data ?? []) as TItem[],
+    isLoading,
+    error,
+    insert,
+    update,
+    delete: del,
+    upsert,
+  }
+}

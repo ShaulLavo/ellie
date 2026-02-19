@@ -1,136 +1,76 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useLiveQuery } from "@tanstack/react-db";
-import { createChatStreamDB, type ChatStreamDB } from "./db";
-import { chatStateSchema, type Message } from "./schema";
+import { useCallback } from "react"
+import { createRpcClient } from "@ellie/streams-rpc/client"
+import { useStream } from "@ellie/streams-rpc/react"
+import { appRouter, type AppRouter } from "../../../../app/src/rpc/router"
 
-type StreamDbState =
-  | { status: "loading" }
-  | { status: "ready"; db: ChatStreamDB }
-  | { status: "error"; error: Error };
+// ============================================================================
+// RPC Client (singleton)
+// ============================================================================
+
+const rpc = createRpcClient<AppRouter>(appRouter, {
+  baseUrl: window.location.origin,
+})
+
+// ============================================================================
+// Message type (inferred from the router schema)
+// ============================================================================
+
+export type Message = {
+  id: string
+  role: `user` | `assistant` | `system`
+  content: string
+  createdAt: string
+}
+
+// ============================================================================
+// Hook
+// ============================================================================
 
 /**
- * Hook for a chat session backed by Durable Streams + TanStack DB.
+ * Hook for a chat session backed by Durable Streams via the RPC layer.
  *
- * Uses StreamDB to create TanStack DB collections from a durable stream,
- * then subscribes with useLiveQuery for reactive UI updates.
- *
- * Messages are written directly to the stream using the state protocol
- * (schema helpers create properly formatted change events).
+ * Uses useStream() for reactive subscription + typed mutations.
  */
 export function useChat(chatId: string) {
-  const [state, setState] = useState<StreamDbState>({ status: "loading" });
-  const streamDbRef = useRef<ChatStreamDB | null>(null);
+  const {
+    data: messages,
+    isLoading,
+    error,
+    insert,
+  } = useStream(rpc.chat.messages, { chatId })
 
-  // Create and preload StreamDB when chatId changes
-  useEffect(() => {
-    let cancelled = false;
-    const db = createChatStreamDB(chatId);
-    streamDbRef.current = db;
-
-    db.stream.create({ contentType: "application/json" })
-      .then(() => db.preload())
-      .then(() => {
-        if (!cancelled) setState({ status: "ready", db });
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("[useChat] Failed to preload StreamDB:", err instanceof Error ? err.message : JSON.stringify(err));
-          setState({
-            status: "error",
-            error: err instanceof Error ? err : new Error("Failed to load chat"),
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      db.close();
-      streamDbRef.current = null;
-    };
-  }, [chatId]);
-
-  const streamDb = state.status === "ready" ? state.db : null;
-
-  // Live query: subscribe to messages collection
-  const { data: rawMessages } = useLiveQuery(
-    (q) =>
-      streamDb
-        ? q
-            .from({ messages: streamDb.collections.messages })
-            .orderBy(({ messages: m }) => m.createdAt, "asc")
-        : null,
-    [streamDb],
-  );
-
-  const messages: Message[] = rawMessages ?? [];
-
-  // Send a message by appending a state-protocol event to the stream
   const sendMessage = useCallback(
-    async (content: string, role: Message["role"] = "user") => {
-      const db = streamDbRef.current;
-      if (!db) return;
-
-      const event = chatStateSchema.messages.insert({
-        value: {
+    async (content: string, role: Message[`role`] = `user`) => {
+      try {
+        await insert({
           id: crypto.randomUUID(),
           role,
           content,
           createdAt: new Date().toISOString(),
-        },
-      });
-
-      try {
-        await db.stream.append(JSON.stringify(event));
+        } as Message)
       } catch (err) {
         console.error(
-          "[useChat] Failed to send message:",
-          err instanceof Error ? err.message : JSON.stringify(err),
-        );
-        throw err;
+          `[useChat] Failed to send message:`,
+          err instanceof Error ? err.message : JSON.stringify(err)
+        )
+        throw err
       }
     },
-    [],
-  );
+    [insert]
+  )
 
+  // TODO: clearChat requires stream-level delete + re-subscribe.
+  // For now, this is a no-op placeholder. Stream deletion needs
+  // to be exposed via the RPC layer or handled separately.
   const clearChat = useCallback(async () => {
-    const db = streamDbRef.current;
-    if (!db) return;
-
-    // Best effort — if delete fails (e.g. stream already gone), we still
-    // want to recreate so the user isn't stuck with a broken chat.
-    try {
-      await db.stream.delete();
-    } catch (err) {
-      console.error(
-        "[useChat] Failed to delete stream:",
-        err instanceof Error ? err.message : JSON.stringify(err),
-      );
-    }
-    db.close();
-    streamDbRef.current = null;
-
-    // Re-create the stream DB from scratch
-    setState({ status: "loading" });
-    const newDb = createChatStreamDB(chatId);
-    streamDbRef.current = newDb;
-
-    try {
-      await newDb.stream.create({ contentType: "application/json" });
-      await newDb.preload();
-      setState({ status: "ready", db: newDb });
-    } catch (err) {
-      setState({
-        status: "error",
-        error: err instanceof Error ? err : new Error("Failed to reload chat"),
-      });
-    }
-  }, [chatId]);
+    console.warn(`[useChat] clearChat not yet implemented via RPC layer`)
+  }, [])
 
   return {
-    messages,
-    isLoading: state.status === "loading",
-    error: state.status === "error" ? state.error : null,
+    messages: messages as Message[],
+    isLoading,
+    error,
     sendMessage,
     clearChat,
-  };
+  }
 }
