@@ -1,0 +1,28 @@
+{
+  "name": "@ellie/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./models": "./src/models/index.ts",
+    "./usage": "./src/usage.ts",
+    "./overflow": "./src/overflow.ts",
+    "./env": "./src/env.ts",
+    "./thinking": "./src/thinking.ts"
+  },
+  "scripts": {
+    "check-types": "tsgo --noEmit",
+    "generate-models": "bun run scripts/generate-models.ts"
+  },
+  "peerDependencies": {
+    "@tanstack/ai": ">=0.5.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@tanstack/ai": "^0.5.1",
+    "typescript": "^5.0.0"
+  }
+}
