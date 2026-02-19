@@ -1,6 +1,11 @@
 import { treaty } from "@elysiajs/eden";
 import type { App } from "@ellie/api-types";
 
+// TODO: Rethink Elysia/Treaty RPC — the preservingFetcher proxy, clone-on-read,
+// and empty-body JSON guard are all workarounds for Treaty consuming response
+// bodies. Consider building a lightweight typed RPC layer directly on top of
+// DurableStreams instead.
+
 /**
  * Custom fetcher that preserves response bodies for the DurableStream protocol.
  *
