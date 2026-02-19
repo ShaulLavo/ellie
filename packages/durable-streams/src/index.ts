@@ -11,7 +11,7 @@ export type {
   Stream,
   StreamMessage,
   InternalOffset,
-  PendingLongPoll,
+  SubscriptionEvent,
   AppendOptions,
   AppendResult,
   ProducerValidationResult,

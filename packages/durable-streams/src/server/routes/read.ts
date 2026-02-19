@@ -1,5 +1,6 @@
 import { generateResponseCursor } from "../../cursor"
 import { formatSingleJsonMessage, formatInternalOffset } from "../../store"
+import type { StreamMessage } from "../../types"
 import type { ServerContext, InjectedFault } from "../lib/context"
 import { encodeSSEData } from "../lib/sse"
 import {
@@ -65,6 +66,40 @@ function emitControlEvent(
 
   controller.enqueue(encodeSSEFrame(SSE_EVENT_CONTROL_PREFIX, JSON.stringify(data)))
   return opts.closed
+}
+
+function waitForStoreMessages(
+  ctx: ServerContext,
+  path: string,
+  offset: string,
+  timeoutMs: number
+): Promise<{
+  messages: Array<StreamMessage>
+  timedOut: boolean
+  streamClosed: boolean
+}> {
+  return new Promise((resolve) => {
+    let settled = false
+
+    const unsubscribe = ctx.store.subscribe(path, offset, (event) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeoutHandle)
+      resolve({
+        messages: event.messages,
+        timedOut: false,
+        streamClosed: event.type === `closed` || event.type === `deleted`,
+      })
+    })
+
+    const timeoutHandle = setTimeout(() => {
+      if (settled) return
+      settled = true
+      unsubscribe()
+      const s = ctx.store.get(path)
+      resolve({ messages: [], timedOut: true, streamClosed: s?.closed ?? false })
+    }, timeoutMs)
+  })
 }
 
 export async function handleRead(
@@ -181,7 +216,8 @@ export async function handleRead(
       })
     }
 
-    const result = await ctx.store.waitForMessages(
+    const result = await waitForStoreMessages(
+      ctx,
       path,
       effectiveOffset ?? streamOffset,
       ctx.config.longPollTimeout
@@ -406,7 +442,8 @@ function handleSSE(
           if (upToDate) {
             if (checkClosed()) break
 
-            const result = await ctx.store.waitForMessages(
+            const result = await waitForStoreMessages(
+              ctx,
               path,
               currentOffset,
               ctx.config.longPollTimeout

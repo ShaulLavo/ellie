@@ -46,11 +46,9 @@ export type ProducerValidationResult =
   | { status: `sequence_gap`; expectedSeq: number; receivedSeq: number }
   | { status: `stream_closed` }
 
-export interface PendingLongPoll {
-  path: string
-  offset: string
-  resolve: (messages: Array<StreamMessage>) => void
-  timeoutId: ReturnType<typeof setTimeout>
+export interface SubscriptionEvent {
+  type: 'messages' | 'closed' | 'deleted'
+  messages: Array<StreamMessage>
 }
 
 export interface AppendOptions {
