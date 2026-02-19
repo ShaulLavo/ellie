@@ -356,15 +356,6 @@ export interface CreateOptions extends StreamHandleOptions {
   body?: BodyInit | Uint8Array | string
 
   /**
-   * Enable automatic batching for append() calls.
-   * When true, multiple append() calls made while a POST is in-flight
-   * will be batched together into a single request.
-   *
-   * @default true
-   */
-  batching?: boolean
-
-  /**
    * If true, create the stream in the closed state.
    * Any body provided becomes the complete and final content.
    *

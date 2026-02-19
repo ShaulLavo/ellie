@@ -527,10 +527,10 @@ export class StreamResponseImpl<
           0
         )
         const combined = new Uint8Array(totalLength)
-        let offset = 0
+        let byteOffset = 0
         for (const part of decodedParts) {
-          combined.set(part, offset)
-          offset += part.length
+          combined.set(part, byteOffset)
+          byteOffset += part.length
         }
         body = combined.buffer
       }

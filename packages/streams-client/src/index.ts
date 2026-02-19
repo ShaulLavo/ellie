@@ -20,7 +20,7 @@ export { stream } from "./stream-api"
 export { DurableStream, type DurableStreamOptions } from "./stream"
 
 // HTTP warning utility
-export { warnIfUsingHttpInBrowser, _resetHttpWarningForTesting } from "./utils"
+export { warnIfUsingHttpInBrowser } from "./utils"
 
 // ============================================================================
 // Transport

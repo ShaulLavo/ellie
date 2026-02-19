@@ -146,7 +146,7 @@ export const SSE_COMPATIBLE_CONTENT_TYPES: ReadonlyArray<string> = [
 /**
  * Protocol query parameters that should not be set by users.
  */
-export const DURABLE_STREAM_PROTOCOL_QUERY_PARAMS: Array<string> = [
+export const DURABLE_STREAM_PROTOCOL_QUERY_PARAMS: ReadonlyArray<string> = [
   OFFSET_QUERY_PARAM,
   LIVE_QUERY_PARAM,
   CURSOR_QUERY_PARAM,

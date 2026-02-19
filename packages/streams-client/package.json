@@ -15,8 +15,8 @@
     "fastq": "^1.19.1"
   },
   "peerDependencies": {
-    "@elysiajs/eden": "*",
-    "elysia": "*"
+    "@elysiajs/eden": ">=1.4.0",
+    "elysia": ">=1.0.0"
   },
   "peerDependenciesMeta": {
     "@elysiajs/eden": { "optional": true },

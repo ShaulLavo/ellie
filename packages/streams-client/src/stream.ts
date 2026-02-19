@@ -15,10 +15,13 @@ import {
 import { IdempotentProducer } from "./idempotent-producer"
 import {
   STREAM_CLOSED_HEADER,
+  STREAM_CURSOR_HEADER,
   STREAM_EXPIRES_AT_HEADER,
   STREAM_OFFSET_HEADER,
   STREAM_SEQ_HEADER,
+  STREAM_SSE_DATA_ENCODING_HEADER,
   STREAM_TTL_HEADER,
+  STREAM_UP_TO_DATE_HEADER,
 } from "./constants"
 import {
   BackoffDefaults,
@@ -33,11 +36,6 @@ import {
   warnIfUsingHttpInBrowser,
 } from "./utils"
 import { StreamResponseImpl } from "./response"
-import {
-  STREAM_CURSOR_HEADER,
-  STREAM_SSE_DATA_ENCODING_HEADER,
-  STREAM_UP_TO_DATE_HEADER,
-} from "./constants"
 import type { BackoffOptions } from "./fetch"
 import type { queueAsPromised } from "fastq"
 import type { StreamTransport } from "./transport"

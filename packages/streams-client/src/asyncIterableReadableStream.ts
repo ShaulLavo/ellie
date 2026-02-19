@@ -96,22 +96,23 @@ function defineAsyncIterator<T>(stream: ReadableStream<T>): void {
 
           if (done) {
             finished = true
-            reader.releaseLock()
             return { done: true, value: undefined as unknown as T }
           }
 
           return { done: false, value: value }
         } catch (err) {
-          // On read error, release lock to avoid leaking it
           finished = true
-          try {
-            reader.releaseLock()
-          } catch {
-            // Ignore release errors - lock may already be released
-          }
           throw err
         } finally {
           pendingReads--
+          // Only release the lock when no other reads are in-flight
+          if (finished && pendingReads === 0) {
+            try {
+              reader.releaseLock()
+            } catch {
+              // Ignore release errors - lock may already be released
+            }
+          }
         }
       },
 

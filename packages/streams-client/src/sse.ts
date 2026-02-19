@@ -28,6 +28,51 @@ export interface SSEControlEvent {
 export type SSEEvent = SSEDataEvent | SSEControlEvent
 
 /**
+ * Dispatch a completed SSE event into a typed SSEEvent, or return null
+ * for unknown event types. Throws DurableStreamError on control JSON parse failure.
+ */
+function processEvent(currentEvent: {
+  type?: string
+  data: Array<string>
+}): SSEEvent | null {
+  if (!currentEvent.type || currentEvent.data.length === 0) return null
+
+  const dataStr = currentEvent.data.join(`\n`)
+
+  if (currentEvent.type === `data`) {
+    return { type: `data`, data: dataStr }
+  }
+
+  if (currentEvent.type === `control`) {
+    try {
+      const control = JSON.parse(dataStr) as {
+        streamNextOffset: Offset
+        streamCursor?: string
+        upToDate?: boolean
+        streamClosed?: boolean
+      }
+      return {
+        type: `control`,
+        streamNextOffset: control.streamNextOffset,
+        streamCursor: control.streamCursor,
+        upToDate: control.upToDate,
+        streamClosed: control.streamClosed,
+      }
+    } catch (err) {
+      const preview =
+        dataStr.length > 100 ? dataStr.slice(0, 100) + `...` : dataStr
+      throw new DurableStreamError(
+        `Failed to parse SSE control event: ${err instanceof Error ? err.message : String(err)}. Data: ${preview}`,
+        `PARSE_ERROR`
+      )
+    }
+  }
+
+  // Unknown event types are silently skipped per protocol
+  return null
+}
+
+/**
  * Parse SSE events from a ReadableStream<Uint8Array>.
  * Yields parsed events as they arrive.
  */
@@ -63,38 +108,8 @@ export async function* parseSSEStream(
       for (const line of lines) {
         if (line === ``) {
           // Empty line signals end of event
-          if (currentEvent.type && currentEvent.data.length > 0) {
-            const dataStr = currentEvent.data.join(`\n`)
-
-            if (currentEvent.type === `data`) {
-              yield { type: `data`, data: dataStr }
-            } else if (currentEvent.type === `control`) {
-              try {
-                const control = JSON.parse(dataStr) as {
-                  streamNextOffset: Offset
-                  streamCursor?: string
-                  upToDate?: boolean
-                  streamClosed?: boolean
-                }
-                yield {
-                  type: `control`,
-                  streamNextOffset: control.streamNextOffset,
-                  streamCursor: control.streamCursor,
-                  upToDate: control.upToDate,
-                  streamClosed: control.streamClosed,
-                }
-              } catch (err) {
-                // Control events contain critical offset data - don't silently ignore
-                const preview =
-                  dataStr.length > 100 ? dataStr.slice(0, 100) + `...` : dataStr
-                throw new DurableStreamError(
-                  `Failed to parse SSE control event: ${err instanceof Error ? err.message : String(err)}. Data: ${preview}`,
-                  `PARSE_ERROR`
-                )
-              }
-            }
-            // Unknown event types are silently skipped per protocol
-          }
+          const event = processEvent(currentEvent)
+          if (event) yield event
           currentEvent = { data: [] }
         } else if (line.startsWith(`event:`)) {
           // Per SSE spec, strip only one optional space after "event:"
@@ -135,35 +150,8 @@ export async function* parseSSEStream(
     }
 
     // Yield any final pending event
-    if (currentEvent.type && currentEvent.data.length > 0) {
-      const dataStr = currentEvent.data.join(`\n`)
-      if (currentEvent.type === `data`) {
-        yield { type: `data`, data: dataStr }
-      } else if (currentEvent.type === `control`) {
-        try {
-          const control = JSON.parse(dataStr) as {
-            streamNextOffset: Offset
-            streamCursor?: string
-            upToDate?: boolean
-            streamClosed?: boolean
-          }
-          yield {
-            type: `control`,
-            streamNextOffset: control.streamNextOffset,
-            streamCursor: control.streamCursor,
-            upToDate: control.upToDate,
-            streamClosed: control.streamClosed,
-          }
-        } catch (err) {
-          const preview =
-            dataStr.length > 100 ? dataStr.slice(0, 100) + `...` : dataStr
-          throw new DurableStreamError(
-            `Failed to parse SSE control event: ${err instanceof Error ? err.message : String(err)}. Data: ${preview}`,
-            `PARSE_ERROR`
-          )
-        }
-      }
-    }
+    const finalEvent = processEvent(currentEvent)
+    if (finalEvent) yield finalEvent
   } finally {
     reader.releaseLock()
   }
