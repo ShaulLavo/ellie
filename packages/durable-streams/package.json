@@ -10,7 +10,7 @@
     "./store": "./src/store.ts",
     "./cursor": "./src/cursor.ts",
     "./types": "./src/types.ts",
-    "./server": "./src/server/index.ts"
+    "./server": "./src/server/server.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
