@@ -214,22 +214,6 @@ interface CollectionSyncHandler {
 }
 
 /**
- * Detect TanStack DB's known groupBy bug where commit() throws because
- * a derived row "already exists in the collection" from a "live-query" source.
- *
- * String-match workaround — TanStack DB does not expose structured error codes.
- * If TanStack changes the message, this stops matching and the error propagates
- * normally (fail-safe: throws rather than silently swallows).
- */
-function isTanStackGroupByBug(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes(`already exists in the collection`) &&
-    error.message.includes(`live-query`)
-  )
-}
-
-/**
  * Internal event dispatcher that routes stream events to collection handlers
  */
 class EventDispatcher {
@@ -385,12 +369,6 @@ class EventDispatcher {
       try {
         handler.commit()
       } catch (error) {
-        if (isTanStackGroupByBug(error)) {
-          console.warn(
-            `[StreamDB] Known TanStack DB groupBy bug detected - queries with groupBy may show stale data`
-          )
-          continue
-        }
         console.error(`[StreamDB] Error in handler.commit():`, error)
         throw error
       }
