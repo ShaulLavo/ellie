@@ -104,6 +104,23 @@ for (const item of items) {
 }
 ```
 
+## Never Nest Ternaries
+
+Never nest a ternary expression inside another ternary. If you need conditional logic that would result in a nested ternary, extract each ternary into its own named variable first.
+
+**Bad — nested ternary:**
+```ts
+const label = isAdmin ? "Admin" : isEditor ? "Editor" : "Viewer"
+```
+
+**Good — separate variables:**
+```ts
+const editorOrViewer = isEditor ? "Editor" : "Viewer"
+const label = isAdmin ? "Admin" : editorOrViewer
+```
+
+This keeps each conditional self-contained and readable. Apply the same principle for JSX — extract conditional expressions into variables above the return.
+
 ## When Reviewing Code
 
-Flag any function exceeding depth 3. Suggest specific inversion or extraction refactors. Prioritize readability: guard clauses at top, happy path flowing down, small focused functions.
+Flag any function exceeding depth 3. Suggest specific inversion or extraction refactors. Prioritize readability: guard clauses at top, happy path flowing down, small focused functions. Flag any nested ternary and suggest extracting inner ternaries into named variables.

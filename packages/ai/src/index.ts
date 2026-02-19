@@ -116,3 +116,6 @@ export type {
 	ProcessorResult,
 	ProcessorState,
 } from "@tanstack/ai";
+
+
+export * from '@tanstack/ai';

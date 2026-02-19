@@ -10,8 +10,7 @@ export default defineConfig({
     }),
   ],
   server: {
-    proxy: {
-      "/streams": "http://localhost:4437",
-    },
+    port: 5173,
+    strictPort: true,
   },
 });
