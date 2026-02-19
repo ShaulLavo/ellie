@@ -7,8 +7,9 @@
     "test:conformance": "bun test test/conformance.test.ts"
   },
   "dependencies": {
-    "elysia": "latest",
-    "@ellie/durable-streams": "workspace:*"
+    "@ellie/durable-streams": "workspace:*",
+    "@elysiajs/eden": "^1.4.8",
+    "elysia": "latest"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

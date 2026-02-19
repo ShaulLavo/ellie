@@ -32,13 +32,15 @@ export function createDurableStreamServer(options: {
       set.headers[`cross-origin-resource-policy`] = `cross-origin`
     })
     .use(chatRoutes(ctx))
-
-  if (enableDurableStreamsApi) {
-    app.all(`/streams/*`, async ({ request, params }) => {
+    .all(`/streams/*`, async ({ request, params, status }) => {
+      if (!enableDurableStreamsApi) {
+        return status(404, `Not found`)
+      }
       const streamPath = `/${params[`*`]}`
       return handleDurableStreamRequest(ctx, request, streamPath)
     })
-  }
 
   return { app, ctx }
 }
+
+export type App = ReturnType<typeof createDurableStreamServer>[`app`]

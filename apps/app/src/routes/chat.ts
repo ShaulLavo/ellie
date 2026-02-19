@@ -10,7 +10,7 @@
  *   GET    /chat/:chatId/messages/stream  — SSE subscription
  *   DELETE /chat/:chatId                  — delete a chat
  */
-import { Elysia } from "elysia"
+import { Elysia, t } from "elysia"
 import type { ServerContext } from "@ellie/durable-streams/server"
 import type { StreamMessage } from "@ellie/durable-streams"
 
@@ -37,143 +37,108 @@ function ensureChatStream(ctx: ServerContext, path: string): void {
 
 export function chatRoutes(ctx: ServerContext) {
   return new Elysia({ prefix: `/chat` })
-    .post(`/:chatId/messages`, async ({ params, request }) => {
-      const streamPath = chatStreamPath(params.chatId)
-      const body = await request.json()
+    .post(
+      `/:chatId/messages`,
+      async ({ params, body }) => {
+        const streamPath = chatStreamPath(params.chatId)
 
-      ensureChatStream(ctx, streamPath)
+        ensureChatStream(ctx, streamPath)
 
-      const data = encoder.encode(JSON.stringify(body))
-      const result = ctx.store.append(streamPath, data, {
-        contentType: `application/json`,
-      })
-
-      const message = `message` in result ? result.message! : result
-
-      return Response.json({ offset: message.offset, message: body })
-    })
-    .get(`/:chatId/messages/stream`, ({ params, query }) => {
-      const streamPath = chatStreamPath(params.chatId)
-      const after = query.after as string | undefined
-
-      if (!after) {
-        return new Response(`Missing required 'after' query parameter`, {
-          status: 400,
-          headers: { "content-type": `text/plain` },
+        const data = encoder.encode(JSON.stringify(body))
+        const result = ctx.store.append(streamPath, data, {
+          contentType: `application/json`,
         })
+
+        const appended = `message` in result ? result.message! : result
+
+        return { offset: appended.offset, message: body }
+      },
+      {
+        body: t.Object({
+          role: t.String(),
+          content: t.String(),
+        }),
       }
+    )
+    .get(
+      `/:chatId/messages`,
+      ({ params, query }) => {
+        const streamPath = chatStreamPath(params.chatId)
+        const after = query.after ?? undefined
 
-      ensureChatStream(ctx, streamPath)
+        if (!ctx.store.has(streamPath)) {
+          return { messages: [] as { offset: string; data: unknown }[] }
+        }
 
-      let isConnected = true
-      let controllerRef: ReadableStreamDefaultController<Uint8Array>
+        const { messages } = ctx.store.read(streamPath, after)
+        const decoded = messages.map(decodeJsonMessage)
 
-      const readable = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          controllerRef = controller
-          ctx.activeSSEResponses.add(controller)
+        return { messages: decoded }
+      },
+      {
+        query: t.Object({
+          after: t.Optional(t.String()),
+        }),
+      }
+    )
+    .get(
+      `/:chatId/messages/stream`,
+      async function* ({ params, query }) {
+        const streamPath = chatStreamPath(params.chatId)
+        const after = query.after
 
-          let currentOffset = after
+        if (!after) return
 
-          const cleanup = () => {
-            isConnected = false
-            ctx.activeSSEResponses.delete(controller)
+        ensureChatStream(ctx, streamPath)
+
+        let currentOffset = after
+
+        while (!ctx.isShuttingDown) {
+          const { messages } = ctx.store.read(streamPath, currentOffset)
+
+          for (const msg of messages) {
+            const decoded = decodeJsonMessage(msg)
+            yield decoded
+            currentOffset = msg.offset
           }
 
-          try {
-            while (isConnected && !ctx.isShuttingDown) {
-              const { messages } = ctx.store.read(streamPath, currentOffset)
+          const result = await ctx.store.waitForMessages(
+            streamPath,
+            currentOffset,
+            ctx.config.longPollTimeout
+          )
 
-              for (const msg of messages) {
-                const decoded = decodeJsonMessage(msg)
-                controller.enqueue(
-                  encoder.encode(
-                    `event: message\ndata: ${JSON.stringify(decoded)}\n\n`
-                  )
-                )
-                currentOffset = msg.offset
-              }
+          if (ctx.isShuttingDown) break
 
-              const result = await ctx.store.waitForMessages(
-                streamPath,
-                currentOffset,
-                ctx.config.longPollTimeout
-              )
-
-              if (ctx.isShuttingDown || !isConnected) break
-
-              if (result.streamClosed) {
-                controller.enqueue(
-                  encoder.encode(`event: done\ndata: {}\n\n`)
-                )
-                break
-              }
-
-              if (result.timedOut) {
-                controller.enqueue(encoder.encode(`: keepalive\n\n`))
-                continue
-              }
-
-              for (const msg of result.messages) {
-                const decoded = decodeJsonMessage(msg)
-                controller.enqueue(
-                  encoder.encode(
-                    `event: message\ndata: ${JSON.stringify(decoded)}\n\n`
-                  )
-                )
-                currentOffset = msg.offset
-              }
-            }
-          } catch {
-            // Client disconnected
-          } finally {
-            cleanup()
-            try {
-              controller.close()
-            } catch {
-              // Already closed
-            }
+          if (result.streamClosed) {
+            return
           }
-        },
-        cancel() {
-          isConnected = false
-          ctx.activeSSEResponses.delete(controllerRef)
-        },
-      })
 
-      return new Response(readable, {
-        status: 200,
-        headers: {
-          "content-type": `text/event-stream`,
-          "cache-control": `no-cache`,
-          connection: `keep-alive`,
-        },
-      })
-    })
-    .get(`/:chatId/messages`, ({ params, query }) => {
-      const streamPath = chatStreamPath(params.chatId)
-      const after = (query.after as string | undefined) ?? undefined
+          if (result.timedOut) {
+            continue
+          }
 
-      if (!ctx.store.has(streamPath)) {
-        return Response.json({ messages: [] })
+          for (const msg of result.messages) {
+            const decoded = decodeJsonMessage(msg)
+            yield decoded
+            currentOffset = msg.offset
+          }
+        }
+      },
+      {
+        query: t.Object({
+          after: t.Optional(t.String()),
+        }),
       }
-
-      const { messages } = ctx.store.read(streamPath, after)
-      const decoded = messages.map(decodeJsonMessage)
-
-      return Response.json({ messages: decoded })
-    })
-    .delete(`/:chatId`, ({ params }) => {
+    )
+    .delete(`/:chatId`, ({ params, status, set }) => {
       const streamPath = chatStreamPath(params.chatId)
 
       if (!ctx.store.has(streamPath)) {
-        return new Response(`Chat not found`, {
-          status: 404,
-          headers: { "content-type": `text/plain` },
-        })
+        return status(404, `Chat not found`)
       }
 
       ctx.store.delete(streamPath)
-      return new Response(null, { status: 204 })
+      set.status = 204
     })
 }
