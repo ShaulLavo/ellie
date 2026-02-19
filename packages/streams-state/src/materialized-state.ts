@@ -66,8 +66,8 @@ export class MaterializedState {
   /**
    * Get all entries for a specific type
    */
-  getType(type: string): Map<string, unknown> {
-    return this.data.get(type) || new Map()
+  getType(type: string): Map<string, unknown> | undefined {
+    return this.data.get(type)
   }
 
   /**
@@ -87,7 +87,7 @@ export class MaterializedState {
   /**
    * Get all type names
    */
-  get types(): Array<string> {
+  getTypes(): Array<string> {
     return Array.from(this.data.keys())
   }
 }
