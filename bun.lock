@@ -76,7 +76,7 @@
         "sqlite-vec": "^0.1.6",
       },
       "peerDependencies": {
-        "zod": "",
+        "zod": "^4.3.6",
       },
       "optionalPeers": [
         "zod",
