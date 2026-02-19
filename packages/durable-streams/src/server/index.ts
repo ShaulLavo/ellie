@@ -20,6 +20,7 @@ function applyCorsHeaders(response: Response): Response {
 
 export {
   createServerContext,
+  shutdown,
   consumeInjectedFault,
   type ServerContext,
   type ServerConfig,

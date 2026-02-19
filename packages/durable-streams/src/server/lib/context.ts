@@ -50,6 +50,23 @@ export function createServerContext(options: {
   }
 }
 
+/**
+ * Gracefully shut down a server context: cancel subscriptions,
+ * close all active SSE responses, and mark the context as shutting down.
+ */
+export function shutdown(ctx: ServerContext): void {
+  ctx.isShuttingDown = true
+  ctx.store.cancelAllSubscriptions()
+  ctx.activeSSEResponses.forEach((controller) => {
+    try {
+      controller.close()
+    } catch {
+      // Already closed
+    }
+  })
+  ctx.activeSSEResponses.clear()
+}
+
 export function consumeInjectedFault(
   ctx: ServerContext,
   path: string,
