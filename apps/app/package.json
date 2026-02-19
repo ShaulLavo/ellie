@@ -11,6 +11,7 @@
     "@ellie/durable-streams": "workspace:*"
   },
   "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
     "bun-types": "latest",
     "@durable-streams/server-conformance-tests": "0.2.1",
     "@durable-streams/client": "0.2.1",

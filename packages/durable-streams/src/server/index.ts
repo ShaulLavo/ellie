@@ -1,11 +1,11 @@
-import { handleCreate } from "./create"
-import { handleHead } from "./head"
-import { handleRead } from "./read"
-import { handleAppend } from "./append"
-import { handleDelete } from "./delete"
-import { handleTestInjectError } from "./test-control"
-import { consumeInjectedFault } from "./context"
-import type { ServerContext } from "./context"
+import { handleCreate } from "./routes/create"
+import { handleHead } from "./routes/head"
+import { handleRead } from "./routes/read"
+import { handleAppend } from "./routes/append"
+import { handleDelete } from "./routes/delete"
+import { handleTestInjectError } from "./routes/test-control"
+import { consumeInjectedFault } from "./lib/context"
+import type { ServerContext } from "./lib/context"
 
 export {
   createServerContext,
@@ -13,7 +13,7 @@ export {
   type ServerContext,
   type ServerConfig,
   type InjectedFault,
-} from "./context"
+} from "./lib/context"
 
 /**
  * Handle a raw Durable Streams protocol request.
@@ -22,10 +22,11 @@ export {
  */
 export async function handleDurableStreamRequest(
   ctx: ServerContext,
-  request: Request
+  request: Request,
+  streamPath?: string
 ): Promise<Response> {
   const url = new URL(request.url)
-  const path = url.pathname
+  const path = streamPath ?? url.pathname
   const method = request.method.toUpperCase()
 
   if (method === `OPTIONS`) {

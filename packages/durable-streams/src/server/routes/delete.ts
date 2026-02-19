@@ -1,4 +1,4 @@
-import type { ServerContext } from "./context"
+import type { ServerContext } from "../lib/context"
 
 export function handleDelete(ctx: ServerContext, path: string): Response {
   if (!ctx.store.has(path)) {

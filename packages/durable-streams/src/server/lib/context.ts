@@ -1,5 +1,5 @@
-import { StreamStore } from "../store"
-import type { CursorOptions } from "../cursor"
+import { StreamStore } from "../../store"
+import type { CursorOptions } from "../../cursor"
 
 export interface ServerConfig {
   longPollTimeout: number

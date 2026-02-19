@@ -1,10 +1,10 @@
-import type { ServerContext } from "./context"
+import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
   STREAM_TTL_HEADER,
   STREAM_EXPIRES_AT_HEADER,
   STREAM_CLOSED_HEADER,
-} from "./constants"
+} from "../lib/constants"
 
 export async function handleCreate(
   ctx: ServerContext,

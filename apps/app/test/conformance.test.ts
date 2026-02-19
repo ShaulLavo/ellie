@@ -15,7 +15,7 @@ describe(`Elysia Durable Streams Server`, () => {
     // Listen on random port
     const instance = server.app.listen(0)
     const port = instance.server?.port
-    config.baseUrl = `http://localhost:${port}`
+    config.baseUrl = `http://localhost:${port}/streams`
   })
 
   afterAll(async () => {

@@ -1,4 +1,4 @@
-import type { ServerContext } from "./context"
+import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
   STREAM_SEQ_HEADER,
@@ -8,7 +8,7 @@ import {
   PRODUCER_SEQ_HEADER,
   PRODUCER_EXPECTED_SEQ_HEADER,
   PRODUCER_RECEIVED_SEQ_HEADER,
-} from "./constants"
+} from "../lib/constants"
 
 export async function handleAppend(
   ctx: ServerContext,

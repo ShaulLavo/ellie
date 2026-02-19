@@ -3,7 +3,7 @@ import {
   createServerContext,
   handleDurableStreamRequest,
 } from "@ellie/durable-streams/server"
-import { handleChatRequest } from "./routes/chat"
+import { chatRoutes } from "./routes/chat"
 
 export function createDurableStreamServer(options: {
   port?: number
@@ -31,30 +31,14 @@ export function createDurableStreamServer(options: {
       set.headers[`x-content-type-options`] = `nosniff`
       set.headers[`cross-origin-resource-policy`] = `cross-origin`
     })
-    .all(`*`, async ({ request }) => {
-      const url = new URL(request.url)
-      const path = url.pathname
-      const method = request.method.toUpperCase()
+    .use(chatRoutes(ctx))
 
-      if (method === `OPTIONS`) {
-        return new Response(null, { status: 204 })
-      }
-
-      // Chat routes (always enabled)
-      if (path.startsWith(`/chat/`)) {
-        return handleChatRequest(ctx, request, path, method)
-      }
-
-      // Durable Streams raw protocol (dev/test only)
-      if (!enableDurableStreamsApi) {
-        return new Response(`Not found`, {
-          status: 404,
-          headers: { "content-type": `text/plain` },
-        })
-      }
-
-      return handleDurableStreamRequest(ctx, request)
+  if (enableDurableStreamsApi) {
+    app.all(`/streams/*`, async ({ request, params }) => {
+      const streamPath = `/${params[`*`]}`
+      return handleDurableStreamRequest(ctx, request, streamPath)
     })
+  }
 
   return { app, ctx }
 }

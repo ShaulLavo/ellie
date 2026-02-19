@@ -1,12 +1,12 @@
-import { generateResponseCursor } from "../cursor"
-import { formatSingleJsonMessage } from "../store"
-import type { ServerContext, InjectedFault } from "./context"
-import { encodeSSEData } from "./sse"
+import { generateResponseCursor } from "../../cursor"
+import { formatSingleJsonMessage } from "../../store"
+import type { ServerContext, InjectedFault } from "../lib/context"
+import { encodeSSEData } from "../lib/sse"
 import {
   getCompressionEncoding,
   compressData,
   COMPRESSION_THRESHOLD,
-} from "./compression"
+} from "../lib/compression"
 import {
   STREAM_OFFSET_HEADER,
   STREAM_CURSOR_HEADER,
@@ -20,7 +20,7 @@ import {
   OFFSET_QUERY_PARAM,
   LIVE_QUERY_PARAM,
   CURSOR_QUERY_PARAM,
-} from "./constants"
+} from "../lib/constants"
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
