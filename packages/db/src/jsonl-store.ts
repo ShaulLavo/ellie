@@ -54,8 +54,8 @@ export class JsonlEngine {
   ): schema.StreamRow {
     const now = Date.now()
 
-    // Idempotent insert — ignore conflict if stream already exists
-    this.db
+    // Idempotent insert — returns inserted row, or fetches existing on conflict
+    const [inserted] = this.db
       .insert(schema.streams)
       .values({
         path: streamPath,
@@ -65,15 +65,17 @@ export class JsonlEngine {
         createdAt: now,
       })
       .onConflictDoNothing()
-      .run()
+      .returning()
+      .all()
 
-    const result = this.db
+    if (inserted) return inserted
+
+    // Stream already existed — fetch it
+    return this.db
       .select()
       .from(schema.streams)
       .where(eq(schema.streams.path, streamPath))
       .get()!
-
-    return result
   }
 
   getStream(streamPath: string): schema.StreamRow | undefined {
@@ -144,24 +146,16 @@ export class JsonlEngine {
     const offset = formatOffset(stream.currentReadSeq, newByteOffset)
 
     // 3. Insert index entry + update stream offset (single transaction)
-    this.sqlite.run("BEGIN")
-    try {
-      this.db
-        .insert(schema.messages)
+    this.db.transaction((tx) => {
+      tx.insert(schema.messages)
         .values({ streamPath, bytePos, length, offset, timestamp })
         .run()
 
-      this.db
-        .update(schema.streams)
+      tx.update(schema.streams)
         .set({ currentByteOffset: newByteOffset })
         .where(eq(schema.streams.path, streamPath))
         .run()
-
-      this.sqlite.run("COMMIT")
-    } catch (e) {
-      this.sqlite.run("ROLLBACK")
-      throw e
-    }
+    })
 
     return { offset, bytePos, length, timestamp }
   }
@@ -267,14 +261,13 @@ export class JsonlEngine {
     // Core tables — applied via Drizzle migrations (single source of truth: schema.ts)
     migrate(this.db, { migrationsFolder: MIGRATIONS_DIR })
 
-    // FTS5 for full-text search on message content
-    // (virtual tables can't be defined in Drizzle schema — raw DDL required)
+    // TODO: populate messages_fts from the append path and implement full-text search queries
     this.sqlite.run(`
       CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
       USING fts5(id, stream_path, content, tokenize='porter')
     `)
 
-    // Vector table for embeddings (optional — only works if sqlite-vec is available)
+    // TODO: populate embeddings from the append path and implement vector similarity search
     try {
       this.sqlite.run(`
         CREATE VIRTUAL TABLE IF NOT EXISTS messages_vec
