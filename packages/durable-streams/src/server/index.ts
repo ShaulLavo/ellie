@@ -154,7 +154,7 @@ export async function handleDurableStreamRequest(
         }))
       }
     }
-    console.error(`Request error:`, err)
+    console.error(`Request error:`, err instanceof Error ? err.message : JSON.stringify(err))
     return applyCorsHeaders(new Response(`Internal server error`, {
       status: 500,
       headers: { "content-type": `text/plain` },

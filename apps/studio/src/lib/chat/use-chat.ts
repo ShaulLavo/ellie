@@ -27,13 +27,14 @@ export function useChat(chatId: string) {
     const db = createChatStreamDB(chatId);
     streamDbRef.current = db;
 
-    db.preload()
+    db.stream.create({ contentType: "application/json" })
+      .then(() => db.preload())
       .then(() => {
         if (!cancelled) setState({ status: "ready", db });
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error("[useChat] Failed to preload StreamDB:", err);
+          console.error("[useChat] Failed to preload StreamDB:", err instanceof Error ? err.message : JSON.stringify(err));
           setState({
             status: "error",
             error: err instanceof Error ? err : new Error("Failed to load chat"),

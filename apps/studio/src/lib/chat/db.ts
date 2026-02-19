@@ -12,7 +12,7 @@ export type ChatStreamDB = StreamDB<typeof chatStateSchema>;
 export function createChatStreamDB(chatId: string): ChatStreamDB {
   return createStreamDB({
     streamOptions: {
-      url: `/streams/chat/${chatId}`,
+      url: `${window.location.origin}/streams/chat/${chatId}`,
       contentType: "application/json",
     },
     state: chatStateSchema,
