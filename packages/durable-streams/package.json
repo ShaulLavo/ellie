@@ -13,7 +13,7 @@
     "./server": "./src/server/index.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@ellie/db": "workspace:*",

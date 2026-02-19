@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "bun run --watch src/server.ts",
     "test": "bun test",
-    "test:conformance": "bun test test/conformance.test.ts"
+    "test:conformance": "bun test test/conformance.test.ts",
+    "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@ellie/db": "workspace:*",

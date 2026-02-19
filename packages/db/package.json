@@ -11,7 +11,7 @@
     "./typed-log": "./src/typed-log.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit",
+    "check-types": "tsgo --noEmit",
     "build": "./scripts/build-sqlite.sh",
     "test": "bun test"
   },
