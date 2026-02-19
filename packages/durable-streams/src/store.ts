@@ -500,7 +500,7 @@ export class StreamStore {
     }
 
     if (!offset || offset === `-1`) {
-      return { messages: [...stream.messages], upToDate: true }
+      return { messages: stream.messages, upToDate: true }
     }
 
     const offsetIndex = this.findOffsetIndex(stream, offset)
