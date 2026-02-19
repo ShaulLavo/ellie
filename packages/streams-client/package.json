@@ -15,14 +15,6 @@
   "dependencies": {
     "fastq": "^1.19.1"
   },
-  "peerDependencies": {
-    "@elysiajs/eden": ">=1.4.0",
-    "elysia": ">=1.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@elysiajs/eden": { "optional": true },
-    "elysia": { "optional": true }
-  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "typescript": "^5.0.0"

@@ -28,7 +28,6 @@
     "packages/*"
   ],
   "overrides": {
-    "elysia": "latest",
     "typescript": "5.9.2"
   }
 }
