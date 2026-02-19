@@ -14,7 +14,7 @@ const enableDurableStreamsApi = Bun.env.NODE_ENV !== `production`;
 
 const app = new Elysia()
   .onRequest(({ set }) => {
-    setDurableStreamHeaders(set.headers as Record<string, string>);
+    setDurableStreamHeaders(set.headers as Record<string, string | number>);
   })
   .use(chatRoutes(ctx))
   .use(streamRoutes(ctx, enableDurableStreamsApi));

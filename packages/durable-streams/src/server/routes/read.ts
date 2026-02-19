@@ -219,7 +219,11 @@ export async function handleRead(
   // Conditional GET
   const ifNoneMatch = request.headers.get(`if-none-match`)
   if (ifNoneMatch && ifNoneMatch === etag) {
-    return new Response(null, { status: 304, headers: new Headers({ etag }) })
+    const notModifiedHeaders: Record<string, string> = { etag }
+    if (ctx.config.compression) {
+      notModifiedHeaders[`vary`] = `accept-encoding`
+    }
+    return new Response(null, { status: 304, headers: new Headers(notModifiedHeaders) })
   }
 
   // Format response data
@@ -453,7 +457,9 @@ function handleSSE(
     },
     cancel() {
       isConnected = false
-      ctx.activeSSEResponses.delete(controllerRef)
+      if (controllerRef) {
+        ctx.activeSSEResponses.delete(controllerRef)
+      }
     },
   })
 

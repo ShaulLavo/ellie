@@ -85,13 +85,10 @@ export function chatRoutes(ctx: ServerContext) {
       `/:chatId/messages/stream`,
       async function* ({ params, query }) {
         const streamPath = chatStreamPath(params.chatId);
-        const after = query.after;
-
-        if (!after) return;
 
         ensureChatStream(ctx, streamPath);
 
-        let currentOffset = after;
+        let currentOffset: string | undefined = query.after;
 
         while (!ctx.isShuttingDown) {
           const { messages } = ctx.store.read(streamPath, currentOffset);
@@ -102,9 +99,12 @@ export function chatRoutes(ctx: ServerContext) {
             currentOffset = msg.offset;
           }
 
+          const waitOffset = currentOffset ?? ctx.store.get(streamPath)?.currentOffset;
+          if (!waitOffset) break;
+
           const result = await ctx.store.waitForMessages(
             streamPath,
-            currentOffset,
+            waitOffset,
             ctx.config.longPollTimeout
           );
 

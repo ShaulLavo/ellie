@@ -6,6 +6,16 @@ import { handleDelete } from "./routes/delete"
 import { handleTestInjectError } from "./routes/test-control"
 import { consumeInjectedFault } from "./lib/context"
 import type { ServerContext } from "./lib/context"
+import { setDurableStreamHeaders } from "./lib/constants"
+
+function applyCorsHeaders(response: Response): Response {
+  const h: Record<string, string> = {}
+  setDurableStreamHeaders(h)
+  for (const [k, v] of Object.entries(h)) {
+    response.headers.set(k, String(v))
+  }
+  return response
+}
 
 export {
   createServerContext,
@@ -38,11 +48,11 @@ export async function handleDurableStreamRequest(
   const method = request.method.toUpperCase()
 
   if (method === `OPTIONS`) {
-    return new Response(null, { status: 204 })
+    return applyCorsHeaders(new Response(null, { status: 204 }))
   }
 
   if (path === `/_test/inject-error`) {
-    return handleTestInjectError(ctx, request, method)
+    return applyCorsHeaders(await handleTestInjectError(ctx, request, method))
   }
 
   const fault = consumeInjectedFault(ctx, path, method)
@@ -55,7 +65,7 @@ export async function handleDurableStreamRequest(
     }
 
     if (fault.dropConnection) {
-      return new Response(null, { status: 502 })
+      return applyCorsHeaders(new Response(null, { status: 502 }))
     }
 
     if (fault.status !== undefined) {
@@ -65,10 +75,10 @@ export async function handleDurableStreamRequest(
       if (fault.retryAfter !== undefined) {
         headers[`retry-after`] = fault.retryAfter.toString()
       }
-      return new Response(`Injected error for testing`, {
+      return applyCorsHeaders(new Response(`Injected error for testing`, {
         status: fault.status,
         headers,
-      })
+      }))
     }
   }
 
@@ -81,66 +91,73 @@ export async function handleDurableStreamRequest(
       : null
 
   try {
+    let response: Response
     switch (method) {
       case `PUT`:
-        return handleCreate(ctx, request, path, url)
+        response = await handleCreate(ctx, request, path, url)
+        break
       case `HEAD`:
-        return handleHead(ctx, path)
+        response = handleHead(ctx, path)
+        break
       case `GET`:
-        return handleRead(ctx, request, path, url, bodyFault)
+        response = await handleRead(ctx, request, path, url, bodyFault)
+        break
       case `POST`:
-        return handleAppend(ctx, request, path)
+        response = await handleAppend(ctx, request, path)
+        break
       case `DELETE`:
-        return handleDelete(ctx, path)
+        response = handleDelete(ctx, path)
+        break
       default:
-        return new Response(`Method not allowed`, {
+        response = new Response(`Method not allowed`, {
           status: 405,
           headers: { "content-type": `text/plain` },
         })
     }
+    return applyCorsHeaders(response)
   } catch (err) {
     if (err instanceof Error) {
       if (err.message.includes(`not found`)) {
-        return new Response(`Stream not found`, {
+        return applyCorsHeaders(new Response(`Stream not found`, {
           status: 404,
           headers: { "content-type": `text/plain` },
-        })
+        }))
       }
       if (err.message.includes(`already exists with different configuration`)) {
-        return new Response(`Stream already exists with different configuration`, {
+        return applyCorsHeaders(new Response(`Stream already exists with different configuration`, {
           status: 409,
           headers: { "content-type": `text/plain` },
-        })
+        }))
       }
       if (err.message.includes(`Sequence conflict`)) {
-        return new Response(`Sequence conflict`, {
+        return applyCorsHeaders(new Response(`Sequence conflict`, {
           status: 409,
           headers: { "content-type": `text/plain` },
-        })
+        }))
       }
       if (err.message.includes(`Content-type mismatch`)) {
-        return new Response(`Content-type mismatch`, {
+        return applyCorsHeaders(new Response(`Content-type mismatch`, {
           status: 409,
           headers: { "content-type": `text/plain` },
-        })
+        }))
       }
       if (err.message.includes(`Invalid JSON`)) {
-        return new Response(`Invalid JSON`, {
+        return applyCorsHeaders(new Response(`Invalid JSON`, {
           status: 400,
           headers: { "content-type": `text/plain` },
-        })
+        }))
       }
       if (err.message.includes(`Empty arrays are not allowed`)) {
-        return new Response(`Empty arrays are not allowed`, {
+        return applyCorsHeaders(new Response(`Empty arrays are not allowed`, {
           status: 400,
           headers: { "content-type": `text/plain` },
-        })
+        }))
       }
     }
     console.error(`Request error:`, err)
-    return new Response(`Internal server error`, {
+    return applyCorsHeaders(new Response(`Internal server error`, {
       status: 500,
       headers: { "content-type": `text/plain` },
-    })
+    }))
   }
 }
