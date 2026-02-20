@@ -8,10 +8,12 @@
     "lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "test:conformance": "bun scripts/run-conformance.ts all",
+    "test:conformance:server": "bun scripts/run-conformance.ts server",
+    "test:conformance:client": "bun scripts/run-conformance.ts client"
   },
   "devDependencies": {
-    "@durable-streams/client-conformance-tests": "^0.2.1",
     "@sinclair/typebox": "^0.34.48",
     "oxlint": "^1.48.0",
     "prettier": "^3.7.4",

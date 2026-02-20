@@ -8,6 +8,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@ellie/env": "workspace:*",
     "@ellie/rpc-router": "workspace:*",
     "@ellie/streams-client": "workspace:*",
     "@ellie/streams-rpc": "workspace:*",

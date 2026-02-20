@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ellie/db": "workspace:*",
+    "@ellie/env": "workspace:*",
     "@ellie/durable-streams": "workspace:*",
     "@ellie/rpc-router": "workspace:*",
     "@ellie/streams-rpc": "workspace:*",

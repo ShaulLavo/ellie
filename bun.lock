@@ -20,6 +20,7 @@
       "dependencies": {
         "@ellie/db": "workspace:*",
         "@ellie/durable-streams": "workspace:*",
+        "@ellie/env": "workspace:*",
         "@ellie/rpc-router": "workspace:*",
         "@ellie/streams-rpc": "workspace:*",
         "valibot": "^1.2.0",
@@ -35,6 +36,7 @@
       "name": "studio",
       "version": "0.0.0",
       "dependencies": {
+        "@ellie/env": "workspace:*",
         "@ellie/rpc-router": "workspace:*",
         "@ellie/streams-client": "workspace:*",
         "@ellie/streams-rpc": "workspace:*",
@@ -63,6 +65,9 @@
     "packages/ai": {
       "name": "@ellie/ai",
       "version": "0.1.0",
+      "dependencies": {
+        "@ellie/env": "workspace:*",
+      },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
         "@tanstack/ai": "^0.5.1",
@@ -98,6 +103,17 @@
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
         "typescript": "^5.0.0",
+      },
+    },
+    "packages/env": {
+      "name": "@ellie/env",
+      "version": "0.1.0",
+      "dependencies": {
+        "valibot": "^1.2.0",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "bun-types": "latest",
       },
     },
     "packages/rpc-router": {
@@ -218,6 +234,8 @@
     "@ellie/db": ["@ellie/db@workspace:packages/db"],
 
     "@ellie/durable-streams": ["@ellie/durable-streams@workspace:packages/durable-streams"],
+
+    "@ellie/env": ["@ellie/env@workspace:packages/env"],
 
     "@ellie/rpc-router": ["@ellie/rpc-router@workspace:packages/rpc-router"],
 
