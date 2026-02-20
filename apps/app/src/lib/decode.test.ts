@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { Type as t } from "@sinclair/typebox"
+import * as v from "valibot"
 import { decodeAndValidate } from "./decode"
 import type { StreamMessage } from "@ellie/durable-streams"
 
@@ -15,9 +15,10 @@ function makeMsg(json: string, commaTerminated = true): StreamMessage {
 }
 
 describe(`decodeAndValidate`, () => {
-  const schema = t.Object({
-    role: t.String(),
-    content: t.String(),
+  // looseObject allows and preserves additional properties (like TypeBox default)
+  const schema = v.looseObject({
+    role: v.string(),
+    content: v.string(),
   })
 
   it(`parses and validates a valid comma-terminated message`, () => {
@@ -61,18 +62,18 @@ describe(`decodeAndValidate`, () => {
     )
   })
 
-  it(`throws when message violates schema — extra properties allowed by default`, () => {
+  it(`allows extra properties with looseObject`, () => {
     const msg = makeMsg(`{"role":"user","content":"hi","extra":"field"}`)
-    // TypeBox t.Object allows additional properties by default
+    // looseObject allows additional properties (preserves them in output)
     const result = decodeAndValidate(msg, schema)
     expect(result).toEqual({ role: `user`, content: `hi`, extra: `field` })
   })
 
-  it(`works with strict schema`, () => {
-    const strict = t.Object({
-      role: t.String(),
-      content: t.String(),
-    }, { additionalProperties: false })
+  it(`rejects extra properties with strictObject`, () => {
+    const strict = v.strictObject({
+      role: v.string(),
+      content: v.string(),
+    })
 
     const msg = makeMsg(`{"role":"user","content":"hi","extra":"field"}`)
     expect(() => decodeAndValidate(msg, strict)).toThrow(
@@ -81,13 +82,13 @@ describe(`decodeAndValidate`, () => {
   })
 
   it(`validates a number schema`, () => {
-    const numSchema = t.Number()
+    const numSchema = v.number()
     const msg = makeMsg(`42`)
     expect(decodeAndValidate(msg, numSchema)).toBe(42)
   })
 
   it(`rejects wrong type for number schema`, () => {
-    const numSchema = t.Number()
+    const numSchema = v.number()
     const msg = makeMsg(`"not a number"`)
     expect(() => decodeAndValidate(msg, numSchema)).toThrow(
       /schema validation/

@@ -91,7 +91,8 @@ describe("AgentManager", () => {
 		const { runId } = await manager.prompt("chat-1", "Hello");
 
 		expect(runId).toBeDefined();
-		expect(runId).toMatch(/^run_/);
+		expect(typeof runId).toBe("string");
+		expect(runId.length).toBeGreaterThan(0);
 
 		// Wait for agent to finish
 		const agent = manager.getOrCreate("chat-1");

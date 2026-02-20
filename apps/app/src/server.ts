@@ -5,6 +5,7 @@ import { JsonlEngine } from "@ellie/db";
 import { env } from "@ellie/env/server";
 import { handleAgentRequest } from "./routes/agent";
 import { AgentManager } from "./agent/manager";
+import { anthropicText } from "@tanstack/ai-anthropic";
 
 const parsedUrl = new URL(env.API_BASE_URL);
 const port = parsedUrl.port !== "" ? Number(parsedUrl.port) : parsedUrl.protocol === "https:" ? 443 : 80;
@@ -17,24 +18,13 @@ const durableStore = new DurableStore(engine);
 export const ctx = createServerContext({ store: durableStore });
 
 // ── Agent manager ────────────────────────────────────────────────
-// Lazily initialized — call `setAgentAdapter()` before using agent routes.
-let _agentManager: AgentManager | undefined;
-
-/**
- * Set the TanStack AI adapter and initialize the agent manager.
- * Must be called before agent routes are used.
- */
-export function setAgentAdapter(adapter: import("@tanstack/ai").AnyTextAdapter): void {
-  _agentManager = new AgentManager(durableStore, {
-    adapter,
-    systemPrompt: "You are a helpful assistant.",
-  });
-}
-
-export function getAgentManager(): AgentManager {
-  if (!_agentManager) throw new Error("Call setAgentAdapter() before using agent routes");
-  return _agentManager;
-}
+// Initialized eagerly at startup. Requires ANTHROPIC_API_KEY in env.
+const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
+  ? new AgentManager(durableStore, {
+      adapter: anthropicText("claude-sonnet-4-5"),
+      systemPrompt: "You are a helpful assistant.",
+    })
+  : null;
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
@@ -71,7 +61,15 @@ async function fetch(req: Request): Promise<Response> {
   }
 
   // Agent action routes (prompt, steer, abort, history)
-  const agentResponse = handleAgentRequest(getAgentManager(), req, path);
+  if (!agentManager) {
+    if (path.match(/^\/agent\/[^/]+\/(prompt|steer|abort|history)$/)) {
+      return Response.json(
+        { error: "Agent routes unavailable: no ANTHROPIC_API_KEY configured" },
+        { status: 503 },
+      );
+    }
+  }
+  const agentResponse = agentManager ? handleAgentRequest(agentManager, req, path) : undefined;
   if (agentResponse) {
     const response = await agentResponse;
     logRequest(req.method, path, response.status);

@@ -1,18 +1,18 @@
-import type { TSchema } from "@sinclair/typebox"
-import { Value } from "@sinclair/typebox/value"
+import type { GenericSchema, InferOutput } from "valibot"
+import * as v from "valibot"
 import type { StreamMessage } from "@ellie/durable-streams"
 
 const decoder = new TextDecoder()
 
 /**
- * Decode a comma-terminated JSON message and validate against a TypeBox schema.
+ * Decode a comma-terminated JSON message and validate against a Valibot schema.
  * Messages from the store are comma-terminated (e.g. `{"role":"user"},`).
  * Strips the trailing comma before parsing, then checks against the schema.
  */
-export function decodeAndValidate<T extends TSchema>(
+export function decodeAndValidate<T extends GenericSchema>(
   msg: StreamMessage,
   schema: T,
-): unknown {
+): InferOutput<T> {
   const bytes = msg.data
   // Strip trailing whitespace and comma (store format from processJsonAppend)
   let end = bytes.length
@@ -26,13 +26,13 @@ export function decodeAndValidate<T extends TSchema>(
   const text = decoder.decode(end === bytes.length ? bytes : bytes.subarray(0, end))
   const parsed: unknown = JSON.parse(text)
 
-  if (!Value.Check(schema, parsed)) {
-    const errors = [...Value.Errors(schema, parsed)]
-    const detail = errors.length > 0
-      ? errors.map((e) => `${e.path}: ${e.message}`).join(`, `)
-      : `unknown`
+  const result = v.safeParse(schema, parsed)
+  if (!result.success) {
+    const detail = result.issues
+      .map((e) => `${e.path?.map((p) => p.key).join(".") ?? "/"}: ${e.message}`)
+      .join(`, `)
     throw new Error(`Stream message failed schema validation: ${detail}`)
   }
 
-  return parsed
+  return result.output
 }

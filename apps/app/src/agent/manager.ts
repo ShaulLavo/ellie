@@ -80,6 +80,14 @@ export class AgentManager {
 			}
 		}
 
+		// Pre-flight checks — surface sync errors as HTTP errors to the caller
+		if (agent.state.isStreaming) {
+			throw new Error("Agent is already processing a prompt.");
+		}
+		if (!agent.adapter) {
+			throw new Error("No adapter configured for agent.");
+		}
+
 		const runId = ulid();
 
 		// Create the events stream for this run
@@ -95,6 +103,8 @@ export class AgentManager {
 		// Start the prompt (non-blocking — events flow via onEvent)
 		agent.prompt(text).catch((err) => {
 			console.error(`[agent-manager] prompt failed for ${chatId}:`, err);
+			// Write a terminal event so the client doesn't hang
+			this.writeErrorEvent(chatId, runId);
 		});
 
 		return { runId };
@@ -174,6 +184,23 @@ export class AgentManager {
 	}
 
 	// -- Internal ---
+
+	/**
+	 * Write a terminal agent_end event to the events stream.
+	 * Used as a safety net when agent.prompt() rejects unexpectedly,
+	 * so the client doesn't hang waiting for events that will never arrive.
+	 */
+	private writeErrorEvent(chatId: string, runId: string): void {
+		const eventsPath = this.eventsPath(chatId, runId);
+		try {
+			const errorEvent: AgentEvent = { type: "agent_end", messages: [] };
+			const data = encoder.encode(JSON.stringify(errorEvent));
+			this.store.append(eventsPath, data);
+			this.store.closeStream(eventsPath);
+		} catch {
+			// Stream may already be closed — nothing more to do
+		}
+	}
 
 	private messagesPath(chatId: string): string {
 		return `/agent/${chatId}`;
