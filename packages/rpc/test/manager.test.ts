@@ -345,4 +345,121 @@ describe(`StreamManager`, () => {
       expect(r2).toEqual([])
     })
   })
+
+  describe(`ref counting edge cases`, () => {
+    it(`subscribe with bad collection leaks a ref`, async () => {
+      const params = uniqueParams()
+
+      // subscribe() increments refs before checking the collection name.
+      // If the collection is not found, it throws — but refs is already +1.
+      expect(() =>
+        manager.subscribe(chatStreamDef, `nonexistent`, params)
+      ).toThrow(`Collection "nonexistent" not found`)
+
+      // The cache entry exists with refs=1 (leaked). A valid subscribe
+      // reuses the entry and bumps refs to 2.
+      const handle = manager.subscribe(chatStreamDef, `messages`, params)
+      await handle.ready
+
+      // One unsubscribe brings refs to 1 — cleanup should NOT happen
+      // because the leaked ref is still counted.
+      handle.unsubscribe()
+
+      // Stream is still accessible (cache entry not evicted)
+      const result = await manager.get(chatStreamDef, `messages`, params)
+      expect(result).toEqual([])
+    })
+
+    it(`cleanup only on last unsubscribe`, async () => {
+      const params = uniqueParams()
+
+      const handle1 = manager.subscribe(chatStreamDef, `messages`, params)
+      await handle1.ready
+      // refs = 1
+
+      const handle2 = manager.subscribe(chatStreamDef, `messages`, params)
+      // refs = 2
+
+      handle1.unsubscribe()
+      // refs = 1 — no cleanup
+
+      // Stream still accessible
+      const result = await manager.get(chatStreamDef, `messages`, params)
+      expect(Array.isArray(result)).toBe(true)
+
+      handle2.unsubscribe()
+      // refs = 0 — cleanup triggers
+
+      // Next get() creates a fresh entry
+      const result2 = await manager.get(chatStreamDef, `messages`, params)
+      expect(result2).toEqual([])
+    })
+
+    it(`delete while subscribed evicts immediately`, async () => {
+      const params = uniqueParams()
+      const msg = makeMessage(`m1`, `before-delete`)
+
+      const handle = manager.subscribe(chatStreamDef, `messages`, params)
+      await handle.ready
+
+      await manager.mutate(chatStreamDef, `messages`, `insert`, params, {
+        value: msg,
+      })
+      await waitFor(
+        manager, chatStreamDef, `messages`, params,
+        (items) => items.length === 1
+      )
+
+      // deleteStream closes and evicts immediately, regardless of refs
+      await manager.deleteStream(chatStreamDef, params)
+
+      // Old handle's unsubscribe is safe even after eviction
+      expect(() => handle.unsubscribe()).not.toThrow()
+
+      // Re-subscribe creates a fresh entry (auto-creates empty stream)
+      const freshHandle = manager.subscribe(chatStreamDef, `messages`, params)
+      await freshHandle.ready
+
+      const result = await manager.get(chatStreamDef, `messages`, params)
+      expect(result).toEqual([])
+
+      freshHandle.unsubscribe()
+    })
+  })
+
+  describe(`unsubscribe after ready settles`, () => {
+    it(`cleanup happens after ready resolves and all refs released`, async () => {
+      const params = uniqueParams()
+
+      const handle = manager.subscribe(chatStreamDef, `messages`, params)
+      await handle.ready
+      // settled = true after ready resolves
+
+      handle.unsubscribe()
+      // refs = 0 + settled = true → synchronous cleanup (line 190)
+
+      // Cache entry was evicted — next get creates a fresh one
+      const result = await manager.get(chatStreamDef, `messages`, params)
+      expect(result).toEqual([])
+    })
+
+    it(`cleanup waits for ready when not yet settled`, async () => {
+      const params = uniqueParams()
+
+      // subscribe returns synchronously; ready is pending
+      const handle = manager.subscribe(chatStreamDef, `messages`, params)
+
+      // Unsubscribe immediately — ready hasn't settled yet, so cleanup
+      // defers via entry.ready.then(cleanup, cleanup)
+      handle.unsubscribe()
+
+      // Wait for ready to settle (it should resolve successfully)
+      await handle.ready
+
+      // After ready settles, the deferred cleanup should have run.
+      // Next get creates a fresh entry.
+      const result = await manager.get(chatStreamDef, `messages`, params)
+      expect(result).toEqual([])
+    })
+  })
 })
