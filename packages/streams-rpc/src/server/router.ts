@@ -91,6 +91,16 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
       )
     }
 
+    // "value" and "key" are reserved — the proxy client destructures these
+    // from the flat params object for mutation payloads.
+    const reserved = path.match(/:(?:value|key)\b/g)
+    if (reserved) {
+      throw new Error(
+        `[streams-rpc] Path "${path}" uses reserved param name(s) ${reserved.join(`, `)}. ` +
+          `"value" and "key" are used by the RPC client for mutation payloads.`
+      )
+    }
+
     // Normalize collection inputs to CollectionDefs
     const normalized: Record<string, CollectionDef> = {}
     const seenTypes = new Map<string, string>()

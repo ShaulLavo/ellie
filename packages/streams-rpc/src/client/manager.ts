@@ -81,7 +81,7 @@ export class StreamManager {
   ): CacheEntry {
     const resolvedPath = resolvePath(streamDef.path, params)
     let entry = this.#cache.get(resolvedPath)
-    if (entry) return entry
+    if (entry && !entry.pendingDelete) return entry
 
     const transport = new FetchStreamTransport({
       baseUrl: this.#baseUrl,
