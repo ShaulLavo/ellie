@@ -3,6 +3,8 @@ import { createServerContext, handleDurableStreamRequest } from "@ellie/durable-
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
 import { env } from "@ellie/env/server";
+import { handleAgentRequest } from "./routes/agent";
+import { AgentManager } from "./agent/manager";
 
 const parsedUrl = new URL(env.API_BASE_URL);
 const port = parsedUrl.port !== "" ? Number(parsedUrl.port) : parsedUrl.protocol === "https:" ? 443 : 80;
@@ -13,6 +15,24 @@ console.log(`[server] DATA_DIR=${DATA_DIR}`);
 const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
 const durableStore = new DurableStore(engine);
 export const ctx = createServerContext({ store: durableStore });
+
+// ── Agent manager ────────────────────────────────────────────────
+// Adapter is lazily set — call `setAgentAdapter()` before using agent routes.
+// This allows the adapter to be configured externally (e.g., with API keys from env).
+const agentManager = new AgentManager(durableStore, {
+  adapter: undefined as any, // Set via setAgentAdapter() before first use
+  systemPrompt: "You are a helpful assistant.",
+});
+
+/**
+ * Set the TanStack AI adapter for the agent manager.
+ * Must be called before agent routes are used.
+ */
+export function setAgentAdapter(adapter: import("@tanstack/ai").AnyTextAdapter): void {
+  (agentManager as any).options.adapter = adapter;
+}
+
+export { agentManager };
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
@@ -46,6 +66,33 @@ async function fetch(req: Request): Promise<Response> {
     });
     logRequest(req.method, path, response.status);
     return response;
+  }
+
+  // Agent action routes (prompt, steer, abort, history)
+  const agentResponse = handleAgentRequest(agentManager, req, path);
+  if (agentResponse) {
+    const response = await agentResponse;
+    logRequest(req.method, path, response.status);
+    return response;
+  }
+
+  // /agent/:id/events/:runId — agent events stream (must match before /agent/:id)
+  const agentEventsMatch = path.match(/^\/agent\/([^/]+)\/events\/([^/]+)$/);
+  if (agentEventsMatch) {
+    const [, chatId, runId] = agentEventsMatch;
+    const response = await handleDurableStreamRequest(ctx, req, `/agent/${chatId}/events/${runId}`);
+    logRequest(req.method, path, response.status);
+    return response;
+  }
+
+  // /agent/:id — agent messages stream (only for GET/PUT — stream reads)
+  if (path.match(/^\/agent\/([^/]+)$/) && (req.method === "GET" || req.method === "PUT")) {
+    const id = path.slice("/agent/".length);
+    if (id) {
+      const response = await handleDurableStreamRequest(ctx, req, `/agent/${id}`);
+      logRequest(req.method, path, response.status);
+      return response;
+    }
   }
 
   // /chat/:id

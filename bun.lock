@@ -16,11 +16,14 @@
       "name": "app",
       "version": "1.0.50",
       "dependencies": {
+        "@ellie/agent": "workspace:*",
+        "@ellie/ai": "workspace:*",
         "@ellie/db": "workspace:*",
         "@ellie/durable-streams": "workspace:*",
         "@ellie/env": "workspace:*",
         "@ellie/router": "workspace:*",
         "@ellie/rpc": "workspace:*",
+        "@tanstack/ai": "^0.5.1",
         "valibot": "^1.2.0",
       },
       "devDependencies": {
@@ -64,6 +67,22 @@
         "eslint-plugin-react-hooks": "^7.0.1",
         "tailwindcss": "^4.2.0",
         "typescript-eslint": "^8.56.0",
+      },
+    },
+    "packages/agent": {
+      "name": "@ellie/agent",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/ai": "workspace:*",
+        "valibot": "^1.2.0",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "@tanstack/ai": "^0.5.1",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@tanstack/ai": ">=0.5.0",
       },
     },
     "packages/ai": {
@@ -127,6 +146,7 @@
       "name": "@ellie/router",
       "version": "0.1.0",
       "dependencies": {
+        "@ellie/agent": "workspace:*",
         "@ellie/rpc": "workspace:*",
         "valibot": "^1.2.0",
       },
@@ -281,6 +301,8 @@
     "@durable-streams/state": ["@durable-streams/state@0.2.1", "", { "dependencies": { "@durable-streams/client": "0.2.1", "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@tanstack/db": ">=0.5.0" } }, "sha512-8piCcw/y1Jz6QJn0vOf+yhovFlp3xvRbzWRWtF51ndlorofJi3pOfCXnEINuvSueuNMIJosmKOg0AEvpMKfoCw=="],
 
     "@ecies/ciphers": ["@ecies/ciphers@0.2.5", "", { "peerDependencies": { "@noble/ciphers": "^1.0.0" } }, "sha512-GalEZH4JgOMHYYcYmVqnFirFsjZHeoGMDt9IxEnM9F7GRUUyUksJ7Ou53L83WHJq3RWKD3AcBpo0iQh0oMpf8A=="],
+
+    "@ellie/agent": ["@ellie/agent@workspace:packages/agent"],
 
     "@ellie/ai": ["@ellie/ai@workspace:packages/ai"],
 
