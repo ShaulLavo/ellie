@@ -222,7 +222,11 @@ export async function reflect(
       factType: memory.memory.factType,
       entities: memory.entities.map((entity) => entity.name),
       score: memory.score,
-      occurredAt: memory.memory.validFrom ?? memory.memory.createdAt,
+      occurredAt:
+        memory.memory.occurredStart ??
+        memory.memory.occurredStart ??
+        memory.memory.eventDate ??
+        memory.memory.createdAt,
     }))
   })
 

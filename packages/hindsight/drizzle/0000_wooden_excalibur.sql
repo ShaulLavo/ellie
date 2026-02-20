@@ -86,8 +86,9 @@ CREATE TABLE `hs_memory_units` (
 	`content` text NOT NULL,
 	`fact_type` text NOT NULL,
 	`confidence` real DEFAULT 1 NOT NULL,
-	`valid_from` integer,
-	`valid_to` integer,
+	`event_date` integer,
+	`occurred_start` integer,
+	`occurred_end` integer,
 	`metadata` text,
 	`tags` text,
 	`source_text` text,
@@ -103,7 +104,9 @@ CREATE TABLE `hs_memory_units` (
 --> statement-breakpoint
 CREATE INDEX `idx_hs_mu_bank` ON `hs_memory_units` (`bank_id`);--> statement-breakpoint
 CREATE INDEX `idx_hs_mu_fact_type` ON `hs_memory_units` (`bank_id`,`fact_type`);--> statement-breakpoint
-CREATE INDEX `idx_hs_mu_temporal` ON `hs_memory_units` (`bank_id`,`valid_from`,`valid_to`);--> statement-breakpoint
+CREATE INDEX `idx_hs_mu_event_date` ON `hs_memory_units` (`bank_id`,`event_date`);--> statement-breakpoint
+CREATE INDEX `idx_hs_mu_occurred_range` ON `hs_memory_units` (`bank_id`,`occurred_start`,`occurred_end`);--> statement-breakpoint
+CREATE INDEX `idx_hs_mu_mentioned_at` ON `hs_memory_units` (`bank_id`,`mentioned_at`);--> statement-breakpoint
 CREATE INDEX `idx_hs_mu_consolidated` ON `hs_memory_units` (`bank_id`,`consolidated_at`);--> statement-breakpoint
 CREATE TABLE `hs_mental_models` (
 	`id` text PRIMARY KEY NOT NULL,

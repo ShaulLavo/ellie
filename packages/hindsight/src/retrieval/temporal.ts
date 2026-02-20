@@ -5,11 +5,13 @@ import type { RetrievalHit } from "./semantic"
 /**
  * Time-range retrieval: find memories whose temporal validity overlaps a range.
  *
- * Overlap condition:
- *   (valid_from <= range.to OR valid_from IS NULL)
- *   AND (valid_to >= range.from OR valid_to IS NULL)
+ * Python parity overlap condition:
+ * - (occurred_start <= to AND occurred_end >= from)
+ * - OR mentioned_at in range
+ * - OR occurred_start in range
+ * - OR occurred_end in range
  *
- * Scored by recency (more recent = higher score).
+ * Scored by temporal-anchor recency (more recent = higher score).
  * Supports optional tag pre-filtering via json_each().
  */
 export function searchTemporal(
@@ -22,20 +24,33 @@ export function searchTemporal(
 ): RetrievalHit[] {
   if (!timeRange || (timeRange.from == null && timeRange.to == null)) return []
 
+  const rangeFrom = timeRange.from ?? -8_640_000_000_000_000
+  const rangeTo = timeRange.to ?? 8_640_000_000_000_000
+
   const conditions: string[] = ["bank_id = ?"]
-  const params: (string | number)[] = [bankId]
+  const params: (string | number)[] = [
+    bankId,
+    rangeTo,
+    rangeFrom,
+    rangeFrom,
+    rangeTo,
+    rangeFrom,
+    rangeTo,
+    rangeFrom,
+    rangeTo,
+  ]
 
-  if (timeRange.from != null) {
-    conditions.push("(valid_to >= ? OR valid_to IS NULL)")
-    params.push(timeRange.from)
-  }
-  if (timeRange.to != null) {
-    conditions.push("(valid_from <= ? OR valid_from IS NULL)")
-    params.push(timeRange.to)
-  }
+  conditions.push(`(
+    (occurred_start IS NOT NULL AND occurred_end IS NOT NULL AND occurred_start <= ? AND occurred_end >= ?)
+    OR (mentioned_at IS NOT NULL AND mentioned_at BETWEEN ? AND ?)
+    OR (occurred_start IS NOT NULL AND occurred_start BETWEEN ? AND ?)
+    OR (occurred_end IS NOT NULL AND occurred_end BETWEEN ? AND ?)
+  )`)
 
-  // Only include memories that have at least some temporal data
-  conditions.push("(valid_from IS NOT NULL OR valid_to IS NOT NULL)")
+  // Only include memories that have at least some temporal data.
+  conditions.push(
+    "(event_date IS NOT NULL OR occurred_start IS NOT NULL OR occurred_end IS NOT NULL OR mentioned_at IS NOT NULL OR occurred_start IS NOT NULL OR occurred_end IS NOT NULL)",
+  )
 
   // Tag pre-filtering
   if (tags && tags.length > 0) {
@@ -75,20 +90,48 @@ export function searchTemporal(
   const rows = hdb.sqlite
     .prepare(
       `
-      SELECT id, created_at FROM hs_memory_units
+      SELECT id, event_date, occurred_start, occurred_end, mentioned_at, created_at
+      FROM hs_memory_units
       WHERE ${conditions.join(" AND ")}
-      ORDER BY created_at DESC
+      ORDER BY COALESCE(event_date, occurred_start, mentioned_at, created_at) DESC
       LIMIT ?
     `,
     )
-    .all(...params, limit) as Array<{ id: string; created_at: number }>
+    .all(...params, limit) as Array<{
+      id: string
+      event_date: number | null
+      occurred_start: number | null
+      occurred_end: number | null
+      mentioned_at: number | null
+      created_at: number
+    }>
 
   if (rows.length === 0) return []
 
-  // Position-based scoring: first result = 1.0, last = close to 0
-  return rows.map((r, i) => ({
-    id: r.id,
-    score: 1 - i / Math.max(rows.length, 1),
-    source: "temporal",
-  }))
+  const anchors = rows.map((row) => {
+    if (row.occurred_start != null && row.occurred_end != null) {
+      return Math.round((row.occurred_start + row.occurred_end) / 2)
+    }
+    return (
+      row.occurred_start ??
+      row.occurred_end ??
+      row.mentioned_at ??
+      row.event_date ??
+      row.created_at
+    )
+  })
+  const maxAnchor = Math.max(...anchors)
+  const minAnchor = Math.min(...anchors)
+  const range = maxAnchor - minAnchor
+
+  return rows.map((row, index) => {
+    const anchor = anchors[index]!
+    const normalized =
+      range <= 0 ? 1 : Math.max(0, Math.min(1, (anchor - minAnchor) / range))
+    return {
+      id: row.id,
+      score: normalized,
+      source: "temporal",
+    }
+  })
 }

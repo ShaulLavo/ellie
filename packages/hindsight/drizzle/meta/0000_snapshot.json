@@ -635,15 +635,15 @@
           "autoincrement": false,
           "default": 1
         },
-        "valid_from": {
-          "name": "valid_from",
+        "occurred_start": {
+          "name": "occurred_start",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "valid_to": {
-          "name": "valid_to",
+        "occurred_end": {
+          "name": "occurred_end",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -741,8 +741,8 @@
           "name": "idx_hs_mu_temporal",
           "columns": [
             "bank_id",
-            "valid_from",
-            "valid_to"
+            "occurred_start",
+            "occurred_end"
           ],
           "isUnique": false
         },

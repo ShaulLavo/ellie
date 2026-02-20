@@ -460,7 +460,19 @@ function computeRecency(
   row: typeof import("./schema").memoryUnits.$inferSelect,
   now: number,
 ): number {
-  const anchor = row.validFrom ?? row.mentionedAt ?? row.createdAt
+  let anchor: number | null = null
+  const occurredStart = row.occurredStart ?? row.occurredStart
+  const occurredEnd = row.occurredEnd ?? row.occurredEnd
+  if (occurredStart != null && occurredEnd != null) {
+    anchor = Math.round((occurredStart + occurredEnd) / 2)
+  } else {
+    anchor =
+      occurredStart ??
+      occurredEnd ??
+      row.mentionedAt ??
+      row.eventDate ??
+      row.createdAt
+  }
   if (anchor == null) return 0.5
   const daysAgo = (now - anchor) / (1000 * 60 * 60 * 24)
   return clamp(Math.max(0.1, 1 - daysAgo / 365), 0.1, 1)

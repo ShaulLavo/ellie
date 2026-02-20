@@ -149,14 +149,14 @@ describe("temporal link behavior via retain pipeline", () => {
     const base = Date.parse("2024-06-15T12:00:00.000Z")
 
     const first = await t.hs.retain(bankId, "first", {
-      facts: [{ content: "Candidate memory", validFrom: base - 2 * 60 * 60 * 1000 }],
+      facts: [{ content: "Candidate memory", occurredStart: base - 2 * 60 * 60 * 1000 }],
       eventDate: base - 2 * 60 * 60 * 1000,
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const second = await t.hs.retain(bankId, "second", {
-      facts: [{ content: "Source memory", validFrom: base }],
+      facts: [{ content: "Source memory", occurredStart: base }],
       eventDate: base,
       dedupThreshold: 0,
       consolidate: false,
@@ -171,14 +171,14 @@ describe("temporal link behavior via retain pipeline", () => {
     const base = Date.parse("2024-06-15T12:00:00.000Z")
 
     const first = await t.hs.retain(bankId, "first", {
-      facts: [{ content: "Old memory", validFrom: base - 3 * 24 * 60 * 60 * 1000 }],
+      facts: [{ content: "Old memory", occurredStart: base - 3 * 24 * 60 * 60 * 1000 }],
       eventDate: base - 3 * 24 * 60 * 60 * 1000,
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const second = await t.hs.retain(bankId, "second", {
-      facts: [{ content: "New memory", validFrom: base }],
+      facts: [{ content: "New memory", occurredStart: base }],
       eventDate: base,
       dedupThreshold: 0,
       consolidate: false,
@@ -192,21 +192,21 @@ describe("temporal link behavior via retain pipeline", () => {
     const base = Date.parse("2024-06-15T12:00:00.000Z")
 
     const close = await t.hs.retain(bankId, "close", {
-      facts: [{ content: "Close candidate", validFrom: base - 1 * 60 * 60 * 1000 }],
+      facts: [{ content: "Close candidate", occurredStart: base - 1 * 60 * 60 * 1000 }],
       eventDate: base - 1 * 60 * 60 * 1000,
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const far = await t.hs.retain(bankId, "far", {
-      facts: [{ content: "Far candidate", validFrom: base - 18 * 60 * 60 * 1000 }],
+      facts: [{ content: "Far candidate", occurredStart: base - 18 * 60 * 60 * 1000 }],
       eventDate: base - 18 * 60 * 60 * 1000,
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const source = await t.hs.retain(bankId, "source", {
-      facts: [{ content: "Source memory", validFrom: base }],
+      facts: [{ content: "Source memory", occurredStart: base }],
       eventDate: base,
       dedupThreshold: 0,
       consolidate: false,
@@ -223,14 +223,14 @@ describe("temporal link behavior via retain pipeline", () => {
     const base = Date.parse("2024-06-15T12:00:00.000Z")
 
     const edge = await t.hs.retain(bankId, "edge", {
-      facts: [{ content: "Edge candidate", validFrom: base - 23 * 60 * 60 * 1000 }],
+      facts: [{ content: "Edge candidate", occurredStart: base - 23 * 60 * 60 * 1000 }],
       eventDate: base - 23 * 60 * 60 * 1000,
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const source = await t.hs.retain(bankId, "source", {
-      facts: [{ content: "Source memory", validFrom: base }],
+      facts: [{ content: "Source memory", occurredStart: base }],
       eventDate: base,
       dedupThreshold: 0,
       consolidate: false,
@@ -246,7 +246,7 @@ describe("temporal link behavior via retain pipeline", () => {
 
     for (let i = 0; i < 15; i++) {
       await t.hs.retain(bankId, `candidate-${i}`, {
-        facts: [{ content: `Candidate ${i}`, validFrom: base - i * 60 * 1000 }],
+        facts: [{ content: `Candidate ${i}`, occurredStart: base - i * 60 * 1000 }],
         eventDate: base - i * 60 * 1000,
         dedupThreshold: 0,
         consolidate: false,
@@ -254,7 +254,7 @@ describe("temporal link behavior via retain pipeline", () => {
     }
 
     const source = await t.hs.retain(bankId, "source", {
-      facts: [{ content: "Source memory", validFrom: base }],
+      facts: [{ content: "Source memory", occurredStart: base }],
       eventDate: base,
       dedupThreshold: 0,
       consolidate: false,
@@ -289,8 +289,8 @@ describe("temporal fields written to DB", () => {
     const retain = await t.hs.retain(bankId, "temporal fields", {
       eventDate,
       facts: [
-        { content: "Pottery workshop yesterday", validFrom: pointStart, validTo: pointEnd },
-        { content: "Alice visited Paris in February 2024", validFrom: periodStart, validTo: periodEnd },
+        { content: "Pottery workshop yesterday", occurredStart: pointStart, occurredEnd: pointEnd },
+        { content: "Alice visited Paris in February 2024", occurredStart: periodStart, occurredEnd: periodEnd },
       ],
       dedupThreshold: 0,
       consolidate: false,
@@ -298,8 +298,11 @@ describe("temporal fields written to DB", () => {
 
     expect(retain.memories.length).toBeGreaterThanOrEqual(2)
     for (const memory of retain.memories) {
-      expect(memory.validFrom).not.toBeNull()
-      expect(memory.validTo).not.toBeNull()
+      expect(memory.eventDate).not.toBeNull()
+      expect(memory.occurredStart).not.toBeNull()
+      expect(memory.occurredEnd).not.toBeNull()
+      expect(memory.occurredStart).not.toBeNull()
+      expect(memory.occurredEnd).not.toBeNull()
       expect(memory.mentionedAt).not.toBeNull()
     }
 
@@ -328,46 +331,48 @@ describe("temporal fields written to DB", () => {
   })
 
   it("point event: occurred_start and occurred_end are within the same day", async () => {
-    const validFrom = Date.parse("2024-11-16T08:00:00.000Z")
-    const validTo = Date.parse("2024-11-16T18:00:00.000Z")
+    const occurredStart = Date.parse("2024-11-16T08:00:00.000Z")
+    const occurredEnd = Date.parse("2024-11-16T18:00:00.000Z")
 
     const result = await t.hs.retain(bankId, "point event", {
-      facts: [{ content: "Point event", validFrom, validTo }],
+      facts: [{ content: "Point event", occurredStart, occurredEnd }],
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const memory = result.memories[0]!
-    expect(memory.validFrom).not.toBeNull()
-    expect(memory.validTo).not.toBeNull()
+    expect(memory.occurredStart).not.toBeNull()
+    expect(memory.occurredEnd).not.toBeNull()
+    expect(memory.occurredStart).not.toBeNull()
+    expect(memory.occurredEnd).not.toBeNull()
     const sameDay =
-      new Date(memory.validFrom!).toISOString().slice(0, 10) ===
-      new Date(memory.validTo!).toISOString().slice(0, 10)
+      new Date(memory.occurredStart!).toISOString().slice(0, 10) ===
+      new Date(memory.occurredEnd!).toISOString().slice(0, 10)
     expect(sameDay).toBe(true)
   })
 
   it("period event: occurred_start is in the correct month/year (e.g. February 2024)", async () => {
-    const validFrom = Date.parse("2024-02-01T00:00:00.000Z")
-    const validTo = Date.parse("2024-02-29T23:59:59.000Z")
+    const occurredStart = Date.parse("2024-02-01T00:00:00.000Z")
+    const occurredEnd = Date.parse("2024-02-29T23:59:59.000Z")
 
     const result = await t.hs.retain(bankId, "period event", {
-      facts: [{ content: "February period event", validFrom, validTo }],
+      facts: [{ content: "February period event", occurredStart, occurredEnd }],
       dedupThreshold: 0,
       consolidate: false,
     })
 
     const memory = result.memories[0]!
-    const start = new Date(memory.validFrom!)
+    const start = new Date(memory.occurredStart!)
     expect(start.getUTCFullYear()).toBe(2024)
     expect(start.getUTCMonth()).toBe(1)
   })
 
   it("temporal fields are present and populated in search/recall results", async () => {
-    const validFrom = Date.parse("2024-11-16T08:00:00.000Z")
-    const validTo = Date.parse("2024-11-16T18:00:00.000Z")
+    const occurredStart = Date.parse("2024-11-16T08:00:00.000Z")
+    const occurredEnd = Date.parse("2024-11-16T18:00:00.000Z")
 
     await t.hs.retain(bankId, "searchable temporal", {
-      facts: [{ content: "Pottery workshop detail", validFrom, validTo }],
+      facts: [{ content: "Pottery workshop detail", occurredStart, occurredEnd }],
       dedupThreshold: 0,
       consolidate: false,
     })
@@ -379,8 +384,11 @@ describe("temporal fields written to DB", () => {
 
     expect(result.memories.length).toBeGreaterThan(0)
     const first = result.memories[0]!.memory
-    expect(first.validFrom).not.toBeNull()
-    expect(first.validTo).not.toBeNull()
+    expect(first.eventDate).not.toBeNull()
+    expect(first.occurredStart).not.toBeNull()
+    expect(first.occurredEnd).not.toBeNull()
+    expect(first.occurredStart).not.toBeNull()
+    expect(first.occurredEnd).not.toBeNull()
     expect(first.mentionedAt).not.toBeNull()
   })
 })

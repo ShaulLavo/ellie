@@ -1,12 +1,11 @@
+import * as chrono from "chrono-node"
+
 /**
  * Temporal extraction from natural language queries.
  *
- * Supports:
- * - Relative periods ("last week", "last month", "last year")
- * - Weekday references ("last saturday")
- * - Weekend references ("last weekend")
- * - Fuzzy phrases ("a couple of days ago", "a few weeks ago")
- * - Month+year ranges ("June 2024", "junio 2024", "giugno 2024")
+ * Python parity flow:
+ * 1) Period extraction first (deterministic phrase handling)
+ * 2) Fallback parser pass (chrono) with false-positive filtering
  */
 
 function startOfDay(date: Date): Date {
@@ -49,19 +48,11 @@ function getLastWeekday(referenceDate: Date, weekday: number): Date {
   return addDays(referenceDate, -diff)
 }
 
-function thisWeekRange(referenceDate: Date): { from: number; to: number } {
-  const currentWeekday = referenceDate.getDay()
-  const mondayOffset = currentWeekday === 0 ? -6 : 1 - currentWeekday
-  const monday = addDays(referenceDate, mondayOffset)
-  const sunday = addDays(monday, 6)
-  return range(monday, sunday)
-}
-
 function lastWeekRange(referenceDate: Date): { from: number; to: number } {
-  const thisWeek = thisWeekRange(referenceDate)
-  const start = addDays(new Date(thisWeek.from), -7)
-  const end = addDays(new Date(thisWeek.to), -7)
-  return range(start, end)
+  const mondayOffset = referenceDate.getDay() === 0 ? -6 : 1 - referenceDate.getDay()
+  const thisWeekMonday = addDays(referenceDate, mondayOffset)
+  const lastWeekMonday = addDays(thisWeekMonday, -7)
+  return range(lastWeekMonday, addDays(lastWeekMonday, 6))
 }
 
 function monthRange(year: number, monthIndexZeroBased: number): { from: number; to: number } {
@@ -76,10 +67,6 @@ function lastMonthRange(referenceDate: Date): { from: number; to: number } {
     : referenceDate.getFullYear()
   const month = referenceDate.getMonth() === 0 ? 11 : referenceDate.getMonth() - 1
   return monthRange(year, month)
-}
-
-function thisMonthRange(referenceDate: Date): { from: number; to: number } {
-  return monthRange(referenceDate.getFullYear(), referenceDate.getMonth())
 }
 
 function lastYearRange(referenceDate: Date): { from: number; to: number } {
@@ -113,9 +100,7 @@ const WEEKDAY_BY_NAME: Record<string, number> = {
 }
 
 function extractMonthYearRange(query: string): { from: number; to: number } | undefined {
-  const match = query.match(
-    /\b([a-zA-Z\u00C0-\u024F]+)\s+(\d{4})\b/u,
-  )
+  const match = query.match(/\b([a-zA-Z\u00C0-\u024F]+)\s+(\d{4})\b/u)
   if (!match) return undefined
 
   const monthName = match[1]!
@@ -140,84 +125,91 @@ function extractLastWeekdayRange(
   return range(date, date)
 }
 
-const PERIOD_PATTERNS: Array<{
-  regex: RegExp
-  range: (referenceDate: Date, match: RegExpMatchArray) => { from: number; to: number }
-}> = [
-  {
-    regex: /\b(yesterday|ayer|ieri|hier|gestern)\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -1),
-  },
-  {
-    regex: /\b(today|hoy|oggi|heute|aujourd['’]?hui)\b/i,
-    range: (referenceDate) => dayRange(referenceDate, 0),
-  },
-  {
-    regex: /\b(last\s+week|la\s+semana\s+pasada|la\s+settimana\s+scorsa|letzte\s+woche)\b/i,
-    range: (referenceDate) => lastWeekRange(referenceDate),
-  },
-  {
-    regex: /\b(this\s+week)\b/i,
-    range: (referenceDate) => thisWeekRange(referenceDate),
-  },
-  {
-    regex: /\b(last\s+month|el\s+mes\s+pasado|il\s+mese\s+scorso|letzten?\s+monat)\b/i,
-    range: (referenceDate) => lastMonthRange(referenceDate),
-  },
-  {
-    regex: /\b(this\s+month)\b/i,
-    range: (referenceDate) => thisMonthRange(referenceDate),
-  },
-  {
-    regex: /\b(last\s+year|el\s+a[ñn]o\s+pasado|l['’]anno\s+scorso|letztes?\s+jahr)\b/i,
-    range: (referenceDate) => lastYearRange(referenceDate),
-  },
-  {
-    regex: /\b(last\s+weekend|el\s+fin\s+de\s+semana\s+pasado|letztes?\s+wochenende)\b/i,
-    range: (referenceDate) => {
-      const saturday = getLastWeekday(referenceDate, 6)
-      return range(saturday, addDays(saturday, 1))
+function extractPeriod(
+  query: string,
+  referenceDate: Date,
+): { from: number; to: number } | undefined {
+  const queryLower = query.toLowerCase()
+
+  const patterns: Array<{
+    regex: RegExp
+    range: (match: RegExpMatchArray) => { from: number; to: number }
+  }> = [
+    { regex: /\b(yesterday|ayer|ieri|hier|gestern)\b/i, range: () => dayRange(referenceDate, -1) },
+    { regex: /\b(today|hoy|oggi|heute|aujourd['’]?hui)\b/i, range: () => dayRange(referenceDate, 0) },
+    { regex: /\b(tomorrow|ma[ñn]ana|domani|morgen|demain)\b/i, range: () => dayRange(referenceDate, 1) },
+    { regex: /\blast\s+night\b/i, range: () => dayRange(referenceDate, -1) },
+    { regex: /\b(last\s+week|la\s+semana\s+pasada|la\s+settimana\s+scorsa|letzte\s+woche)\b/i, range: () => lastWeekRange(referenceDate) },
+    { regex: /\b(last\s+month|el\s+mes\s+pasado|il\s+mese\s+scorso|letzten?\s+monat)\b/i, range: () => lastMonthRange(referenceDate) },
+    { regex: /\b(last\s+year|el\s+a[ñn]o\s+pasado|l['’]anno\s+scorso|letztes?\s+jahr)\b/i, range: () => lastYearRange(referenceDate) },
+    {
+      regex: /\b(last\s+weekend|el\s+fin\s+de\s+semana\s+pasado|letztes?\s+wochenende)\b/i,
+      range: () => {
+        const saturday = getLastWeekday(referenceDate, 6)
+        return range(saturday, addDays(saturday, 1))
+      },
     },
-  },
-  {
-    regex: /\b(a\s+)?couple\s+(of\s+)?days?\s+ago\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -3, -1),
-  },
-  {
-    regex: /\b(a\s+)?few\s+days?\s+ago\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -5, -2),
-  },
-  {
-    regex: /\b(a\s+)?couple\s+(of\s+)?weeks?\s+ago\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -21, -7),
-  },
-  {
-    regex: /\b(a\s+)?few\s+weeks?\s+ago\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -35, -14),
-  },
-  {
-    regex: /\b(a\s+)?couple\s+(of\s+)?months?\s+ago\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -90, -30),
-  },
-  {
-    regex: /\b(a\s+)?few\s+months?\s+ago\b/i,
-    range: (referenceDate) => dayRange(referenceDate, -150, -60),
-  },
-  {
-    regex: /\blast\s+(\d+)\s+days?\b/i,
-    range: (referenceDate, match) => {
-      const days = Number.parseInt(match[1]!, 10)
-      return dayRange(referenceDate, -days, -1)
+    { regex: /\b(a\s+)?couple\s+(of\s+)?days?\s+ago\b/i, range: () => dayRange(referenceDate, -3, -1) },
+    { regex: /\b(a\s+)?few\s+days?\s+ago\b/i, range: () => dayRange(referenceDate, -5, -2) },
+    { regex: /\b(a\s+)?couple\s+(of\s+)?weeks?\s+ago\b/i, range: () => dayRange(referenceDate, -21, -7) },
+    { regex: /\b(a\s+)?few\s+weeks?\s+ago\b/i, range: () => dayRange(referenceDate, -35, -14) },
+    { regex: /\b(a\s+)?couple\s+(of\s+)?months?\s+ago\b/i, range: () => dayRange(referenceDate, -90, -30) },
+    { regex: /\b(a\s+)?few\s+months?\s+ago\b/i, range: () => dayRange(referenceDate, -150, -60) },
+    {
+      regex: /\blast\s+(\d+)\s+days?\b/i,
+      range: (match) => dayRange(referenceDate, -Number.parseInt(match[1]!, 10), -1),
     },
-  },
-  {
-    regex: /\bin\s+the\s+last\s+(\d+)\s+days?\b/i,
-    range: (referenceDate, match) => {
-      const days = Number.parseInt(match[1]!, 10)
-      return dayRange(referenceDate, -days, -1)
+    {
+      regex: /\bin\s+the\s+last\s+(\d+)\s+days?\b/i,
+      range: (match) => dayRange(referenceDate, -Number.parseInt(match[1]!, 10), -1),
     },
-  },
-]
+  ]
+
+  for (const pattern of patterns) {
+    const match = query.match(pattern.regex)
+    if (!match) continue
+    return pattern.range(match)
+  }
+
+  const weekdayRange = extractLastWeekdayRange(queryLower, referenceDate)
+  if (weekdayRange) return weekdayRange
+
+  return extractMonthYearRange(query)
+}
+
+const FALSE_POSITIVES = new Set([
+  "do",
+  "may",
+  "march",
+  "will",
+  "can",
+  "sat",
+  "sun",
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+])
+
+function extractFallbackDateRange(
+  query: string,
+  referenceDate: Date,
+): { from: number; to: number } | undefined {
+  const parsed = chrono.parse(query, referenceDate, { forwardDate: false })
+  if (parsed.length === 0) return undefined
+
+  for (const result of parsed) {
+    const text = result.text.trim().toLowerCase()
+    if (FALSE_POSITIVES.has(text) && text.length <= 5) continue
+    if (text.length <= 3 && FALSE_POSITIVES.has(text)) continue
+
+    const date = result.start.date()
+    return range(date, date)
+  }
+
+  return undefined
+}
 
 /**
  * Extract a temporal range from a natural language query.
@@ -229,19 +221,11 @@ export function extractTemporalRange(
   referenceDate?: Date,
 ): { from: number; to: number } | undefined {
   const now = referenceDate ?? new Date()
-  const queryLower = query.toLowerCase()
 
-  const monthYearRange = extractMonthYearRange(query)
-  if (monthYearRange) return monthYearRange
+  // Python parity: period extraction first.
+  const period = extractPeriod(query, now)
+  if (period) return period
 
-  const lastWeekdayRange = extractLastWeekdayRange(queryLower, now)
-  if (lastWeekdayRange) return lastWeekdayRange
-
-  for (const pattern of PERIOD_PATTERNS) {
-    const match = query.match(pattern.regex)
-    if (!match) continue
-    return pattern.range(now, match)
-  }
-
-  return undefined
+  // Fallback parser pass.
+  return extractFallbackDateRange(query, now)
 }

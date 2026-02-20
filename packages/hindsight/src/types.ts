@@ -76,8 +76,12 @@ export interface MemoryUnit {
   confidence: number
   documentId: string | null
   chunkId: string | null
-  validFrom: number | null
-  validTo: number | null
+  /** Canonical temporal anchor. Equals occurredStart when present, else mentionedAt. */
+  eventDate: number | null
+  /** Canonical occurred-start timestamp (epoch ms). */
+  occurredStart: number | null
+  /** Canonical occurred-end timestamp (epoch ms). */
+  occurredEnd: number | null
   /** Epoch ms when content was mentioned in source context (nullable). */
   mentionedAt: number | null
   metadata: Record<string, unknown> | null
@@ -282,8 +286,8 @@ export interface RetainOptions {
     content: string
     factType?: FactType
     confidence?: number
-    validFrom?: number | null
-    validTo?: number | null
+    occurredStart?: number | null
+    occurredEnd?: number | null
     entities?: string[]
     tags?: string[]
   }>

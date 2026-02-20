@@ -198,17 +198,17 @@ describe("Combined scoring trace (TDD targets)", () => {
         {
           content: "Alpha timeline includes launch and migration milestones.",
           factType: "world",
-          validFrom: now - 2 * 24 * 60 * 60 * 1000,
+          occurredStart: now - 2 * 24 * 60 * 60 * 1000,
         },
         {
           content: "Beta launch checklist tracks testing and rollout readiness.",
           factType: "world",
-          validFrom: now - 12 * 24 * 60 * 60 * 1000,
+          occurredStart: now - 12 * 24 * 60 * 60 * 1000,
         },
         {
           content: "Gamma release notes mention deployment blockers and risks.",
           factType: "experience",
-          validFrom: now - 45 * 24 * 60 * 60 * 1000,
+          occurredStart: now - 45 * 24 * 60 * 60 * 1000,
         },
       ],
       consolidate: false,

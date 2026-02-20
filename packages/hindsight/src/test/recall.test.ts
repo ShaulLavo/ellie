@@ -433,8 +433,8 @@ describe("recall", () => {
         facts: [
           {
             content: "Recent event",
-            validFrom: now - 3_600_000, // 1 hour ago
-            validTo: now,
+            occurredStart: now - 3_600_000, // 1 hour ago
+            occurredEnd: now,
           },
         ],
         consolidate: false,

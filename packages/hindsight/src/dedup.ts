@@ -50,8 +50,9 @@ export async function findDuplicates(
       const row = hdb.db
         .select({
           bankId: hdb.schema.memoryUnits.bankId,
-          validFrom: hdb.schema.memoryUnits.validFrom,
-          validTo: hdb.schema.memoryUnits.validTo,
+          eventDate: hdb.schema.memoryUnits.eventDate,
+          occurredStart: hdb.schema.memoryUnits.occurredStart,
+          occurredEnd: hdb.schema.memoryUnits.occurredEnd,
           mentionedAt: hdb.schema.memoryUnits.mentionedAt,
           createdAt: hdb.schema.memoryUnits.createdAt,
         })
@@ -63,7 +64,13 @@ export async function findDuplicates(
       if (anchor == null) return true
 
       const candidateAnchor =
-        row.validFrom ?? row.validTo ?? row.mentionedAt ?? row.createdAt
+        row.eventDate ??
+        row.occurredStart ??
+        row.occurredEnd ??
+        row.occurredStart ??
+        row.occurredEnd ??
+        row.mentionedAt ??
+        row.createdAt
       if (Math.abs(anchor - candidateAnchor) <= windowMs) return true
     }
     return false

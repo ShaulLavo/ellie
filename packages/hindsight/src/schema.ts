@@ -82,12 +82,13 @@ export const memoryUnits = sqliteTable(
     confidence: real("confidence").notNull().default(1.0),
     documentId: text("document_id"),
     chunkId: text("chunk_id"),
-    validFrom: integer("valid_from"), // epoch ms, nullable for atemporal facts
-    validTo: integer("valid_to"), // epoch ms, null = still valid
+    eventDate: integer("event_date"), // epoch ms anchor (occurred_start if present, else mentioned_at)
+    occurredStart: integer("occurred_start"), // epoch ms when the event started
+    occurredEnd: integer("occurred_end"), // epoch ms when the event ended
+    mentionedAt: integer("mentioned_at"), // epoch ms — when the content was mentioned (vs when stored)
     metadata: text("metadata"), // JSON blob
     tags: text("tags"), // JSON array of strings
     sourceText: text("source_text"), // original text this was extracted from
-    mentionedAt: integer("mentioned_at"), // epoch ms — when the content was mentioned (vs when stored)
     consolidatedAt: integer("consolidated_at"), // epoch ms — when this memory was processed by consolidation
     proofCount: integer("proof_count").notNull().default(0), // observations: number of supporting facts
     sourceMemoryIds: text("source_memory_ids"), // observations: JSON array of ULID refs
@@ -100,11 +101,13 @@ export const memoryUnits = sqliteTable(
     index("idx_hs_mu_fact_type").on(table.bankId, table.factType),
     index("idx_hs_mu_document").on(table.bankId, table.documentId),
     index("idx_hs_mu_chunk").on(table.chunkId),
-    index("idx_hs_mu_temporal").on(
+    index("idx_hs_mu_event_date").on(table.bankId, table.eventDate),
+    index("idx_hs_mu_occurred_range").on(
       table.bankId,
-      table.validFrom,
-      table.validTo,
+      table.occurredStart,
+      table.occurredEnd,
     ),
+    index("idx_hs_mu_mentioned_at").on(table.bankId, table.mentionedAt),
     index("idx_hs_mu_consolidated").on(table.bankId, table.consolidatedAt),
   ],
 )

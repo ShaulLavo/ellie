@@ -34,7 +34,7 @@ describe("Consolidation", () => {
     const hdb = (t.hs as any).hdb
     return hdb.sqlite
       .prepare(
-        `SELECT id, content, fact_type, source_memory_ids, proof_count, tags, valid_from, valid_to, history
+        `SELECT id, content, fact_type, source_memory_ids, proof_count, tags, occurred_start, occurred_end, history
          FROM hs_memory_units
          WHERE bank_id = ? AND fact_type = 'observation'
          ORDER BY created_at ASC`,
@@ -46,8 +46,8 @@ describe("Consolidation", () => {
         source_memory_ids: string | null
         proof_count: number
         tags: string | null
-        valid_from: number | null
-        valid_to: number | null
+        occurred_start: number | null
+        occurred_end: number | null
         history: string | null
       }>
   }
@@ -841,8 +841,8 @@ describe("Consolidation", () => {
           {
             content: "Alice worked in Paris.",
             factType: "world",
-            validFrom: now - 10_000,
-            validTo: now - 8_000,
+            occurredStart: now - 10_000,
+            occurredEnd: now - 8_000,
           },
         ],
         eventDate: now - 10_000,
@@ -864,15 +864,15 @@ describe("Consolidation", () => {
       const hdb = (t.hs as any).hdb
       const observation = hdb.sqlite
         .prepare(
-          `SELECT id, valid_from, valid_to, mentioned_at
+          `SELECT id, occurred_start, occurred_end, mentioned_at
            FROM hs_memory_units
            WHERE bank_id = ? AND fact_type = 'observation'
            LIMIT 1`,
         )
         .get(bankId) as {
           id: string
-          valid_from: number | null
-          valid_to: number | null
+          occurred_start: number | null
+          occurred_end: number | null
           mentioned_at: number | null
         }
       expect(observation).toBeDefined()
@@ -882,8 +882,8 @@ describe("Consolidation", () => {
           {
             content: "Alice later moved to Berlin.",
             factType: "world",
-            validFrom: now - 7_000,
-            validTo: now - 2_000,
+            occurredStart: now - 7_000,
+            occurredEnd: now - 2_000,
           },
         ],
         eventDate: now - 2_000,
@@ -905,18 +905,18 @@ describe("Consolidation", () => {
 
       const updated = hdb.sqlite
         .prepare(
-          `SELECT valid_from, valid_to, mentioned_at
+          `SELECT occurred_start, occurred_end, mentioned_at
            FROM hs_memory_units
            WHERE id = ?`,
         )
         .get(observation.id) as {
-          valid_from: number | null
-          valid_to: number | null
+          occurred_start: number | null
+          occurred_end: number | null
           mentioned_at: number | null
         }
 
-      expect(updated.valid_from).toBe(now - 10_000)
-      expect(updated.valid_to).toBe(now - 2_000)
+      expect(updated.occurred_start).toBe(now - 10_000)
+      expect(updated.occurred_end).toBe(now - 2_000)
       expect(updated.mentioned_at).toBe(now - 2_000)
       expect(first.memories[0]!.id).toBeDefined()
     })
@@ -928,8 +928,8 @@ describe("Consolidation", () => {
           {
             content: "Charlie managed the migration.",
             factType: "world",
-            validFrom: now - 100_000,
-            validTo: now - 50_000,
+            occurredStart: now - 100_000,
+            occurredEnd: now - 50_000,
           },
         ],
         eventDate: now - 60_000,
@@ -950,20 +950,20 @@ describe("Consolidation", () => {
       const hdb = (t.hs as any).hdb
       const observation = hdb.sqlite
         .prepare(
-          `SELECT valid_from, valid_to, mentioned_at
+          `SELECT occurred_start, occurred_end, mentioned_at
            FROM hs_memory_units
            WHERE bank_id = ? AND fact_type = 'observation'
            ORDER BY created_at DESC
            LIMIT 1`,
         )
         .get(bankId) as {
-          valid_from: number | null
-          valid_to: number | null
+          occurred_start: number | null
+          occurred_end: number | null
           mentioned_at: number | null
         }
 
-      expect(observation.valid_from).toBe(now - 100_000)
-      expect(observation.valid_to).toBe(now - 50_000)
+      expect(observation.occurred_start).toBe(now - 100_000)
+      expect(observation.occurred_end).toBe(now - 50_000)
       expect(observation.mentioned_at).toBe(now - 60_000)
     })
   })
@@ -1251,8 +1251,8 @@ describe("Consolidation", () => {
         facts: [
           {
             content: "Henry was a vegetarian.",
-            validFrom: baseTime,
-            validTo: baseTime + 50_000,
+            occurredStart: baseTime,
+            occurredEnd: baseTime + 50_000,
           },
         ],
         consolidate: false,
@@ -1274,8 +1274,8 @@ describe("Consolidation", () => {
         facts: [
           {
             content: "Henry now eats meat.",
-            validFrom: baseTime + 60_000,
-            validTo: null,
+            occurredStart: baseTime + 60_000,
+            occurredEnd: null,
           },
         ],
         consolidate: false,
@@ -1300,7 +1300,7 @@ describe("Consolidation", () => {
       expect(updatedObs).toHaveLength(1)
       expect(updatedObs[0]!.content).toContain("meat")
       // Temporal range should be expanded to cover both periods
-      expect(updatedObs[0]!.valid_from).toBeLessThanOrEqual(baseTime)
+      expect(updatedObs[0]!.occurred_start).toBeLessThanOrEqual(baseTime)
     })
   })
 
@@ -1620,7 +1620,7 @@ describe("Core parity: test_consolidation.py", () => {
   async function seedBase() {
     await t.hs.retain(bankId, "seed", {
       facts: [
-        { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], validFrom: Date.now() - 60 * 86_400_000 },
+        { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], occurredStart: Date.now() - 60 * 86_400_000 },
         { content: "Rain caused the trail to become muddy", factType: "world", confidence: 0.88, entities: ["trail"], tags: ["seed", "weather"] },
         { content: "Alice prefers tea over coffee", factType: "opinion", confidence: 0.85, entities: ["Alice"], tags: ["seed", "preferences"] },
       ],

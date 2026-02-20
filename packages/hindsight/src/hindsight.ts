@@ -1091,14 +1091,22 @@ Instructions:
     )
 
     const items = paged.map((row) => ({
+      // Python parity: date prefers eventDate, with occurred/mentioned fallbacks.
+      // Keep API shape stable while backing with canonical temporal fields.
       id: row.id,
       text: row.content,
       context: row.sourceText ?? "",
-      date: toIsoOrEmpty(row.validFrom ?? row.mentionedAt ?? row.createdAt),
+      date: toIsoOrEmpty(
+        row.eventDate ??
+          row.occurredStart ??
+          row.occurredStart ??
+          row.mentionedAt ??
+          row.createdAt,
+      ),
       factType: row.factType as ListMemoryUnitsResult["items"][number]["factType"],
       mentionedAt: toIsoOrNull(row.mentionedAt),
-      occurredStart: toIsoOrNull(row.validFrom),
-      occurredEnd: toIsoOrNull(row.validTo),
+      occurredStart: toIsoOrNull(row.occurredStart ?? row.occurredStart),
+      occurredEnd: toIsoOrNull(row.occurredEnd ?? row.occurredEnd),
       entities: (entityByMemory.get(row.id) ?? []).join(", "),
       chunkId: row.chunkId,
     }))
@@ -1129,11 +1137,17 @@ Instructions:
       id: row.id,
       text: row.content,
       context: row.sourceText ?? "",
-      date: toIsoOrEmpty(row.validFrom ?? row.mentionedAt ?? row.createdAt),
+      date: toIsoOrEmpty(
+        row.eventDate ??
+          row.occurredStart ??
+          row.occurredStart ??
+          row.mentionedAt ??
+          row.createdAt,
+      ),
       type: row.factType as MemoryUnitDetail["type"],
       mentionedAt: toIsoOrNull(row.mentionedAt),
-      occurredStart: toIsoOrNull(row.validFrom),
-      occurredEnd: toIsoOrNull(row.validTo),
+      occurredStart: toIsoOrNull(row.occurredStart ?? row.occurredStart),
+      occurredEnd: toIsoOrNull(row.occurredEnd ?? row.occurredEnd),
       entities: entityNames,
       documentId: row.documentId,
       chunkId: row.chunkId,
@@ -1161,7 +1175,7 @@ Instructions:
         text: sourceRow.content,
         type: sourceRow.factType as MemoryUnitDetail["type"],
         context: sourceRow.sourceText,
-        occurredStart: toIsoOrNull(sourceRow.validFrom),
+        occurredStart: toIsoOrNull(sourceRow.occurredStart ?? sourceRow.occurredStart),
         mentionedAt: toIsoOrNull(sourceRow.mentionedAt),
       }))
     }

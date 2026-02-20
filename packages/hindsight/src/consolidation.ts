@@ -49,6 +49,24 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
   }
 }
 
+function getOccurredStart(
+  row: typeof import("./schema").memoryUnits.$inferSelect,
+): number | null {
+  return row.occurredStart ?? row.occurredStart
+}
+
+function getOccurredEnd(
+  row: typeof import("./schema").memoryUnits.$inferSelect,
+): number | null {
+  return row.occurredEnd ?? row.occurredEnd
+}
+
+function getEventDate(
+  row: typeof import("./schema").memoryUnits.$inferSelect,
+): number | null {
+  return row.eventDate ?? getOccurredStart(row) ?? row.mentionedAt
+}
+
 // ── Valibot schema for LLM consolidation response ───────────────────────
 
 const ConsolidationActionSchema = v.array(
@@ -252,8 +270,8 @@ interface RelatedObservation {
   content: string
   proofCount: number
   sourceCount: number
-  validFrom: number | null
-  validTo: number | null
+  occurredStart: number | null
+  occurredEnd: number | null
   mentionedAt: number | null
 }
 
@@ -313,8 +331,8 @@ async function findRelatedObservations(
       content: row.content,
       proofCount: row.proofCount,
       sourceCount: sourceMemoryIds.length,
-      validFrom: row.validFrom,
-      validTo: row.validTo,
+      occurredStart: getOccurredStart(row),
+      occurredEnd: getOccurredEnd(row),
       mentionedAt: row.mentionedAt,
     })
   }
@@ -333,8 +351,8 @@ async function consolidateWithLLM(
   const factPayload: ConsolidationPromptFact = {
     id: sourceMemory.id,
     content: sourceMemory.content,
-    validFrom: sourceMemory.validFrom,
-    validTo: sourceMemory.validTo,
+    occurredStart: getOccurredStart(sourceMemory),
+    occurredEnd: getOccurredEnd(sourceMemory),
     mentionedAt: sourceMemory.mentionedAt,
     tags: sourceTags,
   }
@@ -451,8 +469,9 @@ async function executeCreateAction(
       content: action.text,
       factType: "observation",
       confidence: sourceMemory.confidence,
-      validFrom: sourceMemory.validFrom,
-      validTo: sourceMemory.validTo,
+      eventDate: getEventDate(sourceMemory),
+      occurredStart: getOccurredStart(sourceMemory),
+      occurredEnd: getOccurredEnd(sourceMemory),
       mentionedAt: sourceMemory.mentionedAt,
       tags,
       proofCount: 1,
@@ -523,12 +542,19 @@ async function executeUpdateAction(
   const mergedTags = [...new Set([...existingTags, ...sourceTags])]
 
   // Expand temporal range
-  const validFrom = minNullable(existing.validFrom, sourceMemory.validFrom)
-  const validTo = maxNullable(existing.validTo, sourceMemory.validTo)
+  const occurredStart = minNullable(
+    getOccurredStart(existing),
+    getOccurredStart(sourceMemory),
+  )
+  const occurredEnd = maxNullable(
+    getOccurredEnd(existing),
+    getOccurredEnd(sourceMemory),
+  )
   const mentionedAt = maxNullable(
     existing.mentionedAt,
     sourceMemory.mentionedAt,
   )
+  const eventDate = occurredStart ?? mentionedAt
 
   hdb.db
     .update(schema.memoryUnits)
@@ -538,8 +564,9 @@ async function executeUpdateAction(
       sourceMemoryIds: JSON.stringify(existingSourceIds),
       history: JSON.stringify(history),
       tags: mergedTags.length > 0 ? JSON.stringify(mergedTags) : null,
-      validFrom,
-      validTo,
+      eventDate,
+      occurredStart,
+      occurredEnd,
       mentionedAt,
       updatedAt: now,
     })
@@ -615,14 +642,15 @@ async function executeMergeAction(
     sourceMemory.id,
   )
 
-  let validFrom = sourceMemory.validFrom
-  let validTo = sourceMemory.validTo
+  let occurredStart = getOccurredStart(sourceMemory)
+  let occurredEnd = getOccurredEnd(sourceMemory)
   let mentionedAt = sourceMemory.mentionedAt
   for (const observation of observations) {
-    validFrom = minNullable(validFrom, observation.validFrom)
-    validTo = maxNullable(validTo, observation.validTo)
+    occurredStart = minNullable(occurredStart, getOccurredStart(observation))
+    occurredEnd = maxNullable(occurredEnd, getOccurredEnd(observation))
     mentionedAt = maxNullable(mentionedAt, observation.mentionedAt)
   }
+  const eventDate = occurredStart ?? mentionedAt
 
   hdb.db
     .update(schema.memoryUnits)
@@ -633,8 +661,9 @@ async function executeMergeAction(
       history: JSON.stringify(history),
       tags:
         mergedTags.size > 0 ? JSON.stringify([...mergedTags]) : null,
-      validFrom,
-      validTo,
+      eventDate,
+      occurredStart,
+      occurredEnd,
       mentionedAt,
       updatedAt: now,
     })

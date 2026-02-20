@@ -22,6 +22,7 @@
     "@ellie/db": "workspace:*",
     "@ellie/utils": "workspace:*",
     "@tanstack/ai-anthropic": "^0.5.0",
+    "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.45.1",
     "valibot": "^1.2.0"
   },

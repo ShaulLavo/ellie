@@ -153,7 +153,7 @@ describeIfReal("Fact extraction quality (real LLM)", () => {
       expect(memories.length).toBeGreaterThan(0)
       expect(
         memories.some((memory) =>
-          approximateDate(memory.validFrom ? new Date(memory.validFrom).toISOString() : null, "2024-11-12T00:00:00.000Z"),
+          approximateDate(memory.occurredStart ? new Date(memory.occurredStart).toISOString() : null, "2024-11-12T00:00:00.000Z"),
         ),
       ).toBe(true)
     })
@@ -162,13 +162,13 @@ describeIfReal("Fact extraction quality (real LLM)", () => {
       const memories = await extract("Last Saturday I met Emily for lunch.")
       expect(memories.length).toBeGreaterThan(0)
       const text = lowerJoined(memories)
-      expect(text.includes("saturday") || memories.some((m) => m.validFrom != null)).toBe(true)
+      expect(text.includes("saturday") || memories.some((m) => m.occurredStart != null)).toBe(true)
     })
 
     it("converts 'two weeks ago' to approximate date", async () => {
       const memories = await extract("Two weeks ago I submitted the application.")
       expect(memories.length).toBeGreaterThan(0)
-      expect(memories.some((memory) => memory.validFrom != null)).toBe(true)
+      expect(memories.some((memory) => memory.occurredStart != null)).toBe(true)
     })
 
     it("preserves absolute dates as-is", async () => {
@@ -176,8 +176,8 @@ describeIfReal("Fact extraction quality (real LLM)", () => {
       expect(memories.length).toBeGreaterThan(0)
       expect(
         memories.some((memory) => {
-          if (!memory.validFrom) return false
-          const date = new Date(memory.validFrom)
+          if (!memory.occurredStart) return false
+          const date = new Date(memory.occurredStart)
           return date.getUTCFullYear() === 2024 && date.getUTCMonth() === 2
         }),
       ).toBe(true)

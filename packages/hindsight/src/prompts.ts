@@ -185,8 +185,8 @@ You may also return [] if no action is needed.`
 export interface ConsolidationPromptFact {
   id: string
   content: string
-  validFrom: number | null
-  validTo: number | null
+  occurredStart: number | null
+  occurredEnd: number | null
   mentionedAt: number | null
   tags: string[]
 }
@@ -196,8 +196,8 @@ export interface ConsolidationPromptObservation {
   content: string
   proofCount: number
   sourceCount: number
-  validFrom: number | null
-  validTo: number | null
+  occurredStart: number | null
+  occurredEnd: number | null
   mentionedAt: number | null
 }
 
@@ -213,8 +213,8 @@ export function getConsolidationUserPrompt(
 ): string {
   let prompt = `NEW FACT [ID: ${newFact.id}]:\n${newFact.content}\n`
   prompt += `Temporal:\n`
-  prompt += `- validFrom: ${formatEpochMs(newFact.validFrom)}\n`
-  prompt += `- validTo: ${formatEpochMs(newFact.validTo)}\n`
+  prompt += `- occurredStart: ${formatEpochMs(newFact.occurredStart)}\n`
+  prompt += `- occurredEnd: ${formatEpochMs(newFact.occurredEnd)}\n`
   prompt += `- mentionedAt: ${formatEpochMs(newFact.mentionedAt)}\n`
   prompt += `- tags: ${newFact.tags.join(", ") || "none"}\n`
 
@@ -222,7 +222,7 @@ export function getConsolidationUserPrompt(
     prompt += "\nEXISTING RELATED OBSERVATIONS:\n"
     for (const obs of relatedObservations) {
       prompt += `\n[ID: ${obs.id}] (backed by ${obs.proofCount} facts, ${obs.sourceCount} sources)\n`
-      prompt += `Temporal: validFrom=${formatEpochMs(obs.validFrom)}, validTo=${formatEpochMs(obs.validTo)}, mentionedAt=${formatEpochMs(obs.mentionedAt)}\n`
+      prompt += `Temporal: occurredStart=${formatEpochMs(obs.occurredStart)}, occurredEnd=${formatEpochMs(obs.occurredEnd)}, mentionedAt=${formatEpochMs(obs.mentionedAt)}\n`
       prompt += `${obs.content}\n`
     }
   } else {

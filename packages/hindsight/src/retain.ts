@@ -70,8 +70,10 @@ interface ExtractedFact {
   content: string
   factType: FactType
   confidence: number
-  validFrom: string | null
-  validTo: string | null
+  eventDate: string | null
+  occurredStart: string | null
+  occurredEnd: string | null
+  mentionedAt: string | null
   entities: ExtractedEntity[]
   tags: string[]
   causalRelations: ExtractedCausalRelation[]
@@ -276,22 +278,26 @@ function normalizeExtractedFacts(
     const factKind = String(
       fact.factKind ?? fact.fact_kind ?? "conversation",
     ).toLowerCase()
-    let validFrom =
-      readIsoDate(fact.validFrom) ??
-      readIsoDate(fact.valid_from) ??
+    let occurredStart =
+      readIsoDate(fact.occurredStart) ??
+      readIsoDate(fact.occurred_start) ??
       readIsoDate(fact.occurredStart) ??
       readIsoDate(fact.occurred_start)
-    let validTo =
-      readIsoDate(fact.validTo) ??
-      readIsoDate(fact.valid_to) ??
+    let occurredEnd =
+      readIsoDate(fact.occurredEnd) ??
+      readIsoDate(fact.occurred_end) ??
       readIsoDate(fact.occurredEnd) ??
       readIsoDate(fact.occurred_end)
+    let mentionedAt = readIsoDate(fact.mentionedAt) ?? readIsoDate(fact.mentioned_at)
 
-    if (!validFrom && factKind === "event") {
-      validFrom = inferTemporalDate(content, eventDateMs)
+    if (!occurredStart && factKind === "event") {
+      occurredStart = inferTemporalDate(content, eventDateMs)
     }
-    if (!validTo && validFrom && factKind === "event") {
-      validTo = validFrom
+    if (!occurredEnd && occurredStart && factKind === "event") {
+      occurredEnd = occurredStart
+    }
+    if (!mentionedAt) {
+      mentionedAt = new Date(eventDateMs).toISOString()
     }
 
     const confidence =
@@ -323,8 +329,10 @@ function normalizeExtractedFacts(
       content,
       factType,
       confidence,
-      validFrom,
-      validTo,
+      eventDate: occurredStart ?? mentionedAt,
+      occurredStart,
+      occurredEnd,
+      mentionedAt,
       entities,
       tags,
       causalRelations,
@@ -420,8 +428,10 @@ async function extractFactsFromContent(
       content: sanitizeText(f.content),
       factType: (f.factType ?? "world") as ExtractedFact["factType"],
       confidence: f.confidence ?? 1.0,
-      validFrom: f.validFrom != null ? new Date(f.validFrom).toISOString() : null,
-      validTo: f.validTo != null ? new Date(f.validTo).toISOString() : null,
+      eventDate: null,
+      occurredStart: f.occurredStart != null ? new Date(f.occurredStart).toISOString() : null,
+      occurredEnd: f.occurredEnd != null ? new Date(f.occurredEnd).toISOString() : null,
+      mentionedAt: null,
       entities: (f.entities ?? []).map((name) => ({
         name,
         entityType: "concept" as const,
@@ -724,6 +734,11 @@ function planEntities(
 function rowToMemoryUnit(
   row: typeof import("./schema").memoryUnits.$inferSelect,
 ): MemoryUnit {
+  const occurredStart = row.occurredStart
+  const occurredEnd = row.occurredEnd
+  const mentionedAt = row.mentionedAt
+  const eventDate = row.eventDate ?? occurredStart ?? mentionedAt
+
   return {
     id: row.id,
     bankId: row.bankId,
@@ -732,9 +747,10 @@ function rowToMemoryUnit(
     confidence: row.confidence,
     documentId: row.documentId,
     chunkId: row.chunkId,
-    validFrom: row.validFrom,
-    validTo: row.validTo,
-    mentionedAt: row.mentionedAt,
+    eventDate,
+    occurredStart,
+    occurredEnd,
+    mentionedAt,
     metadata: safeJsonParse<Record<string, unknown> | null>(row.metadata, null),
     tags: safeJsonParse<string[] | null>(row.tags, null),
     sourceText: row.sourceText,
@@ -1001,6 +1017,9 @@ export async function retain(
     const memoryMetadata = options.metadata ?? null
     const sourceText = context ? `${context}\n\n${cleanContent}` : cleanContent
     const mentionedAt = eventDateMs + factIndex
+    const occurredStart = parseISOToEpoch(fact.occurredStart ?? fact.occurredStart)
+    const occurredEnd = parseISOToEpoch(fact.occurredEnd ?? fact.occurredEnd)
+    const eventDate = occurredStart ?? mentionedAt
 
     hdb.db
       .insert(schema.memoryUnits)
@@ -1012,8 +1031,9 @@ export async function retain(
         content: fact.content,
         factType: fact.factType,
         confidence: fact.confidence,
-        validFrom: parseISOToEpoch(fact.validFrom),
-        validTo: parseISOToEpoch(fact.validTo),
+        eventDate,
+        occurredStart,
+        occurredEnd,
         mentionedAt,
         metadata: memoryMetadata ? JSON.stringify(memoryMetadata) : null,
         tags: tags.length > 0 ? JSON.stringify(tags) : null,
@@ -1057,8 +1077,9 @@ export async function retain(
       confidence: fact.confidence,
       documentId,
       chunkId,
-      validFrom: parseISOToEpoch(fact.validFrom),
-      validTo: parseISOToEpoch(fact.validTo),
+      eventDate,
+      occurredStart,
+      occurredEnd,
       mentionedAt,
       metadata: memoryMetadata,
       tags: tags.length > 0 ? tags : null,
@@ -1328,6 +1349,13 @@ export async function retainBatch(
       const offset = mentionOffsetsByResult[item.originalIndex] ?? 0
       mentionOffsetsByResult[item.originalIndex] = offset + 1
       const mentionedAt = item.eventDateMs + offset
+      const occurredStart = parseISOToEpoch(
+        item.fact.occurredStart ?? item.fact.occurredStart,
+      )
+      const occurredEnd = parseISOToEpoch(
+        item.fact.occurredEnd ?? item.fact.occurredEnd,
+      )
+      const eventDate = occurredStart ?? mentionedAt
       const sourceText = item.context
         ? `${item.context}\n\n${item.sourceText}`
         : item.sourceText
@@ -1340,8 +1368,9 @@ export async function retainBatch(
         content: item.fact.content,
         factType: item.fact.factType,
         confidence: item.fact.confidence,
-        validFrom: parseISOToEpoch(item.fact.validFrom),
-        validTo: parseISOToEpoch(item.fact.validTo),
+        eventDate,
+        occurredStart,
+        occurredEnd,
         mentionedAt,
         metadata: item.metadata ? JSON.stringify(item.metadata) : null,
         tags: tags.length > 0 ? JSON.stringify(tags) : null,
@@ -1358,8 +1387,9 @@ export async function retainBatch(
         confidence: item.fact.confidence,
         documentId: item.documentId,
         chunkId: item.chunkId,
-        validFrom: parseISOToEpoch(item.fact.validFrom),
-        validTo: parseISOToEpoch(item.fact.validTo),
+        eventDate,
+        occurredStart,
+        occurredEnd,
         mentionedAt,
         metadata: item.metadata,
         tags: tags.length > 0 ? tags : null,
@@ -1560,8 +1590,9 @@ function findDuplicateFlagsByVector(
       const row = hdb.db
         .select({
           bankId: hdb.schema.memoryUnits.bankId,
-          validFrom: hdb.schema.memoryUnits.validFrom,
-          validTo: hdb.schema.memoryUnits.validTo,
+          eventDate: hdb.schema.memoryUnits.eventDate,
+          occurredStart: hdb.schema.memoryUnits.occurredStart,
+          occurredEnd: hdb.schema.memoryUnits.occurredEnd,
           mentionedAt: hdb.schema.memoryUnits.mentionedAt,
           createdAt: hdb.schema.memoryUnits.createdAt,
         })
@@ -1572,7 +1603,13 @@ function findDuplicateFlagsByVector(
 
       if (anchor != null) {
         const candidateAnchor =
-          row.validFrom ?? row.validTo ?? row.mentionedAt ?? row.createdAt
+          row.eventDate ??
+          row.occurredStart ??
+          row.occurredEnd ??
+          row.occurredStart ??
+          row.occurredEnd ??
+          row.mentionedAt ??
+          row.createdAt
         if (Math.abs(anchor - candidateAnchor) > windowMs) {
           continue
         }
@@ -1644,8 +1681,9 @@ function createTemporalLinksFromMemories(
     .select({
       id: hdb.schema.memoryUnits.id,
       bankId: hdb.schema.memoryUnits.bankId,
-      validFrom: hdb.schema.memoryUnits.validFrom,
-      validTo: hdb.schema.memoryUnits.validTo,
+      eventDate: hdb.schema.memoryUnits.eventDate,
+      occurredStart: hdb.schema.memoryUnits.occurredStart,
+      occurredEnd: hdb.schema.memoryUnits.occurredEnd,
       mentionedAt: hdb.schema.memoryUnits.mentionedAt,
       createdAt: hdb.schema.memoryUnits.createdAt,
     })
@@ -1658,8 +1696,9 @@ function createTemporalLinksFromMemories(
     .map((row) => ({
       id: row.id,
       anchor: getTemporalAnchor(
-        row.validFrom,
-        row.validTo,
+        row.eventDate,
+        row.occurredStart,
+        row.occurredEnd,
         row.mentionedAt,
         row.createdAt,
       ),
@@ -1669,8 +1708,9 @@ function createTemporalLinksFromMemories(
   const newUnits: Record<string, number> = {}
   for (const memory of newMemories) {
     const anchor = getTemporalAnchor(
-      memory.validFrom,
-      memory.validTo,
+      memory.eventDate,
+      memory.occurredStart,
+      memory.occurredEnd,
       memory.mentionedAt,
       memory.createdAt,
     )
@@ -1714,8 +1754,9 @@ function createTemporalLinksFromMemories(
   for (let i = 0; i < newMemories.length; i++) {
     const source = newMemories[i]!
     const sourceAnchor = getTemporalAnchor(
-      source.validFrom,
-      source.validTo,
+      source.eventDate,
+      source.occurredStart,
+      source.occurredEnd,
       source.mentionedAt,
       source.createdAt,
     )
@@ -1724,8 +1765,9 @@ function createTemporalLinksFromMemories(
     for (let j = i + 1; j < newMemories.length; j++) {
       const target = newMemories[j]!
       const targetAnchor = getTemporalAnchor(
-        target.validFrom,
-        target.validTo,
+        target.eventDate,
+        target.occurredStart,
+        target.occurredEnd,
         target.mentionedAt,
         target.createdAt,
       )
@@ -1758,12 +1800,19 @@ function createTemporalLinksFromMemories(
 }
 
 function getTemporalAnchor(
-  validFrom: number | null,
-  validTo: number | null,
+  eventDate: number | null,
+  occurredStart: number | null,
+  occurredEnd: number | null,
   mentionedAt: number | null,
   createdAt: number,
 ): number | null {
-  return validFrom ?? validTo ?? mentionedAt ?? createdAt
+  return (
+    eventDate ??
+    occurredStart ??
+    occurredEnd ??
+    mentionedAt ??
+    createdAt
+  )
 }
 
 function insertTemporalLinkIfMissing(
