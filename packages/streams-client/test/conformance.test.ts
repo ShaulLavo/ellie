@@ -16,25 +16,6 @@ describe(`@ellie/streams-client conformance`, () => {
       testTimeout: 30000,
     })
 
-    const failures = summary.results
-      .filter((r: any) => !r.passed && !r.skipped)
-      .map((r: any) => ({
-        suite: r.suite,
-        test: r.test,
-        error: r.error ?? null,
-      }))
-
-    console.log(
-      `\n__CONFORMANCE_RESULT__ ${JSON.stringify({
-        type: `client`,
-        passed: summary.passed,
-        failed: summary.failed,
-        skipped: summary.skipped,
-        total: summary.total,
-        failures,
-      })}`
-    )
-
     expect(summary.failed).toBe(0)
   }, 120_000)
 })
