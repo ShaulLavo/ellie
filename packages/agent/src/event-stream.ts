@@ -15,6 +15,7 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	private resultPromise: Promise<R>;
 	private isComplete: (event: T) => boolean;
 	private extractResult: (event: T) => R;
+	private iterating = false;
 
 	constructor(
 		isComplete: (event: T) => boolean,
@@ -74,24 +75,32 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	}
 
 	async *[Symbol.asyncIterator](): AsyncIterator<T> {
-		while (true) {
-			if (this.readIndex < this.queue.length) {
-				const event = this.queue[this.readIndex++];
-				// Compact when >50% consumed and enough items read
-				if (this.readIndex > 64 && this.readIndex > this.queue.length / 2) {
-					this.queue = this.queue.slice(this.readIndex);
-					this.readIndex = 0;
+		if (this.iterating) {
+			throw new Error("EventStream does not support concurrent consumers");
+		}
+		this.iterating = true;
+		try {
+			while (true) {
+				if (this.readIndex < this.queue.length) {
+					const event = this.queue[this.readIndex++];
+					// Compact when >50% consumed and enough items read
+					if (this.readIndex > 64 && this.readIndex > this.queue.length / 2) {
+						this.queue = this.queue.slice(this.readIndex);
+						this.readIndex = 0;
+					}
+					yield event;
+				} else if (this.done) {
+					return;
+				} else {
+					const value = await new Promise<IteratorResult<T>>((resolve) => {
+						this.resolve = resolve;
+					});
+					if (value.done) return;
+					yield value.value;
 				}
-				yield event;
-			} else if (this.done) {
-				return;
-			} else {
-				const value = await new Promise<IteratorResult<T>>((resolve) => {
-					this.resolve = resolve;
-				});
-				if (value.done) return;
-				yield value.value;
 			}
+		} finally {
+			this.iterating = false;
 		}
 	}
 }

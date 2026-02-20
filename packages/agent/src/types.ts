@@ -218,6 +218,6 @@ export interface AgentLoopConfig {
 	getSteeringMessages?: () => Promise<AgentMessage[]>;
 	getFollowUpMessages?: () => Promise<AgentMessage[]>;
 
-	/** Called alongside EventStream.push() for each event. Use for durable persistence. */
-	onEvent?: (event: AgentEvent) => void | Promise<void>;
+	/** Called alongside EventStream.push() for each event. Use for durable persistence. Must be synchronous. */
+	onEvent?: (event: AgentEvent) => void;
 }

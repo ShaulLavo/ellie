@@ -51,8 +51,8 @@ export class AgentManager {
 		}
 
 		agent = new Agent({
-			adapter: this.options.adapter,
 			...this.options.agentOptions,
+			adapter: this.options.adapter,
 			initialState: {
 				systemPrompt: this.options.systemPrompt ?? "",
 				...this.options.agentOptions?.initialState,
@@ -156,8 +156,20 @@ export class AgentManager {
 
 	/**
 	 * Remove an agent from memory (does not delete the stream).
+	 * If the agent is actively streaming, eviction is deferred until the run completes.
 	 */
 	evict(chatId: string): void {
+		const agent = this.agents.get(chatId);
+		if (agent?.state.isStreaming) {
+			// Defer eviction — subscribe to wait for completion
+			const unsub = agent.subscribe((e) => {
+				if (e.type === "agent_end") {
+					unsub();
+					this.agents.delete(chatId);
+				}
+			});
+			return;
+		}
 		this.agents.delete(chatId);
 	}
 

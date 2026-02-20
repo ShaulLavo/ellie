@@ -17,7 +17,7 @@
     "valibot": "^1.2.0"
   },
   "peerDependencies": {
-    "@tanstack/ai": ">=0.5.0"
+    "@tanstack/ai": "^0.5.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

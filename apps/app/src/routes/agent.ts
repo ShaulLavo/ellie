@@ -73,18 +73,27 @@ async function handleSteer(
 	req: Request,
 	chatId: string,
 ): Promise<Response> {
+	let body: { message?: string };
 	try {
-		const body = await req.json() as { message?: string };
-		if (!body.message || typeof body.message !== "string") {
-			return Response.json(
-				{ error: "Missing 'message' field in request body" },
-				{ status: 400 },
-			);
-		}
+		body = await req.json() as { message?: string };
+	} catch {
+		return Response.json({ error: "Invalid JSON" }, { status: 400 });
+	}
 
+	if (!body.message || typeof body.message !== "string") {
+		return Response.json(
+			{ error: "Missing 'message' field in request body" },
+			{ status: 400 },
+		);
+	}
+
+	try {
 		manager.steer(chatId, body.message);
 		return Response.json({ status: "queued" });
 	} catch (err: any) {
+		if (err?.message?.includes("No agent found")) {
+			return Response.json({ error: "Agent not found" }, { status: 404 });
+		}
 		return Response.json(
 			{ error: err?.message || "Failed to steer" },
 			{ status: 500 },
@@ -100,6 +109,9 @@ async function handleAbort(
 		manager.abort(chatId);
 		return Response.json({ status: "aborted" });
 	} catch (err: any) {
+		if (err?.message?.includes("No agent found")) {
+			return Response.json({ error: "Agent not found" }, { status: 404 });
+		}
 		return Response.json(
 			{ error: err?.message || "Failed to abort" },
 			{ status: 500 },

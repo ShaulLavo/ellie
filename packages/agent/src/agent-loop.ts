@@ -41,21 +41,26 @@ export function agentLoop(
 	const emit = createEmitter(stream, config);
 
 	(async () => {
-		const newMessages: AgentMessage[] = [...prompts];
-		const currentContext: AgentContext = {
-			...context,
-			messages: [...context.messages, ...prompts],
-		};
+		try {
+			const newMessages: AgentMessage[] = [...prompts];
+			const currentContext: AgentContext = {
+				...context,
+				messages: [...context.messages, ...prompts],
+			};
 
-		emit({ type: "agent_start" });
-		emit({ type: "turn_start" });
+			emit({ type: "agent_start" });
+			emit({ type: "turn_start" });
 
-		for (const prompt of prompts) {
-			emit({ type: "message_start", message: prompt });
-			emit({ type: "message_end", message: prompt });
+			for (const prompt of prompts) {
+				emit({ type: "message_start", message: prompt });
+				emit({ type: "message_end", message: prompt });
+			}
+
+			await runLoop(currentContext, newMessages, config, signal, stream, emit, streamFn);
+		} catch (err) {
+			emit({ type: "agent_end", messages: [] });
+			stream.end([]);
 		}
-
-		await runLoop(currentContext, newMessages, config, signal, stream, emit, streamFn);
 	})();
 
 	return stream;
@@ -84,13 +89,18 @@ export function agentLoopContinue(
 	const emit = createEmitter(stream, config);
 
 	(async () => {
-		const newMessages: AgentMessage[] = [];
-		const currentContext: AgentContext = { ...context };
+		try {
+			const newMessages: AgentMessage[] = [];
+			const currentContext: AgentContext = { ...context };
 
-		emit({ type: "agent_start" });
-		emit({ type: "turn_start" });
+			emit({ type: "agent_start" });
+			emit({ type: "turn_start" });
 
-		await runLoop(currentContext, newMessages, config, signal, stream, emit, streamFn);
+			await runLoop(currentContext, newMessages, config, signal, stream, emit, streamFn);
+		} catch (err) {
+			emit({ type: "agent_end", messages: [] });
+			stream.end([]);
+		}
 	})();
 
 	return stream;
@@ -115,7 +125,16 @@ function createEmitter(
 ): EmitFn {
 	return (event: AgentEvent) => {
 		stream.push(event);
-		config.onEvent?.(event);
+		try {
+			const result = config.onEvent?.(event);
+			if (result && typeof (result as any).catch === "function") {
+				(result as any).catch((err: unknown) => {
+					console.error("[agent-loop] async onEvent error:", err);
+				});
+			}
+		} catch (err) {
+			console.error("[agent-loop] onEvent error:", err);
+		}
 	};
 }
 
@@ -539,10 +558,15 @@ async function processAgentStream(
 		? toThinkingModelOptions(config.model.provider, config.thinkingLevel)
 		: undefined;
 
-	// Build abort controller
-	const abortController = signal
-		? { abort: () => {}, signal } as AbortController
-		: undefined;
+	// Build abort controller — create a real one and wire external signal
+	let abortController: AbortController | undefined;
+	let cleanupAbortListener: (() => void) | undefined;
+	if (signal) {
+		abortController = new AbortController();
+		const onAbort = () => abortController!.abort();
+		signal.addEventListener("abort", onAbort, { once: true });
+		cleanupAbortListener = () => signal.removeEventListener("abort", onAbort);
+	}
 
 	// Use custom streamFn or chat() with TanStack's agent loop
 	const streamSource: AsyncIterable<StreamChunk> = streamFn
@@ -645,6 +669,8 @@ async function processAgentStream(
 	} catch (err: any) {
 		partial.stopReason = signal?.aborted ? "aborted" : "error";
 		partial.errorMessage = err?.message || String(err);
+	} finally {
+		cleanupAbortListener?.();
 	}
 
 	// Finalize last partial

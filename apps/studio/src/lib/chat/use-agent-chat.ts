@@ -64,7 +64,7 @@ export function useAgentChat(chatId: string) {
     async (text: string) => {
       setIsSending(true)
       try {
-        await agentAction(`/agent/${chatId}/prompt`, { message: text })
+        await agentAction(`/agent/${encodeURIComponent(chatId)}/prompt`, { message: text })
       } catch (err) {
         console.error(
           `[useAgentChat] Failed to send message:`,
@@ -81,7 +81,7 @@ export function useAgentChat(chatId: string) {
   const steer = useCallback(
     async (text: string) => {
       try {
-        await agentAction(`/agent/${chatId}/steer`, { message: text })
+        await agentAction(`/agent/${encodeURIComponent(chatId)}/steer`, { message: text })
       } catch (err) {
         console.error(
           `[useAgentChat] Failed to steer:`,
@@ -96,7 +96,7 @@ export function useAgentChat(chatId: string) {
   const abort = useCallback(
     async () => {
       try {
-        await agentAction(`/agent/${chatId}/abort`)
+        await agentAction(`/agent/${encodeURIComponent(chatId)}/abort`)
       } catch (err) {
         console.error(
           `[useAgentChat] Failed to abort:`,

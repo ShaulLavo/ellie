@@ -7,7 +7,6 @@ import type {
 	AssistantMessage,
 } from "../src/types";
 import type { StreamChunk, AnyTextAdapter } from "@tanstack/ai";
-import * as v from "valibot";
 
 // ============================================================================
 // Test helpers

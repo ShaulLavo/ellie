@@ -242,10 +242,6 @@ describe("agentLoop", () => {
 	});
 
 	test("tool not found produces error result", async () => {
-		const streamFn = createMockStreamFn(
-			toolCallResponseStream("tc_1", "nonexistent", {}),
-		);
-
 		// Second call returns text (after tool result)
 		let callCount = 0;
 		const dynamicStreamFn: StreamFn = async function* () {

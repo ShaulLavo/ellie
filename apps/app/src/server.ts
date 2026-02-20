@@ -89,12 +89,10 @@ async function fetch(req: Request): Promise<Response> {
 
   // /agent/:id — agent messages stream (only for GET/PUT — stream reads)
   if (path.match(/^\/agent\/([^/]+)$/) && (req.method === "GET" || req.method === "PUT")) {
-    const id = path.slice("/agent/".length);
-    if (id) {
-      const response = await handleDurableStreamRequest(ctx, req, `/agent/${id}`);
-      logRequest(req.method, path, response.status);
-      return response;
-    }
+    const id = decodeURIComponent(path.slice("/agent/".length));
+    const response = await handleDurableStreamRequest(ctx, req, `/agent/${id}`);
+    logRequest(req.method, path, response.status);
+    return response;
   }
 
   // /chat/:id

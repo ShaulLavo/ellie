@@ -50,7 +50,7 @@ export interface AgentOptions {
 	streamFn?: StreamFn;
 
 	/** Called for each AgentEvent alongside EventStream.push(). Use for durable persistence. */
-	onEvent?: (event: AgentEvent) => void | Promise<void>;
+	onEvent?: (event: AgentEvent) => void;
 }
 
 export class Agent {
@@ -70,16 +70,20 @@ export class Agent {
 	private followUpMode: "all" | "one-at-a-time";
 	public streamFn?: StreamFn;
 	public adapter?: AnyTextAdapter;
-	public onEvent?: (event: AgentEvent) => void | Promise<void>;
+	public onEvent?: (event: AgentEvent) => void;
 	/** Current run ID. Set by external managers before prompt() and cleared automatically. */
 	public runId?: string;
 	private runningPrompt?: Promise<void>;
 	private resolveRunningPrompt?: () => void;
 
 	constructor(opts: AgentOptions = {}) {
+		const defaultModel = getModel("anthropic", "claude-sonnet-4-6");
+		if (!defaultModel) {
+			throw new Error("Default model 'claude-sonnet-4-6' not found in registry — check @ellie/ai model config");
+		}
 		this._state = {
 			systemPrompt: "",
-			model: getModel("anthropic", "claude-sonnet-4-6")!,
+			model: defaultModel,
 			thinkingLevel: "off",
 			tools: [],
 			messages: [],
@@ -429,13 +433,13 @@ export class Agent {
 				(partial as AssistantMessage).content.length > 0
 			) {
 				const assistantPartial = partial as AssistantMessage;
-				const onlyEmpty = !assistantPartial.content.some(
+				const hasMeaningfulContent = assistantPartial.content.some(
 					(c) =>
 						(c.type === "thinking" && c.thinking.trim().length > 0) ||
 						(c.type === "text" && c.text.trim().length > 0) ||
 						(c.type === "toolCall" && c.name.trim().length > 0),
 				);
-				if (!onlyEmpty) {
+				if (hasMeaningfulContent) {
 					this.appendMessage(partial);
 				}
 			}
@@ -482,7 +486,11 @@ export class Agent {
 
 	private emit(e: AgentEvent) {
 		for (const listener of this.listeners) {
-			listener(e);
+			try {
+				listener(e);
+			} catch (err) {
+				console.error("[Agent] listener error:", err);
+			}
 		}
 	}
 }
