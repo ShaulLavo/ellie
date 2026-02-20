@@ -30,7 +30,7 @@ function toCollectionDef(
 }
 
 // ============================================================================
-// Type-Level Collection Map Normalization
+// Type-Level Helpers
 // ============================================================================
 
 /**
@@ -151,7 +151,7 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
  *     prefs: prefSchema,
  *   })
  *
- * export type AppRouter = typeof appRouter
+ * export type AppRouter = typeof appRouter["_def"]
  * ```
  */
 export function createRouter(): RouterBuilder<{}> {
