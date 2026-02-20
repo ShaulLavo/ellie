@@ -84,10 +84,9 @@ export class JsonlEngine {
       return existing
     }
 
-    // Stream was soft-deleted — auto-resurrect with a fresh log file.
-    // A new ULID-based logFileId means a brand-new JSONL file on disk.
-    // Old file is orphaned (harmless). Bumping currentReadSeq makes old offsets
-    // unreachable so stale subscribers/cursors can't read previous-incarnation data.
+    // Stream was deleted/cleared — start fresh with a new JSONL file.
+    // New ULID-based logFileId → new file on disk. Old file is orphaned.
+    // Wipes messages + producers, bumps currentReadSeq to invalidate old cursors.
     const newLogFileId = ulid()
 
     this.db.transaction((tx) => {
