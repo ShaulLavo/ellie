@@ -23,6 +23,31 @@ export type LinkType =
   | "enables"
   | "prevents"
 
+// ── Meta-Path Graph Retrieval ─────────────────────────────────────────────
+
+/** Direction constraint for a meta-path step */
+export type LinkDirection = "forward" | "backward" | "both"
+
+/** A single step in a meta-path: which link type to traverse and in which direction */
+export interface MetaPathStep {
+  /** Link type to traverse in this step */
+  linkType: LinkType
+  /** Direction: "forward" = sourceId→targetId, "backward" = reverse, "both" = either */
+  direction: LinkDirection
+  /** Score decay factor for this step (0-1). Applied multiplicatively. Default: 0.5 */
+  decay?: number
+}
+
+/** A complete meta-path: a named sequence of typed steps */
+export interface MetaPath {
+  /** Human-readable name for debugging/tracing */
+  name: string
+  /** Ordered sequence of link types to traverse */
+  steps: MetaPathStep[]
+  /** Weight of this meta-path's contribution when aggregating across paths. Default: 1.0 */
+  weight?: number
+}
+
 // ── Data objects ───────────────────────────────────────────────────────────
 
 /** A change entry in an observation's history */

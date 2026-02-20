@@ -37,6 +37,11 @@ export type {
   ObservationSearchResult,
   RawFactSearchResult,
   RerankFunction,
+  LinkDirection,
+  MetaPathStep,
+  MetaPath,
 } from "./types"
+
+export { DEFAULT_META_PATHS } from "./retrieval/graph"
 
 export * as schema from "./schema"
