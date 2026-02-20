@@ -43,8 +43,8 @@ export interface RpcClientOptions {
  *
  * @example
  * ```typescript
- * import { appRouter, type AppRouter } from "@ellie/rpc-router"
- * import { createRpcClient } from "@ellie/streams-rpc/client"
+ * import { appRouter, type AppRouter } from "@ellie/router"
+ * import { createRpcClient } from "@ellie/rpc/client"
  * import { env } from "@ellie/env/client"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, {

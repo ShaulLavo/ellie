@@ -1,6 +1,6 @@
-import { createRpcClient } from "@ellie/streams-rpc/client"
+import { createRpcClient } from "@ellie/rpc/client"
 import { env } from "@ellie/env/client"
-import { appRouter, type AppRouter } from "@ellie/rpc-router"
+import { appRouter, type AppRouter } from "@ellie/router"
 
 // ============================================================================
 // RPC Client (singleton)

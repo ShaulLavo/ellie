@@ -27,9 +27,9 @@ function stableStringify(obj: Record<string, string>): string {
  *
  * @example
  * ```typescript
- * import { createRpcClient } from "@ellie/streams-rpc/client"
- * import { useStream } from "@ellie/streams-rpc/react"
- * import { appRouter, type AppRouter } from "@ellie/rpc-router"
+ * import { createRpcClient } from "@ellie/rpc/client"
+ * import { useStream } from "@ellie/rpc/react"
+ * import { appRouter, type AppRouter } from "@ellie/router"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, { baseUrl: origin })
  *

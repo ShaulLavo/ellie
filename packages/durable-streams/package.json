@@ -10,7 +10,8 @@
     "./store": "./src/store.ts",
     "./cursor": "./src/cursor.ts",
     "./types": "./src/types.ts",
-    "./server": "./src/server/index.ts"
+    "./server": "./src/server/index.ts",
+    "./test/server-conformance": "./src/server-conformance-suite.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",
@@ -22,6 +23,8 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@ellie/streams-client": "workspace:*",
+    "fast-check": "^4.4.0",
     "typescript": "^5.0.0"
   }
 }

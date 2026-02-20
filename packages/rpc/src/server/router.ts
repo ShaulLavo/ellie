@@ -146,7 +146,7 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
  * @example
  * ```typescript
  * import * as v from "valibot"
- * import { createRouter } from "@ellie/streams-rpc/server"
+ * import { createRouter } from "@ellie/rpc/server"
  *
  * const messageSchema = v.object({
  *   id: v.string(),

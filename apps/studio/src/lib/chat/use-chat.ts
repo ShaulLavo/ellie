@@ -1,6 +1,6 @@
 import { useCallback } from "react"
-import { useStream } from "@ellie/streams-rpc/react"
-import type { InferSchema } from "@ellie/streams-rpc"
+import { useStream } from "@ellie/rpc/react"
+import type { InferSchema } from "@ellie/rpc"
 import { rpc, type AppRouter } from "../rpc"
 
 // ============================================================================
