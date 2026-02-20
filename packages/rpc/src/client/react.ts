@@ -27,9 +27,9 @@ function stableStringify(obj: Record<string, string>): string {
  *
  * @example
  * ```typescript
- * import { createRpcClient } from "@ellie/streams-rpc/client"
- * import { useStream } from "@ellie/streams-rpc/react"
- * import { appRouter, type AppRouter } from "@ellie/rpc-router"
+ * import { createRpcClient } from "@ellie/rpc/client"
+ * import { useStream } from "@ellie/rpc/react"
+ * import { appRouter, type AppRouter } from "@ellie/router"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, { baseUrl: origin })
  *
@@ -65,7 +65,10 @@ export function useStream<
     upsert(params: TParams & { value: TItem }): Promise<void>
     clear(params: TParams): Promise<void>
   },
-  params: TParams
+  params: TParams,
+  options?: {
+    orderBy?: { field: keyof TItem & string; direction?: `asc` | `desc` }
+  }
 ) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -73,7 +76,6 @@ export function useStream<
     TItem & object,
     string
   > | null>(null)
-
   // Serialize params for dependency tracking (sorted keys for stability)
   const paramsKey = stableStringify(params)
 
@@ -108,10 +110,21 @@ export function useStream<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramsKey])
 
+  // Memoize orderBy config to keep useLiveQuery deps stable
+  const orderByField = options?.orderBy?.field
+  const orderByDirection = options?.orderBy?.direction ?? `asc`
+
   // Live query: reactively subscribe to the TanStack DB collection
   const { data } = useLiveQuery(
-    (q) => (collection ? q.from({ items: collection }) : null),
-    [collection]
+    (q) => {
+      if (!collection) return null
+      const query = q.from({ items: collection })
+      if (orderByField) {
+        return query.orderBy(({ items }) => (items as any)[orderByField], orderByDirection)
+      }
+      return query
+    },
+    [collection, orderByField, orderByDirection]
   )
 
   // Mutation helpers — merge params automatically.

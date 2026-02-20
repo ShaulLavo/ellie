@@ -212,7 +212,6 @@ export async function handleRead(
 
   // Read current messages
   let { messages, upToDate } = ctx.store.read(path, effectiveOffset)
-
   // Long-poll wait logic
   const clientIsCaughtUp =
     (effectiveOffset && effectiveOffset === streamOffset) ||

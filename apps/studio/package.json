@@ -8,9 +8,10 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@ellie/rpc-router": "workspace:*",
+    "@ellie/env": "workspace:*",
+    "@ellie/router": "workspace:*",
     "@ellie/streams-client": "workspace:*",
-    "@ellie/streams-rpc": "workspace:*",
+    "@ellie/rpc": "workspace:*",
     "@ellie/streams-state": "workspace:*",
     "@tanstack/ai": "^0.5.1",
     "@tanstack/db": "^0.5.27",

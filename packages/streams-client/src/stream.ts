@@ -396,7 +396,8 @@ export class DurableStream {
       })
     }
 
-    if (!response.ok) {
+    // 404 means the stream is already gone — that's the desired end state
+    if (!response.ok && response.status !== 404) {
       await handleErrorResponse(response, this.url)
     }
   }

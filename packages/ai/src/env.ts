@@ -1,6 +1,7 @@
+import { env, type ServerEnv } from "@ellie/env/server";
 import type { ProviderName } from "./types";
 
-const ENV_KEY_MAP: Record<ProviderName, string | null> = {
+const ENV_KEY_MAP: Record<ProviderName, keyof ServerEnv | null> = {
 	anthropic: "ANTHROPIC_API_KEY",
 	openai: "OPENAI_API_KEY",
 	openrouter: "OPENROUTER_API_KEY",
@@ -13,10 +14,10 @@ const ENV_KEY_MAP: Record<ProviderName, string | null> = {
  * or the env var is not set.
  */
 export function getEnvApiKey(provider: ProviderName): string | undefined {
-	const envVar = ENV_KEY_MAP[provider];
-	if (!envVar) return undefined;
+	const envKey = ENV_KEY_MAP[provider];
+	if (!envKey) return undefined;
 
-	return Bun.env[envVar] || undefined;
+	return env[envKey] || undefined;
 }
 
 /** Check if a provider has an API key available in the environment. */

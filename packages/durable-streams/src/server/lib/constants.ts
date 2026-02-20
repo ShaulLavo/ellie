@@ -7,7 +7,6 @@ export const STREAM_TTL_HEADER = `Stream-TTL`;
 export const STREAM_EXPIRES_AT_HEADER = `Stream-Expires-At`;
 export const STREAM_SSE_DATA_ENCODING_HEADER = `Stream-SSE-Data-Encoding`;
 export const STREAM_CLOSED_HEADER = `Stream-Closed`;
-export const STREAM_RESURRECT_HEADER = `Stream-Resurrect`;
 
 // Idempotent producer headers
 export const PRODUCER_ID_HEADER = `Producer-Id`;

@@ -11,11 +11,10 @@
     "test": "turbo run test"
   },
   "devDependencies": {
-    "@durable-streams/client-conformance-tests": "^0.2.1",
     "@sinclair/typebox": "^0.34.48",
+    "@typescript/native-preview": "latest",
     "oxlint": "^1.48.0",
     "prettier": "^3.7.4",
-    "@typescript/native-preview": "latest",
     "turbo": "^2.8.10",
     "typescript": "5.9.2"
   },
