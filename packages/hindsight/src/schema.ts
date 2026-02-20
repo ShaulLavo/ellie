@@ -249,6 +249,30 @@ export const directives = sqliteTable(
   ],
 )
 
+// ── Async Operations ──────────────────────────────────────────────────────
+
+export const asyncOperations = sqliteTable(
+  "hs_async_operations",
+  {
+    operationId: text("operation_id").primaryKey(),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    operationType: text("operation_type").notNull(), // retain | consolidation | refresh_mental_model
+    status: text("status").notNull().default("pending"), // pending | processing | completed | failed
+    resultMetadata: text("result_metadata"), // JSON blob
+    errorMessage: text("error_message"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    completedAt: integer("completed_at"),
+  },
+  (table) => [
+    index("idx_hs_ops_bank").on(table.bankId),
+    index("idx_hs_ops_status").on(table.status),
+    index("idx_hs_ops_bank_status").on(table.bankId, table.status),
+  ],
+)
+
 // ── Type exports ───────────────────────────────────────────────────────────
 
 export type BankRow = typeof banks.$inferSelect
@@ -269,3 +293,5 @@ export type MentalModelRow = typeof mentalModels.$inferSelect
 export type NewMentalModelRow = typeof mentalModels.$inferInsert
 export type DirectiveRow = typeof directives.$inferSelect
 export type NewDirectiveRow = typeof directives.$inferInsert
+export type AsyncOperationRow = typeof asyncOperations.$inferSelect
+export type NewAsyncOperationRow = typeof asyncOperations.$inferInsert

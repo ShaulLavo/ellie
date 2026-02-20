@@ -15,6 +15,13 @@
       "when": 1771612140000,
       "tag": "0001_documents_chunks",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771615200000,
+      "tag": "0002_async_operations",
+      "breakpoints": true
     }
   ]
 }

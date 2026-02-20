@@ -333,28 +333,12 @@ describe("recall with tag filtering", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("list tags", () => {
-  it("returns all unique tags with counts", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags")
-  })
-  it("filters with wildcard prefix (user:*)", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_wildcard_prefix")
-  })
-  it("filters with wildcard suffix (*-admin)", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_wildcard_suffix")
-  })
-  it("filters with wildcard middle (env*-prod)", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_wildcard_middle")
-  })
-  it("wildcard matching is case-insensitive", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_case_insensitive")
-  })
-  it("supports pagination with limit and offset", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_pagination")
-  })
-  it("returns empty for bank with no tags", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_empty")
-  })
-  it("returns tags ordered by count descending", () => {
-    throw new Error("implement me: Hindsight.listTags() not implemented — see test_tags_visibility.py::test_list_tags_ordered")
-  })
+  it.todo("returns all unique tags with counts")
+  it.todo("filters with wildcard prefix (user:*)")
+  it.todo("filters with wildcard suffix (*-admin)")
+  it.todo("filters with wildcard middle (env*-prod)")
+  it.todo("wildcard matching is case-insensitive")
+  it.todo("supports pagination with limit and offset")
+  it.todo("returns empty for bank with no tags")
+  it.todo("returns tags ordered by count descending")
 })

@@ -383,6 +383,73 @@ export interface GraphEdge {
   weight: number
 }
 
+// ── Async Operations ─────────────────────────────────────────────────────
+
+export type AsyncOperationType =
+  | "retain"
+  | "consolidation"
+  | "refresh_mental_model"
+
+export type AsyncOperationStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+
+export type AsyncOperationApiStatus =
+  | "pending"
+  | "completed"
+  | "failed"
+  | "not_found"
+
+export interface AsyncOperationSummary {
+  id: string
+  taskType: AsyncOperationType
+  itemsCount: number
+  documentId: string | null
+  createdAt: number
+  status: Exclude<AsyncOperationApiStatus, "not_found">
+  errorMessage: string | null
+}
+
+export interface ListOperationsOptions {
+  status?: Exclude<AsyncOperationApiStatus, "not_found">
+  limit?: number
+  offset?: number
+}
+
+export interface ListOperationsResult {
+  total: number
+  operations: AsyncOperationSummary[]
+}
+
+export interface OperationStatusResult {
+  operationId: string
+  status: AsyncOperationApiStatus
+  operationType: AsyncOperationType | null
+  createdAt: number | null
+  updatedAt: number | null
+  completedAt: number | null
+  errorMessage: string | null
+  resultMetadata: Record<string, unknown> | null
+}
+
+export interface SubmitAsyncOperationResult {
+  operationId: string
+  deduplicated?: boolean
+}
+
+export interface SubmitAsyncRetainResult extends SubmitAsyncOperationResult {
+  itemsCount: number
+}
+
+export interface CancelOperationResult {
+  success: boolean
+  message: string
+  operationId: string
+  bankId: string
+}
+
 /** Result from reflect() */
 export interface ReflectResult {
   answer: string

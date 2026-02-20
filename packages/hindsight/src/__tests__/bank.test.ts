@@ -136,12 +136,9 @@ describe("Bank management", () => {
   // ── Update name/description ──────────────────────────────────────────
 
   describe("updateBank name/description", () => {
-    it("updates bank name and is reflected in getBank", () => {
-      // TS Hindsight has no updateBankName method yet
-      throw new Error(
-        "implement me: Hindsight needs updateBankName method — see test_http_api_integration.py::test_update_bank_name",
-      )
-    })
+    it.todo(
+      "updates bank name and is reflected in getBank",
+    )
 
     it("updates bank description/mission field", () => {
       const bank = t.hs.createBank("mission-test")

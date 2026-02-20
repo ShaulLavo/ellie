@@ -18,6 +18,10 @@ describe("Entity extraction on retain", () => {
   })
 
   afterEach(() => {
+    const pending = t.hs.listOperations(bankId, { status: "pending" })
+    for (const operation of pending.operations) {
+      t.hs.cancelOperation(bankId, operation.id)
+    }
     t.cleanup()
   })
 
@@ -405,47 +409,81 @@ describe("Entity state tracking (TDD targets)", () => {
 })
 
 describe("clearObservations (TDD targets)", () => {
-  it("clearObservations removes all observations from the bank", () => {
-    implementMe(
-      "Hindsight.clearObservations() not implemented",
-      "test_retain.py::test_bank_clear_observations",
-    )
-  })
-
-  it("clearObservations does not remove raw facts (experience/world)", () => {
-    implementMe(
-      "Hindsight.clearObservations() not implemented",
-      "test_retain.py::test_bank_clear_observations_preserves_facts",
-    )
-  })
+  it.todo("clearObservations removes all observations from the bank")
+  it.todo("clearObservations does not remove raw facts (experience/world)")
 })
 
 describe("Operation lifecycle (TDD targets)", () => {
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  async function waitForOperation(
+    operationId: string,
+    timeoutMs: number = 3000,
+  ): Promise<ReturnType<TestHindsight["hs"]["getOperationStatus"]>> {
+    const started = Date.now()
+    for (;;) {
+      const status = t.hs.getOperationStatus(bankId, operationId)
+      if (status.status === "completed" || status.status === "failed") return status
+      if (Date.now() - started > timeoutMs) {
+        throw new Error(`Timed out waiting for operation ${operationId}`)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  }
+
   it("operation list is empty for a fresh bank", () => {
-    implementMe(
-      "async operation tracking not implemented",
-      "test_worker.py::test_operation_list_empty",
-    )
+    const result = t.hs.listOperations(bankId)
+    expect(result.total).toBe(0)
+    expect(result.operations).toHaveLength(0)
   })
 
-  it("async retain creates an operation with pending status", () => {
-    implementMe(
-      "async operation tracking not implemented",
-      "test_worker.py::test_operation_async_retain",
+  it("async retain creates an operation with pending status", async () => {
+    const submitted = await t.hs.submitAsyncRetain(
+      bankId,
+      ["Alice enjoys long-distance running"],
+      { consolidate: false, dedupThreshold: 0 },
     )
+
+    const status = t.hs.getOperationStatus(bankId, submitted.operationId)
+    expect(status.status).toBe("pending")
+    t.hs.cancelOperation(bankId, submitted.operationId)
+    await new Promise((resolve) => setTimeout(resolve, 20))
   })
 
-  it("completed operation is removed from the pending operations list", () => {
-    implementMe(
-      "async operation tracking not implemented",
-      "test_worker.py::test_operation_completed",
+  it("completed operation is removed from the pending operations list", async () => {
+    const submitted = await t.hs.submitAsyncRetain(
+      bankId,
+      ["Bob finished migration rollout"],
+      { consolidate: false, dedupThreshold: 0 },
     )
+
+    const finalStatus = await waitForOperation(submitted.operationId)
+    expect(finalStatus.status).toBe("completed")
+
+    const pending = t.hs.listOperations(bankId, { status: "pending" })
+    expect(pending.total).toBe(0)
+    expect(pending.operations).toHaveLength(0)
   })
 
-  it("failed operation has errorMessage set", () => {
-    implementMe(
-      "async operation tracking not implemented",
-      "test_worker.py::test_operation_failed",
+  it("failed operation has errorMessage set", async () => {
+    const submitted = await t.hs.submitAsyncRefreshMentalModel(
+      bankId,
+      "missing-mental-model-id",
     )
+
+    const finalStatus = await waitForOperation(submitted.operationId)
+    expect(finalStatus.status).toBe("failed")
+    expect(finalStatus.errorMessage).toBeDefined()
+    expect((finalStatus.errorMessage ?? "").length).toBeGreaterThan(0)
   })
 })

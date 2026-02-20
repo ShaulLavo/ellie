@@ -53,6 +53,16 @@ import type {
   ChunkRecord,
   GraphNode,
   GraphEdge,
+  AsyncOperationType,
+  AsyncOperationStatus,
+  AsyncOperationApiStatus,
+  AsyncOperationSummary,
+  ListOperationsOptions,
+  ListOperationsResult,
+  OperationStatusResult,
+  SubmitAsyncOperationResult,
+  SubmitAsyncRetainResult,
+  CancelOperationResult,
 } from "./types"
 
 // ── Default config values ───────────────────────────────────────────────
@@ -86,6 +96,8 @@ export class Hindsight {
   private readonly rerank: RerankFunction | undefined
   private readonly instanceDefaults: BankConfig | undefined
   private readonly onTrace: TraceCallback | undefined
+  private readonly activeOperationTasks = new Map<string, Promise<void>>()
+  private readonly cancelledOperations = new Set<string>()
 
   constructor(config: HindsightConfig) {
     const dims = config.embeddingDimensions ?? 1536
@@ -514,6 +526,291 @@ export class Hindsight {
         skipped: r.skipped,
       }),
     )
+  }
+
+  // ── Async Operations ───────────────────────────────────────────────
+
+  async submitAsyncRetain(
+    bankId: string,
+    contents: string[] | RetainBatchItem[],
+    options?: RetainBatchOptions,
+  ): Promise<SubmitAsyncRetainResult> {
+    const retainTask = async () => {
+      if (contents.length === 0) {
+        return this.retainBatch(bankId, [] as string[], options)
+      }
+      if (typeof contents[0] === "string") {
+        return this.retainBatch(bankId, contents as string[], options)
+      }
+      return this.retainBatch(bankId, contents as RetainBatchItem[], options)
+    }
+
+    const result = await this.submitAsyncOperation(
+      bankId,
+      "retain",
+      retainTask,
+      { itemsCount: contents.length },
+      false,
+    )
+    return {
+      ...result,
+      itemsCount: contents.length,
+    }
+  }
+
+  async submitAsyncConsolidation(
+    bankId: string,
+    options?: ConsolidateOptions,
+  ): Promise<SubmitAsyncOperationResult> {
+    return this.submitAsyncOperation(
+      bankId,
+      "consolidation",
+      () => this.consolidate(bankId, options),
+      null,
+      true,
+    )
+  }
+
+  async submitAsyncRefreshMentalModel(
+    bankId: string,
+    mentalModelId: string,
+  ): Promise<SubmitAsyncOperationResult> {
+    return this.submitAsyncOperation(
+      bankId,
+      "refresh_mental_model",
+      () => this.refreshMentalModel(bankId, mentalModelId),
+    )
+  }
+
+  listOperations(
+    bankId: string,
+    options?: ListOperationsOptions,
+  ): ListOperationsResult {
+    const limit = options?.limit ?? 20
+    const offset = options?.offset ?? 0
+    const rows = this.hdb.db
+      .select()
+      .from(this.hdb.schema.asyncOperations)
+      .where(eq(this.hdb.schema.asyncOperations.bankId, bankId))
+      .all()
+      .filter((row) => {
+        if (!options?.status) return true
+        if (options.status === "pending") {
+          return row.status === "pending" || row.status === "processing"
+        }
+        return row.status === options.status
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
+
+    const paged = rows.slice(offset, offset + limit)
+    const operations: AsyncOperationSummary[] = paged.map((row) => {
+      const metadata = row.resultMetadata
+        ? safeJson<Record<string, unknown>>(row.resultMetadata, {})
+        : {}
+      return {
+        id: row.operationId,
+        taskType: row.operationType as AsyncOperationType,
+        itemsCount:
+          typeof metadata.itemsCount === "number" ? metadata.itemsCount : 0,
+        documentId:
+          typeof metadata.documentId === "string" ? metadata.documentId : null,
+        createdAt: row.createdAt,
+        status: this.toOperationApiStatus(row.status as AsyncOperationStatus),
+        errorMessage: row.errorMessage,
+      }
+    })
+
+    return {
+      total: rows.length,
+      operations,
+    }
+  }
+
+  getOperationStatus(bankId: string, operationId: string): OperationStatusResult {
+    const row = this.hdb.db
+      .select()
+      .from(this.hdb.schema.asyncOperations)
+      .where(
+        and(
+          eq(this.hdb.schema.asyncOperations.operationId, operationId),
+          eq(this.hdb.schema.asyncOperations.bankId, bankId),
+        ),
+      )
+      .get()
+
+    if (!row) {
+      return {
+        operationId,
+        status: "not_found",
+        operationType: null,
+        createdAt: null,
+        updatedAt: null,
+        completedAt: null,
+        errorMessage: null,
+        resultMetadata: null,
+      }
+    }
+
+    return {
+      operationId: row.operationId,
+      status: this.toOperationApiStatus(row.status as AsyncOperationStatus),
+      operationType: row.operationType as AsyncOperationType,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      completedAt: row.completedAt,
+      errorMessage: row.errorMessage,
+      resultMetadata: row.resultMetadata
+        ? safeJson<Record<string, unknown>>(row.resultMetadata, {})
+        : null,
+    }
+  }
+
+  cancelOperation(bankId: string, operationId: string): CancelOperationResult {
+    const existing = this.hdb.db
+      .select({ operationId: this.hdb.schema.asyncOperations.operationId })
+      .from(this.hdb.schema.asyncOperations)
+      .where(
+        and(
+          eq(this.hdb.schema.asyncOperations.operationId, operationId),
+          eq(this.hdb.schema.asyncOperations.bankId, bankId),
+        ),
+      )
+      .get()
+
+    if (!existing) {
+      return {
+        success: false,
+        message: `Operation ${operationId} not found`,
+        operationId,
+        bankId,
+      }
+    }
+
+    this.hdb.db
+      .delete(this.hdb.schema.asyncOperations)
+      .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+      .run()
+    this.cancelledOperations.add(operationId)
+
+    return {
+      success: true,
+      message: `Operation ${operationId} cancelled`,
+      operationId,
+      bankId,
+    }
+  }
+
+  private toOperationApiStatus(
+    status: AsyncOperationStatus,
+  ): Exclude<AsyncOperationApiStatus, "not_found"> {
+    if (status === "processing") return "pending"
+    return status
+  }
+
+  private async submitAsyncOperation(
+    bankId: string,
+    operationType: AsyncOperationType,
+    task: () => Promise<unknown>,
+    resultMetadata?: Record<string, unknown> | null,
+    dedupeByBank: boolean = false,
+  ): Promise<SubmitAsyncOperationResult> {
+    if (dedupeByBank) {
+      const existing = this.hdb.db
+        .select({ operationId: this.hdb.schema.asyncOperations.operationId })
+        .from(this.hdb.schema.asyncOperations)
+        .where(
+          and(
+            eq(this.hdb.schema.asyncOperations.bankId, bankId),
+            eq(this.hdb.schema.asyncOperations.operationType, operationType),
+            eq(this.hdb.schema.asyncOperations.status, "pending"),
+          ),
+        )
+        .get()
+      if (existing) {
+        return { operationId: existing.operationId, deduplicated: true }
+      }
+    }
+
+    const operationId = ulid()
+    const now = Date.now()
+    this.hdb.db
+      .insert(this.hdb.schema.asyncOperations)
+      .values({
+        operationId,
+        bankId,
+        operationType,
+        status: "pending",
+        resultMetadata: resultMetadata ? JSON.stringify(resultMetadata) : null,
+        errorMessage: null,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+      })
+      .run()
+
+    const run = async () => {
+      try {
+        if (this.cancelledOperations.has(operationId)) return
+
+        const pendingRow = this.hdb.db
+          .select({ operationId: this.hdb.schema.asyncOperations.operationId })
+          .from(this.hdb.schema.asyncOperations)
+          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+          .get()
+        if (!pendingRow) return
+
+        this.hdb.db
+          .update(this.hdb.schema.asyncOperations)
+          .set({
+            status: "processing",
+            updatedAt: Date.now(),
+          })
+          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+          .run()
+
+        await task()
+
+        if (this.cancelledOperations.has(operationId)) return
+
+        const completedAt = Date.now()
+        this.hdb.db
+          .update(this.hdb.schema.asyncOperations)
+          .set({
+            status: "completed",
+            updatedAt: completedAt,
+            completedAt,
+            errorMessage: null,
+          })
+          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+          .run()
+      } catch (error) {
+        if (this.cancelledOperations.has(operationId)) return
+        const message =
+          error instanceof Error ? error.message : String(error)
+        const truncated = message.length > 5000 ? message.slice(0, 5000) : message
+        this.hdb.db
+          .update(this.hdb.schema.asyncOperations)
+          .set({
+            status: "failed",
+            updatedAt: Date.now(),
+            errorMessage: truncated,
+          })
+          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+          .run()
+      } finally {
+        this.activeOperationTasks.delete(operationId)
+        this.cancelledOperations.delete(operationId)
+      }
+    }
+
+    const taskPromise = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void run().finally(resolve)
+      }, 0)
+    })
+    this.activeOperationTasks.set(operationId, taskPromise)
+
+    return { operationId }
   }
 
   // ── Mental models ─────────────────────────────────────────────────
