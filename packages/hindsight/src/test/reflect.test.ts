@@ -168,11 +168,58 @@ describe("reflect", () => {
   // These tests are marked .todo until the feature is implemented.
 
   describe("based_on format", () => {
-    it.todo("returns based_on as object with memories/mentalModels/directives arrays (not a list)")
+    // These tests are TDD anchors — they will fail until the based_on field
+    // is added to ReflectResult. Use .skip so they don't block CI.
 
-    it.todo("returns based_on with empty arrays when bank has no memories and facts are requested")
+    it.skip("returns based_on as object with memories/mentalModels/directives arrays (not a list)", async () => {
+      // Seed memories
+      await t.hs.retain(bankId, "test", {
+        facts: [{ content: "Alice is a software engineer" }],
+        consolidate: false,
+      })
 
-    it.todo("returns based_on as null/undefined when facts are not requested")
+      // Create a directive
+      t.hs.createDirective(bankId, {
+        name: "Be concise",
+        content: "Always respond concisely.",
+      })
+
+      // Create a mental model
+      await t.hs.createMentalModel(bankId, {
+        name: "Team Model",
+        sourceQuery: "Team summary",
+        content: "The team is small and agile.",
+      })
+
+      t.adapter.setResponse("Alice is a software engineer on a small team.")
+      const result = await t.hs.reflect(bankId, "What do you know about Alice?")
+
+      // based_on should be an object with three arrays
+      expect(result.based_on).toBeDefined()
+      expect(Array.isArray(result.based_on!.memories)).toBe(true)
+      expect(Array.isArray(result.based_on!.mentalModels)).toBe(true)
+      expect(Array.isArray(result.based_on!.directives)).toBe(true)
+    })
+
+    it.skip("returns based_on with empty arrays when bank has no memories and facts are requested", async () => {
+      t.adapter.setResponse("I have no relevant information to share.")
+      const result = await t.hs.reflect(bankId, "What do you know?")
+
+      expect(result.based_on).toBeDefined()
+      expect(result.based_on!.memories).toHaveLength(0)
+      expect(result.based_on!.mentalModels).toHaveLength(0)
+      expect(result.based_on!.directives).toHaveLength(0)
+    })
+
+    it.skip("returns based_on as null/undefined when facts are not requested", async () => {
+      t.adapter.setResponse("General answer without fact lookup.")
+      const result = await t.hs.reflect(bankId, "Hello, how are you?", {
+        saveObservations: false,
+      })
+
+      // When the LLM doesn't call any memory tools, based_on should be nullish
+      expect(result.based_on == null).toBe(true)
+    })
   })
 
   // ── Result structure ─────────────────────────────────────────────────

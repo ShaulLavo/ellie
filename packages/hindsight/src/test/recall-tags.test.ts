@@ -379,12 +379,225 @@ describeWithLLM("reflect with tags (real LLM parity)", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("list tags", () => {
-  it.todo("returns all unique tags with counts")
-  it.todo("filters with wildcard prefix (user:*)")
-  it.todo("filters with wildcard suffix (*-admin)")
-  it.todo("filters with wildcard middle (env*-prod)")
-  it.todo("wildcard matching is case-insensitive")
-  it.todo("supports pagination with limit and offset")
-  it.todo("returns empty for bank with no tags")
-  it.todo("returns tags ordered by count descending")
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("returns all unique tags with counts", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Alice graduated from MIT with honors in computer science" }],
+      tags: ["alpha"],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Bob prefers hiking in the Rocky Mountains on weekends" }],
+      tags: ["alpha"],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Charlie runs a bakery in downtown Portland" }],
+      tags: ["beta"],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+
+    const result = t.hs.listTags(bankId)
+
+    expect(result.items).toHaveLength(2)
+    const alphaItem = result.items.find((i) => i.tag === "alpha")
+    const betaItem = result.items.find((i) => i.tag === "beta")
+    expect(alphaItem).toBeDefined()
+    expect(alphaItem!.count).toBe(2)
+    expect(betaItem).toBeDefined()
+    expect(betaItem!.count).toBe(1)
+    expect(result.total).toBe(2)
+  })
+
+  it("filters with wildcard prefix (user:*)", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Alice data" }],
+      tags: ["user:alice"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Bob data" }],
+      tags: ["user:bob"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Admin data" }],
+      tags: ["admin:root"],
+      consolidate: false,
+    })
+
+    const result = t.hs.listTags(bankId, { pattern: "user:*" })
+
+    expect(result.items).toHaveLength(2)
+    expect(result.items.every((i) => i.tag.startsWith("user:"))).toBe(true)
+    expect(result.total).toBe(2)
+  })
+
+  it("filters with wildcard suffix (*-admin)", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Super admin data" }],
+      tags: ["super-admin"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "DB admin data" }],
+      tags: ["db-admin"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "User data" }],
+      tags: ["user"],
+      consolidate: false,
+    })
+
+    const result = t.hs.listTags(bankId, { pattern: "*-admin" })
+
+    expect(result.items).toHaveLength(2)
+    expect(result.items.every((i) => i.tag.endsWith("-admin"))).toBe(true)
+    expect(result.total).toBe(2)
+  })
+
+  it("filters with wildcard middle (env*-prod)", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Staging prod" }],
+      tags: ["env-staging-prod"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Direct prod" }],
+      tags: ["env-prod"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Dev env" }],
+      tags: ["env-dev"],
+      consolidate: false,
+    })
+
+    const result = t.hs.listTags(bankId, { pattern: "env*-prod" })
+
+    // Should match env-staging-prod and env-prod, but not env-dev
+    expect(result.items).toHaveLength(2)
+    const tags = result.items.map((i) => i.tag)
+    expect(tags).toContain("env-staging-prod")
+    expect(tags).toContain("env-prod")
+    expect(tags).not.toContain("env-dev")
+  })
+
+  it("wildcard matching is case-insensitive", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Alice data" }],
+      tags: ["User:Alice"],
+      consolidate: false,
+    })
+
+    const result = t.hs.listTags(bankId, { pattern: "user:*" })
+
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]!.tag).toBe("User:Alice")
+  })
+
+  it("supports pagination with limit and offset", async () => {
+    // Seed 5 distinct tags with very different content to avoid dedup
+    const tagContent: Record<string, string> = {
+      alpha: "Alice graduated from MIT with a degree in computer science",
+      bravo: "Bob prefers hiking in the Rocky Mountains on weekends",
+      charlie: "Charlie runs a bakery in downtown Portland specializing in sourdough",
+      delta: "Diana works as a marine biologist studying coral reef ecosystems",
+      echo: "Edward teaches classical piano at the Vienna conservatory",
+    }
+    for (const [tag, content] of Object.entries(tagContent)) {
+      await t.hs.retain(bankId, "test", {
+        facts: [{ content }],
+        tags: [tag],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+    }
+
+    const page1 = t.hs.listTags(bankId, { limit: 2, offset: 0 })
+    const page2 = t.hs.listTags(bankId, { limit: 2, offset: 2 })
+    const page3 = t.hs.listTags(bankId, { limit: 2, offset: 4 })
+
+    expect(page1.items).toHaveLength(2)
+    expect(page2.items).toHaveLength(2)
+    expect(page3.items).toHaveLength(1)
+    expect(page1.total).toBe(5)
+    expect(page2.total).toBe(5)
+
+    // No overlap between pages
+    const page1Tags = page1.items.map((i) => i.tag)
+    const page2Tags = page2.items.map((i) => i.tag)
+    for (const tag of page1Tags) {
+      expect(page2Tags).not.toContain(tag)
+    }
+  })
+
+  it("returns empty for bank with no tags", () => {
+    const result = t.hs.listTags(bankId)
+
+    expect(result.items).toHaveLength(0)
+    expect(result.total).toBe(0)
+    expect(result.limit).toBe(100)
+    expect(result.offset).toBe(0)
+  })
+
+  it("returns tags ordered by count descending", async () => {
+    // tag-a: 3 memories, tag-c: 2 memories, tag-b: 1 memory
+    const tagAContents = [
+      "Alice graduated from MIT with honors in computer science",
+      "Bob prefers hiking in the Rocky Mountains on weekends",
+      "Charlie runs a bakery in downtown Portland specializing in sourdough",
+    ]
+    for (const content of tagAContents) {
+      await t.hs.retain(bankId, "test", {
+        facts: [{ content }],
+        tags: ["tag-a"],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+    }
+    const tagCContents = [
+      "Diana works as a marine biologist studying coral reef ecosystems",
+      "Edward teaches classical piano at the Vienna conservatory",
+    ]
+    for (const content of tagCContents) {
+      await t.hs.retain(bankId, "test", {
+        facts: [{ content }],
+        tags: ["tag-c"],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+    }
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Frank designs electric vehicles for a startup in Detroit" }],
+      tags: ["tag-b"],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+
+    const result = t.hs.listTags(bankId)
+
+    expect(result.items).toHaveLength(3)
+    expect(result.items[0]!.tag).toBe("tag-a")
+    expect(result.items[0]!.count).toBe(3)
+    expect(result.items[1]!.tag).toBe("tag-c")
+    expect(result.items[1]!.count).toBe(2)
+    expect(result.items[2]!.tag).toBe("tag-b")
+    expect(result.items[2]!.count).toBe(1)
+  })
 })

@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import {
+  createTestHindsight,
+  createTestBank,
+  createRealTestHindsight,
+  describeWithLLM,
+  type TestHindsight,
+  type RealTestHindsight,
+} from "./setup"
 
 async function waitFor(
   condition: () => boolean,
@@ -340,9 +347,8 @@ describe("Mental models", () => {
       expect(fetched!.lastRefreshedAt).toBe(result.model.lastRefreshedAt)
     })
 
-    it.todo(
-      "refresh with tags only accesses tagged memories (requires real-LLM tool-calling loop parity)",
-    )
+    // Moved to describeWithLLM block at the bottom of this file:
+    // "refresh with tags only accesses tagged memories"
 
     it("refresh with directives applies them to reflect prompt", async () => {
       t.hs.createDirective(bankId, {
@@ -570,29 +576,14 @@ describe("Mental models", () => {
       })
     })
 
-    it.todo(
-      "reflect based_on separates directives, memories, and mental models (requires based_on API parity + real-LLM tool-calling)",
-    )
+    // Moved to describeWithLLM block at the bottom of this file:
+    // "reflect based_on separates directives, memories, and mental models"
   })
 
   // ── Tag security boundaries ───────────────────────────────────────────
 
   describe("tag security", () => {
-    it.todo(
-      "mental model refresh respects tag boundaries (requires real-LLM tool-calling)",
-    )
-
-    it.todo(
-      "refresh with tags only accesses same tagged models (requires real-LLM tool-calling)",
-    )
-
-    it.todo(
-      "refresh of tagged model does not access different-tagged models (requires real-LLM tool-calling)",
-    )
-
-    it.todo(
-      "refresh of tagged model excludes untagged memories (requires real-LLM tool-calling)",
-    )
+    // Real-LLM tag security tests moved to describeWithLLM block at the bottom of this file
 
     it("consolidation does not refresh models with non-matching tags", async () => {
       const mmAlice = await t.hs.createMentalModel(bankId, {
@@ -652,4 +643,188 @@ describe("Mental models", () => {
       expect(fetched!.name).toBe("Team Communication Preferences")
     })
   })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Real LLM mental model tests — tag security & based_on
+// ════════════════════════════════════════════════════════════════════════════
+//
+// These tests require a real Anthropic adapter to drive the agentic tool loop.
+// Skipped when ANTHROPIC_API_KEY is not set.
+
+describeWithLLM("Mental model tag security (real LLM)", () => {
+  let t: RealTestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createRealTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("refresh with tags only accesses tagged memories", async () => {
+    const userAToken = "USER_A_REFRESH_TOKEN_8x2f1a"
+    const userBToken = "USER_B_REFRESH_TOKEN_3k7d9c"
+
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: `User A secret token is ${userAToken}` }],
+      tags: ["user-a"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: `User B secret token is ${userBToken}` }],
+      tags: ["user-b"],
+      consolidate: false,
+    })
+
+    const model = await t.hs.createMentalModel(bankId, {
+      name: "User A Summary",
+      sourceQuery: "What are all the tokens you know about? Return them exactly.",
+      tags: ["user-a"],
+    })
+
+    const result = await t.hs.refreshMentalModel(bankId, model.id)
+
+    // The refreshed content should reference user A's token only
+    expect(result.model.content).toContain(userAToken)
+    expect(result.model.content).not.toContain(userBToken)
+  }, 60_000)
+
+  it("mental model refresh respects tag boundaries", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Project X uses Rust for performance-critical code" }],
+      tags: ["tag-x"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Project Y uses Python for data analysis" }],
+      tags: ["tag-y"],
+      consolidate: false,
+    })
+
+    const model = await t.hs.createMentalModel(bankId, {
+      name: "Project X Tech Stack",
+      sourceQuery: "What programming languages are used? Return the exact languages.",
+      tags: ["tag-x"],
+    })
+
+    const result = await t.hs.refreshMentalModel(bankId, model.id)
+
+    const content = result.model.content!.toLowerCase()
+    expect(content).toContain("rust")
+    expect(content).not.toContain("python")
+  }, 60_000)
+
+  it("refresh with tags only accesses same tagged models", async () => {
+    // Create two mental models with different tags and content
+    await t.hs.createMentalModel(bankId, {
+      name: "Alpha Model",
+      sourceQuery: "Alpha summary",
+      content: "Alpha specific keyword: ALPHA_UNIQUE_xk92",
+      tags: ["alpha"],
+    })
+    await t.hs.createMentalModel(bankId, {
+      name: "Beta Model",
+      sourceQuery: "Beta summary",
+      content: "Beta specific keyword: BETA_UNIQUE_m47j",
+      tags: ["beta"],
+    })
+
+    // Seed a fact for alpha so there's something for the model to refresh from
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Alpha team ships weekly" }],
+      tags: ["alpha"],
+      consolidate: false,
+    })
+
+    const alphaModel = t.hs.listMentalModels(bankId, { tags: ["alpha"] })[0]!
+    const result = await t.hs.refreshMentalModel(bankId, alphaModel.id)
+
+    // The refreshed content should not reference beta's unique token
+    expect(result.model.content).not.toContain("BETA_UNIQUE_m47j")
+  }, 60_000)
+
+  it("refresh of tagged model does not access different-tagged models", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Team Red uses React Native for mobile" }],
+      tags: ["team-red"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Team Blue uses Flutter for mobile" }],
+      tags: ["team-blue"],
+      consolidate: false,
+    })
+
+    const model = await t.hs.createMentalModel(bankId, {
+      name: "Team Red Mobile Stack",
+      sourceQuery: "What mobile framework does the team use? Return exact name.",
+      tags: ["team-red"],
+    })
+
+    const result = await t.hs.refreshMentalModel(bankId, model.id)
+
+    const content = result.model.content!.toLowerCase()
+    expect(content).toContain("react native")
+    expect(content).not.toContain("flutter")
+  }, 60_000)
+
+  it("refresh of tagged model excludes untagged memories", async () => {
+    const taggedToken = "TAGGED_SECRET_9f3x2b"
+    const untaggedToken = "UNTAGGED_SECRET_7h4m1k"
+
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: `Tagged memory token: ${taggedToken}` }],
+      tags: ["secure"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: `Untagged memory token: ${untaggedToken}` }],
+      consolidate: false,
+    })
+
+    const model = await t.hs.createMentalModel(bankId, {
+      name: "Secure Summary",
+      sourceQuery: "What tokens do you know about? Return them exactly.",
+      tags: ["secure"],
+    })
+
+    const result = await t.hs.refreshMentalModel(bankId, model.id)
+
+    expect(result.model.content).toContain(taggedToken)
+    expect(result.model.content).not.toContain(untaggedToken)
+  }, 60_000)
+
+  it("reflect based_on separates directives, memories, and mental models", async () => {
+    // Seed all three types
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "The office is located in Tel Aviv" }],
+      consolidate: false,
+    })
+    t.hs.createDirective(bankId, {
+      name: "Language",
+      content: "Always respond in English.",
+    })
+    await t.hs.createMentalModel(bankId, {
+      name: "Office Info",
+      sourceQuery: "Where is the office?",
+      content: "The office is in Tel Aviv.",
+    })
+
+    const result = await t.hs.reflect(
+      bankId,
+      "Where is the office? Use all available sources.",
+      { budget: "high" },
+    )
+
+    // Verify based_on separates the three source types
+    // (This test will fail until based_on is implemented on ReflectResult)
+    expect(result.based_on).toBeDefined()
+    expect(Array.isArray(result.based_on!.memories)).toBe(true)
+    expect(Array.isArray(result.based_on!.mentalModels)).toBe(true)
+    expect(Array.isArray(result.based_on!.directives)).toBe(true)
+  }, 60_000)
 })

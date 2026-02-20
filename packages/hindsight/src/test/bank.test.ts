@@ -136,9 +136,19 @@ describe("Bank management", () => {
   // ── Update name/description ──────────────────────────────────────────
 
   describe("updateBank name/description", () => {
-    it.todo(
-      "updates bank name and is reflected in getBank",
-    )
+    it("updates bank name and is reflected in getBank", () => {
+      const bank = t.hs.createBank("original-name")
+      const updated = t.hs.updateBank(bank.id, { name: "new-name" })
+      expect(updated.name).toBe("new-name")
+
+      // getBank by new name should find it
+      const found = t.hs.getBank("new-name")
+      expect(found).toBeDefined()
+      expect(found!.id).toBe(bank.id)
+
+      // getBank by old name should not find it
+      expect(t.hs.getBank("original-name")).toBeUndefined()
+    })
 
     it("updates bank description/mission field", () => {
       const bank = t.hs.createBank("mission-test")
