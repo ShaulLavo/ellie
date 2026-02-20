@@ -73,14 +73,22 @@ class SQLiteManager {
     this.initialized = true
 
     if (existsSync(this.customLibPath)) {
-      Database.setCustomSQLite(this.customLibPath)
+      try {
+        Database.setCustomSQLite(this.customLibPath)
+      } catch {
+        // Already loaded (e.g. HMR reload) — safe to ignore
+      }
       this._vecAvailable = true
       return
     }
 
     for (const p of this.fallbackPaths) {
       if (existsSync(p)) {
-        Database.setCustomSQLite(p)
+        try {
+          Database.setCustomSQLite(p)
+        } catch {
+          // Already loaded (e.g. HMR reload) — safe to ignore
+        }
         this.needsLoadExtension = true
         // Don't set vecAvailable here — it's only confirmed when sqlite-vec
         // actually loads successfully in open()

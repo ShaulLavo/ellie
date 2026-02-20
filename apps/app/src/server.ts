@@ -4,7 +4,7 @@ import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
 import { handleStreamRequest } from "./routes/streams";
 
-const port = parseInt(Bun.env.PORT ?? `4437`);
+const port = new URL(Bun.env.API_BASE_URL ?? `http://localhost:3000`).port || 80;
 const DATA_DIR = Bun.env.DATA_DIR ?? "./data";
 
 console.log(`[server] DATA_DIR=${DATA_DIR}`);
@@ -21,6 +21,7 @@ const STUDIO_PUBLIC = resolve(import.meta.dir, "../../studio/public");
 // In dev (`--hot`): Bun injects HMR client, bundles TSX on the fly.
 // In production: pre-bundled with all assets.
 const html = await import(resolve(STUDIO_PUBLIC, "index.html"));
+const manifestPath = resolve(STUDIO_PUBLIC, "manifest.json");
 
 // ── Request handler ───────────────────────────────────────────────
 
@@ -40,21 +41,34 @@ async function fetch(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
-  let response: Response;
+  if (path === "/manifest.json") {
+    const file = Bun.file(manifestPath);
+    const response = new Response(file, {
+      headers: { "Content-Type": "application/manifest+json" },
+    });
+    logRequest(req, response.status);
+    return response;
+  }
 
   const streamResponse = handleStreamRequest(ctx, req, path);
   if (streamResponse) {
-    response = await streamResponse;
-  } else {
-    // SPA fallback — serve React app for all non-API routes
-    response = new Response(html.default);
+    const response = await streamResponse;
+    logRequest(req, response.status);
+    return response;
   }
 
-  logRequest(req, response.status);
-  return response;
+  // Non-API routes fall through to SPA handler via `routes`
+  return new Response(null, { status: 404 });
 }
 
 // ── Start server ──────────────────────────────────────────────────
-Bun.serve({ fetch, port });
+// Single HTML entry = SPA fallback for all non-API routes
+Bun.serve({
+  routes: {
+    "/": html.default,
+  },
+  fetch,
+  port,
+});
 
 console.log(`[server] listening on http://localhost:${port}`);
