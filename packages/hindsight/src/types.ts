@@ -758,6 +758,10 @@ export type ConsolidationAction =
 
 /** Options for creating a mental model */
 export interface CreateMentalModelOptions {
+  /** Optional custom ID (parity with Python mental_model_id) */
+  id?: string
+  /** Optional alias for custom ID (Python-style naming) */
+  mentalModelId?: string
   /** Human-readable name */
   name: string
   /** The query to run through reflect() when refreshing */
@@ -777,6 +781,12 @@ export interface UpdateMentalModelOptions {
   content?: string
   tags?: string[]
   autoRefresh?: boolean
+}
+
+/** Options for listing mental models */
+export interface ListMentalModelsOptions {
+  /** Filter mental models by tag overlap (any-match) */
+  tags?: string[]
 }
 
 /** Result from refreshing a mental model */

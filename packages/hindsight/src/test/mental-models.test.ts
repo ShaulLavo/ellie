@@ -6,7 +6,20 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs: number = 1500,
+  intervalMs: number = 25,
+): Promise<void> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (condition()) return
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  throw new Error(`Timed out waiting for condition after ${timeoutMs}ms`)
+}
 
 describe("Mental models", () => {
   let t: TestHindsight
@@ -134,11 +147,28 @@ describe("Mental models", () => {
     })
 
     it("filters by tags when tags option provided", async () => {
-      // listMentalModels currently only accepts bankId — no tag filter parameter.
-      implementMe(
-        "listMentalModels needs tag filter option",
-        "test_mental_models.py::test_list_mental_models_with_tags",
-      )
+      await t.hs.createMentalModel(bankId, {
+        name: "Tag 1 model",
+        sourceQuery: "q1",
+        tags: ["tag1"],
+      })
+      await t.hs.createMentalModel(bankId, {
+        name: "Tag 2 model",
+        sourceQuery: "q2",
+        tags: ["tag2"],
+      })
+      await t.hs.createMentalModel(bankId, {
+        name: "Untagged model",
+        sourceQuery: "q3",
+      })
+
+      const filteredTag1 = t.hs.listMentalModels(bankId, { tags: ["tag1"] })
+      expect(filteredTag1).toHaveLength(1)
+      expect(filteredTag1[0]!.name).toBe("Tag 1 model")
+
+      const filteredTag2 = t.hs.listMentalModels(bankId, { tags: ["tag2"] })
+      expect(filteredTag2).toHaveLength(1)
+      expect(filteredTag2[0]!.name).toBe("Tag 2 model")
     })
 
     it("is bank-scoped", async () => {
@@ -310,29 +340,28 @@ describe("Mental models", () => {
       expect(fetched!.lastRefreshedAt).toBe(result.model.lastRefreshedAt)
     })
 
-    it("refresh with tags only accesses tagged memories", async () => {
-      // This test requires verifying that the reflect call uses tag filtering
-      // internally. The refreshMentalModel function passes model tags with
-      // all_strict matching to reflect(). We can verify by checking that
-      // the refresh completes and uses the tagged reflect path.
-      // However, verifying that memories are actually filtered by tags
-      // requires seeding tagged memories and checking which ones appear
-      // in the result — which needs agentic tool calling from the mock.
-      implementMe(
-        "refresh with tags needs agentic mock to verify tag-filtered recall",
-        "test_mental_models.py::test_refresh_with_tags",
-      )
-    })
+    it.todo(
+      "refresh with tags only accesses tagged memories (requires real-LLM tool-calling loop parity)",
+    )
 
     it("refresh with directives applies them to reflect prompt", async () => {
-      // Verifying that directives are injected into the reflect prompt
-      // requires inspecting the system prompt passed to the adapter.
-      // The current mock adapter tracks calls but doesn't expose the
-      // system prompt in a structured way for assertion.
-      implementMe(
-        "refresh with directives needs adapter call inspection for system prompt",
-        "test_mental_models.py::test_refresh_with_directives",
-      )
+      t.hs.createDirective(bankId, {
+        name: "Response Style",
+        content: "Always be concise and professional",
+      })
+      const model = await t.hs.createMentalModel(bankId, {
+        name: "Directive Refresh Model",
+        sourceQuery: "Summarize the team",
+      })
+
+      t.adapter.setResponse("Concise professional answer.")
+      await t.hs.refreshMentalModel(bankId, model.id)
+
+      const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+      const callText = JSON.stringify(lastCall)
+      expect(callText).toContain("## DIRECTIVES (MANDATORY)")
+      expect(callText).toContain("Response Style")
+      expect(callText).toContain("Always be concise and professional")
     })
 
     it("refresh completes without error when bank has directives", async () => {
@@ -383,113 +412,222 @@ describe("Mental models", () => {
 
   describe("mental models used in reflect", () => {
     it("reflect searches mental models when they exist", async () => {
-      // Requires agentic mock that can drive the 3-tier tool loop
-      // (search_mental_models tool call). The current mock adapter
-      // returns flat text and cannot simulate tool calling.
-      implementMe(
-        "reflect needs agentic mock to drive search_mental_models tool",
-        "test_mental_models.py::test_reflect_searches_mental_models",
-      )
+      await t.hs.createMentalModel(bankId, {
+        name: "Team Collaboration Practices",
+        sourceQuery: "How does the team collaborate?",
+        content:
+          "The team uses async communication via Slack and holds daily standups at 9am.",
+        tags: ["team"],
+      })
+
+      t.adapter.setResponse("Team collaboration answer.")
+      await t.hs.reflect(bankId, "How does the team work together?")
+
+      const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+      const callText = JSON.stringify(lastCall)
+      expect(callText).toContain("search_mental_models")
     })
 
     it("stale mental model triggers tier 2/3 search", async () => {
-      // Requires agentic mock that recognizes isStale=true on a mental model
-      // result and then calls search_observations or search_memories.
-      implementMe(
-        "stale mental model drill-down needs agentic mock with multi-tool calls",
-        "test_mental_models.py::test_stale_mental_model_triggers_tier2_3",
-      )
+      await t.hs.createMentalModel(bankId, {
+        name: "Potentially stale model",
+        sourceQuery: "What is the current status?",
+        content: "Old summary",
+      })
+
+      t.adapter.setResponse("Drill-down answer.")
+      await t.hs.reflect(bankId, "What is the latest status?")
+
+      const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+      const callText = JSON.stringify(lastCall)
+      expect(callText).toContain("search_observations")
+      expect(callText).toContain("\"recall\"")
+      expect(callText).toContain("search_memories")
     })
 
     it("mental model with autoRefresh gets refreshed after consolidation", async () => {
-      // Requires agentic mock to verify that consolidation triggers
-      // refreshMentalModel for autoRefresh=true models.
-      implementMe(
-        "auto-refresh after consolidation needs agentic mock for full pipeline",
-        "test_mental_models.py::test_auto_refresh_after_consolidation",
-      )
+      const model = await t.hs.createMentalModel(bankId, {
+        name: "Auto Refresh Model",
+        sourceQuery: "What happened recently?",
+        content: "Initial content",
+        autoRefresh: true,
+      })
+
+      await t.hs.retain(bankId, "retain source", {
+        facts: [{ content: "Alice shipped a new feature." }],
+        consolidate: false,
+      })
+
+      t.adapter.setResponses([
+        JSON.stringify([
+          { action: "create", text: "Alice shipped a new feature.", reason: "new update" },
+        ]),
+        "Refreshed auto model content.",
+      ])
+
+      const result = await t.hs.consolidate(bankId)
+      expect(result.mentalModelsRefreshQueued).toBeGreaterThanOrEqual(1)
+
+      await waitFor(() => {
+        const after = t.hs.getMentalModel(bankId, model.id)
+        return after?.lastRefreshedAt !== null && after?.content !== "Initial content"
+      })
     })
 
     it("consolidation only refreshes matching tagged models", async () => {
-      // Requires verifying that consolidation's triggerMentalModelRefreshes
-      // respects tag boundaries. Needs agentic mock to drive consolidation
-      // with tagged memories and verify which models get refreshed.
-      implementMe(
-        "tag-scoped consolidation refresh needs agentic mock for full pipeline",
-        "test_mental_models.py::test_consolidation_only_refreshes_matching_tags",
-      )
+      const mmAlice = await t.hs.createMentalModel(bankId, {
+        name: "Alice model",
+        sourceQuery: "What about Alice?",
+        content: "Initial Alice content",
+        tags: ["user:alice"],
+        autoRefresh: true,
+      })
+      const mmBob = await t.hs.createMentalModel(bankId, {
+        name: "Bob model",
+        sourceQuery: "What about Bob?",
+        content: "Initial Bob content",
+        tags: ["user:bob"],
+        autoRefresh: true,
+      })
+      const mmUntagged = await t.hs.createMentalModel(bankId, {
+        name: "Global model",
+        sourceQuery: "What about everyone?",
+        content: "Initial global content",
+        autoRefresh: true,
+      })
+      const aliceInitial = mmAlice.lastRefreshedAt
+      const bobInitial = mmBob.lastRefreshedAt
+      const globalInitial = mmUntagged.lastRefreshedAt
+
+      await t.hs.retain(bankId, "retain source", {
+        facts: [{ content: "Alice likes React", tags: ["user:alice"] }],
+        consolidate: false,
+      })
+
+      t.adapter.setResponses([
+        JSON.stringify([
+          { action: "create", text: "Alice likes React", reason: "new observation" },
+        ]),
+        "Alice model refreshed",
+        "Global model refreshed",
+      ])
+
+      const result = await t.hs.consolidate(bankId)
+      expect(result.mentalModelsRefreshQueued).toBe(2)
+
+      await waitFor(() => {
+        const a = t.hs.getMentalModel(bankId, mmAlice.id)
+        const b = t.hs.getMentalModel(bankId, mmBob.id)
+        const g = t.hs.getMentalModel(bankId, mmUntagged.id)
+        return (
+          (a?.lastRefreshedAt ?? null) !== aliceInitial &&
+          (g?.lastRefreshedAt ?? null) !== globalInitial &&
+          (b?.lastRefreshedAt ?? null) === bobInitial
+        )
+      })
     })
 
     it("untagged auto-refresh models are always refreshed after any consolidation", async () => {
-      // Requires agentic mock to drive consolidation and verify that
-      // untagged auto-refresh models are refreshed regardless of which
-      // tagged memories were consolidated.
-      implementMe(
-        "untagged auto-refresh after consolidation needs agentic mock",
-        "test_mental_models.py::test_untagged_auto_refresh_always_refreshed",
-      )
+      const tagged = await t.hs.createMentalModel(bankId, {
+        name: "Tagged model",
+        sourceQuery: "tagged query",
+        content: "Initial tagged content",
+        tags: ["project-x"],
+        autoRefresh: true,
+      })
+      const untagged = await t.hs.createMentalModel(bankId, {
+        name: "Untagged model",
+        sourceQuery: "untagged query",
+        content: "Initial untagged content",
+        autoRefresh: true,
+      })
+      const taggedInitial = tagged.lastRefreshedAt
+      const untaggedInitial = untagged.lastRefreshedAt
+
+      await t.hs.retain(bankId, "retain source", {
+        facts: [{ content: "Project X note", tags: ["project-x"] }],
+        consolidate: false,
+      })
+
+      t.adapter.setResponses([
+        JSON.stringify([
+          { action: "create", text: "Project X note", reason: "new note" },
+        ]),
+        "Tagged refresh",
+        "Untagged refresh",
+      ])
+
+      const result = await t.hs.consolidate(bankId)
+      expect(result.mentalModelsRefreshQueued).toBe(2)
+
+      await waitFor(() => {
+        const tModel = t.hs.getMentalModel(bankId, tagged.id)
+        const uModel = t.hs.getMentalModel(bankId, untagged.id)
+        return (
+          (tModel?.lastRefreshedAt ?? null) !== taggedInitial &&
+          (uModel?.lastRefreshedAt ?? null) !== untaggedInitial
+        )
+      })
     })
 
-    it("reflect based_on separates directives, memories, and mental models", async () => {
-      // Requires agentic mock to drive reflect with mental models,
-      // directives, and memories, then inspect the based_on structure.
-      implementMe(
-        "based_on structure needs agentic mock to collect all tiers",
-        "test_reflections.py::test_reflect_based_on_separates_types",
-      )
-    })
+    it.todo(
+      "reflect based_on separates directives, memories, and mental models (requires based_on API parity + real-LLM tool-calling)",
+    )
   })
 
   // ── Tag security boundaries ───────────────────────────────────────────
 
   describe("tag security", () => {
-    it("mental model refresh respects tag boundaries", async () => {
-      // Create a tagged mental model and verify that refresh passes
-      // the tags with all_strict matching to reflect. Verifying that
-      // cross-tag memories are excluded requires agentic tool calling.
-      implementMe(
-        "tag boundary enforcement needs agentic mock to verify cross-tag exclusion",
-        "test_mental_models.py::test_refresh_respects_tag_boundaries",
-      )
-    })
+    it.todo(
+      "mental model refresh respects tag boundaries (requires real-LLM tool-calling)",
+    )
 
-    it("refresh with tags only accesses same tagged models", async () => {
-      // refreshMentalModel passes model tags to reflect with all_strict.
-      // Verifying that only same-tagged memories are accessed requires
-      // the agentic loop to call search tools.
-      implementMe(
-        "same-tag access verification needs agentic mock",
-        "test_mental_models.py::test_refresh_same_tag_access",
-      )
-    })
+    it.todo(
+      "refresh with tags only accesses same tagged models (requires real-LLM tool-calling)",
+    )
 
-    it("refresh of tagged model does not access different-tagged models", async () => {
-      // Verifying cross-tag exclusion requires seeding memories with
-      // different tags and checking none appear in the reflect result.
-      implementMe(
-        "cross-tag exclusion verification needs agentic mock",
-        "test_mental_models.py::test_refresh_excludes_different_tags",
-      )
-    })
+    it.todo(
+      "refresh of tagged model does not access different-tagged models (requires real-LLM tool-calling)",
+    )
 
-    it("refresh of tagged model excludes untagged memories", async () => {
-      // all_strict matching in refreshMentalModel means untagged memories
-      // (which have no tags) should not match. Verification requires
-      // agentic mock driving the recall tool.
-      implementMe(
-        "untagged memory exclusion verification needs agentic mock",
-        "test_mental_models.py::test_refresh_excludes_untagged_memories",
-      )
-    })
+    it.todo(
+      "refresh of tagged model excludes untagged memories (requires real-LLM tool-calling)",
+    )
 
     it("consolidation does not refresh models with non-matching tags", async () => {
-      // Verifying that triggerMentalModelRefreshes skips models whose
-      // tags don't overlap with consolidated memory tags. Needs the full
-      // consolidation pipeline with agentic mock.
-      implementMe(
-        "consolidation tag filtering needs agentic mock for full pipeline",
-        "test_mental_models.py::test_consolidation_no_refresh_non_matching_tags",
-      )
+      const mmAlice = await t.hs.createMentalModel(bankId, {
+        name: "Alice only",
+        sourceQuery: "Alice summary",
+        tags: ["user:alice"],
+        autoRefresh: true,
+      })
+      const mmBob = await t.hs.createMentalModel(bankId, {
+        name: "Bob only",
+        sourceQuery: "Bob summary",
+        tags: ["user:bob"],
+        autoRefresh: true,
+      })
+
+      await t.hs.retain(bankId, "retain source", {
+        facts: [{ content: "Alice likes coffee", tags: ["user:alice"] }],
+        consolidate: false,
+      })
+
+      t.adapter.setResponses([
+        JSON.stringify([
+          { action: "create", text: "Alice likes coffee", reason: "new fact" },
+        ]),
+        "Alice refresh response",
+      ])
+
+      const result = await t.hs.consolidate(bankId)
+      expect(result.mentalModelsRefreshQueued).toBe(1)
+
+      await waitFor(() => {
+        const aliceAfter = t.hs.getMentalModel(bankId, mmAlice.id)
+        const bobAfter = t.hs.getMentalModel(bankId, mmBob.id)
+        return aliceAfter?.lastRefreshedAt !== null && bobAfter?.lastRefreshedAt === null
+      })
     })
   })
 
@@ -497,12 +635,21 @@ describe("Mental models", () => {
 
   describe("custom ID", () => {
     it("creates mental model with custom ID", async () => {
-      // CreateMentalModelOptions does not have an `id` field.
-      // The id is always auto-generated via ulid() in createMentalModel.
-      implementMe(
-        "createMentalModel needs optional id parameter in CreateMentalModelOptions",
-        "test_reflections.py::test_create_mental_model_with_custom_id",
-      )
+      const customId = "team-communication-preferences"
+      const model = await t.hs.createMentalModel(bankId, {
+        id: customId,
+        name: "Team Communication Preferences",
+        sourceQuery: "How does the team prefer to communicate?",
+        content: "The team prefers async communication via Slack",
+        tags: ["team", "communication"],
+      })
+
+      expect(model.id).toBe(customId)
+
+      const fetched = t.hs.getMentalModel(bankId, customId)
+      expect(fetched).toBeDefined()
+      expect(fetched!.id).toBe(customId)
+      expect(fetched!.name).toBe("Team Communication Preferences")
     })
   })
 })
