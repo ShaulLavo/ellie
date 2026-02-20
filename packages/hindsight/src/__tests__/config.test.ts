@@ -7,8 +7,6 @@
 
 import { describe, it, expect, afterEach } from "bun:test"
 import { createTestHindsight, type TestHindsight } from "./setup"
-import type { BankConfig } from "../types"
-
 describe("BankConfig validation", () => {
   let t: TestHindsight
 
@@ -23,7 +21,10 @@ describe("BankConfig validation", () => {
       const bank = t.hs.createBank(`mode-${mode}`, {
         config: { extractionMode: mode },
       })
-      expect(bank.config.extractionMode).toBe(mode)
+      const extractionMode = bank.config.extractionMode
+      expect(extractionMode).toBeDefined()
+      if (!extractionMode) throw new Error("Expected extractionMode to be set")
+      expect(extractionMode).toBe(mode)
     }
   })
 
@@ -34,7 +35,10 @@ describe("BankConfig validation", () => {
       const bank = t.hs.createBank(`budget-${budget}`, {
         config: { reflectBudget: budget },
       })
-      expect(bank.config.reflectBudget).toBe(budget)
+      const reflectBudget = bank.config.reflectBudget
+      expect(reflectBudget).toBeDefined()
+      if (!reflectBudget) throw new Error("Expected reflectBudget to be set")
+      expect(reflectBudget).toBe(budget)
     }
   })
 

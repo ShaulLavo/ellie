@@ -77,7 +77,7 @@ describe("parseLLMJson", () => {
   })
 
   it("returns fallback on empty string", () => {
-    expect(parseLLMJson("", [])).toEqual([])
+    expect(parseLLMJson<string[]>("", [])).toEqual([])
   })
 
   it("handles whitespace around JSON", () => {
@@ -87,7 +87,8 @@ describe("parseLLMJson", () => {
 
   it("parses arrays", () => {
     const input = '[{"action": "create", "text": "observation"}]'
-    expect(parseLLMJson<Array<{ action: string; text: string }>>(input, [])).toEqual([
+    const fallback: Array<{ action: string; text: string }> = []
+    expect(parseLLMJson(input, fallback)).toEqual([
       { action: "create", text: "observation" },
     ])
   })
@@ -103,7 +104,10 @@ describe("parseLLMJson", () => {
   ]
 }
 \`\`\``
-    const result = parseLLMJson<{ facts: Array<{ content: string; factType: string }> }>(input, { facts: [] })
+    const fallback: { facts: Array<{ content: string; factType: string }> } = {
+      facts: [],
+    }
+    const result = parseLLMJson(input, fallback)
     expect(result.facts).toHaveLength(1)
     expect(result.facts[0].content).toBe("Test fact")
   })
