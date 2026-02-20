@@ -1,11 +1,11 @@
 import { createStateSchema } from "@ellie/streams-state";
-import { z } from "zod";
+import * as v from "valibot";
 
-export const messageSchema = z.object({
-  id: z.string(),
-  role: z.enum(["user", "assistant", "system"]),
-  content: z.string(),
-  createdAt: z.string(),
+export const messageSchema = v.object({
+  id: v.string(),
+  role: v.picklist(["user", "assistant", "system"]),
+  content: v.string(),
+  createdAt: v.string(),
 });
 
 export const chatStateSchema = createStateSchema({
@@ -16,4 +16,4 @@ export const chatStateSchema = createStateSchema({
   },
 });
 
-export type Message = z.infer<typeof messageSchema>;
+export type Message = v.InferOutput<typeof messageSchema>;

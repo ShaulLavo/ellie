@@ -1,4 +1,5 @@
-import type { z } from "zod"
+import type { GenericSchema, InferOutput } from "valibot"
+import { parse } from "valibot"
 import type { JsonlEngine as LogStore } from "./jsonl-store"
 
 // -- Types --------------------------------------------------------------------
@@ -17,7 +18,7 @@ export interface TypedLogReadOptions {
 }
 
 export interface TypedLog<T> {
-  /** Validate and append a record. Throws ZodError on invalid input. */
+  /** Validate and append a record. Throws ValiError on invalid input. */
   append(record: T): {
     offset: string
     bytePos: number
@@ -43,7 +44,7 @@ const decoder = new TextDecoder()
 /**
  * Create a typed, schema-validated append-only log.
  *
- * Wraps a LogStore stream with Zod validation on write
+ * Wraps a LogStore stream with Valibot validation on write
  * and typed JSON deserialization on read.
  *
  * ```typescript
@@ -52,12 +53,12 @@ const decoder = new TextDecoder()
  * events.read()  // Array<{ data: Event, offset, timestamp }>
  * ```
  */
-export function typedLog<S extends z.ZodType>(
+export function typedLog<S extends GenericSchema>(
   store: LogStore,
   streamPath: string,
   schema: S,
   options?: { contentType?: string }
-): TypedLog<z.infer<S>> {
+): TypedLog<InferOutput<S>> {
   // Ensure the stream exists (idempotent)
   store.createStream(streamPath, {
     contentType: options?.contentType ?? "application/json",
@@ -68,9 +69,9 @@ export function typedLog<S extends z.ZodType>(
       return streamPath
     },
 
-    append(record: z.infer<S>) {
-      // Validate with Zod — throws ZodError if invalid
-      const validated = schema.parse(record)
+    append(record: InferOutput<S>) {
+      // Validate with Valibot — throws ValiError if invalid
+      const validated = parse(schema, record)
 
       // Serialize the validated (possibly transformed) value
       const json = JSON.stringify(validated)
@@ -79,15 +80,15 @@ export function typedLog<S extends z.ZodType>(
       return store.append(streamPath, bytes)
     },
 
-    read(opts?: TypedLogReadOptions): TypedLogRecord<z.infer<S>>[] {
+    read(opts?: TypedLogReadOptions): TypedLogRecord<InferOutput<S>>[] {
       const messages = store.read(streamPath, opts?.after)
-      const results: TypedLogRecord<z.infer<S>>[] = []
+      const results: TypedLogRecord<InferOutput<S>>[] = []
 
       for (const msg of messages) {
         try {
           const json = decoder.decode(msg.data)
           const parsed = JSON.parse(json)
-          const data = opts?.validate ? schema.parse(parsed) : parsed
+          const data = opts?.validate ? parse(schema, parsed) : parsed
 
           results.push({
             data,

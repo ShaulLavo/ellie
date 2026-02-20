@@ -18,15 +18,8 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.1"
-  },
-  "peerDependencies": {
-    "zod": "^4.3.6"
-  },
-  "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    }
+    "drizzle-orm": "^0.45.1",
+    "valibot": "^1.2.0"
   },
   "optionalDependencies": {
     "sqlite-vec": "^0.1.6"

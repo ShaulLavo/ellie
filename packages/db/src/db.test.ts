@@ -3,7 +3,7 @@ import { createDB, isVecAvailable } from "./index"
 import { LogFile, streamPathToFilename } from "./log"
 import { JsonlEngine, formatOffset } from "./jsonl-store"
 import { typedLog } from "./typed-log"
-import { z } from "zod"
+import * as v from "valibot"
 import { eq } from "drizzle-orm"
 import { existsSync, rmSync, readFileSync, mkdtempSync } from "fs"
 import { join } from "path"
@@ -1093,10 +1093,10 @@ describe("typedLog", () => {
   let logDir: string
   let store: JsonlEngine
 
-  const testSchema = z.object({
-    event: z.string(),
-    value: z.number(),
-    tags: z.array(z.string()).optional(),
+  const testSchema = v.object({
+    event: v.string(),
+    value: v.number(),
+    tags: v.optional(v.array(v.string())),
   })
 
   beforeEach(() => {
@@ -1200,8 +1200,8 @@ describe("typedLog", () => {
   })
 
   it("multiple typed logs share one store with different schemas", () => {
-    const schemaA = z.object({ kind: z.literal("a"), n: z.number() })
-    const schemaB = z.object({ kind: z.literal("b"), s: z.string() })
+    const schemaA = v.object({ kind: v.literal("a"), n: v.number() })
+    const schemaB = v.object({ kind: v.literal("b"), s: v.string() })
 
     const logA = typedLog(store, "/multi/a", schemaA)
     const logB = typedLog(store, "/multi/b", schemaB)
@@ -1222,10 +1222,10 @@ describe("typedLog", () => {
     expect(log.streamPath).toBe("/typed/path")
   })
 
-  it("applies Zod transforms on write", () => {
-    const trimSchema = z.object({
-      name: z.string().trim(),
-      value: z.number(),
+  it("applies transforms on write", () => {
+    const trimSchema = v.object({
+      name: v.pipe(v.string(), v.trim()),
+      value: v.number(),
     })
 
     const log = typedLog(store, "/typed/transform", trimSchema)
