@@ -27,6 +27,7 @@ import type {
   HindsightConfig,
   BankConfig,
   Bank,
+  DispositionTraits,
   MentalModel,
   CreateMentalModelOptions,
   UpdateMentalModelOptions,
@@ -165,16 +166,32 @@ export class Hindsight {
 
   // ── Bank management ─────────────────────────────────────────────────
 
-  createBank(name: string, description?: string, config?: BankConfig): Bank {
+  createBank(
+    name: string,
+    options?: {
+      description?: string
+      config?: BankConfig
+      disposition?: Partial<DispositionTraits>
+      mission?: string
+    },
+  ): Bank {
     const id = ulid()
     const now = Date.now()
+    const disposition: DispositionTraits = {
+      ...DEFAULT_DISPOSITION,
+      ...stripUndefined(options?.disposition ?? {}),
+    }
+    const mission = options?.mission ?? ""
+
     this.hdb.db
       .insert(this.hdb.schema.banks)
       .values({
         id,
         name,
-        description: description ?? null,
-        config: config ? JSON.stringify(config) : null,
+        description: options?.description ?? null,
+        config: options?.config ? JSON.stringify(options.config) : null,
+        disposition: JSON.stringify(disposition),
+        mission,
         createdAt: now,
         updatedAt: now,
       })
@@ -182,8 +199,10 @@ export class Hindsight {
     return {
       id,
       name,
-      description: description ?? null,
-      config: config ?? {},
+      description: options?.description ?? null,
+      config: options?.config ?? {},
+      disposition,
+      mission,
       createdAt: now,
       updatedAt: now,
     }
@@ -269,6 +288,42 @@ export class Hindsight {
     return this.getBankById(bankId)!
   }
 
+  setDisposition(bankId: string, traits: Partial<DispositionTraits>): Bank {
+    const bank = this.getBankById(bankId)
+    if (!bank) throw new Error(`Bank ${bankId} not found`)
+
+    const merged: DispositionTraits = {
+      ...bank.disposition,
+      ...stripUndefined(traits),
+    }
+
+    // Clamp values to 1-5
+    merged.skepticism = clamp(merged.skepticism, 1, 5)
+    merged.literalism = clamp(merged.literalism, 1, 5)
+    merged.empathy = clamp(merged.empathy, 1, 5)
+
+    const now = Date.now()
+    this.hdb.db
+      .update(this.hdb.schema.banks)
+      .set({ disposition: JSON.stringify(merged), updatedAt: now })
+      .where(eq(this.hdb.schema.banks.id, bankId))
+      .run()
+    return this.getBankById(bankId)!
+  }
+
+  setMission(bankId: string, mission: string): Bank {
+    const bank = this.getBankById(bankId)
+    if (!bank) throw new Error(`Bank ${bankId} not found`)
+
+    const now = Date.now()
+    this.hdb.db
+      .update(this.hdb.schema.banks)
+      .set({ mission, updatedAt: now })
+      .where(eq(this.hdb.schema.banks.id, bankId))
+      .run()
+    return this.getBankById(bankId)!
+  }
+
   // ── Core operations ─────────────────────────────────────────────────
 
   async retain(
@@ -284,6 +339,11 @@ export class Hindsight {
       consolidate: cfg.enableConsolidation,
       ...stripUndefined(options ?? {}),
     }
+    const bank = this.getBankById(bankId)
+    const retainProfile = bank
+      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+      : undefined
+
     return this.trace(
       "retain",
       bankId,
@@ -298,6 +358,7 @@ export class Hindsight {
           content,
           resolvedOptions,
           this.rerank,
+          retainProfile,
         ),
       (r) => ({
         memoriesExtracted: r.memories.length,
@@ -376,6 +437,11 @@ export class Hindsight {
       budget: cfg.reflectBudget,
       ...stripUndefined(options ?? {}),
     }
+    const bank = this.getBankById(bankId)
+    const bankProfile = bank
+      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+      : undefined
+
     return this.trace(
       "reflect",
       bankId,
@@ -389,6 +455,7 @@ export class Hindsight {
           query,
           resolvedOptions,
           this.rerank,
+          bankProfile,
         ),
       (r) => ({
         memoriesAccessed: r.memories.length,
@@ -405,6 +472,11 @@ export class Hindsight {
     bankId: string,
     options?: ConsolidateOptions,
   ): Promise<ConsolidateResult> {
+    const bank = this.getBankById(bankId)
+    const consProfile = bank
+      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+      : undefined
+
     return this.trace(
       "consolidate",
       bankId,
@@ -417,6 +489,7 @@ export class Hindsight {
           bankId,
           options,
           this.rerank,
+          consProfile,
         ),
       (r) => ({
         memoriesProcessed: r.memoriesProcessed,
@@ -459,6 +532,11 @@ export class Hindsight {
     bankId: string,
     id: string,
   ): Promise<RefreshMentalModelResult> {
+    const bank = this.getBankById(bankId)
+    const profile = bank
+      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+      : undefined
+
     return refreshMentalModelImpl(
       this.hdb,
       this.memoryVec,
@@ -467,6 +545,7 @@ export class Hindsight {
       bankId,
       id,
       this.rerank,
+      profile,
     )
   }
 
@@ -508,6 +587,12 @@ export class Hindsight {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+const DEFAULT_DISPOSITION: DispositionTraits = {
+  skepticism: 3,
+  literalism: 3,
+  empathy: 3,
+}
+
 function toBank(row: typeof import("./schema").banks.$inferSelect): Bank {
   let config: BankConfig = {}
   if (row.config) {
@@ -517,14 +602,30 @@ function toBank(row: typeof import("./schema").banks.$inferSelect): Bank {
       // malformed JSON → empty config
     }
   }
+
+  let disposition: DispositionTraits = { ...DEFAULT_DISPOSITION }
+  if (row.disposition) {
+    try {
+      disposition = { ...DEFAULT_DISPOSITION, ...JSON.parse(row.disposition) }
+    } catch {
+      // malformed JSON → default disposition
+    }
+  }
+
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     config,
+    disposition,
+    mission: row.mission ?? "",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
 }
 
 /** Strip undefined keys so they don't overwrite spread defaults */

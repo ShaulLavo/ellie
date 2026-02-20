@@ -23,6 +23,7 @@ import { sanitizeText, parseLLMJson } from "./sanitize"
 import { findDuplicates } from "./dedup"
 import { resolveEntity } from "./entity-resolver"
 import { consolidate } from "./consolidation"
+import type { BankProfile } from "./reflect"
 
 // ── Valibot schema for LLM extraction response ────────────────────────────
 
@@ -374,6 +375,7 @@ export async function retain(
   content: string,
   options: RetainOptions = {},
   rerank?: RerankFunction,
+  bankProfile?: BankProfile,
 ): Promise<RetainResult> {
   const now = Date.now()
   const { schema } = hdb
@@ -673,7 +675,7 @@ export async function retain(
 
   if (shouldConsolidate) {
     // Fire-and-forget — don't block retain
-    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank).catch(
+    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank, bankProfile).catch(
       () => {}, // swallow errors — consolidation is best-effort
     )
   }

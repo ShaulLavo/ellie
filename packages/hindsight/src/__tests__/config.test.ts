@@ -18,10 +18,10 @@ describe("BankConfig validation", () => {
 
   it("accepts valid extractionMode values", () => {
     t = createTestHindsight()
-    const modes: BankConfig["extractionMode"][] = ["concise", "verbose", "custom"]
+    const modes: Array<"concise" | "verbose" | "custom"> = ["concise", "verbose", "custom"]
     for (const mode of modes) {
-      const bank = t.hs.createBank(`mode-${mode}`, undefined, {
-        extractionMode: mode,
+      const bank = t.hs.createBank(`mode-${mode}`, {
+        config: { extractionMode: mode },
       })
       expect(bank.config.extractionMode).toBe(mode)
     }
@@ -29,10 +29,10 @@ describe("BankConfig validation", () => {
 
   it("accepts valid reflectBudget values", () => {
     t = createTestHindsight()
-    const budgets: BankConfig["reflectBudget"][] = ["low", "mid", "high"]
+    const budgets: Array<"low" | "mid" | "high"> = ["low", "mid", "high"]
     for (const budget of budgets) {
-      const bank = t.hs.createBank(`budget-${budget}`, undefined, {
-        reflectBudget: budget,
+      const bank = t.hs.createBank(`budget-${budget}`, {
+        config: { reflectBudget: budget },
       })
       expect(bank.config.reflectBudget).toBe(budget)
     }
@@ -42,8 +42,8 @@ describe("BankConfig validation", () => {
     t = createTestHindsight()
     const thresholds = [0, 0.5, 0.92, 1.0]
     for (const threshold of thresholds) {
-      const bank = t.hs.createBank(`thresh-${threshold}`, undefined, {
-        dedupThreshold: threshold,
+      const bank = t.hs.createBank(`thresh-${threshold}`, {
+        config: { dedupThreshold: threshold },
       })
       expect(bank.config.dedupThreshold).toBe(threshold)
     }
@@ -51,22 +51,24 @@ describe("BankConfig validation", () => {
 
   it("stores enableConsolidation flag", () => {
     t = createTestHindsight()
-    const bankEnabled = t.hs.createBank("consolidation-on", undefined, {
-      enableConsolidation: true,
+    const bankEnabled = t.hs.createBank("consolidation-on", {
+      config: { enableConsolidation: true },
     })
     expect(bankEnabled.config.enableConsolidation).toBe(true)
 
-    const bankDisabled = t.hs.createBank("consolidation-off", undefined, {
-      enableConsolidation: false,
+    const bankDisabled = t.hs.createBank("consolidation-off", {
+      config: { enableConsolidation: false },
     })
     expect(bankDisabled.config.enableConsolidation).toBe(false)
   })
 
   it("stores customGuidelines", () => {
     t = createTestHindsight()
-    const bank = t.hs.createBank("custom", undefined, {
-      extractionMode: "custom",
-      customGuidelines: "Focus on technical facts only.",
+    const bank = t.hs.createBank("custom", {
+      config: {
+        extractionMode: "custom",
+        customGuidelines: "Focus on technical facts only.",
+      },
     })
     expect(bank.config.customGuidelines).toBe("Focus on technical facts only.")
   })
@@ -93,8 +95,8 @@ describe("Defaults merging", () => {
     })
     try {
       // Bank only overrides extractionMode
-      const bank = t.hs.createBank("partial-override", undefined, {
-        extractionMode: "concise",
+      const bank = t.hs.createBank("partial-override", {
+        config: { extractionMode: "concise" },
       })
       // Bank config stores what was explicitly set
       expect(bank.config.extractionMode).toBe("concise")

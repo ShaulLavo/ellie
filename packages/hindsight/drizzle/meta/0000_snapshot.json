@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "580e7bb9-d82f-4fcc-837f-67b2a377bf4e",
+  "id": "bb63a368-453c-4e35-a6da-8fbe8446c480",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "hs_banks": {
@@ -34,6 +34,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "disposition": {
+          "name": "disposition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mission": {
+          "name": "mission",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
         },
         "created_at": {
           "name": "created_at",

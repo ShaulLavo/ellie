@@ -3,6 +3,8 @@ CREATE TABLE `hs_banks` (
 	`name` text NOT NULL,
 	`description` text,
 	`config` text,
+	`disposition` text,
+	`mission` text DEFAULT '' NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL
 );

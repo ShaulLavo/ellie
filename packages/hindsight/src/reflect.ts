@@ -24,7 +24,15 @@ import type {
   Freshness,
   ScoredMemory,
   RerankFunction,
+  DispositionTraits,
 } from "./types"
+
+/** Bank profile passed to reflect for prompt injection */
+export interface BankProfile {
+  name: string
+  mission: string
+  disposition: DispositionTraits
+}
 import { recall } from "./recall"
 import { searchMentalModelsWithStaleness } from "./mental-models"
 import { loadDirectivesForReflect } from "./directives"
@@ -57,6 +65,7 @@ export async function reflect(
   query: string,
   options: ReflectOptions = {},
   rerank?: RerankFunction,
+  bankProfile?: BankProfile,
 ): Promise<ReflectResult> {
   const allMemories: ScoredMemory[] = []
   const { schema } = hdb
@@ -234,9 +243,11 @@ export async function reflect(
   // Load directives and build system prompt with injection at top + bottom
   const activeDirectives = loadDirectivesForReflect(hdb, bankId, options.tags, options.tagsMatch)
   const basePrompt = getReflectSystemPrompt(budget)
+  const bankIdentity = bankProfile ? buildBankIdentitySection(bankProfile) : ""
   const systemPrompt =
     buildDirectivesSection(activeDirectives) +
     basePrompt +
+    bankIdentity +
     buildDirectivesReminder(activeDirectives)
 
   const answer = await streamToText(
@@ -379,4 +390,27 @@ function mergeTags(
 ): string[] | undefined {
   if (!sessionTags?.length && !toolTags?.length) return undefined
   return [...new Set([...(sessionTags ?? []), ...(toolTags ?? [])])]
+}
+
+// ── Bank Identity ──────────────────────────────────────────────────────
+
+/**
+ * Build the bank identity section for the reflect system prompt.
+ * Includes the bank name, mission, and disposition traits.
+ */
+function buildBankIdentitySection(profile: BankProfile): string {
+  const parts: string[] = ["", `## Memory Bank: ${profile.name}`]
+
+  if (profile.mission) {
+    parts.push(`Mission: ${profile.mission}`)
+  }
+
+  const { disposition } = profile
+  const traits: string[] = []
+  traits.push(`skepticism=${disposition.skepticism}`)
+  traits.push(`literalism=${disposition.literalism}`)
+  traits.push(`empathy=${disposition.empathy}`)
+  parts.push(`Disposition: ${traits.join(", ")}`)
+
+  return parts.join("\n")
 }

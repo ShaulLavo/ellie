@@ -30,6 +30,7 @@ import type {
 import { CONSOLIDATION_SYSTEM, getConsolidationUserPrompt } from "./prompts"
 import { parseLLMJson } from "./sanitize"
 import { refreshMentalModel } from "./mental-models"
+import type { BankProfile } from "./reflect"
 
 // ── Valibot schema for LLM consolidation response ───────────────────────
 
@@ -65,6 +66,7 @@ export async function consolidate(
   bankId: string,
   options: ConsolidateOptions = {},
   rerank?: RerankFunction,
+  bankProfile?: BankProfile,
 ): Promise<ConsolidateResult> {
   const { schema } = hdb
   const batchSize = options.batchSize ?? 50
@@ -166,6 +168,7 @@ export async function consolidate(
       bankId,
       allTags,
       rerank,
+      bankProfile,
     )
   }
 
@@ -399,6 +402,7 @@ async function triggerMentalModelRefreshes(
   bankId: string,
   consolidatedTags: Set<string>,
   rerank?: RerankFunction,
+  bankProfile?: BankProfile,
 ): Promise<number> {
   const { schema } = hdb
 
@@ -425,7 +429,7 @@ async function triggerMentalModelRefreshes(
     }
 
     // Fire-and-forget refresh
-    refreshMentalModel(hdb, memoryVec, modelVec, adapter, bankId, model.id, rerank)
+    refreshMentalModel(hdb, memoryVec, modelVec, adapter, bankId, model.id, rerank, bankProfile)
       .then(() => {})
       .catch(() => {})
     refreshed++

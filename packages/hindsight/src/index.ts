@@ -14,6 +14,7 @@ export type {
   MemoryUnit,
   Entity,
   Bank,
+  DispositionTraits,
   MentalModel,
   ScoredMemory,
   ObservationHistoryEntry,
@@ -44,7 +45,5 @@ export type {
   MetaPathStep,
   MetaPath,
 } from "./types"
-
-export { DEFAULT_META_PATHS } from "./retrieval/graph"
 
 export * as schema from "./schema"

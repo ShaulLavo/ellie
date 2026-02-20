@@ -30,14 +30,16 @@ describe("Bank management", () => {
     })
 
     it("creates a bank with description", () => {
-      const bank = t.hs.createBank("named", "A test bank")
+      const bank = t.hs.createBank("named", { description: "A test bank" })
       expect(bank.description).toBe("A test bank")
     })
 
     it("creates a bank with config", () => {
-      const bank = t.hs.createBank("configured", undefined, {
-        extractionMode: "verbose",
-        dedupThreshold: 0.8,
+      const bank = t.hs.createBank("configured", {
+        config: {
+          extractionMode: "verbose",
+          dedupThreshold: 0.8,
+        },
       })
       expect(bank.config.extractionMode).toBe("verbose")
       expect(bank.config.dedupThreshold).toBe(0.8)
@@ -153,9 +155,11 @@ describe("Bank management", () => {
     })
 
     it("merges with existing config", () => {
-      const bank = t.hs.createBank("merge-cfg", undefined, {
-        extractionMode: "concise",
-        dedupThreshold: 0.9,
+      const bank = t.hs.createBank("merge-cfg", {
+        config: {
+          extractionMode: "concise",
+          dedupThreshold: 0.9,
+        },
       })
       const updated = t.hs.updateBankConfig(bank.id, {
         dedupThreshold: 0.8,
@@ -209,8 +213,8 @@ describe("Config resolution hierarchy", () => {
       defaults: { extractionMode: "verbose" },
     })
     try {
-      const bank = t.hs.createBank("bank-override", undefined, {
-        extractionMode: "concise",
+      const bank = t.hs.createBank("bank-override", {
+        config: { extractionMode: "concise" },
       })
       expect(bank.config.extractionMode).toBe("concise")
     } finally {

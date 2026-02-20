@@ -14,6 +14,8 @@ export const banks = sqliteTable("hs_banks", {
   name: text("name").notNull().unique(),
   description: text("description"),
   config: text("config"), // JSON BankConfig
+  disposition: text("disposition"), // JSON DispositionTraits {skepticism, literalism, empathy} 1-5
+  mission: text("mission").notNull().default(""), // First-person mission statement
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 })

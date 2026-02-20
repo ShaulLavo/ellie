@@ -87,7 +87,7 @@ describe("parseLLMJson", () => {
 
   it("parses arrays", () => {
     const input = '[{"action": "create", "text": "observation"}]'
-    expect(parseLLMJson(input, [])).toEqual([
+    expect(parseLLMJson<Array<{ action: string; text: string }>>(input, [])).toEqual([
       { action: "create", text: "observation" },
     ])
   })
@@ -103,7 +103,7 @@ describe("parseLLMJson", () => {
   ]
 }
 \`\`\``
-    const result = parseLLMJson(input, { facts: [] })
+    const result = parseLLMJson<{ facts: Array<{ content: string; factType: string }> }>(input, { facts: [] })
     expect(result.facts).toHaveLength(1)
     expect(result.facts[0].content).toBe("Test fact")
   })

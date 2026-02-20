@@ -101,7 +101,7 @@ export function createTestBank(
 ): string {
   const bank = hs.createBank(
     name ?? `test-bank-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    description,
+    description ? { description } : undefined,
   )
   return bank.id
 }

@@ -115,12 +115,26 @@ export interface BankConfig {
   dedupThreshold?: number
 }
 
+/** Personality traits that shape reflect behavior (1-5 integer scale) */
+export interface DispositionTraits {
+  /** How skeptical vs trusting (1=trusting, 5=skeptical) */
+  skepticism: number
+  /** How literally to interpret information (1=flexible, 5=literal) */
+  literalism: number
+  /** How much to consider emotional context (1=detached, 5=empathetic) */
+  empathy: number
+}
+
 /** A memory bank (agent profile) */
 export interface Bank {
   id: string
   name: string
   description: string | null
   config: BankConfig
+  /** Personality traits shaping reflect behavior. Default: all 3s (neutral) */
+  disposition: DispositionTraits
+  /** First-person mission statement ("I am...") that shapes reflect behavior */
+  mission: string
   createdAt: number
   updatedAt: number
 }
