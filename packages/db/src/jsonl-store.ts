@@ -161,6 +161,12 @@ export class JsonlEngine {
     }
   }
 
+  // TODO: Implement reaper — background job or CLI command that cleans up
+  // soft-deleted streams and their orphaned JSONL files:
+  //   1. Find streams where deleted_at older than a retention window
+  //   2. Delete orphaned JSONL files from disk using logFileId
+  //   3. Hard-DELETE the SQLite row (cascade removes messages/producers)
+
   // -- Append ---------------------------------------------------------------
 
   /**
