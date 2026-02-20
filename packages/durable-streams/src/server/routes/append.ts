@@ -234,8 +234,6 @@ export async function handleAppend(
 
   const { message, producerResult, streamClosed } = result
 
-  console.log(`[append] ${path} result: offset=${message?.offset ?? 'null'} closed=${streamClosed ?? false} producer=${producerResult?.status ?? 'none'}`)
-
   // Handle append to closed stream
   if (streamClosed && !message) {
     if (producerResult?.status === `duplicate`) {

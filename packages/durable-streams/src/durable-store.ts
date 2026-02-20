@@ -245,10 +245,6 @@ export class DurableStore implements IStreamStore {
       timestamp: m.timestamp,
     }))
 
-    if (messages.length > 0) {
-      console.log(`[DurableStore.read] ${path}: ${messages.length} messages, offsets: [${messages.map(m => m.offset).join(`, `)}]`)
-    }
-
     return { messages, upToDate: true }
   }
 

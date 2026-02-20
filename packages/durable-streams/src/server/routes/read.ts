@@ -212,10 +212,6 @@ export async function handleRead(
 
   // Read current messages
   let { messages, upToDate } = ctx.store.read(path, effectiveOffset)
-  if (messages.length > 0) {
-    console.log(`[READ] ${path}: ${messages.length} messages, offsets: [${messages.map(m => m.offset).join(`, `)}]`)
-  }
-
   // Long-poll wait logic
   const clientIsCaughtUp =
     (effectiveOffset && effectiveOffset === streamOffset) ||
@@ -421,9 +417,6 @@ function handleSSE(
       }
 
       const emitMessages = (messages: Array<{ data: Uint8Array; offset: string }>) => {
-        if (messages.length > 0) {
-          console.log(`[SSE] Emitting ${messages.length} messages for ${path}, offsets: [${messages.map(m => m.offset).join(`, `)}]`)
-        }
         for (const message of messages) {
           const dataPayload = formatMessagePayload(message.data, useBase64, isJsonStream)
           controller.enqueue(encodeSSEFrame(SSE_EVENT_DATA_PREFIX, dataPayload))

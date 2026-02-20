@@ -815,6 +815,8 @@ function createConsumer(
   /** Schedule a reconnect with exponential backoff on failure */
   const scheduleReconnect = (attempt = 0): void => {
     if (explicitlyClosed || abortController.signal.aborted) return
+    // Invalidate so any future start() call creates a fresh connection
+    consumerPromise = null
     const delay = Math.min(500 * Math.pow(2, attempt), 5000)
     setTimeout(async () => {
       if (explicitlyClosed || abortController.signal.aborted) return

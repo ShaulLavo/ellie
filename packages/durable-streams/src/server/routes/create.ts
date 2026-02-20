@@ -68,8 +68,6 @@ export async function handleCreate(
   const body = new Uint8Array(await request.arrayBuffer())
   const isNew = !ctx.store.has(path)
 
-  if (isNew) console.log(`[create] ${path} contentType=${contentType}`)
-
   try {
     ctx.store.create(path, {
       contentType,
