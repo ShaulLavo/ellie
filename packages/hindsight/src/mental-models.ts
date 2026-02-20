@@ -163,10 +163,16 @@ export async function updateMentalModel(
   const row = hdb.db
     .select()
     .from(hdb.schema.mentalModels)
-    .where(eq(hdb.schema.mentalModels.id, id))
+    .where(
+      and(
+        eq(hdb.schema.mentalModels.bankId, bankId),
+        eq(hdb.schema.mentalModels.id, id),
+      ),
+    )
     .get()
 
-  return rowToMentalModel(row!)
+  if (!row) throw new Error(`Mental model ${id} not found in bank ${bankId}`)
+  return rowToMentalModel(row)
 }
 
 export function deleteMentalModel(

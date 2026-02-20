@@ -141,18 +141,19 @@ export async function consolidate(
           result.observationsUpdated++
         }
       }
+
+      // 4. Mark memory as consolidated only on success
+      hdb.db
+        .update(schema.memoryUnits)
+        .set({ consolidatedAt: now })
+        .where(eq(schema.memoryUnits.id, memory.id))
+        .run()
+
+      result.memoriesProcessed++
     } catch {
-      // Swallow per-memory errors — don't block the whole batch
+      // Swallow per-memory errors — don't block the whole batch.
+      // Memory is NOT marked consolidated so it will be retried next run.
     }
-
-    // 4. Mark memory as consolidated (even on error, to prevent re-processing)
-    hdb.db
-      .update(schema.memoryUnits)
-      .set({ consolidatedAt: now })
-      .where(eq(schema.memoryUnits.id, memory.id))
-      .run()
-
-    result.memoriesProcessed++
   }
 
   // 5. Trigger mental model refreshes
