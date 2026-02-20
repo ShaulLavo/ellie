@@ -1,4 +1,9 @@
 export { Hindsight } from "./hindsight"
+export {
+  DEFAULT_EMBED_MODEL,
+  DEFAULT_RERANK_MODEL,
+  DEFAULT_EMBED_DIMS,
+} from "./default-models"
 
 export type {
   HindsightConfig,

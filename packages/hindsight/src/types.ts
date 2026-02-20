@@ -183,17 +183,34 @@ export interface HindsightConfig {
   dbPath: string
   /** TanStack AI text adapter for LLM calls. Default: anthropicText("claude-haiku-4-5") */
   adapter?: AnyTextAdapter
-  /** Embedding function: text → float array (user-provided) */
-  embed: EmbedFunction
-  /** Optional embedding batch function for high-throughput ingestion */
+  /**
+   * Embedding function: text → float array (user-provided).
+   *
+   * Optional. If omitted, Hindsight uses the built-in TEI default targeting
+   * BAAI/bge-small-en-v1.5.
+   */
+  embed?: EmbedFunction
+  /**
+   * Optional embedding batch function for high-throughput ingestion.
+   *
+   * If omitted while using built-in defaults, Hindsight uses the TEI batch endpoint.
+   */
   embedBatch?: EmbedBatchFunction
-  /** Embedding dimensions (must match embed output). Default: 1536 */
+  /**
+   * Embedding dimensions (must match embed output).
+   * Default: 1536 for custom embed functions, 384 for built-in TEI defaults.
+   */
   embeddingDimensions?: number
   /** Enable automatic consolidation after retain. Default: true */
   enableConsolidation?: boolean
   /** Default bank config applied to all banks unless overridden per-bank */
   defaults?: BankConfig
-  /** Optional cross-encoder reranking function for improved recall precision */
+  /**
+   * Optional cross-encoder reranking function for improved recall precision.
+   *
+   * If omitted while using built-in defaults, Hindsight uses the built-in TEI
+   * reranker targeting cross-encoder/ms-marco-MiniLM-L-6-v2.
+   */
   rerank?: RerankFunction
   /** Called after each operation completes with timing + metadata */
   onTrace?: TraceCallback

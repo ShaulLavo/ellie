@@ -4,6 +4,7 @@ import { anthropicText } from "@tanstack/ai-anthropic"
 import type { AnyTextAdapter } from "@tanstack/ai"
 import { chat, streamToText } from "@ellie/ai"
 import { createHindsightDB, type HindsightDatabase } from "./db"
+import { resolveModelRuntime } from "./default-models"
 import { EmbeddingStore } from "./embedding"
 import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain"
 import { recall as recallImpl } from "./recall"
@@ -119,33 +120,34 @@ export class Hindsight {
   private readonly cancelledOperations = new Set<string>()
 
   constructor(config: HindsightConfig) {
-    const dims = config.embeddingDimensions ?? 1536
+    const runtime = resolveModelRuntime(config)
+    const dims = runtime.embeddingDimensions
 
     this.hdb = createHindsightDB(config.dbPath, dims)
     this.adapter = config.adapter ?? anthropicText("claude-haiku-4-5")
-    this.rerank = config.rerank
+    this.rerank = runtime.rerank
     this.instanceDefaults = config.defaults
     this.onTrace = config.onTrace
     this.extensions = config.extensions
 
     this.memoryVec = new EmbeddingStore(
       this.hdb.sqlite,
-      config.embed,
-      config.embedBatch,
+      runtime.embed,
+      runtime.embedBatch,
       dims,
       "hs_memory_vec",
     )
     this.entityVec = new EmbeddingStore(
       this.hdb.sqlite,
-      config.embed,
-      config.embedBatch,
+      runtime.embed,
+      runtime.embedBatch,
       dims,
       "hs_entity_vec",
     )
     this.modelVec = new EmbeddingStore(
       this.hdb.sqlite,
-      config.embed,
-      config.embedBatch,
+      runtime.embed,
+      runtime.embedBatch,
       dims,
       "hs_mental_model_vec",
     )
