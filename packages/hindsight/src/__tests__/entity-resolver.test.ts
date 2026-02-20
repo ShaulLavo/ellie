@@ -160,12 +160,12 @@ describe("resolveEntity", () => {
   it("boosts score with temporal proximity", () => {
     const recentEntity = makeEntity({
       id: "e1",
-      name: "Pet", // partial match
+      name: "Pete", // close match to "Peter"
       lastUpdated: now, // just now
     })
     const oldEntity = makeEntity({
       id: "e2",
-      name: "Pet", // same partial match
+      name: "Pete", // same close match
       lastUpdated: now - 14 * 86_400_000, // 14 days ago, beyond 7-day window
     })
 

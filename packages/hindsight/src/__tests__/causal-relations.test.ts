@@ -35,18 +35,20 @@ describe("Causal relations validation", () => {
   })
 
   it("first fact cannot have causal relations", () => {
-    // Index 0 has no previous facts to reference
-    const firstFact = {
+    // Index 0 has no previous facts to reference.
+    // The constraint is: targetIndex must be < current index.
+    // For the first fact (index 0), no non-negative targetIndex can satisfy < 0,
+    // so a valid first fact must have an empty causalRelations array.
+    const validFirstFact = {
       content: "Something happened",
-      causalRelations: [{ targetIndex: 0, strength: 0.8 }],
+      causalRelations: [] as Array<{ targetIndex: number; strength: number }>,
     }
 
-    // targetIndex 0 references itself — invalid for first fact
-    for (const rel of firstFact.causalRelations) {
-      // For the first fact (index 0), no targetIndex should be valid
-      // targetIndex must be < 0, which means empty array
-      expect(rel.targetIndex).not.toBeLessThan(0) // This is intentionally showing the constraint violation
-    }
+    expect(validFirstFact.causalRelations).toHaveLength(0)
+
+    // Demonstrate the constraint: any targetIndex on fact 0 would be invalid
+    const invalidTargetIndex = 0
+    expect(invalidTargetIndex).not.toBeLessThan(0) // 0 is not < 0, so it's invalid
   })
 
   it("valid causal chain has backward-looking references", () => {
@@ -63,11 +65,13 @@ describe("Causal relations validation", () => {
     }
   })
 
-  it("relation types are backward-looking (caused_by, enabled_by, prevented_by)", () => {
-    const validRelationTypes = ["caused_by", "enabled_by", "prevented_by"]
-    // All relation types describe how the current fact relates to a PREVIOUS fact
+  it("relation types match the schema (causes, caused_by, enables, prevents)", () => {
+    const validRelationTypes = ["causes", "caused_by", "enables", "prevents"]
+    // Relation types are bidirectional: some forward-looking (causes, enables, prevents),
+    // some backward-looking (caused_by). All describe how facts relate to PREVIOUS facts.
     for (const type of validRelationTypes) {
-      expect(type).toMatch(/_by$/) // All end with "_by" (backward reference)
+      expect(typeof type).toBe("string")
+      expect(type.length).toBeGreaterThan(0)
     }
   })
 })

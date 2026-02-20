@@ -26,7 +26,7 @@ describe("Retrieval methods", () => {
   let t: TestHindsight
   let bankId: string
 
-  beforeEach(async () => {
+  beforeEach(() => {
     t = createTestHindsight()
     bankId = createTestBank(t.hs)
   })

@@ -42,16 +42,15 @@ describe("recall", () => {
 
   it("returns scored memories", async () => {
     const result = await t.hs.recall(bankId, "hiking")
-    if (result.memories.length > 0) {
-      const first = result.memories[0]!
-      expect(first.memory).toBeDefined()
-      expect(first.score).toBeDefined()
-      expect(typeof first.score).toBe("number")
-      expect(first.sources).toBeDefined()
-      expect(Array.isArray(first.sources)).toBe(true)
-      expect(first.entities).toBeDefined()
-      expect(Array.isArray(first.entities)).toBe(true)
-    }
+    expect(result.memories.length).toBeGreaterThan(0)
+    const first = result.memories[0]!
+    expect(first.memory).toBeDefined()
+    expect(first.score).toBeDefined()
+    expect(typeof first.score).toBe("number")
+    expect(first.sources).toBeDefined()
+    expect(Array.isArray(first.sources)).toBe(true)
+    expect(first.entities).toBeDefined()
+    expect(Array.isArray(first.entities)).toBe(true)
   })
 
   it("returns memories sorted by score descending", async () => {

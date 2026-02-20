@@ -436,7 +436,7 @@ export interface ObservationSearchResult {
 export interface RawFactSearchResult {
   id: string
   content: string
-  factType: string
+  factType: FactType
   entities: string[]
   score: number
   occurredAt: number | null

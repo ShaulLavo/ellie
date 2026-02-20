@@ -6,7 +6,7 @@
  * TDD targets for functions not yet implemented or not yet exported.
  */
 
-import { describe, it, expect } from "bun:test"
+import { describe, it } from "bun:test"
 
 // Note: These test internal functions from reflect.ts. Since the TypeScript
 // implementation uses TanStack AI's chat() which handles tool calling internally,

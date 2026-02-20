@@ -62,10 +62,9 @@ describe("reflect", () => {
 
       // The reflect function saves the answer as an observation when
       // saveObservations=true (default). This tests real code in reflect.ts.
-      if (result.answer.trim()) {
-        expect(result.observations).toHaveLength(1)
-        expect(result.observations[0]).toBe(result.answer)
-      }
+      expect(result.answer.trim()).not.toBe("")
+      expect(result.observations).toHaveLength(1)
+      expect(result.observations[0]).toBe(result.answer)
     })
 
     it("skips saving when saveObservations=false", async () => {

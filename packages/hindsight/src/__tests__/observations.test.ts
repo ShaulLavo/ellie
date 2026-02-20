@@ -72,14 +72,12 @@ describe("Entity extraction on retain", () => {
     })
 
     // Entity type should default to something reasonable
-    if (result.entities.length > 0) {
-      const google = result.entities.find((e) => e.name === "Google")
-      if (google) {
-        expect(["person", "organization", "place", "concept", "other"]).toContain(
-          google.entityType,
-        )
-      }
-    }
+    expect(result.entities.length).toBeGreaterThan(0)
+    const google = result.entities.find((e) => e.name === "Google")
+    expect(google).toBeDefined()
+    expect(["person", "organization", "place", "concept", "other"]).toContain(
+      google!.entityType,
+    )
   })
 
   it("creates junction entries linking memories to entities", async () => {
@@ -92,10 +90,9 @@ describe("Entity extraction on retain", () => {
 
     // The memory should have entities linked to it
     const recallResult = await t.hs.recall(bankId, "Alice Bob conference")
-    if (recallResult.memories.length > 0) {
-      const memory = recallResult.memories[0]!
-      expect(memory.entities.length).toBeGreaterThanOrEqual(1)
-    }
+    expect(recallResult.memories.length).toBeGreaterThan(0)
+    const memory = recallResult.memories[0]!
+    expect(memory.entities.length).toBeGreaterThanOrEqual(1)
   })
 })
 

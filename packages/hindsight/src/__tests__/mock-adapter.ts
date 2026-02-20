@@ -135,6 +135,7 @@ export function createMockAdapter(): MockAdapter {
 
     // ── AnyTextAdapter.structuredOutput ──
     structuredOutput(_options: unknown) {
+      calls.push({ messages: [], options: _options })
       const response =
         responseQueue.length > 0 ? responseQueue.shift()! : nextResponse
 
