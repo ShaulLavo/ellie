@@ -4,21 +4,19 @@
   "scripts": {
     "dev": "bun run --hot src/server.ts",
     "test": "bun test",
-    "test:conformance": "bun test test/conformance.test.ts",
     "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@ellie/db": "workspace:*",
+    "@ellie/env": "workspace:*",
     "@ellie/durable-streams": "workspace:*",
-    "@ellie/rpc-router": "workspace:*",
-    "@ellie/streams-rpc": "workspace:*",
+    "@ellie/router": "workspace:*",
+    "@ellie/rpc": "workspace:*",
     "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "bun-types": "latest",
-    "@durable-streams/server-conformance-tests": "0.2.1",
-    "@durable-streams/client": "0.2.1"
+    "bun-types": "latest"
   },
   "module": "src/server.ts"
 }

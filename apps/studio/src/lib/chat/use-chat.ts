@@ -1,6 +1,6 @@
 import { useCallback } from "react"
-import { useStream } from "@ellie/streams-rpc/react"
-import type { InferSchema } from "@ellie/streams-rpc"
+import { useStream } from "@ellie/rpc/react"
+import type { InferSchema } from "@ellie/rpc"
 import { rpc, type AppRouter } from "../rpc"
 
 // ============================================================================
@@ -25,7 +25,9 @@ export function useChat(chatId: string) {
     error,
     insert,
     clear,
-  } = useStream(rpc.chat.messages, { chatId })
+  } = useStream(rpc.chat.messages, { chatId }, {
+    orderBy: { field: `createdAt`, direction: `asc` },
+  })
 
   const sendMessage = useCallback(
     async (content: string, role: Message[`role`] = `user`) => {

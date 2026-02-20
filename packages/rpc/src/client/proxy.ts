@@ -43,11 +43,12 @@ export interface RpcClientOptions {
  *
  * @example
  * ```typescript
- * import { appRouter, type AppRouter } from "@ellie/rpc-router"
- * import { createRpcClient } from "@ellie/streams-rpc/client"
+ * import { appRouter, type AppRouter } from "@ellie/router"
+ * import { createRpcClient } from "@ellie/rpc/client"
+ * import { env } from "@ellie/env/client"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, {
- *   baseUrl: process.env.API_BASE_URL ?? ``,
+ *   baseUrl: env.API_BASE_URL,
  * })
  *
  * // One-shot read
@@ -92,7 +93,7 @@ export function createRpcClient<TRouter extends RouterDef>(
             // Stream-level clear: rpc.chat.clear({ chatId })
             if (collectionName === `clear`) {
               return (params?: Record<string, string>) =>
-                manager.deleteStream(streamDef, params ?? {})
+                manager.clearStream(streamDef, params ?? {})
             }
 
             const colName = collectionName as string
@@ -168,7 +169,7 @@ export function createRpcClient<TRouter extends RouterDef>(
               },
 
               clear(params?: Record<string, string>) {
-                return manager.deleteStream(streamDef, params ?? {})
+                return manager.clearStream(streamDef, params ?? {})
               },
             }
           },

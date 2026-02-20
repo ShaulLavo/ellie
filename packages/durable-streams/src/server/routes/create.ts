@@ -1,13 +1,11 @@
 import { formatInternalOffset } from "../../store"
 import { StoreError } from "../../errors"
-import { SoftDeletedError } from "@ellie/db"
 import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
   STREAM_TTL_HEADER,
   STREAM_EXPIRES_AT_HEADER,
   STREAM_CLOSED_HEADER,
-  STREAM_RESURRECT_HEADER,
 } from "../lib/constants"
 
 export async function handleCreate(
@@ -31,8 +29,6 @@ export async function handleCreate(
   )
   const closedHeader = request.headers.get(STREAM_CLOSED_HEADER.toLowerCase())
   const createClosed = closedHeader === `true`
-  const resurrectHeader = request.headers.get(STREAM_RESURRECT_HEADER.toLowerCase())
-  const resurrect = resurrectHeader === `true`
 
   if (ttlHeader && expiresAtHeader) {
     return new Response(`Cannot specify both Stream-TTL and Stream-Expires-At`, {
@@ -72,8 +68,6 @@ export async function handleCreate(
   const body = new Uint8Array(await request.arrayBuffer())
   const isNew = !ctx.store.has(path)
 
-  if (isNew) console.log(`[create] ${path} contentType=${contentType}`)
-
   try {
     ctx.store.create(path, {
       contentType,
@@ -81,19 +75,12 @@ export async function handleCreate(
       expiresAt: expiresAtHeader ?? undefined,
       initialData: body.length > 0 ? body : undefined,
       closed: createClosed,
-      resurrect,
     })
   } catch (err) {
     if (err instanceof StoreError && err.code === `already_exists`) {
       console.error(`[create] ${path} conflict: already exists with different config`)
       return new Response(err.message, {
         status: 409,
-        headers: { "content-type": `text/plain` },
-      })
-    }
-    if (err instanceof SoftDeletedError) {
-      return new Response(err.message, {
-        status: 410,
         headers: { "content-type": `text/plain` },
       })
     }

@@ -212,14 +212,11 @@ export class StreamManager {
       // Issue HTTP DELETE regardless of ref count
       await entry.db.stream.delete()
 
-      if (entry.refs > 0) {
-        // Active subscribers exist — defer close until last unsubscribe
-        entry.pendingDelete = true
-      } else {
-        // No subscribers — close and evict immediately
-        entry.db.close()
-        this.#cache.delete(resolvedPath)
-      }
+      // Always close and evict immediately — the old consumer's long-poll
+      // will fail once the stream is deleted. The next #getOrCreate call
+      // (from re-render) will create a fresh StreamDB.
+      entry.db.close()
+      this.#cache.delete(resolvedPath)
     } else {
       // No cached entry — use static DurableStream.delete() for a one-shot delete
       const transport = new FetchStreamTransport({
@@ -231,6 +228,49 @@ export class StreamManager {
         transport,
       })
     }
+  }
+
+  /**
+   * Clear a stream: soft-delete the old log on the server, then immediately
+   * re-create a fresh one. All connected clients (including the caller) detect
+   * the closure via their consumer and auto-reconnect to the new incarnation.
+   */
+  async clearStream(
+    streamDef: StreamDef,
+    params: Record<string, string>
+  ): Promise<void> {
+    const resolvedPath = resolvePath(streamDef.path, params)
+    const entry = this.#cache.get(resolvedPath)
+
+    // Issue HTTP DELETE — the server soft-deletes the stream and notifies
+    // all subscribers (including ours) via streamClosed signal.
+    if (entry) {
+      await entry.db.stream.delete()
+    } else {
+      const transport = new FetchStreamTransport({
+        baseUrl: this.#baseUrl,
+        streamId: resolvedPath.replace(/^\//, ``),
+      })
+      await DurableStream.delete({
+        url: `${this.#baseUrl}${resolvedPath}`,
+        transport,
+      })
+    }
+
+    // Re-create the stream on the server so reconnecting consumers find it.
+    // We use a one-shot create (not #getOrCreate) to avoid replacing the
+    // cached entry — the existing StreamDB's consumer will reconnect itself.
+    const transport = new FetchStreamTransport({
+      baseUrl: this.#baseUrl,
+      streamId: resolvedPath.replace(/^\//, ``),
+    })
+    await new DurableStream({ url: `${this.#baseUrl}${resolvedPath}`, transport })
+      .create({ contentType: `application/json` })
+      .catch((err: unknown) => {
+        const isConflict =
+          err instanceof DurableStreamError && err.code === `CONFLICT_EXISTS`
+        if (!isConflict) throw err
+      })
   }
 
   /**

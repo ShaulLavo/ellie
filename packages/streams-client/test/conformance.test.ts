@@ -16,18 +16,6 @@ describe(`@ellie/streams-client conformance`, () => {
       testTimeout: 30000,
     })
 
-    // Log failures for debugging
-    for (const result of summary.results) {
-      if (!result.passed && !result.skipped) {
-        console.error(`FAIL: ${result.suite} > ${result.test}`)
-        if (result.error) console.error(`  ${result.error}`)
-      }
-    }
-
-    console.log(
-      `\nConformance: ${summary.passed}/${summary.total} passed, ${summary.failed} failed, ${summary.skipped} skipped`
-    )
-
     expect(summary.failed).toBe(0)
   }, 120_000)
 })

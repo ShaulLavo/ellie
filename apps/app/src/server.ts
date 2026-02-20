@@ -2,10 +2,11 @@ import { resolve } from "node:path";
 import { createServerContext } from "@ellie/durable-streams/server";
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
+import { env } from "@ellie/env/server";
 import { handleStreamRequest } from "./routes/streams";
 
-const port = new URL(Bun.env.API_BASE_URL ?? `http://localhost:3000`).port || 80;
-const DATA_DIR = Bun.env.DATA_DIR ?? "./data";
+const port = new URL(env.API_BASE_URL).port || 80;
+const { DATA_DIR } = env;
 
 console.log(`[server] DATA_DIR=${DATA_DIR}`);
 

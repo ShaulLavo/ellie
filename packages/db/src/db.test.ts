@@ -499,56 +499,35 @@ describe("JsonlEngine", () => {
 
   // ── Resurrect ─────────────────────────────────────────────────────────
 
-  describe("resurrect", () => {
-    it("throws when creating at soft-deleted path without resurrect", () => {
-      store.createStream("/revive")
-      store.deleteStream("/revive")
-
-      expect(() => store.createStream("/revive")).toThrow("Stream was deleted")
-    })
-
-    it("throws SoftDeletedError with stream path and timestamp", () => {
-      store.createStream("/revive-err")
-      store.deleteStream("/revive-err")
-
-      try {
-        store.createStream("/revive-err")
-        throw new Error("should have thrown")
-      } catch (e: any) {
-        expect(e.code).toBe("soft_deleted")
-        expect(e.streamPath).toBe("/revive-err")
-        expect(typeof e.deletedAt).toBe("number")
-      }
-    })
-
-    it("resurrects a soft-deleted stream with resurrect: true", () => {
+  describe("create after delete", () => {
+    it("auto-creates a fresh stream at a soft-deleted path", () => {
       store.createStream("/revive-ok")
       store.append("/revive-ok", new TextEncoder().encode('{"old":true}'))
       store.deleteStream("/revive-ok")
 
-      const resurrected = store.createStream("/revive-ok", { resurrect: true })
-      expect(resurrected.path).toBe("/revive-ok")
-      expect(resurrected.closed).toBe(false)
-      expect(resurrected.deletedAt).toBeNull()
+      const fresh = store.createStream("/revive-ok")
+      expect(fresh.path).toBe("/revive-ok")
+      expect(fresh.closed).toBe(false)
+      expect(fresh.deletedAt).toBeNull()
     })
 
-    it("resurrected stream starts fresh — old messages not readable", () => {
+    it("fresh stream starts empty — old messages not readable", () => {
       store.createStream("/revive-fresh")
       store.append("/revive-fresh", new TextEncoder().encode('{"old":1}'))
       store.append("/revive-fresh", new TextEncoder().encode('{"old":2}'))
       store.deleteStream("/revive-fresh")
 
-      store.createStream("/revive-fresh", { resurrect: true })
+      store.createStream("/revive-fresh")
       const messages = store.read("/revive-fresh")
       expect(messages).toHaveLength(0)
     })
 
-    it("resurrected stream can append and read new messages", () => {
+    it("fresh stream can append and read new messages", () => {
       store.createStream("/revive-append")
       store.append("/revive-append", new TextEncoder().encode('{"old":true}'))
       store.deleteStream("/revive-append")
 
-      store.createStream("/revive-append", { resurrect: true })
+      store.createStream("/revive-append")
       store.append("/revive-append", new TextEncoder().encode('{"new":true}'))
 
       const messages = store.read("/revive-append")
@@ -556,13 +535,13 @@ describe("JsonlEngine", () => {
       expect(new TextDecoder().decode(messages[0]!.data)).toBe('{"new":true}')
     })
 
-    it("resurrected stream bumps readSeq so old offsets are unreachable", () => {
+    it("fresh stream bumps readSeq so old offsets are unreachable", () => {
       store.createStream("/revive-seq")
       store.append("/revive-seq", new TextEncoder().encode('{"v":1}'))
       const oldOffset = store.getCurrentOffset("/revive-seq")!
 
       store.deleteStream("/revive-seq")
-      store.createStream("/revive-seq", { resurrect: true })
+      store.createStream("/revive-seq")
 
       store.append("/revive-seq", new TextEncoder().encode('{"v":2}'))
       const newOffset = store.getCurrentOffset("/revive-seq")!
@@ -571,7 +550,7 @@ describe("JsonlEngine", () => {
       expect(newOffset > oldOffset).toBe(true)
     })
 
-    it("JSONL file is preserved through resurrect", () => {
+    it("JSONL file is preserved through delete + create", () => {
       store.createStream("/revive-file")
       store.append("/revive-file", new TextEncoder().encode('{"before":true}'))
 
@@ -581,7 +560,7 @@ describe("JsonlEngine", () => {
       store.deleteStream("/revive-file")
       expect(existsSync(filePath)).toBe(true)
 
-      store.createStream("/revive-file", { resurrect: true })
+      store.createStream("/revive-file")
       expect(existsSync(filePath)).toBe(true)
 
       // New data appends to same file

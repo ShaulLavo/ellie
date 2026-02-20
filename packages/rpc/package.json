@@ -1,5 +1,5 @@
 {
-  "name": "@ellie/streams-rpc",
+  "name": "@ellie/rpc",
   "version": "0.1.0",
   "private": true,
   "type": "module",
