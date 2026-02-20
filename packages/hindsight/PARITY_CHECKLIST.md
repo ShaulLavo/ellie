@@ -1,49 +1,57 @@
-# Hindsight Parity Checklist (PR #35)
+# Hindsight Parity Checklist
 
-Source-of-truth references:
-- `/Users/shaul/Desktop/ai/memory/hindsight/hindsight-api/hindsight_api/engine/search/link_expansion_retrieval.py`
-- `/Users/shaul/Desktop/ai/memory/hindsight/hindsight-api/hindsight_api/engine/retain/orchestrator.py`
-- `/Users/shaul/Desktop/ai/memory/hindsight/hindsight-api/hindsight_api/engine/memory_engine.py`
+Date: 2026-02-20  
+Source of truth: `/Users/shaul/Desktop/ai/memory/hindsight/hindsight-api/hindsight_api/engine`
 
-## 1) Graph retrieval parity
-- [x] Fallback expansion over `semantic|temporal|entity` links with half-weight scoring.
-- [x] Semantic + temporal seed union behavior.
-- [x] Directional causal traversal parity.
-- [x] Tests in `src/__tests__/recall-methods.test.ts` for fallback + temporal seed merge + entity frequency filter behavior.
+## Core parity targets
 
-## 2) Retain link-creation parity
-- [x] Temporal link creation in retain pipeline.
-- [x] Preserve entity/causal/semantic link creation.
-- [x] Add ordering/temporal regression tests in `src/__tests__/retain-ordering.test.ts`.
+- [x] Graph retrieval parity (link expansion + seed union + directional causal + fallback scoring)
+- [x] Batch retain parity (rich batch items, 600K auto-chunking, chonkiejs, batch embedding, single transaction)
+- [x] Consolidation merge action parity (`create` / `update` / `merge` / `skip`)
+- [x] Async operation subsystem parity (`hs_async_operations`, submit/list/status/cancel)
 
-## 3) Recall API/behavior parity
-- [x] Token budget path (`maxTokens`).
-- [x] Optional payloads (`includeEntities`, `includeChunks`).
-- [x] Chunk payload should prefer chunk table context when available.
-- [x] Apply deterministic token budget for entity payload (`maxEntityTokens`).
+## API surface parity (`memory_engine` vs TS `Hindsight`)
 
-## 4) Reflect tool parity
-- [x] Add `expand` tool path for chunk/document context expansion.
-- [x] Wire expand outputs to retained chunk/document metadata.
+- [x] `listMemoryUnits`
+- [x] `getMemoryUnit`
+- [x] `deleteMemoryUnit`
+- [x] `clearObservations`
+- [x] `listEntities`
+- [x] `getEntityState`
+- [x] `getEntity`
+- [x] `listTags` (wildcard + pagination)
+- [x] `getBankStats`
+- [x] `updateBank`
+- [x] `mergeBankMission`
 
-## 5) Batch retain input-surface parity
-- [x] Add rich item overload (`content/context/event_date/document_id/tags/metadata`) while keeping `string[]` path.
-- [x] Keep chonkie chunking and shared retain guarantees.
+## Recall parity
 
-## 6) Documents/chunks subsystem parity
-- [x] Schema: documents/chunks + memory unit references.
-- [x] Retain persists document/chunk metadata.
-- [x] Recall/expand can return chunk context.
+- [x] Combined scoring model parity (`cross-encoder` + normalized `rrf` + temporal + recency)
+- [x] Token-budget retrieval mode (`maxTokens`)
+- [x] Optional recall payloads (`includeEntities`, `includeChunks`)
+- [x] Recall trace payload with retrieval timings + ranking internals
 
-## 7) Dedup parity
-- [x] Add temporal-windowed dedup semantics (similarity + temporal proximity).
+## Temporal query analyzer parity
 
-## 8) Consolidation context parity
-- [x] Enrich consolidation prompt context with source temporal metadata and richer related-observation details.
+- [x] Month/year range parsing
+- [x] Day-of-week parsing (e.g. `last saturday`)
+- [x] Weekend parsing (`last weekend`)
+- [x] Fuzzy relative phrases (`couple/few ... ago`)
+- [x] Multilingual temporal keywords baseline
 
-## 9) Operational/admin API parity (scoped)
-- [x] Expose document/chunk/graph inspection helpers on TS API surface for this PR scope.
+## Reflect parity
 
-## 10) Test closure + hardening
-- [x] Convert selected parity `it.todo` cases in `consolidation.test.ts`, `retain.test.ts`, `recall.test.ts` that are directly affected by this implementation pass.
-- [ ] Final gate: `bun run check-types` + full `bun test` in `packages/hindsight`.
+- [x] Expand-style context drill-down path (chunk/document)
+- [x] Tool-path hardening (`recall` alias + robust expand arg normalization)
+- [x] Done-answer leakage cleanup
+- [x] Optional structured output extraction (`responseSchema`)
+- [x] Reflect tool-call trace payload
+
+## Extensions/auth hooks parity
+
+- [x] Added extension hooks in config (`resolveTenantId`, `authorize`, `validate`, `onComplete`)
+- [x] Wired hooks through core ops + async submit ops
+
+## Operational/admin API tests
+
+- [ ] Keep admin-api tests as TODO (per current PR scope)

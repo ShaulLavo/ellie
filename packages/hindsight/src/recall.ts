@@ -10,6 +10,10 @@ import type {
   RerankFunction,
   RecallEntityState,
   RecallChunk,
+  RecallTrace,
+  RecallTraceCandidate,
+  RecallTraceMethodResult,
+  RecallTraceMetric,
 } from "./types"
 import type { RetrievalHit } from "./retrieval/semantic"
 import { searchSemantic } from "./retrieval/semantic"
@@ -17,21 +21,21 @@ import { searchFulltext } from "./retrieval/fulltext"
 import { searchGraph } from "./retrieval/graph"
 import { searchTemporal } from "./retrieval/temporal"
 import { reciprocalRankFusion } from "./fusion"
-import { rerankCandidates } from "./rerank"
 import { rowToMemoryUnit, rowToEntity } from "./retain"
 import { extractTemporalRange } from "./temporal"
 
+interface TimedHits {
+  hits: RetrievalHit[]
+  durationMs: number
+}
+
+interface RankedCandidate extends RecallTraceCandidate {
+  rawCrossEncoderScore: number
+}
+
 /**
- * Multi-strategy retrieval with Reciprocal Rank Fusion.
- *
- * Runs up to 4 retrieval strategies in parallel:
- * 1. Semantic (sqlite-vec KNN)
- * 2. Fulltext (FTS5 BM25)
- * 3. Graph (link expansion: entity + causal + observation traversal)
- * 4. Temporal (time-range filter)
- *
- * Results are merged via RRF, hydrated with full memory + entity data,
- * then post-filtered by tags, confidence, factType, and entity names.
+ * Multi-strategy retrieval with combined scoring parity:
+ * combined = 0.6 * crossEncoder + 0.2 * normalizedRrf + 0.1 * temporal + 0.1 * recency
  */
 export async function recall(
   hdb: HindsightDatabase,
@@ -41,6 +45,8 @@ export async function recall(
   options: RecallOptions = {},
   rerank?: RerankFunction,
 ): Promise<RecallResult> {
+  const startedAt = Date.now()
+  const phaseMetrics: RecallTraceMetric[] = []
   const limit = options.limit ?? 10
   const maxTokens = options.maxTokens
   const methods = options.methods ?? [
@@ -49,80 +55,207 @@ export async function recall(
     "graph",
     "temporal",
   ]
-  const candidateLimit = limit * 3
-
-  // Auto-extract temporal range from query if not explicitly provided
+  const methodSet = new Set(methods)
+  const candidateLimit = Math.max(limit * 4, 20)
   const timeRange = options.timeRange ?? extractTemporalRange(query)
 
-  const methodSet = new Set(methods)
-  const semanticPromise = methodSet.has("semantic")
-    ? searchSemantic(hdb, memoryVec, bankId, query, candidateLimit)
-    : Promise.resolve<RetrievalHit[]>([])
-  const fulltextPromise = methodSet.has("fulltext")
+  const retrievalStart = Date.now()
+  const semanticTask = methodSet.has("semantic")
+    ? timedAsync(() =>
+        searchSemantic(hdb, memoryVec, bankId, query, candidateLimit),
+      )
+    : Promise.resolve<TimedHits>({ hits: [], durationMs: 0 })
+  const fulltextTask = methodSet.has("fulltext")
     ? Promise.resolve(
-        searchFulltext(
-          hdb,
-          bankId,
-          query,
-          candidateLimit,
-          options.tags,
-          options.tagsMatch,
+        timedSync(() =>
+          searchFulltext(
+            hdb,
+            bankId,
+            query,
+            candidateLimit,
+            options.tags,
+            options.tagsMatch,
+          ),
         ),
       )
-    : Promise.resolve<RetrievalHit[]>([])
-  const temporalPromise = methodSet.has("temporal")
+    : Promise.resolve<TimedHits>({ hits: [], durationMs: 0 })
+  const temporalTask = methodSet.has("temporal")
     ? Promise.resolve(
-        searchTemporal(
-          hdb,
-          bankId,
-          timeRange,
-          candidateLimit,
-          options.tags,
-          options.tagsMatch,
+        timedSync(() =>
+          searchTemporal(
+            hdb,
+            bankId,
+            timeRange,
+            candidateLimit,
+            options.tags,
+            options.tagsMatch,
+          ),
         ),
       )
-    : Promise.resolve<RetrievalHit[]>([])
+    : Promise.resolve<TimedHits>({ hits: [], durationMs: 0 })
 
-  const [semanticHits, fulltextHits, temporalHits] = await Promise.all([
-    semanticPromise,
-    fulltextPromise,
-    temporalPromise,
+  const [semanticTimed, fulltextTimed, temporalTimed] = await Promise.all([
+    semanticTask,
+    fulltextTask,
+    temporalTask,
   ])
 
-  const graphHits = methodSet.has("graph")
-    ? await searchGraph(hdb, memoryVec, bankId, query, candidateLimit, {
-        factTypes: options.factTypes,
-        tags: options.tags,
-        tagsMatch: options.tagsMatch,
-        temporalSeedMemoryIds: temporalHits.map((hit) => hit.id),
-      })
-    : []
+  const graphTimed = methodSet.has("graph")
+    ? await timedAsync(() =>
+        searchGraph(hdb, memoryVec, bankId, query, candidateLimit, {
+          factTypes: options.factTypes,
+          tags: options.tags,
+          tagsMatch: options.tagsMatch,
+          temporalSeedMemoryIds: temporalTimed.hits.map((hit) => hit.id),
+        }),
+      )
+    : { hits: [], durationMs: 0 }
+
+  phaseMetrics.push({
+    phaseName: "parallel_retrieval",
+    durationMs: Date.now() - retrievalStart,
+    details: {
+      semanticCount: semanticTimed.hits.length,
+      fulltextCount: fulltextTimed.hits.length,
+      graphCount: graphTimed.hits.length,
+      temporalCount: temporalTimed.hits.length,
+    },
+  })
 
   const resultSets: RetrievalHit[][] = []
-  if (methodSet.has("semantic")) resultSets.push(semanticHits)
-  if (methodSet.has("fulltext")) resultSets.push(fulltextHits)
-  if (methodSet.has("graph")) resultSets.push(graphHits)
-  if (methodSet.has("temporal")) resultSets.push(temporalHits)
+  if (methodSet.has("semantic")) resultSets.push(semanticTimed.hits)
+  if (methodSet.has("fulltext")) resultSets.push(fulltextTimed.hits)
+  if (methodSet.has("graph")) resultSets.push(graphTimed.hits)
+  if (methodSet.has("temporal")) resultSets.push(temporalTimed.hits)
 
-  // Merge via Reciprocal Rank Fusion
-  const fused = reciprocalRankFusion(resultSets, limit * 2)
+  const mergeStart = Date.now()
+  const fused = reciprocalRankFusion(resultSets, candidateLimit)
+  phaseMetrics.push({
+    phaseName: "rrf_merge",
+    durationMs: Date.now() - mergeStart,
+    details: { candidatesMerged: fused.length },
+  })
 
-  // Optional: Cross-encoder reranking
-  let ranked = fused
-  if (rerank) {
-    const contentMap = new Map<string, string>()
-    for (const { id } of fused) {
-      const row = hdb.db
-        .select({ id: hdb.schema.memoryUnits.id, content: hdb.schema.memoryUnits.content })
-        .from(hdb.schema.memoryUnits)
-        .where(eq(hdb.schema.memoryUnits.id, id))
-        .get()
-      if (row) contentMap.set(row.id, row.content)
+  if (fused.length === 0) {
+    return {
+      memories: [],
+      query,
+      entities: options.includeEntities ? {} : undefined,
+      chunks: options.includeChunks ? {} : undefined,
+      trace: options.enableTrace
+        ? {
+            startedAt,
+            query,
+            maxTokens: maxTokens ?? null,
+            temporalConstraint: timeRange,
+            retrieval: buildMethodTrace([
+              ["semantic", semanticTimed],
+              ["fulltext", fulltextTimed],
+              ["graph", graphTimed],
+              ["temporal", temporalTimed],
+            ]),
+            phaseMetrics,
+            candidates: [],
+            selectedMemoryIds: [],
+            totalDurationMs: Date.now() - startedAt,
+          }
+        : undefined,
     }
-    ranked = await rerankCandidates(rerank, query, fused, contentMap)
   }
 
-  // Hydrate full memory objects with entities, apply filters
+  const fusedIds = fused.map((candidate) => candidate.id)
+  const memoryRows = hdb.db
+    .select()
+    .from(hdb.schema.memoryUnits)
+    .where(inArray(hdb.schema.memoryUnits.id, fusedIds))
+    .all()
+  const memoryRowById = new Map(memoryRows.map((row) => [row.id, row]))
+
+  const rerankStart = Date.now()
+  const rrfMin = Math.min(...fused.map((candidate) => candidate.score))
+  const rrfMax = Math.max(...fused.map((candidate) => candidate.score))
+  const rrfRange = rrfMax - rrfMin
+
+  let crossEncoderRawScores = fused.map((candidate) => candidate.score)
+  let crossEncoderNormalizedScores = fused.map((candidate) =>
+    normalizeRrf(candidate.score, rrfMin, rrfRange),
+  )
+  if (rerank) {
+    const candidatesWithContent = fused.filter((candidate) => {
+      const row = memoryRowById.get(candidate.id)
+      return typeof row?.content === "string" && row.content.length > 0
+    })
+    if (candidatesWithContent.length > 0) {
+      const docs = candidatesWithContent.map(
+        (candidate) => memoryRowById.get(candidate.id)!.content,
+      )
+      const scores = await rerank(query, docs)
+      if (scores.length !== candidatesWithContent.length) {
+        throw new Error(
+          `Rerank score count mismatch: expected ${candidatesWithContent.length}, got ${scores.length}`,
+        )
+      }
+      const scoreById = new Map<string, number>()
+      for (let i = 0; i < candidatesWithContent.length; i++) {
+        scoreById.set(candidatesWithContent[i]!.id, scores[i]!)
+      }
+      crossEncoderRawScores = fused.map((candidate) => scoreById.get(candidate.id) ?? 0)
+      crossEncoderNormalizedScores = crossEncoderRawScores.map(sigmoid)
+    }
+  }
+
+  const temporalById = new Map(temporalTimed.hits.map((hit) => [hit.id, hit.score]))
+  const now = Date.now()
+  const rankedCandidates: RankedCandidate[] = fused
+    .map((candidate, index) => {
+      const row = memoryRowById.get(candidate.id)
+      if (!row) return null
+
+      const rrfNormalized = normalizeRrf(candidate.score, rrfMin, rrfRange)
+      const temporal = temporalById.get(candidate.id) ?? 0.5
+      const recency = computeRecency(row, now)
+      const crossEncoderScoreNormalized = crossEncoderNormalizedScores[index] ?? 0.5
+      const combinedScore =
+        0.6 * crossEncoderScoreNormalized +
+        0.2 * rrfNormalized +
+        0.1 * temporal +
+        0.1 * recency
+
+      return {
+        id: candidate.id,
+        rank: 0,
+        sources: candidate.sources as RankedCandidate["sources"],
+        rrfScore: candidate.score,
+        rawCrossEncoderScore: crossEncoderRawScores[index] ?? 0,
+        crossEncoderScoreNormalized,
+        rrfNormalized,
+        temporal,
+        recency,
+        combinedScore,
+      } satisfies RankedCandidate
+    })
+    .filter((candidate): candidate is RankedCandidate => candidate != null)
+    .sort((a, b) => b.combinedScore - a.combinedScore)
+
+  rankedCandidates.forEach((candidate, index) => {
+    candidate.rank = index + 1
+  })
+  phaseMetrics.push({
+    phaseName: "combined_scoring",
+    durationMs: Date.now() - rerankStart,
+    details: {
+      candidatesScored: rankedCandidates.length,
+      withReranker: Boolean(rerank),
+      weights: {
+        crossEncoder: 0.6,
+        rrf: 0.2,
+        temporal: 0.1,
+        recency: 0.1,
+      },
+    },
+  })
+
+  const hydrationStart = Date.now()
   const memories: ScoredMemory[] = []
   const entityStates = new Map<string, {
     id: string
@@ -132,18 +265,12 @@ export async function recall(
   }>()
   let usedTokens = 0
 
-  for (const { id, score, sources } of ranked) {
+  for (const candidate of rankedCandidates) {
     if (memories.length >= limit) break
 
-    const row = hdb.db
-      .select()
-      .from(hdb.schema.memoryUnits)
-      .where(eq(hdb.schema.memoryUnits.id, id))
-      .get()
-
+    const row = memoryRowById.get(candidate.id)
     if (!row) continue
 
-    // Apply filters
     if (
       options.minConfidence != null &&
       row.confidence < options.minConfidence
@@ -157,44 +284,32 @@ export async function recall(
       continue
     }
 
-    // Tag filter (post-filter for semantic + graph; fulltext + temporal pre-filter too)
     if (options.tags && options.tags.length > 0) {
-      let memoryTags: string[] = []
-      try {
-        memoryTags = row.tags ? JSON.parse(row.tags) : []
-      } catch {
-        // malformed tags — treat as untagged
-      }
+      const memoryTags = parseStringArray(row.tags)
       if (!matchesTags(memoryTags, options.tags, options.tagsMatch ?? "any")) {
         continue
       }
     }
 
-    // Fetch associated entities
     const junctions = hdb.db
       .select()
       .from(hdb.schema.memoryEntities)
-      .where(eq(hdb.schema.memoryEntities.memoryId, id))
+      .where(eq(hdb.schema.memoryEntities.memoryId, candidate.id))
       .all()
 
     const entityRows = junctions
-      .map((j) =>
+      .map((junction) =>
         hdb.db
           .select()
           .from(hdb.schema.entities)
-          .where(eq(hdb.schema.entities.id, j.entityId))
+          .where(eq(hdb.schema.entities.id, junction.entityId))
           .get(),
       )
       .filter(Boolean)
 
-    // Entity name filter
     if (options.entities && options.entities.length > 0) {
-      const entityNames = new Set(
-        entityRows.map((e) => e!.name.toLowerCase()),
-      )
-      const hasMatch = options.entities.some((n) =>
-        entityNames.has(n.toLowerCase()),
-      )
+      const entityNames = new Set(entityRows.map((entityRow) => entityRow!.name.toLowerCase()))
+      const hasMatch = options.entities.some((name) => entityNames.has(name.toLowerCase()))
       if (!hasMatch) continue
     }
 
@@ -206,9 +321,9 @@ export async function recall(
 
     memories.push({
       memory: rowToMemoryUnit(row),
-      score,
-      sources: sources as ScoredMemory["sources"],
-      entities: entityRows.map((e) => rowToEntity(e!)),
+      score: candidate.combinedScore,
+      sources: candidate.sources,
+      entities: entityRows.map((entityRow) => rowToEntity(entityRow!)),
     })
 
     if (options.includeEntities) {
@@ -230,15 +345,43 @@ export async function recall(
     }
   }
 
+  phaseMetrics.push({
+    phaseName: "hydrate_filter",
+    durationMs: Date.now() - hydrationStart,
+    details: {
+      selected: memories.length,
+      tokenBudget: maxTokens ?? null,
+      usedTokens: maxTokens != null ? usedTokens : undefined,
+    },
+  })
+
   const entities = options.includeEntities
     ? buildEntityPayload(entityStates, options.maxEntityTokens)
     : undefined
-
   const chunks = options.includeChunks
     ? buildChunkPayload(hdb, memories, options.maxChunkTokens)
     : undefined
 
-  return { memories, query, entities, chunks }
+  const trace: RecallTrace | undefined = options.enableTrace
+    ? {
+        startedAt,
+        query,
+        maxTokens: maxTokens ?? null,
+        temporalConstraint: timeRange,
+        retrieval: buildMethodTrace([
+          ["semantic", semanticTimed],
+          ["fulltext", fulltextTimed],
+          ["graph", graphTimed],
+          ["temporal", temporalTimed],
+        ]),
+        phaseMetrics,
+        candidates: rankedCandidates,
+        selectedMemoryIds: memories.map((memory) => memory.memory.id),
+        totalDurationMs: Date.now() - startedAt,
+      }
+    : undefined
+
+  return { memories, query, entities, chunks, trace }
 }
 
 // ── Tag matching ──────────────────────────────────────────────────────────
@@ -263,13 +406,76 @@ export function matchesTags(
 
   switch (mode) {
     case "any":
-      return isUntagged || memoryTags.some((t) => filterTags.includes(t))
+      return isUntagged || memoryTags.some((tag) => filterTags.includes(tag))
     case "all":
-      return isUntagged || filterTags.every((t) => memoryTags.includes(t))
+      return isUntagged || filterTags.every((tag) => memoryTags.includes(tag))
     case "any_strict":
-      return !isUntagged && memoryTags.some((t) => filterTags.includes(t))
+      return !isUntagged && memoryTags.some((tag) => filterTags.includes(tag))
     case "all_strict":
-      return !isUntagged && filterTags.every((t) => memoryTags.includes(t))
+      return !isUntagged && filterTags.every((tag) => memoryTags.includes(tag))
+  }
+}
+
+function timedSync(fn: () => RetrievalHit[]): TimedHits {
+  const startedAt = Date.now()
+  const hits = fn()
+  return { hits, durationMs: Date.now() - startedAt }
+}
+
+async function timedAsync(fn: () => Promise<RetrievalHit[]>): Promise<TimedHits> {
+  const startedAt = Date.now()
+  const hits = await fn()
+  return { hits, durationMs: Date.now() - startedAt }
+}
+
+function buildMethodTrace(
+  methods: Array<[RecallTraceMethodResult["methodName"], TimedHits]>,
+): RecallTraceMethodResult[] {
+  return methods
+    .filter(([, timed]) => timed.durationMs > 0 || timed.hits.length > 0)
+    .map(([methodName, timed]) => ({
+      methodName,
+      durationMs: timed.durationMs,
+      count: timed.hits.length,
+      results: timed.hits.map((hit, index) => ({
+        id: hit.id,
+        rank: index + 1,
+        score: hit.score,
+      })),
+    }))
+}
+
+function normalizeRrf(score: number, min: number, range: number): number {
+  if (range <= 0) return 0.5
+  return clamp((score - min) / range, 0, 1)
+}
+
+function sigmoid(score: number): number {
+  return 1 / (1 + Math.exp(-score))
+}
+
+function computeRecency(
+  row: typeof import("./schema").memoryUnits.$inferSelect,
+  now: number,
+): number {
+  const anchor = row.validFrom ?? row.mentionedAt ?? row.createdAt
+  if (anchor == null) return 0.5
+  const daysAgo = (now - anchor) / (1000 * 60 * 60 * 24)
+  return clamp(Math.max(0.1, 1 - daysAgo / 365), 0.1, 1)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function parseStringArray(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is string => typeof item === "string")
+  } catch {
+    return []
   }
 }
 

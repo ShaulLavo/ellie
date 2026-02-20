@@ -2,6 +2,7 @@ import { ulid } from "@ellie/utils"
 import { eq, and, inArray } from "drizzle-orm"
 import { anthropicText } from "@tanstack/ai-anthropic"
 import type { AnyTextAdapter } from "@tanstack/ai"
+import { chat, streamToText } from "@ellie/ai"
 import { createHindsightDB, type HindsightDatabase } from "./db"
 import { EmbeddingStore } from "./embedding"
 import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain"
@@ -63,6 +64,21 @@ import type {
   SubmitAsyncOperationResult,
   SubmitAsyncRetainResult,
   CancelOperationResult,
+  HindsightOperationName,
+  HindsightOperationContext,
+  HindsightOperationResultContext,
+  HindsightExtensions,
+  ListMemoryUnitsOptions,
+  ListMemoryUnitsResult,
+  MemoryUnitDetail,
+  DeleteMemoryUnitResult,
+  ClearObservationsResult,
+  ListEntitiesResult,
+  EntityState,
+  EntityDetail,
+  ListTagsOptions,
+  ListTagsResult,
+  BankStats,
 } from "./types"
 
 // ── Default config values ───────────────────────────────────────────────
@@ -96,6 +112,7 @@ export class Hindsight {
   private readonly rerank: RerankFunction | undefined
   private readonly instanceDefaults: BankConfig | undefined
   private readonly onTrace: TraceCallback | undefined
+  private readonly extensions: HindsightExtensions | undefined
   private readonly activeOperationTasks = new Map<string, Promise<void>>()
   private readonly cancelledOperations = new Set<string>()
 
@@ -107,6 +124,7 @@ export class Hindsight {
     this.rerank = config.rerank
     this.instanceDefaults = config.defaults
     this.onTrace = config.onTrace
+    this.extensions = config.extensions
 
     this.memoryVec = new EmbeddingStore(
       this.hdb.sqlite,
@@ -163,22 +181,42 @@ export class Hindsight {
 
   private async trace<T>(
     operation: HindsightTrace["operation"],
+    hookOperation: HindsightOperationName,
     bankId: string,
+    input: Record<string, unknown>,
     fn: () => Promise<T>,
     extractMetadata: (result: T) => Record<string, unknown>,
   ): Promise<T> {
+    const hookContext = this.buildOperationContext(hookOperation, bankId, input)
+    await this.runBeforeOperationHooks(hookContext)
     const startedAt = Date.now()
-    const result = await fn()
-    if (this.onTrace) {
-      this.onTrace({
-        operation,
-        bankId,
-        startedAt,
-        duration: Date.now() - startedAt,
-        metadata: extractMetadata(result),
+    try {
+      const result = await fn()
+      if (this.onTrace) {
+        this.onTrace({
+          operation,
+          bankId,
+          startedAt,
+          duration: Date.now() - startedAt,
+          metadata: extractMetadata(result),
+        })
+      }
+      await this.runAfterOperationHooks({
+        ...hookContext,
+        success: true,
+        result,
       })
+      return result
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error)
+      await this.runAfterOperationHooks({
+        ...hookContext,
+        success: false,
+        error: message,
+      })
+      throw error
     }
-    return result
   }
 
   // ── Bank management ─────────────────────────────────────────────────
@@ -341,6 +379,71 @@ export class Hindsight {
     return this.getBankById(bankId)!
   }
 
+  updateBank(
+    bankId: string,
+    updates: { name?: string; mission?: string },
+  ): Bank {
+    const bank = this.getBankById(bankId)
+    if (!bank) throw new Error(`Bank ${bankId} not found`)
+
+    const patch: Partial<typeof this.hdb.schema.banks.$inferInsert> = {
+      updatedAt: Date.now(),
+    }
+    if (updates.name != null) patch.name = updates.name
+    if (updates.mission != null) patch.mission = updates.mission
+
+    this.hdb.db
+      .update(this.hdb.schema.banks)
+      .set(patch)
+      .where(eq(this.hdb.schema.banks.id, bankId))
+      .run()
+    return this.getBankById(bankId)!
+  }
+
+  async mergeBankMission(
+    bankId: string,
+    newInfo: string,
+  ): Promise<{ mission: string }> {
+    const bank = this.getBankById(bankId)
+    if (!bank) throw new Error(`Bank ${bankId} not found`)
+
+    const prompt = `You are helping maintain an agent mission statement.
+
+Current mission: ${bank.mission || "(empty)"}
+
+New information to add: ${newInfo}
+
+Instructions:
+1. Merge the new information with the current mission.
+2. If there are conflicts, the NEW information overwrites the old.
+3. Keep additions that don't conflict.
+4. Output in FIRST PERSON ("I") perspective.
+5. Be concise and keep it under 500 characters.
+6. Return ONLY the merged mission text.`
+
+    let mergedMission: string
+    try {
+      const response = await streamToText(
+        chat({
+          adapter: this.adapter,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      )
+      mergedMission = response.trim()
+    } catch {
+      mergedMission = bank.mission
+        ? `${bank.mission} ${newInfo}`.trim()
+        : newInfo
+    }
+
+    if (!mergedMission) {
+      mergedMission = newInfo
+    }
+
+    this.setMission(bankId, mergedMission)
+    return { mission: mergedMission }
+  }
+
   // ── Core operations ─────────────────────────────────────────────────
 
   async retain(
@@ -363,7 +466,9 @@ export class Hindsight {
 
     return this.trace(
       "retain",
+      "retain",
       bankId,
+      { contentLength: content.length, hasOptions: Boolean(options) },
       () =>
         retainImpl(
           this.hdb,
@@ -410,7 +515,9 @@ export class Hindsight {
     }
     return this.trace(
       "retain",
+      "retain_batch",
       bankId,
+      { itemsCount: contents.length, hasOptions: Boolean(options) },
       () =>
         retainBatchImpl(
           this.hdb,
@@ -445,7 +552,13 @@ export class Hindsight {
   ): Promise<RecallResult> {
     return this.trace(
       "recall",
+      "recall",
       bankId,
+      {
+        queryLength: query.length,
+        hasOptions: Boolean(options),
+        maxTokens: options?.maxTokens ?? null,
+      },
       () => recallImpl(this.hdb, this.memoryVec, bankId, query, options, this.rerank),
       (r) => ({
         memoriesReturned: r.memories.length,
@@ -471,7 +584,12 @@ export class Hindsight {
 
     return this.trace(
       "reflect",
+      "reflect",
       bankId,
+      {
+        queryLength: query.length,
+        hasContext: Boolean(resolvedOptions.context),
+      },
       () =>
         reflectImpl(
           this.hdb,
@@ -506,7 +624,12 @@ export class Hindsight {
 
     return this.trace(
       "consolidate",
+      "consolidate",
       bankId,
+      {
+        batchSize: options?.batchSize ?? null,
+        refreshMentalModels: options?.refreshMentalModels ?? true,
+      },
       () =>
         consolidateImpl(
           this.hdb,
@@ -548,6 +671,7 @@ export class Hindsight {
     const result = await this.submitAsyncOperation(
       bankId,
       "retain",
+      "submit_async_retain",
       retainTask,
       { itemsCount: contents.length },
       false,
@@ -565,6 +689,7 @@ export class Hindsight {
     return this.submitAsyncOperation(
       bankId,
       "consolidation",
+      "submit_async_consolidation",
       () => this.consolidate(bankId, options),
       null,
       true,
@@ -578,6 +703,7 @@ export class Hindsight {
     return this.submitAsyncOperation(
       bankId,
       "refresh_mental_model",
+      "submit_async_refresh_mental_model",
       () => this.refreshMentalModel(bankId, mentalModelId),
     )
   }
@@ -710,107 +836,138 @@ export class Hindsight {
   private async submitAsyncOperation(
     bankId: string,
     operationType: AsyncOperationType,
+    hookOperation: HindsightOperationName,
     task: () => Promise<unknown>,
     resultMetadata?: Record<string, unknown> | null,
     dedupeByBank: boolean = false,
   ): Promise<SubmitAsyncOperationResult> {
-    if (dedupeByBank) {
-      const existing = this.hdb.db
-        .select({ operationId: this.hdb.schema.asyncOperations.operationId })
-        .from(this.hdb.schema.asyncOperations)
-        .where(
-          and(
-            eq(this.hdb.schema.asyncOperations.bankId, bankId),
-            eq(this.hdb.schema.asyncOperations.operationType, operationType),
-            eq(this.hdb.schema.asyncOperations.status, "pending"),
-          ),
-        )
-        .get()
-      if (existing) {
-        return { operationId: existing.operationId, deduplicated: true }
-      }
-    }
+    const hookContext = this.buildOperationContext(hookOperation, bankId, {
+      operationType,
+      dedupeByBank,
+      resultMetadata: resultMetadata ?? null,
+    })
+    try {
+      await this.runBeforeOperationHooks(hookContext)
 
-    const operationId = ulid()
-    const now = Date.now()
-    this.hdb.db
-      .insert(this.hdb.schema.asyncOperations)
-      .values({
-        operationId,
-        bankId,
-        operationType,
-        status: "pending",
-        resultMetadata: resultMetadata ? JSON.stringify(resultMetadata) : null,
-        errorMessage: null,
-        createdAt: now,
-        updatedAt: now,
-        completedAt: null,
-      })
-      .run()
-
-    const run = async () => {
-      try {
-        if (this.cancelledOperations.has(operationId)) return
-
-        const pendingRow = this.hdb.db
+      if (dedupeByBank) {
+        const existing = this.hdb.db
           .select({ operationId: this.hdb.schema.asyncOperations.operationId })
           .from(this.hdb.schema.asyncOperations)
-          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+          .where(
+            and(
+              eq(this.hdb.schema.asyncOperations.bankId, bankId),
+              eq(this.hdb.schema.asyncOperations.operationType, operationType),
+              eq(this.hdb.schema.asyncOperations.status, "pending"),
+            ),
+          )
           .get()
-        if (!pendingRow) return
-
-        this.hdb.db
-          .update(this.hdb.schema.asyncOperations)
-          .set({
-            status: "processing",
-            updatedAt: Date.now(),
+        if (existing) {
+          const dedupResult = { operationId: existing.operationId, deduplicated: true }
+          await this.runAfterOperationHooks({
+            ...hookContext,
+            success: true,
+            result: dedupResult,
           })
-          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-          .run()
-
-        await task()
-
-        if (this.cancelledOperations.has(operationId)) return
-
-        const completedAt = Date.now()
-        this.hdb.db
-          .update(this.hdb.schema.asyncOperations)
-          .set({
-            status: "completed",
-            updatedAt: completedAt,
-            completedAt,
-            errorMessage: null,
-          })
-          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-          .run()
-      } catch (error) {
-        if (this.cancelledOperations.has(operationId)) return
-        const message =
-          error instanceof Error ? error.message : String(error)
-        const truncated = message.length > 5000 ? message.slice(0, 5000) : message
-        this.hdb.db
-          .update(this.hdb.schema.asyncOperations)
-          .set({
-            status: "failed",
-            updatedAt: Date.now(),
-            errorMessage: truncated,
-          })
-          .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-          .run()
-      } finally {
-        this.activeOperationTasks.delete(operationId)
-        this.cancelledOperations.delete(operationId)
+          return dedupResult
+        }
       }
+
+      const operationId = ulid()
+      const now = Date.now()
+      this.hdb.db
+        .insert(this.hdb.schema.asyncOperations)
+        .values({
+          operationId,
+          bankId,
+          operationType,
+          status: "pending",
+          resultMetadata: resultMetadata ? JSON.stringify(resultMetadata) : null,
+          errorMessage: null,
+          createdAt: now,
+          updatedAt: now,
+          completedAt: null,
+        })
+        .run()
+
+      const run = async () => {
+        try {
+          if (this.cancelledOperations.has(operationId)) return
+
+          const pendingRow = this.hdb.db
+            .select({ operationId: this.hdb.schema.asyncOperations.operationId })
+            .from(this.hdb.schema.asyncOperations)
+            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+            .get()
+          if (!pendingRow) return
+
+          this.hdb.db
+            .update(this.hdb.schema.asyncOperations)
+            .set({
+              status: "processing",
+              updatedAt: Date.now(),
+            })
+            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+            .run()
+
+          await task()
+
+          if (this.cancelledOperations.has(operationId)) return
+
+          const completedAt = Date.now()
+          this.hdb.db
+            .update(this.hdb.schema.asyncOperations)
+            .set({
+              status: "completed",
+              updatedAt: completedAt,
+              completedAt,
+              errorMessage: null,
+            })
+            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+            .run()
+        } catch (error) {
+          if (this.cancelledOperations.has(operationId)) return
+          const message =
+            error instanceof Error ? error.message : String(error)
+          const truncated = message.length > 5000 ? message.slice(0, 5000) : message
+          this.hdb.db
+            .update(this.hdb.schema.asyncOperations)
+            .set({
+              status: "failed",
+              updatedAt: Date.now(),
+              errorMessage: truncated,
+            })
+            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+            .run()
+        } finally {
+          this.activeOperationTasks.delete(operationId)
+          this.cancelledOperations.delete(operationId)
+        }
+      }
+
+      const taskPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          void run().finally(resolve)
+        }, 0)
+      })
+      this.activeOperationTasks.set(operationId, taskPromise)
+
+      const result = { operationId }
+      await this.runAfterOperationHooks({
+        ...hookContext,
+        success: true,
+        result,
+      })
+      return result
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error)
+      await this.runAfterOperationHooks({
+        ...hookContext,
+        success: false,
+        error: message,
+      })
+      throw error
     }
-
-    const taskPromise = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        void run().finally(resolve)
-      }, 0)
-    })
-    this.activeOperationTasks.set(operationId, taskPromise)
-
-    return { operationId }
   }
 
   // ── Mental models ─────────────────────────────────────────────────
@@ -890,6 +1047,443 @@ export class Hindsight {
 
   deleteDirective(bankId: string, id: string): void {
     deleteDirectiveImpl(this.hdb, bankId, id)
+  }
+
+  // ── API Parity Utilities ─────────────────────────────────────────────
+
+  listMemoryUnits(
+    bankId: string,
+    options?: ListMemoryUnitsOptions,
+  ): ListMemoryUnitsResult {
+    const limit = options?.limit ?? 100
+    const offset = options?.offset ?? 0
+    const searchQuery = options?.searchQuery?.toLowerCase().trim()
+
+    const rows = this.hdb.db
+      .select()
+      .from(this.hdb.schema.memoryUnits)
+      .where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
+      .all()
+      .filter((row) => {
+        if (options?.factType && row.factType !== options.factType) return false
+        if (!searchQuery) return true
+        const text = row.content.toLowerCase()
+        const context = (row.sourceText ?? "").toLowerCase()
+        return text.includes(searchQuery) || context.includes(searchQuery)
+      })
+      .sort((a, b) => {
+        const aPrimary = a.mentionedAt ?? -1
+        const bPrimary = b.mentionedAt ?? -1
+        if (aPrimary !== bPrimary) return bPrimary - aPrimary
+        return b.createdAt - a.createdAt
+      })
+
+    const paged = rows.slice(offset, offset + limit)
+    const entityByMemory = this.loadEntityNamesByMemoryIds(
+      paged.map((row) => row.id),
+    )
+
+    const items = paged.map((row) => ({
+      id: row.id,
+      text: row.content,
+      context: row.sourceText ?? "",
+      date: toIsoOrEmpty(row.validFrom ?? row.mentionedAt ?? row.createdAt),
+      factType: row.factType as ListMemoryUnitsResult["items"][number]["factType"],
+      mentionedAt: toIsoOrNull(row.mentionedAt),
+      occurredStart: toIsoOrNull(row.validFrom),
+      occurredEnd: toIsoOrNull(row.validTo),
+      entities: (entityByMemory.get(row.id) ?? []).join(", "),
+      chunkId: row.chunkId,
+    }))
+
+    return {
+      items,
+      total: rows.length,
+      limit,
+      offset,
+    }
+  }
+
+  getMemoryUnit(bankId: string, memoryId: string): MemoryUnitDetail | undefined {
+    const row = this.hdb.db
+      .select()
+      .from(this.hdb.schema.memoryUnits)
+      .where(
+        and(
+          eq(this.hdb.schema.memoryUnits.id, memoryId),
+          eq(this.hdb.schema.memoryUnits.bankId, bankId),
+        ),
+      )
+      .get()
+    if (!row) return undefined
+
+    const entityNames = this.loadEntityNamesByMemoryIds([row.id]).get(row.id) ?? []
+    const result: MemoryUnitDetail = {
+      id: row.id,
+      text: row.content,
+      context: row.sourceText ?? "",
+      date: toIsoOrEmpty(row.validFrom ?? row.mentionedAt ?? row.createdAt),
+      type: row.factType as MemoryUnitDetail["type"],
+      mentionedAt: toIsoOrNull(row.mentionedAt),
+      occurredStart: toIsoOrNull(row.validFrom),
+      occurredEnd: toIsoOrNull(row.validTo),
+      entities: entityNames,
+      documentId: row.documentId,
+      chunkId: row.chunkId,
+      tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
+    }
+
+    const sourceMemoryIds = row.sourceMemoryIds
+      ? safeJson<string[]>(row.sourceMemoryIds, [])
+      : []
+    if (row.factType === "observation" && sourceMemoryIds.length > 0) {
+      result.sourceMemoryIds = sourceMemoryIds
+      const sourceRows = this.hdb.db
+        .select()
+        .from(this.hdb.schema.memoryUnits)
+        .where(inArray(this.hdb.schema.memoryUnits.id, sourceMemoryIds))
+        .all()
+        .sort((a, b) => {
+          const aPrimary = a.mentionedAt ?? -1
+          const bPrimary = b.mentionedAt ?? -1
+          return bPrimary - aPrimary
+        })
+
+      result.sourceMemories = sourceRows.map((sourceRow) => ({
+        id: sourceRow.id,
+        text: sourceRow.content,
+        type: sourceRow.factType as MemoryUnitDetail["type"],
+        context: sourceRow.sourceText,
+        occurredStart: toIsoOrNull(sourceRow.validFrom),
+        mentionedAt: toIsoOrNull(sourceRow.mentionedAt),
+      }))
+    }
+
+    return result
+  }
+
+  deleteMemoryUnit(memoryId: string): DeleteMemoryUnitResult {
+    const row = this.hdb.db
+      .select({
+        id: this.hdb.schema.memoryUnits.id,
+        bankId: this.hdb.schema.memoryUnits.bankId,
+      })
+      .from(this.hdb.schema.memoryUnits)
+      .where(eq(this.hdb.schema.memoryUnits.id, memoryId))
+      .get()
+    if (!row) {
+      return {
+        success: false,
+        unitId: null,
+        message: "Memory unit not found",
+      }
+    }
+
+    this.memoryVec.delete(memoryId)
+    this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE id = ?", [memoryId])
+    this.hdb.db
+      .delete(this.hdb.schema.memoryUnits)
+      .where(eq(this.hdb.schema.memoryUnits.id, memoryId))
+      .run()
+    this.removeMemoryIdFromMentalModels(row.bankId, memoryId)
+
+    return {
+      success: true,
+      unitId: row.id,
+      message: "Memory unit and all its links deleted successfully",
+    }
+  }
+
+  clearObservations(bankId: string): ClearObservationsResult {
+    const observationIds = this.hdb.db
+      .select({ id: this.hdb.schema.memoryUnits.id })
+      .from(this.hdb.schema.memoryUnits)
+      .where(
+        and(
+          eq(this.hdb.schema.memoryUnits.bankId, bankId),
+          eq(this.hdb.schema.memoryUnits.factType, "observation"),
+        ),
+      )
+      .all()
+      .map((row) => row.id)
+
+    for (const observationId of observationIds) {
+      this.memoryVec.delete(observationId)
+      this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE id = ?", [observationId])
+      this.hdb.db
+        .delete(this.hdb.schema.memoryUnits)
+        .where(eq(this.hdb.schema.memoryUnits.id, observationId))
+        .run()
+    }
+
+    return { deletedCount: observationIds.length }
+  }
+
+  listEntities(
+    bankId: string,
+    options?: { limit?: number; offset?: number },
+  ): ListEntitiesResult {
+    const limit = options?.limit ?? 100
+    const offset = options?.offset ?? 0
+    const rows = this.hdb.db
+      .select()
+      .from(this.hdb.schema.entities)
+      .where(eq(this.hdb.schema.entities.bankId, bankId))
+      .all()
+      .sort((a, b) => {
+        if (a.mentionCount !== b.mentionCount) {
+          return b.mentionCount - a.mentionCount
+        }
+        if (a.lastUpdated !== b.lastUpdated) {
+          return b.lastUpdated - a.lastUpdated
+        }
+        return a.id.localeCompare(b.id)
+      })
+
+    const paged = rows.slice(offset, offset + limit)
+    return {
+      items: paged.map((row) => ({
+        id: row.id,
+        canonicalName: row.name,
+        mentionCount: row.mentionCount,
+        firstSeen: toIsoOrNull(row.firstSeen),
+        lastSeen: toIsoOrNull(row.lastUpdated),
+        metadata: row.metadata
+          ? safeJson<Record<string, unknown>>(row.metadata, {})
+          : {},
+      })),
+      total: rows.length,
+      limit,
+      offset,
+    }
+  }
+
+  getEntityState(
+    _bankId: string,
+    entityId: string,
+    entityName: string,
+    _options?: { limit?: number },
+  ): EntityState {
+    return {
+      entityId,
+      canonicalName: entityName,
+      observations: [],
+    }
+  }
+
+  getEntity(bankId: string, entityId: string): EntityDetail | undefined {
+    const row = this.hdb.db
+      .select()
+      .from(this.hdb.schema.entities)
+      .where(
+        and(
+          eq(this.hdb.schema.entities.id, entityId),
+          eq(this.hdb.schema.entities.bankId, bankId),
+        ),
+      )
+      .get()
+    if (!row) return undefined
+
+    return {
+      id: row.id,
+      canonicalName: row.name,
+      mentionCount: row.mentionCount,
+      firstSeen: toIsoOrNull(row.firstSeen),
+      lastSeen: toIsoOrNull(row.lastUpdated),
+      metadata: row.metadata
+        ? safeJson<Record<string, unknown>>(row.metadata, {})
+        : {},
+      observations: [],
+    }
+  }
+
+  listTags(bankId: string, options?: ListTagsOptions): ListTagsResult {
+    const limit = options?.limit ?? 100
+    const offset = options?.offset ?? 0
+    const pattern = options?.pattern ? options.pattern.replace(/\*/g, "%").toLowerCase() : null
+
+    const totalRow = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT COUNT(DISTINCT jt.value) as total
+        FROM hs_memory_units mu, json_each(mu.tags) jt
+        WHERE mu.bank_id = ?
+          AND mu.tags IS NOT NULL
+          AND json_valid(mu.tags)
+          AND json_array_length(mu.tags) > 0
+          AND (? IS NULL OR lower(jt.value) LIKE ?)
+      `,
+      )
+      .get(bankId, pattern, pattern) as { total: number } | undefined
+
+    const rows = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT jt.value as tag, COUNT(*) as count
+        FROM hs_memory_units mu, json_each(mu.tags) jt
+        WHERE mu.bank_id = ?
+          AND mu.tags IS NOT NULL
+          AND json_valid(mu.tags)
+          AND json_array_length(mu.tags) > 0
+          AND (? IS NULL OR lower(jt.value) LIKE ?)
+        GROUP BY jt.value
+        ORDER BY count DESC, tag ASC
+        LIMIT ? OFFSET ?
+      `,
+      )
+      .all(bankId, pattern, pattern, limit, offset) as Array<{
+      tag: string
+      count: number
+    }>
+
+    return {
+      items: rows.map((row) => ({
+        tag: row.tag,
+        count: row.count,
+      })),
+      total: totalRow?.total ?? 0,
+      limit,
+      offset,
+    }
+  }
+
+  getBankStats(bankId: string): BankStats {
+    const nodeStats = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT fact_type as factType, COUNT(*) as count
+        FROM hs_memory_units
+        WHERE bank_id = ?
+        GROUP BY fact_type
+      `,
+      )
+      .all(bankId) as Array<{ factType: string; count: number }>
+
+    const linkStats = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT ml.link_type as linkType, COUNT(*) as count
+        FROM hs_memory_links ml
+        JOIN hs_memory_units mu ON ml.source_id = mu.id
+        WHERE mu.bank_id = ?
+        GROUP BY ml.link_type
+      `,
+      )
+      .all(bankId) as Array<{ linkType: string; count: number }>
+
+    const linkByFactTypeStats = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT mu.fact_type as factType, COUNT(*) as count
+        FROM hs_memory_links ml
+        JOIN hs_memory_units mu ON ml.source_id = mu.id
+        WHERE mu.bank_id = ?
+        GROUP BY mu.fact_type
+      `,
+      )
+      .all(bankId) as Array<{ factType: string; count: number }>
+
+    const linkBreakdownRows = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT mu.fact_type as factType, ml.link_type as linkType, COUNT(*) as count
+        FROM hs_memory_links ml
+        JOIN hs_memory_units mu ON ml.source_id = mu.id
+        WHERE mu.bank_id = ?
+        GROUP BY mu.fact_type, ml.link_type
+      `,
+      )
+      .all(bankId) as Array<{ factType: string; linkType: string; count: number }>
+
+    const operationRows = this.hdb.sqlite
+      .prepare(
+        `
+        SELECT status, COUNT(*) as count
+        FROM hs_async_operations
+        WHERE bank_id = ?
+        GROUP BY status
+      `,
+      )
+      .all(bankId) as Array<{ status: string; count: number }>
+
+    return {
+      bankId,
+      nodeCounts: Object.fromEntries(nodeStats.map((row) => [row.factType, row.count])),
+      linkCounts: Object.fromEntries(linkStats.map((row) => [row.linkType, row.count])),
+      linkCountsByFactType: Object.fromEntries(
+        linkByFactTypeStats.map((row) => [row.factType, row.count]),
+      ),
+      linkBreakdown: linkBreakdownRows.map((row) => ({
+        factType: row.factType,
+        linkType: row.linkType,
+        count: row.count,
+      })),
+      operations: Object.fromEntries(operationRows.map((row) => [row.status, row.count])),
+    }
+  }
+
+  private loadEntityNamesByMemoryIds(memoryIds: string[]): Map<string, string[]> {
+    if (memoryIds.length === 0) return new Map()
+
+    const relations = this.hdb.db
+      .select({
+        memoryId: this.hdb.schema.memoryEntities.memoryId,
+        entityId: this.hdb.schema.memoryEntities.entityId,
+      })
+      .from(this.hdb.schema.memoryEntities)
+      .where(inArray(this.hdb.schema.memoryEntities.memoryId, memoryIds))
+      .all()
+    if (relations.length === 0) return new Map()
+
+    const entityIds = [...new Set(relations.map((row) => row.entityId))]
+    const entities = this.hdb.db
+      .select({
+        id: this.hdb.schema.entities.id,
+        name: this.hdb.schema.entities.name,
+      })
+      .from(this.hdb.schema.entities)
+      .where(inArray(this.hdb.schema.entities.id, entityIds))
+      .all()
+    const entityNameById = new Map(entities.map((entity) => [entity.id, entity.name]))
+
+    const byMemory = new Map<string, string[]>()
+    for (const relation of relations) {
+      const entityName = entityNameById.get(relation.entityId)
+      if (!entityName) continue
+      const list = byMemory.get(relation.memoryId) ?? []
+      list.push(entityName)
+      byMemory.set(relation.memoryId, list)
+    }
+
+    return byMemory
+  }
+
+  private removeMemoryIdFromMentalModels(bankId: string, memoryId: string): void {
+    const models = this.hdb.db
+      .select({
+        id: this.hdb.schema.mentalModels.id,
+        sourceMemoryIds: this.hdb.schema.mentalModels.sourceMemoryIds,
+      })
+      .from(this.hdb.schema.mentalModels)
+      .where(eq(this.hdb.schema.mentalModels.bankId, bankId))
+      .all()
+
+    for (const model of models) {
+      const ids = model.sourceMemoryIds
+        ? safeJson<string[]>(model.sourceMemoryIds, [])
+        : []
+      if (!ids.includes(memoryId)) continue
+
+      const filtered = ids.filter((id) => id !== memoryId)
+      this.hdb.db
+        .update(this.hdb.schema.mentalModels)
+        .set({
+          sourceMemoryIds: JSON.stringify(filtered),
+          updatedAt: Date.now(),
+        })
+        .where(eq(this.hdb.schema.mentalModels.id, model.id))
+        .run()
+    }
   }
 
   // ── Documents / Chunks / Graph ─────────────────────────────────────
@@ -1126,6 +1720,42 @@ export class Hindsight {
     }
   }
 
+  private resolveTenantId(bankId: string): string {
+    return this.extensions?.resolveTenantId?.(bankId) ?? bankId
+  }
+
+  private buildOperationContext(
+    operation: HindsightOperationName,
+    bankId: string,
+    input: Record<string, unknown>,
+  ): HindsightOperationContext {
+    return {
+      operation,
+      bankId,
+      tenantId: this.resolveTenantId(bankId),
+      input,
+    }
+  }
+
+  private async runBeforeOperationHooks(
+    context: HindsightOperationContext,
+  ): Promise<void> {
+    if (!this.extensions) return
+    if (this.extensions.authorize) {
+      await this.extensions.authorize(context)
+    }
+    if (this.extensions.validate) {
+      await this.extensions.validate(context)
+    }
+  }
+
+  private async runAfterOperationHooks(
+    context: HindsightOperationResultContext,
+  ): Promise<void> {
+    if (!this.extensions?.onComplete) return
+    await this.extensions.onComplete(context)
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────
 
   close(): void {
@@ -1182,6 +1812,15 @@ function safeJson<T>(value: string, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+function toIsoOrNull(value: number | null | undefined): string | null {
+  if (value == null) return null
+  return new Date(value).toISOString()
+}
+
+function toIsoOrEmpty(value: number | null | undefined): string {
+  return toIsoOrNull(value) ?? ""
 }
 
 function dedupeGraphEdges(edges: GraphEdge[]): GraphEdge[] {

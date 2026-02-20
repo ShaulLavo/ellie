@@ -5,9 +5,6 @@
  * Tier 2 — Observations: auto-consolidated durable knowledge with freshness
  * Tier 3 — Raw Facts: individual experiences + world knowledge (ground truth)
  * Utility — get_entity: cross-tier entity lookup
- *
- * The LLM decides when to drill down between tiers based on staleness metadata.
- * A budget parameter controls exploration depth (low/mid/high → 3/5/8 iterations).
  */
 
 import { chat, streamToText, maxIterations, toolDefinition } from "@ellie/ai"
@@ -26,13 +23,7 @@ import type {
   RerankFunction,
   DispositionTraits,
 } from "./types"
-
-/** Bank profile passed to reflect for prompt injection */
-export interface BankProfile {
-  name: string
-  mission: string
-  disposition: DispositionTraits
-}
+import { parseLLMJson } from "./sanitize"
 import { recall } from "./recall"
 import { searchMentalModelsWithStaleness } from "./mental-models"
 import { loadDirectivesForReflect } from "./directives"
@@ -42,7 +33,12 @@ import {
   buildDirectivesReminder,
 } from "./prompts"
 
-// ── Budget → iterations mapping ─────────────────────────────────────────
+/** Bank profile passed to reflect for prompt injection */
+export interface BankProfile {
+  name: string
+  mission: string
+  disposition: DispositionTraits
+}
 
 const BUDGET_ITERATIONS: Record<ReflectBudget, number> = {
   low: 3,
@@ -50,7 +46,10 @@ const BUDGET_ITERATIONS: Record<ReflectBudget, number> = {
   high: 8,
 }
 
-// ── Main reflect function ───────────────────────────────────────────────
+const DONE_CALL_PATTERN = /done\s*\(\s*\{.*$/is
+const LEAKED_JSON_SUFFIX = /\s*```(?:json)?\s*\{[^}]*(?:"(?:observation_ids|memory_ids|mental_model_ids)"|\})\s*```\s*$/is
+const LEAKED_JSON_OBJECT = /\s*\{[^{]*"(?:observation_ids|memory_ids|mental_model_ids|answer)"[^}]*\}\s*$/is
+const TRAILING_IDS_PATTERN = /\s*(?:observation_ids|memory_ids|mental_model_ids)\s*[=:]\s*\[.*?\]\s*$/is
 
 /**
  * @param modelVec - Embedding store for mental models. Pass null to skip
@@ -67,11 +66,41 @@ export async function reflect(
   rerank?: RerankFunction,
   bankProfile?: BankProfile,
 ): Promise<ReflectResult> {
+  const startedAt = Date.now()
   const allMemories: ScoredMemory[] = []
+  const toolCalls: NonNullable<ReflectResult["trace"]>["toolCalls"] = []
   const { schema } = hdb
 
   const budget = options.budget ?? "mid"
   const iterations = options.maxIterations ?? BUDGET_ITERATIONS[budget]
+
+  const trackedToolCall = async <T>(
+    tool: string,
+    input: Record<string, unknown>,
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const toolStartedAt = Date.now()
+    try {
+      const output = await fn()
+      toolCalls.push({
+        tool,
+        durationMs: Date.now() - toolStartedAt,
+        input,
+        outputSize: safeOutputSize(output),
+      })
+      return output
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toolCalls.push({
+        tool,
+        durationMs: Date.now() - toolStartedAt,
+        input,
+        outputSize: 0,
+        error: message,
+      })
+      throw error
+    }
+  }
 
   // ── Tier 1: search_mental_models ──
 
@@ -87,10 +116,10 @@ export async function reflect(
 
   const searchMentalModels = searchMentalModelsDef.server(async (_args) => {
     const args = _args as { query: string }
-
-    if (!modelVec) return []
-
-    return searchMentalModelsWithStaleness(hdb, modelVec, bankId, args.query)
+    return trackedToolCall("search_mental_models", args, async () => {
+      if (!modelVec) return []
+      return searchMentalModelsWithStaleness(hdb, modelVec, bankId, args.query)
+    })
   })
 
   // ── Tier 2: search_observations ──
@@ -100,7 +129,7 @@ export async function reflect(
     description:
       "Search consolidated observations (auto-generated durable knowledge). " +
       "Observations synthesize multiple raw facts — more reliable than individual facts. " +
-      "If stale (freshness != 'up_to_date'), ALSO use search_memories to verify with current raw facts.",
+      "If stale (freshness != 'up_to_date'), ALSO use recall to verify with current raw facts.",
     inputSchema: v.object({
       query: v.pipe(v.string(), v.description("Search query for observations")),
       limit: v.optional(v.pipe(v.number(), v.description("Max results (default 10)"))),
@@ -110,71 +139,127 @@ export async function reflect(
 
   const searchObservations = searchObservationsDef.server(async (_args) => {
     const args = _args as { query: string; limit?: number; tags?: string[] }
+    return trackedToolCall("search_observations", args, async () => {
+      const mergedTags = mergeTags(options.tags, args.tags)
+      const result = await recall(
+        hdb,
+        memoryVec,
+        bankId,
+        args.query,
+        {
+          limit: args.limit ?? 10,
+          factTypes: ["observation"],
+          tags: mergedTags,
+          tagsMatch: options.tagsMatch,
+        },
+        rerank,
+      )
 
-    // Merge tool-level tags with session-level tags
-    const mergedTags = mergeTags(options.tags, args.tags)
+      allMemories.push(...result.memories)
 
-    const result = await recall(hdb, memoryVec, bankId, args.query, {
-      limit: args.limit ?? 10,
-      factTypes: ["observation"],
-      tags: mergedTags,
-      tagsMatch: options.tagsMatch,
-    }, rerank)
-
-    allMemories.push(...result.memories)
-
-    return result.memories.map((m) => {
-      const staleness = computeObservationStaleness(hdb, bankId, m.memory.updatedAt)
-      return {
-        id: m.memory.id,
-        content: m.memory.content,
-        proofCount: m.memory.proofCount,
-        sourceMemoryIds: m.memory.sourceMemoryIds ?? [],
-        tags: m.memory.tags,
-        score: m.score,
-        ...staleness,
-      }
+      return result.memories.map((memory) => {
+        const staleness = computeObservationStaleness(
+          hdb,
+          bankId,
+          memory.memory.updatedAt,
+        )
+        return {
+          id: memory.memory.id,
+          content: memory.memory.content,
+          proofCount: memory.memory.proofCount,
+          sourceMemoryIds: memory.memory.sourceMemoryIds ?? [],
+          tags: memory.memory.tags,
+          score: memory.score,
+          ...staleness,
+        }
+      })
     })
   })
 
-  // ── Tier 3: search_memories (raw facts) ──
+  // ── Tier 3: recall / search_memories alias ──
 
-  const searchMemoriesDef = toolDefinition({
-    name: "search_memories",
-    description:
-      "Search raw facts (experiences and world knowledge). Ground truth. " +
-      "Use when no mental models or observations exist, they are stale, or you need specific details and supporting evidence.",
-    inputSchema: v.object({
-      query: v.pipe(v.string(), v.description("Search query — be specific and targeted")),
-      limit: v.optional(v.pipe(v.number(), v.description("Max results (default 10)"))),
-      tags: v.optional(v.array(v.string(), "Filter by tags (merged with session-level tags)")),
-    }),
+  const recallInputSchema = v.object({
+    query: v.pipe(v.string(), v.description("Search query — be specific and targeted")),
+    limit: v.optional(v.number()),
+    maxTokens: v.optional(v.number()),
+    max_tokens: v.optional(v.number()),
+    tags: v.optional(v.array(v.string(), "Filter by tags (merged with session-level tags)")),
   })
 
-  const searchMemories = searchMemoriesDef.server(async (_args) => {
-    const args = _args as { query: string; limit?: number; tags?: string[] }
-
-    // Merge tool-level tags with session-level tags
-    const mergedTags = mergeTags(options.tags, args.tags)
-
-    const result = await recall(hdb, memoryVec, bankId, args.query, {
-      limit: args.limit ?? 10,
-      factTypes: ["experience", "world"],
-      tags: mergedTags,
-      tagsMatch: options.tagsMatch,
-    }, rerank)
+  const runRecallTool = async (
+    rawArgs: {
+      query: string
+      limit?: number
+      maxTokens?: number
+      max_tokens?: number
+      tags?: string[]
+    },
+    toolName: string,
+  ) => trackedToolCall(toolName, rawArgs, async () => {
+    const mergedTags = mergeTags(options.tags, rawArgs.tags)
+    const maxTokenBudget = rawArgs.maxTokens ?? rawArgs.max_tokens
+    const result = await recall(
+      hdb,
+      memoryVec,
+      bankId,
+      rawArgs.query,
+      {
+        limit: rawArgs.limit ?? 10,
+        maxTokens: maxTokenBudget,
+        factTypes: ["experience", "world"],
+        tags: mergedTags,
+        tagsMatch: options.tagsMatch,
+      },
+      rerank,
+    )
 
     allMemories.push(...result.memories)
 
-    return result.memories.map((m) => ({
-      id: m.memory.id,
-      content: m.memory.content,
-      factType: m.memory.factType,
-      entities: m.entities.map((e) => e.name),
-      score: m.score,
-      occurredAt: m.memory.validFrom ?? m.memory.createdAt,
+    return result.memories.map((memory) => ({
+      id: memory.memory.id,
+      content: memory.memory.content,
+      factType: memory.memory.factType,
+      entities: memory.entities.map((entity) => entity.name),
+      score: memory.score,
+      occurredAt: memory.memory.validFrom ?? memory.memory.createdAt,
     }))
   })
+
+  const recallDef = toolDefinition({
+    name: "recall",
+    description:
+      "Search raw facts (experiences and world knowledge). Ground truth. " +
+      "Use when no mental models or observations exist, they are stale, or you need specific details and supporting evidence.",
+    inputSchema: recallInputSchema,
+  })
+  const recallTool = recallDef.server(async (_args) =>
+    runRecallTool(
+      _args as {
+        query: string
+        limit?: number
+        maxTokens?: number
+        max_tokens?: number
+        tags?: string[]
+      },
+      "recall",
+    ))
+
+  const searchMemoriesDef = toolDefinition({
+    name: "search_memories",
+    description: "Alias for recall. Same behavior, retained for compatibility.",
+    inputSchema: recallInputSchema,
+  })
+  const searchMemories = searchMemoriesDef.server(async (_args) =>
+    runRecallTool(
+      _args as {
+        query: string
+        limit?: number
+        maxTokens?: number
+        max_tokens?: number
+        tags?: string[]
+      },
+      "search_memories",
+    ))
 
   // ── Utility: get_entity ──
 
@@ -189,49 +274,51 @@ export async function reflect(
 
   const getEntity = getEntityDef.server(async (_args) => {
     const args = _args as { name: string }
-    const entity = hdb.db
-      .select()
-      .from(schema.entities)
-      .where(
-        and(
-          eq(schema.entities.bankId, bankId),
-          eq(schema.entities.name, args.name),
-        ),
-      )
-      .get()
+    return trackedToolCall("get_entity", args, async () => {
+      const entity = hdb.db
+        .select()
+        .from(schema.entities)
+        .where(
+          and(
+            eq(schema.entities.bankId, bankId),
+            eq(schema.entities.name, args.name),
+          ),
+        )
+        .get()
 
-    if (!entity) return { found: false as const }
+      if (!entity) return { found: false as const }
 
-    const junctions = hdb.db
-      .select()
-      .from(schema.memoryEntities)
-      .where(eq(schema.memoryEntities.entityId, entity.id))
-      .all()
+      const junctions = hdb.db
+        .select()
+        .from(schema.memoryEntities)
+        .where(eq(schema.memoryEntities.entityId, entity.id))
+        .all()
 
-    const memoryRows = junctions
-      .map((j) =>
-        hdb.db
-          .select()
-          .from(schema.memoryUnits)
-          .where(eq(schema.memoryUnits.id, j.memoryId))
-          .get(),
-      )
-      .filter(Boolean)
+      const memoryRows = junctions
+        .map((junction) =>
+          hdb.db
+            .select()
+            .from(schema.memoryUnits)
+            .where(eq(schema.memoryUnits.id, junction.memoryId))
+            .get(),
+        )
+        .filter(Boolean)
 
-    return {
-      found: true as const,
-      entity: {
-        name: entity.name,
-        type: entity.entityType,
-        firstSeen: entity.firstSeen,
-        lastUpdated: entity.lastUpdated,
-      },
-      memoryCount: memoryRows.length,
-      memories: memoryRows.slice(0, 10).map((m) => ({
-        content: m!.content,
-        factType: m!.factType,
-      })),
-    }
+      return {
+        found: true as const,
+        entity: {
+          name: entity.name,
+          type: entity.entityType,
+          firstSeen: entity.firstSeen,
+          lastUpdated: entity.lastUpdated,
+        },
+        memoryCount: memoryRows.length,
+        memories: memoryRows.slice(0, 10).map((memory) => ({
+          content: memory!.content,
+          factType: memory!.factType,
+        })),
+      }
+    })
   })
 
   // ── Utility: expand (chunk/document context) ──
@@ -242,130 +329,137 @@ export async function reflect(
       "Expand one or more memory IDs into chunk/document context. " +
       "Use depth='chunk' for local context and depth='document' for full source text.",
     inputSchema: v.object({
-      memoryIds: v.array(v.string(), "Memory IDs to expand"),
-      depth: v.optional(v.picklist(["chunk", "document"]), "chunk"),
+      memoryIds: v.optional(v.array(v.string())),
+      memory_ids: v.optional(v.array(v.string())),
+      depth: v.optional(v.string()),
     }),
   })
 
   const expand = expandDef.server(async (_args) => {
-    const args = _args as { memoryIds: string[]; depth?: "chunk" | "document" }
-    if (!args.memoryIds?.length) return { results: [] as Array<Record<string, unknown>> }
-
-    const memoryIds = [...new Set(args.memoryIds)]
-    const depth = args.depth ?? "chunk"
-    const memoryRows = hdb.db
-      .select({
-        id: schema.memoryUnits.id,
-        content: schema.memoryUnits.content,
-        chunkId: schema.memoryUnits.chunkId,
-        documentId: schema.memoryUnits.documentId,
-        factType: schema.memoryUnits.factType,
-        sourceText: schema.memoryUnits.sourceText,
-      })
-      .from(schema.memoryUnits)
-      .where(
-        and(
-          eq(schema.memoryUnits.bankId, bankId),
-          inArray(schema.memoryUnits.id, memoryIds),
-        ),
-      )
-      .all()
-    if (memoryRows.length === 0) return { results: [] as Array<Record<string, unknown>> }
-
-    const chunkIds = [
-      ...new Set(
-        memoryRows
-          .map((row) => row.chunkId)
-          .filter((id): id is string => typeof id === "string" && id.length > 0),
-      ),
-    ]
-    const chunkRows =
-      chunkIds.length > 0
-        ? hdb.db
-            .select({
-              id: schema.chunks.id,
-              content: schema.chunks.content,
-              chunkIndex: schema.chunks.chunkIndex,
-              documentId: schema.chunks.documentId,
-            })
-            .from(schema.chunks)
-            .where(inArray(schema.chunks.id, chunkIds))
-            .all()
-        : []
-    const chunkMap = new Map(chunkRows.map((row) => [row.id, row]))
-
-    const documentIds = new Set<string>()
-    if (depth === "document") {
-      for (const memory of memoryRows) {
-        if (memory.documentId) documentIds.add(memory.documentId)
-        if (!memory.chunkId) continue
-        const chunk = chunkMap.get(memory.chunkId)
-        if (chunk?.documentId) documentIds.add(chunk.documentId)
-      }
+    const rawArgs = _args as {
+      memoryIds?: string[]
+      memory_ids?: string[]
+      depth?: string
     }
-    const documentRows =
-      documentIds.size > 0
-        ? hdb.db
-            .select({
-              id: schema.documents.id,
-              originalText: schema.documents.originalText,
-            })
-            .from(schema.documents)
-            .where(inArray(schema.documents.id, [...documentIds]))
-            .all()
-        : []
-    const documentMap = new Map(documentRows.map((row) => [row.id, row]))
-    const memoryMap = new Map(memoryRows.map((row) => [row.id, row]))
+    return trackedToolCall("expand", rawArgs, async () => {
+      const memoryIds = normalizeExpandMemoryIds(rawArgs)
+      if (memoryIds.length === 0) return { results: [] as Array<Record<string, unknown>> }
 
-    const results: Array<Record<string, unknown>> = []
-    for (const memoryId of memoryIds) {
-      const memory = memoryMap.get(memoryId)
-      if (!memory) continue
+      const depth = normalizeExpandDepth(rawArgs.depth)
+      const memoryRows = hdb.db
+        .select({
+          id: schema.memoryUnits.id,
+          content: schema.memoryUnits.content,
+          chunkId: schema.memoryUnits.chunkId,
+          documentId: schema.memoryUnits.documentId,
+          factType: schema.memoryUnits.factType,
+          sourceText: schema.memoryUnits.sourceText,
+        })
+        .from(schema.memoryUnits)
+        .where(
+          and(
+            eq(schema.memoryUnits.bankId, bankId),
+            inArray(schema.memoryUnits.id, memoryIds),
+          ),
+        )
+        .all()
+      if (memoryRows.length === 0) return { results: [] as Array<Record<string, unknown>> }
 
-      const item: Record<string, unknown> = {
-        memory: {
-          id: memory.id,
-          content: memory.content,
-          factType: memory.factType,
-          context: memory.sourceText,
-          chunkId: memory.chunkId,
-          documentId: memory.documentId,
-        },
+      const chunkIds = [
+        ...new Set(
+          memoryRows
+            .map((row) => row.chunkId)
+            .filter((id): id is string => typeof id === "string" && id.length > 0),
+        ),
+      ]
+      const chunkRows =
+        chunkIds.length > 0
+          ? hdb.db
+              .select({
+                id: schema.chunks.id,
+                content: schema.chunks.content,
+                chunkIndex: schema.chunks.chunkIndex,
+                documentId: schema.chunks.documentId,
+              })
+              .from(schema.chunks)
+              .where(inArray(schema.chunks.id, chunkIds))
+              .all()
+          : []
+      const chunkMap = new Map(chunkRows.map((row) => [row.id, row]))
+
+      const documentIds = new Set<string>()
+      if (depth === "document") {
+        for (const memory of memoryRows) {
+          if (memory.documentId) documentIds.add(memory.documentId)
+          if (!memory.chunkId) continue
+          const chunk = chunkMap.get(memory.chunkId)
+          if (chunk?.documentId) documentIds.add(chunk.documentId)
+        }
       }
+      const documentRows =
+        documentIds.size > 0
+          ? hdb.db
+              .select({
+                id: schema.documents.id,
+                originalText: schema.documents.originalText,
+              })
+              .from(schema.documents)
+              .where(inArray(schema.documents.id, [...documentIds]))
+              .all()
+          : []
+      const documentMap = new Map(documentRows.map((row) => [row.id, row]))
+      const memoryMap = new Map(memoryRows.map((row) => [row.id, row]))
 
-      if (memory.chunkId) {
-        const chunk = chunkMap.get(memory.chunkId)
-        if (chunk) {
-          item.chunk = {
-            id: chunk.id,
-            text: chunk.content,
-            index: chunk.chunkIndex,
-            documentId: chunk.documentId,
-          }
-          if (depth === "document" && chunk.documentId) {
-            const document = documentMap.get(chunk.documentId)
-            if (document) {
-              item.document = {
-                id: document.id,
-                text: document.originalText,
+      const results: Array<Record<string, unknown>> = []
+      for (const memoryId of memoryIds) {
+        const memory = memoryMap.get(memoryId)
+        if (!memory) continue
+
+        const item: Record<string, unknown> = {
+          memory: {
+            id: memory.id,
+            content: memory.content,
+            factType: memory.factType,
+            context: memory.sourceText,
+            chunkId: memory.chunkId,
+            documentId: memory.documentId,
+          },
+        }
+
+        if (memory.chunkId) {
+          const chunk = chunkMap.get(memory.chunkId)
+          if (chunk) {
+            item.chunk = {
+              id: chunk.id,
+              text: chunk.content,
+              index: chunk.chunkIndex,
+              documentId: chunk.documentId,
+            }
+            if (depth === "document" && chunk.documentId) {
+              const document = documentMap.get(chunk.documentId)
+              if (document) {
+                item.document = {
+                  id: document.id,
+                  text: document.originalText,
+                }
               }
             }
           }
-        }
-      } else if (depth === "document" && memory.documentId) {
-        const document = documentMap.get(memory.documentId)
-        if (document) {
-          item.document = {
-            id: document.id,
-            text: document.originalText,
+        } else if (depth === "document" && memory.documentId) {
+          const document = documentMap.get(memory.documentId)
+          if (document) {
+            item.document = {
+              id: document.id,
+              text: document.originalText,
+            }
           }
         }
+
+        results.push(item)
       }
 
-      results.push(item)
-    }
-
-    return { results }
+      return { results }
+    })
   })
 
   // ── Run the agentic loop ──
@@ -374,8 +468,12 @@ export async function reflect(
     ? `${query}\n\nAdditional context: ${options.context}`
     : query
 
-  // Load directives and build system prompt with injection at top + bottom
-  const activeDirectives = loadDirectivesForReflect(hdb, bankId, options.tags, options.tagsMatch)
+  const activeDirectives = loadDirectivesForReflect(
+    hdb,
+    bankId,
+    options.tags,
+    options.tagsMatch,
+  )
   const basePrompt = getReflectSystemPrompt(budget)
   const bankIdentity = bankProfile ? buildBankIdentitySection(bankProfile) : ""
   const systemPrompt =
@@ -384,75 +482,82 @@ export async function reflect(
     bankIdentity +
     buildDirectivesReminder(activeDirectives)
 
-  const answer = await streamToText(
+  const rawAnswer = await streamToText(
     chat({
       adapter,
       messages: [{ role: "user", content: userMessage }],
       systemPrompts: [systemPrompt],
-      tools: [searchMentalModels, searchObservations, searchMemories, getEntity, expand],
+      tools: [
+        searchMentalModels,
+        searchObservations,
+        recallTool,
+        searchMemories,
+        getEntity,
+        expand,
+      ],
       agentLoopStrategy: maxIterations(iterations),
     }),
   )
+  const answer = cleanReflectAnswer(rawAnswer)
 
   // ── Optionally save as observation (stored as memory_unit with factType="observation") ──
 
   const observationTexts: string[] = []
-
   if (options.saveObservations !== false && answer.trim()) {
-    const obsId = ulid()
+    const observationId = ulid()
     const now = Date.now()
-    const sourceIds = [...new Set(allMemories.map((m) => m.memory.id))]
+    const sourceIds = [...new Set(allMemories.map((memory) => memory.memory.id))]
 
     hdb.db
       .insert(schema.memoryUnits)
       .values({
-        id: obsId,
+        id: observationId,
         bankId,
         content: answer,
         factType: "observation",
-        confidence: 1.0,
+        confidence: 1,
         proofCount: sourceIds.length,
         sourceMemoryIds: JSON.stringify(sourceIds),
         tags: options.tags ? JSON.stringify(options.tags) : null,
         history: JSON.stringify([]),
-        consolidatedAt: now, // mark as already consolidated
+        consolidatedAt: now,
         createdAt: now,
         updatedAt: now,
       })
       .run()
 
-    // Index in FTS5 + vector store for future retrieval
     hdb.sqlite.run(
       "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
-      [obsId, bankId, answer],
+      [observationId, bankId, answer],
     )
-
-    if (memoryVec) {
-      await memoryVec.upsert(obsId, answer)
-    }
-
+    await memoryVec.upsert(observationId, answer)
     observationTexts.push(answer)
   }
 
-  // ── Deduplicate collected memories ──
-
-  const seen = new Set<string>()
+  const seenMemoryIds = new Set<string>()
   const uniqueMemories: ScoredMemory[] = []
-  for (const m of allMemories) {
-    if (!seen.has(m.memory.id)) {
-      seen.add(m.memory.id)
-      uniqueMemories.push(m)
-    }
+  for (const memory of allMemories) {
+    if (seenMemoryIds.has(memory.memory.id)) continue
+    seenMemoryIds.add(memory.memory.id)
+    uniqueMemories.push(memory)
   }
+
+  const structuredOutput = options.responseSchema
+    ? await generateStructuredOutput(adapter, answer, options.responseSchema)
+    : undefined
 
   return {
     answer,
     memories: uniqueMemories,
     observations: observationTexts,
+    structuredOutput,
+    trace: {
+      startedAt,
+      durationMs: Date.now() - startedAt,
+      toolCalls,
+    },
   }
 }
-
-// ── Staleness helpers ───────────────────────────────────────────────────
 
 interface ObservationStalenessInfo {
   isStale: boolean
@@ -460,27 +565,15 @@ interface ObservationStalenessInfo {
   freshness: Freshness
 }
 
-/**
- * Compute observation staleness based on pending unconsolidated memories.
- *
- * An observation may be stale if new raw facts have arrived since the observation
- * was last updated but have not yet been processed by consolidation.
- *
- *   0 pending        → up_to_date
- *   1-3 pending      → slightly_stale (isStale=false, LLM sees metadata)
- *   4+ pending       → stale (isStale=true)
- */
 function computeObservationStaleness(
   hdb: HindsightDatabase,
   bankId: string,
   observationUpdatedAt: number,
 ): ObservationStalenessInfo {
   const pendingCount = countPendingConsolidation(hdb, bankId, observationUpdatedAt)
-
   if (pendingCount === 0) {
     return { isStale: false, stalenessReason: null, freshness: "up_to_date" }
   }
-
   if (pendingCount <= 3) {
     return {
       isStale: false,
@@ -488,7 +581,6 @@ function computeObservationStaleness(
       freshness: "slightly_stale",
     }
   }
-
   return {
     isStale: true,
     stalenessReason: `${pendingCount} memories pending consolidation`,
@@ -496,9 +588,6 @@ function computeObservationStaleness(
   }
 }
 
-/**
- * Count unconsolidated experience+world facts created after a given timestamp.
- */
 function countPendingConsolidation(
   hdb: HindsightDatabase,
   bankId: string,
@@ -513,25 +602,14 @@ function countPendingConsolidation(
        AND created_at > ?`,
     )
     .get(bankId, afterTimestamp) as { cnt: number }
-
   return result.cnt
 }
 
-/** Merge session-level tags with tool-level tags (union, deduplicated) */
-function mergeTags(
-  sessionTags?: string[],
-  toolTags?: string[],
-): string[] | undefined {
+function mergeTags(sessionTags?: string[], toolTags?: string[]): string[] | undefined {
   if (!sessionTags?.length && !toolTags?.length) return undefined
   return [...new Set([...(sessionTags ?? []), ...(toolTags ?? [])])]
 }
 
-// ── Bank Identity ──────────────────────────────────────────────────────
-
-/**
- * Build the bank identity section for the reflect system prompt.
- * Includes the bank name, mission, and disposition traits.
- */
 function buildBankIdentitySection(profile: BankProfile): string {
   const parts: string[] = ["", `## Memory Bank: ${profile.name}`]
 
@@ -540,11 +618,73 @@ function buildBankIdentitySection(profile: BankProfile): string {
   }
 
   const { disposition } = profile
-  const traits: string[] = []
-  traits.push(`skepticism=${disposition.skepticism}`)
-  traits.push(`literalism=${disposition.literalism}`)
-  traits.push(`empathy=${disposition.empathy}`)
-  parts.push(`Disposition: ${traits.join(", ")}`)
+  parts.push(
+    `Disposition: skepticism=${disposition.skepticism}, literalism=${disposition.literalism}, empathy=${disposition.empathy}`,
+  )
 
   return parts.join("\n")
+}
+
+function normalizeExpandMemoryIds(args: {
+  memoryIds?: string[]
+  memory_ids?: string[]
+}): string[] {
+  const fromCamel = Array.isArray(args.memoryIds) ? args.memoryIds : []
+  const fromSnake = Array.isArray(args.memory_ids) ? args.memory_ids : []
+  return [...new Set([...fromCamel, ...fromSnake].filter(Boolean))]
+}
+
+function normalizeExpandDepth(depth: string | undefined): "chunk" | "document" {
+  return depth?.toLowerCase() === "document" ? "document" : "chunk"
+}
+
+function cleanReflectAnswer(text: string): string {
+  let cleaned = (text ?? "").trim()
+  cleaned = cleaned.replace(DONE_CALL_PATTERN, "").trim()
+  cleaned = cleaned.replace(LEAKED_JSON_SUFFIX, "").trim()
+  cleaned = cleaned.replace(LEAKED_JSON_OBJECT, "").trim()
+  cleaned = cleaned.replace(TRAILING_IDS_PATTERN, "").trim()
+  return cleaned || (text ?? "").trim()
+}
+
+async function generateStructuredOutput(
+  adapter: AnyTextAdapter,
+  answer: string,
+  schema: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  if (!answer.trim()) return null
+
+  try {
+    const schemaJson = JSON.stringify(schema, null, 2)
+    const text = await streamToText(
+      chat({
+        adapter,
+        systemPrompts: [
+          "Extract structured JSON from the provided answer. Return only a JSON object matching the schema.",
+        ],
+        messages: [
+          {
+            role: "user",
+            content:
+              `Answer:\n${answer}\n\n` +
+              `JSON Schema:\n${schemaJson}\n\n` +
+              "Return only valid JSON.",
+          },
+        ],
+      }),
+    )
+    const parsed = parseLLMJson<Record<string, unknown> | null>(text, null)
+    if (!parsed || typeof parsed !== "object") return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function safeOutputSize(value: unknown): number {
+  try {
+    return JSON.stringify(value).length
+  } catch {
+    return String(value).length
+  }
 }

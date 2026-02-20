@@ -188,6 +188,8 @@ export interface HindsightConfig {
   rerank?: RerankFunction
   /** Called after each operation completes with timing + metadata */
   onTrace?: TraceCallback
+  /** Optional auth/tenant/operation validator extension hooks. */
+  extensions?: HindsightExtensions
 }
 
 // ── Tracing ───────────────────────────────────────────────────────────────
@@ -203,6 +205,47 @@ export interface HindsightTrace {
 
 /** Callback for receiving operation traces */
 export type TraceCallback = (trace: HindsightTrace) => void
+
+export type HindsightOperationName =
+  | "retain"
+  | "retain_batch"
+  | "recall"
+  | "reflect"
+  | "consolidate"
+  | "submit_async_retain"
+  | "submit_async_consolidation"
+  | "submit_async_refresh_mental_model"
+
+export interface HindsightOperationContext {
+  operation: HindsightOperationName
+  bankId: string
+  tenantId: string
+  input: Record<string, unknown>
+}
+
+export interface HindsightOperationResultContext
+  extends HindsightOperationContext {
+  success: boolean
+  result?: unknown
+  error?: string
+}
+
+export interface HindsightExtensions {
+  /** Optional tenant resolver. Defaults to the bankId when not provided. */
+  resolveTenantId?: (bankId: string) => string | undefined
+  /** Optional auth hook called before operations run. */
+  authorize?: (
+    context: HindsightOperationContext,
+  ) => void | Promise<void>
+  /** Optional validator hook called before operations run. */
+  validate?: (
+    context: HindsightOperationContext,
+  ) => void | Promise<void>
+  /** Optional completion hook called after operation success/failure. */
+  onComplete?: (
+    context: HindsightOperationResultContext,
+  ) => void | Promise<void>
+}
 
 // ── Operation options ──────────────────────────────────────────────────────
 
@@ -280,6 +323,8 @@ export interface RecallOptions {
   includeChunks?: boolean
   /** Optional token budget for chunk payload. */
   maxChunkTokens?: number
+  /** Include detailed retrieval/ranking trace. */
+  enableTrace?: boolean
 }
 
 /** Tag matching mode for recall/reflect tag filtering */
@@ -305,6 +350,8 @@ export interface ReflectOptions {
   tags?: string[]
   /** Tag matching mode. Default: "any" */
   tagsMatch?: TagsMatch
+  /** Optional JSON schema for structured output extraction from the answer. */
+  responseSchema?: Record<string, unknown>
 }
 
 // ── Results ────────────────────────────────────────────────────────────────
@@ -325,6 +372,48 @@ export interface RecallResult {
   query: string
   entities?: Record<string, RecallEntityState>
   chunks?: Record<string, RecallChunk>
+  trace?: RecallTrace
+}
+
+export interface RecallTraceMetric {
+  phaseName: string
+  durationMs: number
+  details?: Record<string, unknown>
+}
+
+export interface RecallTraceMethodResult {
+  methodName: "semantic" | "fulltext" | "graph" | "temporal"
+  durationMs: number
+  count: number
+  results: Array<{
+    id: string
+    rank: number
+    score: number
+  }>
+}
+
+export interface RecallTraceCandidate {
+  id: string
+  rank: number
+  sources: Array<"semantic" | "fulltext" | "graph" | "temporal">
+  rrfScore: number
+  crossEncoderScoreNormalized: number
+  rrfNormalized: number
+  temporal: number
+  recency: number
+  combinedScore: number
+}
+
+export interface RecallTrace {
+  startedAt: number
+  query: string
+  maxTokens: number | null
+  temporalConstraint?: { from?: number; to?: number }
+  retrieval: RecallTraceMethodResult[]
+  phaseMetrics: RecallTraceMetric[]
+  candidates: RecallTraceCandidate[]
+  selectedMemoryIds: string[]
+  totalDurationMs: number
 }
 
 /** Aggregated entity state payload returned by recall(includeEntities=true). */
@@ -381,6 +470,128 @@ export interface GraphEdge {
   targetId: string
   linkType: LinkType
   weight: number
+}
+
+export interface MemoryUnitListItem {
+  id: string
+  text: string
+  context: string
+  date: string
+  factType: FactType
+  mentionedAt: string | null
+  occurredStart: string | null
+  occurredEnd: string | null
+  entities: string
+  chunkId: string | null
+}
+
+export interface ListMemoryUnitsOptions {
+  factType?: FactType
+  searchQuery?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ListMemoryUnitsResult {
+  items: MemoryUnitListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface MemoryUnitSourceMemory {
+  id: string
+  text: string
+  type: FactType
+  context: string | null
+  occurredStart: string | null
+  mentionedAt: string | null
+}
+
+export interface MemoryUnitDetail {
+  id: string
+  text: string
+  context: string
+  date: string
+  type: FactType
+  mentionedAt: string | null
+  occurredStart: string | null
+  occurredEnd: string | null
+  entities: string[]
+  documentId: string | null
+  chunkId: string | null
+  tags: string[]
+  sourceMemoryIds?: string[]
+  sourceMemories?: MemoryUnitSourceMemory[]
+}
+
+export interface DeleteMemoryUnitResult {
+  success: boolean
+  unitId: string | null
+  message: string
+}
+
+export interface ClearObservationsResult {
+  deletedCount: number
+}
+
+export interface EntityListItem {
+  id: string
+  canonicalName: string
+  mentionCount: number
+  firstSeen: string | null
+  lastSeen: string | null
+  metadata: Record<string, unknown>
+}
+
+export interface ListEntitiesResult {
+  items: EntityListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface EntityState {
+  entityId: string
+  canonicalName: string
+  observations: Array<Record<string, unknown>>
+}
+
+export interface EntityDetail {
+  id: string
+  canonicalName: string
+  mentionCount: number
+  firstSeen: string | null
+  lastSeen: string | null
+  metadata: Record<string, unknown>
+  observations: Array<Record<string, unknown>>
+}
+
+export interface TagUsage {
+  tag: string
+  count: number
+}
+
+export interface ListTagsOptions {
+  pattern?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ListTagsResult {
+  items: TagUsage[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface BankStats {
+  bankId: string
+  nodeCounts: Record<string, number>
+  linkCounts: Record<string, number>
+  linkCountsByFactType: Record<string, number>
+  linkBreakdown: Array<{ factType: string; linkType: string; count: number }>
+  operations: Record<string, number>
 }
 
 // ── Async Operations ─────────────────────────────────────────────────────
@@ -455,6 +666,18 @@ export interface ReflectResult {
   answer: string
   memories: ScoredMemory[]
   observations: string[]
+  structuredOutput?: Record<string, unknown> | null
+  trace?: {
+    startedAt: number
+    durationMs: number
+    toolCalls: Array<{
+      tool: string
+      durationMs: number
+      input: Record<string, unknown>
+      outputSize: number
+      error?: string
+    }>
+  }
 }
 
 // ── Consolidation options/results ────────────────────────────────────────
