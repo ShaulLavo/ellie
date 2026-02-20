@@ -70,6 +70,7 @@ export type {
   EntityListItem,
   EntityState,
   EntityDetail,
+  UpdateEntityOptions,
   ListTagsOptions,
   ListTagsResult,
   TagUsage,

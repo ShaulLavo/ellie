@@ -77,6 +77,7 @@ import type {
   ListEntitiesResult,
   EntityState,
   EntityDetail,
+  UpdateEntityOptions,
   ListTagsOptions,
   ListTagsResult,
   BankStats,
@@ -1290,6 +1291,7 @@ Instructions:
     return {
       id: row.id,
       canonicalName: row.name,
+      description: row.description,
       mentionCount: row.mentionCount,
       firstSeen: toIsoOrNull(row.firstSeen),
       lastSeen: toIsoOrNull(row.lastUpdated),
@@ -1298,6 +1300,55 @@ Instructions:
         : {},
       observations: [],
     }
+  }
+
+  updateEntity(
+    bankId: string,
+    entityId: string,
+    options: UpdateEntityOptions,
+  ): EntityDetail | undefined {
+    const row = this.hdb.db
+      .select()
+      .from(this.hdb.schema.entities)
+      .where(
+        and(
+          eq(this.hdb.schema.entities.id, entityId),
+          eq(this.hdb.schema.entities.bankId, bankId),
+        ),
+      )
+      .get()
+    if (!row) return undefined
+
+    const canonicalName =
+      options.canonicalName?.trim() && options.canonicalName.trim().length > 0
+        ? options.canonicalName.trim()
+        : row.name
+    const description =
+      options.description !== undefined ? options.description : row.description
+    const metadata =
+      options.metadata !== undefined
+        ? options.metadata
+          ? JSON.stringify(options.metadata)
+          : null
+        : row.metadata
+
+    this.hdb.db
+      .update(this.hdb.schema.entities)
+      .set({
+        name: canonicalName,
+        description,
+        metadata,
+        lastUpdated: Date.now(),
+      })
+      .where(
+        and(
+          eq(this.hdb.schema.entities.id, entityId),
+          eq(this.hdb.schema.entities.bankId, bankId),
+        ),
+      )
+      .run()
+
+    return this.getEntity(bankId, entityId)
   }
 
   listTags(bankId: string, options?: ListTagsOptions): ListTagsResult {

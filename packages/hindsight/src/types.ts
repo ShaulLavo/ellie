@@ -570,11 +570,18 @@ export interface EntityState {
 export interface EntityDetail {
   id: string
   canonicalName: string
+  description: string | null
   mentionCount: number
   firstSeen: string | null
   lastSeen: string | null
   metadata: Record<string, unknown>
   observations: Array<Record<string, unknown>>
+}
+
+export interface UpdateEntityOptions {
+  canonicalName?: string
+  description?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 export interface TagUsage {

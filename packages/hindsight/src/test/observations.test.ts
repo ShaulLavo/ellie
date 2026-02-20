@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
 
 describe("Entity extraction on retain", () => {
   let t: TestHindsight
@@ -309,11 +309,29 @@ describe("Recall entity parameters (TDD targets)", () => {
 })
 
 describe("Observation storage controls (TDD targets)", () => {
-  it("observations are not stored when disabled", () => {
-    implementMe(
-      "reflect saveObservations=false already tested in reflect.test.ts; consolidation observation storage toggle not implemented",
-      "test_consolidation.py::test_observations_disabled",
-    )
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("observations are not stored when disabled", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Alice shipped the release", factType: "experience" }],
+      consolidate: false,
+    })
+
+    const observations = t.hs.listMemoryUnits(bankId, { factType: "observation" })
+    const experiences = t.hs.listMemoryUnits(bankId, { factType: "experience" })
+
+    expect(observations.total).toBe(0)
+    expect(experiences.total).toBeGreaterThan(0)
   })
 })
 
@@ -400,17 +418,95 @@ describe("Entity state tracking (TDD targets)", () => {
     expect(second!.lastUpdated).toBeGreaterThanOrEqual(first!.lastUpdated)
   })
 
-  it("entity description can be updated", () => {
-    implementMe(
-      "entity description update not exposed via Hindsight public API",
-      "test_observations.py::test_entity_description_update",
+  it("entity description can be updated", async () => {
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Alice started a project", entities: ["Alice"] }],
+      consolidate: false,
+    })
+
+    const entities = t.hs.listEntities(bankId)
+    const alice = entities.items.find((entity) => entity.canonicalName === "Alice")
+    expect(alice).toBeDefined()
+
+    const updated = t.hs.updateEntity(bankId, alice!.id, {
+      description: "Leads platform engineering and mentors new hires",
+    })
+    expect(updated).toBeDefined()
+    expect(updated!.description).toBe(
+      "Leads platform engineering and mentors new hires",
+    )
+
+    const reloaded = t.hs.getEntity(bankId, alice!.id)
+    expect(reloaded).toBeDefined()
+    expect(reloaded!.description).toBe(
+      "Leads platform engineering and mentors new hires",
     )
   })
 })
 
 describe("clearObservations (TDD targets)", () => {
-  it.todo("clearObservations removes all observations from the bank")
-  it.todo("clearObservations does not remove raw facts (experience/world)")
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("clearObservations removes all observations from the bank", async () => {
+    await t.hs.retain(bankId, "raw", {
+      facts: [
+        { content: "Alice likes coffee", factType: "experience", entities: ["Alice"] },
+      ],
+      consolidate: false,
+    })
+
+    // Create at least one observation via reflect save path.
+    await t.hs.reflect(bankId, "What do we know about Alice?", {
+      saveObservations: true,
+    })
+
+    const before = t.hs.listMemoryUnits(bankId, { factType: "observation" })
+    expect(before.total).toBeGreaterThan(0)
+
+    const result = t.hs.clearObservations(bankId)
+    expect(result.deletedCount).toBeGreaterThan(0)
+
+    const after = t.hs.listMemoryUnits(bankId, { factType: "observation" })
+    expect(after.total).toBe(0)
+  })
+
+  it("clearObservations does not remove raw facts (experience/world)", async () => {
+    await t.hs.retain(bankId, "raw", {
+      facts: [
+        { content: "Alice likes coffee", factType: "experience", entities: ["Alice"] },
+        { content: "Coffee contains caffeine", factType: "world", entities: ["Coffee"] },
+      ],
+      consolidate: false,
+    })
+
+    const rawBefore = t.hs.listMemoryUnits(bankId)
+    const rawIds = rawBefore.items.map((item) => item.id)
+    expect(rawIds.length).toBeGreaterThanOrEqual(2)
+
+    await t.hs.reflect(bankId, "Summarize the known facts", {
+      saveObservations: true,
+    })
+
+    const clearResult = t.hs.clearObservations(bankId)
+    expect(clearResult.deletedCount).toBeGreaterThanOrEqual(0)
+
+    const rawAfter = t.hs.listMemoryUnits(bankId)
+    const rawAfterSet = new Set(rawAfter.items.map((item) => item.id))
+    for (const id of rawIds) {
+      expect(rawAfterSet.has(id)).toBe(true)
+    }
+    expect(rawAfter.total).toBeGreaterThanOrEqual(rawIds.length)
+  })
 })
 
 describe("Operation lifecycle (TDD targets)", () => {
