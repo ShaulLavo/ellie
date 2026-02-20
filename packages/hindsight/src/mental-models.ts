@@ -17,6 +17,7 @@ import type {
   CreateMentalModelOptions,
   UpdateMentalModelOptions,
   RefreshMentalModelResult,
+  RerankFunction,
 } from "./types"
 import { reflect } from "./reflect"
 import type { MentalModelRow } from "./schema"
@@ -196,6 +197,7 @@ export async function refreshMentalModel(
   adapter: AnyTextAdapter,
   bankId: string,
   id: string,
+  rerank?: RerankFunction,
 ): Promise<RefreshMentalModelResult> {
   const row = hdb.db
     .select()
@@ -219,6 +221,7 @@ export async function refreshMentalModel(
     bankId,
     row.sourceQuery,
     { saveObservations: false },
+    rerank,
   )
 
   const now = Date.now()

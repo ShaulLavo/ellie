@@ -36,6 +36,7 @@ export type {
   MentalModelSearchResult,
   ObservationSearchResult,
   RawFactSearchResult,
+  RerankFunction,
 } from "./types"
 
 export * as schema from "./schema"

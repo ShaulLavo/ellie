@@ -23,6 +23,7 @@ import type {
   ReflectBudget,
   Freshness,
   ScoredMemory,
+  RerankFunction,
 } from "./types"
 import { recall } from "./recall"
 import { searchMentalModelsWithStaleness } from "./mental-models"
@@ -55,6 +56,7 @@ export async function reflect(
   bankId: string,
   query: string,
   options: ReflectOptions = {},
+  rerank?: RerankFunction,
 ): Promise<ReflectResult> {
   const allMemories: ScoredMemory[] = []
   const { schema } = hdb
@@ -108,7 +110,7 @@ export async function reflect(
       factTypes: ["observation"],
       tags: mergedTags,
       tagsMatch: options.tagsMatch,
-    })
+    }, rerank)
 
     allMemories.push(...result.memories)
 
@@ -151,7 +153,7 @@ export async function reflect(
       factTypes: ["experience", "world"],
       tags: mergedTags,
       tagsMatch: options.tagsMatch,
-    })
+    }, rerank)
 
     allMemories.push(...result.memories)
 

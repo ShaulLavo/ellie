@@ -7,6 +7,7 @@ import type {
   ScoredMemory,
   FactType,
   TagsMatch,
+  RerankFunction,
 } from "./types"
 import type { RetrievalHit } from "./retrieval/semantic"
 import { searchSemantic } from "./retrieval/semantic"
@@ -14,6 +15,7 @@ import { searchFulltext } from "./retrieval/fulltext"
 import { searchGraph } from "./retrieval/graph"
 import { searchTemporal } from "./retrieval/temporal"
 import { reciprocalRankFusion } from "./fusion"
+import { rerankCandidates } from "./rerank"
 import { rowToMemoryUnit, rowToEntity } from "./retain"
 import { extractTemporalRange } from "./temporal"
 
@@ -35,6 +37,7 @@ export async function recall(
   bankId: string,
   query: string,
   options: RecallOptions = {},
+  rerank?: RerankFunction,
 ): Promise<RecallResult> {
   const limit = options.limit ?? 10
   const methods = options.methods ?? [
@@ -81,10 +84,25 @@ export async function recall(
   // Merge via Reciprocal Rank Fusion
   const fused = reciprocalRankFusion(resultSets, limit * 2)
 
+  // Optional: Cross-encoder reranking
+  let ranked = fused
+  if (rerank) {
+    const contentMap = new Map<string, string>()
+    for (const { id } of fused) {
+      const row = hdb.db
+        .select({ id: hdb.schema.memoryUnits.id, content: hdb.schema.memoryUnits.content })
+        .from(hdb.schema.memoryUnits)
+        .where(eq(hdb.schema.memoryUnits.id, id))
+        .get()
+      if (row) contentMap.set(row.id, row.content)
+    }
+    ranked = await rerankCandidates(rerank, query, fused, contentMap)
+  }
+
   // Hydrate full memory objects with entities, apply filters
   const memories: ScoredMemory[] = []
 
-  for (const { id, score, sources } of fused) {
+  for (const { id, score, sources } of ranked) {
     if (memories.length >= limit) break
 
     const row = hdb.db

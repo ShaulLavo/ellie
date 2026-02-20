@@ -13,6 +13,7 @@ import type {
   FactType,
   EntityType,
   LinkType,
+  RerankFunction,
 } from "./types"
 import { getExtractionPrompt, EXTRACT_FACTS_USER } from "./prompts"
 import { sanitizeText, parseLLMJson } from "./sanitize"
@@ -115,6 +116,7 @@ export async function retain(
   bankId: string,
   content: string,
   options: RetainOptions = {},
+  rerank?: RerankFunction,
 ): Promise<RetainResult> {
   const now = Date.now()
   const { schema } = hdb
@@ -458,7 +460,7 @@ export async function retain(
 
   if (shouldConsolidate) {
     // Fire-and-forget — don't block retain
-    consolidate(hdb, memoryVec, modelVec, adapter, bankId).catch(
+    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank).catch(
       () => {}, // swallow errors — consolidation is best-effort
     )
   }

@@ -25,6 +25,7 @@ import type {
   ConsolidateResult,
   ConsolidationAction,
   ObservationHistoryEntry,
+  RerankFunction,
 } from "./types"
 import { CONSOLIDATION_SYSTEM, getConsolidationUserPrompt } from "./prompts"
 import { parseLLMJson } from "./sanitize"
@@ -63,6 +64,7 @@ export async function consolidate(
   adapter: AnyTextAdapter,
   bankId: string,
   options: ConsolidateOptions = {},
+  rerank?: RerankFunction,
 ): Promise<ConsolidateResult> {
   const { schema } = hdb
   const batchSize = options.batchSize ?? 50
@@ -162,6 +164,7 @@ export async function consolidate(
       adapter,
       bankId,
       allTags,
+      rerank,
     )
   }
 
@@ -394,6 +397,7 @@ async function triggerMentalModelRefreshes(
   adapter: AnyTextAdapter,
   bankId: string,
   consolidatedTags: Set<string>,
+  rerank?: RerankFunction,
 ): Promise<number> {
   const { schema } = hdb
 
@@ -420,7 +424,7 @@ async function triggerMentalModelRefreshes(
     }
 
     // Fire-and-forget refresh
-    refreshMentalModel(hdb, memoryVec, modelVec, adapter, bankId, model.id)
+    refreshMentalModel(hdb, memoryVec, modelVec, adapter, bankId, model.id, rerank)
       .then(() => {})
       .catch(() => {})
     refreshed++

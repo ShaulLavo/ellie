@@ -44,6 +44,7 @@ import type {
   ConsolidateResult,
   TraceCallback,
   HindsightTrace,
+  RerankFunction,
 } from "./types"
 
 // ── Default config values ───────────────────────────────────────────────
@@ -74,6 +75,7 @@ export class Hindsight {
   private readonly entityVec: EmbeddingStore
   private readonly modelVec: EmbeddingStore
   private readonly adapter: AnyTextAdapter
+  private readonly rerank: RerankFunction | undefined
   private readonly instanceDefaults: BankConfig | undefined
   private readonly onTrace: TraceCallback | undefined
 
@@ -82,6 +84,7 @@ export class Hindsight {
 
     this.hdb = createHindsightDB(config.dbPath, dims)
     this.adapter = config.adapter ?? anthropicText("claude-haiku-4-5")
+    this.rerank = config.rerank
     this.instanceDefaults = config.defaults
     this.onTrace = config.onTrace
 
@@ -289,6 +292,7 @@ export class Hindsight {
           bankId,
           content,
           resolvedOptions,
+          this.rerank,
         ),
       (r) => ({
         memoriesExtracted: r.memories.length,
@@ -306,7 +310,7 @@ export class Hindsight {
     return this.trace(
       "recall",
       bankId,
-      () => recallImpl(this.hdb, this.memoryVec, bankId, query, options),
+      () => recallImpl(this.hdb, this.memoryVec, bankId, query, options, this.rerank),
       (r) => ({
         memoriesReturned: r.memories.length,
         limit: options?.limit ?? 10,
@@ -336,6 +340,7 @@ export class Hindsight {
           bankId,
           query,
           resolvedOptions,
+          this.rerank,
         ),
       (r) => ({
         memoriesAccessed: r.memories.length,
@@ -363,6 +368,7 @@ export class Hindsight {
           this.adapter,
           bankId,
           options,
+          this.rerank,
         ),
       (r) => ({
         memoriesProcessed: r.memoriesProcessed,
@@ -412,6 +418,7 @@ export class Hindsight {
       this.adapter,
       bankId,
       id,
+      this.rerank,
     )
   }
 

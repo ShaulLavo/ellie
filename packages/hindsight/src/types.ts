@@ -120,6 +120,9 @@ export interface MentalModel {
 /** User-provided embedding function: text → float array */
 export type EmbedFunction = (text: string) => Promise<number[]>
 
+/** User-provided reranking function: (query, documents) → relevance scores (higher = more relevant) */
+export type RerankFunction = (query: string, documents: string[]) => Promise<number[]>
+
 /** Configuration for creating a Hindsight instance */
 export interface HindsightConfig {
   /** Path to SQLite database file */
@@ -134,6 +137,8 @@ export interface HindsightConfig {
   enableConsolidation?: boolean
   /** Default bank config applied to all banks unless overridden per-bank */
   defaults?: BankConfig
+  /** Optional cross-encoder reranking function for improved recall precision */
+  rerank?: RerankFunction
   /** Called after each operation completes with timing + metadata */
   onTrace?: TraceCallback
 }
