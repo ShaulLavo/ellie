@@ -20,6 +20,9 @@
       "dependencies": {
         "@ellie/db": "workspace:*",
         "@ellie/durable-streams": "workspace:*",
+        "@ellie/rpc-router": "workspace:*",
+        "@ellie/streams-rpc": "workspace:*",
+        "valibot": "^1.2.0",
       },
       "devDependencies": {
         "@durable-streams/client": "0.2.1",
@@ -32,7 +35,9 @@
       "name": "studio",
       "version": "0.0.0",
       "dependencies": {
+        "@ellie/rpc-router": "workspace:*",
         "@ellie/streams-client": "workspace:*",
+        "@ellie/streams-rpc": "workspace:*",
         "@ellie/streams-state": "workspace:*",
         "@tanstack/ai": "^0.5.1",
         "@tanstack/db": "^0.5.27",
@@ -95,6 +100,17 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/rpc-router": {
+      "name": "@ellie/rpc-router",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/streams-rpc": "workspace:*",
+        "valibot": "^1.2.0",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+      },
+    },
     "packages/streams-client": {
       "name": "@ellie/streams-client",
       "version": "0.1.0",
@@ -104,6 +120,28 @@
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
         "typescript": "^5.0.0",
+      },
+    },
+    "packages/streams-rpc": {
+      "name": "@ellie/streams-rpc",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/streams-client": "workspace:*",
+        "@ellie/streams-state": "workspace:*",
+        "@standard-schema/spec": "^1.0.0",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "@tanstack/db": "^0.5.27",
+        "@tanstack/react-db": "^0.1.71",
+        "@types/react": "^19.2.7",
+        "react": "^19.2.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@tanstack/db": ">=0.5.0",
+        "@tanstack/react-db": ">=0.5.0",
+        "react": ">=18",
       },
     },
     "packages/streams-state": {
@@ -181,7 +219,11 @@
 
     "@ellie/durable-streams": ["@ellie/durable-streams@workspace:packages/durable-streams"],
 
+    "@ellie/rpc-router": ["@ellie/rpc-router@workspace:packages/rpc-router"],
+
     "@ellie/streams-client": ["@ellie/streams-client@workspace:packages/streams-client"],
+
+    "@ellie/streams-rpc": ["@ellie/streams-rpc@workspace:packages/streams-rpc"],
 
     "@ellie/streams-state": ["@ellie/streams-state@workspace:packages/streams-state"],
 

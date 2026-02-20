@@ -9,7 +9,10 @@
   },
   "dependencies": {
     "@ellie/db": "workspace:*",
-    "@ellie/durable-streams": "workspace:*"
+    "@ellie/durable-streams": "workspace:*",
+    "@ellie/rpc-router": "workspace:*",
+    "@ellie/streams-rpc": "workspace:*",
+    "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
