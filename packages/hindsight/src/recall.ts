@@ -6,7 +6,6 @@ import type {
   RecallResult,
   ScoredMemory,
   FactType,
-  TagsMatch,
   RerankFunction,
   RecallEntityState,
   RecallChunk,
@@ -23,6 +22,7 @@ import { searchTemporal } from "./retrieval/temporal"
 import { reciprocalRankFusion } from "./fusion"
 import { rowToMemoryUnit, rowToEntity } from "./retain"
 import { extractTemporalRange } from "./temporal"
+import { matchesTags, parseStringArray } from "./tags"
 
 interface TimedHits {
   hits: RetrievalHit[]
@@ -163,6 +163,7 @@ export async function recall(
     }
   }
 
+  // Batch-load memory rows for all fused candidates (avoids N+1)
   const fusedIds = fused.map((candidate) => candidate.id)
   const memoryRows = hdb.db
     .select()
@@ -256,6 +257,39 @@ export async function recall(
   })
 
   const hydrationStart = Date.now()
+
+  // Batch-load all junctions + entities for ranked candidates (avoids N+1)
+  const rankedIds = rankedCandidates.map((c) => c.id)
+  const allJunctions =
+    rankedIds.length > 0
+      ? hdb.db
+          .select()
+          .from(hdb.schema.memoryEntities)
+          .where(inArray(hdb.schema.memoryEntities.memoryId, rankedIds))
+          .all()
+      : []
+
+  // Group junctions by memoryId
+  const junctionsByMemoryId = new Map<string, typeof allJunctions>()
+  for (const j of allJunctions) {
+    const list = junctionsByMemoryId.get(j.memoryId)
+    if (list) list.push(j)
+    else junctionsByMemoryId.set(j.memoryId, [j])
+  }
+
+  // Batch-load all referenced entities
+  const allEntityIds = [...new Set(allJunctions.map((j) => j.entityId))]
+  const allEntityRows =
+    allEntityIds.length > 0
+      ? hdb.db
+          .select()
+          .from(hdb.schema.entities)
+          .where(inArray(hdb.schema.entities.id, allEntityIds))
+          .all()
+      : []
+  const entityById = new Map(allEntityRows.map((e) => [e.id, e]))
+
+  // Hydrate full memory objects with entities, apply filters
   const memories: ScoredMemory[] = []
   const entityStates = new Map<string, {
     id: string
@@ -264,6 +298,8 @@ export async function recall(
     memoryIds: Set<string>
   }>()
   let usedTokens = 0
+
+  const VALID_SOURCES = new Set(["semantic", "fulltext", "graph", "temporal"])
 
   for (const candidate of rankedCandidates) {
     if (memories.length >= limit) break
@@ -291,20 +327,10 @@ export async function recall(
       }
     }
 
-    const junctions = hdb.db
-      .select()
-      .from(hdb.schema.memoryEntities)
-      .where(eq(hdb.schema.memoryEntities.memoryId, candidate.id))
-      .all()
-
+    // Look up pre-loaded entities for this memory (avoids N+1)
+    const junctions = junctionsByMemoryId.get(candidate.id) ?? []
     const entityRows = junctions
-      .map((junction) =>
-        hdb.db
-          .select()
-          .from(hdb.schema.entities)
-          .where(eq(hdb.schema.entities.id, junction.entityId))
-          .get(),
-      )
+      .map((j) => entityById.get(j.entityId))
       .filter(Boolean)
 
     if (options.entities && options.entities.length > 0) {
@@ -319,10 +345,15 @@ export async function recall(
       usedTokens += contentTokens
     }
 
+    // Validate sources at runtime — filter to known retrieval methods
+    const validatedSources = candidate.sources.filter((s) =>
+      VALID_SOURCES.has(s),
+    ) as ScoredMemory["sources"]
+
     memories.push({
       memory: rowToMemoryUnit(row),
       score: candidate.combinedScore,
-      sources: candidate.sources,
+      sources: validatedSources,
       entities: entityRows.map((entityRow) => rowToEntity(entityRow!)),
     })
 
@@ -384,37 +415,8 @@ export async function recall(
   return { memories, query, entities, chunks, trace }
 }
 
-// ── Tag matching ──────────────────────────────────────────────────────────
-
-/**
- * Check if a memory's tags match the filter tags according to the given mode.
- *
- * Modes:
- * - "any": memory has any matching tag OR is untagged (most permissive)
- * - "all": memory has ALL filter tags (untagged memories are included)
- * - "any_strict": memory has any matching tag (excludes untagged)
- * - "all_strict": memory has ALL filter tags (excludes untagged)
- */
-export function matchesTags(
-  memoryTags: string[],
-  filterTags: string[],
-  mode: TagsMatch,
-): boolean {
-  if (filterTags.length === 0) return true
-
-  const isUntagged = memoryTags.length === 0
-
-  switch (mode) {
-    case "any":
-      return isUntagged || memoryTags.some((tag) => filterTags.includes(tag))
-    case "all":
-      return isUntagged || filterTags.every((tag) => memoryTags.includes(tag))
-    case "any_strict":
-      return !isUntagged && memoryTags.some((tag) => filterTags.includes(tag))
-    case "all_strict":
-      return !isUntagged && filterTags.every((tag) => memoryTags.includes(tag))
-  }
-}
+// Re-export matchesTags for downstream consumers
+export { matchesTags } from "./tags"
 
 function timedSync(fn: () => RetrievalHit[]): TimedHits {
   const startedAt = Date.now()
@@ -466,17 +468,6 @@ function computeRecency(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
-}
-
-function parseStringArray(raw: string | null): string[] {
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((item): item is string => typeof item === "string")
-  } catch {
-    return []
-  }
 }
 
 function estimateTokens(text: string): number {

@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, or } from "drizzle-orm"
 import type { HindsightDatabase } from "../db"
 import type { EmbeddingStore } from "../embedding"
 import type { FactType, TagsMatch } from "../types"
-import { matchesTags } from "../recall"
+import { passesTagFilter, parseStringArray } from "../tags"
 import type { RetrievalHit } from "./semantic"
 
 /**
@@ -123,27 +123,45 @@ async function resolveSeedIds(
   const seedThreshold = options.seedThreshold ?? DEFAULT_SEED_THRESHOLD
   const factTypes = getFactTypeSet(options.factTypes)
   const hits = await memoryVec.search(query, searchLimit)
+
+  // Filter hits above threshold (preserving order)
+  const candidateHits = hits.filter((hit) => {
+    const similarity = 1 - hit.distance
+    return similarity >= seedThreshold
+  })
+
+  // Collect all IDs we need to look up (semantic hits + temporal seeds)
+  const temporalSeedIds = unique(options.temporalSeedMemoryIds ?? [])
+  const allCandidateIds = unique([
+    ...candidateHits.map((h) => h.id),
+    ...temporalSeedIds,
+  ])
+
+  // Batch-load all candidate memory rows in one query
+  const candidateRows =
+    allCandidateIds.length > 0
+      ? hdb.db
+          .select({
+            id: hdb.schema.memoryUnits.id,
+            bankId: hdb.schema.memoryUnits.bankId,
+            factType: hdb.schema.memoryUnits.factType,
+            tags: hdb.schema.memoryUnits.tags,
+          })
+          .from(hdb.schema.memoryUnits)
+          .where(inArray(hdb.schema.memoryUnits.id, allCandidateIds))
+          .all()
+      : []
+  const rowById = new Map(candidateRows.map((r) => [r.id, r]))
+
+  // Select seeds from semantic hits (order matters — best similarity first)
   const seeds: string[] = []
   const seen = new Set<string>()
 
-  for (const hit of hits) {
+  for (const hit of candidateHits) {
     if (seeds.length >= desiredSeedCount) break
     if (seen.has(hit.id)) continue
 
-    const similarity = 1 - hit.distance
-    if (similarity < seedThreshold) continue
-
-    const row = hdb.db
-      .select({
-        id: hdb.schema.memoryUnits.id,
-        bankId: hdb.schema.memoryUnits.bankId,
-        factType: hdb.schema.memoryUnits.factType,
-        tags: hdb.schema.memoryUnits.tags,
-      })
-      .from(hdb.schema.memoryUnits)
-      .where(eq(hdb.schema.memoryUnits.id, hit.id))
-      .get()
-
+    const row = rowById.get(hit.id)
     if (!row || row.bankId !== bankId) continue
     if (!factTypes.has(row.factType as FactType)) continue
     if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
@@ -152,21 +170,11 @@ async function resolveSeedIds(
     seeds.push(hit.id)
   }
 
-  const temporalSeedIds = unique(options.temporalSeedMemoryIds ?? [])
+  // Add temporal seeds
   for (const temporalSeedId of temporalSeedIds) {
     if (seen.has(temporalSeedId)) continue
 
-    const row = hdb.db
-      .select({
-        id: hdb.schema.memoryUnits.id,
-        bankId: hdb.schema.memoryUnits.bankId,
-        factType: hdb.schema.memoryUnits.factType,
-        tags: hdb.schema.memoryUnits.tags,
-      })
-      .from(hdb.schema.memoryUnits)
-      .where(eq(hdb.schema.memoryUnits.id, temporalSeedId))
-      .get()
-
+    const row = rowById.get(temporalSeedId)
     if (!row || row.bankId !== bankId) continue
     if (!factTypes.has(row.factType as FactType)) continue
     if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
@@ -422,24 +430,28 @@ function expandViaCausalLinks(
         eq(hdb.schema.memoryLinks.bankId, bankId),
         inArray(hdb.schema.memoryLinks.linkType, [...CAUSAL_LINK_TYPES]),
         gte(hdb.schema.memoryLinks.weight, causalThreshold),
-        inArray(hdb.schema.memoryLinks.sourceId, seedIds),
+        or(
+          inArray(hdb.schema.memoryLinks.sourceId, seedIds),
+          inArray(hdb.schema.memoryLinks.targetId, seedIds),
+        ),
       ),
     )
     .all()
-
-  const rankedLinks = [...links]
     .sort((a, b) => b.weight - a.weight)
     .slice(0, rawLimit)
 
   const scores = new Map<string, number>()
 
-  for (const link of rankedLinks) {
-    const neighborId = seedSet.has(link.sourceId) ? link.targetId : link.sourceId
-    if (seedSet.has(neighborId)) continue
-
-    const score = link.weight + 1
-    const current = scores.get(neighborId) ?? 0
-    scores.set(neighborId, Math.max(current, score))
+  for (const link of links) {
+    if (seedSet.has(link.sourceId) && !seedSet.has(link.targetId)) {
+      const current = scores.get(link.targetId) ?? 0
+      scores.set(link.targetId, Math.max(current, link.weight + 1))
+      continue
+    }
+    if (seedSet.has(link.targetId) && !seedSet.has(link.sourceId)) {
+      const current = scores.get(link.sourceId) ?? 0
+      scores.set(link.sourceId, Math.max(current, link.weight + 1))
+    }
   }
 
   return filterScoreMapByMemoryRows(
@@ -583,41 +595,16 @@ function filterScoreMapByMemoryRows(
     .where(inArray(hdb.schema.memoryUnits.id, ids))
     .all()
 
-  const validIds = new Set<string>()
+  const filtered = new Map<string, number>()
   for (const row of rows) {
     if (row.bankId !== bankId) continue
     if (!factTypeSet.has(row.factType as FactType)) continue
     if (!passesTagFilter(row.tags, tags, tagsMatch)) continue
-    validIds.add(row.id)
+    const score = scores.get(row.id)
+    if (score != null) filtered.set(row.id, score)
   }
 
-  for (const id of ids) {
-    if (validIds.has(id)) continue
-    scores.delete(id)
-  }
-
-  return scores
-}
-
-function parseStringArray(raw: string | null): string[] {
-  if (!raw) return []
-
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((value): value is string => typeof value === "string")
-  } catch {
-    return []
-  }
-}
-
-function passesTagFilter(
-  rawTags: string | null,
-  filterTags?: string[],
-  mode: TagsMatch = "any",
-): boolean {
-  if (!filterTags || filterTags.length === 0) return true
-  return matchesTags(parseStringArray(rawTags), filterTags, mode)
+  return filtered
 }
 
 function unique(values: string[]): string[] {
