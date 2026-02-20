@@ -283,6 +283,7 @@ describe("Retrieval methods", () => {
             occurredEnd: now - 360 * 86_400_000,
           },
         ],
+        eventDate: now - 365 * 86_400_000,
         consolidate: false,
       })
 

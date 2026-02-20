@@ -159,6 +159,9 @@ function readString(value: unknown): string | null {
 }
 
 function readIsoDate(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString()
+  }
   const text = readString(value)
   if (!text) return null
   const ms = new Date(text).getTime()
