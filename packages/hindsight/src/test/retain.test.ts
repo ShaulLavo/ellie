@@ -508,6 +508,106 @@ describe("retain", () => {
       const temporal = links.filter((link) => link.linkType === "temporal")
       expect(temporal.length).toBeGreaterThan(0)
     })
+
+    it("caps new->existing temporal links at 10 and uses Python recency ordering", async () => {
+      const base = Date.now()
+      const hourMs = 3_600_000
+      const existingIds: string[] = []
+
+      // Seed 12 existing facts, newest first by smaller hour offset.
+      for (let hourOffset = 1; hourOffset <= 12; hourOffset++) {
+        const retainResult = await t.hs.retain(bankId, `existing-${hourOffset}`, {
+          facts: [
+            {
+              content: `Existing temporal fact ${hourOffset}`,
+              validFrom: base - hourOffset * hourMs,
+            },
+          ],
+          consolidate: false,
+          dedupThreshold: 0,
+        })
+        existingIds.push(retainResult.memories[0]!.id)
+      }
+
+      const newResult = await t.hs.retain(bankId, "new-source", {
+        facts: [{ content: "New temporal source fact", validFrom: base }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+      const newId = newResult.memories[0]!.id
+      const existingSet = new Set(existingIds)
+
+      const newToExistingTemporal = newResult.links.filter(
+        (link) =>
+          link.linkType === "temporal" &&
+          link.sourceId === newId &&
+          existingSet.has(link.targetId),
+      )
+
+      expect(newToExistingTemporal).toHaveLength(10)
+      // Python parity: ordered by candidate recency (event_date DESC), not nearest distance sort.
+      expect(newToExistingTemporal.map((link) => link.targetId)).toEqual(
+        existingIds.slice(0, 10),
+      )
+    })
+
+    it("persists temporal link weights using linear decay with 0.3 floor", async () => {
+      const base = Date.now()
+      const hourMs = 3_600_000
+
+      const near = await t.hs.retain(bankId, "near", {
+        facts: [{ content: "Near temporal candidate", validFrom: base - 2 * hourMs }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+      const floor = await t.hs.retain(bankId, "floor", {
+        facts: [{ content: "Floor temporal candidate", validFrom: base - 23 * hourMs }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      const source = await t.hs.retain(bankId, "source", {
+        facts: [{ content: "Temporal weight source", validFrom: base }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      const sourceId = source.memories[0]!.id
+      const nearId = near.memories[0]!.id
+      const floorId = floor.memories[0]!.id
+
+      const hdb = (t.hs as any).hdb
+      const rows = hdb.db
+        .select({
+          sourceId: hdb.schema.memoryLinks.sourceId,
+          targetId: hdb.schema.memoryLinks.targetId,
+          linkType: hdb.schema.memoryLinks.linkType,
+          weight: hdb.schema.memoryLinks.weight,
+        })
+        .from(hdb.schema.memoryLinks)
+        .all()
+        .filter(
+          (row: {
+            sourceId: string
+            targetId: string
+            linkType: string
+            weight: number
+          }) =>
+            row.linkType === "temporal" &&
+            row.sourceId === sourceId &&
+            (row.targetId === nearId || row.targetId === floorId),
+        )
+
+      expect(rows).toHaveLength(2)
+
+      const nearLink = rows.find((row: { targetId: string }) => row.targetId === nearId)
+      const floorLink = rows.find((row: { targetId: string }) => row.targetId === floorId)
+      expect(nearLink).toBeDefined()
+      expect(floorLink).toBeDefined()
+
+      expect(nearLink!.weight).toBeCloseTo(1 - 2 / 24, 6)
+      expect(floorLink!.weight).toBe(0.3)
+    })
   })
 
   // ── All link types together (needs LLM extraction) ──────────────────

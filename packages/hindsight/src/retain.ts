@@ -26,6 +26,12 @@ import { findDuplicates } from "./dedup"
 import { resolveEntity } from "./entity-resolver"
 import { consolidate } from "./consolidation"
 import type { BankProfile } from "./reflect"
+import {
+  TEMPORAL_LINK_WINDOW_HOURS,
+  computeTemporalLinks,
+  computeTemporalQueryBounds,
+  computeTemporalWeight,
+} from "./retain-link-utils"
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1529,9 +1535,6 @@ const DUPLICATE_SEARCH_K = 5
 const DEDUP_TIME_WINDOW_HOURS = 24
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
-const TEMPORAL_LINK_WINDOW_HOURS = 24
-const TEMPORAL_LINK_MIN_WEIGHT = 0.3
-const TEMPORAL_LINK_MAX_NEIGHBORS = 10
 
 function findDuplicateFlagsByVector(
   hdb: HindsightDatabase,
@@ -1663,36 +1666,49 @@ function createTemporalLinksFromMemories(
     }))
     .filter((row): row is { id: string; anchor: number } => row.anchor != null)
 
+  const newUnits: Record<string, number> = {}
   for (const memory of newMemories) {
-    const sourceAnchor = getTemporalAnchor(
+    const anchor = getTemporalAnchor(
       memory.validFrom,
       memory.validTo,
       memory.mentionedAt,
       memory.createdAt,
     )
-    if (sourceAnchor == null) continue
+    if (anchor == null) continue
+    newUnits[memory.id] = anchor
+  }
 
-    const rankedNeighbors = candidateAnchors
-      .map((candidate) => ({
-        id: candidate.id,
-        distanceMs: Math.abs(sourceAnchor - candidate.anchor),
-      }))
-      .filter((neighbor) => neighbor.distanceMs <= windowMs)
-      .sort((a, b) => a.distanceMs - b.distanceMs)
-      .slice(0, TEMPORAL_LINK_MAX_NEIGHBORS)
+  const { minDate, maxDate } = computeTemporalQueryBounds(
+    newUnits,
+    TEMPORAL_LINK_WINDOW_HOURS,
+  )
+  const boundedCandidates =
+    minDate == null || maxDate == null
+      ? []
+      : candidateAnchors
+          .filter((candidate) => candidate.anchor >= minDate && candidate.anchor <= maxDate)
+          .sort((a, b) => b.anchor - a.anchor)
+          .map((candidate) => ({
+            id: candidate.id,
+            eventDate: candidate.anchor,
+          }))
 
-    for (const neighbor of rankedNeighbors) {
-      const weight = temporalWeightFromDistance(neighbor.distanceMs, windowMs)
-      insertTemporalLinkIfMissing(
-        hdb,
-        bankId,
-        memory.id,
-        neighbor.id,
-        weight,
-        createdAt,
-        output,
-      )
-    }
+  const temporalLinks = computeTemporalLinks(
+    newUnits,
+    boundedCandidates,
+    TEMPORAL_LINK_WINDOW_HOURS,
+  )
+
+  for (const [sourceId, targetId, _linkType, weight] of temporalLinks) {
+    insertTemporalLinkIfMissing(
+      hdb,
+      bankId,
+      sourceId,
+      targetId,
+      weight,
+      createdAt,
+      output,
+    )
   }
 
   for (let i = 0; i < newMemories.length; i++) {
@@ -1717,7 +1733,7 @@ function createTemporalLinksFromMemories(
 
       const distanceMs = Math.abs(sourceAnchor - targetAnchor)
       if (distanceMs > windowMs) continue
-      const weight = temporalWeightFromDistance(distanceMs, windowMs)
+      const weight = computeTemporalWeight(distanceMs, windowMs)
 
       insertTemporalLinkIfMissing(
         hdb,
@@ -1748,12 +1764,6 @@ function getTemporalAnchor(
   createdAt: number,
 ): number | null {
   return validFrom ?? validTo ?? mentionedAt ?? createdAt
-}
-
-function temporalWeightFromDistance(distanceMs: number, windowMs: number): number {
-  if (windowMs <= 0) return TEMPORAL_LINK_MIN_WEIGHT
-  const linearWeight = 1 - distanceMs / windowMs
-  return Math.max(TEMPORAL_LINK_MIN_WEIGHT, linearWeight)
 }
 
 function insertTemporalLinkIfMissing(
