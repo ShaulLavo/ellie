@@ -18,6 +18,7 @@ import { BackoffDefaults, createFetchWithBackoff } from "./fetch"
 import { StreamResponseImpl } from "./response"
 import {
   handleErrorResponse,
+  parseUrl,
   resolveFromSplit,
   splitRecord,
   warnIfUsingHttpInBrowser,
@@ -134,7 +135,7 @@ async function streamInternal<TJson = unknown>(
   const paramsSplit = splitRecord(options.params, true)
 
   // Build the first request
-  const fetchUrl = new URL(url)
+  const fetchUrl = parseUrl(url)
 
   // Set offset query param
   const startOffset = options.offset ?? `-1`
@@ -222,7 +223,7 @@ async function streamInternal<TJson = unknown>(
     signal: AbortSignal,
     resumingFromPause?: boolean
   ): Promise<Response> => {
-    const nextUrl = new URL(url)
+    const nextUrl = parseUrl(url)
     nextUrl.searchParams.set(OFFSET_QUERY_PARAM, offset)
 
     // For subsequent requests, set live mode unless resuming from pause
@@ -268,7 +269,7 @@ async function streamInternal<TJson = unknown>(
           cursor: string | undefined,
           signal: AbortSignal
         ): Promise<Response> => {
-          const sseUrl = new URL(url)
+          const sseUrl = parseUrl(url)
           sseUrl.searchParams.set(OFFSET_QUERY_PARAM, offset)
           sseUrl.searchParams.set(LIVE_QUERY_PARAM, `sse`)
           if (cursor) {

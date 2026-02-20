@@ -31,6 +31,7 @@ import {
 import { stream as streamFn } from "./stream-api"
 import {
   handleErrorResponse,
+  parseUrl,
   resolveFromSplit,
   splitRecord,
   warnIfUsingHttpInBrowser,
@@ -1091,7 +1092,7 @@ export class DurableStream {
   }> {
     // Spread because callers mutate requestHeaders (content-type, seq, etc.)
     const requestHeaders = { ...(await resolveFromSplit(this.#headersSplit)) }
-    const fetchUrl = new URL(this.url)
+    const fetchUrl = parseUrl(this.url)
 
     // Add params
     const params = await resolveFromSplit(this.#paramsSplit)
