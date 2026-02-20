@@ -190,22 +190,42 @@ function getWindowLocationHref(): string | undefined {
  * Resolve a URL string, handling relative URLs in browser environments.
  * Returns undefined if the URL cannot be parsed.
  */
-function resolveUrlMaybe(urlString: string): URL | undefined {
+function tryAbsoluteUrl(urlString: string): URL | undefined {
   try {
-    // First try parsing as an absolute URL
     return new URL(urlString)
   } catch {
-    // If that fails and we're in a browser, try resolving as relative URL
-    const base = getWindowLocationHref()
-    if (base) {
-      try {
-        return new URL(urlString, base)
-      } catch {
-        return undefined
-      }
-    }
     return undefined
   }
+}
+
+function tryRelativeUrl(urlString: string): URL | undefined {
+  const base = getWindowLocationHref()
+  if (!base) return undefined
+  try {
+    return new URL(urlString, base)
+  } catch {
+    return undefined
+  }
+}
+
+function resolveUrlMaybe(urlString: string): URL | undefined {
+  return tryAbsoluteUrl(urlString) ?? tryRelativeUrl(urlString)
+}
+
+/**
+ * Parse a URL string into a URL object, supporting relative URLs in browsers.
+ *
+ * In browser environments, relative paths like `/chat/room-1` are resolved
+ * against `window.location.origin`. In non-browser environments (Node/Bun),
+ * the URL must be absolute.
+ *
+ * @throws {TypeError} If the URL cannot be parsed
+ */
+export function parseUrl(urlString: string): URL {
+  const resolved = resolveUrlMaybe(urlString)
+  if (resolved) return resolved
+  // Fall through to native constructor for its standard error message
+  return new URL(urlString)
 }
 
 /**
