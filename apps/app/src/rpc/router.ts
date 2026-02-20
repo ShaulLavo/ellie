@@ -16,8 +16,8 @@ export const messageSchema = v.object({
 // ============================================================================
 
 export const appRouter = createRouter()
-  .stream(`chat`, `/chat/:chatId`)
-    .collection(`messages`, messageSchema)
-  .build()
+  .stream(`chat`, `/chat/:chatId`, {
+    messages: messageSchema,
+  })
 
-export type AppRouter = typeof appRouter
+export type AppRouter = typeof appRouter[`_def`]

@@ -4,6 +4,7 @@ export type {
   ExtractParams,
   CollectionDef,
   StreamDef,
+  Router,
   RouterDef,
   SubscriptionHandle,
   CollectionClient,

@@ -84,6 +84,14 @@ export interface StreamDef<
  */
 export type RouterDef = Record<string, StreamDef>
 
+/**
+ * A router instance that carries its stream definitions.
+ * Returned by `createRouter().stream(...).stream(...)`.
+ */
+export interface Router<T extends RouterDef = RouterDef> {
+  readonly _def: T
+}
+
 // ============================================================================
 // Subscription Handle
 // ============================================================================

@@ -1,16 +1,7 @@
 import { useCallback } from "react"
-import { createRpcClient } from "@ellie/streams-rpc/client"
 import { useStream } from "@ellie/streams-rpc/react"
 import type { InferSchema } from "@ellie/streams-rpc"
-import { appRouter, type AppRouter } from "../../../../app/src/rpc/router"
-
-// ============================================================================
-// RPC Client (singleton)
-// ============================================================================
-
-const rpc = createRpcClient<AppRouter>(appRouter, {
-  baseUrl: window.location.origin,
-})
+import { rpc, type AppRouter } from "../rpc"
 
 // ============================================================================
 // Message type (derived from the router schema — stays in sync automatically)

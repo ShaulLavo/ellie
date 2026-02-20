@@ -1,5 +1,5 @@
 import { StreamManager } from "./manager"
-import type { RouterDef, RpcClient, StreamDef } from "../types"
+import type { Router, RouterDef, RpcClient, StreamDef } from "../types"
 
 // ============================================================================
 // Introspection Guard
@@ -38,7 +38,7 @@ export interface RpcClientOptions {
  *   2. `.messages` → Proxy for the "messages" collection
  *   3. `.get({ chatId })` → resolves path, gets/creates StreamDB, reads collection
  *
- * @param routerDef - The router definition (import the runtime value from server)
+ * @param router - The router (from `createRouter().stream(...)`) or a plain RouterDef
  * @param options - Client configuration (baseUrl)
  *
  * @example
@@ -47,7 +47,7 @@ export interface RpcClientOptions {
  * import { createRpcClient } from "@ellie/streams-rpc/client"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, {
- *   baseUrl: window.location.origin,
+ *   baseUrl: process.env.API_BASE_URL ?? ``,
  * })
  *
  * // One-shot read
@@ -65,9 +65,10 @@ export interface RpcClientOptions {
  * ```
  */
 export function createRpcClient<TRouter extends RouterDef>(
-  routerDef: TRouter,
+  router: Router<TRouter> | TRouter,
   options: RpcClientOptions
 ): RpcClient<TRouter> {
+  const routerDef = (`_def` in router ? router._def : router) as TRouter
   const manager = new StreamManager(options.baseUrl)
 
   // Level 1: stream namespace proxy (rpc.chat → ...)
