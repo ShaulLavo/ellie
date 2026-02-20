@@ -9,6 +9,8 @@
 import { tmpdir } from "os"
 import { join } from "path"
 import { rmSync, readFileSync } from "fs"
+import { describe } from "bun:test"
+import { anthropicText } from "@tanstack/ai-anthropic"
 import { Hindsight } from "../hindsight"
 import type { HindsightConfig } from "../types"
 import { createMockAdapter, type MockAdapter } from "./mock-adapter"
@@ -129,6 +131,60 @@ export function createTestHindsight(
   }
 
   return { hs, adapter, dbPath, cleanup }
+}
+
+// ── Real LLM test factory ───────────────────────────────────────────────────
+
+export const HAS_ANTHROPIC_KEY = !!process.env.ANTHROPIC_API_KEY
+
+/** Use instead of `describe` for test blocks that require a real LLM (Anthropic API key). */
+export const describeWithLLM = HAS_ANTHROPIC_KEY ? describe : describe.skip
+
+export interface RealTestHindsight {
+  hs: Hindsight
+  dbPath: string
+  cleanup: () => void
+}
+
+/**
+ * Create a Hindsight instance with a real Anthropic adapter (claude-haiku-4-5).
+ *
+ * Requires ANTHROPIC_API_KEY in the environment. Use `describeWithLLM` to skip
+ * entire test blocks when the key is not available.
+ */
+export function createRealTestHindsight(
+  overrides?: Partial<HindsightConfig>,
+): RealTestHindsight {
+  const dbPath = join(
+    tmpdir(),
+    `hindsight-test-real-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+  )
+  const adapter = anthropicText("claude-haiku-4-5")
+
+  const hs = new Hindsight({
+    dbPath,
+    embed: mockEmbed,
+    embeddingDimensions: EMBED_DIMS,
+    adapter,
+    ...overrides,
+  })
+
+  const cleanup = () => {
+    try {
+      hs.close()
+    } catch {
+      // already closed
+    }
+    try {
+      rmSync(dbPath, { force: true })
+      rmSync(dbPath + "-wal", { force: true })
+      rmSync(dbPath + "-shm", { force: true })
+    } catch {
+      // file may not exist
+    }
+  }
+
+  return { hs, dbPath, cleanup }
 }
 
 /**
