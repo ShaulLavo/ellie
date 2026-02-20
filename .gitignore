@@ -46,5 +46,8 @@ data/
 .DS_Store
 *.pem
 
+# Tailwind CLI output
+apps/studio/src/output.css
+
 # Claude worktrees
 .claude/worktrees/
