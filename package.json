@@ -11,7 +11,7 @@
     "test": "turbo run test"
   },
   "devDependencies": {
-"@typescript/native-preview": "latest",
+    "@typescript/native-preview": "latest",
     "oxlint": "^1.48.0",
     "prettier": "^3.7.4",
     "turbo": "^2.8.10",
@@ -27,5 +27,11 @@
   ],
   "overrides": {
     "typescript": "5.9.2"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource/geist-mono": "^5.2.7",
+    "@fontsource/google-sans-flex": "^5.2.2"
   }
 }
