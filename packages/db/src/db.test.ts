@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createDB, isVecAvailable } from "./index"
-import { LogFile, streamPathToFilename } from "./log"
+import { LogFile } from "./log"
 import { JsonlEngine, formatOffset } from "./jsonl-store"
-import { readdirSync } from "fs"
 import { typedLog } from "./typed-log"
 import * as v from "valibot"
 import { eq } from "drizzle-orm"
@@ -160,51 +159,6 @@ describe("LogFile", () => {
     const { bytePos } = log2.append(new TextEncoder().encode("new-data"))
     expect(bytePos).toBe(sizeAfterFirst)
     log2.close()
-  })
-})
-
-// ════════════════════════════════════════════════════════════════════════════
-// streamPathToFilename
-// ════════════════════════════════════════════════════════════════════════════
-
-describe("streamPathToFilename", () => {
-  it("converts simple path", () => {
-    expect(streamPathToFilename("/chat/session-1")).toBe("chat__session-1.jsonl")
-  })
-
-  it("handles deeply nested paths", () => {
-    expect(streamPathToFilename("/a/b/c/d")).toBe("a__b__c__d.jsonl")
-  })
-
-  it("handles single segment", () => {
-    expect(streamPathToFilename("/logs")).toBe("logs.jsonl")
-  })
-
-  it("handles no leading slash", () => {
-    expect(streamPathToFilename("chat/test")).toBe("chat__test.jsonl")
-  })
-
-  it("rejects null bytes", () => {
-    expect(() => streamPathToFilename("/chat/\0bad")).toThrow("null bytes")
-  })
-
-  it("rejects path traversal with ..", () => {
-    expect(() => streamPathToFilename("/chat/../etc/passwd")).toThrow("path traversal")
-  })
-
-  it("rejects path traversal with .", () => {
-    expect(() => streamPathToFilename("/./chat")).toThrow("path traversal")
-  })
-
-  it("rejects unsafe characters", () => {
-    expect(() => streamPathToFilename("/chat:bad")).toThrow("unsafe characters")
-    expect(() => streamPathToFilename("/chat\\bad")).toThrow("unsafe characters")
-    expect(() => streamPathToFilename("/chat<bad")).toThrow("unsafe characters")
-  })
-
-  it("rejects empty path", () => {
-    expect(() => streamPathToFilename("")).toThrow("empty")
-    expect(() => streamPathToFilename("/")).toThrow("empty")
   })
 })
 

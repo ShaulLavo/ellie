@@ -5,9 +5,6 @@ import { constants } from "fs"
 // Pre-allocated newline byte — avoids per-append allocation
 const NEWLINE = new Uint8Array([0x0a])
 
-// eslint-disable-next-line no-control-regex
-const UNSAFE_PATH_CHARS = /[:\\<>|"?\x00-\x1f]/
-
 /**
  * JSONL log file writer/reader.
  *
@@ -97,35 +94,4 @@ export class LogFile {
       this.fd = -1
     }
   }
-}
-
-/**
- * Convert a stream path to a safe filename.
- * `/chat/session-123` -> `chat__session-123.jsonl`
- *
- * Rejects paths with null bytes, path traversal (`..`), or other unsafe characters.
- */
-export function streamPathToFilename(streamPath: string): string {
-  // Reject null bytes
-  if (streamPath.includes("\0")) {
-    throw new Error(`Stream path contains null bytes: ${streamPath}`)
-  }
-
-  // Reject path traversal
-  const segments = streamPath.split("/").filter(Boolean)
-  if (segments.some((s) => s === ".." || s === ".")) {
-    throw new Error(`Stream path contains path traversal: ${streamPath}`)
-  }
-
-  // Reject OS-unsafe characters (colons, backslashes, control chars)
-  if (UNSAFE_PATH_CHARS.test(streamPath)) {
-    throw new Error(`Stream path contains unsafe characters: ${streamPath}`)
-  }
-
-  if (segments.length === 0) {
-    throw new Error(`Stream path is empty`)
-  }
-
-  const normalized = segments.join("__")
-  return `${normalized}.jsonl`
 }

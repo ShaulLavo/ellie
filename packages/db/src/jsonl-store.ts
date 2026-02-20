@@ -143,7 +143,8 @@ export class JsonlEngine {
   }
 
   deleteStream(streamPath: string): void {
-    // Soft-delete: mark the stream as deleted, keep JSONL file on disk
+    // Soft-delete: mark the stream as deleted.
+    // On next createStream() for this path, the stream is wiped and gets a new JSONL file.
     this.db
       .update(schema.streams)
       .set({ deletedAt: Date.now() })
@@ -152,18 +153,13 @@ export class JsonlEngine {
       )
       .run()
 
-    // Release the file descriptor — don't hold handles for dead streams
+    // Release the file descriptor
     const log = this.openLogs.get(streamPath)
     if (log) {
       log.close()
       this.openLogs.delete(streamPath)
     }
   }
-
-  // TODO: Implement reaper — background job or CLI command that hard-deletes
-  // streams where deleted_at < Date.now() - RETENTION_PERIOD. The reaper would:
-  //   1. Find streams with deleted_at older than the retention window
-  //   2. DELETE the SQLite row (cascade removes messages/producers)
 
   // -- Append ---------------------------------------------------------------
 
