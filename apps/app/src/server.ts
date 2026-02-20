@@ -21,7 +21,7 @@ export const ctx = createServerContext({ store: durableStore });
 // Initialized eagerly at startup. Requires ANTHROPIC_API_KEY in env.
 const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
   ? new AgentManager(durableStore, {
-      adapter: anthropicText("claude-sonnet-4-5"),
+      adapter: anthropicText(env.ANTHROPIC_MODEL as any),
       systemPrompt: "You are a helpful assistant.",
     })
   : null;
@@ -79,7 +79,8 @@ async function fetch(req: Request): Promise<Response> {
   // /agent/:id/events/:runId — agent events stream (must match before /agent/:id)
   const agentEventsMatch = path.match(/^\/agent\/([^/]+)\/events\/([^/]+)$/);
   if (agentEventsMatch) {
-    const [, chatId, runId] = agentEventsMatch;
+    const chatId = decodeURIComponent(agentEventsMatch[1]);
+    const runId = decodeURIComponent(agentEventsMatch[2]);
     const response = await handleDurableStreamRequest(ctx, req, `/agent/${chatId}/events/${runId}`);
     logRequest(req.method, path, response.status);
     return response;

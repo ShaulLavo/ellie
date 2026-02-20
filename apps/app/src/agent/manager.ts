@@ -54,8 +54,8 @@ export class AgentManager {
 			...this.options.agentOptions,
 			adapter: this.options.adapter,
 			initialState: {
-				systemPrompt: this.options.systemPrompt ?? "",
 				...this.options.agentOptions?.initialState,
+				systemPrompt: this.options.systemPrompt ?? "",
 			},
 			onEvent: (event) => this.handleEvent(chatId, event),
 		});
@@ -142,16 +142,25 @@ export class AgentManager {
 
 		const { messages } = this.store.read(messagesPath);
 		const result: AgentMessage[] = [];
+		let corrupted = 0;
 
-		for (const msg of messages) {
+		for (let i = 0; i < messages.length; i++) {
 			try {
-				const json = JSON.parse(decoder.decode(stripTrailingComma(msg.data)));
+				const json = JSON.parse(decoder.decode(stripTrailingComma(messages[i].data)));
 				const parsed = v.parse(agentMessageSchema, json);
 				result.push(parsed as AgentMessage);
-			} catch {
-				// Skip corrupted entries
+			} catch (err) {
+				corrupted++;
+				console.warn(
+					`[agent-manager] corrupted message at index ${i} in ${messagesPath}:`,
+					err instanceof Error ? err.message : err,
+				);
 				continue;
 			}
+		}
+
+		if (corrupted > 0) {
+			console.warn(`[agent-manager] skipped ${corrupted} corrupted entries in ${messagesPath}`);
 		}
 
 		return result;

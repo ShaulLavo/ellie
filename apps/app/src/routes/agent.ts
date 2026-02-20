@@ -19,25 +19,25 @@ export function handleAgentRequest(
 	// POST /agent/:chatId/prompt
 	const promptMatch = pathname.match(/^\/agent\/([^/]+)\/prompt$/);
 	if (promptMatch && req.method === "POST") {
-		return handlePrompt(agentManager, req, promptMatch[1]);
+		return handlePrompt(agentManager, req, decodeURIComponent(promptMatch[1]));
 	}
 
 	// POST /agent/:chatId/steer
 	const steerMatch = pathname.match(/^\/agent\/([^/]+)\/steer$/);
 	if (steerMatch && req.method === "POST") {
-		return handleSteer(agentManager, req, steerMatch[1]);
+		return handleSteer(agentManager, req, decodeURIComponent(steerMatch[1]));
 	}
 
 	// POST /agent/:chatId/abort
 	const abortMatch = pathname.match(/^\/agent\/([^/]+)\/abort$/);
 	if (abortMatch && req.method === "POST") {
-		return handleAbort(agentManager, abortMatch[1]);
+		return handleAbort(agentManager, decodeURIComponent(abortMatch[1]));
 	}
 
 	// GET /agent/:chatId/history
 	const historyMatch = pathname.match(/^\/agent\/([^/]+)\/history$/);
 	if (historyMatch && req.method === "GET") {
-		return handleHistory(agentManager, historyMatch[1]);
+		return handleHistory(agentManager, decodeURIComponent(historyMatch[1]));
 	}
 
 	return null;
