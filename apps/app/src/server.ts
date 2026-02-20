@@ -17,22 +17,24 @@ const durableStore = new DurableStore(engine);
 export const ctx = createServerContext({ store: durableStore });
 
 // ── Agent manager ────────────────────────────────────────────────
-// Adapter is lazily set — call `setAgentAdapter()` before using agent routes.
-// This allows the adapter to be configured externally (e.g., with API keys from env).
-const agentManager = new AgentManager(durableStore, {
-  adapter: undefined as any, // Set via setAgentAdapter() before first use
-  systemPrompt: "You are a helpful assistant.",
-});
+// Lazily initialized — call `setAgentAdapter()` before using agent routes.
+let _agentManager: AgentManager | undefined;
 
 /**
- * Set the TanStack AI adapter for the agent manager.
+ * Set the TanStack AI adapter and initialize the agent manager.
  * Must be called before agent routes are used.
  */
 export function setAgentAdapter(adapter: import("@tanstack/ai").AnyTextAdapter): void {
-  (agentManager as any).options.adapter = adapter;
+  _agentManager = new AgentManager(durableStore, {
+    adapter,
+    systemPrompt: "You are a helpful assistant.",
+  });
 }
 
-export { agentManager };
+export function getAgentManager(): AgentManager {
+  if (!_agentManager) throw new Error("Call setAgentAdapter() before using agent routes");
+  return _agentManager;
+}
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
@@ -69,7 +71,7 @@ async function fetch(req: Request): Promise<Response> {
   }
 
   // Agent action routes (prompt, steer, abort, history)
-  const agentResponse = handleAgentRequest(agentManager, req, path);
+  const agentResponse = handleAgentRequest(getAgentManager(), req, path);
   if (agentResponse) {
     const response = await agentResponse;
     logRequest(req.method, path, response.status);

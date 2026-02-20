@@ -11,6 +11,34 @@ import { env } from "@ellie/env/client"
 export type AgentMessage = InferSchema<AppRouter[`agent`][`collections`][`messages`][`schema`]>
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+async function agentAction<T = void>(
+  endpoint: string,
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(`${env.API_BASE_URL}${endpoint}`, {
+    method: `POST`,
+    ...(body
+      ? {
+          headers: { "Content-Type": `application/json` },
+          body: JSON.stringify(body),
+        }
+      : {}),
+  })
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as any).error || `Request failed: ${endpoint}`)
+  }
+
+  const text = await res.text()
+  if (text) return JSON.parse(text) as T
+  return undefined as T
+}
+
+// ============================================================================
 // Hook
 // ============================================================================
 
@@ -30,26 +58,13 @@ export function useAgentChat(chatId: string) {
     orderBy: { field: `timestamp`, direction: `asc` },
   })
 
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
 
   const sendMessage = useCallback(
     async (text: string) => {
       setIsSending(true)
       try {
-        const res = await fetch(`${env.API_BASE_URL}/agent/${chatId}/prompt`, {
-          method: `POST`,
-          headers: { "Content-Type": `application/json` },
-          body: JSON.stringify({ message: text }),
-        })
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error((body as any).error || `Failed to send message`)
-        }
-
-        const { runId } = await res.json() as { runId: string }
-        setCurrentRunId(runId)
+        await agentAction(`/agent/${chatId}/prompt`, { message: text })
       } catch (err) {
         console.error(
           `[useAgentChat] Failed to send message:`,
@@ -66,16 +81,7 @@ export function useAgentChat(chatId: string) {
   const steer = useCallback(
     async (text: string) => {
       try {
-        const res = await fetch(`${env.API_BASE_URL}/agent/${chatId}/steer`, {
-          method: `POST`,
-          headers: { "Content-Type": `application/json` },
-          body: JSON.stringify({ message: text }),
-        })
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error((body as any).error || `Failed to steer`)
-        }
+        await agentAction(`/agent/${chatId}/steer`, { message: text })
       } catch (err) {
         console.error(
           `[useAgentChat] Failed to steer:`,
@@ -90,14 +96,7 @@ export function useAgentChat(chatId: string) {
   const abort = useCallback(
     async () => {
       try {
-        const res = await fetch(`${env.API_BASE_URL}/agent/${chatId}/abort`, {
-          method: `POST`,
-        })
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error((body as any).error || `Failed to abort`)
-        }
+        await agentAction(`/agent/${chatId}/abort`)
       } catch (err) {
         console.error(
           `[useAgentChat] Failed to abort:`,
@@ -117,6 +116,5 @@ export function useAgentChat(chatId: string) {
     sendMessage,
     steer,
     abort,
-    currentRunId,
   }
 }

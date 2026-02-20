@@ -6,6 +6,7 @@
  */
 export class EventStream<T, R = T> implements AsyncIterable<T> {
 	private queue: T[] = [];
+	private readIndex = 0;
 	private resolve: ((value: IteratorResult<T>) => void) | null = null;
 	private done = false;
 	private finalResult: R | undefined;
@@ -74,8 +75,14 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 
 	async *[Symbol.asyncIterator](): AsyncIterator<T> {
 		while (true) {
-			if (this.queue.length > 0) {
-				yield this.queue.shift()!;
+			if (this.readIndex < this.queue.length) {
+				const event = this.queue[this.readIndex++];
+				// Compact when >50% consumed and enough items read
+				if (this.readIndex > 64 && this.readIndex > this.queue.length / 2) {
+					this.queue = this.queue.slice(this.readIndex);
+					this.readIndex = 0;
+				}
+				yield event;
 			} else if (this.done) {
 				return;
 			} else {

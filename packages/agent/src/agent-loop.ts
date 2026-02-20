@@ -1,16 +1,17 @@
 /**
  * Agent loop — orchestrates multi-turn LLM conversations with tool execution.
  *
- * Transforms to ModelMessage[] only at the LLM call boundary.
- * Handles steering (mid-execution interrupts) and follow-up messages.
+ * Delegates the tool-call/re-call loop to TanStack AI's chat() with
+ * agentLoopStrategy: maxIterations(). Handles steering (mid-execution
+ * interrupts) and follow-up messages as an outer loop.
  */
 
-import { chat, type StreamChunk } from "@tanstack/ai";
+import { chat, maxIterations, type StreamChunk } from "@tanstack/ai";
 import { mapTanStackUsage, toThinkingModelOptions } from "@ellie/ai";
-import type { Usage } from "@ellie/ai";
+import type { Model, Usage } from "@ellie/ai";
 import * as v from "valibot";
 import { EventStream } from "./event-stream";
-import { convertAgentToolsToTanStack } from "./messages";
+import { toModelMessages } from "./messages";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -64,7 +65,7 @@ export function agentLoop(
  * Continue an agent loop from the current context without adding new messages.
  * Used for retries — context already has user message or tool results.
  *
- * The last message must convert to a user or toolResult via convertToLlm.
+ * The last message must be a user or toolResult.
  */
 export function agentLoopContinue(
 	context: AgentContext,
@@ -108,9 +109,6 @@ function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 	);
 }
 
-/**
- * Create an emit function that pushes to the EventStream and calls onEvent.
- */
 function createEmitter(
 	stream: EventStream<AgentEvent, AgentMessage[]>,
 	config: AgentLoopConfig,
@@ -132,8 +130,144 @@ function createEmptyUsage(): Usage {
 	};
 }
 
+// ============================================================================
+// Tool bridge — wraps AgentTool[] into TanStack Tool[] with execute
+// ============================================================================
+
+/**
+ * Tracks TOOL_CALL_START events so wrapped execute functions can
+ * correlate which toolCallId they're executing for.
+ * Safe because TanStack emits all TOOL_CALL_START events for an
+ * iteration before calling any execute functions.
+ */
+interface ToolCallTracker {
+	register(toolCallId: string, toolName: string): void;
+	dequeue(toolName: string): string;
+}
+
+function createToolCallTracker(): ToolCallTracker {
+	const pending = new Map<string, string[]>();
+	return {
+		register(toolCallId: string, toolName: string) {
+			let ids = pending.get(toolName);
+			if (!ids) {
+				ids = [];
+				pending.set(toolName, ids);
+			}
+			ids.push(toolCallId);
+		},
+		dequeue(toolName: string): string {
+			const ids = pending.get(toolName);
+			if (ids && ids.length > 0) {
+				return ids.shift()!;
+			}
+			return `unknown_${Date.now()}`;
+		},
+	};
+}
+
+/**
+ * Wrap AgentTool[] into TanStack AI tools with execute functions.
+ * Each wrapper:
+ * - Dequeues the toolCallId from the tracker
+ * - Emits tool_execution_start/update/end events
+ * - Validates args with Valibot
+ * - Passes signal and onUpdate to the real tool
+ * - Creates and emits ToolResultMessage
+ * - Returns text content for TanStack's conversation history
+ */
+function wrapToolsForTanStack(
+	tools: AgentTool<any>[],
+	tracker: ToolCallTracker,
+	signal: AbortSignal | undefined,
+	emit: EmitFn,
+	toolResultCollector: ToolResultMessage[],
+) {
+	return tools.map((tool) => ({
+		name: tool.name,
+		description: tool.description,
+		inputSchema: tool.parameters,
+		execute: async (args: unknown) => {
+			const toolCallId = tracker.dequeue(tool.name);
+
+			emit({
+				type: "tool_execution_start",
+				toolCallId,
+				toolName: tool.name,
+				args,
+			});
+
+			let result: AgentToolResult;
+			let isError = false;
+
+			try {
+				const validatedArgs = v.parse(tool.parameters, args);
+				result = await tool.execute(
+					toolCallId,
+					validatedArgs,
+					signal,
+					(partialResult) => {
+						emit({
+							type: "tool_execution_update",
+							toolCallId,
+							toolName: tool.name,
+							args,
+							partialResult,
+						});
+					},
+				);
+			} catch (e) {
+				result = {
+					content: [
+						{
+							type: "text",
+							text: e instanceof Error ? e.message : String(e),
+						},
+					],
+					details: {},
+				};
+				isError = true;
+			}
+
+			emit({
+				type: "tool_execution_end",
+				toolCallId,
+				toolName: tool.name,
+				result,
+				isError,
+			});
+
+			// Create and emit ToolResultMessage for persistence
+			const toolResultMessage: ToolResultMessage = {
+				role: "toolResult",
+				toolCallId,
+				toolName: tool.name,
+				content: result.content,
+				details: result.details,
+				isError,
+				timestamp: Date.now(),
+			};
+			toolResultCollector.push(toolResultMessage);
+			emit({ type: "message_start", message: toolResultMessage });
+			emit({ type: "message_end", message: toolResultMessage });
+
+			// Return text for TanStack's conversation history
+			return result.content
+				.map((c) => (c.type === "text" ? c.text : ""))
+				.join("");
+		},
+	}));
+}
+
+// ============================================================================
+// Main loop
+// ============================================================================
+
 /**
  * Main loop logic shared by agentLoop and agentLoopContinue.
+ *
+ * TanStack AI handles the tool-call loop internally via maxIterations().
+ * This outer loop handles steering and follow-up messages.
  */
 async function runLoop(
 	currentContext: AgentContext,
@@ -148,89 +282,125 @@ async function runLoop(
 	let pendingMessages: AgentMessage[] =
 		(await config.getSteeringMessages?.()) || [];
 
-	// Outer loop: continues when follow-up messages arrive after agent would stop
+	// Outer loop: continues when steering or follow-up messages arrive
 	while (true) {
-		let hasMoreToolCalls = true;
-		let steeringAfterTools: AgentMessage[] | null = null;
+		if (!firstTurn) {
+			emit({ type: "turn_start" });
+		} else {
+			firstTurn = false;
+		}
 
-		// Inner loop: process tool calls and steering messages
-		while (hasMoreToolCalls || pendingMessages.length > 0) {
-			if (!firstTurn) {
-				emit({ type: "turn_start" });
-			} else {
-				firstTurn = false;
+		// Inject pending messages before next assistant response
+		if (pendingMessages.length > 0) {
+			for (const message of pendingMessages) {
+				emit({ type: "message_start", message });
+				emit({ type: "message_end", message });
+				currentContext.messages.push(message);
+				newMessages.push(message);
 			}
+			pendingMessages = [];
+		}
 
-			// Process pending messages (inject before next assistant response)
-			if (pendingMessages.length > 0) {
-				for (const message of pendingMessages) {
-					emit({ type: "message_start", message });
-					emit({ type: "message_end", message });
-					currentContext.messages.push(message);
-					newMessages.push(message);
-				}
-				pendingMessages = [];
-			}
+		// Process assistant response
+		// With chat(): TanStack handles tool loop internally via maxIterations.
+		// With streamFn: we must handle tool execution + re-call manually.
+		let result = await processAgentStream(
+			currentContext,
+			config,
+			signal,
+			emit,
+			streamFn,
+		);
 
-			// Stream assistant response
-			const message = await streamAssistantResponse(
-				currentContext,
-				config,
-				signal,
-				emit,
-				streamFn,
-			);
-			newMessages.push(message);
+		// Collect messages from this iteration
+		for (const msg of result.messages) {
+			newMessages.push(msg);
+		}
 
-			if (
-				message.stopReason === "error" ||
-				message.stopReason === "aborted"
+		// When using streamFn, handle tool execution loop manually
+		if (streamFn) {
+			let iterations = 0;
+			const maxTurns = config.maxTurns ?? 10;
+			while (
+				!result.abortedOrError &&
+				result.lastAssistant.stopReason === "toolUse" &&
+				iterations < maxTurns
 			) {
-				emit({ type: "turn_end", message, toolResults: [] });
-				emit({ type: "agent_end", messages: newMessages });
-				stream.end(newMessages);
-				return;
-			}
+				iterations++;
 
-			// Check for tool calls
-			const toolCalls = message.content.filter(
-				(c): c is ToolCall => c.type === "toolCall",
-			);
-			hasMoreToolCalls = toolCalls.length > 0;
-
-			const toolResults: ToolResultMessage[] = [];
-			if (hasMoreToolCalls) {
-				const toolExecution = await executeToolCalls(
-					currentContext.tools,
-					message,
-					signal,
-					emit,
-					config.getSteeringMessages,
+				// Execute tool calls from the assistant message
+				const toolCalls = result.lastAssistant.content.filter(
+					(c): c is ToolCall => c.type === "toolCall",
 				);
-				toolResults.push(...toolExecution.toolResults);
-				steeringAfterTools = toolExecution.steeringMessages ?? null;
+				let steered = false;
+				for (let i = 0; i < toolCalls.length; i++) {
+					if (signal?.aborted) break;
 
-				for (const result of toolResults) {
-					currentContext.messages.push(result);
-					newMessages.push(result);
+					// Check for steering between tool executions
+					const midSteering = (await config.getSteeringMessages?.()) || [];
+					if (midSteering.length > 0) {
+						pendingMessages = midSteering;
+						steered = true;
+						// Emit skipped tool results for remaining calls (including current)
+						for (let j = i; j < toolCalls.length; j++) {
+							const remaining = toolCalls[j];
+							const skipResult: ToolResultMessage = {
+								role: "toolResult",
+								toolCallId: remaining.id,
+								toolName: remaining.name,
+								content: [{ type: "text", text: "Tool execution skipped due to steering" }],
+								isError: true,
+								timestamp: Date.now(),
+							};
+							emit({ type: "tool_execution_start", toolCallId: remaining.id, toolName: remaining.name, args: remaining.arguments });
+							emit({ type: "tool_execution_end", toolCallId: remaining.id, toolName: remaining.name, result: { content: skipResult.content, details: {} }, isError: true });
+							emit({ type: "message_start", message: skipResult });
+							emit({ type: "message_end", message: skipResult });
+							currentContext.messages.push(skipResult);
+							newMessages.push(skipResult);
+						}
+						break;
+					}
+
+					const toolResults = await executeToolCall(
+						toolCalls[i], currentContext.tools ?? [], signal, emit,
+					);
+					for (const tr of toolResults) {
+						currentContext.messages.push(tr);
+						newMessages.push(tr);
+					}
 				}
-			}
+				if (steered) break;
 
-			emit({ type: "turn_end", message, toolResults });
+				if (signal?.aborted) break;
 
-			// Get steering messages after turn completes
-			if (steeringAfterTools && steeringAfterTools.length > 0) {
-				pendingMessages = steeringAfterTools;
-				steeringAfterTools = null;
-			} else {
-				pendingMessages = (await config.getSteeringMessages?.()) || [];
+				// Re-call the LLM with tool results
+				result = await processAgentStream(
+					currentContext, config, signal, emit, streamFn,
+				);
+				for (const msg of result.messages) {
+					newMessages.push(msg);
+				}
 			}
 		}
 
-		// Agent would stop here. Check for follow-up messages.
-		const followUpMessages = (await config.getFollowUpMessages?.()) || [];
-		if (followUpMessages.length > 0) {
-			pendingMessages = followUpMessages;
+		if (result.abortedOrError) {
+			emit({ type: "turn_end", message: result.lastAssistant, toolResults: result.toolResults });
+			emit({ type: "agent_end", messages: newMessages });
+			stream.end(newMessages);
+			return;
+		}
+
+		emit({ type: "turn_end", message: result.lastAssistant, toolResults: result.toolResults });
+
+		// Check for steering messages after turn
+		pendingMessages = (await config.getSteeringMessages?.()) || [];
+		if (pendingMessages.length > 0) continue;
+
+		// Check for follow-up messages
+		const followUps = (await config.getFollowUpMessages?.()) || [];
+		if (followUps.length > 0) {
+			pendingMessages = followUps;
 			continue;
 		}
 
@@ -241,35 +411,131 @@ async function runLoop(
 	stream.end(newMessages);
 }
 
+// ============================================================================
+// Manual tool execution (used when streamFn bypasses TanStack's agent loop)
+// ============================================================================
+
 /**
- * Stream an assistant response from the LLM.
- * Converts AgentMessage[] → ModelMessage[] at the call boundary.
- * Consumes AG-UI StreamChunk events and builds an AssistantMessage.
+ * Execute a single tool call manually. Used for the streamFn path
+ * where TanStack AI isn't driving the tool loop.
  */
-async function streamAssistantResponse(
+async function executeToolCall(
+	toolCall: ToolCall,
+	tools: AgentTool<any>[],
+	signal: AbortSignal | undefined,
+	emit: EmitFn,
+): Promise<ToolResultMessage[]> {
+	const tool = tools.find((t) => t.name === toolCall.name);
+
+	emit({
+		type: "tool_execution_start",
+		toolCallId: toolCall.id,
+		toolName: toolCall.name,
+		args: toolCall.arguments,
+	});
+
+	let result: AgentToolResult;
+	let isError = false;
+
+	if (!tool) {
+		result = {
+			content: [{ type: "text", text: `Tool not found: ${toolCall.name}` }],
+			details: {},
+		};
+		isError = true;
+	} else {
+		try {
+			const validatedArgs = v.parse(tool.parameters, toolCall.arguments);
+			result = await tool.execute(
+				toolCall.id,
+				validatedArgs,
+				signal,
+				(partialResult) => {
+					emit({
+						type: "tool_execution_update",
+						toolCallId: toolCall.id,
+						toolName: toolCall.name,
+						args: toolCall.arguments,
+						partialResult,
+					});
+				},
+			);
+		} catch (e) {
+			result = {
+				content: [
+					{ type: "text", text: e instanceof Error ? e.message : String(e) },
+				],
+				details: {},
+			};
+			isError = true;
+		}
+	}
+
+	emit({
+		type: "tool_execution_end",
+		toolCallId: toolCall.id,
+		toolName: toolCall.name,
+		result,
+		isError,
+	});
+
+	const toolResultMessage: ToolResultMessage = {
+		role: "toolResult",
+		toolCallId: toolCall.id,
+		toolName: toolCall.name,
+		content: result.content,
+		details: result.details,
+		isError,
+		timestamp: Date.now(),
+	};
+
+	emit({ type: "message_start", message: toolResultMessage });
+	emit({ type: "message_end", message: toolResultMessage });
+
+	return [toolResultMessage];
+}
+
+// ============================================================================
+// Stream processing — consumes TanStack AI stream, builds messages
+// ============================================================================
+
+interface ProcessResult {
+	messages: AgentMessage[];
+	toolResults: ToolResultMessage[];
+	lastAssistant: AssistantMessage;
+	abortedOrError: boolean;
+}
+
+/**
+ * Process a full TanStack AI agent stream (may include multiple LLM turns
+ * if tools are involved). Builds AssistantMessage + ToolResultMessage objects,
+ * emits events for subscribers.
+ */
+async function processAgentStream(
 	context: AgentContext,
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
 	streamFn?: StreamFn,
-): Promise<AssistantMessage> {
-	// Apply context transform if configured
-	// Pass a defensive copy so the callback isn't affected by later mutations
+): Promise<ProcessResult> {
+	// Apply context transform
 	let messages = context.messages;
 	if (config.transformContext) {
 		messages = await config.transformContext([...messages], signal);
 	}
 
 	// Convert to LLM-compatible messages
-	const llmMessages = await config.convertToLlm(messages);
+	const llmMessages = toModelMessages(messages);
 
-	// Convert tools
-	const tanStackTools = context.tools
-		? convertAgentToolsToTanStack(context.tools)
+	// Set up tool bridge
+	const tracker = createToolCallTracker();
+	const toolResultCollector: ToolResultMessage[] = [];
+	const tanStackTools = context.tools?.length
+		? wrapToolsForTanStack(context.tools, tracker, signal, emit, toolResultCollector)
 		: undefined;
 
-	// Build model options with thinking support
-	let modelOptions = config.thinkingLevel && config.thinkingLevel !== "off"
+	// Build model options
+	const modelOptions = config.thinkingLevel && config.thinkingLevel !== "off"
 		? toThinkingModelOptions(config.model.provider, config.thinkingLevel)
 		: undefined;
 
@@ -278,7 +544,7 @@ async function streamAssistantResponse(
 		? { abort: () => {}, signal } as AbortController
 		: undefined;
 
-	// Use custom streamFn or default chat()
+	// Use custom streamFn or chat() with TanStack's agent loop
 	const streamSource: AsyncIterable<StreamChunk> = streamFn
 		? streamFn({
 				adapter: config.adapter,
@@ -303,25 +569,18 @@ async function streamAssistantResponse(
 				temperature: config.temperature,
 				maxTokens: config.maxTokens,
 				abortController,
-				// Disable TanStack AI's built-in agent loop — we handle it ourselves
-				agentLoopStrategy: () => false,
+				// Let TanStack handle tool-call iterations
+				agentLoopStrategy: tanStackTools
+					? maxIterations(config.maxTurns ?? 10)
+					: () => false,
 			});
 
-	// Build partial AssistantMessage from AG-UI events
-	const partial: AssistantMessage = {
-		role: "assistant",
-		content: [],
-		provider: config.model.provider,
-		model: config.model.id,
-		usage: createEmptyUsage(),
-		stopReason: "stop",
-		timestamp: Date.now(),
-	};
-
+	// State for multi-turn message accumulation
+	const allMessages: AgentMessage[] = [];
+	let partial: AssistantMessage = createPartial(config);
 	let emittedStart = false;
-	// Track partial JSON for tool call arguments
+	let turnCount = 0;
 	const partialJsonMap = new Map<string, string>();
-	// Map toolCallId → contentIndex for tool call events
 	const toolCallIndexMap = new Map<string, number>();
 
 	try {
@@ -332,251 +591,55 @@ async function streamAssistantResponse(
 				break;
 			}
 
-			switch (chunk.type) {
-				case "RUN_STARTED": {
-					if (!emittedStart) {
-						emittedStart = true;
-						emit({
-							type: "message_start",
-							message: { ...partial },
-						});
+			// Detect new LLM turn: RUN_STARTED after a previous turn completed
+			// This happens when TanStack re-calls the LLM after tool execution
+			if (chunk.type === "RUN_STARTED" && turnCount > 0) {
+				// Finalize previous assistant message
+				finalizePartial(partial, emittedStart, context, allMessages, emit);
+				// Start fresh partial for new turn
+				partial = createPartial(config);
+				emittedStart = false;
+				partialJsonMap.clear();
+				toolCallIndexMap.clear();
+			}
+
+			// Track tool call IDs for the bridge
+			if (chunk.type === "TOOL_CALL_START") {
+				tracker.register(chunk.toolCallId, chunk.toolName);
+			}
+
+			// Track RUN_STARTED for turn counting
+			if (chunk.type === "RUN_STARTED") {
+				turnCount++;
+			}
+
+			// After TanStack executes a tool, it emits TOOL_CALL_END with result.
+			// Our wrapped execute already emitted tool_execution_* events and created
+			// ToolResultMessages. The TOOL_CALL_END with result is TanStack's own event
+			// after our execute returns — we should skip it to avoid double-processing.
+			if (chunk.type === "TOOL_CALL_END" && "result" in chunk && chunk.result !== undefined) {
+				// TanStack's post-execution event. Tool results already handled by wrapper.
+				// Push tool results into context for next LLM call awareness
+				for (const tr of toolResultCollector) {
+					if (!allMessages.includes(tr)) {
+						context.messages.push(tr);
+						allMessages.push(tr);
 					}
-					break;
 				}
+				continue;
+			}
 
-				case "TEXT_MESSAGE_START": {
-					if (!emittedStart) {
-						emittedStart = true;
-						emit({
-							type: "message_start",
-							message: { ...partial },
-						});
-					}
-					// Add empty text content block
-					const textIdx = partial.content.length;
-					partial.content.push({ type: "text", text: "" });
-					const textStartEvent: AssistantStreamEvent = {
-						type: "text_start",
-						contentIndex: textIdx,
-					};
-					emit({
-						type: "message_update",
-						message: { ...partial, content: [...partial.content] },
-						streamEvent: textStartEvent,
-					});
-					break;
-				}
+			// Process chunk into partial AssistantMessage
+			processChunk(chunk, partial, emit, emittedStart, partialJsonMap, toolCallIndexMap, config.model);
 
-				case "TEXT_MESSAGE_CONTENT": {
-					// Append delta to last text content block
-					const lastText = partial.content.findLast((c) => c.type === "text");
-					if (lastText && lastText.type === "text") {
-						lastText.text += chunk.delta;
-						const idx = partial.content.lastIndexOf(lastText);
-						const textDeltaEvent: AssistantStreamEvent = {
-							type: "text_delta",
-							contentIndex: idx,
-							delta: chunk.delta,
-						};
-						emit({
-							type: "message_update",
-							message: { ...partial, content: [...partial.content] },
-							streamEvent: textDeltaEvent,
-						});
-					}
-					break;
-				}
-
-				case "TEXT_MESSAGE_END": {
-					const endText = partial.content.findLast((c) => c.type === "text");
-					if (endText) {
-						const idx = partial.content.lastIndexOf(endText);
-						const textEndEvent: AssistantStreamEvent = {
-							type: "text_end",
-							contentIndex: idx,
-						};
-						emit({
-							type: "message_update",
-							message: { ...partial, content: [...partial.content] },
-							streamEvent: textEndEvent,
-						});
-					}
-					break;
-				}
-
-				case "STEP_STARTED": {
-					if (!emittedStart) {
-						emittedStart = true;
-						emit({
-							type: "message_start",
-							message: { ...partial },
-						});
-					}
-					// Add empty thinking content block
-					const thinkIdx = partial.content.length;
-					partial.content.push({ type: "thinking", thinking: "" });
-					const thinkStartEvent: AssistantStreamEvent = {
-						type: "thinking_start",
-						contentIndex: thinkIdx,
-					};
-					emit({
-						type: "message_update",
-						message: { ...partial, content: [...partial.content] },
-						streamEvent: thinkStartEvent,
-					});
-					break;
-				}
-
-				case "STEP_FINISHED": {
-					const lastThinking = partial.content.findLast(
-						(c) => c.type === "thinking",
-					);
-					if (lastThinking && lastThinking.type === "thinking") {
-						lastThinking.thinking += chunk.delta;
-						const idx = partial.content.lastIndexOf(lastThinking);
-						const thinkDeltaEvent: AssistantStreamEvent = {
-							type: "thinking_delta",
-							contentIndex: idx,
-							delta: chunk.delta,
-						};
-						emit({
-							type: "message_update",
-							message: { ...partial, content: [...partial.content] },
-							streamEvent: thinkDeltaEvent,
-						});
-						const thinkEndEvent: AssistantStreamEvent = {
-							type: "thinking_end",
-							contentIndex: idx,
-						};
-						emit({
-							type: "message_update",
-							message: { ...partial, content: [...partial.content] },
-							streamEvent: thinkEndEvent,
-						});
-					}
-					break;
-				}
-
-				case "TOOL_CALL_START": {
-					if (!emittedStart) {
-						emittedStart = true;
-						emit({
-							type: "message_start",
-							message: { ...partial },
-						});
-					}
-					const tcIdx = partial.content.length;
-					partial.content.push({
-						type: "toolCall",
-						id: chunk.toolCallId,
-						name: chunk.toolName,
-						arguments: {},
-					});
-					toolCallIndexMap.set(chunk.toolCallId, tcIdx);
-					partialJsonMap.set(chunk.toolCallId, "");
-					const tcStartEvent: AssistantStreamEvent = {
-						type: "toolcall_start",
-						contentIndex: tcIdx,
-					};
-					emit({
-						type: "message_update",
-						message: { ...partial, content: [...partial.content] },
-						streamEvent: tcStartEvent,
-					});
-					break;
-				}
-
-				case "TOOL_CALL_ARGS": {
-					const accum =
-						(partialJsonMap.get(chunk.toolCallId) || "") + chunk.delta;
-					partialJsonMap.set(chunk.toolCallId, accum);
-
-					const tcArgIdx = toolCallIndexMap.get(chunk.toolCallId);
-					if (tcArgIdx !== undefined) {
-						// Try to parse accumulated JSON
-						try {
-							const parsed = JSON.parse(accum);
-							const tc = partial.content[tcArgIdx];
-							if (tc && tc.type === "toolCall") {
-								tc.arguments = parsed;
-							}
-						} catch {
-							// Incomplete JSON — that's fine, keep accumulating
-						}
-
-						const tcDeltaEvent: AssistantStreamEvent = {
-							type: "toolcall_delta",
-							contentIndex: tcArgIdx,
-							delta: chunk.delta,
-						};
-						emit({
-							type: "message_update",
-							message: { ...partial, content: [...partial.content] },
-							streamEvent: tcDeltaEvent,
-						});
-					}
-					break;
-				}
-
-				case "TOOL_CALL_END": {
-					const tcEndIdx = toolCallIndexMap.get(chunk.toolCallId);
-					if (tcEndIdx !== undefined) {
-						// Use final input if available, otherwise parse accumulated JSON
-						const tc = partial.content[tcEndIdx];
-						if (tc && tc.type === "toolCall") {
-							if (chunk.input !== undefined) {
-								tc.arguments = chunk.input as Record<string, unknown>;
-							} else {
-								const finalJson =
-									partialJsonMap.get(chunk.toolCallId) || "{}";
-								try {
-									tc.arguments = JSON.parse(finalJson);
-								} catch {
-									tc.arguments = {};
-								}
-							}
-						}
-
-						const tcEndEvent: AssistantStreamEvent = {
-							type: "toolcall_end",
-							contentIndex: tcEndIdx,
-							toolCall: tc as ToolCall,
-						};
-						emit({
-							type: "message_update",
-							message: { ...partial, content: [...partial.content] },
-							streamEvent: tcEndEvent,
-						});
-					}
-					break;
-				}
-
-				case "RUN_FINISHED": {
-					// Map finish reason
-					if (chunk.finishReason === "tool_calls") {
-						partial.stopReason = "toolUse";
-					} else if (chunk.finishReason === "length") {
-						partial.stopReason = "length";
-					} else {
-						partial.stopReason = "stop";
-					}
-
-					// Map usage
-					if (chunk.usage) {
-						partial.usage = mapTanStackUsage(config.model, {
-							promptTokens: chunk.usage.promptTokens,
-							completionTokens: chunk.usage.completionTokens,
-							totalTokens: chunk.usage.totalTokens,
-						});
-					}
-					break;
-				}
-
-				case "RUN_ERROR": {
-					partial.stopReason = "error";
-					partial.errorMessage = chunk.error?.message || "Unknown error";
-					break;
-				}
+			// Update emittedStart after processing
+			if (!emittedStart && (
+				chunk.type === "RUN_STARTED" ||
+				chunk.type === "TEXT_MESSAGE_START" ||
+				chunk.type === "STEP_STARTED" ||
+				chunk.type === "TOOL_CALL_START"
+			)) {
+				emittedStart = true;
 			}
 		}
 	} catch (err: any) {
@@ -584,158 +647,228 @@ async function streamAssistantResponse(
 		partial.errorMessage = err?.message || String(err);
 	}
 
-	// Ensure message_start was emitted
+	// Finalize last partial
+	finalizePartial(partial, emittedStart, context, allMessages, emit);
+
+	return {
+		messages: allMessages,
+		toolResults: toolResultCollector,
+		lastAssistant: partial,
+		abortedOrError: partial.stopReason === "error" || partial.stopReason === "aborted",
+	};
+}
+
+function createPartial(config: AgentLoopConfig): AssistantMessage {
+	return {
+		role: "assistant",
+		content: [],
+		provider: config.model.provider,
+		model: config.model.id,
+		usage: createEmptyUsage(),
+		stopReason: "stop",
+		timestamp: Date.now(),
+	};
+}
+
+function finalizePartial(
+	partial: AssistantMessage,
+	emittedStart: boolean,
+	context: AgentContext,
+	allMessages: AgentMessage[],
+	emit: EmitFn,
+): void {
 	if (!emittedStart) {
 		emit({ type: "message_start", message: { ...partial } });
 	}
-
-	// Finalize: add to context and emit message_end
 	context.messages.push(partial);
+	allMessages.push(partial);
 	emit({ type: "message_end", message: partial });
-
-	return partial;
 }
 
 /**
- * Execute tool calls from an assistant message.
+ * Process a single StreamChunk into the partial AssistantMessage.
+ * Emits message_start/message_update events.
  */
-async function executeToolCalls(
-	tools: AgentTool<any>[] | undefined,
-	assistantMessage: AssistantMessage,
-	signal: AbortSignal | undefined,
+function processChunk(
+	chunk: StreamChunk,
+	partial: AssistantMessage,
 	emit: EmitFn,
-	getSteeringMessages?: AgentLoopConfig["getSteeringMessages"],
-): Promise<{
-	toolResults: ToolResultMessage[];
-	steeringMessages?: AgentMessage[];
-}> {
-	const toolCalls = assistantMessage.content.filter(
-		(c): c is ToolCall => c.type === "toolCall",
-	);
-	const results: ToolResultMessage[] = [];
-	let steeringMessages: AgentMessage[] | undefined;
-
-	for (let index = 0; index < toolCalls.length; index++) {
-		const toolCall = toolCalls[index];
-		const tool = tools?.find((t) => t.name === toolCall.name);
-
-		emit({
-			type: "tool_execution_start",
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-			args: toolCall.arguments,
-		});
-
-		let result: AgentToolResult;
-		let isError = false;
-
-		try {
-			if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
-
-			// Validate arguments with Valibot
-			const validatedArgs = v.parse(tool.parameters, toolCall.arguments);
-
-			result = await tool.execute(
-				toolCall.id,
-				validatedArgs,
-				signal,
-				(partialResult) => {
-					emit({
-						type: "tool_execution_update",
-						toolCallId: toolCall.id,
-						toolName: toolCall.name,
-						args: toolCall.arguments,
-						partialResult,
-					});
-				},
-			);
-		} catch (e) {
-			result = {
-				content: [
-					{
-						type: "text",
-						text: e instanceof Error ? e.message : String(e),
-					},
-				],
-				details: {},
-			};
-			isError = true;
+	emittedStart: boolean,
+	partialJsonMap: Map<string, string>,
+	toolCallIndexMap: Map<string, number>,
+	model: Model,
+): void {
+	switch (chunk.type) {
+		case "RUN_STARTED": {
+			if (!emittedStart) {
+				emit({ type: "message_start", message: { ...partial } });
+			}
+			break;
 		}
 
-		emit({
-			type: "tool_execution_end",
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-			result,
-			isError,
-		});
-
-		const toolResultMessage: ToolResultMessage = {
-			role: "toolResult",
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-			content: result.content,
-			details: result.details,
-			isError,
-			timestamp: Date.now(),
-		};
-
-		results.push(toolResultMessage);
-		emit({ type: "message_start", message: toolResultMessage });
-		emit({ type: "message_end", message: toolResultMessage });
-
-		// Check for steering messages — skip remaining tools if user interrupted
-		if (getSteeringMessages) {
-			const steering = await getSteeringMessages();
-			if (steering.length > 0) {
-				steeringMessages = steering;
-				const remainingCalls = toolCalls.slice(index + 1);
-				for (const skipped of remainingCalls) {
-					results.push(skipToolCall(skipped, emit));
-				}
-				break;
+		case "TEXT_MESSAGE_START": {
+			if (!emittedStart) {
+				emit({ type: "message_start", message: { ...partial } });
 			}
+			const textIdx = partial.content.length;
+			partial.content.push({ type: "text", text: "" });
+			emitUpdate(emit, partial, { type: "text_start", contentIndex: textIdx });
+			break;
+		}
+
+		case "TEXT_MESSAGE_CONTENT": {
+			const lastText = partial.content.findLast((c) => c.type === "text");
+			if (lastText && lastText.type === "text") {
+				lastText.text += chunk.delta;
+				const idx = partial.content.lastIndexOf(lastText);
+				emitUpdate(emit, partial, {
+					type: "text_delta",
+					contentIndex: idx,
+					delta: chunk.delta,
+				});
+			}
+			break;
+		}
+
+		case "TEXT_MESSAGE_END": {
+			const endText = partial.content.findLast((c) => c.type === "text");
+			if (endText) {
+				const idx = partial.content.lastIndexOf(endText);
+				emitUpdate(emit, partial, { type: "text_end", contentIndex: idx });
+			}
+			break;
+		}
+
+		case "STEP_STARTED": {
+			if (!emittedStart) {
+				emit({ type: "message_start", message: { ...partial } });
+			}
+			const thinkIdx = partial.content.length;
+			partial.content.push({ type: "thinking", thinking: "" });
+			emitUpdate(emit, partial, { type: "thinking_start", contentIndex: thinkIdx });
+			break;
+		}
+
+		case "STEP_FINISHED": {
+			const lastThinking = partial.content.findLast((c) => c.type === "thinking");
+			if (lastThinking && lastThinking.type === "thinking") {
+				lastThinking.thinking += chunk.delta;
+				const idx = partial.content.lastIndexOf(lastThinking);
+				emitUpdate(emit, partial, {
+					type: "thinking_delta",
+					contentIndex: idx,
+					delta: chunk.delta,
+				});
+				emitUpdate(emit, partial, { type: "thinking_end", contentIndex: idx });
+			}
+			break;
+		}
+
+		case "TOOL_CALL_START": {
+			if (!emittedStart) {
+				emit({ type: "message_start", message: { ...partial } });
+			}
+			const tcIdx = partial.content.length;
+			partial.content.push({
+				type: "toolCall",
+				id: chunk.toolCallId,
+				name: chunk.toolName,
+				arguments: {},
+			});
+			toolCallIndexMap.set(chunk.toolCallId, tcIdx);
+			partialJsonMap.set(chunk.toolCallId, "");
+			emitUpdate(emit, partial, { type: "toolcall_start", contentIndex: tcIdx });
+			break;
+		}
+
+		case "TOOL_CALL_ARGS": {
+			const accum =
+				(partialJsonMap.get(chunk.toolCallId) || "") + chunk.delta;
+			partialJsonMap.set(chunk.toolCallId, accum);
+
+			const tcArgIdx = toolCallIndexMap.get(chunk.toolCallId);
+			if (tcArgIdx !== undefined) {
+				try {
+					const parsed = JSON.parse(accum);
+					const tc = partial.content[tcArgIdx];
+					if (tc && tc.type === "toolCall") {
+						tc.arguments = parsed;
+					}
+				} catch {
+					// Incomplete JSON — keep accumulating
+				}
+				emitUpdate(emit, partial, {
+					type: "toolcall_delta",
+					contentIndex: tcArgIdx,
+					delta: chunk.delta,
+				});
+			}
+			break;
+		}
+
+		case "TOOL_CALL_END": {
+			// Only handle the pre-execution end event (no result field)
+			const tcEndIdx = toolCallIndexMap.get(chunk.toolCallId);
+			if (tcEndIdx !== undefined) {
+				const tc = partial.content[tcEndIdx];
+				if (tc && tc.type === "toolCall") {
+					if (chunk.input !== undefined) {
+						tc.arguments = chunk.input as Record<string, unknown>;
+					} else {
+						const finalJson = partialJsonMap.get(chunk.toolCallId) || "{}";
+						try {
+							tc.arguments = JSON.parse(finalJson);
+						} catch {
+							tc.arguments = {};
+						}
+					}
+				}
+				emitUpdate(emit, partial, {
+					type: "toolcall_end",
+					contentIndex: tcEndIdx,
+					toolCall: tc as ToolCall,
+				});
+			}
+			break;
+		}
+
+		case "RUN_FINISHED": {
+			if (chunk.finishReason === "tool_calls") {
+				partial.stopReason = "toolUse";
+			} else if (chunk.finishReason === "length") {
+				partial.stopReason = "length";
+			} else {
+				partial.stopReason = "stop";
+			}
+			if (chunk.usage) {
+				partial.usage = mapTanStackUsage(model, {
+					promptTokens: chunk.usage.promptTokens,
+					completionTokens: chunk.usage.completionTokens,
+					totalTokens: chunk.usage.totalTokens,
+				});
+			}
+			break;
+		}
+
+		case "RUN_ERROR": {
+			partial.stopReason = "error";
+			partial.errorMessage = chunk.error?.message || "Unknown error";
+			break;
 		}
 	}
-
-	return { toolResults: results, steeringMessages };
 }
 
-function skipToolCall(
-	toolCall: ToolCall,
+/**
+ * Emit a message_update event with a snapshot of the partial message.
+ */
+function emitUpdate(
 	emit: EmitFn,
-): ToolResultMessage {
-	const result: AgentToolResult = {
-		content: [{ type: "text", text: "Skipped due to queued user message." }],
-		details: {},
-	};
-
+	partial: AssistantMessage,
+	streamEvent: AssistantStreamEvent,
+): void {
 	emit({
-		type: "tool_execution_start",
-		toolCallId: toolCall.id,
-		toolName: toolCall.name,
-		args: toolCall.arguments,
+		type: "message_update",
+		message: { ...partial, content: [...partial.content] },
+		streamEvent,
 	});
-	emit({
-		type: "tool_execution_end",
-		toolCallId: toolCall.id,
-		toolName: toolCall.name,
-		result,
-		isError: true,
-	});
-
-	const toolResultMessage: ToolResultMessage = {
-		role: "toolResult",
-		toolCallId: toolCall.id,
-		toolName: toolCall.name,
-		content: result.content,
-		details: {},
-		isError: true,
-		timestamp: Date.now(),
-	};
-
-	emit({ type: "message_start", message: toolResultMessage });
-	emit({ type: "message_end", message: toolResultMessage });
-
-	return toolResultMessage;
 }

@@ -12,7 +12,6 @@ export { EventStream } from "./event-stream";
 export {
 	toModelMessage,
 	toModelMessages,
-	convertAgentToolsToTanStack,
 } from "./messages";
 
 // Schemas (for JSONL persistence)
@@ -28,9 +27,6 @@ export {
 	toolCallSchema,
 } from "./schemas";
 
-// Type guards
-export { isMessage, isAssistantMessage } from "./types";
-
 // Types
 export type {
 	// Content blocks
@@ -45,7 +41,6 @@ export type {
 	AssistantMessage,
 	ToolResultMessage,
 	Message,
-	CustomAgentMessages,
 	AgentMessage,
 
 	// Tools

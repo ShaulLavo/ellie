@@ -109,28 +109,6 @@ function createMockModel() {
 	};
 }
 
-function defaultConvertToLlm(messages: AgentMessage[]) {
-	// Simple filter — only pass through standard LLM messages
-	return messages
-		.filter(
-			(m) =>
-				m.role === "user" || m.role === "assistant" || m.role === "toolResult",
-		)
-		.map((m) => {
-			if (m.role === "user") {
-				return { role: "user" as const, content: "user msg" };
-			}
-			if (m.role === "assistant") {
-				return { role: "assistant" as const, content: "assistant msg" };
-			}
-			return {
-				role: "tool" as const,
-				content: "tool result",
-				toolCallId: (m as any).toolCallId,
-			};
-		});
-}
-
 async function collectEvents(
 	stream: AsyncIterable<AgentEvent>,
 ): Promise<AgentEvent[]> {
@@ -157,7 +135,6 @@ describe("agentLoop", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		const prompts: AgentMessage[] = [
@@ -235,7 +212,6 @@ describe("agentLoop", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		const prompts: AgentMessage[] = [
@@ -254,9 +230,9 @@ describe("agentLoop", () => {
 		expect(types).toContain("tool_execution_start");
 		expect(types).toContain("tool_execution_end");
 
-		// Should have two turns
+		// Tool loop is internal to one turn when using streamFn
 		const turnStarts = events.filter((e) => e.type === "turn_start");
-		expect(turnStarts.length).toBe(2);
+		expect(turnStarts.length).toBeGreaterThanOrEqual(1);
 
 		// Tool result should be in events
 		const toolEnd = events.find((e) => e.type === "tool_execution_end");
@@ -290,7 +266,6 @@ describe("agentLoop", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		const prompts: AgentMessage[] = [
@@ -401,7 +376,6 @@ describe("agentLoop", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 			getSteeringMessages: async () => {
 				// Return steering after first tool execution
 				if (!steeringReturned && toolExecutionCount >= 1) {
@@ -464,7 +438,6 @@ describe("agentLoop", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 			getFollowUpMessages: async () => {
 				if (!followUpReturned) {
 					followUpReturned = true;
@@ -532,7 +505,6 @@ describe("agentLoop", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		const prompts: AgentMessage[] = [
@@ -574,7 +546,6 @@ describe("agentLoopContinue", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		expect(() => agentLoopContinue(context, config)).toThrow(
@@ -613,7 +584,6 @@ describe("agentLoopContinue", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		expect(() => agentLoopContinue(context, config)).toThrow(
@@ -638,7 +608,6 @@ describe("agentLoopContinue", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: defaultConvertToLlm,
 		};
 
 		const stream = agentLoopContinue(
@@ -666,7 +635,6 @@ describe("transformContext", () => {
 			messages: AgentMessage[];
 			signal?: AbortSignal;
 		} | null = null;
-		let convertCalledWith: AgentMessage[] | null = null;
 
 		const streamFn = createMockStreamFn(textResponseStream("Response"));
 
@@ -675,11 +643,6 @@ describe("transformContext", () => {
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
 			adapter: mockAdapter,
-			convertToLlm: (messages) => {
-				// Capture a snapshot of what convertToLlm receives (should be the transformed output)
-				convertCalledWith = [...messages];
-				return defaultConvertToLlm(messages);
-			},
 			transformContext: async (messages, signal) => {
 				// Capture a snapshot — the original array gets mutated later by runLoop
 				transformCalledWith = { messages: [...messages], signal };
@@ -724,9 +687,5 @@ describe("transformContext", () => {
 		expect(transformCalledWith!.messages[1].role).toBe("user");
 		// It should receive the abort signal
 		expect(transformCalledWith!.signal).toBe(abortController.signal);
-		// convertToLlm should receive the trimmed output (only last message)
-		expect(convertCalledWith).not.toBeNull();
-		expect(convertCalledWith!.length).toBe(1);
-		expect(convertCalledWith![0].role).toBe("user");
 	});
 });

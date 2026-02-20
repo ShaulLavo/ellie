@@ -10,10 +10,8 @@ import {
 	type Model,
 	type ThinkingLevel,
 } from "@ellie/ai";
-import type { AnyTextAdapter, ModelMessage } from "@tanstack/ai";
+import type { AnyTextAdapter } from "@tanstack/ai";
 import { agentLoop, agentLoopContinue } from "./agent-loop";
-import { toModelMessages } from "./messages";
-import { isAssistantMessage, isMessage } from "./types";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -21,17 +19,11 @@ import type {
 	AgentMessage,
 	AgentState,
 	AgentTool,
+	AssistantMessage,
 	ImageContent,
 	StreamFn,
 	TextContent,
 } from "./types";
-
-/**
- * Default convertToLlm: Keep only LLM-compatible messages.
- */
-function defaultConvertToLlm(messages: AgentMessage[]): ModelMessage[] {
-	return toModelMessages(messages.filter(isMessage));
-}
 
 export interface AgentOptions {
 	initialState?: Partial<AgentState>;
@@ -39,16 +31,14 @@ export interface AgentOptions {
 	/** TanStack AI adapter (e.g., anthropicText("claude-sonnet-4-6")) */
 	adapter?: AnyTextAdapter;
 
-	/** Converts AgentMessage[] to LLM-compatible ModelMessage[] before each LLM call. */
-	convertToLlm?: (
-		messages: AgentMessage[],
-	) => ModelMessage[] | Promise<ModelMessage[]>;
-
-	/** Optional transform applied to context before convertToLlm. */
+	/** Optional transform applied to context before sending to LLM. */
 	transformContext?: (
 		messages: AgentMessage[],
 		signal?: AbortSignal,
 	) => Promise<AgentMessage[]>;
+
+	/** Maximum LLM call iterations when tools are involved. Default: 10 */
+	maxTurns?: number;
 
 	/** Steering mode: "all" = send all at once, "one-at-a-time" = one per turn */
 	steeringMode?: "all" | "one-at-a-time";
@@ -67,15 +57,15 @@ export class Agent {
 	private _state: AgentState;
 	private listeners = new Set<(e: AgentEvent) => void>();
 	private abortController?: AbortController;
-	private convertToLlm: (
-		messages: AgentMessage[],
-	) => ModelMessage[] | Promise<ModelMessage[]>;
 	private transformContext?: (
 		messages: AgentMessage[],
 		signal?: AbortSignal,
 	) => Promise<AgentMessage[]>;
+	private maxTurns?: number;
 	private steeringQueue: AgentMessage[] = [];
+	private steeringQueueIdx = 0;
 	private followUpQueue: AgentMessage[] = [];
+	private followUpQueueIdx = 0;
 	private steeringMode: "all" | "one-at-a-time";
 	private followUpMode: "all" | "one-at-a-time";
 	public streamFn?: StreamFn;
@@ -95,12 +85,11 @@ export class Agent {
 			messages: [],
 			isStreaming: false,
 			streamMessage: null,
-			pendingToolCalls: new Set<string>(),
 			error: undefined,
 			...opts.initialState,
 		};
-		this.convertToLlm = opts.convertToLlm || defaultConvertToLlm;
 		this.transformContext = opts.transformContext;
+		this.maxTurns = opts.maxTurns;
 		this.steeringMode = opts.steeringMode || "one-at-a-time";
 		this.followUpMode = opts.followUpMode || "one-at-a-time";
 		this.streamFn = opts.streamFn;
@@ -175,47 +164,66 @@ export class Agent {
 
 	clearSteeringQueue() {
 		this.steeringQueue = [];
+		this.steeringQueueIdx = 0;
 	}
 
 	clearFollowUpQueue() {
 		this.followUpQueue = [];
+		this.followUpQueueIdx = 0;
 	}
 
 	clearAllQueues() {
-		this.steeringQueue = [];
-		this.followUpQueue = [];
+		this.clearSteeringQueue();
+		this.clearFollowUpQueue();
 	}
 
 	hasQueuedMessages(): boolean {
-		return this.steeringQueue.length > 0 || this.followUpQueue.length > 0;
+		return (
+			this.steeringQueueIdx < this.steeringQueue.length ||
+			this.followUpQueueIdx < this.followUpQueue.length
+		);
 	}
 
 	private dequeueSteeringMessages(): AgentMessage[] {
+		if (this.steeringQueueIdx >= this.steeringQueue.length) return [];
+
 		if (this.steeringMode === "one-at-a-time") {
-			if (this.steeringQueue.length > 0) {
-				const first = this.steeringQueue[0];
-				this.steeringQueue = this.steeringQueue.slice(1);
-				return [first];
-			}
-			return [];
+			const first = this.steeringQueue[this.steeringQueueIdx++];
+			this.compactQueue("steering");
+			return [first];
 		}
-		const steering = this.steeringQueue.slice();
+		const remaining = this.steeringQueue.slice(this.steeringQueueIdx);
 		this.steeringQueue = [];
-		return steering;
+		this.steeringQueueIdx = 0;
+		return remaining;
 	}
 
 	private dequeueFollowUpMessages(): AgentMessage[] {
+		if (this.followUpQueueIdx >= this.followUpQueue.length) return [];
+
 		if (this.followUpMode === "one-at-a-time") {
-			if (this.followUpQueue.length > 0) {
-				const first = this.followUpQueue[0];
-				this.followUpQueue = this.followUpQueue.slice(1);
-				return [first];
-			}
-			return [];
+			const first = this.followUpQueue[this.followUpQueueIdx++];
+			this.compactQueue("followUp");
+			return [first];
 		}
-		const followUp = this.followUpQueue.slice();
+		const remaining = this.followUpQueue.slice(this.followUpQueueIdx);
 		this.followUpQueue = [];
-		return followUp;
+		this.followUpQueueIdx = 0;
+		return remaining;
+	}
+
+	private compactQueue(which: "steering" | "followUp") {
+		const queue = which === "steering" ? this.steeringQueue : this.followUpQueue;
+		const idx = which === "steering" ? this.steeringQueueIdx : this.followUpQueueIdx;
+		if (idx > 32 && idx > queue.length / 2) {
+			if (which === "steering") {
+				this.steeringQueue = this.steeringQueue.slice(this.steeringQueueIdx);
+				this.steeringQueueIdx = 0;
+			} else {
+				this.followUpQueue = this.followUpQueue.slice(this.followUpQueueIdx);
+				this.followUpQueueIdx = 0;
+			}
+		}
 	}
 
 	// --- Lifecycle ---
@@ -232,10 +240,8 @@ export class Agent {
 		this._state.messages = [];
 		this._state.isStreaming = false;
 		this._state.streamMessage = null;
-		this._state.pendingToolCalls = new Set<string>();
 		this._state.error = undefined;
-		this.steeringQueue = [];
-		this.followUpQueue = [];
+		this.clearAllQueues();
 		this.runId = undefined;
 	}
 
@@ -349,7 +355,7 @@ export class Agent {
 			model: this._state.model,
 			adapter: this.adapter,
 			thinkingLevel: this._state.thinkingLevel,
-			convertToLlm: this.convertToLlm,
+			maxTurns: this.maxTurns,
 			transformContext: this.transformContext,
 			getSteeringMessages: async () => {
 				if (skipInitialSteeringPoll) {
@@ -381,7 +387,6 @@ export class Agent {
 					);
 
 			for await (const event of stream) {
-				// Update internal state based on events
 				switch (event.type) {
 					case "message_start":
 						partial = event.message;
@@ -399,26 +404,12 @@ export class Agent {
 						this.appendMessage(event.message);
 						break;
 
-					case "tool_execution_start": {
-						const s = new Set(this._state.pendingToolCalls);
-						s.add(event.toolCallId);
-						this._state.pendingToolCalls = s;
-						break;
-					}
-
-					case "tool_execution_end": {
-						const s = new Set(this._state.pendingToolCalls);
-						s.delete(event.toolCallId);
-						this._state.pendingToolCalls = s;
-						break;
-					}
-
 					case "turn_end":
 						if (
-							isAssistantMessage(event.message) &&
-							event.message.errorMessage
+							event.message.role === "assistant" &&
+							(event.message as AssistantMessage).errorMessage
 						) {
-							this._state.error = event.message.errorMessage;
+							this._state.error = (event.message as AssistantMessage).errorMessage;
 						}
 						break;
 
@@ -434,10 +425,11 @@ export class Agent {
 			// Handle any remaining partial message
 			if (
 				partial &&
-				isAssistantMessage(partial) &&
-				partial.content.length > 0
+				partial.role === "assistant" &&
+				(partial as AssistantMessage).content.length > 0
 			) {
-				const onlyEmpty = !partial.content.some(
+				const assistantPartial = partial as AssistantMessage;
+				const onlyEmpty = !assistantPartial.content.some(
 					(c) =>
 						(c.type === "thinking" && c.thinking.trim().length > 0) ||
 						(c.type === "text" && c.text.trim().length > 0) ||
@@ -480,7 +472,6 @@ export class Agent {
 		} finally {
 			this._state.isStreaming = false;
 			this._state.streamMessage = null;
-			this._state.pendingToolCalls = new Set<string>();
 			this.abortController = undefined;
 			this.runId = undefined;
 			this.resolveRunningPrompt?.();

@@ -23,6 +23,7 @@
         "@ellie/env": "workspace:*",
         "@ellie/router": "workspace:*",
         "@ellie/rpc": "workspace:*",
+        "@ellie/utils": "workspace:*",
         "@tanstack/ai": "^0.5.1",
         "valibot": "^1.2.0",
       },

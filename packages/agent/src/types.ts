@@ -69,44 +69,7 @@ export interface ToolResultMessage<TDetails = unknown> {
 
 export type Message = UserMessage | AssistantMessage | ToolResultMessage;
 
-// ============================================================================
-// Custom agent messages (declaration merging)
-// ============================================================================
-
-/**
- * Apps extend via declaration merging:
- *
- * ```typescript
- * declare module "@ellie/agent" {
- *   interface CustomAgentMessages {
- *     artifact: ArtifactMessage;
- *     notification: NotificationMessage;
- *   }
- * }
- * ```
- */
-// biome-ignore lint/suspicious/noEmptyInterface: declaration merging target
-export interface CustomAgentMessages {}
-
-export type AgentMessage =
-	| Message
-	| CustomAgentMessages[keyof CustomAgentMessages];
-
-// ============================================================================
-// Type guards
-// ============================================================================
-
-/** Narrow AgentMessage to Message (user | assistant | toolResult). */
-export function isMessage(m: AgentMessage): m is Message {
-	if (m.role === "user" || m.role === "toolResult") return true;
-	if (m.role === "assistant" && "provider" in m) return true;
-	return false;
-}
-
-/** Narrow AgentMessage to AssistantMessage. Uses `"provider" in m` to distinguish from custom messages. */
-export function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
-	return m.role === "assistant" && "provider" in m;
-}
+export type AgentMessage = Message;
 
 // ============================================================================
 // Tools
@@ -149,7 +112,6 @@ export interface AgentState {
 	messages: AgentMessage[];
 	isStreaming: boolean;
 	streamMessage: AgentMessage | null;
-	pendingToolCalls: Set<string>;
 	error?: string;
 }
 
@@ -245,9 +207,8 @@ export interface AgentLoopConfig {
 	temperature?: number;
 	maxTokens?: number;
 
-	convertToLlm: (
-		messages: AgentMessage[],
-	) => ModelMessage[] | Promise<ModelMessage[]>;
+	/** Maximum LLM call iterations when tools are involved. Default: 10 */
+	maxTurns?: number;
 
 	transformContext?: (
 		messages: AgentMessage[],

@@ -5,7 +5,6 @@
 import type {
 	ModelMessage,
 	ContentPart,
-	Tool as TanStackTool,
 } from "@tanstack/ai";
 import type {
 	Message,
@@ -14,7 +13,6 @@ import type {
 	ToolResultMessage,
 	TextContent,
 	ToolCall,
-	AgentTool,
 } from "./types";
 
 /**
@@ -36,21 +34,6 @@ export function toModelMessage(msg: Message): ModelMessage {
  */
 export function toModelMessages(msgs: Message[]): ModelMessage[] {
 	return msgs.map(toModelMessage);
-}
-
-/**
- * Convert AgentTools to TanStack AI Tool format.
- * Valibot schemas implement Standard Schema V1, so they pass through directly.
- * We don't set `execute` — our agent loop handles execution.
- */
-export function convertAgentToolsToTanStack(
-	tools: AgentTool<any>[],
-): TanStackTool[] {
-	return tools.map((tool) => ({
-		name: tool.name,
-		description: tool.description,
-		inputSchema: tool.parameters,
-	}));
 }
 
 // ============================================================================

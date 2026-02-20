@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
 	toModelMessage,
 	toModelMessages,
-	convertAgentToolsToTanStack,
 } from "../src/messages";
 import type {
 	UserMessage,
@@ -227,28 +226,3 @@ describe("toModelMessages", () => {
 	});
 });
 
-describe("convertAgentToolsToTanStack", () => {
-	test("converts tools with name, description, and schema", () => {
-		const tools = [
-			{
-				name: "get_weather",
-				description: "Get weather for a city",
-				parameters: { type: "object" } as any,
-				label: "Weather",
-				execute: async () => ({
-					content: [{ type: "text" as const, text: "sunny" }],
-					details: {},
-				}),
-			},
-		];
-
-		const result = convertAgentToolsToTanStack(tools);
-
-		expect(result.length).toBe(1);
-		expect(result[0].name).toBe("get_weather");
-		expect(result[0].description).toBe("Get weather for a city");
-		expect(result[0].inputSchema).toBe(tools[0].parameters);
-		// execute should NOT be set — we handle it ourselves
-		expect(result[0].execute).toBeUndefined();
-	});
-});

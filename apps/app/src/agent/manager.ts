@@ -9,9 +9,11 @@ import { Agent, type AgentOptions, type AgentEvent, type AgentMessage } from "@e
 import { agentMessageSchema } from "@ellie/agent";
 import type { IStreamStore } from "@ellie/durable-streams";
 import type { AnyTextAdapter } from "@tanstack/ai";
+import { ulid } from "@ellie/utils";
 import * as v from "valibot";
 
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
 export interface AgentManagerOptions {
 	/** TanStack AI adapter for LLM calls */
@@ -78,7 +80,7 @@ export class AgentManager {
 			}
 		}
 
-		const runId = generateRunId();
+		const runId = ulid();
 
 		// Create the events stream for this run
 		const eventsPath = this.eventsPath(chatId, runId);
@@ -133,7 +135,7 @@ export class AgentManager {
 
 		for (const msg of messages) {
 			try {
-				const json = JSON.parse(new TextDecoder().decode(stripTrailingComma(msg.data)));
+				const json = JSON.parse(decoder.decode(stripTrailingComma(msg.data)));
 				const parsed = v.parse(agentMessageSchema, json);
 				result.push(parsed as AgentMessage);
 			} catch {
@@ -215,10 +217,6 @@ export class AgentManager {
 }
 
 // -- Helpers --
-
-function generateRunId(): string {
-	return `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 /**
  * Strip trailing comma from JSON store format.
