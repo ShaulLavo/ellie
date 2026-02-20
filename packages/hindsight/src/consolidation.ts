@@ -26,7 +26,9 @@ import type {
   ConsolidationAction,
   ObservationHistoryEntry,
   RerankFunction,
+  TagsMatch,
 } from "./types"
+import { matchesTags } from "./recall"
 import { CONSOLIDATION_SYSTEM, getConsolidationUserPrompt } from "./prompts"
 import { parseLLMJson } from "./sanitize"
 import { refreshMentalModel } from "./mental-models"
@@ -107,11 +109,13 @@ export async function consolidate(
 
     try {
       // 1. Find related observations via semantic search
+      // SECURITY: Pass memory tags for all_strict filtering to prevent cross-tenant leakage
       const relatedObs = await findRelatedObservations(
         hdb,
         memoryVec,
         bankId,
         memory.content,
+        memoryTags.length > 0 ? memoryTags : undefined,
       )
 
       // 2. Single LLM call to decide actions
@@ -184,15 +188,26 @@ interface RelatedObservation {
   sourceCount: number
 }
 
+/**
+ * Find related observations via semantic search.
+ *
+ * SECURITY: When `tags` is provided, uses `all_strict` matching to prevent
+ * cross-tenant/cross-user information leakage. Observations are only found
+ * within the same tag scope as the source memory being consolidated.
+ */
 async function findRelatedObservations(
   hdb: HindsightDatabase,
   memoryVec: EmbeddingStore,
   bankId: string,
   content: string,
+  tags?: string[],
   limit: number = 5,
 ): Promise<RelatedObservation[]> {
   const hits = await memoryVec.search(content, limit * 2)
   const observations: RelatedObservation[] = []
+
+  // SECURITY: Use all_strict matching if tags provided to prevent cross-scope consolidation
+  const tagsMatch: TagsMatch = tags?.length ? "all_strict" : "any"
 
   for (const hit of hits) {
     if (observations.length >= limit) break
@@ -213,6 +228,12 @@ async function findRelatedObservations(
       .get()
 
     if (!row) continue
+
+    // SECURITY: Filter by tags to prevent cross-tenant observation leakage
+    if (tags?.length) {
+      const obsTags: string[] = row.tags ? JSON.parse(row.tags) : []
+      if (!matchesTags(obsTags, tags, tagsMatch)) continue
+    }
 
     const sourceMemoryIds: string[] = row.sourceMemoryIds
       ? JSON.parse(row.sourceMemoryIds)
@@ -394,6 +415,19 @@ async function executeUpdateAction(
 
 // ── Mental model refresh trigger ────────────────────────────────────────
 
+/**
+ * Trigger refreshes for auto-refresh mental models after consolidation.
+ *
+ * SECURITY: Controls which mental models get refreshed based on tag boundaries
+ * to prevent cross-tenant information leakage:
+ *
+ * - If tagged memories were consolidated: refresh mental models with overlapping
+ *   tags OR untagged mental models (they're "global" and available to all contexts).
+ *   DO NOT refresh mental models with different tags.
+ *
+ * - If only untagged memories were consolidated: only refresh untagged mental models.
+ *   Tagged mental models are NOT refreshed when untagged memories are consolidated.
+ */
 async function triggerMentalModelRefreshes(
   hdb: HindsightDatabase,
   memoryVec: EmbeddingStore,
@@ -421,11 +455,25 @@ async function triggerMentalModelRefreshes(
   let refreshed = 0
 
   for (const model of autoRefreshModels) {
-    // Tag-based filtering: only refresh if tags overlap or model has no tags
     const modelTags: string[] = model.tags ? JSON.parse(model.tags) : []
-    if (modelTags.length > 0 && consolidatedTags.size > 0) {
-      const hasOverlap = modelTags.some((t) => consolidatedTags.has(t))
-      if (!hasOverlap) continue
+    const modelIsTagged = modelTags.length > 0
+    const hasConsolidatedTags = consolidatedTags.size > 0
+
+    if (hasConsolidatedTags) {
+      // Tagged memories were consolidated — refresh:
+      // 1. Mental models with overlapping tags (security boundary)
+      // 2. Untagged mental models (they're "global")
+      // DO NOT refresh mental models with different tags
+      if (modelIsTagged) {
+        const hasOverlap = modelTags.some((t) => consolidatedTags.has(t))
+        if (!hasOverlap) continue
+      }
+      // Untagged models always get refreshed when tagged memories are consolidated
+    } else {
+      // Only untagged memories were consolidated — SECURITY: only refresh untagged
+      // mental models. Tagged mental models are NOT refreshed when untagged memories
+      // are consolidated to prevent info leakage across tag boundaries.
+      if (modelIsTagged) continue
     }
 
     // Fire-and-forget refresh

@@ -219,6 +219,12 @@ export async function refreshMentalModel(
 
   if (!row) throw new Error(`Mental model ${id} not found in bank ${bankId}`)
 
+  // SECURITY: If the mental model has tags, pass them to reflect with "all_strict"
+  // matching to ensure it can only access memories with the SAME tags.
+  // This prevents cross-tenant/cross-user information leakage by excluding untagged content.
+  const tags: string[] | undefined = row.tags ? JSON.parse(row.tags) : undefined
+  const tagsMatch = tags?.length ? "all_strict" as const : undefined
+
   // Run the source query through reflect (without modelVec to avoid recursion)
   const reflectResult = await reflect(
     hdb,
@@ -227,7 +233,11 @@ export async function refreshMentalModel(
     adapter,
     bankId,
     row.sourceQuery,
-    { saveObservations: false },
+    {
+      saveObservations: false,
+      tags,
+      tagsMatch,
+    },
     rerank,
     bankProfile,
   )
