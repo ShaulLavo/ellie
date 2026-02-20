@@ -2,6 +2,7 @@
 
 import type { ComponentProps, ReactNode } from "react";
 
+// TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Button } from "@/components/ui/button";
 import {

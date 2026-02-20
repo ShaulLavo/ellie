@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components -- motion.create() result is cached at module level */
 "use client";
 
 import type { MotionProps } from "motion/react";
@@ -39,7 +40,6 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- getMotionComponent uses module-level cache, not creating during render
   const MotionComponent = getMotionComponent(
     Component as keyof JSX.IntrinsicElements
   );

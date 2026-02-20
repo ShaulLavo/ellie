@@ -252,13 +252,14 @@ export const Persona: FC<PersonaProps> = memo(
     const speakingInput = useStateMachineInput(rive, stateMachine, "speaking");
     const asleepInput = useStateMachineInput(rive, stateMachine, "asleep");
 
-    // eslint-disable-next-line react-hooks/immutability -- Rive state machine inputs are mutable by design
+    /* eslint-disable react-hooks/immutability -- Rive state machine inputs are mutable by design */
     useEffect(() => {
       if (listeningInput) listeningInput.value = state === "listening";
       if (thinkingInput) thinkingInput.value = state === "thinking";
       if (speakingInput) speakingInput.value = state === "speaking";
       if (asleepInput) asleepInput.value = state === "asleep";
     }, [state, listeningInput, thinkingInput, speakingInput, asleepInput]);
+    /* eslint-enable react-hooks/immutability */
 
     const Component = source.hasModel ? PersonaWithModel : PersonaWithoutModel;
 
