@@ -15,7 +15,11 @@
     "valibot": "^1.2.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-react-jsx": "^7.28.6",
+    "@babel/plugin-transform-typescript": "^7.28.6",
     "@repo/typescript-config": "workspace:*",
+    "babel-plugin-react-compiler": "^1.0.0",
     "bun-types": "latest"
   },
   "module": "src/server.ts"
