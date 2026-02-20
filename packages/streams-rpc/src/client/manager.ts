@@ -1,4 +1,4 @@
-import { FetchStreamTransport } from "@ellie/streams-client"
+import { DurableStream, FetchStreamTransport } from "@ellie/streams-client"
 import {
   createStreamDB,
   createStateSchema,
@@ -169,6 +169,37 @@ export class StreamManager {
           this.#cache.delete(resolvedPath)
         }
       },
+    }
+  }
+
+  /**
+   * Delete an entire stream: issue HTTP DELETE, close StreamDB, evict from cache.
+   * After this call, the next subscribe/get will auto-create a fresh stream.
+   */
+  async deleteStream(
+    streamDef: StreamDef,
+    params: Record<string, string>
+  ): Promise<void> {
+    const resolvedPath = resolvePath(streamDef.path, params)
+    const entry = this.#cache.get(resolvedPath)
+
+    if (entry) {
+      // Use the existing DurableStream instance to issue HTTP DELETE
+      await entry.db.stream.delete()
+      // Close StreamDB (aborts subscription, rejects pending promises)
+      entry.db.close()
+      // Evict from cache so next access creates a fresh stream
+      this.#cache.delete(resolvedPath)
+    } else {
+      // No cached entry — use static DurableStream.delete() for a one-shot delete
+      const transport = new FetchStreamTransport({
+        baseUrl: this.#baseUrl,
+        streamId: resolvedPath.replace(/^\//, ``),
+      })
+      await DurableStream.delete({
+        url: `${this.#baseUrl}${resolvedPath}`,
+        transport,
+      })
     }
   }
 

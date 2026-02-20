@@ -37,6 +37,7 @@ export function useChat(chatId: string) {
     isLoading,
     error,
     insert,
+    clear,
   } = useStream(rpc.chat.messages, { chatId })
 
   const sendMessage = useCallback(
@@ -59,12 +60,17 @@ export function useChat(chatId: string) {
     [insert]
   )
 
-  // TODO: clearChat requires stream-level delete + re-subscribe.
-  // For now, this is a no-op placeholder. Stream deletion needs
-  // to be exposed via the RPC layer or handled separately.
   const clearChat = useCallback(async () => {
-    console.warn(`[useChat] clearChat not yet implemented via RPC layer`)
-  }, [])
+    try {
+      await clear()
+    } catch (err) {
+      console.error(
+        `[useChat] Failed to clear chat:`,
+        err instanceof Error ? err.message : JSON.stringify(err)
+      )
+      throw err
+    }
+  }, [clear])
 
   return {
     messages: messages as Message[],

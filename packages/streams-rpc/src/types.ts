@@ -141,6 +141,8 @@ interface CollectionClientWithParams<
   upsert(
     params: TParams & { value: InferSchema<TDef[`schema`]> }
   ): Promise<void>
+  /** Delete the entire stream and all its data */
+  clear(params: TParams): Promise<void>
 }
 
 interface CollectionClientNoParams<TDef extends CollectionDef> {
@@ -156,6 +158,8 @@ interface CollectionClientNoParams<TDef extends CollectionDef> {
   delete(params: { key: string }): Promise<void>
   /** Append an upsert event to the stream */
   upsert(params: { value: InferSchema<TDef[`schema`]> }): Promise<void>
+  /** Delete the entire stream and all its data */
+  clear(): Promise<void>
 }
 
 // ============================================================================
@@ -164,14 +168,19 @@ interface CollectionClientNoParams<TDef extends CollectionDef> {
 
 /**
  * The API surface for a stream namespace on the client.
- * Each property is a CollectionClient for that collection.
+ * Each property is a CollectionClient for that collection,
+ * plus a `clear()` method for deleting the entire stream.
  */
 export type StreamClient<TDef extends StreamDef> = {
   [K in keyof TDef[`collections`]]: CollectionClient<
     TDef[`collections`][K],
     TDef[`path`]
   >
-}
+} & StreamClearMethod<TDef[`path`]>
+
+type StreamClearMethod<TPath extends string> = HasParams<TPath> extends true
+  ? { clear(params: ExtractParams<TPath>): Promise<void> }
+  : { clear(): Promise<void> }
 
 // ============================================================================
 // Full RPC Client

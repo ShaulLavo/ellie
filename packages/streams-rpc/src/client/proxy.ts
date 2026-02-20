@@ -70,6 +70,12 @@ export function createRpcClient<TRouter extends RouterDef>(
         {},
         {
           get(_, collectionName: string) {
+            // Stream-level clear: rpc.chat.clear({ chatId })
+            if (collectionName === `clear`) {
+              return (params?: Record<string, string>) =>
+                manager.deleteStream(streamDef, params ?? {})
+            }
+
             if (
               !(collectionName in streamDef.collections)
             ) {
@@ -135,6 +141,10 @@ export function createRpcClient<TRouter extends RouterDef>(
                   rest,
                   { value }
                 )
+              },
+
+              clear(params?: Record<string, string>) {
+                return manager.deleteStream(streamDef, params ?? {})
               },
             }
           },

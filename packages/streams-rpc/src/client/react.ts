@@ -53,6 +53,7 @@ export function useStream<
     update(params: TParams & { value: TItem }): Promise<void>
     delete(params: TParams & { key: string }): Promise<void>
     upsert(params: TParams & { value: TItem }): Promise<void>
+    clear(params: TParams): Promise<void>
   },
   params: TParams
 ) {
@@ -145,6 +146,14 @@ export function useStream<
     [paramsKey]
   )
 
+  const clear = useCallback(
+    async () => {
+      await collectionClient.clear(params)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paramsKey]
+  )
+
   return {
     data: (data ?? []) as TItem[],
     isLoading,
@@ -153,5 +162,6 @@ export function useStream<
     update,
     delete: del,
     upsert,
+    clear,
   }
 }
