@@ -32,6 +32,7 @@ import type {
   DispositionTraits,
   MentalModel,
   CreateMentalModelOptions,
+  ListMentalModelsOptions,
   UpdateMentalModelOptions,
   RefreshMentalModelResult,
   Directive,
@@ -989,8 +990,8 @@ Instructions:
     return getMentalModelImpl(this.hdb, bankId, id)
   }
 
-  listMentalModels(bankId: string): MentalModel[] {
-    return listMentalModelsImpl(this.hdb, bankId)
+  listMentalModels(bankId: string, options?: ListMentalModelsOptions): MentalModel[] {
+    return listMentalModelsImpl(this.hdb, bankId, options)
   }
 
   async updateMentalModel(
