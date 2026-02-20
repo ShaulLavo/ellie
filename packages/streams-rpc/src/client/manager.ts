@@ -212,14 +212,11 @@ export class StreamManager {
       // Issue HTTP DELETE regardless of ref count
       await entry.db.stream.delete()
 
-      if (entry.refs > 0) {
-        // Active subscribers exist — defer close until last unsubscribe
-        entry.pendingDelete = true
-      } else {
-        // No subscribers — close and evict immediately
-        entry.db.close()
-        this.#cache.delete(resolvedPath)
-      }
+      // Always close and evict immediately — the old consumer's long-poll
+      // will fail once the stream is deleted. The next #getOrCreate call
+      // (from re-render) will create a fresh StreamDB.
+      entry.db.close()
+      this.#cache.delete(resolvedPath)
     } else {
       // No cached entry — use static DurableStream.delete() for a one-shot delete
       const transport = new FetchStreamTransport({
@@ -231,6 +228,41 @@ export class StreamManager {
         transport,
       })
     }
+  }
+
+  /**
+   * Clear a stream: soft-delete the old log on the server, then close & evict
+   * locally so the next subscribe re-creates a fresh empty stream.
+   *
+   * Other connected clients will see the stream close (their long-poll/SSE gets
+   * a closed signal). The consumer auto-reconnect logic in stream-db handles
+   * re-subscribing to the new incarnation of the stream.
+   */
+  async clearStream(
+    streamDef: StreamDef,
+    params: Record<string, string>
+  ): Promise<void> {
+    const resolvedPath = resolvePath(streamDef.path, params)
+    const entry = this.#cache.get(resolvedPath)
+
+    if (entry) {
+      await entry.db.stream.delete()
+      entry.db.close()
+      this.#cache.delete(resolvedPath)
+    } else {
+      const transport = new FetchStreamTransport({
+        baseUrl: this.#baseUrl,
+        streamId: resolvedPath.replace(/^\//, ``),
+      })
+      await DurableStream.delete({
+        url: `${this.#baseUrl}${resolvedPath}`,
+        transport,
+      })
+    }
+
+    // Immediately re-create so other clients' reconnect finds the new stream
+    const freshEntry = this.#getOrCreate(streamDef, params)
+    await freshEntry.ready
   }
 
   /**

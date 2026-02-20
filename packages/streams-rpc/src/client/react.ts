@@ -65,7 +65,10 @@ export function useStream<
     upsert(params: TParams & { value: TItem }): Promise<void>
     clear(params: TParams): Promise<void>
   },
-  params: TParams
+  params: TParams,
+  options?: {
+    orderBy?: { field: keyof TItem & string; direction?: `asc` | `desc` }
+  }
 ) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -73,6 +76,8 @@ export function useStream<
     TItem & object,
     string
   > | null>(null)
+  // Bumped by clear() to force useEffect re-subscribe (new StreamDB after delete+recreate)
+  const [version, setVersion] = useState(0)
 
   // Serialize params for dependency tracking (sorted keys for stability)
   const paramsKey = stableStringify(params)
@@ -105,13 +110,25 @@ export function useStream<
     }
     // collectionClient is a Proxy — fresh object on every render, can't be in deps.
     // paramsKey captures the serialized params which is what actually drives re-subscribe.
+    // version is bumped by clear() to force re-subscribe after delete+recreate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsKey])
+  }, [paramsKey, version])
+
+  // Memoize orderBy config to keep useLiveQuery deps stable
+  const orderByField = options?.orderBy?.field
+  const orderByDirection = options?.orderBy?.direction ?? `asc`
 
   // Live query: reactively subscribe to the TanStack DB collection
   const { data } = useLiveQuery(
-    (q) => (collection ? q.from({ items: collection }) : null),
-    [collection]
+    (q) => {
+      if (!collection) return null
+      const query = q.from({ items: collection })
+      if (orderByField) {
+        return query.orderBy(({ items }) => (items as any)[orderByField], orderByDirection)
+      }
+      return query
+    },
+    [collection, orderByField, orderByDirection]
   )
 
   // Mutation helpers — merge params automatically.
@@ -160,6 +177,9 @@ export function useStream<
   const clear = useCallback(
     async () => {
       await collectionClient.clear(params)
+      // Force re-subscribe: the old StreamDB was closed + evicted by clearStream,
+      // bumping version triggers the useEffect cleanup → new subscribe → fresh stream.
+      setVersion((v) => v + 1)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [paramsKey]

@@ -76,7 +76,6 @@ export class DurableStore implements IStreamStore {
       expiresAt?: string
       initialData?: Uint8Array
       closed?: boolean
-      resurrect?: boolean
     } = {}
   ): Stream {
     const existing = this.getIfNotExpired(path)
@@ -107,7 +106,6 @@ export class DurableStore implements IStreamStore {
       contentType: options.contentType,
       ttlSeconds: options.ttlSeconds,
       expiresAt: options.expiresAt,
-      resurrect: options.resurrect,
     })
 
     if (options.closed) {
@@ -246,6 +244,10 @@ export class DurableStore implements IStreamStore {
       offset: m.offset,
       timestamp: m.timestamp,
     }))
+
+    if (messages.length > 0) {
+      console.log(`[DurableStore.read] ${path}: ${messages.length} messages, offsets: [${messages.map(m => m.offset).join(`, `)}]`)
+    }
 
     return { messages, upToDate: true }
   }

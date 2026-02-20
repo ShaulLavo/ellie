@@ -50,7 +50,6 @@ export class JsonlEngine {
       contentType?: string
       ttlSeconds?: number
       expiresAt?: string
-      resurrect?: boolean
     } = {}
   ): schema.StreamRow {
     const now = Date.now()
@@ -83,18 +82,8 @@ export class JsonlEngine {
       return existing
     }
 
-    // Stream was soft-deleted — require explicit opt-in to resurrect
-    if (!options.resurrect) {
-      throw new SoftDeletedError(
-        `Stream was deleted at ${new Date(existing.deletedAt).toISOString()}. ` +
-          `Pass resurrect: true to reuse this path.`,
-        streamPath,
-        existing.deletedAt
-      )
-    }
-
-    // Resurrect: clear old index rows + producer state, reset the stream row.
-    // The JSONL file stays on disk. Bumping currentReadSeq makes old offsets
+    // Stream was soft-deleted — auto-resurrect with a fresh log instance.
+    // Old JSONL file stays on disk. Bumping currentReadSeq makes old offsets
     // unreachable so stale subscribers/cursors can't read previous-incarnation data.
     this.db.transaction((tx) => {
       tx.delete(schema.messages)
@@ -148,11 +137,6 @@ export class JsonlEngine {
       .all()
   }
 
-  // TODO: Implement reaper — background job or CLI command that hard-deletes
-  // streams where deleted_at < Date.now() - RETENTION_PERIOD. The reaper would:
-  //   1. Find streams with deleted_at older than the retention window
-  //   2. DELETE the SQLite row (cascade removes messages/producers)
-  //   3. unlinkSync the JSONL file from disk
   deleteStream(streamPath: string): void {
     // Soft-delete: mark the stream as deleted, keep JSONL file on disk
     this.db
@@ -334,20 +318,6 @@ export class JsonlEngine {
     } catch {
       // sqlite-vec not available, skip vector table
     }
-  }
-}
-
-// -- Errors -------------------------------------------------------------------
-
-export class SoftDeletedError extends Error {
-  readonly code = "soft_deleted"
-  constructor(
-    message: string,
-    readonly streamPath: string,
-    readonly deletedAt: number
-  ) {
-    super(message)
-    this.name = "SoftDeletedError"
   }
 }
 

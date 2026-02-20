@@ -323,12 +323,6 @@ class EventDispatcher {
     try {
       handler.write(value, operation)
     } catch (error) {
-      console.error(`[StreamDB] Error in handler.write():`, error)
-      console.error(`[StreamDB] Event that caused error:`, {
-        type: event.type,
-        key: event.key,
-        operation,
-      })
       throw error
     }
   }
@@ -341,9 +335,11 @@ class EventDispatcher {
 
     switch (event.headers.control) {
       case `reset`:
-        // Truncate all collections
+        // Truncate all collections (truncate requires a begin/commit cycle)
         for (const handler of this.handlers.values()) {
+          handler.begin()
           handler.truncate()
+          handler.commit()
         }
         // Clear key tracking
         for (const keys of this.existingKeys.values()) {
@@ -369,7 +365,6 @@ class EventDispatcher {
       try {
         handler.commit()
       } catch (error) {
-        console.error(`[StreamDB] Error in handler.commit():`, error)
         throw error
       }
     }
@@ -734,13 +729,6 @@ function createCollections(
       gcTime: 0,
     })
 
-    console.log(`[StreamDB] Created collection "${name}":`, {
-      type: typeof collection,
-      constructor: collection.constructor.name,
-      isCollection: collection instanceof Object,
-      hasSize: `size` in collection,
-    })
-
     collections[name] = collection
   }
 
@@ -764,29 +752,26 @@ function createConsumer(
   let consumerPromise: Promise<void> | null = null
   let streamResponse: StreamResponse<StateEvent> | null = null
   const abortController = new AbortController()
+  /** Set to true when close() is called explicitly — prevents auto-reconnect */
+  let explicitlyClosed = false
 
-  const startInternal = async (): Promise<void> => {
+  /**
+   * Connect to the stream and start consuming events.
+   * When the stream closes remotely (e.g. clear/delete), it truncates
+   * all collections and schedules a reconnect to the new stream incarnation.
+   */
+  const connect = async (): Promise<void> => {
     streamResponse = await stream.stream<StateEvent>({
       live: true,
       signal: abortController.signal,
     })
 
-    // Track batch processing for debugging
-    let batchCount = 0
-    let lastBatchTime = Date.now()
+    const cleanupHealthCheck = () => {}
+    abortController.signal.addEventListener(`abort`, cleanupHealthCheck, { once: true })
 
     // Process events as they come in
     streamResponse.subscribeJson((batch) => {
       try {
-        batchCount++
-        lastBatchTime = Date.now()
-
-        if (batch.items.length > 0) {
-          console.log(
-            `[StreamDB] Processing batch #${batchCount}: ${batch.items.length} items, upToDate=${batch.upToDate}`
-          )
-        }
-
         for (const event of batch.items) {
           if (isChangeEvent(event)) {
             dispatcher.dispatchChange(event)
@@ -797,44 +782,54 @@ function createConsumer(
 
         // Check batch-level up-to-date signal
         if (batch.upToDate) {
-          console.log(
-            `[StreamDB] Marking up-to-date after batch #${batchCount}`
-          )
           dispatcher.markUpToDate()
-          console.log(`[StreamDB] Successfully marked up-to-date`)
         }
 
-        if (batch.items.length > 0) {
-          console.log(`[StreamDB] Successfully processed batch #${batchCount}`)
+        // Stream closed remotely (deleted) — schedule reconnect
+        if (batch.streamClosed && !explicitlyClosed && !abortController.signal.aborted) {
+          cleanupHealthCheck()
+          // Truncate all collections (old stream data is gone)
+          dispatcher.dispatchControl({ headers: { control: `reset` } } as any)
+          // Reconnect after a short delay to allow the new stream to be created
+          scheduleReconnect()
         }
       } catch (error) {
-        console.error(`[StreamDB] Error processing batch:`, error)
-        console.error(`[StreamDB] Failed batch:`, batch)
         dispatcher.rejectAll(error as Error)
         abortController.abort()
       }
       return Promise.resolve()
     })
 
-    // Health check to detect silent stalls
-    const healthCheck = setInterval(() => {
-      const timeSinceLastBatch = Date.now() - lastBatchTime
-      console.log(
-        `[StreamDB] Health: ${batchCount} batches processed, last batch ${(timeSinceLastBatch / 1000).toFixed(1)}s ago`
-      )
-    }, 15000)
-
-    // Clean up health check on abort
-    abortController.signal.addEventListener(`abort`, () => {
-      clearInterval(healthCheck)
-      console.log(`[StreamDB] Aborted - cleaning up health check`)
+    // Also detect transport errors (e.g. 404 when stream is deleted during poll).
+    // subscribeJson callbacks only fire on successful responses, so we need
+    // streamResponse.closed to catch errors that kill the reader loop.
+    streamResponse.closed.catch(() => {
+      if (!explicitlyClosed && !abortController.signal.aborted) {
+        cleanupHealthCheck()
+        dispatcher.dispatchControl({ headers: { control: `reset` } } as any)
+        scheduleReconnect()
+      }
     })
+  }
+
+  /** Schedule a reconnect with exponential backoff on failure */
+  const scheduleReconnect = (attempt = 0): void => {
+    if (explicitlyClosed || abortController.signal.aborted) return
+    const delay = Math.min(500 * Math.pow(2, attempt), 5000)
+    setTimeout(async () => {
+      if (explicitlyClosed || abortController.signal.aborted) return
+      try {
+        await connect()
+      } catch (err) {
+        scheduleReconnect(attempt + 1)
+      }
+    }, delay)
   }
 
   return {
     start: () => {
       if (!consumerPromise) {
-        consumerPromise = startInternal().catch((err) => {
+        consumerPromise = connect().catch((err) => {
           consumerPromise = null
           throw err
         })
@@ -842,6 +837,7 @@ function createConsumer(
       return consumerPromise
     },
     close: () => {
+      explicitlyClosed = true
       dispatcher.rejectAll(new Error(`StreamDB closed`))
       abortController.abort()
     },
@@ -917,10 +913,6 @@ export function createStreamDB<
   const consumer = createConsumer(stream, dispatcher)
 
   // Combine collections with methods
-  console.log(
-    `[StreamDB] Creating db object with collections:`,
-    Object.keys(collectionInstances)
-  )
   const db = {
     collections: collectionInstances,
     stream,
@@ -934,7 +926,6 @@ export function createStreamDB<
         dispatcher.awaitTxId(txid, timeout),
     },
   } as unknown as StreamDB<TDef>
-  console.log(`[StreamDB] db.collections:`, Object.keys(db.collections))
 
   if (actionsFactory) {
     return {

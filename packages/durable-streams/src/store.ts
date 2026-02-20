@@ -194,7 +194,6 @@ export class StreamStore {
       expiresAt?: string
       initialData?: Uint8Array
       closed?: boolean
-      resurrect?: boolean
     } = {}
   ): Stream {
     const existing = this.getIfNotExpired(path)
