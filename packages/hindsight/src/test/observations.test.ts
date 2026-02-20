@@ -6,7 +6,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
+import { eq } from "drizzle-orm"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import type { HindsightDatabase } from "../db"
 
 describe("Entity extraction on retain", () => {
   let t: TestHindsight
@@ -56,12 +58,16 @@ describe("Entity extraction on retain", () => {
     })
 
     // Peter should now have mentionCount >= 2
-    // We can verify this through entity retrieval (though we don't have a direct
-    // entity listing API — would need to check via recall entity hydration)
-    const result = await t.hs.recall(bankId, "Peter", {
-      methods: ["graph"],
-    })
-    expect(result.memories).toBeDefined()
+    const hdb = (t.hs as any).hdb as HindsightDatabase
+    const peter = hdb.db
+      .select()
+      .from(hdb.schema.entities)
+      .where(eq(hdb.schema.entities.bankId, bankId))
+      .all()
+      .find((e) => e.name === "Peter")
+
+    expect(peter).toBeDefined()
+    expect(peter!.mentionCount).toBeGreaterThanOrEqual(2)
   })
 
   it("assigns entity types from pre-provided facts", async () => {
@@ -300,11 +306,9 @@ describe("Recall entity parameters (TDD targets)", () => {
 
     // recall should include entities by default
     const result = await t.hs.recall(bankId, "Alice")
-    expect(result.memories).toBeDefined()
-    if (result.memories.length > 0) {
-      expect(result.memories[0]!.entities).toBeDefined()
-      expect(Array.isArray(result.memories[0]!.entities)).toBe(true)
-    }
+    expect(result.memories.length).toBeGreaterThan(0)
+    expect(result.memories[0]!.entities).toBeDefined()
+    expect(Array.isArray(result.memories[0]!.entities)).toBe(true)
   })
 })
 

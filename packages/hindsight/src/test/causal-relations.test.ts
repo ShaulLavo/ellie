@@ -52,10 +52,8 @@ describe("Causal relations validation", () => {
     }
 
     expect(validFirstFact.causalRelations).toHaveLength(0)
-
-    // Demonstrate the constraint: any targetIndex on fact 0 would be invalid
-    const invalidTargetIndex = 0
-    expect(invalidTargetIndex).not.toBeLessThan(0) // 0 is not < 0, so it's invalid
+    // Constraint: targetIndex must be < current index. For fact 0, no valid
+    // targetIndex exists (0 is not < 0), so causalRelations must be empty.
   })
 
   it("valid causal chain has backward-looking references", () => {

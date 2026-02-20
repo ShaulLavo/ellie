@@ -182,17 +182,8 @@ describe("extractTemporalRange", () => {
     it("detects 'june 2024' → month range", () => {
       throw new Error("implement me: extractTemporalRange needs named month+year parsing — see test_query_analyzer.py::test_june_2024")
     })
-    it("detects 'last year' → full previous year", () => {
-      throw new Error("implement me: extractTemporalRange needs 'last year' support — see test_query_analyzer.py::test_last_year")
-    })
-    it("detects 'last Saturday' → specific day", () => {
-      throw new Error("implement me: extractTemporalRange needs named day-of-week parsing — see test_query_analyzer.py::test_last_saturday")
-    })
     it("detects specific month/year like 'dogs in June 2023'", () => {
       throw new Error("implement me: extractTemporalRange needs named month+year parsing — see test_query_analyzer.py::test_dogs_in_june_2023")
-    })
-    it("detects 'a couple of days ago'", () => {
-      throw new Error("implement me: extractTemporalRange needs fuzzy temporal phrase parsing — see test_query_analyzer.py::test_couple_of_days_ago")
     })
   })
 

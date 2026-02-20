@@ -8,10 +8,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
 import { loadDirectivesForReflect } from "../directives"
-import {
-  buildDirectivesSection as _buildDirectivesSection,
-  buildDirectivesReminder as _buildDirectivesReminder,
-} from "../prompts"
 import type { HindsightDatabase } from "../db"
 
 describe("Directives", () => {
@@ -273,7 +269,7 @@ describe("Directives", () => {
       expect(result[0]!.name).toBe("Global")
     })
 
-    it("includes tagless directives in tagged session (any mode)", () => {
+    it("excludes tagless directives from tagged session (any mode)", () => {
       const hdb = (t.hs as any).hdb as HindsightDatabase
 
       t.hs.createDirective(bankId, { name: "Global", content: "global" })
