@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createDB, isVecAvailable } from "./index"
 import { LogFile, streamPathToFilename } from "./log"
 import { JsonlEngine, formatOffset } from "./jsonl-store"
+import { readdirSync } from "fs"
 import { typedLog } from "./typed-log"
 import * as v from "valibot"
 import { eq } from "drizzle-orm"
@@ -389,14 +390,14 @@ describe("JsonlEngine", () => {
     })
 
     it("each stream gets its own JSONL file", () => {
-      store.createStream("/chat/session-1")
-      store.createStream("/logs/agent")
+      const s1 = store.createStream("/chat/session-1")
+      const s2 = store.createStream("/logs/agent")
 
       store.append("/chat/session-1", new TextEncoder().encode("msg1"))
       store.append("/logs/agent", new TextEncoder().encode("msg2"))
 
-      expect(existsSync(join(logDir, "chat__session-1.jsonl"))).toBe(true)
-      expect(existsSync(join(logDir, "logs__agent.jsonl"))).toBe(true)
+      expect(existsSync(join(logDir, `${s1.logFileId}.jsonl`))).toBe(true)
+      expect(existsSync(join(logDir, `${s2.logFileId}.jsonl`))).toBe(true)
     })
   })
 
@@ -404,7 +405,7 @@ describe("JsonlEngine", () => {
 
   describe("JSONL files", () => {
     it("JSONL file is human-readable", () => {
-      store.createStream("/readable")
+      const stream = store.createStream("/readable")
 
       store.append("/readable", new TextEncoder().encode('{"event":"click","x":100}'))
       store.append("/readable", new TextEncoder().encode('{"event":"scroll","y":200}'))
@@ -412,7 +413,7 @@ describe("JsonlEngine", () => {
 
       // Use a local store for the reopen — avoids fragile store.close()/reassign
       store.close()
-      const content = readFileSync(join(logDir, "readable.jsonl"), "utf-8")
+      const content = readFileSync(join(logDir, `${stream.logFileId}.jsonl`), "utf-8")
       const lines = content.trim().split("\n")
       expect(lines).toHaveLength(3)
 
@@ -427,14 +428,14 @@ describe("JsonlEngine", () => {
     })
 
     it("JSONL file is grep-able", () => {
-      store.createStream("/greptest")
+      const stream = store.createStream("/greptest")
 
       store.append("/greptest", new TextEncoder().encode('{"type":"error","msg":"disk full"}'))
       store.append("/greptest", new TextEncoder().encode('{"type":"info","msg":"all good"}'))
       store.append("/greptest", new TextEncoder().encode('{"type":"error","msg":"timeout"}'))
 
       store.close()
-      const content = readFileSync(join(logDir, "greptest.jsonl"), "utf-8")
+      const content = readFileSync(join(logDir, `${stream.logFileId}.jsonl`), "utf-8")
       const errorLines = content
         .trim()
         .split("\n")
@@ -449,10 +450,10 @@ describe("JsonlEngine", () => {
 
   describe("soft-delete", () => {
     it("keeps the JSONL file on disk after delete", () => {
-      store.createStream("/cleanup-test")
+      const stream = store.createStream("/cleanup-test")
       store.append("/cleanup-test", new TextEncoder().encode('{"x":1}'))
 
-      const filePath = join(logDir, "cleanup-test.jsonl")
+      const filePath = join(logDir, `${stream.logFileId}.jsonl`)
       expect(existsSync(filePath)).toBe(true)
 
       store.deleteStream("/cleanup-test")
@@ -550,29 +551,38 @@ describe("JsonlEngine", () => {
       expect(newOffset > oldOffset).toBe(true)
     })
 
-    it("JSONL file is preserved through delete + create", () => {
-      store.createStream("/revive-file")
+    it("creates a new JSONL file on resurrect — old file is orphaned", () => {
+      const original = store.createStream("/revive-file")
       store.append("/revive-file", new TextEncoder().encode('{"before":true}'))
 
-      const filePath = join(logDir, "revive-file.jsonl")
-      expect(existsSync(filePath)).toBe(true)
+      const oldFilePath = join(logDir, `${original.logFileId}.jsonl`)
+      expect(existsSync(oldFilePath)).toBe(true)
 
       store.deleteStream("/revive-file")
-      expect(existsSync(filePath)).toBe(true)
+      expect(existsSync(oldFilePath)).toBe(true)
 
-      store.createStream("/revive-file")
-      expect(existsSync(filePath)).toBe(true)
+      const resurrected = store.createStream("/revive-file")
+      // New incarnation gets a different logFileId
+      expect(resurrected.logFileId).not.toBe(original.logFileId)
 
-      // New data appends to same file
+      // Old file stays on disk (orphaned, harmless)
+      expect(existsSync(oldFilePath)).toBe(true)
+
+      const newFilePath = join(logDir, `${resurrected.logFileId}.jsonl`)
+
+      // New data goes to the new file
       store.append("/revive-file", new TextEncoder().encode('{"after":true}'))
       store.close()
 
-      const content = readFileSync(filePath, "utf-8")
-      const lines = content.trim().split("\n")
-      // Both old and new data are in the file
-      expect(lines.length).toBeGreaterThanOrEqual(2)
-      expect(lines[0]).toContain('"before"')
-      expect(lines[lines.length - 1]).toContain('"after"')
+      // Old file still has only old data
+      const oldContent = readFileSync(oldFilePath, "utf-8")
+      expect(oldContent.trim()).toContain('"before"')
+      expect(oldContent).not.toContain('"after"')
+
+      // New file has only new data
+      const newContent = readFileSync(newFilePath, "utf-8")
+      expect(newContent.trim()).toContain('"after"')
+      expect(newContent).not.toContain('"before"')
 
       // Reopen for afterEach close
       store = new JsonlEngine(dbPath, logDir)
@@ -1150,10 +1160,12 @@ describe("typedLog", () => {
     const log = typedLog(store, "/typed/grep", testSchema)
     log.append({ event: "error", value: 500, tags: ["critical"] })
     log.append({ event: "info", value: 200 })
+
+    const stream = store.getStream("/typed/grep")!
     store.close()
 
     const content = readFileSync(
-      join(logDir, "typed__grep.jsonl"),
+      join(logDir, `${stream.logFileId}.jsonl`),
       "utf-8"
     )
     const lines = content.trim().split("\n")

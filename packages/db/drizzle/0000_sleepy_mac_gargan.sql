@@ -31,5 +31,6 @@ CREATE TABLE `streams` (
 	`closed_by_seq` integer,
 	`current_read_seq` integer DEFAULT 0 NOT NULL,
 	`current_byte_offset` integer DEFAULT 0 NOT NULL,
-	`deleted_at` integer
+	`deleted_at` integer,
+	`log_file_id` text
 );

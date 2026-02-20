@@ -18,6 +18,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@ellie/utils": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "valibot": "^1.2.0"
   },

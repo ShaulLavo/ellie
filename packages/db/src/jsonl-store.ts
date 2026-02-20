@@ -6,7 +6,8 @@ import { join } from "path"
 import { mkdirSync } from "fs"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
-import { LogFile, streamPathToFilename } from "./log"
+import { LogFile } from "./log"
+import { ulid } from "@ellie/utils"
 
 /** Resolved path to the drizzle migrations folder shipped with this package. */
 const MIGRATIONS_DIR = join(import.meta.dir, "..", "drizzle")
@@ -63,6 +64,7 @@ export class JsonlEngine {
         ttlSeconds: options.ttlSeconds,
         expiresAt: options.expiresAt,
         createdAt: now,
+        logFileId: ulid(),
       })
       .onConflictDoNothing()
       .returning()
@@ -82,9 +84,12 @@ export class JsonlEngine {
       return existing
     }
 
-    // Stream was soft-deleted — auto-resurrect with a fresh log instance.
-    // Old JSONL file stays on disk. Bumping currentReadSeq makes old offsets
+    // Stream was soft-deleted — auto-resurrect with a fresh log file.
+    // A new ULID-based logFileId means a brand-new JSONL file on disk.
+    // Old file is orphaned (harmless). Bumping currentReadSeq makes old offsets
     // unreachable so stale subscribers/cursors can't read previous-incarnation data.
+    const newLogFileId = ulid()
+
     this.db.transaction((tx) => {
       tx.delete(schema.messages)
         .where(eq(schema.messages.streamPath, streamPath))
@@ -107,6 +112,7 @@ export class JsonlEngine {
           contentType: options.contentType ?? null,
           ttlSeconds: options.ttlSeconds ?? null,
           expiresAt: options.expiresAt ?? null,
+          logFileId: newLogFileId,
         })
         .where(eq(schema.streams.path, streamPath))
         .run()
@@ -296,8 +302,20 @@ export class JsonlEngine {
   private getOrOpenLog(streamPath: string): LogFile {
     let log = this.openLogs.get(streamPath)
     if (!log) {
-      const filename = streamPathToFilename(streamPath)
-      const filePath = join(this.logDir, filename)
+      const stream = this.db
+        .select({ logFileId: schema.streams.logFileId })
+        .from(schema.streams)
+        .where(eq(schema.streams.path, streamPath))
+        .get()
+
+      if (!stream) {
+        throw new Error(`Stream not found: ${streamPath}`)
+      }
+      if (!stream.logFileId) {
+        throw new Error(`Stream has no logFileId: ${streamPath}`)
+      }
+
+      const filePath = join(this.logDir, `${stream.logFileId}.jsonl`)
       log = new LogFile(filePath)
       this.openLogs.set(streamPath, log)
     }

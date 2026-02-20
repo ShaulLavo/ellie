@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3514fb96-3a5f-4db4-a4d5-04698de40f71",
+  "id": "3b80b7f5-87c2-4ed9-874f-7da5d988e9f6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "messages": {
@@ -232,6 +232,13 @@
         "deleted_at": {
           "name": "deleted_at",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "log_file_id": {
+          "name": "log_file_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

@@ -23,6 +23,9 @@ export const streams = sqliteTable("streams", {
   currentReadSeq: integer("current_read_seq").notNull().default(0),
   currentByteOffset: integer("current_byte_offset").notNull().default(0),
   deletedAt: integer("deleted_at"),
+  // ULID-based filename for the JSONL log file. Each stream incarnation
+  // gets a unique ID so clear + recreate produces a fresh file.
+  logFileId: text("log_file_id"),
 })
 
 // -- Stream messages (append-only log index) ----------------------------------
