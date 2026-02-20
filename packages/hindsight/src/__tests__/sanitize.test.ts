@@ -39,11 +39,10 @@ describe("sanitizeText", () => {
     expect(sanitizeText("\x00\x00\x00")).toBe("")
   })
 
-  it("strips emoji (surrogate pairs are removed by current implementation)", () => {
-    // Current implementation strips all surrogate code units [\uD800-\uDFFF],
-    // which means emoji (valid surrogate pairs) also get stripped.
-    // This is a known limitation — revisit if emoji preservation is needed.
-    expect(sanitizeText("Party 🎉 time!")).toBe("Party  time!")
+  it("preserves valid emoji (surrogate pairs are preserved)", () => {
+    // Implementation was fixed to only strip lone/unpaired surrogates,
+    // preserving valid emoji formed from proper surrogate pairs.
+    expect(sanitizeText("Party 🎉 time!")).toBe("Party 🎉 time!")
   })
 
   it("removes mixed null bytes and surrogates", () => {
