@@ -373,6 +373,26 @@ describe("retain", () => {
     // verifies count increases by >= 2
   })
 
+  // ── Temporal fields (event_date, mentioned_at, occurred_start/end) ──────
+
+  describe("temporal fields", () => {
+    it.todo("stores event_date as mentioned_at on retained facts")
+    // Python: test_event_date_storage — retain with event_date param,
+    // verify recalled fact has mentioned_at close to that date
+
+    it.todo("occurred_start and occurred_end are null when not extractable (TDD)")
+    // Python: test_occurred_dates_not_defaulted — LLM must not hallucinate dates;
+    // generic content with no date ref should have null occurred_start/end
+
+    it.todo("mentioned_at vs occurred_start are distinct fields (TDD)")
+    // Python: test_mentioned_at_vs_occurred — mentioned_at = conversation date,
+    // occurred_start = when event happened (can differ by days/months/years)
+
+    it.todo("ISO date string in context sets mentioned_at (TDD)")
+    // Python: test_mentioned_at_from_context_string — pass ISO date as context,
+    // verify mentioned_at on stored fact matches that date
+  })
+
   // ── Retain → recall round-trip ───────────────────────────────────────
 
   describe("retain → recall round-trip", () => {

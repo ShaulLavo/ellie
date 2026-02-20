@@ -136,6 +136,9 @@ describe("Bank management", () => {
   describe("updateBank name/description", () => {
     it.todo("updates bank name and is reflected in getBank")
     it.todo("updates bank description/mission field")
+    it.todo("sets and retrieves bank mission field")
+    // Python: test_set_and_get_mission — bank has a mission/background
+    // field distinct from description; can be set and retrieved
   })
 
   // ── Update config ────────────────────────────────────────────────────

@@ -145,3 +145,13 @@ describe("reciprocalRankFusion", () => {
 
   it.todo("all same scores produce equal RRF output (~0.5 normalized)")
 })
+
+describe("Combined scoring trace (TDD targets)", () => {
+  it.todo("trace has normalized RRF scores (not raw)")
+  // Python: test_trace_has_normalized_rrf — trace object stores
+  // normalized [0,1] scores, not raw RRF values
+
+  it.todo("combined_score matches semantic_score and rrf_normalized components")
+  // Python: test_combined_score_matches_components — combined_score =
+  // f(rrf_normalized, semantic_score), verify formula holds
+})

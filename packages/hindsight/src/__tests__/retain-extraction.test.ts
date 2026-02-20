@@ -56,3 +56,21 @@ describe("Fact extraction output ratio", () => {
   it.todo("extracts at least 1 fact from non-trivial input")
   it.todo("returns empty array for trivial input")
 })
+
+describe("Fact extraction quality edge cases (TDD targets)", () => {
+  it.todo("multi-dimensional extraction: captures all quality dimensions in one pass (TDD)")
+  // Python: test_comprehensive_multi_dimension — content with emotional,
+  // sensory, cognitive, comparative, and intentional dimensions simultaneously
+
+  it.todo("logical inference: 'I am Alice' → agent_name=Alice on all facts (TDD)")
+  // Python: test_logical_inference_identity_connection — speaker self-identification
+  // should propagate agent_name to all extracted facts
+
+  it.todo("pronoun resolution: 'she said' resolved to named speaker (TDD)")
+  // Python: test_logical_inference_pronoun_resolution — when speaker name is
+  // explicit in context, pronouns in facts resolve to that name
+
+  it.todo("extraction without explicit context string still produces valid facts (TDD)")
+  // Python: test_agent_facts_without_explicit_context — no context= param,
+  // extraction should still work with content alone
+})

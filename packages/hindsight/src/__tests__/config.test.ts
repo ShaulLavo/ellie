@@ -104,3 +104,18 @@ describe("Defaults merging", () => {
     }
   })
 })
+
+describe("Hindsight instance config validation (TDD targets)", () => {
+  it.todo("throws when retainMaxCompletionTokens <= retainChunkSize")
+  // Python: test_retain_max_completion_tokens_must_be_greater_than_chunk_size
+
+  it.todo("throws when retainMaxCompletionTokens equals retainChunkSize")
+  // Python: test_retain_max_completion_tokens_equal_to_chunk_size_fails
+
+  it.todo("error message includes both parameter names and their values")
+  // Python: test_retain_max_completion_tokens_must_be_greater_than_chunk_size
+  // — error says which params violated the constraint
+
+  it.todo("valid config with maxCompletionTokens > chunkSize succeeds")
+  // Python: test_valid_retain_config_succeeds
+})

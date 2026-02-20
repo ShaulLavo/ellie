@@ -215,6 +215,24 @@ describe("extractTemporalRange", () => {
   })
 })
 
+describe("compute_temporal_links (TDD targets)", () => {
+  it.todo("candidate within temporal window creates a link")
+  // Python: test_candidate_within_window_creates_link — fact within
+  // TIME_WINDOW_DAYS of another → temporal link created
+
+  it.todo("candidate outside temporal window creates no link")
+  // Python: test_candidate_outside_window_no_link
+
+  it.todo("link weight decreases with temporal distance")
+  // Python: test_weight_decreases_with_distance — closer = higher weight
+
+  it.todo("minimum link weight is 0.3")
+  // Python: test_weight_minimum_is_0_3
+
+  it.todo("maximum 10 temporal links per memory unit")
+  // Python: test_max_10_links_per_unit
+})
+
 // ── Temporal fields written to DB (port of test_temporal_ranges.py) ────────
 
 describe("temporal fields written to DB", () => {
