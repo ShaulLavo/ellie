@@ -1,4 +1,4 @@
-export { StreamStore, normalizeContentType, formatJsonResponse, formatSingleJsonMessage, formatOffset, formatInternalOffset } from "./store"
+export { StreamStore, normalizeContentType, formatJsonResponse, formatJsonResponseDirect, formatResponse, formatSingleJsonMessage, formatOffset, formatInternalOffset } from "./store"
 export { DurableStore } from "./durable-store"
 export { StoreError, STORE_ERROR_STATUS, type StoreErrorCode } from "./errors"
 export {
@@ -10,6 +10,7 @@ export {
 } from "./cursor"
 export type {
   Stream,
+  StreamMetadata,
   StreamMessage,
   InternalOffset,
   SubscriptionEvent,

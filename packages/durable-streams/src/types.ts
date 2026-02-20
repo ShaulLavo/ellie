@@ -9,10 +9,9 @@ export interface InternalOffset {
   byteOffset: number
 }
 
-export interface Stream {
+export interface StreamMetadata {
   path: string
   contentType?: string
-  messages: Array<StreamMessage>
   currentOffset: InternalOffset
   lastSeq?: string
   ttlSeconds?: number
@@ -25,6 +24,10 @@ export interface Stream {
     epoch: number
     seq: number
   }
+}
+
+export interface Stream extends StreamMetadata {
+  messages: Array<StreamMessage>
 }
 
 export interface ProducerState {

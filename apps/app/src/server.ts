@@ -28,7 +28,7 @@ const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
-const STUDIO_PUBLIC = resolve(import.meta.dir, "../../studio/public");
+const STUDIO_PUBLIC = resolve(import.meta.dir, "../../react/public");
 
 // Import index.html through Bun's HTML bundler.
 // In dev (`--hot`): Bun injects HMR client, bundles TSX on the fly.

@@ -6,9 +6,10 @@ import {
   normalizeContentType,
   processJsonAppend,
   formatInternalOffset,
+  formatResponse,
 } from "./store"
 import type {
-  Stream,
+  StreamMetadata,
   StreamMessage,
   AppendOptions,
   AppendResult,
@@ -27,8 +28,6 @@ import type { IStreamStore } from "./server/lib/context"
 const PRODUCER_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 // TODO: Replace setInterval with a proper cron job for producer cleanup
 const PRODUCER_CLEANUP_INTERVAL_MS = 60 * 60_000
-
-const encoder = new TextEncoder()
 
 interface Subscription {
   path: string
@@ -56,6 +55,7 @@ export class DurableStore implements IStreamStore {
       clearInterval(this.cleanupInterval)
       this.cleanupInterval = null
     }
+    this.producerLockTails.clear()
   }
 
   // -- Public API (IStreamStore) --------------------------------------------
@@ -64,7 +64,7 @@ export class DurableStore implements IStreamStore {
     return this.getIfNotExpired(path) !== undefined
   }
 
-  get(path: string): Stream | undefined {
+  get(path: string): StreamMetadata | undefined {
     return this.getIfNotExpired(path)
   }
 
@@ -77,7 +77,7 @@ export class DurableStore implements IStreamStore {
       initialData?: Uint8Array
       closed?: boolean
     } = {}
-  ): Stream {
+  ): StreamMetadata {
     const existing = this.getIfNotExpired(path)
 
     if (existing) {
@@ -384,27 +384,25 @@ export class DurableStore implements IStreamStore {
 
   delete(path: string): boolean {
     this.notifySubscribersDeleted(path)
+    this.clearProducerLocks(path)
     this.engine.deleteStream(path)
     return true
+  }
+
+  private clearProducerLocks(path: string): void {
+    const prefix = `${path}:`
+    for (const key of this.producerLockTails.keys()) {
+      if (key.startsWith(prefix)) {
+        this.producerLockTails.delete(key)
+      }
+    }
   }
 
   formatResponse(
     contentType: string | undefined,
     messages: Array<StreamMessage>
   ): Uint8Array {
-    if (normalizeContentType(contentType) === `application/json`) {
-      return formatJsonResponseDirect(messages)
-    }
-
-    // Binary: concatenate all message data
-    const totalSize = messages.reduce((sum, m) => sum + m.data.length, 0)
-    const result = new Uint8Array(totalSize)
-    let offset = 0
-    for (const msg of messages) {
-      result.set(msg.data, offset)
-      offset += msg.data.length
-    }
-    return result
+    return formatResponse(contentType, messages)
   }
 
   getCurrentOffset(path: string): string | undefined {
@@ -426,11 +424,10 @@ export class DurableStore implements IStreamStore {
 
   // -- Private helpers -------------------------------------------------------
 
-  private rowToStream(row: StreamRow): Stream {
+  private rowToStream(row: StreamRow): StreamMetadata {
     return {
       path: row.path,
       contentType: row.contentType ?? undefined,
-      messages: [], // No in-memory messages — always read from disk
       currentOffset: {
         readSeq: row.currentReadSeq,
         byteOffset: row.currentByteOffset,
@@ -466,7 +463,7 @@ export class DurableStore implements IStreamStore {
     return false
   }
 
-  private getIfNotExpired(path: string): Stream | undefined {
+  private getIfNotExpired(path: string): StreamMetadata | undefined {
     const row = this.engine.getStream(path)
     if (!row) return undefined
     if (this.isExpired(row)) {
@@ -672,51 +669,4 @@ export class DurableStore implements IStreamStore {
       sub.callback({ type: `deleted`, messages: [] })
     }
   }
-}
-
-// -- formatJsonResponseDirect (mirrors StreamStore internals) -----------------
-// Builds a JSON array response directly from message data into a single buffer.
-// Each message's data is comma-terminated (from processJsonAppend).
-// Output: [msg1,msg2,...,msgN]
-
-function formatJsonResponseDirect(messages: Array<StreamMessage>): Uint8Array {
-  if (messages.length === 0) {
-    return encoder.encode(`[]`)
-  }
-
-  let totalDataSize = 0
-  for (const msg of messages) {
-    totalDataSize += msg.data.length
-  }
-
-  const result = new Uint8Array(1 + totalDataSize)
-  result[0] = 0x5b // '['
-
-  let offset = 1
-  for (const msg of messages) {
-    result.set(msg.data, offset)
-    offset += msg.data.length
-  }
-
-  // Replace trailing comma with ']'. Trim trailing whitespace first.
-  let end = offset
-  while (
-    end > 1 &&
-    (result[end - 1] === 0x20 ||
-      result[end - 1] === 0x0a ||
-      result[end - 1] === 0x0d ||
-      result[end - 1] === 0x09)
-  ) {
-    end--
-  }
-  if (end > 1 && result[end - 1] === 0x2c) {
-    result[end - 1] = 0x5d // ']'
-    return end < result.length ? result.subarray(0, end) : result
-  }
-
-  // Fallback: no trailing comma found, append ']'
-  const withBracket = new Uint8Array(offset + 1)
-  withBracket.set(result.subarray(0, offset))
-  withBracket[offset] = 0x5d // ']'
-  return withBracket
 }

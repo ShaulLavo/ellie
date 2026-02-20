@@ -1,7 +1,7 @@
 import { StreamStore } from "../../store"
 import type { CursorOptions } from "../../cursor"
 import type {
-  Stream,
+  StreamMetadata,
   StreamMessage,
   AppendOptions,
   AppendResult,
@@ -14,7 +14,7 @@ import type {
 // to be used interchangeably without sharing a class hierarchy.
 export interface IStreamStore {
   has(path: string): boolean
-  get(path: string): Stream | undefined
+  get(path: string): StreamMetadata | undefined
   create(
     path: string,
     options?: {
@@ -24,7 +24,7 @@ export interface IStreamStore {
       initialData?: Uint8Array
       closed?: boolean
     }
-  ): Stream
+  ): StreamMetadata
   append(path: string, data: Uint8Array, options?: AppendOptions): AppendResult
   appendWithProducer(
     path: string,

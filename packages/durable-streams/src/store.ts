@@ -5,6 +5,7 @@ import type {
   SubscriptionEvent,
   ProducerValidationResult,
   Stream,
+  StreamMetadata,
   StreamMessage,
 } from "./types"
 import { StoreError } from "./errors"
@@ -81,7 +82,7 @@ export function formatJsonResponse(data: Uint8Array): Uint8Array {
  * Each message's data is comma-terminated (from processJsonAppend).
  * Output: [msg1,msg2,...,msgN] with the last comma replaced by ']'.
  */
-function formatJsonResponseDirect(messages: Array<StreamMessage>): Uint8Array {
+export function formatJsonResponseDirect(messages: Array<StreamMessage>): Uint8Array {
   if (messages.length === 0) {
     return encoder.encode(`[]`)
   }
@@ -145,6 +146,22 @@ export function formatSingleJsonMessage(data: Uint8Array): string {
   return `[${inner}]`
 }
 
+export function formatResponse(contentType: string | undefined, messages: Array<StreamMessage>): Uint8Array {
+  if (normalizeContentType(contentType) === `application/json`) {
+    return formatJsonResponseDirect(messages)
+  }
+
+  // Binary: concatenate all message data
+  const totalSize = messages.reduce((sum, m) => sum + m.data.length, 0)
+  const result = new Uint8Array(totalSize)
+  let offset = 0
+  for (const msg of messages) {
+    result.set(msg.data, offset)
+    offset += msg.data.length
+  }
+  return result
+}
+
 interface Subscription {
   path: string
   offset: string
@@ -195,7 +212,7 @@ export class StreamStore {
       initialData?: Uint8Array
       closed?: boolean
     } = {}
-  ): Stream {
+  ): StreamMetadata {
     const existing = this.getIfNotExpired(path)
     if (existing) {
       const newContentType =
@@ -238,7 +255,7 @@ export class StreamStore {
     return stream
   }
 
-  get(path: string): Stream | undefined {
+  get(path: string): StreamMetadata | undefined {
     return this.getIfNotExpired(path)
   }
 
@@ -248,7 +265,17 @@ export class StreamStore {
 
   delete(path: string): boolean {
     this.notifySubscribersDeleted(path)
+    this.clearProducerLocks(path)
     return this.streams.delete(path)
+  }
+
+  private clearProducerLocks(path: string): void {
+    const prefix = `${path}:`
+    for (const key of this.producerLockTails.keys()) {
+      if (key.startsWith(prefix)) {
+        this.producerLockTails.delete(key)
+      }
+    }
   }
 
   private validateProducer(
@@ -572,19 +599,7 @@ export class StreamStore {
   }
 
   formatResponse(contentType: string | undefined, messages: Array<StreamMessage>): Uint8Array {
-    if (normalizeContentType(contentType) === `application/json`) {
-      return formatJsonResponseDirect(messages)
-    }
-
-    // Binary: concatenate all message data
-    const totalSize = messages.reduce((sum, m) => sum + m.data.length, 0)
-    const result = new Uint8Array(totalSize)
-    let offset = 0
-    for (const msg of messages) {
-      result.set(msg.data, offset)
-      offset += msg.data.length
-    }
-    return result
+    return formatResponse(contentType, messages)
   }
 
   subscribe(
