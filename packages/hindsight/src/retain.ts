@@ -236,9 +236,11 @@ export async function retain(
 
         entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }))
       } else {
-        // Exact name match (fallback before creating new)
+        // Exact name + type match (fallback before creating new)
         const exactMatch = existingEntities.find(
-          (e) => e.name.toLowerCase() === ent.name.toLowerCase(),
+          (e) =>
+            e.name.toLowerCase() === ent.name.toLowerCase() &&
+            e.entityType === ent.entityType,
         )
 
         if (exactMatch) {

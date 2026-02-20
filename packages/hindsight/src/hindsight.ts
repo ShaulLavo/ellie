@@ -208,6 +208,38 @@ export class Hindsight {
   }
 
   deleteBank(id: string): void {
+    // Clean up vectors in virtual tables (CASCADE only handles Drizzle-managed tables)
+    const memoryIds = this.hdb.db
+      .select({ id: this.hdb.schema.memoryUnits.id })
+      .from(this.hdb.schema.memoryUnits)
+      .where(eq(this.hdb.schema.memoryUnits.bankId, id))
+      .all()
+    for (const m of memoryIds) {
+      this.memoryVec.delete(m.id)
+    }
+
+    const entityIds = this.hdb.db
+      .select({ id: this.hdb.schema.entities.id })
+      .from(this.hdb.schema.entities)
+      .where(eq(this.hdb.schema.entities.bankId, id))
+      .all()
+    for (const e of entityIds) {
+      this.entityVec.delete(e.id)
+    }
+
+    const modelIds = this.hdb.db
+      .select({ id: this.hdb.schema.mentalModels.id })
+      .from(this.hdb.schema.mentalModels)
+      .where(eq(this.hdb.schema.mentalModels.bankId, id))
+      .all()
+    for (const m of modelIds) {
+      this.modelVec.delete(m.id)
+    }
+
+    // Clean FTS entries
+    this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE bank_id = ?", [id])
+
+    // Delete the bank row (cascades to SQL tables)
     this.hdb.db
       .delete(this.hdb.schema.banks)
       .where(eq(this.hdb.schema.banks.id, id))
@@ -215,6 +247,9 @@ export class Hindsight {
   }
 
   updateBankConfig(bankId: string, config: BankConfig): Bank {
+    const bank = this.getBankById(bankId)
+    if (!bank) throw new Error(`Bank ${bankId} not found`)
+
     const existing = this.getBankConfigRaw(bankId)
     const merged = { ...existing, ...stripUndefined(config) }
     const now = Date.now()

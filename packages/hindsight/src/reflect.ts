@@ -254,7 +254,7 @@ export async function reflect(
   if (options.saveObservations !== false && answer.trim()) {
     const obsId = ulid()
     const now = Date.now()
-    const sourceIds = allMemories.map((m) => m.memory.id)
+    const sourceIds = [...new Set(allMemories.map((m) => m.memory.id))]
 
     hdb.db
       .insert(schema.memoryUnits)
@@ -266,6 +266,7 @@ export async function reflect(
         confidence: 1.0,
         proofCount: sourceIds.length,
         sourceMemoryIds: JSON.stringify(sourceIds),
+        tags: options.tags ? JSON.stringify(options.tags) : null,
         history: JSON.stringify([]),
         consolidatedAt: now, // mark as already consolidated
         createdAt: now,

@@ -23,6 +23,15 @@ import type { MentalModelRow } from "./schema"
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+function safeJsonParse<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
 function rowToMentalModel(row: MentalModelRow): MentalModel {
   return {
     id: row.id,
@@ -30,8 +39,8 @@ function rowToMentalModel(row: MentalModelRow): MentalModel {
     name: row.name,
     sourceQuery: row.sourceQuery,
     content: row.content,
-    sourceMemoryIds: row.sourceMemoryIds ? JSON.parse(row.sourceMemoryIds) : null,
-    tags: row.tags ? JSON.parse(row.tags) : null,
+    sourceMemoryIds: safeJsonParse<string[] | null>(row.sourceMemoryIds, null),
+    tags: safeJsonParse<string[] | null>(row.tags, null),
     autoRefresh: row.autoRefresh === 1,
     lastRefreshedAt: row.lastRefreshedAt,
     createdAt: row.createdAt,

@@ -17,18 +17,19 @@ export function searchGraph(
   limit: number,
 ): RetrievalHit[] {
   const { schema } = hdb
-  const queryLower = query.toLowerCase()
 
-  // Step 1: Find entities whose name appears in the query
+  // Step 1: Find entities whose name appears in the query (word-boundary match)
   const allEntities = hdb.db
     .select()
     .from(schema.entities)
     .where(eq(schema.entities.bankId, bankId))
     .all()
 
-  const seedEntities = allEntities.filter((e) =>
-    queryLower.includes(e.name.toLowerCase()),
-  )
+  const seedEntities = allEntities.filter((e) => {
+    if (e.name.length < 2) return false // skip very short names to avoid false positives
+    const escaped = e.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    return new RegExp(`\\b${escaped}\\b`, "i").test(query)
+  })
 
   if (seedEntities.length === 0) return []
 

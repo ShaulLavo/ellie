@@ -58,6 +58,7 @@ CREATE TABLE `hs_memory_entities` (
 	FOREIGN KEY (`entity_id`) REFERENCES `hs_entities`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `idx_hs_me_entity` ON `hs_memory_entities` (`entity_id`);--> statement-breakpoint
 CREATE TABLE `hs_memory_links` (
 	`id` text PRIMARY KEY NOT NULL,
 	`bank_id` text NOT NULL,

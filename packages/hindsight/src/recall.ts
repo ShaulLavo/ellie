@@ -111,7 +111,12 @@ export async function recall(
 
     // Tag filter (post-filter for semantic + graph; fulltext + temporal pre-filter too)
     if (options.tags && options.tags.length > 0) {
-      const memoryTags: string[] = row.tags ? JSON.parse(row.tags) : []
+      let memoryTags: string[] = []
+      try {
+        memoryTags = row.tags ? JSON.parse(row.tags) : []
+      } catch {
+        // malformed tags — treat as untagged
+      }
       if (!matchesTags(memoryTags, options.tags, options.tagsMatch ?? "any")) {
         continue
       }

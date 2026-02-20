@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7ddea360-e69d-4a3b-94f7-51f1b4d024f4",
+  "id": "580e7bb9-d82f-4fcc-837f-67b2a377bf4e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "hs_banks": {
@@ -387,7 +387,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_hs_me_entity": {
+          "name": "idx_hs_me_entity",
+          "columns": [
+            "entity_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "hs_memory_entities_memory_id_hs_memory_units_id_fk": {
           "name": "hs_memory_entities_memory_id_hs_memory_units_id_fk",

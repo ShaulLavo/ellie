@@ -20,7 +20,7 @@ export function searchTemporal(
   tags?: string[],
   tagsMatch?: TagsMatch,
 ): RetrievalHit[] {
-  if (!timeRange || (!timeRange.from && !timeRange.to)) return []
+  if (!timeRange || (timeRange.from == null && timeRange.to == null)) return []
 
   const conditions: string[] = ["bank_id = ?"]
   const params: (string | number)[] = [bankId]

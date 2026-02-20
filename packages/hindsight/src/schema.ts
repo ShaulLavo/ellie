@@ -90,7 +90,10 @@ export const memoryEntities = sqliteTable(
       .notNull()
       .references(() => entities.id, { onDelete: "cascade" }),
   },
-  (table) => [primaryKey({ columns: [table.memoryId, table.entityId] })],
+  (table) => [
+    primaryKey({ columns: [table.memoryId, table.entityId] }),
+    index("idx_hs_me_entity").on(table.entityId),
+  ],
 )
 
 // ── Memory Links ───────────────────────────────────────────────────────────

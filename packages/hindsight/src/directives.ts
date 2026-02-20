@@ -126,7 +126,9 @@ export function updateDirective(
   if (options.content !== undefined) updates.content = options.content
   if (options.priority !== undefined) updates.priority = options.priority
   if (options.isActive !== undefined) updates.isActive = options.isActive ? 1 : 0
-  if (options.tags !== undefined) updates.tags = JSON.stringify(options.tags)
+  if (options.tags !== undefined) {
+    updates.tags = options.tags === null ? null : JSON.stringify(options.tags)
+  }
 
   hdb.db
     .update(hdb.schema.directives)
@@ -142,10 +144,16 @@ export function updateDirective(
   const row = hdb.db
     .select()
     .from(hdb.schema.directives)
-    .where(eq(hdb.schema.directives.id, id))
+    .where(
+      and(
+        eq(hdb.schema.directives.bankId, bankId),
+        eq(hdb.schema.directives.id, id),
+      ),
+    )
     .get()
 
-  return rowToDirective(row!)
+  if (!row) throw new Error(`Directive ${id} not found in bank ${bankId}`)
+  return rowToDirective(row)
 }
 
 export function deleteDirective(

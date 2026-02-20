@@ -72,7 +72,7 @@ export async function consolidate(
     memoriesProcessed: 0,
     observationsCreated: 0,
     observationsUpdated: 0,
-    mentalModelsRefreshed: 0,
+    mentalModelsRefreshQueued: 0,
   }
 
   // Fetch unconsolidated memories (experience + world facts only)
@@ -155,7 +155,7 @@ export async function consolidate(
 
   // 5. Trigger mental model refreshes
   if (refreshModels) {
-    result.mentalModelsRefreshed = await triggerMentalModelRefreshes(
+    result.mentalModelsRefreshQueued = await triggerMentalModelRefreshes(
       hdb,
       memoryVec,
       modelVec,

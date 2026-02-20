@@ -267,8 +267,8 @@ export interface ConsolidateResult {
   observationsCreated: number
   /** Number of existing observations updated */
   observationsUpdated: number
-  /** Number of mental models refreshed */
-  mentalModelsRefreshed: number
+  /** Number of mental model refreshes queued (fire-and-forget) */
+  mentalModelsRefreshQueued: number
 }
 
 /** A single LLM-decided consolidation action */
