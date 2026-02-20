@@ -26,6 +26,53 @@ import {
 import type { LiveMode, Offset, StreamOptions, StreamResponse } from "./types"
 
 /**
+ * Forward an AbortSignal to an AbortController, handling already-aborted signals.
+ */
+function forwardAbortSignal(signal: AbortSignal, controller: AbortController): void {
+  if (signal.aborted) {
+    controller.abort(signal.reason)
+    return
+  }
+  signal.addEventListener(`abort`, () => controller.abort(signal.reason), { once: true })
+}
+
+/**
+ * Set the live query param on a URL based on the live mode.
+ */
+function setLiveQueryParam(url: URL, live: LiveMode): void {
+  if (live === `sse`) {
+    url.searchParams.set(LIVE_QUERY_PARAM, `sse`)
+    return
+  }
+  if (live === true || live === `long-poll`) {
+    url.searchParams.set(LIVE_QUERY_PARAM, `long-poll`)
+  }
+}
+
+/**
+ * Try to recover from an error using the onError handler.
+ * Returns updated headers/params if retrying, or null to stop.
+ */
+async function handleOnError(
+  onError: StreamOptions[`onError`],
+  err: unknown,
+  currentHeaders: StreamOptions[`headers`],
+  currentParams: StreamOptions[`params`]
+): Promise<{ headers: StreamOptions[`headers`]; params: StreamOptions[`params`] } | null> {
+  if (!onError) return null
+
+  const retryOpts = await onError(
+    err instanceof Error ? err : new Error(String(err))
+  )
+  if (retryOpts === undefined) return null
+
+  return {
+    headers: retryOpts.headers ? { ...currentHeaders, ...retryOpts.headers } : currentHeaders,
+    params: retryOpts.params ? { ...currentParams, ...retryOpts.params } : currentParams,
+  }
+}
+
+/**
  * Create a streaming session to read from a durable stream.
  *
  * This is a fetch-like API:
@@ -83,37 +130,10 @@ export async function stream<TJson = unknown>(
         params: currentParams,
       })
     } catch (err) {
-      // If there's an onError handler, give it a chance to recover
-      if (options.onError) {
-        const retryOpts = await options.onError(
-          err instanceof Error ? err : new Error(String(err))
-        )
-
-        // If handler returns void/undefined, stop retrying
-        if (retryOpts === undefined) {
-          throw err
-        }
-
-        // Merge returned params/headers for retry
-        if (retryOpts.params) {
-          currentParams = {
-            ...currentParams,
-            ...retryOpts.params,
-          }
-        }
-        if (retryOpts.headers) {
-          currentHeaders = {
-            ...currentHeaders,
-            ...retryOpts.headers,
-          }
-        }
-
-        // Continue to retry with updated options
-        continue
-      }
-
-      // No onError handler, just throw
-      throw err
+      const updated = await handleOnError(options.onError, err, currentHeaders, currentParams)
+      if (!updated) throw err
+      currentHeaders = updated.headers
+      currentParams = updated.params
     }
   }
 }
@@ -160,15 +180,7 @@ async function streamInternal<TJson = unknown>(
   // Create abort controller
   const abortController = new AbortController()
   if (options.signal) {
-    if (options.signal.aborted) {
-      abortController.abort(options.signal.reason)
-    } else {
-      options.signal.addEventListener(
-        `abort`,
-        () => abortController.abort(options.signal?.reason),
-        { once: true }
-      )
-    }
+    forwardAbortSignal(options.signal, abortController)
   }
 
   // Get fetch client with backoff
@@ -229,11 +241,7 @@ async function streamInternal<TJson = unknown>(
     // For subsequent requests, set live mode unless resuming from pause
     // (resuming from pause needs immediate response for UI status)
     if (!resumingFromPause) {
-      if (live === `sse`) {
-        nextUrl.searchParams.set(LIVE_QUERY_PARAM, `sse`)
-      } else if (live === true || live === `long-poll`) {
-        nextUrl.searchParams.set(LIVE_QUERY_PARAM, `long-poll`)
-      }
+      setLiveQueryParam(nextUrl, live)
     }
 
     if (cursor) {

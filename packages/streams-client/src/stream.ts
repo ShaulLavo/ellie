@@ -80,6 +80,38 @@ function normalizeContentType(contentType: string | undefined): string {
 }
 
 /**
+ * Forward an AbortSignal to an AbortController, handling already-aborted signals.
+ */
+function forwardAbortSignal(signal: AbortSignal, controller: AbortController): void {
+  if (signal.aborted) {
+    controller.abort(signal.reason)
+    return
+  }
+  signal.addEventListener(`abort`, () => controller.abort(signal.reason), { once: true })
+}
+
+/**
+ * Reject all queued messages with the given error.
+ */
+function rejectAll(messages: Array<QueuedMessage>, error: Error): void {
+  for (const msg of messages) msg.reject(error)
+}
+
+/**
+ * Encode a single append body for the wire format.
+ * JSON mode wraps the value in an array; binary mode preserves raw bytes.
+ */
+function encodeAppendBody(body: Uint8Array | string, isJson: boolean): BodyInit {
+  if (isJson) {
+    const bodyStr = typeof body === `string` ? body : new TextDecoder().decode(body)
+    return `[${bodyStr}]`
+  }
+  if (typeof body === `string`) return body
+  // Use ArrayBuffer for cross-platform BodyInit compatibility
+  return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer
+}
+
+/**
  * Check if a value is a Promise or Promise-like (thenable).
  */
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -548,24 +580,7 @@ export class DurableStream {
     // For JSON mode, wrap body in array to match protocol (server flattens one level)
     // Input is pre-serialized JSON string
     const isJson = normalizeContentType(contentType) === `application/json`
-    let encodedBody: BodyInit
-    if (isJson) {
-      // JSON mode: decode as UTF-8 string and wrap in array
-      const bodyStr =
-        typeof body === `string` ? body : new TextDecoder().decode(body)
-      encodedBody = `[${bodyStr}]`
-    } else {
-      // Binary mode: preserve raw bytes
-      // Use ArrayBuffer for cross-platform BodyInit compatibility
-      if (typeof body === `string`) {
-        encodedBody = body
-      } else {
-        encodedBody = body.buffer.slice(
-          body.byteOffset,
-          body.byteOffset + body.byteLength
-        ) as ArrayBuffer
-      }
-    }
+    const encodedBody = encodeAppendBody(body, isJson)
 
     let response: Response
 
@@ -639,31 +654,20 @@ export class DurableStream {
   async #batchWorker(batch: Array<QueuedMessage>): Promise<void> {
     try {
       await this.#sendBatch(batch)
-
-      // Resolve all messages in the batch
-      for (const msg of batch) {
-        msg.resolve()
-      }
-
-      // Send accumulated batch if any
-      if (this.#buffer.length > 0) {
-        const nextBatch = this.#buffer.splice(0)
-        this.#queue!.push(nextBatch).catch((err) => {
-          for (const msg of nextBatch) msg.reject(err)
-        })
-      }
+      for (const msg of batch) msg.resolve()
+      this.#flushBufferIfPending()
     } catch (error) {
-      // Reject current batch
-      for (const msg of batch) {
-        msg.reject(error as Error)
-      }
-      // Also reject buffered messages (don't leave promises hanging)
-      for (const msg of this.#buffer) {
-        msg.reject(error as Error)
-      }
+      rejectAll(batch, error as Error)
+      rejectAll(this.#buffer, error as Error)
       this.#buffer = []
       throw error
     }
+  }
+
+  #flushBufferIfPending(): void {
+    if (this.#buffer.length === 0) return
+    const nextBatch = this.#buffer.splice(0)
+    this.#queue!.push(nextBatch).catch((err) => rejectAll(nextBatch, err))
   }
 
   /**
@@ -698,55 +702,7 @@ export class DurableStream {
     const isJson = normalizeContentType(contentType) === `application/json`
 
     // Batch data based on content type
-    let batchedBody: BodyInit
-    if (isJson) {
-      // For JSON mode: always send as array (server flattens one level)
-      // Single append: [value] → server stores value
-      // Multiple appends: [val1, val2] → server stores val1, val2
-      // Input is pre-serialized JSON strings, join them into an array
-      const jsonStrings = batch.map((m) =>
-        typeof m.data === `string` ? m.data : new TextDecoder().decode(m.data)
-      )
-      batchedBody = `[${jsonStrings.join(`,`)}]`
-    } else {
-      // For byte mode: preserve original data types
-      // - Strings are concatenated as strings (for text/* content types)
-      // - Uint8Arrays are concatenated as binary (for application/octet-stream)
-      // - Mixed types: convert all to binary to avoid data corruption
-      const hasUint8Array = batch.some((m) => m.data instanceof Uint8Array)
-      const hasString = batch.some((m) => typeof m.data === `string`)
-
-      if (hasUint8Array && !hasString) {
-        // All binary: concatenate Uint8Arrays
-        const chunks = batch.map((m) => m.data as Uint8Array)
-        const totalLength = chunks.reduce((sum, c) => sum + c.length, 0)
-        const combined = new Uint8Array(totalLength)
-        let offset = 0
-        for (const chunk of chunks) {
-          combined.set(chunk, offset)
-          offset += chunk.length
-        }
-        batchedBody = combined
-      } else if (hasString && !hasUint8Array) {
-        // All strings: concatenate as string
-        batchedBody = batch.map((m) => m.data as string).join(``)
-      } else {
-        // Mixed types: convert strings to binary and concatenate
-        // This preserves binary data integrity
-        const encoder = new TextEncoder()
-        const chunks = batch.map((m) =>
-          typeof m.data === `string` ? encoder.encode(m.data) : m.data
-        )
-        const totalLength = chunks.reduce((sum, c) => sum + c.length, 0)
-        const combined = new Uint8Array(totalLength)
-        let offset = 0
-        for (const chunk of chunks) {
-          combined.set(chunk, offset)
-          offset += chunk.length
-        }
-        batchedBody = combined
-      }
-    }
+    const batchedBody = encodeBatch(batch, isJson)
 
     // Combine signals: stream-level signal + any per-message signals
     const signals: Array<AbortSignal> = []
@@ -1035,15 +991,7 @@ export class DurableStream {
       const abortController = new AbortController()
       const signal = options?.signal ?? this.#options.signal
       if (signal) {
-        if (signal.aborted) {
-          abortController.abort(signal.reason)
-        } else {
-          signal.addEventListener(
-            `abort`,
-            () => abortController.abort(signal.reason),
-            { once: true }
-          )
-        }
+        forwardAbortSignal(signal, abortController)
       }
 
       return new StreamResponseImpl<TJson>({
@@ -1109,6 +1057,56 @@ export class DurableStream {
 // ============================================================================
 
 /**
+ * Concatenate Uint8Array chunks into a single Uint8Array.
+ */
+function concatUint8Arrays(chunks: Array<Uint8Array>): Uint8Array {
+  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0)
+  const combined = new Uint8Array(totalLength)
+  let offset = 0
+  for (const chunk of chunks) {
+    combined.set(chunk, offset)
+    offset += chunk.length
+  }
+  return combined
+}
+
+/**
+ * Encode a batch of queued messages into a single BodyInit for the wire.
+ */
+function encodeBatch(batch: Array<QueuedMessage>, isJson: boolean): BodyInit {
+  if (isJson) {
+    // For JSON mode: always send as array (server flattens one level)
+    // Input is pre-serialized JSON strings, join them into an array
+    const jsonStrings = batch.map((m) =>
+      typeof m.data === `string` ? m.data : new TextDecoder().decode(m.data)
+    )
+    return `[${jsonStrings.join(`,`)}]`
+  }
+
+  // For byte mode: preserve original data types
+  // - Strings are concatenated as strings (for text/* content types)
+  // - Uint8Arrays are concatenated as binary (for application/octet-stream)
+  // - Mixed types: convert all to binary to avoid data corruption
+  const hasUint8Array = batch.some((m) => m.data instanceof Uint8Array)
+  const hasString = batch.some((m) => typeof m.data === `string`)
+
+  if (hasUint8Array && !hasString) {
+    return concatUint8Arrays(batch.map((m) => m.data as Uint8Array)) as unknown as BodyInit
+  }
+
+  if (hasString && !hasUint8Array) {
+    return batch.map((m) => m.data as string).join(``)
+  }
+
+  // Mixed types: convert strings to binary and concatenate
+  const encoder = new TextEncoder()
+  const chunks = batch.map((m) =>
+    typeof m.data === `string` ? encoder.encode(m.data) : m.data
+  )
+  return concatUint8Arrays(chunks) as unknown as BodyInit
+}
+
+/**
  * Encode a body value to the appropriate format.
  * Strings are encoded as UTF-8.
  * Objects are JSON-serialized.
@@ -1171,13 +1169,9 @@ function toReadableStream(
     async pull(controller) {
       try {
         const { done, value } = await iterator.next()
-        if (done) {
-          controller.close()
-        } else if (typeof value === `string`) {
-          controller.enqueue(encoder.encode(value))
-        } else {
-          controller.enqueue(value)
-        }
+        if (done) return controller.close()
+        if (typeof value === `string`) return controller.enqueue(encoder.encode(value))
+        controller.enqueue(value)
       } catch (e) {
         controller.error(e)
       }

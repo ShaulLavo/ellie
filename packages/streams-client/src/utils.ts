@@ -271,17 +271,16 @@ export function warnIfUsingHttpInBrowser(
   }
 
   // Check if URL uses HTTP protocol
-  if (parsedUrl.protocol === `http:`) {
-    // Only warn once per origin
-    if (!warnedOrigins.has(parsedUrl.origin)) {
-      warnedOrigins.add(parsedUrl.origin)
-      console.warn(
-        `[DurableStream] Using HTTP (not HTTPS) typically limits browsers to ~6 concurrent connections per origin under HTTP/1.1. ` +
-          `This can cause slow streams and app freezes with multiple active streams. ` +
-          `Use HTTPS for HTTP/2 support. See https://electric-sql.com/r/electric-http2 for more information.`
-      )
-    }
-  }
+  if (parsedUrl.protocol !== `http:`) return
+  if (warnedOrigins.has(parsedUrl.origin)) return
+
+  // Only warn once per origin
+  warnedOrigins.add(parsedUrl.origin)
+  console.warn(
+    `[DurableStream] Using HTTP (not HTTPS) typically limits browsers to ~6 concurrent connections per origin under HTTP/1.1. ` +
+      `This can cause slow streams and app freezes with multiple active streams. ` +
+      `Use HTTPS for HTTP/2 support. See https://electric-sql.com/r/electric-http2 for more information.`
+  )
 }
 
 /**
