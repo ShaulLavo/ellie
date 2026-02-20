@@ -4,7 +4,7 @@ import { anthropicText } from "@tanstack/ai-anthropic"
 import type { AnyTextAdapter } from "@tanstack/ai"
 import { createHindsightDB, type HindsightDatabase } from "./db"
 import { EmbeddingStore } from "./embedding"
-import { retain as retainImpl } from "./retain"
+import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain"
 import { recall as recallImpl } from "./recall"
 import { reflect as reflectImpl } from "./reflect"
 import { consolidate as consolidateImpl } from "./consolidation"
@@ -35,7 +35,9 @@ import type {
   CreateDirectiveOptions,
   UpdateDirectiveOptions,
   RetainOptions,
+  RetainBatchOptions,
   RetainResult,
+  RetainBatchResult,
   RecallOptions,
   RecallResult,
   ReflectOptions,
@@ -91,18 +93,21 @@ export class Hindsight {
     this.memoryVec = new EmbeddingStore(
       this.hdb.sqlite,
       config.embed,
+      config.embedBatch,
       dims,
       "hs_memory_vec",
     )
     this.entityVec = new EmbeddingStore(
       this.hdb.sqlite,
       config.embed,
+      config.embedBatch,
       dims,
       "hs_entity_vec",
     )
     this.modelVec = new EmbeddingStore(
       this.hdb.sqlite,
       config.embed,
+      config.embedBatch,
       dims,
       "hs_mental_model_vec",
     )
@@ -298,6 +303,49 @@ export class Hindsight {
         memoriesExtracted: r.memories.length,
         entitiesResolved: r.entities.length,
         linksCreated: r.links.length,
+      }),
+    )
+  }
+
+  async retainBatch(
+    bankId: string,
+    contents: string[],
+    options?: RetainBatchOptions,
+  ): Promise<RetainBatchResult> {
+    const cfg = this.resolveConfig(bankId)
+    const resolvedOptions: RetainBatchOptions = {
+      mode: cfg.extractionMode,
+      customGuidelines: cfg.customGuidelines ?? undefined,
+      dedupThreshold: cfg.dedupThreshold,
+      consolidate: cfg.enableConsolidation,
+      ...stripUndefined(options ?? {}),
+    }
+    return this.trace(
+      "retain",
+      bankId,
+      () =>
+        retainBatchImpl(
+          this.hdb,
+          this.memoryVec,
+          this.entityVec,
+          this.modelVec,
+          this.adapter,
+          bankId,
+          contents,
+          resolvedOptions,
+          this.rerank,
+        ),
+      (results) => ({
+        items: contents.length,
+        memoriesExtracted: results.reduce(
+          (sum, result) => sum + result.memories.length,
+          0,
+        ),
+        entitiesResolved: results.reduce(
+          (sum, result) => sum + result.entities.length,
+          0,
+        ),
+        linksCreated: results.reduce((sum, result) => sum + result.links.length, 0),
       }),
     )
   }

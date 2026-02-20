@@ -289,17 +289,39 @@ describe("retain", () => {
   // ── Batch edge cases (needs LLM extraction) ─────────────────────────
 
   describe("batch edge cases", () => {
-    it.todo("handles empty batch gracefully")
-    // Python: test_empty_batch — retain_batch with empty contents array,
-    // expects empty list returned without errors
+    it("handles empty batch gracefully", async () => {
+      const result = await t.hs.retainBatch(bankId, [], {
+        consolidate: false,
+      })
 
-    it.todo("handles single-item batch correctly")
-    // Python: test_single_item_batch — retain_batch with one item,
-    // verifies it creates at least one memory unit
+      expect(result).toEqual([])
+    })
 
-    it.todo("handles mixed content sizes in a batch")
-    // Python: test_mixed_content_batch — batch with short and long content,
-    // verifies all items processed and long content creates more facts
+    it("handles single-item batch correctly", async () => {
+      const result = await t.hs.retainBatch(
+        bankId,
+        ["Alice went hiking in Yosemite"],
+        { consolidate: false },
+      )
+
+      expect(result).toHaveLength(1)
+      expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it("handles mixed content sizes in a batch", async () => {
+      const shortContent = "Bob likes Python and hiking."
+      const longContent = "Alice met Bob at the coffee shop. ".repeat(20_000) // ~700k chars
+
+      const result = await t.hs.retainBatch(
+        bankId,
+        [shortContent, longContent],
+        { consolidate: false, dedupThreshold: 0 },
+      )
+
+      expect(result).toHaveLength(2)
+      expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
+      expect(result[1]!.memories.length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   // ── Temporal link creation (needs LLM extraction) ───────────────────

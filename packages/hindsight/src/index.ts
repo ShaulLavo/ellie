@@ -3,6 +3,7 @@ export { Hindsight } from "./hindsight"
 export type {
   HindsightConfig,
   EmbedFunction,
+  EmbedBatchFunction,
   BankConfig,
   TagsMatch,
   HindsightTrace,
@@ -17,7 +18,9 @@ export type {
   ScoredMemory,
   ObservationHistoryEntry,
   RetainOptions,
+  RetainBatchOptions,
   RetainResult,
+  RetainBatchResult,
   RecallOptions,
   RecallResult,
   ReflectOptions,

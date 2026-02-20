@@ -3,11 +3,14 @@ import { ulid } from "@ellie/utils"
 import { eq } from "drizzle-orm"
 import * as v from "valibot"
 import type { AnyTextAdapter } from "@tanstack/ai"
+import { RecursiveChunker } from "@chonkiejs/core"
 import type { HindsightDatabase } from "./db"
 import type { EmbeddingStore } from "./embedding"
 import type {
   RetainOptions,
+  RetainBatchOptions,
   RetainResult,
+  RetainBatchResult,
   MemoryUnit,
   Entity,
   FactType,
@@ -59,12 +62,266 @@ const ExtractedFactSchema = v.object({
 
 type ExtractedFact = v.InferOutput<typeof ExtractedFactSchema>["facts"][number]
 
+const CHARS_PER_BATCH = 600_000
+
+interface PreparedExtractedFact {
+  fact: ExtractedFact
+  originalIndex: number
+  groupIndex: number
+  sourceText: string
+}
+
+interface EntityPlan {
+  entityMap: Map<string, Entity>
+  entityById: Map<string, Entity>
+  existingMentionDeltas: Map<string, number>
+  newEntities: Array<{
+    id: string
+    bankId: string
+    name: string
+    entityType: EntityType
+    mentionCount: number
+    firstSeen: number
+    lastUpdated: number
+  }>
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function parseISOToEpoch(iso: string | null | undefined): number | null {
   if (!iso) return null
   const ms = new Date(iso).getTime()
   return Number.isNaN(ms) ? null : ms
+}
+
+async function extractFactsFromContent(
+  adapter: AnyTextAdapter,
+  content: string,
+  options: RetainOptions | RetainBatchOptions,
+): Promise<ExtractedFact[]> {
+  if ("facts" in options && options.facts) {
+    return options.facts.map((f) => ({
+      content: sanitizeText(f.content),
+      factType: (f.factType ?? "world") as ExtractedFact["factType"],
+      confidence: f.confidence ?? 1.0,
+      validFrom: f.validFrom != null ? new Date(f.validFrom).toISOString() : null,
+      validTo: f.validTo != null ? new Date(f.validTo).toISOString() : null,
+      entities: (f.entities ?? []).map((name) => ({
+        name,
+        entityType: "concept" as const,
+      })),
+      tags: f.tags ?? [],
+      causalRelations: [],
+    }))
+  }
+
+  try {
+    const systemPrompt = getExtractionPrompt(
+      options.mode ?? "concise",
+      options.customGuidelines,
+    )
+
+    const text = await streamToText(
+      chat({
+        adapter,
+        messages: [{ role: "user", content: EXTRACT_FACTS_USER(content) }],
+        systemPrompts: [systemPrompt],
+      }),
+    )
+
+    const parsed = parseLLMJson(text, { facts: [] })
+    const validated = v.safeParse(ExtractedFactSchema, parsed)
+    const extracted = validated.success ? validated.output.facts : []
+    for (const fact of extracted) {
+      fact.content = sanitizeText(fact.content)
+    }
+    return extracted
+  } catch {
+    // Graceful degradation: LLM extraction failed, return empty result
+    return []
+  }
+}
+
+function runInTransaction(hdb: HindsightDatabase, fn: () => void): void {
+  hdb.sqlite.run("BEGIN")
+  try {
+    fn()
+    hdb.sqlite.run("COMMIT")
+  } catch (error) {
+    hdb.sqlite.run("ROLLBACK")
+    throw error
+  }
+}
+
+async function chunkWithChonkie(content: string): Promise<string[]> {
+  if (content.length <= CHARS_PER_BATCH) return [content]
+  const chunker = await RecursiveChunker.create({
+    chunkSize: CHARS_PER_BATCH,
+    tokenizer: "character",
+    minCharactersPerChunk: 1,
+  })
+  const chunks = await chunker.chunk(content)
+  const texts = chunks
+    .map((chunk) => sanitizeText(chunk.text).trim())
+    .filter((chunkText) => chunkText.length > 0)
+  return texts.length > 0 ? texts : [content]
+}
+
+async function explodeBatchContents(
+  contents: string[],
+): Promise<Array<{ originalIndex: number; content: string }>> {
+  const chunked = await Promise.all(
+    contents.map(async (content, originalIndex) => {
+      const sanitized = sanitizeText(content)
+      const chunks = await chunkWithChonkie(sanitized)
+      return chunks.map((chunk) => ({ originalIndex, content: chunk }))
+    }),
+  )
+  return chunked.flat()
+}
+
+function splitByCharacterBudget<T extends { content: string }>(
+  items: T[],
+  maxChars: number,
+): T[][] {
+  if (items.length === 0) return []
+  const batches: T[][] = []
+  let currentBatch: T[] = []
+  let currentChars = 0
+
+  for (const item of items) {
+    const itemChars = item.content.length
+    if (currentBatch.length > 0 && currentChars + itemChars > maxChars) {
+      batches.push(currentBatch)
+      currentBatch = [item]
+      currentChars = itemChars
+      continue
+    }
+
+    currentBatch.push(item)
+    currentChars += itemChars
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch)
+  }
+
+  return batches
+}
+
+function planEntities(
+  hdb: HindsightDatabase,
+  bankId: string,
+  extracted: PreparedExtractedFact[],
+  now: number,
+): EntityPlan {
+  const existingEntities = hdb.db
+    .select()
+    .from(hdb.schema.entities)
+    .where(eq(hdb.schema.entities.bankId, bankId))
+    .all()
+  const cooccurrences = loadCooccurrences(hdb, bankId)
+
+  const entityMap = new Map<string, Entity>()
+  const entityById = new Map<string, Entity>()
+  const existingMentionDeltas = new Map<string, number>()
+  const newEntities: EntityPlan["newEntities"] = []
+  const newEntityById = new Map<string, EntityPlan["newEntities"][number]>()
+
+  for (const item of extracted) {
+    const nearbyNames = item.fact.entities.map((entity) => entity.name)
+    for (const ent of item.fact.entities) {
+      const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+      const seen = entityMap.get(key)
+      if (seen) {
+        const pending = newEntityById.get(seen.id)
+        if (pending) {
+          pending.mentionCount += 1
+          continue
+        }
+        existingMentionDeltas.set(
+          seen.id,
+          (existingMentionDeltas.get(seen.id) ?? 0) + 1,
+        )
+        continue
+      }
+
+      const resolved = resolveEntity(
+        ent.name,
+        ent.entityType,
+        existingEntities,
+        cooccurrences,
+        nearbyNames.filter((name) => name !== ent.name),
+        now,
+      )
+      const exactMatch = existingEntities.find(
+        (row) =>
+          row.name.toLowerCase() === ent.name.toLowerCase() &&
+          row.entityType === ent.entityType,
+      )
+
+      if (resolved || exactMatch) {
+        const row =
+          (resolved
+            ? existingEntities.find((entity) => entity.id === resolved.entityId)
+            : exactMatch) ?? null
+        if (!row) continue
+
+        const entity = rowToEntity({ ...row, lastUpdated: now })
+        entityMap.set(key, entity)
+        entityById.set(entity.id, entity)
+        existingMentionDeltas.set(
+          entity.id,
+          (existingMentionDeltas.get(entity.id) ?? 0) + 1,
+        )
+        continue
+      }
+
+      const entityId = ulid()
+      const pendingEntity: EntityPlan["newEntities"][number] = {
+        id: entityId,
+        bankId,
+        name: ent.name,
+        entityType: ent.entityType as EntityType,
+        mentionCount: 1,
+        firstSeen: now,
+        lastUpdated: now,
+      }
+      newEntities.push(pendingEntity)
+      newEntityById.set(entityId, pendingEntity)
+
+      const entity: Entity = {
+        id: entityId,
+        bankId,
+        name: ent.name,
+        entityType: ent.entityType as EntityType,
+        description: null,
+        metadata: null,
+        firstSeen: now,
+        lastUpdated: now,
+      }
+      entityMap.set(key, entity)
+      entityById.set(entity.id, entity)
+      existingEntities.push({
+        id: entityId,
+        bankId,
+        name: ent.name,
+        entityType: ent.entityType,
+        description: null,
+        metadata: null,
+        mentionCount: pendingEntity.mentionCount,
+        firstSeen: now,
+        lastUpdated: now,
+      })
+    }
+  }
+
+  return {
+    entityMap,
+    entityById,
+    existingMentionDeltas,
+    newEntities,
+  }
 }
 
 function rowToMemoryUnit(
@@ -125,51 +382,7 @@ export async function retain(
   const cleanContent = sanitizeText(content)
 
   // ── Step 1: Get facts (LLM extraction or pre-provided) ──
-
-  let extracted: ExtractedFact[]
-
-  if (options.facts) {
-    extracted = options.facts.map((f) => ({
-      content: sanitizeText(f.content),
-      factType: (f.factType ?? "world") as ExtractedFact["factType"],
-      confidence: f.confidence ?? 1.0,
-      validFrom: f.validFrom != null ? new Date(f.validFrom).toISOString() : null,
-      validTo: f.validTo != null ? new Date(f.validTo).toISOString() : null,
-      entities: (f.entities ?? []).map((name) => ({
-        name,
-        entityType: "concept" as const,
-      })),
-      tags: f.tags ?? [],
-      causalRelations: [],
-    }))
-  } else {
-    try {
-      const systemPrompt = getExtractionPrompt(
-        options.mode ?? "concise",
-        options.customGuidelines,
-      )
-
-      const text = await streamToText(
-        chat({
-          adapter,
-          messages: [{ role: "user", content: EXTRACT_FACTS_USER(cleanContent) }],
-          systemPrompts: [systemPrompt],
-        }),
-      )
-
-      const parsed = parseLLMJson(text, { facts: [] })
-      const validated = v.safeParse(ExtractedFactSchema, parsed)
-      extracted = validated.success ? validated.output.facts : []
-    } catch {
-      // Graceful degradation: LLM extraction failed, return empty result
-      extracted = []
-    }
-  }
-
-  // Sanitize each extracted fact's content
-  for (const fact of extracted) {
-    fact.content = sanitizeText(fact.content)
-  }
+  let extracted = await extractFactsFromContent(adapter, cleanContent, options)
 
   if (extracted.length === 0) {
     return { memories: [], entities: [], links: [] }
@@ -472,10 +685,472 @@ export async function retain(
   }
 }
 
+export async function retainBatch(
+  hdb: HindsightDatabase,
+  memoryVec: EmbeddingStore,
+  entityVec: EmbeddingStore,
+  modelVec: EmbeddingStore,
+  adapter: AnyTextAdapter,
+  bankId: string,
+  contents: string[],
+  options: RetainBatchOptions = {},
+  rerank?: RerankFunction,
+): Promise<RetainBatchResult> {
+  if (contents.length === 0) return []
+
+  const expandedContents = await explodeBatchContents(contents)
+  const subBatches = splitByCharacterBudget(expandedContents, CHARS_PER_BATCH)
+  const aggregate = contents.map<RetainResult>(() => ({
+    memories: [],
+    entities: [],
+    links: [],
+  }))
+  const entityIdsByResult = contents.map(() => new Set<string>())
+  const entityById = new Map<string, Entity>()
+  const linkKeysByResult = contents.map(() => new Set<string>())
+  const memoryIdsToOriginalIndex = new Map<string, number>()
+
+  for (const subBatch of subBatches) {
+    const extractedPerContent = await Promise.all(
+      subBatch.map(async ({ content }) =>
+        extractFactsFromContent(adapter, content, options),
+      ),
+    )
+
+    const flattened: PreparedExtractedFact[] = []
+    for (let groupIndex = 0; groupIndex < subBatch.length; groupIndex++) {
+      const { originalIndex, content } = subBatch[groupIndex]!
+      const extracted = extractedPerContent[groupIndex]!
+      for (const fact of extracted) {
+        flattened.push({
+          fact,
+          originalIndex,
+          groupIndex,
+          sourceText: content,
+        })
+      }
+    }
+
+    if (flattened.length === 0) continue
+
+    const dedupThreshold = options.dedupThreshold ?? 0.92
+    const allVectors = await memoryVec.createVectors(
+      flattened.map((item) => item.fact.content),
+    )
+
+    const dedupFlags =
+      dedupThreshold > 0
+        ? findDuplicateFlagsByVector(
+            hdb,
+            memoryVec,
+            bankId,
+            allVectors,
+            dedupThreshold,
+          )
+        : flattened.map(() => false)
+
+    const retainedFacts: PreparedExtractedFact[] = []
+    const retainedVectors: Float32Array[] = []
+    for (let i = 0; i < flattened.length; i++) {
+      if (dedupFlags[i]) continue
+      retainedFacts.push(flattened[i]!)
+      retainedVectors.push(allVectors[i]!)
+    }
+
+    if (retainedFacts.length === 0) continue
+
+    const now = Date.now()
+    const entityPlan = planEntities(hdb, bankId, retainedFacts, now)
+    for (const [entityId, entity] of entityPlan.entityById.entries()) {
+      entityById.set(entityId, entity)
+    }
+    const entityVectors = await entityVec.createVectors(
+      entityPlan.newEntities.map((entity) => entity.name),
+    )
+
+    const memoryRows: Array<typeof hdb.schema.memoryUnits.$inferInsert> = []
+    const memoryRecords: Array<{
+      memory: MemoryUnit
+      originalIndex: number
+      fact: ExtractedFact
+      vector: Float32Array
+    }> = []
+    const memoryEntityIds = new Map<string, string[]>()
+    const memoryEntityNames = new Map<string, Set<string>>()
+    const memoryIdsByGroup = new Map<number, string[]>()
+
+    for (let i = 0; i < retainedFacts.length; i++) {
+      const item = retainedFacts[i]!
+      const memoryId = ulid()
+      const tags = [...(item.fact.tags ?? []), ...(options.tags ?? [])]
+
+      memoryRows.push({
+        id: memoryId,
+        bankId,
+        content: item.fact.content,
+        factType: item.fact.factType,
+        confidence: item.fact.confidence,
+        validFrom: parseISOToEpoch(item.fact.validFrom),
+        validTo: parseISOToEpoch(item.fact.validTo),
+        metadata: options.metadata ? JSON.stringify(options.metadata) : null,
+        tags: tags.length > 0 ? JSON.stringify(tags) : null,
+        sourceText: item.sourceText,
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      const memory: MemoryUnit = {
+        id: memoryId,
+        bankId,
+        content: item.fact.content,
+        factType: item.fact.factType as FactType,
+        confidence: item.fact.confidence,
+        validFrom: parseISOToEpoch(item.fact.validFrom),
+        validTo: parseISOToEpoch(item.fact.validTo),
+        metadata: options.metadata ?? null,
+        tags: tags.length > 0 ? tags : null,
+        sourceText: item.sourceText,
+        consolidatedAt: null,
+        proofCount: 0,
+        sourceMemoryIds: null,
+        history: null,
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      const linkedEntityIds: string[] = []
+      const linkedEntityNames = new Set<string>()
+      for (const ent of item.fact.entities) {
+        const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+        const entity = entityPlan.entityMap.get(key)
+        if (!entity) continue
+        linkedEntityIds.push(entity.id)
+        linkedEntityNames.add(ent.name.toLowerCase())
+        entityIdsByResult[item.originalIndex]!.add(entity.id)
+      }
+
+      memoryEntityIds.set(memoryId, linkedEntityIds)
+      memoryEntityNames.set(memoryId, linkedEntityNames)
+      memoryRecords.push({
+        memory,
+        originalIndex: item.originalIndex,
+        fact: item.fact,
+        vector: retainedVectors[i]!,
+      })
+      const groupMemoryIds = memoryIdsByGroup.get(item.groupIndex) ?? []
+      groupMemoryIds.push(memoryId)
+      memoryIdsByGroup.set(item.groupIndex, groupMemoryIds)
+      memoryIdsToOriginalIndex.set(memoryId, item.originalIndex)
+    }
+
+    const existingById = new Map(
+      hdb.db
+        .select()
+        .from(hdb.schema.entities)
+        .where(eq(hdb.schema.entities.bankId, bankId))
+        .all()
+        .map((row) => [row.id, row]),
+    )
+
+    const createdLinks: RetainResult["links"] = []
+
+    runInTransaction(hdb, () => {
+      for (const [entityId, delta] of entityPlan.existingMentionDeltas.entries()) {
+        const existing = existingById.get(entityId)
+        if (!existing) continue
+        hdb.db
+          .update(hdb.schema.entities)
+          .set({
+            lastUpdated: now,
+            mentionCount: existing.mentionCount + delta,
+          })
+          .where(eq(hdb.schema.entities.id, entityId))
+          .run()
+      }
+
+      for (const newEntity of entityPlan.newEntities) {
+        hdb.db.insert(hdb.schema.entities).values(newEntity).run()
+      }
+
+      entityVec.upsertVectors(
+        entityPlan.newEntities.map((entity, index) => ({
+          id: entity.id,
+          vector: entityVectors[index]!,
+        })),
+      )
+
+      for (const row of memoryRows) {
+        hdb.db.insert(hdb.schema.memoryUnits).values(row).run()
+        hdb.sqlite.run(
+          "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
+          [row.id, bankId, row.content],
+        )
+      }
+
+      memoryVec.upsertVectors(
+        memoryRecords.map((item) => ({
+          id: item.memory.id,
+          vector: item.vector,
+        })),
+      )
+
+      for (const memory of memoryRecords) {
+        const linkedEntityIds = memoryEntityIds.get(memory.memory.id) ?? []
+        for (const entityId of linkedEntityIds) {
+          hdb.db
+            .insert(hdb.schema.memoryEntities)
+            .values({ memoryId: memory.memory.id, entityId })
+            .run()
+        }
+        updateCooccurrences(hdb, bankId, linkedEntityIds)
+      }
+
+      createEntityLinksFromMemories(
+        hdb,
+        bankId,
+        memoryRecords.map((record) => record.memory.id),
+        memoryEntityNames,
+        now,
+        createdLinks,
+      )
+
+      createCausalLinksFromGroups(
+        hdb,
+        bankId,
+        retainedFacts,
+        memoryIdsByGroup,
+        now,
+        createdLinks,
+      )
+
+      createSemanticLinksFromVectors(
+        hdb,
+        memoryVec,
+        bankId,
+        memoryRecords.map((record) => ({
+          id: record.memory.id,
+          vector: record.vector,
+        })),
+        now,
+        createdLinks,
+      )
+    })
+
+    for (const memory of memoryRecords) {
+      aggregate[memory.originalIndex]!.memories.push(memory.memory)
+    }
+
+    for (const link of createdLinks) {
+      const sourceIndex = memoryIdsToOriginalIndex.get(link.sourceId)
+      const targetIndex = memoryIdsToOriginalIndex.get(link.targetId)
+      if (sourceIndex !== undefined) {
+        addUniqueLink(aggregate[sourceIndex]!, linkKeysByResult[sourceIndex]!, link)
+      }
+      if (targetIndex !== undefined && targetIndex !== sourceIndex) {
+        addUniqueLink(aggregate[targetIndex]!, linkKeysByResult[targetIndex]!, link)
+      }
+    }
+  }
+
+  for (let i = 0; i < aggregate.length; i++) {
+    aggregate[i]!.entities = [...entityIdsByResult[i]!]
+      .map((entityId) => entityById.get(entityId))
+      .filter((entity): entity is Entity => Boolean(entity))
+  }
+
+  if (options.consolidate !== false) {
+    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank).catch(() => {
+      // consolidation is best-effort
+    })
+  }
+
+  return aggregate
+}
+
 // ── Semantic Links ─────────────────────────────────────────────────────────
 
+const DUPLICATE_SEARCH_K = 5
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
+
+function findDuplicateFlagsByVector(
+  hdb: HindsightDatabase,
+  memoryVec: EmbeddingStore,
+  bankId: string,
+  vectors: Float32Array[],
+  threshold: number,
+): boolean[] {
+  const flags: boolean[] = []
+
+  for (const vector of vectors) {
+    const hits = memoryVec.searchByVector(vector, DUPLICATE_SEARCH_K)
+    let isDuplicate = false
+
+    for (const hit of hits) {
+      const similarity = 1 - hit.distance
+      if (similarity < threshold) break
+
+      const row = hdb.db
+        .select({ bankId: hdb.schema.memoryUnits.bankId })
+        .from(hdb.schema.memoryUnits)
+        .where(eq(hdb.schema.memoryUnits.id, hit.id))
+        .get()
+      if (row?.bankId !== bankId) continue
+      isDuplicate = true
+      break
+    }
+
+    flags.push(isDuplicate)
+  }
+
+  return flags
+}
+
+function createEntityLinksFromMemories(
+  hdb: HindsightDatabase,
+  bankId: string,
+  memoryIds: string[],
+  memoryEntityNames: Map<string, Set<string>>,
+  createdAt: number,
+  output: RetainResult["links"],
+): void {
+  for (let i = 0; i < memoryIds.length; i++) {
+    const sourceId = memoryIds[i]!
+    const sourceEntities = memoryEntityNames.get(sourceId) ?? new Set<string>()
+    for (let j = i + 1; j < memoryIds.length; j++) {
+      const targetId = memoryIds[j]!
+      const targetEntities = memoryEntityNames.get(targetId) ?? new Set<string>()
+      const shared = [...sourceEntities].filter((name) =>
+        targetEntities.has(name),
+      )
+      if (shared.length === 0) continue
+
+      const weight =
+        shared.length /
+        Math.max(sourceEntities.size, targetEntities.size, 1)
+
+      hdb.db
+        .insert(hdb.schema.memoryLinks)
+        .values({
+          id: ulid(),
+          bankId,
+          sourceId,
+          targetId,
+          linkType: "entity",
+          weight,
+          createdAt,
+        })
+        .run()
+
+      output.push({ sourceId, targetId, linkType: "entity" })
+    }
+  }
+}
+
+function createCausalLinksFromGroups(
+  hdb: HindsightDatabase,
+  bankId: string,
+  facts: PreparedExtractedFact[],
+  memoryIdsByGroup: Map<number, string[]>,
+  createdAt: number,
+  output: RetainResult["links"],
+): void {
+  const factsByGroup = new Map<number, PreparedExtractedFact[]>()
+  for (const fact of facts) {
+    const list = factsByGroup.get(fact.groupIndex) ?? []
+    list.push(fact)
+    factsByGroup.set(fact.groupIndex, list)
+  }
+
+  for (const [groupIndex, groupFacts] of factsByGroup.entries()) {
+    const groupMemoryIds = memoryIdsByGroup.get(groupIndex) ?? []
+    for (let i = 0; i < groupFacts.length; i++) {
+      const sourceId = groupMemoryIds[i]
+      const fact = groupFacts[i]
+      if (!sourceId || !fact) continue
+
+      for (const relation of fact.fact.causalRelations ?? []) {
+        if (relation.targetIndex < 0 || relation.targetIndex >= i) continue
+        const targetId = groupMemoryIds[relation.targetIndex]
+        if (!targetId || sourceId === targetId) continue
+
+        const linkType = relation.relationType ?? "causes"
+        hdb.db
+          .insert(hdb.schema.memoryLinks)
+          .values({
+            id: ulid(),
+            bankId,
+            sourceId,
+            targetId,
+            linkType,
+            weight: relation.strength,
+            createdAt,
+          })
+          .run()
+
+        output.push({ sourceId, targetId, linkType })
+      }
+    }
+  }
+}
+
+function createSemanticLinksFromVectors(
+  hdb: HindsightDatabase,
+  memoryVec: EmbeddingStore,
+  bankId: string,
+  newMemories: Array<{ id: string; vector: Float32Array }>,
+  createdAt: number,
+  output: RetainResult["links"],
+): void {
+  const newMemoryIds = new Set(newMemories.map((memory) => memory.id))
+
+  for (const memory of newMemories) {
+    const hits = memoryVec.searchByVector(memory.vector, SEMANTIC_LINK_TOP_K + 1)
+
+    for (const hit of hits) {
+      if (hit.id === memory.id || newMemoryIds.has(hit.id)) continue
+      const similarity = 1 - hit.distance
+      if (similarity < SEMANTIC_LINK_THRESHOLD) continue
+
+      const row = hdb.db
+        .select({ bankId: hdb.schema.memoryUnits.bankId })
+        .from(hdb.schema.memoryUnits)
+        .where(eq(hdb.schema.memoryUnits.id, hit.id))
+        .get()
+      if (row?.bankId !== bankId) continue
+
+      hdb.db
+        .insert(hdb.schema.memoryLinks)
+        .values({
+          id: ulid(),
+          bankId,
+          sourceId: memory.id,
+          targetId: hit.id,
+          linkType: "semantic",
+          weight: similarity,
+          createdAt,
+        })
+        .run()
+
+      output.push({
+        sourceId: memory.id,
+        targetId: hit.id,
+        linkType: "semantic",
+      })
+    }
+  }
+}
+
+function addUniqueLink(
+  result: RetainResult,
+  linkKeys: Set<string>,
+  link: RetainResult["links"][number],
+): void {
+  const key = `${link.sourceId}:${link.targetId}:${link.linkType}`
+  if (linkKeys.has(key)) return
+  linkKeys.add(key)
+  result.links.push(link)
+}
 
 async function createSemanticLinks(
   hdb: HindsightDatabase,

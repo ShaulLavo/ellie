@@ -144,6 +144,8 @@ export interface MentalModel {
 
 /** User-provided embedding function: text → float array */
 export type EmbedFunction = (text: string) => Promise<number[]>
+/** Optional user-provided embedding batch function: texts → float arrays */
+export type EmbedBatchFunction = (texts: string[]) => Promise<number[][]>
 
 /** User-provided reranking function: (query, documents) → relevance scores (higher = more relevant) */
 export type RerankFunction = (query: string, documents: string[]) => Promise<number[]>
@@ -156,6 +158,8 @@ export interface HindsightConfig {
   adapter?: AnyTextAdapter
   /** Embedding function: text → float array (user-provided) */
   embed: EmbedFunction
+  /** Optional embedding batch function for high-throughput ingestion */
+  embedBatch?: EmbedBatchFunction
   /** Embedding dimensions (must match embed output). Default: 1536 */
   embeddingDimensions?: number
   /** Enable automatic consolidation after retain. Default: true */
@@ -210,6 +214,10 @@ export interface RetainOptions {
   consolidate?: boolean
 }
 
+/** Options for retainBatch() */
+export interface RetainBatchOptions
+  extends Omit<RetainOptions, "facts"> {}
+
 /** Options for recall() */
 export interface RecallOptions {
   /** Maximum results to return. Default: 10 */
@@ -263,6 +271,9 @@ export interface RetainResult {
   entities: Entity[]
   links: Array<{ sourceId: string; targetId: string; linkType: LinkType }>
 }
+
+/** Result from retainBatch(): one RetainResult per input content item */
+export type RetainBatchResult = RetainResult[]
 
 /** Result from recall() */
 export interface RecallResult {

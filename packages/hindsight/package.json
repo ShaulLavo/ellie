@@ -16,6 +16,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@chonkiejs/core": "^0.0.7",
     "@ellie/ai": "workspace:*",
     "@ellie/db": "workspace:*",
     "@ellie/utils": "workspace:*",
