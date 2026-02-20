@@ -789,7 +789,7 @@ function createConsumer(
         if (batch.streamClosed && !explicitlyClosed && !abortController.signal.aborted) {
           cleanupHealthCheck()
           // Truncate all collections (old stream data is gone)
-          dispatcher.dispatchControl({ headers: { control: `reset` } } as any)
+          dispatcher.dispatchControl({ headers: { control: `reset` } })
           // Reconnect after a short delay to allow the new stream to be created
           scheduleReconnect()
         }
@@ -806,7 +806,7 @@ function createConsumer(
     streamResponse.closed.catch(() => {
       if (!explicitlyClosed && !abortController.signal.aborted) {
         cleanupHealthCheck()
-        dispatcher.dispatchControl({ headers: { control: `reset` } } as any)
+        dispatcher.dispatchControl({ headers: { control: `reset` } })
         scheduleReconnect()
       }
     })
