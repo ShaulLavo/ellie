@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
 
 describe("recall", () => {
   let t: TestHindsight
@@ -166,17 +166,82 @@ describe("recall", () => {
   // ── Search trace (port of test_search_trace.py) ────────────────────────
 
   describe("search trace", () => {
-    it.todo("returns trace object when enableTrace=true")
-    it.todo("trace.query contains query text, budget, maxTokens, and embedding")
-    it.todo("trace.entryPoints contains nodes with nodeId, text, and similarityScore in [0,1]")
-    it.todo("trace.visits contains visited nodes with nodeId, text, and finalWeight")
-    it.todo("entry point visits have no parentNodeId or linkType")
-    it.todo("trace.summary.totalNodesVisited equals length of trace.visits")
-    it.todo("trace.summary.resultsReturned equals length of result.memories")
-    it.todo("trace.summary.budgetUsed is <= budget")
-    it.todo("trace.summary.totalDurationSeconds is > 0")
-    it.todo("trace.summary.phaseMetrics includes generateQueryEmbedding, parallelRetrieval, rrfMerge, reranking phases")
-    it.todo("returns trace=null/undefined when enableTrace=false")
+    it("returns trace object when enableTrace=true", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_enabled",
+      )
+    })
+
+    it("trace.query contains query text, budget, maxTokens, and embedding", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_query_fields",
+      )
+    })
+
+    it("trace.entryPoints contains nodes with nodeId, text, and similarityScore in [0,1]", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_entry_points",
+      )
+    })
+
+    it("trace.visits contains visited nodes with nodeId, text, and finalWeight", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_visits",
+      )
+    })
+
+    it("entry point visits have no parentNodeId or linkType", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_entry_point_no_parent",
+      )
+    })
+
+    it("trace.summary.totalNodesVisited equals length of trace.visits", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_summary_nodes",
+      )
+    })
+
+    it("trace.summary.resultsReturned equals length of result.memories", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_summary_results",
+      )
+    })
+
+    it("trace.summary.budgetUsed is <= budget", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_summary_budget",
+      )
+    })
+
+    it("trace.summary.totalDurationSeconds is > 0", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_summary_duration",
+      )
+    })
+
+    it("trace.summary.phaseMetrics includes generateQueryEmbedding, parallelRetrieval, rrfMerge, reranking phases", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_phase_metrics",
+      )
+    })
+
+    it("returns trace=null/undefined when enableTrace=false", () => {
+      implementMe(
+        "RecallResult.trace not implemented",
+        "test_search_trace.py::test_trace_disabled",
+      )
+    })
   })
 
   // ── Time range ──────────────────────────────────────────────────────────

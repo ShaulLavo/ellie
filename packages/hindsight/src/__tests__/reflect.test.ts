@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
 
 describe("reflect", () => {
   let t: TestHindsight
@@ -29,29 +29,73 @@ describe("reflect", () => {
   // ── Basic reflect (TDD — need agentic mock or real LLM) ──────────────
 
   describe("basic reflect", () => {
-    it.todo("returns ReflectResult with answer, memories, observations")
-    it.todo("returns non-empty answer that addresses the query")
+    it("returns ReflectResult with answer, memories, observations", () => {
+      implementMe(
+        "requires agentic mock adapter to drive 3-tier tool loop",
+        "test_reflections.py::test_reflect_basic_structure",
+      )
+    })
+
+    it("returns non-empty answer that addresses the query", () => {
+      implementMe(
+        "requires agentic mock adapter to drive 3-tier tool loop",
+        "test_reflections.py::test_reflect_nonempty_answer",
+      )
+    })
   })
 
   // ── Reflect without prior context ────────────────────────────────────
 
   describe("reflect without context (port of test_think.py)", () => {
-    it.todo("handles query when bank has no memories (returns graceful answer)")
+    it("handles query when bank has no memories (returns graceful answer)", () => {
+      implementMe(
+        "requires agentic mock adapter — current mock returns raw text not tool calls",
+        "test_think.py::test_think_empty_bank",
+      )
+    })
   })
 
   // ── Reflect with memories ───────────────────────────────────────────────
 
   describe("reflect with memories", () => {
-    it.todo("uses stored memories when answering (answer references seeded facts)")
+    it("uses stored memories when answering (answer references seeded facts)", () => {
+      implementMe(
+        "requires agentic mock adapter to verify memory retrieval in tool loop",
+        "test_reflections.py::test_reflect_with_memories",
+      )
+    })
   })
 
   // ── Budget controls (TDD — need agentic mock to verify iteration count) ─
 
   describe("budget controls", () => {
-    it.todo("low budget limits to 3 iterations")
-    it.todo("mid budget (default) limits to 5 iterations")
-    it.todo("high budget limits to 8 iterations")
-    it.todo("custom maxIterations overrides budget")
+    it("low budget limits to 3 iterations", () => {
+      implementMe(
+        "requires agentic mock to verify iteration count",
+        "test_reflections.py::test_reflect_budget_low",
+      )
+    })
+
+    it("mid budget (default) limits to 5 iterations", () => {
+      implementMe(
+        "requires agentic mock to verify iteration count",
+        "test_reflections.py::test_reflect_budget_mid",
+      )
+    })
+
+    it("high budget limits to 8 iterations", () => {
+      implementMe(
+        "requires agentic mock to verify iteration count",
+        "test_reflections.py::test_reflect_budget_high",
+      )
+    })
+
+    it("custom maxIterations overrides budget", () => {
+      implementMe(
+        "requires agentic mock to verify iteration count",
+        "test_reflections.py::test_reflect_custom_max_iterations",
+      )
+    })
   })
 
   // ── Observation saving (these test real code paths) ────────────────────
@@ -79,9 +123,26 @@ describe("reflect", () => {
   // ── based_on format (port of test_reflect_empty_based_on.py) ────────────
 
   describe("based_on format", () => {
-    it.todo("returns based_on as object with memories/mentalModels/directives arrays (not a list)")
-    it.todo("returns based_on with empty arrays when bank has no memories and facts are requested")
-    it.todo("returns based_on as null/undefined when facts are not requested")
+    it("returns based_on as object with memories/mentalModels/directives arrays (not a list)", () => {
+      implementMe(
+        "ReflectResult.based_on not implemented in TS types",
+        "test_reflect_empty_based_on.py::test_based_on_format",
+      )
+    })
+
+    it("returns based_on with empty arrays when bank has no memories and facts are requested", () => {
+      implementMe(
+        "ReflectResult.based_on not implemented in TS types",
+        "test_reflect_empty_based_on.py::test_based_on_empty",
+      )
+    })
+
+    it("returns based_on as null/undefined when facts are not requested", () => {
+      implementMe(
+        "ReflectResult.based_on not implemented in TS types",
+        "test_reflect_empty_based_on.py::test_based_on_null",
+      )
+    })
   })
 
   // ── Result structure ─────────────────────────────────────────────────
@@ -104,23 +165,75 @@ describe("reflect", () => {
   // ── Context injection (TDD — need to verify prompt content) ──────────
 
   describe("context injection", () => {
-    it.todo("passes additional context to the agent (verified via adapter call inspection)")
+    it("passes additional context to the agent (verified via adapter call inspection)", async () => {
+      const contextStr = "The user is a software engineer named Alice."
+      await t.hs.reflect(bankId, "Who am I?", {
+        context: contextStr,
+      })
+
+      // Verify the adapter was called and context was included
+      expect(t.adapter.callCount).toBeGreaterThanOrEqual(1)
+      const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+      // The context should appear somewhere in the messages sent to the adapter
+      const messagesStr = JSON.stringify(lastCall)
+      expect(messagesStr).toContain(contextStr)
+    })
   })
 
   // ── Tag propagation (TDD — need agentic mock to verify tag filtering) ─
 
   describe("tag propagation", () => {
-    it.todo("propagates tags to all tier searches")
-    it.todo("reflect with tags filters memories to matching tags only")
+    it("propagates tags to all tier searches", () => {
+      implementMe(
+        "requires agentic mock adapter to verify tag filtering in tool calls",
+        "test_reflections.py::test_reflect_tag_propagation",
+      )
+    })
+
+    it("reflect with tags filters memories to matching tags only", () => {
+      implementMe(
+        "requires agentic mock adapter to verify tag filtering in tool calls",
+        "test_reflections.py::test_reflect_tag_filtering",
+      )
+    })
   })
 
   // ── Recall integration (port of test_reflections.py) ──────────────────
 
   describe("recall integration", () => {
-    it.todo("recall includes observations in results when factTypes includes 'observation'")
-    it.todo("recall includes mental models when factTypes includes 'mental_model'")
-    it.todo("recall excludes observations by default")
-    it.todo("reflect searches mental models when they exist")
-    it.todo("reflect tool trace includes reason field for debugging")
+    it("recall includes observations in results when factTypes includes 'observation'", () => {
+      implementMe(
+        "requires agentic mock to verify observation recall within reflect",
+        "test_reflections.py::test_recall_includes_observations",
+      )
+    })
+
+    it("recall includes mental models when factTypes includes 'mental_model'", () => {
+      implementMe(
+        "requires agentic mock to verify mental model recall within reflect",
+        "test_reflections.py::test_recall_includes_mental_models",
+      )
+    })
+
+    it("recall excludes observations by default", () => {
+      implementMe(
+        "requires agentic mock to verify default fact type filtering",
+        "test_reflections.py::test_recall_excludes_observations_default",
+      )
+    })
+
+    it("reflect searches mental models when they exist", () => {
+      implementMe(
+        "requires agentic mock to verify mental model search tool calls",
+        "test_reflections.py::test_reflect_searches_mental_models",
+      )
+    })
+
+    it("reflect tool trace includes reason field for debugging", () => {
+      implementMe(
+        "requires agentic mock to capture tool trace with reason fields",
+        "test_reflections.py::test_reflect_tool_trace_reason",
+      )
+    })
   })
 })

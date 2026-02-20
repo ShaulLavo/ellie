@@ -6,30 +6,105 @@
  */
 
 import { describe, it } from "bun:test"
+import { implementMe } from "./setup"
 
 describe("Multilingual support", () => {
   describe("Chinese content", () => {
-    it.todo("retains Chinese text and extracts Chinese facts")
-    it.todo("recalls Chinese content with Chinese query")
-    it.todo("reflect responds in Chinese when memories are in Chinese")
-    it.todo("preserves Chinese entity names")
+    it("retains Chinese text and extracts Chinese facts", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_chinese_retain",
+      )
+    })
+
+    it("recalls Chinese content with Chinese query", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_chinese_recall",
+      )
+    })
+
+    it("reflect responds in Chinese when memories are in Chinese", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_chinese_reflect",
+      )
+    })
+
+    it("preserves Chinese entity names", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_chinese_entities",
+      )
+    })
   })
 
   describe("Japanese content", () => {
-    it.todo("retains Japanese text and extracts Japanese facts")
-    it.todo("recalls Japanese content")
-    it.todo("handles kanji, hiragana, and katakana")
+    it("retains Japanese text and extracts Japanese facts", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_japanese_retain",
+      )
+    })
+
+    it("recalls Japanese content", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_japanese_recall",
+      )
+    })
+
+    it("handles kanji, hiragana, and katakana", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_japanese_scripts",
+      )
+    })
   })
 
   describe("Language preservation", () => {
-    it.todo("English content stays in English (not translated to CJK)")
-    it.todo("Italian content stays in Italian")
-    it.todo("Mixed language entities are preserved correctly")
-    it.todo("Extraction language matches input language")
+    it("English content stays in English (not translated to CJK)", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_english_preservation",
+      )
+    })
+
+    it("Italian content stays in Italian", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_italian_preservation",
+      )
+    })
+
+    it("Mixed language entities are preserved correctly", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_mixed_language_entities",
+      )
+    })
+
+    it("Extraction language matches input language", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_extraction_language_match",
+      )
+    })
   })
 
   describe("Cross-language retrieval", () => {
-    it.todo("semantic search works across languages")
-    it.todo("fulltext search handles CJK tokenization")
+    it("semantic search works across languages", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_cross_language_semantic",
+      )
+    })
+
+    it("fulltext search handles CJK tokenization", () => {
+      implementMe(
+        "requires real LLM for multilingual extraction",
+        "test_multilingual.py::test_cjk_tokenization",
+      )
+    })
   })
 })

@@ -7,6 +7,7 @@
  */
 
 import { describe, it } from "bun:test"
+import { implementMe } from "./setup"
 
 // Note: These test internal functions from reflect.ts. Since the TypeScript
 // implementation uses TanStack AI's chat() which handles tool calling internally,
@@ -24,46 +25,204 @@ describe("Clean answer text (port of TestCleanAnswerText)", () => {
   // These tests validate answer text cleanup — stripping done() tool call syntax
   // from the LLM output when it leaks into the answer text.
 
-  it.todo("strips done() call from end of text")
-  it.todo("strips done() call with whitespace")
-  it.todo("preserves text without done() call")
-  it.todo("preserves 'done' word in regular text")
-  it.todo("handles empty text")
-  it.todo("strips multiline done() call")
+  it("strips done() call from end of text", () => {
+    implementMe(
+      "_cleanAnswerText not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanAnswerText::test_strips_done_call",
+    )
+  })
+
+  it("strips done() call with whitespace", () => {
+    implementMe(
+      "_cleanAnswerText not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanAnswerText::test_strips_done_whitespace",
+    )
+  })
+
+  it("preserves text without done() call", () => {
+    implementMe(
+      "_cleanAnswerText not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanAnswerText::test_preserves_no_done",
+    )
+  })
+
+  it("preserves 'done' word in regular text", () => {
+    implementMe(
+      "_cleanAnswerText not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanAnswerText::test_preserves_done_word",
+    )
+  })
+
+  it("handles empty text", () => {
+    implementMe(
+      "_cleanAnswerText not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanAnswerText::test_empty_text",
+    )
+  })
+
+  it("strips multiline done() call", () => {
+    implementMe(
+      "_cleanAnswerText not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanAnswerText::test_multiline_done",
+    )
+  })
 })
 
 describe("Clean done answer (port of TestCleanDoneAnswer)", () => {
   // These tests validate cleanup of structured output that leaks into the answer
   // field of the done() tool call.
 
-  it.todo("cleans answer with leaked JSON code block at end")
-  it.todo("cleans answer with leaked memory_ids code block")
-  it.todo("cleans raw JSON object at end of answer")
-  it.todo("cleans trailing IDs pattern")
-  it.todo("cleans memory_ids equals pattern at end of answer")
-  it.todo("preserves normal answer without leaked output")
-  it.todo("handles empty answer (returns empty string)")
-  it.todo("preserves 'observation' word in regular text content")
-  it.todo("handles multiline with markdown")
+  it("cleans answer with leaked JSON code block at end", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_json_code_block",
+    )
+  })
+
+  it("cleans answer with leaked memory_ids code block", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_memory_ids_code_block",
+    )
+  })
+
+  it("cleans raw JSON object at end of answer", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_raw_json_object",
+    )
+  })
+
+  it("cleans trailing IDs pattern", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_trailing_ids",
+    )
+  })
+
+  it("cleans memory_ids equals pattern at end of answer", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_memory_ids_equals",
+    )
+  })
+
+  it("preserves normal answer without leaked output", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_normal_answer",
+    )
+  })
+
+  it("handles empty answer (returns empty string)", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_empty_answer",
+    )
+  })
+
+  it("preserves 'observation' word in regular text content", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_preserves_observation_word",
+    )
+  })
+
+  it("handles multiline with markdown", () => {
+    implementMe(
+      "_cleanDoneAnswer not exported from reflect.ts",
+      "test_reflect_agent.py::TestCleanDoneAnswer::test_multiline_markdown",
+    )
+  })
 })
 
 describe("Tool name normalization (port of TestToolNameNormalization)", () => {
   // LLMs sometimes output tool names with prefixes like "functions.",
   // "call=", or special token suffixes. These tests verify normalization.
 
-  it.todo("standard names pass through unchanged")
-  it.todo("normalizes 'functions.' prefix")
-  it.todo("normalizes 'call=' prefix")
-  it.todo("normalizes 'call=functions.' prefix")
-  it.todo("normalizes special token suffix")
-  it.todo("_isDoneTool recognizes done variants")
+  it("standard names pass through unchanged", () => {
+    implementMe(
+      "_normalizeToolName not exported from reflect.ts",
+      "test_reflect_agent.py::TestToolNameNormalization::test_standard_names",
+    )
+  })
+
+  it("normalizes 'functions.' prefix", () => {
+    implementMe(
+      "_normalizeToolName not exported from reflect.ts",
+      "test_reflect_agent.py::TestToolNameNormalization::test_functions_prefix",
+    )
+  })
+
+  it("normalizes 'call=' prefix", () => {
+    implementMe(
+      "_normalizeToolName not exported from reflect.ts",
+      "test_reflect_agent.py::TestToolNameNormalization::test_call_prefix",
+    )
+  })
+
+  it("normalizes 'call=functions.' prefix", () => {
+    implementMe(
+      "_normalizeToolName not exported from reflect.ts",
+      "test_reflect_agent.py::TestToolNameNormalization::test_call_functions_prefix",
+    )
+  })
+
+  it("normalizes special token suffix", () => {
+    implementMe(
+      "_normalizeToolName not exported from reflect.ts",
+      "test_reflect_agent.py::TestToolNameNormalization::test_special_token_suffix",
+    )
+  })
+
+  it("_isDoneTool recognizes done variants", () => {
+    implementMe(
+      "_isDoneTool not exported from reflect.ts",
+      "test_reflect_agent.py::TestToolNameNormalization::test_is_done_tool",
+    )
+  })
 })
 
 describe("Reflect agent with mocked LLM (port of TestReflectAgentMocked)", () => {
-  it.todo("handles 'functions.done' prefix in tool call")
-  it.todo("handles 'call=functions.done' prefix")
-  it.todo("recovers from unknown tool call")
-  it.todo("recovers from tool execution error")
-  it.todo("normalizes tool names for all tools (search_mental_models, etc.)")
-  it.todo("stops at max iterations")
+  it("handles 'functions.done' prefix in tool call", () => {
+    implementMe(
+      "requires agentic mock adapter that can handle tool-calling loops",
+      "test_reflect_agent.py::TestReflectAgentMocked::test_functions_done_prefix",
+    )
+  })
+
+  it("handles 'call=functions.done' prefix", () => {
+    implementMe(
+      "requires agentic mock adapter that can handle tool-calling loops",
+      "test_reflect_agent.py::TestReflectAgentMocked::test_call_functions_done",
+    )
+  })
+
+  it("recovers from unknown tool call", () => {
+    implementMe(
+      "requires agentic mock adapter that can handle tool-calling loops",
+      "test_reflect_agent.py::TestReflectAgentMocked::test_unknown_tool_recovery",
+    )
+  })
+
+  it("recovers from tool execution error", () => {
+    implementMe(
+      "requires agentic mock adapter that can handle tool-calling loops",
+      "test_reflect_agent.py::TestReflectAgentMocked::test_tool_error_recovery",
+    )
+  })
+
+  it("normalizes tool names for all tools (search_mental_models, etc.)", () => {
+    implementMe(
+      "requires agentic mock adapter that can handle tool-calling loops",
+      "test_reflect_agent.py::TestReflectAgentMocked::test_normalize_all_tools",
+    )
+  })
+
+  it("stops at max iterations", () => {
+    implementMe(
+      "requires agentic mock adapter that can handle tool-calling loops",
+      "test_reflect_agent.py::TestReflectAgentMocked::test_max_iterations",
+    )
+  })
 })

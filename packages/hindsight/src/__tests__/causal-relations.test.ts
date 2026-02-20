@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
 
 describe("Causal relations validation", () => {
   it("causal relations only reference previous facts (targetIndex < current)", () => {
@@ -108,12 +108,59 @@ describe("Causal relation storage", () => {
 })
 
 describe("Causal relation extraction (TDD targets)", () => {
-  it.todo("extracts causal chain from narrative text")
-  it.todo("strength reflects causal certainty (strong vs weak)")
-  it.todo("token efficiency: output/input ratio < 6x with causal relations")
-  it.todo("multiple causal relations per fact (caused_by + enabled_by)")
-  it.todo("extracts complex multi-node causal graph")
-  it.todo("no fact has self-referencing causal relation")
-  it.todo("bidirectional causal links use backward-looking only")
-  it.todo("strength values are within [0.0, 1.0]")
+  it("extracts causal chain from narrative text", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_causal_chain_extraction",
+    )
+  })
+
+  it("strength reflects causal certainty (strong vs weak)", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_causal_strength",
+    )
+  })
+
+  it("token efficiency: output/input ratio < 6x with causal relations", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_causal_token_efficiency",
+    )
+  })
+
+  it("multiple causal relations per fact (caused_by + enabled_by)", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_multiple_causal_relations",
+    )
+  })
+
+  it("extracts complex multi-node causal graph", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_complex_causal_graph",
+    )
+  })
+
+  it("no fact has self-referencing causal relation", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_no_self_reference",
+    )
+  })
+
+  it("bidirectional causal links use backward-looking only", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_backward_looking_only",
+    )
+  })
+
+  it("strength values are within [0.0, 1.0]", () => {
+    implementMe(
+      "requires real LLM for causal extraction",
+      "test_fact_extraction_quality.py::test_strength_range",
+    )
+  })
 })
