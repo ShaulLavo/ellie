@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe } from "bun:test"
-import { runConformanceTests } from "../src/server-conformance-suite"
+import { runConformanceTests } from "./server-conformance-suite"
 import {
   createServerContext,
   handleDurableStreamRequest,
