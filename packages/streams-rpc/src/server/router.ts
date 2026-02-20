@@ -19,14 +19,16 @@ function toCollectionDef(
   name: string,
   input: CollectionInput
 ): CollectionDef {
-  if (`schema` in input) {
-    return {
-      schema: input.schema,
-      type: input.type ?? name,
-      primaryKey: input.primaryKey ?? `id`,
-    }
+  if (`~standard` in input) {
+    // Bare schema — apply defaults
+    return { schema: input, type: name, primaryKey: `id` }
   }
-  return { schema: input, type: name, primaryKey: `id` }
+  // Config object with { schema, type?, primaryKey? }
+  return {
+    schema: input.schema,
+    type: input.type ?? name,
+    primaryKey: input.primaryKey ?? `id`,
+  }
 }
 
 // ============================================================================
@@ -155,5 +157,5 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
  * ```
  */
 export function createRouter(): RouterBuilder<{}> {
-  return new RouterBuilder({} as {})
+  return new RouterBuilder({})
 }

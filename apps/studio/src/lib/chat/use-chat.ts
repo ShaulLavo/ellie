@@ -35,7 +35,7 @@ export function useChat(chatId: string) {
           role,
           content,
           createdAt: new Date().toISOString(),
-        } as Message)
+        })
       } catch (err) {
         console.error(
           `[useChat] Failed to send message:`,
@@ -60,7 +60,7 @@ export function useChat(chatId: string) {
   }, [clear])
 
   return {
-    messages: messages as Message[],
+    messages,
     isLoading,
     error,
     sendMessage,

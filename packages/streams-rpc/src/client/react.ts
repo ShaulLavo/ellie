@@ -29,7 +29,7 @@ function stableStringify(obj: Record<string, string>): string {
  * ```typescript
  * import { createRpcClient } from "@ellie/streams-rpc/client"
  * import { useStream } from "@ellie/streams-rpc/react"
- * import { appRouter, type AppRouter } from "app/src/rpc/router"
+ * import { appRouter, type AppRouter } from "@ellie/rpc-router"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, { baseUrl: origin })
  *
@@ -103,6 +103,8 @@ export function useStream<
       handle.unsubscribe()
       setCollection(null)
     }
+    // collectionClient is a Proxy — fresh object on every render, can't be in deps.
+    // paramsKey captures the serialized params which is what actually drives re-subscribe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramsKey])
 
@@ -112,7 +114,9 @@ export function useStream<
     [collection]
   )
 
-  // Mutation helpers — merge params automatically
+  // Mutation helpers — merge params automatically.
+  // collectionClient + params excluded from deps: Proxy creates fresh objects each
+  // render, paramsKey is the stable serialized equivalent. See useEffect above.
   const insert = useCallback(
     async (value: TItem) => {
       await collectionClient.insert({ ...params, value } as TParams & {

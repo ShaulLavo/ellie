@@ -28,8 +28,8 @@
     "@repo/typescript-config": "workspace:*",
     "@tanstack/db": "^0.5.27",
     "@tanstack/react-db": "^0.1.71",
-    "@types/react": "^18.0.0",
-    "react": "^18.0.0",
+    "@types/react": "^19.2.7",
+    "react": "^19.2.0",
     "typescript": "^5.0.0"
   }
 }

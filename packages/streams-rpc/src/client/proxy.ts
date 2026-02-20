@@ -43,7 +43,7 @@ export interface RpcClientOptions {
  *
  * @example
  * ```typescript
- * import { appRouter, type AppRouter } from "app/src/rpc/router"
+ * import { appRouter, type AppRouter } from "@ellie/rpc-router"
  * import { createRpcClient } from "@ellie/streams-rpc/client"
  *
  * const rpc = createRpcClient<AppRouter>(appRouter, {
@@ -106,6 +106,10 @@ export function createRpcClient<TRouter extends RouterDef>(
             }
 
             // Level 3: method object (rpc.chat.messages.get → fn)
+            //
+            // ⚠️ Known limitation: path params named "value" or "key" collide with
+            // the mutation payload destructure below ({ value, ...rest } / { key, ...rest }).
+            // Avoid using "value" or "key" as path param names in router definitions.
             return {
               get(params?: Record<string, string>) {
                 return manager.get(streamDef, colName, params ?? {})

@@ -1,4 +1,4 @@
-import { DurableStream, FetchStreamTransport } from "@ellie/streams-client"
+import { DurableStream, DurableStreamError, FetchStreamTransport } from "@ellie/streams-client"
 import {
   createStreamDB,
   createStateSchema,
@@ -20,6 +20,8 @@ interface CacheEntry {
   ready: Promise<void>
   /** True once the ready promise has settled (resolved or rejected) */
   settled: boolean
+  /** True when deleteStream was called while refs > 0 — deferred until last unsubscribe */
+  pendingDelete: boolean
 }
 
 type Operation = `insert` | `update` | `delete` | `upsert`
@@ -38,7 +40,7 @@ function resolvePath(
 ): string {
   let resolved = template
   for (const [key, value] of Object.entries(params)) {
-    resolved = resolved.replace(`:${key}`, encodeURIComponent(value))
+    resolved = resolved.replaceAll(`:${key}`, encodeURIComponent(value))
   }
   const missing = resolved.match(/:([A-Za-z0-9_]+)/g)
   if (missing) {
@@ -110,12 +112,14 @@ export class StreamManager {
     // Auto-create stream on first use, then preload
     const ready = db.stream
       .create({ contentType: `application/json` })
-      .catch(() => {
-        // Ignore "already exists" errors
+      .catch((err: unknown) => {
+        const isConflict =
+          err instanceof DurableStreamError && err.code === `CONFLICT_EXISTS`
+        if (!isConflict) throw err
       })
       .then(() => db.preload())
 
-    entry = { db, schema, refs: 0, ready, settled: false }
+    entry = { db, schema, refs: 0, ready, settled: false, pendingDelete: false }
     const entryRef = entry
     ready.finally(() => { entryRef.settled = true })
 
@@ -145,7 +149,7 @@ export class StreamManager {
         `[streams-rpc] Collection "${collectionName}" not found in stream`
       )
     }
-    return Array.from(collection)
+    return collection.toArray
   }
 
   /**
@@ -183,7 +187,7 @@ export class StreamManager {
               this.#cache.delete(resolvedPath)
             }
           }
-          if (entry.settled) {
+          if (entry.pendingDelete || entry.settled) {
             cleanup()
           } else {
             entry.ready.then(cleanup, cleanup)
@@ -205,12 +209,17 @@ export class StreamManager {
     const entry = this.#cache.get(resolvedPath)
 
     if (entry) {
-      // Use the existing DurableStream instance to issue HTTP DELETE
+      // Issue HTTP DELETE regardless of ref count
       await entry.db.stream.delete()
-      // Close StreamDB (aborts subscription, rejects pending promises)
-      entry.db.close()
-      // Evict from cache so next access creates a fresh stream
-      this.#cache.delete(resolvedPath)
+
+      if (entry.refs > 0) {
+        // Active subscribers exist — defer close until last unsubscribe
+        entry.pendingDelete = true
+      } else {
+        // No subscribers — close and evict immediately
+        entry.db.close()
+        this.#cache.delete(resolvedPath)
+      }
     } else {
       // No cached entry — use static DurableStream.delete() for a one-shot delete
       const transport = new FetchStreamTransport({
@@ -245,6 +254,11 @@ export class StreamManager {
     }
 
     const event = helpers[operation](payload)
+    if (event == null) {
+      throw new Error(
+        `[streams-rpc] "${operation}" helper returned ${event} for collection "${collectionName}"`
+      )
+    }
     await entry.db.stream.append(JSON.stringify(event))
   }
 }
