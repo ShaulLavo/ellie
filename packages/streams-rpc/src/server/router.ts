@@ -91,6 +91,7 @@ class StreamBuilder<
       this.#path,
       this.#collections
     )
+    // TS can't infer the merged TStreams through _addStream + StreamBuilder generics, cast intentionally
     return new StreamBuilder(name, path, {} as {}, merged) as any
   }
 
@@ -144,6 +145,12 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>> {
     path: SPath,
     collections: SCollections
   ): RouterBuilder<TStreams & { [K in SName]: StreamDef<SPath, SCollections> }> {
+    if (name in this.#streams) {
+      throw new Error(
+        `[streams-rpc] Duplicate stream name "${name}" in router`
+      )
+    }
+
     const streamDef = { path, collections }
 
     // Runtime validation: no duplicate event types

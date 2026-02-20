@@ -1,6 +1,7 @@
 import { useCallback } from "react"
 import { createRpcClient } from "@ellie/streams-rpc/client"
 import { useStream } from "@ellie/streams-rpc/react"
+import type { InferSchema } from "@ellie/streams-rpc"
 import { appRouter, type AppRouter } from "../../../../app/src/rpc/router"
 
 // ============================================================================
@@ -12,15 +13,10 @@ const rpc = createRpcClient<AppRouter>(appRouter, {
 })
 
 // ============================================================================
-// Message type (inferred from the router schema)
+// Message type (derived from the router schema — stays in sync automatically)
 // ============================================================================
 
-export type Message = {
-  id: string
-  role: `user` | `assistant` | `system`
-  content: string
-  createdAt: string
-}
+export type Message = InferSchema<AppRouter[`chat`][`collections`][`messages`][`schema`]>
 
 // ============================================================================
 // Hook

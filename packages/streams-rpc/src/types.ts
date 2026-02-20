@@ -8,7 +8,7 @@ import type { Collection } from "@tanstack/db"
 /**
  * Infer the output type from a Standard Schema (Valibot, Zod, TypeBox, etc.)
  */
-export type InferSchema<T> = T extends StandardSchemaV1<infer O> ? O : unknown
+export type InferSchema<T> = T extends StandardSchemaV1<any, infer O> ? O : unknown
 
 // ============================================================================
 // Path Parameter Extraction

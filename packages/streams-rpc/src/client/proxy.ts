@@ -2,6 +2,21 @@ import { StreamManager } from "./manager"
 import type { RouterDef, RpcClient, StreamDef } from "../types"
 
 // ============================================================================
+// Introspection Guard
+// ============================================================================
+
+/**
+ * Well-known keys that JS runtimes, Promise, React DevTools, and
+ * console.log probe on objects. Returning undefined for these prevents
+ * the Proxy from throwing when the object is inspected.
+ */
+const INTROSPECTION_KEYS = new Set([`then`, `toJSON`, `$$typeof`, `valueOf`, `toString`])
+
+function isIntrospectionKey(key: string | symbol): boolean {
+  return typeof key === `symbol` || INTROSPECTION_KEYS.has(key as string)
+}
+
+// ============================================================================
 // Client Options
 // ============================================================================
 
@@ -57,11 +72,12 @@ export function createRpcClient<TRouter extends RouterDef>(
 
   // Level 1: stream namespace proxy (rpc.chat → ...)
   return new Proxy({} as RpcClient<TRouter>, {
-    get(_, streamName: string) {
-      const streamDef = (routerDef as Record<string, StreamDef>)[streamName]
+    get(_, streamName: string | symbol) {
+      if (isIntrospectionKey(streamName)) return undefined
+      const streamDef = (routerDef as Record<string, StreamDef>)[streamName as string]
       if (!streamDef) {
         throw new Error(
-          `[streams-rpc] Unknown stream "${streamName}" — not defined in router`
+          `[streams-rpc] Unknown stream "${String(streamName)}" — not defined in router`
         )
       }
 
@@ -69,18 +85,21 @@ export function createRpcClient<TRouter extends RouterDef>(
       return new Proxy(
         {},
         {
-          get(_, collectionName: string) {
+          get(_, collectionName: string | symbol) {
+            if (isIntrospectionKey(collectionName)) return undefined
+
             // Stream-level clear: rpc.chat.clear({ chatId })
             if (collectionName === `clear`) {
               return (params?: Record<string, string>) =>
                 manager.deleteStream(streamDef, params ?? {})
             }
 
+            const colName = collectionName as string
             if (
-              !(collectionName in streamDef.collections)
+              !(colName in streamDef.collections)
             ) {
               throw new Error(
-                `[streams-rpc] Unknown collection "${collectionName}" in stream "${streamName}". ` +
+                `[streams-rpc] Unknown collection "${colName}" in stream "${String(streamName)}". ` +
                   `Available: ${Object.keys(streamDef.collections).join(`, `)}`
               )
             }
@@ -88,13 +107,13 @@ export function createRpcClient<TRouter extends RouterDef>(
             // Level 3: method object (rpc.chat.messages.get → fn)
             return {
               get(params?: Record<string, string>) {
-                return manager.get(streamDef, collectionName, params ?? {})
+                return manager.get(streamDef, colName, params ?? {})
               },
 
               subscribe(params?: Record<string, string>) {
                 return manager.subscribe(
                   streamDef,
-                  collectionName,
+                  colName,
                   params ?? {}
                 )
               },
@@ -103,7 +122,7 @@ export function createRpcClient<TRouter extends RouterDef>(
                 const { value, ...rest } = params ?? {}
                 return manager.mutate(
                   streamDef,
-                  collectionName,
+                  colName,
                   `insert`,
                   rest,
                   { value }
@@ -114,7 +133,7 @@ export function createRpcClient<TRouter extends RouterDef>(
                 const { value, ...rest } = params ?? {}
                 return manager.mutate(
                   streamDef,
-                  collectionName,
+                  colName,
                   `update`,
                   rest,
                   { value }
@@ -125,7 +144,7 @@ export function createRpcClient<TRouter extends RouterDef>(
                 const { key, ...rest } = params ?? {}
                 return manager.mutate(
                   streamDef,
-                  collectionName,
+                  colName,
                   `delete`,
                   rest,
                   { key }
@@ -136,7 +155,7 @@ export function createRpcClient<TRouter extends RouterDef>(
                 const { value, ...rest } = params ?? {}
                 return manager.mutate(
                   streamDef,
-                  collectionName,
+                  colName,
                   `upsert`,
                   rest,
                   { value }

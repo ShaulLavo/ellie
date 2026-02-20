@@ -18,6 +18,8 @@ interface CacheEntry {
   schema: StateSchema<any>
   refs: number
   ready: Promise<void>
+  /** True once the ready promise has settled (resolved or rejected) */
+  settled: boolean
 }
 
 type Operation = `insert` | `update` | `delete` | `upsert`
@@ -37,6 +39,12 @@ function resolvePath(
   let resolved = template
   for (const [key, value] of Object.entries(params)) {
     resolved = resolved.replace(`:${key}`, encodeURIComponent(value))
+  }
+  const missing = resolved.match(/:([A-Za-z0-9_]+)/g)
+  if (missing) {
+    throw new Error(
+      `[streams-rpc] Missing params ${missing.join(`, `)} for path "${template}"`
+    )
   }
   return resolved
 }
@@ -107,7 +115,10 @@ export class StreamManager {
       })
       .then(() => db.preload())
 
-    entry = { db, schema, refs: 0, ready }
+    entry = { db, schema, refs: 0, ready, settled: false }
+    const entryRef = entry
+    ready.finally(() => { entryRef.settled = true })
+
     this.#cache.set(resolvedPath, entry)
     return entry
   }
@@ -165,8 +176,18 @@ export class StreamManager {
       unsubscribe: () => {
         entry.refs--
         if (entry.refs <= 0) {
-          entry.db.close()
-          this.#cache.delete(resolvedPath)
+          const cleanup = () => {
+            // Re-check: another subscribe may have come in while we waited
+            if (entry.refs <= 0) {
+              entry.db.close()
+              this.#cache.delete(resolvedPath)
+            }
+          }
+          if (entry.settled) {
+            cleanup()
+          } else {
+            entry.ready.then(cleanup, cleanup)
+          }
         }
       },
     }

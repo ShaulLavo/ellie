@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useLiveQuery } from "@tanstack/react-db"
 import type { Collection } from "@tanstack/db"
 import type { SubscriptionHandle } from "../types"
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Deterministic serialization — sorted keys so insertion order doesn't matter */
+function stableStringify(obj: Record<string, string>): string {
+  const keys = Object.keys(obj).sort()
+  return JSON.stringify(keys.map((k) => [k, obj[k]]))
+}
 
 // ============================================================================
 // useStream Hook
@@ -59,14 +69,13 @@ export function useStream<
 ) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
-  const handleRef = useRef<SubscriptionHandle<TItem> | null>(null)
   const [collection, setCollection] = useState<Collection<
     TItem & object,
     string
   > | null>(null)
 
-  // Serialize params for dependency tracking
-  const paramsKey = JSON.stringify(params)
+  // Serialize params for dependency tracking (sorted keys for stability)
+  const paramsKey = stableStringify(params)
 
   useEffect(() => {
     let cancelled = false
@@ -74,7 +83,6 @@ export function useStream<
     setError(null)
 
     const handle = collectionClient.subscribe(params)
-    handleRef.current = handle
     setCollection(handle.collection as Collection<TItem & object, string>)
 
     handle.ready
@@ -93,7 +101,6 @@ export function useStream<
     return () => {
       cancelled = true
       handle.unsubscribe()
-      handleRef.current = null
       setCollection(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
