@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import type { HindsightDatabase } from "./db"
 import type { EmbeddingStore } from "./embedding"
 import type {
@@ -8,6 +8,8 @@ import type {
   FactType,
   TagsMatch,
   RerankFunction,
+  RecallEntityState,
+  RecallChunk,
 } from "./types"
 import type { RetrievalHit } from "./retrieval/semantic"
 import { searchSemantic } from "./retrieval/semantic"
@@ -141,12 +143,6 @@ export async function recall(
 
     if (!row) continue
 
-    if (maxTokens != null) {
-      const contentTokens = estimateTokens(row.content)
-      if (usedTokens + contentTokens > maxTokens) break
-      usedTokens += contentTokens
-    }
-
     // Apply filters
     if (
       options.minConfidence != null &&
@@ -202,6 +198,12 @@ export async function recall(
       if (!hasMatch) continue
     }
 
+    if (maxTokens != null) {
+      const contentTokens = estimateTokens(row.content)
+      if (usedTokens + contentTokens > maxTokens) break
+      usedTokens += contentTokens
+    }
+
     memories.push({
       memory: rowToMemoryUnit(row),
       score,
@@ -229,21 +231,11 @@ export async function recall(
   }
 
   const entities = options.includeEntities
-    ? Object.fromEntries(
-        Array.from(entityStates.entries()).map(([entityId, entityState]) => [
-          entityId,
-          {
-            id: entityState.id,
-            name: entityState.name,
-            entityType: entityState.entityType,
-            memoryIds: Array.from(entityState.memoryIds),
-          },
-        ]),
-      )
+    ? buildEntityPayload(entityStates, options.maxEntityTokens)
     : undefined
 
   const chunks = options.includeChunks
-    ? buildChunkPayload(memories, options.maxChunkTokens)
+    ? buildChunkPayload(hdb, memories, options.maxChunkTokens)
     : undefined
 
   return { memories, query, entities, chunks }
@@ -285,25 +277,126 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
 
-function buildChunkPayload(
-  memories: ScoredMemory[],
-  maxChunkTokens?: number,
-): Record<string, { memoryId: string; content: string }> {
-  const payload: Record<string, { memoryId: string; content: string }> = {}
+function buildEntityPayload(
+  entityStates: Map<string, {
+    id: string
+    name: string
+    entityType: ScoredMemory["entities"][number]["entityType"]
+    memoryIds: Set<string>
+  }>,
+  maxEntityTokens?: number,
+): Record<string, RecallEntityState> {
+  const payload: Record<string, RecallEntityState> = {}
   let usedTokens = 0
 
-  for (const scored of memories) {
-    const chunkContent = scored.memory.sourceText ?? scored.memory.content
-    const chunkTokens = estimateTokens(chunkContent)
-    if (maxChunkTokens != null && usedTokens + chunkTokens > maxChunkTokens) {
+  for (const [entityId, entityState] of entityStates.entries()) {
+    const memoryIds = Array.from(entityState.memoryIds)
+    const tokenCost = estimateTokens(entityState.name) + memoryIds.length
+    if (maxEntityTokens != null && usedTokens + tokenCost > maxEntityTokens) {
       break
     }
-    usedTokens += chunkTokens
-    payload[scored.memory.id] = {
-      memoryId: scored.memory.id,
-      content: chunkContent,
+    usedTokens += tokenCost
+    payload[entityId] = {
+      id: entityState.id,
+      name: entityState.name,
+      entityType: entityState.entityType,
+      memoryIds,
     }
   }
 
   return payload
+}
+
+function buildChunkPayload(
+  hdb: HindsightDatabase,
+  memories: ScoredMemory[],
+  maxChunkTokens: number = 8192,
+): Record<string, RecallChunk> {
+  const payload: Record<string, RecallChunk> = {}
+  const chunkIdsOrdered: string[] = []
+  const memoryIdByChunkId = new Map<string, string>()
+
+  for (const scored of memories) {
+    if (!scored.memory.chunkId) continue
+    if (memoryIdByChunkId.has(scored.memory.chunkId)) continue
+    memoryIdByChunkId.set(scored.memory.chunkId, scored.memory.id)
+    chunkIdsOrdered.push(scored.memory.chunkId)
+  }
+
+  const chunkRows =
+    chunkIdsOrdered.length > 0
+      ? hdb.db
+          .select({
+            id: hdb.schema.chunks.id,
+            documentId: hdb.schema.chunks.documentId,
+            chunkIndex: hdb.schema.chunks.chunkIndex,
+            content: hdb.schema.chunks.content,
+          })
+          .from(hdb.schema.chunks)
+          .where(inArray(hdb.schema.chunks.id, chunkIdsOrdered))
+          .all()
+      : []
+  const chunkById = new Map(chunkRows.map((row) => [row.id, row]))
+
+  let usedTokens = 0
+
+  for (const chunkId of chunkIdsOrdered) {
+    const row = chunkById.get(chunkId)
+    if (!row) continue
+    const memoryId = memoryIdByChunkId.get(chunkId)
+    if (!memoryId) continue
+
+    const chunkContent = row.content
+    const chunkTokens = estimateTokens(chunkContent)
+    if (usedTokens + chunkTokens > maxChunkTokens) {
+      const remaining = maxChunkTokens - usedTokens
+      if (remaining <= 0) break
+      const truncated = truncateToApproxTokens(chunkContent, remaining)
+      payload[chunkId] = {
+        chunkId,
+        memoryId,
+        documentId: row.documentId,
+        chunkIndex: row.chunkIndex,
+        content: truncated,
+        truncated: true,
+      }
+      break
+    }
+
+    usedTokens += chunkTokens
+    payload[chunkId] = {
+      chunkId,
+      memoryId,
+      documentId: row.documentId,
+      chunkIndex: row.chunkIndex,
+      content: chunkContent,
+      truncated: false,
+    }
+  }
+
+  for (const scored of memories) {
+    if (scored.memory.chunkId && payload[scored.memory.chunkId]) continue
+    const chunkId = `memory:${scored.memory.id}`
+    if (payload[chunkId]) continue
+    const fallback = scored.memory.sourceText ?? scored.memory.content
+    const chunkTokens = estimateTokens(fallback)
+    if (usedTokens + chunkTokens > maxChunkTokens) break
+    usedTokens += chunkTokens
+    payload[chunkId] = {
+      chunkId,
+      memoryId: scored.memory.id,
+      documentId: scored.memory.documentId,
+      chunkIndex: null,
+      content: fallback,
+      truncated: false,
+    }
+  }
+
+  return payload
+}
+
+function truncateToApproxTokens(text: string, tokenBudget: number): string {
+  const maxChars = Math.max(0, tokenBudget * 4)
+  if (text.length <= maxChars) return text
+  return text.slice(0, maxChars)
 }

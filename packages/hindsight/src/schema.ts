@@ -22,6 +22,51 @@ export const banks = sqliteTable("hs_banks", {
   updatedAt: integer("updated_at").notNull(),
 })
 
+// ── Documents ──────────────────────────────────────────────────────────────
+
+export const documents = sqliteTable(
+  "hs_documents",
+  {
+    id: text("id").primaryKey(),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    originalText: text("original_text"),
+    contentHash: text("content_hash"),
+    metadata: text("metadata"), // JSON blob
+    retainParams: text("retain_params"), // JSON blob
+    tags: text("tags"), // JSON array of strings
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_hs_doc_bank").on(table.bankId),
+    index("idx_hs_doc_hash").on(table.contentHash),
+  ],
+)
+
+// ── Chunks ─────────────────────────────────────────────────────────────────
+
+export const chunks = sqliteTable(
+  "hs_chunks",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_hs_chunk_bank").on(table.bankId),
+    index("idx_hs_chunk_doc").on(table.documentId),
+  ],
+)
+
 // ── Memory Units ───────────────────────────────────────────────────────────
 
 export const memoryUnits = sqliteTable(
@@ -34,6 +79,8 @@ export const memoryUnits = sqliteTable(
     content: text("content").notNull(),
     factType: text("fact_type").notNull(), // world | experience | opinion | observation
     confidence: real("confidence").notNull().default(1.0),
+    documentId: text("document_id"),
+    chunkId: text("chunk_id"),
     validFrom: integer("valid_from"), // epoch ms, nullable for atemporal facts
     validTo: integer("valid_to"), // epoch ms, null = still valid
     metadata: text("metadata"), // JSON blob
@@ -50,6 +97,8 @@ export const memoryUnits = sqliteTable(
   (table) => [
     index("idx_hs_mu_bank").on(table.bankId),
     index("idx_hs_mu_fact_type").on(table.bankId, table.factType),
+    index("idx_hs_mu_document").on(table.bankId, table.documentId),
+    index("idx_hs_mu_chunk").on(table.chunkId),
     index("idx_hs_mu_temporal").on(
       table.bankId,
       table.validFrom,
@@ -202,6 +251,10 @@ export const directives = sqliteTable(
 
 export type BankRow = typeof banks.$inferSelect
 export type NewBankRow = typeof banks.$inferInsert
+export type DocumentRow = typeof documents.$inferSelect
+export type NewDocumentRow = typeof documents.$inferInsert
+export type ChunkRow = typeof chunks.$inferSelect
+export type NewChunkRow = typeof chunks.$inferInsert
 export type MemoryUnitRow = typeof memoryUnits.$inferSelect
 export type NewMemoryUnitRow = typeof memoryUnits.$inferInsert
 export type EntityRow = typeof entities.$inferSelect

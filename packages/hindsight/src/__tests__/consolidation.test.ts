@@ -834,44 +834,58 @@ describe("Consolidation", () => {
 
   describe("temporal range expansion", () => {
     it("expands temporal range when updating observation (LEAST start, GREATEST end)", async () => {
-      // Create fact with initial temporal range
-      const baseTime = Date.now() - 100_000
-      await t.hs.retain(bankId, "source", {
+      const now = Date.now()
+      const first = await t.hs.retain(bankId, "source first", {
         facts: [
           {
-            content: "Wendy visits the gym regularly.",
-            validFrom: baseTime,
-            validTo: baseTime + 10_000,
+            content: "Alice worked in Paris.",
+            factType: "world",
+            validFrom: now - 10_000,
+            validTo: now - 8_000,
           },
         ],
+        eventDate: now - 10_000,
         consolidate: false,
+        dedupThreshold: 0,
       })
 
       t.adapter.setResponse(
         JSON.stringify([
-          { action: "create", text: "Wendy visits the gym regularly.", reason: "habit" },
+          {
+            action: "create",
+            text: "Alice worked in Paris.",
+            reason: "durable timeline detail",
+          },
         ]),
       )
-
       await t.hs.consolidate(bankId)
 
-      const initialObs = listObservations()
-      expect(initialObs).toHaveLength(1)
-      const obsId = initialObs[0]!.id
-      const initialFrom = initialObs[0]!.valid_from
-      const initialTo = initialObs[0]!.valid_to
+      const hdb = (t.hs as any).hdb
+      const observation = hdb.sqlite
+        .prepare(
+          `SELECT id, valid_from, valid_to, mentioned_at
+           FROM hs_memory_units
+           WHERE bank_id = ? AND fact_type = 'observation'
+           LIMIT 1`,
+        )
+        .get(bankId) as {
+          id: string
+          valid_from: number | null
+          valid_to: number | null
+          mentioned_at: number | null
+        }
+      expect(observation).toBeDefined()
 
-      // Add a fact with wider temporal range
-      const earlierStart = baseTime - 50_000
-      const laterEnd = baseTime + 50_000
-      await t.hs.retain(bankId, "source", {
+      await t.hs.retain(bankId, "source second", {
         facts: [
           {
-            content: "Wendy has been going to the gym since January.",
-            validFrom: earlierStart,
-            validTo: laterEnd,
+            content: "Alice later moved to Berlin.",
+            factType: "world",
+            validFrom: now - 7_000,
+            validTo: now - 2_000,
           },
         ],
+        eventDate: now - 2_000,
         consolidate: false,
         dedupThreshold: 0,
       })
@@ -880,48 +894,76 @@ describe("Consolidation", () => {
         JSON.stringify([
           {
             action: "update",
-            observationId: obsId,
-            text: "Wendy has been going to the gym since January.",
-            reason: "expanded time range",
+            observationId: observation.id,
+            text: "Alice worked in Paris and later moved to Berlin.",
+            reason: "timeline expanded",
           },
         ]),
       )
-
       await t.hs.consolidate(bankId)
 
-      const updatedObs = listObservations()
-      expect(updatedObs).toHaveLength(1)
-      // valid_from should be the LEAST (earliest)
-      expect(updatedObs[0]!.valid_from).toBeLessThanOrEqual(initialFrom!)
-      // valid_to should be the GREATEST (latest)
-      expect(updatedObs[0]!.valid_to).toBeGreaterThanOrEqual(initialTo!)
+      const updated = hdb.sqlite
+        .prepare(
+          `SELECT valid_from, valid_to, mentioned_at
+           FROM hs_memory_units
+           WHERE id = ?`,
+        )
+        .get(observation.id) as {
+          valid_from: number | null
+          valid_to: number | null
+          mentioned_at: number | null
+        }
+
+      expect(updated.valid_from).toBe(now - 10_000)
+      expect(updated.valid_to).toBe(now - 2_000)
+      expect(updated.mentioned_at).toBe(now - 2_000)
+      expect(first.memories[0]!.id).toBeDefined()
     })
 
     it("inherits temporal dates from source memories", async () => {
       const now = Date.now()
-      await t.hs.retain(bankId, "source", {
+      await t.hs.retain(bankId, "temporal source", {
         facts: [
           {
-            content: "Xavier started learning guitar in 2024.",
-            validFrom: now - 200_000,
-            validTo: now,
+            content: "Charlie managed the migration.",
+            factType: "world",
+            validFrom: now - 100_000,
+            validTo: now - 50_000,
           },
         ],
+        eventDate: now - 60_000,
         consolidate: false,
       })
 
       t.adapter.setResponse(
         JSON.stringify([
-          { action: "create", text: "Xavier started learning guitar in 2024.", reason: "skill" },
+          {
+            action: "create",
+            text: "Charlie managed the migration.",
+            reason: "durable project history",
+          },
         ]),
       )
-
       await t.hs.consolidate(bankId)
 
-      const obs = listObservations()
-      expect(obs).toHaveLength(1)
-      expect(obs[0]!.valid_from).toBe(now - 200_000)
-      expect(obs[0]!.valid_to).toBe(now)
+      const hdb = (t.hs as any).hdb
+      const observation = hdb.sqlite
+        .prepare(
+          `SELECT valid_from, valid_to, mentioned_at
+           FROM hs_memory_units
+           WHERE bank_id = ? AND fact_type = 'observation'
+           ORDER BY created_at DESC
+           LIMIT 1`,
+        )
+        .get(bankId) as {
+          valid_from: number | null
+          valid_to: number | null
+          mentioned_at: number | null
+        }
+
+      expect(observation.valid_from).toBe(now - 100_000)
+      expect(observation.valid_to).toBe(now - 50_000)
+      expect(observation.mentioned_at).toBe(now - 60_000)
     })
   })
 
@@ -1411,13 +1453,8 @@ describe("Consolidation", () => {
         consolidate: false,
         dedupThreshold: 0,
       })
-      await t.hs.retain(bankId, "source 2", {
-        facts: [{ content: "Nate runs every morning." }],
-        consolidate: false,
-        dedupThreshold: 0,
-      })
 
-      // Create one observation from first fact, update it from second
+      // First pass: create observation from the first fact.
       t.adapter.setResponse(
         JSON.stringify([
           { action: "create", text: "Nate likes running.", reason: "hobby" },
@@ -1429,6 +1466,12 @@ describe("Consolidation", () => {
       const initialObs = listObservations()
       expect(initialObs).toHaveLength(1)
       const obsId = initialObs[0]!.id
+
+      await t.hs.retain(bankId, "source 2", {
+        facts: [{ content: "Nate runs every morning." }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
 
       t.adapter.setResponse(
         JSON.stringify([

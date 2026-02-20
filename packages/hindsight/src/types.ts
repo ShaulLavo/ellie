@@ -65,6 +65,8 @@ export interface MemoryUnit {
   content: string
   factType: FactType
   confidence: number
+  documentId: string | null
+  chunkId: string | null
   validFrom: number | null
   validTo: number | null
   /** Epoch ms when content was mentioned in source context (nullable). */
@@ -220,6 +222,12 @@ export interface RetainOptions {
   metadata?: Record<string, unknown>
   /** Tags to attach to all extracted memories */
   tags?: string[]
+  /** Optional context attached to all extracted memories in this call. */
+  context?: string
+  /** Optional timestamp used as mentionedAt anchor (epoch ms, Date, or ISO string). */
+  eventDate?: number | Date | string
+  /** Optional document identifier for this retain call. */
+  documentId?: string
   /** Extraction mode. Default: "concise" */
   mode?: "concise" | "verbose" | "custom"
   /** Custom extraction guidelines (only used when mode is "custom") */
@@ -233,6 +241,16 @@ export interface RetainOptions {
 /** Options for retainBatch() */
 export interface RetainBatchOptions
   extends Omit<RetainOptions, "facts"> {}
+
+/** Rich retain-batch item. */
+export interface RetainBatchItem {
+  content: string
+  context?: string
+  eventDate?: number | Date | string
+  documentId?: string
+  tags?: string[]
+  metadata?: Record<string, unknown>
+}
 
 /** Options for recall() */
 export interface RecallOptions {
@@ -319,8 +337,50 @@ export interface RecallEntityState {
 
 /** Lightweight chunk payload returned by recall(includeChunks=true). */
 export interface RecallChunk {
+  chunkId: string
   memoryId: string
+  documentId: string | null
+  chunkIndex: number | null
   content: string
+  truncated: boolean
+}
+
+export interface DocumentRecord {
+  id: string
+  bankId: string
+  contentHash: string | null
+  textLength: number
+  metadata: Record<string, unknown> | null
+  retainParams: Record<string, unknown> | null
+  tags: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ChunkRecord {
+  id: string
+  documentId: string
+  bankId: string
+  index: number
+  text: string
+  createdAt: number
+}
+
+export interface GraphNode {
+  id: string
+  content: string
+  factType: FactType
+  documentId: string | null
+  chunkId: string | null
+  tags: string[]
+  sourceMemoryIds: string[]
+}
+
+export interface GraphEdge {
+  sourceId: string
+  targetId: string
+  linkType: LinkType
+  weight: number
 }
 
 /** Result from reflect() */

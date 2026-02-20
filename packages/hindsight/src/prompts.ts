@@ -175,16 +175,48 @@ RESPONSE FORMAT: Return ONLY valid JSON — an array of actions:
 
 You may also return [] if no action is needed.`
 
+export interface ConsolidationPromptFact {
+  id: string
+  content: string
+  validFrom: number | null
+  validTo: number | null
+  mentionedAt: number | null
+  tags: string[]
+}
+
+export interface ConsolidationPromptObservation {
+  id: string
+  content: string
+  proofCount: number
+  sourceCount: number
+  validFrom: number | null
+  validTo: number | null
+  mentionedAt: number | null
+}
+
+function formatEpochMs(value: number | null): string {
+  if (value == null) return "null"
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? "null" : date.toISOString()
+}
+
 export function getConsolidationUserPrompt(
-  newFact: string,
-  relatedObservations: Array<{ id: string; content: string; proofCount: number; sourceCount: number }>,
+  newFact: ConsolidationPromptFact,
+  relatedObservations: ConsolidationPromptObservation[],
 ): string {
-  let prompt = `NEW FACT:\n${newFact}\n`
+  let prompt = `NEW FACT [ID: ${newFact.id}]:\n${newFact.content}\n`
+  prompt += `Temporal:\n`
+  prompt += `- validFrom: ${formatEpochMs(newFact.validFrom)}\n`
+  prompt += `- validTo: ${formatEpochMs(newFact.validTo)}\n`
+  prompt += `- mentionedAt: ${formatEpochMs(newFact.mentionedAt)}\n`
+  prompt += `- tags: ${newFact.tags.join(", ") || "none"}\n`
 
   if (relatedObservations.length > 0) {
     prompt += "\nEXISTING RELATED OBSERVATIONS:\n"
     for (const obs of relatedObservations) {
-      prompt += `\n[ID: ${obs.id}] (backed by ${obs.proofCount} facts, ${obs.sourceCount} sources)\n${obs.content}\n`
+      prompt += `\n[ID: ${obs.id}] (backed by ${obs.proofCount} facts, ${obs.sourceCount} sources)\n`
+      prompt += `Temporal: validFrom=${formatEpochMs(obs.validFrom)}, validTo=${formatEpochMs(obs.validTo)}, mentionedAt=${formatEpochMs(obs.mentionedAt)}\n`
+      prompt += `${obs.content}\n`
     }
   } else {
     prompt += "\nNo existing related observations found.\n"
@@ -228,6 +260,10 @@ TIER 3 — Raw Facts (search_memories)
 UTILITY — get_entity
   Look up any named entity and its associated memories. Works across all tiers.
 
+UTILITY — expand
+  Expand one or more memory IDs to chunk or full-document context.
+  Use this when a retrieved fact is relevant but lacks enough surrounding detail.
+
 RETRIEVAL STRATEGY:
 ${BUDGET_GUIDANCE[budget]}
 
@@ -244,6 +280,7 @@ All search tools use semantic search. NEVER just echo the user's question. Decom
   GOOD: search_mental_models("meeting patterns") first, then
         search_observations("meetings") + search_observations("discussion topics")
 Think: What ENTITIES and CONCEPTS does this question involve? Search for each separately.
+If supporting evidence seems too terse, call expand(memoryIds, depth) before finalizing.
 
 HOW TO REASON:
 - Synthesize a coherent narrative from retrieved memories across tiers

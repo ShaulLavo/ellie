@@ -409,48 +409,88 @@ describe("retain", () => {
       expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
       expect(result[1]!.memories.length).toBeGreaterThanOrEqual(1)
     })
+
+    it("supports rich batch items with per-item context, eventDate, documentId, tags, and metadata", async () => {
+      const base = Date.now() - 120_000
+      const result = await t.hs.retainBatch(
+        bankId,
+        [
+          {
+            content: "Alice discussed launch milestones",
+            context: "Sprint planning",
+            eventDate: base,
+            documentId: "doc-rich-a",
+            tags: ["team:alpha"],
+            metadata: { source: "meeting-a" },
+          },
+          {
+            content: "Bob documented rollout risks",
+            context: "Risk review",
+            eventDate: base + 5_000,
+            documentId: "doc-rich-b",
+            tags: ["team:beta"],
+            metadata: { source: "meeting-b" },
+          },
+        ],
+        { consolidate: false, dedupThreshold: 0, tags: ["project:phoenix"] },
+      )
+
+      expect(result).toHaveLength(2)
+      expect(result[0]!.memories.length).toBeGreaterThan(0)
+      expect(result[1]!.memories.length).toBeGreaterThan(0)
+
+      const first = result[0]!.memories[0]!
+      const second = result[1]!.memories[0]!
+      expect(first.documentId).toBe("doc-rich-a")
+      expect(second.documentId).toBe("doc-rich-b")
+      expect(first.chunkId).toBeDefined()
+      expect(second.chunkId).toBeDefined()
+      expect(first.sourceText).toContain("Sprint planning")
+      expect(second.sourceText).toContain("Risk review")
+      expect(first.mentionedAt).toBe(base)
+      expect(second.mentionedAt).toBe(base + 5_000)
+      expect(first.tags).toContain("project:phoenix")
+      expect(second.tags).toContain("project:phoenix")
+      expect(first.metadata).toEqual({ source: "meeting-a" })
+      expect(second.metadata).toEqual({ source: "meeting-b" })
+
+      const docs = t.hs.listDocuments(bankId)
+      const docA = docs.items.find((doc) => doc.id === "doc-rich-a")
+      const docB = docs.items.find((doc) => doc.id === "doc-rich-b")
+      expect(docA).toBeDefined()
+      expect(docB).toBeDefined()
+      expect(docA!.tags).toContain("team:alpha")
+      expect(docA!.tags).toContain("project:phoenix")
+      expect(docB!.tags).toContain("team:beta")
+      expect(docB!.tags).toContain("project:phoenix")
+
+      const chunkA = t.hs.getChunk(bankId, first.chunkId!)
+      const chunkB = t.hs.getChunk(bankId, second.chunkId!)
+      expect(chunkA).toBeDefined()
+      expect(chunkB).toBeDefined()
+      expect(chunkA!.text).toContain("Alice discussed")
+      expect(chunkB!.text).toContain("Bob documented")
+    })
   })
 
   // ── Temporal link creation (needs LLM extraction) ───────────────────
 
   describe("temporal links", () => {
     it("creates temporal links between facts with nearby event dates", async () => {
-      const baseTime = Date.now()
-      const oneHourMs = 3_600_000
-
-      // Retain facts with close validFrom dates (within 1 hour)
-      const result = await t.hs.retain(bankId, "test", {
-        facts: [
-          {
-            content: "Meeting with Alice at the office",
-            validFrom: baseTime,
-            validTo: baseTime + oneHourMs,
-            entities: ["Alice"],
-          },
-          {
-            content: "Lunch with Alice after the meeting",
-            validFrom: baseTime + oneHourMs,
-            validTo: baseTime + 2 * oneHourMs,
-            entities: ["Alice"],
-          },
+      const base = Date.now() - 30_000
+      const result = await t.hs.retainBatch(
+        bankId,
+        [
+          { content: "Temporal A", eventDate: base, documentId: "doc-temporal-a" },
+          { content: "Temporal B", eventDate: base + 3_600_000, documentId: "doc-temporal-b" },
+          { content: "Temporal C", eventDate: base + 2 * 3_600_000, documentId: "doc-temporal-c" },
         ],
-        consolidate: false,
-        dedupThreshold: 0,
-      })
+        { consolidate: false, dedupThreshold: 0 },
+      )
 
-      expect(result.memories).toHaveLength(2)
-      // Temporal links are a link type — verify the links array contains
-      // at least entity links (since both share "Alice").
-      // Temporal links between facts with nearby dates depend on implementation.
-      // The current retain implementation does not create temporal links automatically,
-      // so we verify the structure is correct and at least entity links exist.
-      expect(result.links.length).toBeGreaterThanOrEqual(1)
-      const entityLinks = result.links.filter((l) => l.linkType === "entity")
-      expect(entityLinks.length).toBeGreaterThanOrEqual(1)
-      // Temporal link creation is not yet implemented in retain —
-      // this test documents the expected behavior for when it is added.
-      const temporalLinks = result.links.filter((l) => l.linkType === "temporal")
-      expect(Array.isArray(temporalLinks)).toBe(true)
+      const links = result.flatMap((item) => item.links)
+      const temporal = links.filter((link) => link.linkType === "temporal")
+      expect(temporal.length).toBeGreaterThan(0)
     })
   })
 
@@ -524,7 +564,6 @@ describe("retain", () => {
         consolidate: false,
       })
 
-      // retainBatch with semantically similar items about Python
       const results = await t.hs.retainBatch(
         bankId,
         [
@@ -534,94 +573,29 @@ describe("retain", () => {
         ],
         { consolidate: false, dedupThreshold: 0 },
       )
-
       expect(results).toHaveLength(3)
-      // Each item should have at least one memory
-      for (const result of results) {
-        expect(result.memories.length).toBeGreaterThanOrEqual(1)
-      }
-      // Semantic links may be created between batch items and existing memories
-      const allLinks = results.flatMap((r) => r.links)
-      const semanticLinks = allLinks.filter((l) => l.linkType === "semantic")
-      // Verify the mechanism runs — semantic link creation depends on embedding similarity
+
+      const allLinks = results.flatMap((item) => item.links)
+      const semanticLinks = allLinks.filter((link) => link.linkType === "semantic")
       expect(Array.isArray(semanticLinks)).toBe(true)
     })
 
     it("creates temporal links between facts in the same batch", async () => {
-      const baseTime = Date.now()
-      const oneHourMs = 3_600_000
-
-      // retainBatch where each item has a fact with nearby event dates
-      // Since retainBatch uses LLM extraction, we set up mock responses
-      // with validFrom dates close together
-      t.adapter.setResponses([
-        JSON.stringify({
-          facts: [
-            {
-              content: "Morning standup at 9am",
-              factType: "experience",
-              confidence: 0.9,
-              validFrom: new Date(baseTime).toISOString(),
-              validTo: null,
-              entities: [{ name: "Team", entityType: "organization" }],
-              tags: [],
-              causalRelations: [],
-            },
-          ],
-        }),
-        JSON.stringify({
-          facts: [
-            {
-              content: "Code review at 10am",
-              factType: "experience",
-              confidence: 0.9,
-              validFrom: new Date(baseTime + oneHourMs).toISOString(),
-              validTo: null,
-              entities: [{ name: "Team", entityType: "organization" }],
-              tags: [],
-              causalRelations: [],
-            },
-          ],
-        }),
-        JSON.stringify({
-          facts: [
-            {
-              content: "Lunch break at 11am",
-              factType: "experience",
-              confidence: 0.9,
-              validFrom: new Date(baseTime + 2 * oneHourMs).toISOString(),
-              validTo: null,
-              entities: [{ name: "Team", entityType: "organization" }],
-              tags: [],
-              causalRelations: [],
-            },
-          ],
-        }),
-      ])
-
-      const results = await t.hs.retainBatch(
+      const base = Date.now() - 90_000
+      const result = await t.hs.retainBatch(
         bankId,
         [
-          "Had our morning standup at 9am",
-          "Did code review at 10am",
-          "Took lunch break at 11am",
+          { content: "Batch temporal one", eventDate: base },
+          { content: "Batch temporal two", eventDate: base + 1_000 },
+          { content: "Batch temporal three", eventDate: base + 2_000 },
         ],
         { consolidate: false, dedupThreshold: 0 },
       )
 
-      expect(results).toHaveLength(3)
-      for (const result of results) {
-        expect(result.memories.length).toBeGreaterThanOrEqual(1)
-      }
-
-      // Entity links should exist since all items share "Team"
-      const allLinks = results.flatMap((r) => r.links)
-      const entityLinks = allLinks.filter((l) => l.linkType === "entity")
-      expect(entityLinks.length).toBeGreaterThanOrEqual(1)
-
-      // Temporal links between items with nearby dates depend on implementation
-      const temporalLinks = allLinks.filter((l) => l.linkType === "temporal")
-      expect(Array.isArray(temporalLinks)).toBe(true)
+      const temporalLinks = result.flatMap((item) =>
+        item.links.filter((link) => link.linkType === "temporal"),
+      )
+      expect(temporalLinks.length).toBeGreaterThan(0)
     })
   })
 
@@ -708,30 +682,22 @@ describe("retain", () => {
 
   describe("per-item tags on document", () => {
     it("stores per-item tags on the document record", async () => {
-      // Retain with per-fact tags
-      const result = await t.hs.retain(bankId, "test document content", {
-        facts: [
+      await t.hs.retainBatch(
+        bankId,
+        [
           {
-            content: "User prefers dark mode in the app",
+            content: "Tagged doc content",
+            documentId: "doc-tags-1",
             tags: ["user:testuser", "app-type:taste-ai"],
           },
-          {
-            content: "User is a vegetarian",
-            tags: ["user:testuser", "category:diet"],
-          },
         ],
-        consolidate: false,
-      })
+        { consolidate: false, dedupThreshold: 0 },
+      )
 
-      expect(result.memories).toHaveLength(2)
-
-      // First fact should have its per-fact tags
-      expect(result.memories[0]!.tags).toContain("user:testuser")
-      expect(result.memories[0]!.tags).toContain("app-type:taste-ai")
-
-      // Second fact should have its per-fact tags
-      expect(result.memories[1]!.tags).toContain("user:testuser")
-      expect(result.memories[1]!.tags).toContain("category:diet")
+      const document = t.hs.getDocument(bankId, "doc-tags-1")
+      expect(document).toBeDefined()
+      expect(document!.tags).toContain("user:testuser")
+      expect(document!.tags).toContain("app-type:taste-ai")
     })
   })
 

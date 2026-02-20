@@ -1,5 +1,6 @@
 import { chat, streamToText } from "@ellie/ai"
 import { ulid } from "@ellie/utils"
+import { createHash } from "crypto"
 import { and, eq } from "drizzle-orm"
 import * as v from "valibot"
 import type { AnyTextAdapter } from "@tanstack/ai"
@@ -11,6 +12,7 @@ import type {
   RetainBatchOptions,
   RetainResult,
   RetainBatchResult,
+  RetainBatchItem,
   MemoryUnit,
   Entity,
   FactType,
@@ -81,6 +83,33 @@ interface PreparedExtractedFact {
   originalIndex: number
   groupIndex: number
   sourceText: string
+  context: string | null
+  eventDateMs: number
+  documentId: string
+  chunkId: string
+  metadata: Record<string, unknown> | null
+  tags: string[]
+}
+
+interface NormalizedBatchItem {
+  content: string
+  context: string | null
+  eventDateMs: number
+  documentId: string
+  metadata: Record<string, unknown> | null
+  tags: string[]
+}
+
+interface ExpandedBatchContent {
+  originalIndex: number
+  content: string
+  chunkIndex: number
+  chunkId: string
+  context: string | null
+  eventDateMs: number
+  documentId: string
+  metadata: Record<string, unknown> | null
+  tags: string[]
 }
 
 interface EntityPlan {
@@ -106,10 +135,62 @@ function parseISOToEpoch(iso: string | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms
 }
 
+function parseEventDateToEpoch(
+  input: number | Date | string | null | undefined,
+  fallback: number,
+): number {
+  if (input == null) return fallback
+  if (typeof input === "number") return Number.isFinite(input) ? input : fallback
+  if (input instanceof Date) {
+    const ms = input.getTime()
+    return Number.isFinite(ms) ? ms : fallback
+  }
+  const ms = new Date(input).getTime()
+  return Number.isFinite(ms) ? ms : fallback
+}
+
+function mergeMetadata(
+  base?: Record<string, unknown> | null,
+  extra?: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!base && !extra) return null
+  return {
+    ...(base ?? {}),
+    ...(extra ?? {}),
+  }
+}
+
+function normalizeBatchInputs(
+  bankId: string,
+  contents: string[] | RetainBatchItem[],
+  options: RetainBatchOptions,
+): NormalizedBatchItem[] {
+  const now = Date.now()
+  const normalized: NormalizedBatchItem[] = []
+
+  for (let i = 0; i < contents.length; i++) {
+    const value = contents[i]
+    const item = typeof value === "string" ? { content: value } : value
+    const sanitizedContent = sanitizeText(item.content)
+    const documentId = item.documentId ?? `${bankId}-${ulid()}`
+    normalized.push({
+      content: sanitizedContent,
+      context: item.context ?? options.context ?? null,
+      eventDateMs: parseEventDateToEpoch(item.eventDate ?? options.eventDate, now),
+      documentId,
+      metadata: mergeMetadata(options.metadata ?? null, item.metadata ?? null),
+      tags: [...new Set([...(options.tags ?? []), ...(item.tags ?? [])])],
+    })
+  }
+
+  return normalized
+}
+
 async function extractFactsFromContent(
   adapter: AnyTextAdapter,
   content: string,
   options: RetainOptions | RetainBatchOptions,
+  context?: string | null,
 ): Promise<ExtractedFact[]> {
   if ("facts" in options && options.facts) {
     return options.facts.map((f) => ({
@@ -127,6 +208,10 @@ async function extractFactsFromContent(
     }))
   }
 
+  const extractionInput = context
+    ? `${content}\n\nContext:\n${context}`
+    : content
+
   try {
     const systemPrompt = getExtractionPrompt(
       options.mode ?? "concise",
@@ -136,7 +221,7 @@ async function extractFactsFromContent(
     const text = await streamToText(
       chat({
         adapter,
-        messages: [{ role: "user", content: EXTRACT_FACTS_USER(content) }],
+        messages: [{ role: "user", content: EXTRACT_FACTS_USER(extractionInput) }],
         systemPrompts: [systemPrompt],
       }),
     )
@@ -180,13 +265,26 @@ async function chunkWithChonkie(content: string): Promise<string[]> {
 }
 
 async function explodeBatchContents(
-  contents: string[],
-): Promise<Array<{ originalIndex: number; content: string }>> {
+  bankId: string,
+  contents: NormalizedBatchItem[],
+): Promise<ExpandedBatchContent[]> {
   const chunked = await Promise.all(
-    contents.map(async (content, originalIndex) => {
-      const sanitized = sanitizeText(content)
-      const chunks = await chunkWithChonkie(sanitized)
-      return chunks.map((chunk) => ({ originalIndex, content: chunk }))
+    contents.map(async (item, originalIndex) => {
+      const chunks = await chunkWithChonkie(item.content)
+      return chunks.map((chunk, chunkIndex) => {
+        const chunkId = `${bankId}_${item.documentId}_${chunkIndex}`
+        return {
+          originalIndex,
+          content: chunk,
+          chunkIndex,
+          chunkId,
+          context: item.context,
+          eventDateMs: item.eventDateMs,
+          documentId: item.documentId,
+          metadata: item.metadata,
+          tags: item.tags,
+        }
+      })
     }),
   )
   return chunked.flat()
@@ -219,6 +317,41 @@ function splitByCharacterBudget<T extends { content: string }>(
   }
 
   return batches
+}
+
+function buildContentHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex")
+}
+
+function upsertDocuments(
+  hdb: HindsightDatabase,
+  rows: Array<typeof hdb.schema.documents.$inferInsert>,
+): void {
+  for (const row of rows) {
+    hdb.db
+      .delete(hdb.schema.documents)
+      .where(
+        and(
+          eq(hdb.schema.documents.id, row.id),
+          eq(hdb.schema.documents.bankId, row.bankId),
+        ),
+      )
+      .run()
+    hdb.db.insert(hdb.schema.documents).values(row).run()
+  }
+}
+
+function upsertChunks(
+  hdb: HindsightDatabase,
+  rows: Array<typeof hdb.schema.chunks.$inferInsert>,
+): void {
+  for (const row of rows) {
+    hdb.db
+      .delete(hdb.schema.chunks)
+      .where(eq(hdb.schema.chunks.id, row.id))
+      .run()
+    hdb.db.insert(hdb.schema.chunks).values(row).run()
+  }
 }
 
 function planEntities(
@@ -345,6 +478,8 @@ function rowToMemoryUnit(
     content: row.content,
     factType: row.factType as FactType,
     confidence: row.confidence,
+    documentId: row.documentId,
+    chunkId: row.chunkId,
     validFrom: row.validFrom,
     validTo: row.validTo,
     mentionedAt: row.mentionedAt,
@@ -391,12 +526,21 @@ export async function retain(
 ): Promise<RetainResult> {
   const now = Date.now()
   const { schema } = hdb
+  const eventDateMs = parseEventDateToEpoch(options.eventDate, now)
+  const context = options.context ? sanitizeText(options.context) : null
+  const documentId = options.documentId ?? null
+  const chunkId = documentId ? `${bankId}_${documentId}_0` : null
 
   // Sanitize input content
   const cleanContent = sanitizeText(content)
 
   // ── Step 1: Get facts (LLM extraction or pre-provided) ──
-  let extracted = await extractFactsFromContent(adapter, cleanContent, options)
+  let extracted = await extractFactsFromContent(
+    adapter,
+    cleanContent,
+    options,
+    context,
+  )
 
   if (extracted.length === 0) {
     return { memories: [], entities: [], links: [] }
@@ -410,7 +554,10 @@ export async function retain(
       hdb,
       memoryVec,
       bankId,
-      extracted,
+      extracted.map((fact, index) => ({
+        content: fact.content,
+        temporalAnchor: eventDateMs + index,
+      })),
       dedupThreshold,
     )
 
@@ -439,6 +586,37 @@ export async function retain(
 
   if (extracted.length === 0) {
     return { memories: [], entities: [], links: [] }
+  }
+
+  if (documentId && chunkId) {
+    runInTransaction(hdb, () => {
+      upsertDocuments(hdb, [
+        {
+          id: documentId,
+          bankId,
+          originalText: cleanContent,
+          contentHash: buildContentHash(cleanContent),
+          metadata: options.metadata ? JSON.stringify(options.metadata) : null,
+          retainParams: JSON.stringify({
+            context: context ?? undefined,
+            eventDate: eventDateMs,
+          }),
+          tags: options.tags?.length ? JSON.stringify(options.tags) : null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      upsertChunks(hdb, [
+        {
+          id: chunkId,
+          documentId,
+          bankId,
+          content: cleanContent,
+          chunkIndex: 0,
+          createdAt: now,
+        },
+      ])
+    })
   }
 
   // ── Step 2: Resolve & upsert entities ──
@@ -561,23 +739,30 @@ export async function retain(
 
   const memories: MemoryUnit[] = []
 
-  for (const fact of extracted) {
+  for (let factIndex = 0; factIndex < extracted.length; factIndex++) {
+    const fact = extracted[factIndex]!
     const memoryId = ulid()
     const tags = [...(fact.tags ?? []), ...(options.tags ?? [])]
+    const memoryMetadata = options.metadata ?? null
+    const sourceText = context ? `${context}\n\n${cleanContent}` : cleanContent
+    const mentionedAt = eventDateMs + factIndex
 
     hdb.db
       .insert(schema.memoryUnits)
       .values({
         id: memoryId,
         bankId,
+        documentId,
+        chunkId,
         content: fact.content,
         factType: fact.factType,
         confidence: fact.confidence,
         validFrom: parseISOToEpoch(fact.validFrom),
         validTo: parseISOToEpoch(fact.validTo),
-        metadata: options.metadata ? JSON.stringify(options.metadata) : null,
+        mentionedAt,
+        metadata: memoryMetadata ? JSON.stringify(memoryMetadata) : null,
         tags: tags.length > 0 ? JSON.stringify(tags) : null,
-        sourceText: cleanContent,
+        sourceText,
         createdAt: now,
         updatedAt: now,
       })
@@ -615,12 +800,14 @@ export async function retain(
       content: fact.content,
       factType: fact.factType as FactType,
       confidence: fact.confidence,
+      documentId,
+      chunkId,
       validFrom: parseISOToEpoch(fact.validFrom),
       validTo: parseISOToEpoch(fact.validTo),
-      mentionedAt: null,
-      metadata: options.metadata ?? null,
+      mentionedAt,
+      metadata: memoryMetadata,
       tags: tags.length > 0 ? tags : null,
-      sourceText: cleanContent,
+      sourceText,
       consolidatedAt: null,
       proofCount: 0,
       sourceMemoryIds: null,
@@ -739,41 +926,83 @@ export async function retainBatch(
   modelVec: EmbeddingStore,
   adapter: AnyTextAdapter,
   bankId: string,
-  contents: string[],
+  contents: string[] | RetainBatchItem[],
   options: RetainBatchOptions = {},
   rerank?: RerankFunction,
 ): Promise<RetainBatchResult> {
   if (contents.length === 0) return []
+  const normalizedItems = normalizeBatchInputs(bankId, contents, options)
+  if (normalizedItems.length === 0) return []
 
-  const expandedContents = await explodeBatchContents(contents)
+  const expandedContents = await explodeBatchContents(bankId, normalizedItems)
   const subBatches = splitByCharacterBudget(expandedContents, CHARS_PER_BATCH)
-  const aggregate = contents.map<RetainResult>(() => ({
+  const aggregate = normalizedItems.map<RetainResult>(() => ({
     memories: [],
     entities: [],
     links: [],
   }))
-  const entityIdsByResult = contents.map(() => new Set<string>())
+  const entityIdsByResult = normalizedItems.map(() => new Set<string>())
   const entityById = new Map<string, Entity>()
-  const linkKeysByResult = contents.map(() => new Set<string>())
+  const linkKeysByResult = normalizedItems.map(() => new Set<string>())
   const memoryIdsToOriginalIndex = new Map<string, number>()
+  const mentionOffsetsByResult = normalizedItems.map(() => 0)
+
+  const now = Date.now()
+  const documentRows: Array<typeof hdb.schema.documents.$inferInsert> = normalizedItems.map(
+    (item) => ({
+      id: item.documentId,
+      bankId,
+      originalText: item.content,
+      contentHash: buildContentHash(item.content),
+      metadata: item.metadata ? JSON.stringify(item.metadata) : null,
+      retainParams: JSON.stringify({
+        context: item.context ?? undefined,
+        eventDate: item.eventDateMs,
+      }),
+      tags: item.tags.length > 0 ? JSON.stringify(item.tags) : null,
+      createdAt: now,
+      updatedAt: now,
+    }),
+  )
+  const chunkRows: Array<typeof hdb.schema.chunks.$inferInsert> = expandedContents.map(
+    (item) => ({
+      id: item.chunkId,
+      documentId: item.documentId,
+      bankId,
+      content: item.content,
+      chunkIndex: item.chunkIndex,
+      createdAt: now,
+    }),
+  )
+
+  runInTransaction(hdb, () => {
+    upsertDocuments(hdb, documentRows)
+    upsertChunks(hdb, chunkRows)
+  })
 
   for (const subBatch of subBatches) {
     const extractedPerContent = await Promise.all(
-      subBatch.map(async ({ content }) =>
-        extractFactsFromContent(adapter, content, options),
+      subBatch.map(async ({ content, context }) =>
+        extractFactsFromContent(adapter, content, options, context),
       ),
     )
 
     const flattened: PreparedExtractedFact[] = []
     for (let groupIndex = 0; groupIndex < subBatch.length; groupIndex++) {
-      const { originalIndex, content } = subBatch[groupIndex]!
+      const item = subBatch[groupIndex]!
       const extracted = extractedPerContent[groupIndex]!
       for (const fact of extracted) {
         flattened.push({
           fact,
-          originalIndex,
+          originalIndex: item.originalIndex,
           groupIndex,
-          sourceText: content,
+          sourceText: item.content,
+          context: item.context,
+          eventDateMs: item.eventDateMs,
+          documentId: item.documentId,
+          chunkId: item.chunkId,
+          metadata: item.metadata,
+          tags: item.tags,
         })
       }
     }
@@ -792,6 +1021,7 @@ export async function retainBatch(
             memoryVec,
             bankId,
             allVectors,
+            flattened.map((item, index) => item.eventDateMs + index),
             dedupThreshold,
           )
         : flattened.map(() => false)
@@ -829,19 +1059,28 @@ export async function retainBatch(
     for (let i = 0; i < retainedFacts.length; i++) {
       const item = retainedFacts[i]!
       const memoryId = ulid()
-      const tags = [...(item.fact.tags ?? []), ...(options.tags ?? [])]
+      const tags = [...new Set([...(item.fact.tags ?? []), ...item.tags])]
+      const offset = mentionOffsetsByResult[item.originalIndex] ?? 0
+      mentionOffsetsByResult[item.originalIndex] = offset + 1
+      const mentionedAt = item.eventDateMs + offset
+      const sourceText = item.context
+        ? `${item.context}\n\n${item.sourceText}`
+        : item.sourceText
 
       memoryRows.push({
         id: memoryId,
         bankId,
+        documentId: item.documentId,
+        chunkId: item.chunkId,
         content: item.fact.content,
         factType: item.fact.factType,
         confidence: item.fact.confidence,
         validFrom: parseISOToEpoch(item.fact.validFrom),
         validTo: parseISOToEpoch(item.fact.validTo),
-        metadata: options.metadata ? JSON.stringify(options.metadata) : null,
+        mentionedAt,
+        metadata: item.metadata ? JSON.stringify(item.metadata) : null,
         tags: tags.length > 0 ? JSON.stringify(tags) : null,
-        sourceText: item.sourceText,
+        sourceText,
         createdAt: now,
         updatedAt: now,
       })
@@ -852,12 +1091,14 @@ export async function retainBatch(
         content: item.fact.content,
         factType: item.fact.factType as FactType,
         confidence: item.fact.confidence,
+        documentId: item.documentId,
+        chunkId: item.chunkId,
         validFrom: parseISOToEpoch(item.fact.validFrom),
         validTo: parseISOToEpoch(item.fact.validTo),
-        mentionedAt: null,
-        metadata: options.metadata ?? null,
+        mentionedAt,
+        metadata: item.metadata,
         tags: tags.length > 0 ? tags : null,
-        sourceText: item.sourceText,
+        sourceText,
         consolidatedAt: null,
         proofCount: 0,
         sourceMemoryIds: null,
@@ -1026,6 +1267,7 @@ export async function retainBatch(
 // ── Semantic Links ─────────────────────────────────────────────────────────
 
 const DUPLICATE_SEARCH_K = 5
+const DEDUP_TIME_WINDOW_HOURS = 24
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
 const TEMPORAL_LINK_WINDOW_HOURS = 24
@@ -1037,11 +1279,15 @@ function findDuplicateFlagsByVector(
   memoryVec: EmbeddingStore,
   bankId: string,
   vectors: Float32Array[],
+  anchors: number[],
   threshold: number,
 ): boolean[] {
   const flags: boolean[] = []
+  const windowMs = DEDUP_TIME_WINDOW_HOURS * 60 * 60 * 1000
 
-  for (const vector of vectors) {
+  for (let vectorIndex = 0; vectorIndex < vectors.length; vectorIndex++) {
+    const vector = vectors[vectorIndex]!
+    const anchor = anchors[vectorIndex] ?? null
     const hits = memoryVec.searchByVector(vector, DUPLICATE_SEARCH_K)
     let isDuplicate = false
 
@@ -1050,11 +1296,25 @@ function findDuplicateFlagsByVector(
       if (similarity < threshold) break
 
       const row = hdb.db
-        .select({ bankId: hdb.schema.memoryUnits.bankId })
+        .select({
+          bankId: hdb.schema.memoryUnits.bankId,
+          validFrom: hdb.schema.memoryUnits.validFrom,
+          validTo: hdb.schema.memoryUnits.validTo,
+          mentionedAt: hdb.schema.memoryUnits.mentionedAt,
+          createdAt: hdb.schema.memoryUnits.createdAt,
+        })
         .from(hdb.schema.memoryUnits)
         .where(eq(hdb.schema.memoryUnits.id, hit.id))
         .get()
       if (row?.bankId !== bankId) continue
+
+      if (anchor != null) {
+        const candidateAnchor =
+          row.validFrom ?? row.validTo ?? row.mentionedAt ?? row.createdAt
+        if (Math.abs(anchor - candidateAnchor) > windowMs) {
+          continue
+        }
+      }
       isDuplicate = true
       break
     }

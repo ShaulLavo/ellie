@@ -1,5 +1,5 @@
 import { ulid } from "@ellie/utils"
-import { eq } from "drizzle-orm"
+import { eq, and, inArray } from "drizzle-orm"
 import { anthropicText } from "@tanstack/ai-anthropic"
 import type { AnyTextAdapter } from "@tanstack/ai"
 import { createHindsightDB, type HindsightDatabase } from "./db"
@@ -37,6 +37,7 @@ import type {
   UpdateDirectiveOptions,
   RetainOptions,
   RetainBatchOptions,
+  RetainBatchItem,
   RetainResult,
   RetainBatchResult,
   RecallOptions,
@@ -48,6 +49,10 @@ import type {
   TraceCallback,
   HindsightTrace,
   RerankFunction,
+  DocumentRecord,
+  ChunkRecord,
+  GraphNode,
+  GraphEdge,
 } from "./types"
 
 // ── Default config values ───────────────────────────────────────────────
@@ -372,6 +377,16 @@ export class Hindsight {
     bankId: string,
     contents: string[],
     options?: RetainBatchOptions,
+  ): Promise<RetainBatchResult>
+  async retainBatch(
+    bankId: string,
+    contents: RetainBatchItem[],
+    options?: RetainBatchOptions,
+  ): Promise<RetainBatchResult>
+  async retainBatch(
+    bankId: string,
+    contents: string[] | RetainBatchItem[],
+    options?: RetainBatchOptions,
   ): Promise<RetainBatchResult> {
     const cfg = this.resolveConfig(bankId)
     const resolvedOptions: RetainBatchOptions = {
@@ -580,6 +595,240 @@ export class Hindsight {
     deleteDirectiveImpl(this.hdb, bankId, id)
   }
 
+  // ── Documents / Chunks / Graph ─────────────────────────────────────
+
+  listDocuments(
+    bankId: string,
+    options?: { search?: string; limit?: number; offset?: number },
+  ): { items: DocumentRecord[]; total: number; limit: number; offset: number } {
+    const limit = options?.limit ?? 100
+    const offset = options?.offset ?? 0
+    const search = options?.search?.toLowerCase().trim()
+
+    const allRows = this.hdb.db
+      .select()
+      .from(this.hdb.schema.documents)
+      .where(eq(this.hdb.schema.documents.bankId, bankId))
+      .all()
+      .filter((row) => (search ? row.id.toLowerCase().includes(search) : true))
+      .sort((a, b) => b.createdAt - a.createdAt)
+
+    const paged = allRows.slice(offset, offset + limit)
+    const items: DocumentRecord[] = paged.map((row) => ({
+      id: row.id,
+      bankId: row.bankId,
+      contentHash: row.contentHash,
+      textLength: row.originalText?.length ?? 0,
+      metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : null,
+      retainParams: row.retainParams ? safeJson<Record<string, unknown>>(row.retainParams, {}) : null,
+      tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }))
+
+    return {
+      items,
+      total: allRows.length,
+      limit,
+      offset,
+    }
+  }
+
+  getDocument(bankId: string, documentId: string): DocumentRecord | undefined {
+    const row = this.hdb.db
+      .select()
+      .from(this.hdb.schema.documents)
+      .where(
+        and(
+          eq(this.hdb.schema.documents.id, documentId),
+          eq(this.hdb.schema.documents.bankId, bankId),
+        ),
+      )
+      .get()
+    if (!row) return undefined
+
+    return {
+      id: row.id,
+      bankId: row.bankId,
+      contentHash: row.contentHash,
+      textLength: row.originalText?.length ?? 0,
+      metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : null,
+      retainParams: row.retainParams ? safeJson<Record<string, unknown>>(row.retainParams, {}) : null,
+      tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }
+  }
+
+  deleteDocument(bankId: string, documentId: string): boolean {
+    this.hdb.db
+      .update(this.hdb.schema.memoryUnits)
+      .set({ documentId: null, chunkId: null, updatedAt: Date.now() })
+      .where(
+        and(
+          eq(this.hdb.schema.memoryUnits.bankId, bankId),
+          eq(this.hdb.schema.memoryUnits.documentId, documentId),
+        ),
+      )
+      .run()
+
+    this.hdb.db
+      .delete(this.hdb.schema.documents)
+      .where(
+        and(
+          eq(this.hdb.schema.documents.id, documentId),
+          eq(this.hdb.schema.documents.bankId, bankId),
+        ),
+      )
+      .run()
+
+    return true
+  }
+
+  getChunk(bankId: string, chunkId: string): ChunkRecord | undefined {
+    const row = this.hdb.db
+      .select()
+      .from(this.hdb.schema.chunks)
+      .where(
+        and(
+          eq(this.hdb.schema.chunks.id, chunkId),
+          eq(this.hdb.schema.chunks.bankId, bankId),
+        ),
+      )
+      .get()
+    if (!row) return undefined
+
+    return {
+      id: row.id,
+      documentId: row.documentId,
+      bankId: row.bankId,
+      index: row.chunkIndex,
+      text: row.content,
+      createdAt: row.createdAt,
+    }
+  }
+
+  getGraphData(
+    bankId: string,
+    options?: { factType?: string; limit?: number },
+  ): {
+    nodes: GraphNode[]
+    edges: GraphEdge[]
+    totalUnits: number
+    limit: number
+  } {
+    const limit = options?.limit ?? 1000
+    const rows = options?.factType
+      ? this.hdb.db
+          .select()
+          .from(this.hdb.schema.memoryUnits)
+          .where(
+            and(
+              eq(this.hdb.schema.memoryUnits.bankId, bankId),
+              eq(this.hdb.schema.memoryUnits.factType, options.factType),
+            ),
+          )
+          .all()
+      : this.hdb.db
+          .select()
+          .from(this.hdb.schema.memoryUnits)
+          .where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
+          .all()
+
+    const orderedRows = rows
+      .sort(
+        (a, b) =>
+          (b.mentionedAt ?? b.createdAt) - (a.mentionedAt ?? a.createdAt),
+      )
+      .slice(0, limit)
+
+    const nodes: GraphNode[] = orderedRows.map((row) => ({
+      id: row.id,
+      content: row.content,
+      factType: row.factType as GraphNode["factType"],
+      documentId: row.documentId,
+      chunkId: row.chunkId,
+      tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
+      sourceMemoryIds: row.sourceMemoryIds
+        ? safeJson<string[]>(row.sourceMemoryIds, [])
+        : [],
+    }))
+
+    const visibleNodeIds = new Set(nodes.map((node) => node.id))
+    if (visibleNodeIds.size === 0) {
+      return { nodes, edges: [], totalUnits: rows.length, limit }
+    }
+
+    const visibleIds = [...visibleNodeIds]
+    const directLinks = this.hdb.db
+      .select({
+        sourceId: this.hdb.schema.memoryLinks.sourceId,
+        targetId: this.hdb.schema.memoryLinks.targetId,
+        linkType: this.hdb.schema.memoryLinks.linkType,
+        weight: this.hdb.schema.memoryLinks.weight,
+      })
+      .from(this.hdb.schema.memoryLinks)
+      .where(
+        and(
+          eq(this.hdb.schema.memoryLinks.bankId, bankId),
+          inArray(this.hdb.schema.memoryLinks.sourceId, visibleIds),
+          inArray(this.hdb.schema.memoryLinks.targetId, visibleIds),
+        ),
+      )
+      .all()
+
+    const sourceToObservations = new Map<string, string[]>()
+    for (const node of nodes) {
+      for (const sourceId of node.sourceMemoryIds) {
+        const existing = sourceToObservations.get(sourceId) ?? []
+        existing.push(node.id)
+        sourceToObservations.set(sourceId, existing)
+      }
+    }
+
+    const copiedLinks: GraphEdge[] = []
+    for (const link of directLinks) {
+      const fromObs = sourceToObservations.get(link.sourceId) ?? []
+      const toObs = sourceToObservations.get(link.targetId) ?? []
+
+      for (const obsId of fromObs) {
+        if (!visibleNodeIds.has(link.targetId)) continue
+        copiedLinks.push({
+          sourceId: obsId,
+          targetId: link.targetId,
+          linkType: link.linkType as GraphEdge["linkType"],
+          weight: link.weight,
+        })
+      }
+      for (const obsId of toObs) {
+        if (!visibleNodeIds.has(link.sourceId)) continue
+        copiedLinks.push({
+          sourceId: link.sourceId,
+          targetId: obsId,
+          linkType: link.linkType as GraphEdge["linkType"],
+          weight: link.weight,
+        })
+      }
+    }
+
+    const edges: GraphEdge[] = dedupeGraphEdges([
+      ...directLinks.map((link) => ({
+        sourceId: link.sourceId,
+        targetId: link.targetId,
+        linkType: link.linkType as GraphEdge["linkType"],
+        weight: link.weight,
+      })),
+      ...copiedLinks,
+    ])
+
+    return {
+      nodes,
+      edges,
+      totalUnits: rows.length,
+      limit,
+    }
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────
 
   close(): void {
@@ -628,6 +877,28 @@ function toBank(row: typeof import("./schema").banks.$inferSelect): Bank {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function safeJson<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+function dedupeGraphEdges(edges: GraphEdge[]): GraphEdge[] {
+  const seen = new Map<string, GraphEdge>()
+  for (const edge of edges) {
+    const source = edge.sourceId < edge.targetId ? edge.sourceId : edge.targetId
+    const target = edge.sourceId < edge.targetId ? edge.targetId : edge.sourceId
+    const key = `${source}:${target}:${edge.linkType}`
+    const existing = seen.get(key)
+    if (!existing || edge.weight > existing.weight) {
+      seen.set(key, edge)
+    }
+  }
+  return [...seen.values()]
 }
 
 /** Strip undefined keys so they don't overwrite spread defaults */

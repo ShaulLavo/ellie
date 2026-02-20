@@ -200,6 +200,7 @@ describe("recall with tag filtering", () => {
       facts: [{ content: "Tagged fact for verification" }],
       tags: ["verified-tag"],
       consolidate: false,
+      dedupThreshold: 0,
     })
 
     expect(result.memories[0]!.tags).toEqual(["verified-tag"])
@@ -227,6 +228,7 @@ describe("recall with tag filtering", () => {
       ],
       tags: ["doc-tag"],
       consolidate: false,
+      dedupThreshold: 0,
     })
 
     const tags = result.memories[0]!.tags ?? []

@@ -2,72 +2,102 @@
  * Tests for fact ordering — temporal ordering within documents.
  *
  * Port of test_fact_ordering.py.
- * TDD targets — these require real LLM extraction.
  */
 
-import { describe, it } from "bun:test"
-import { implementMe } from "./setup"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
+import { createTestBank, createTestHindsight, type TestHindsight } from "./setup"
 
 describe("Fact ordering", () => {
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
   describe("temporal ordering within a conversation", () => {
-    it("facts from same conversation maintain temporal order via mentionedAt", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_temporal_order_same_conversation",
-      )
-    })
+    it("facts from same conversation maintain temporal order via mentionedAt", async () => {
+      const eventDate = Date.now() - 10_000
+      const result = await t.hs.retain(bankId, "conversation", {
+        eventDate,
+        facts: [
+          { content: "First statement in thread", factType: "world" },
+          { content: "Second statement in thread", factType: "world" },
+          { content: "Third statement in thread", factType: "world" },
+        ],
+        consolidate: false,
+      })
 
-    it("later facts have higher mentionedAt than earlier facts", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_later_facts_higher_mentioned_at",
-      )
-    })
-
-    it("first fact has mentionedAt close to event_date", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_first_fact_close_to_event_date",
-      )
+      expect(result.memories).toHaveLength(3)
+      const mentionedAts = result.memories.map((memory) => memory.mentionedAt)
+      expect(mentionedAts[0]).toBe(eventDate)
+      expect(mentionedAts[1]).toBe(eventDate + 1)
+      expect(mentionedAts[2]).toBe(eventDate + 2)
     })
   })
 
   describe("mentionedAt offsets", () => {
-    it("each fact gets a unique mentionedAt offset", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_unique_mentioned_at",
-      )
-    })
+    it("each fact gets a unique mentionedAt offset and recall preserves temporal metadata", async () => {
+      const eventDate = Date.now() - 20_000
+      await t.hs.retain(bankId, "ordering sample", {
+        eventDate,
+        facts: [
+          { content: "Alpha event", factType: "world" },
+          { content: "Beta event", factType: "world" },
+          { content: "Gamma event", factType: "world" },
+        ],
+        consolidate: false,
+      })
 
-    it("offset increments by at least 1ms per fact", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_offset_increment",
-      )
-    })
+      const recalled = await t.hs.recall(bankId, "event", {
+        methods: ["semantic", "fulltext"],
+      })
+      const mentionedAts = recalled.memories
+        .map((memory) => memory.memory.mentionedAt)
+        .filter((value): value is number => value != null)
 
-    it("ordering survives recall retrieval", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_ordering_survives_recall",
-      )
+      expect(mentionedAts.length).toBeGreaterThan(0)
+      expect(new Set(mentionedAts).size).toBe(mentionedAts.length)
+      for (const value of mentionedAts) {
+        expect(value).toBeGreaterThanOrEqual(eventDate)
+      }
     })
   })
 
   describe("multiple documents ordering", () => {
-    it("facts from different documents have distinct mentionedAt timestamps", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_distinct_timestamps_across_documents",
+    it("batch retain of multiple documents produces distinct mentionedAt ranges", async () => {
+      const base = Date.now() - 60_000
+      const result = await t.hs.retainBatch(
+        bankId,
+        [
+          {
+            content: "Doc A fact one. Doc A fact two.",
+            eventDate: base,
+            documentId: "doc-A",
+          },
+          {
+            content: "Doc B fact one. Doc B fact two.",
+            eventDate: base + 10_000,
+            documentId: "doc-B",
+          },
+        ],
+        { consolidate: false, dedupThreshold: 0 },
       )
-    })
 
-    it("batch retain of multiple documents produces at least 2 unique timestamps across results", () => {
-      implementMe(
-        "requires mentionedAt offset from LLM extraction",
-        "test_fact_ordering.py::test_batch_retain_unique_timestamps",
-      )
+      const docA = result[0]!.memories
+        .map((memory) => memory.mentionedAt)
+        .filter((value): value is number => value != null)
+      const docB = result[1]!.memories
+        .map((memory) => memory.mentionedAt)
+        .filter((value): value is number => value != null)
+      expect(docA.length).toBeGreaterThan(0)
+      expect(docB.length).toBeGreaterThan(0)
+      expect(Math.min(...docB)).toBeGreaterThan(Math.max(...docA))
     })
   })
 })

@@ -132,6 +132,40 @@ describe("recall", () => {
       expect(result.entities).toBeDefined()
       expect(result.chunks).toBeDefined()
     })
+
+    it("uses stored chunk context and respects chunk/entity token budgets", async () => {
+      await t.hs.retain(
+        bankId,
+        "Alice meeting notes: discussed rollout, risks, and mitigation plans.",
+        {
+          facts: [
+            {
+              content: "Alice discussed rollout risks",
+              entities: ["Alice"],
+              factType: "world",
+            },
+          ],
+          documentId: "doc-recall-chunk",
+          context: "Sprint planning",
+          eventDate: Date.now() - 5_000,
+          consolidate: false,
+        },
+      )
+
+      const result = await t.hs.recall(bankId, "Alice rollout", {
+        includeChunks: true,
+        includeEntities: true,
+        maxChunkTokens: 5,
+        maxEntityTokens: 1,
+      })
+
+      expect(result.chunks).toBeDefined()
+      const chunkValues = Object.values(result.chunks ?? {})
+      expect(chunkValues.length).toBeGreaterThan(0)
+      expect(chunkValues[0]!.chunkId).toBeDefined()
+      expect(chunkValues[0]!.content.length).toBeLessThanOrEqual(20)
+      expect(result.entities).toEqual({})
+    })
   })
 
   // ── Method selection ────────────────────────────────────────────────────

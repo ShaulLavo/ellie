@@ -12,7 +12,7 @@
 
 import { chat, streamToText, maxIterations, toolDefinition } from "@ellie/ai"
 import { ulid } from "@ellie/utils"
-import { eq, and } from "drizzle-orm"
+import { eq, and, inArray } from "drizzle-orm"
 import * as v from "valibot"
 import type { AnyTextAdapter } from "@tanstack/ai"
 import type { HindsightDatabase } from "./db"
@@ -234,6 +234,140 @@ export async function reflect(
     }
   })
 
+  // ── Utility: expand (chunk/document context) ──
+
+  const expandDef = toolDefinition({
+    name: "expand",
+    description:
+      "Expand one or more memory IDs into chunk/document context. " +
+      "Use depth='chunk' for local context and depth='document' for full source text.",
+    inputSchema: v.object({
+      memoryIds: v.array(v.string(), "Memory IDs to expand"),
+      depth: v.optional(v.picklist(["chunk", "document"]), "chunk"),
+    }),
+  })
+
+  const expand = expandDef.server(async (_args) => {
+    const args = _args as { memoryIds: string[]; depth?: "chunk" | "document" }
+    if (!args.memoryIds?.length) return { results: [] as Array<Record<string, unknown>> }
+
+    const memoryIds = [...new Set(args.memoryIds)]
+    const depth = args.depth ?? "chunk"
+    const memoryRows = hdb.db
+      .select({
+        id: schema.memoryUnits.id,
+        content: schema.memoryUnits.content,
+        chunkId: schema.memoryUnits.chunkId,
+        documentId: schema.memoryUnits.documentId,
+        factType: schema.memoryUnits.factType,
+        sourceText: schema.memoryUnits.sourceText,
+      })
+      .from(schema.memoryUnits)
+      .where(
+        and(
+          eq(schema.memoryUnits.bankId, bankId),
+          inArray(schema.memoryUnits.id, memoryIds),
+        ),
+      )
+      .all()
+    if (memoryRows.length === 0) return { results: [] as Array<Record<string, unknown>> }
+
+    const chunkIds = [
+      ...new Set(
+        memoryRows
+          .map((row) => row.chunkId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0),
+      ),
+    ]
+    const chunkRows =
+      chunkIds.length > 0
+        ? hdb.db
+            .select({
+              id: schema.chunks.id,
+              content: schema.chunks.content,
+              chunkIndex: schema.chunks.chunkIndex,
+              documentId: schema.chunks.documentId,
+            })
+            .from(schema.chunks)
+            .where(inArray(schema.chunks.id, chunkIds))
+            .all()
+        : []
+    const chunkMap = new Map(chunkRows.map((row) => [row.id, row]))
+
+    const documentIds = new Set<string>()
+    if (depth === "document") {
+      for (const memory of memoryRows) {
+        if (memory.documentId) documentIds.add(memory.documentId)
+        if (!memory.chunkId) continue
+        const chunk = chunkMap.get(memory.chunkId)
+        if (chunk?.documentId) documentIds.add(chunk.documentId)
+      }
+    }
+    const documentRows =
+      documentIds.size > 0
+        ? hdb.db
+            .select({
+              id: schema.documents.id,
+              originalText: schema.documents.originalText,
+            })
+            .from(schema.documents)
+            .where(inArray(schema.documents.id, [...documentIds]))
+            .all()
+        : []
+    const documentMap = new Map(documentRows.map((row) => [row.id, row]))
+    const memoryMap = new Map(memoryRows.map((row) => [row.id, row]))
+
+    const results: Array<Record<string, unknown>> = []
+    for (const memoryId of memoryIds) {
+      const memory = memoryMap.get(memoryId)
+      if (!memory) continue
+
+      const item: Record<string, unknown> = {
+        memory: {
+          id: memory.id,
+          content: memory.content,
+          factType: memory.factType,
+          context: memory.sourceText,
+          chunkId: memory.chunkId,
+          documentId: memory.documentId,
+        },
+      }
+
+      if (memory.chunkId) {
+        const chunk = chunkMap.get(memory.chunkId)
+        if (chunk) {
+          item.chunk = {
+            id: chunk.id,
+            text: chunk.content,
+            index: chunk.chunkIndex,
+            documentId: chunk.documentId,
+          }
+          if (depth === "document" && chunk.documentId) {
+            const document = documentMap.get(chunk.documentId)
+            if (document) {
+              item.document = {
+                id: document.id,
+                text: document.originalText,
+              }
+            }
+          }
+        }
+      } else if (depth === "document" && memory.documentId) {
+        const document = documentMap.get(memory.documentId)
+        if (document) {
+          item.document = {
+            id: document.id,
+            text: document.originalText,
+          }
+        }
+      }
+
+      results.push(item)
+    }
+
+    return { results }
+  })
+
   // ── Run the agentic loop ──
 
   const userMessage = options.context
@@ -255,7 +389,7 @@ export async function reflect(
       adapter,
       messages: [{ role: "user", content: userMessage }],
       systemPrompts: [systemPrompt],
-      tools: [searchMentalModels, searchObservations, searchMemories, getEntity],
+      tools: [searchMentalModels, searchObservations, searchMemories, getEntity, expand],
       agentLoopStrategy: maxIterations(iterations),
     }),
   )

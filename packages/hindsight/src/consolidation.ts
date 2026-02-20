@@ -29,7 +29,11 @@ import type {
   TagsMatch,
 } from "./types"
 import { matchesTags } from "./recall"
-import { CONSOLIDATION_SYSTEM, getConsolidationUserPrompt } from "./prompts"
+import {
+  CONSOLIDATION_SYSTEM,
+  getConsolidationUserPrompt,
+  type ConsolidationPromptFact,
+} from "./prompts"
 import { parseLLMJson } from "./sanitize"
 import { refreshMentalModel } from "./mental-models"
 import type { BankProfile } from "./reflect"
@@ -149,7 +153,7 @@ export async function consolidate(
       // 2. Single LLM call to decide actions
       const actions = await consolidateWithLLM(
         adapter,
-        memory.content,
+        memory,
         relatedObs,
       )
 
@@ -248,6 +252,9 @@ interface RelatedObservation {
   content: string
   proofCount: number
   sourceCount: number
+  validFrom: number | null
+  validTo: number | null
+  mentionedAt: number | null
 }
 
 /**
@@ -306,6 +313,9 @@ async function findRelatedObservations(
       content: row.content,
       proofCount: row.proofCount,
       sourceCount: sourceMemoryIds.length,
+      validFrom: row.validFrom,
+      validTo: row.validTo,
+      mentionedAt: row.mentionedAt,
     })
   }
 
@@ -316,10 +326,19 @@ async function findRelatedObservations(
 
 async function consolidateWithLLM(
   adapter: AnyTextAdapter,
-  factContent: string,
+  sourceMemory: typeof import("./schema").memoryUnits.$inferSelect,
   relatedObservations: RelatedObservation[],
 ): Promise<ConsolidationAction[]> {
-  const userPrompt = getConsolidationUserPrompt(factContent, relatedObservations)
+  const sourceTags = safeJsonParse<string[]>(sourceMemory.tags, [])
+  const factPayload: ConsolidationPromptFact = {
+    id: sourceMemory.id,
+    content: sourceMemory.content,
+    validFrom: sourceMemory.validFrom,
+    validTo: sourceMemory.validTo,
+    mentionedAt: sourceMemory.mentionedAt,
+    tags: sourceTags,
+  }
+  const userPrompt = getConsolidationUserPrompt(factPayload, relatedObservations)
 
   try {
     const text = await streamToText(

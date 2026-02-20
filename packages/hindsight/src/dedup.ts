@@ -10,6 +10,7 @@ import type { HindsightDatabase } from "./db"
 import type { EmbeddingStore } from "./embedding"
 
 const DEFAULT_THRESHOLD = 0.92
+const DEFAULT_TIME_WINDOW_HOURS = 24
 
 /**
  * Number of nearest neighbors to fetch. We search more than 1 because the
@@ -29,29 +30,41 @@ export async function findDuplicates(
   hdb: HindsightDatabase,
   memoryVec: EmbeddingStore,
   bankId: string,
-  facts: Array<{ content: string }>,
+  facts: Array<{ content: string; temporalAnchor?: number | null }>,
   threshold: number = DEFAULT_THRESHOLD,
+  timeWindowHours: number = DEFAULT_TIME_WINDOW_HOURS,
 ): Promise<boolean[]> {
+  const windowMs = Math.max(0, timeWindowHours) * 60 * 60 * 1000
   // Run all vector searches in parallel — they are independent
   const allHits = await Promise.all(
     facts.map((fact) => memoryVec.search(fact.content, SEARCH_K)),
   )
 
-  return allHits.map((hits) => {
+  return allHits.map((hits, factIndex) => {
+    const anchor = facts[factIndex]?.temporalAnchor ?? null
     for (const hit of hits) {
       const similarity = 1 - hit.distance
       if (similarity < threshold) break // hits are sorted by distance; no point continuing
 
       // Verify the hit is in the same bank
       const row = hdb.db
-        .select({ bankId: hdb.schema.memoryUnits.bankId })
+        .select({
+          bankId: hdb.schema.memoryUnits.bankId,
+          validFrom: hdb.schema.memoryUnits.validFrom,
+          validTo: hdb.schema.memoryUnits.validTo,
+          mentionedAt: hdb.schema.memoryUnits.mentionedAt,
+          createdAt: hdb.schema.memoryUnits.createdAt,
+        })
         .from(hdb.schema.memoryUnits)
         .where(eq(hdb.schema.memoryUnits.id, hit.id))
         .get()
 
-      if (row?.bankId === bankId) {
-        return true
-      }
+      if (!row || row.bankId !== bankId) continue
+      if (anchor == null) return true
+
+      const candidateAnchor =
+        row.validFrom ?? row.validTo ?? row.mentionedAt ?? row.createdAt
+      if (Math.abs(anchor - candidateAnchor) <= windowMs) return true
     }
     return false
   })
