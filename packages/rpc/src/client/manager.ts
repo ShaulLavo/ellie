@@ -231,12 +231,9 @@ export class StreamManager {
   }
 
   /**
-   * Clear a stream: soft-delete the old log on the server, then close & evict
-   * locally so the next subscribe re-creates a fresh empty stream.
-   *
-   * Other connected clients will see the stream close (their long-poll/SSE gets
-   * a closed signal). The consumer auto-reconnect logic in stream-db handles
-   * re-subscribing to the new incarnation of the stream.
+   * Clear a stream: soft-delete the old log on the server, then immediately
+   * re-create a fresh one. All connected clients (including the caller) detect
+   * the closure via their consumer and auto-reconnect to the new incarnation.
    */
   async clearStream(
     streamDef: StreamDef,
@@ -245,10 +242,10 @@ export class StreamManager {
     const resolvedPath = resolvePath(streamDef.path, params)
     const entry = this.#cache.get(resolvedPath)
 
+    // Issue HTTP DELETE — the server soft-deletes the stream and notifies
+    // all subscribers (including ours) via streamClosed signal.
     if (entry) {
       await entry.db.stream.delete()
-      entry.db.close()
-      this.#cache.delete(resolvedPath)
     } else {
       const transport = new FetchStreamTransport({
         baseUrl: this.#baseUrl,
@@ -260,9 +257,20 @@ export class StreamManager {
       })
     }
 
-    // Immediately re-create so other clients' reconnect finds the new stream
-    const freshEntry = this.#getOrCreate(streamDef, params)
-    await freshEntry.ready
+    // Re-create the stream on the server so reconnecting consumers find it.
+    // We use a one-shot create (not #getOrCreate) to avoid replacing the
+    // cached entry — the existing StreamDB's consumer will reconnect itself.
+    const transport = new FetchStreamTransport({
+      baseUrl: this.#baseUrl,
+      streamId: resolvedPath.replace(/^\//, ``),
+    })
+    await new DurableStream({ url: `${this.#baseUrl}${resolvedPath}`, transport })
+      .create({ contentType: `application/json` })
+      .catch((err: unknown) => {
+        const isConflict =
+          err instanceof DurableStreamError && err.code === `CONFLICT_EXISTS`
+        if (!isConflict) throw err
+      })
   }
 
   /**

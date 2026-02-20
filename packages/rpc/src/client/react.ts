@@ -76,9 +76,6 @@ export function useStream<
     TItem & object,
     string
   > | null>(null)
-  // Bumped by clear() to force useEffect re-subscribe (new StreamDB after delete+recreate)
-  const [version, setVersion] = useState(0)
-
   // Serialize params for dependency tracking (sorted keys for stability)
   const paramsKey = stableStringify(params)
 
@@ -110,9 +107,8 @@ export function useStream<
     }
     // collectionClient is a Proxy — fresh object on every render, can't be in deps.
     // paramsKey captures the serialized params which is what actually drives re-subscribe.
-    // version is bumped by clear() to force re-subscribe after delete+recreate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsKey, version])
+  }, [paramsKey])
 
   // Memoize orderBy config to keep useLiveQuery deps stable
   const orderByField = options?.orderBy?.field
@@ -177,9 +173,6 @@ export function useStream<
   const clear = useCallback(
     async () => {
       await collectionClient.clear(params)
-      // Force re-subscribe: the old StreamDB was closed + evicted by clearStream,
-      // bumping version triggers the useEffect cleanup → new subscribe → fresh stream.
-      setVersion((v) => v + 1)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [paramsKey]
