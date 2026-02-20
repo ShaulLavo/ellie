@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { eq } from "drizzle-orm"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
 import { searchGraph } from "../retrieval/graph"
 import type { HindsightDatabase } from "../db"
 import type { EmbeddingStore } from "../embedding"
@@ -287,18 +287,89 @@ describe("Retrieval methods", () => {
   // ── MPFP graph retrieval (port of test_mpfp_retrieval.py) ──────────────
 
   describe("MPFP graph retrieval", () => {
-    it.todo("finds facts related via graph traversal through shared entities (integration)")
-    it.todo("loads edges lazily — only fetches edges for frontier nodes actually reached")
-    it.todo("empty seeds return empty results (no traversal)")
-    it.todo("single-hop traversal deposits alpha mass at seed node")
-    it.todo("single-hop traversal spreads remaining mass to neighbours proportionally")
-    it.todo("two-hop traversal propagates mass through intermediate nodes")
-    it.todo("cache reuse prevents redundant edge loading for already-cached nodes")
-    it.todo("RRF fusion: empty pattern results return empty list")
-    it.todo("RRF fusion: single pattern preserves rank order")
-    it.todo("RRF fusion: nodes appearing in multiple patterns get boosted score")
-    it.todo("RRF fusion: top_k limits returned results")
-    it.todo("RRF fusion: patterns with empty scores are ignored")
+    it("finds facts related via graph traversal through shared entities (integration)", () => {
+      implementMe(
+        "MPFP graph traversal not exposed as standalone function",
+        "test_mpfp_retrieval.py::test_graph_traversal_shared_entities",
+      )
+    })
+
+    it("loads edges lazily — only fetches edges for frontier nodes actually reached", () => {
+      implementMe(
+        "MPFP lazy edge loading not exposed for testing",
+        "test_mpfp_retrieval.py::test_lazy_edge_loading",
+      )
+    })
+
+    it("empty seeds return empty results (no traversal)", () => {
+      implementMe(
+        "MPFP empty seeds behavior not exposed for testing",
+        "test_mpfp_retrieval.py::test_empty_seeds",
+      )
+    })
+
+    it("single-hop traversal deposits alpha mass at seed node", () => {
+      implementMe(
+        "MPFP alpha mass deposit not exposed for testing",
+        "test_mpfp_retrieval.py::test_single_hop_alpha",
+      )
+    })
+
+    it("single-hop traversal spreads remaining mass to neighbours proportionally", () => {
+      implementMe(
+        "MPFP mass spreading not exposed for testing",
+        "test_mpfp_retrieval.py::test_single_hop_spread",
+      )
+    })
+
+    it("two-hop traversal propagates mass through intermediate nodes", () => {
+      implementMe(
+        "MPFP two-hop propagation not exposed for testing",
+        "test_mpfp_retrieval.py::test_two_hop_propagation",
+      )
+    })
+
+    it("cache reuse prevents redundant edge loading for already-cached nodes", () => {
+      implementMe(
+        "MPFP cache reuse not exposed for testing",
+        "test_mpfp_retrieval.py::test_cache_reuse",
+      )
+    })
+
+    it("RRF fusion: empty pattern results return empty list", () => {
+      implementMe(
+        "MPFP RRF fusion internals not exposed for testing",
+        "test_mpfp_retrieval.py::test_rrf_empty",
+      )
+    })
+
+    it("RRF fusion: single pattern preserves rank order", () => {
+      implementMe(
+        "MPFP RRF fusion internals not exposed for testing",
+        "test_mpfp_retrieval.py::test_rrf_single_pattern",
+      )
+    })
+
+    it("RRF fusion: nodes appearing in multiple patterns get boosted score", () => {
+      implementMe(
+        "MPFP RRF fusion internals not exposed for testing",
+        "test_mpfp_retrieval.py::test_rrf_boost",
+      )
+    })
+
+    it("RRF fusion: top_k limits returned results", () => {
+      implementMe(
+        "MPFP RRF fusion internals not exposed for testing",
+        "test_mpfp_retrieval.py::test_rrf_top_k",
+      )
+    })
+
+    it("RRF fusion: patterns with empty scores are ignored", () => {
+      implementMe(
+        "MPFP RRF fusion internals not exposed for testing",
+        "test_mpfp_retrieval.py::test_rrf_empty_scores",
+      )
+    })
   })
 
   // ── Link expansion retrieval (port of test_link_expansion_retrieval.py) ─

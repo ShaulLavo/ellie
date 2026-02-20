@@ -178,67 +178,96 @@ describe("extractTemporalRange", () => {
     })
   })
 
-  // TDD targets from Python test_query_analyzer.py — these test more
-  // colloquial expressions not yet supported by temporal.ts
-
   describe("TDD targets: colloquial expressions", () => {
-    it.todo("detects 'june 2024' → month range")
-    it.todo("detects 'last year' → full previous year")
-    it.todo("detects 'last Saturday' → specific day")
-    it.todo("detects specific month/year like 'dogs in June 2023'")
-    it.todo("detects 'a couple of days ago'")
+    it("detects 'june 2024' → month range", () => {
+      throw new Error("implement me: extractTemporalRange needs named month+year parsing — see test_query_analyzer.py::test_june_2024")
+    })
+    it("detects 'last year' → full previous year", () => {
+      throw new Error("implement me: extractTemporalRange needs 'last year' support — see test_query_analyzer.py::test_last_year")
+    })
+    it("detects 'last Saturday' → specific day", () => {
+      throw new Error("implement me: extractTemporalRange needs named day-of-week parsing — see test_query_analyzer.py::test_last_saturday")
+    })
+    it("detects specific month/year like 'dogs in June 2023'", () => {
+      throw new Error("implement me: extractTemporalRange needs named month+year parsing — see test_query_analyzer.py::test_dogs_in_june_2023")
+    })
+    it("detects 'a couple of days ago'", () => {
+      throw new Error("implement me: extractTemporalRange needs fuzzy temporal phrase parsing — see test_query_analyzer.py::test_couple_of_days_ago")
+    })
   })
 
-  // ── Missing Python tests (test_query_analyzer.py) ──────────────────────
-  // These are specific test cases from the Python suite that are not yet
-  // represented above, added as .todo() items for future implementation.
-
   describe("TDD targets: named month+year parsing", () => {
-    it.todo("detects 'March 2023' → 2023-03-01 to 2023-03-31")
-    it.todo("detects 'melanie activities in june 2024' → 2024-06-01 to 2024-06-30")
+    it("detects 'March 2023' → 2023-03-01 to 2023-03-31", () => {
+      throw new Error("implement me: extractTemporalRange needs named month+year parsing — see test_query_analyzer.py::test_march_2023")
+    })
+    it("detects 'melanie activities in june 2024' → 2024-06-01 to 2024-06-30", () => {
+      throw new Error("implement me: extractTemporalRange needs named month+year parsing — see test_query_analyzer.py::test_melanie_june_2024")
+    })
   })
 
   describe("TDD targets: named day of week", () => {
-    it.todo("detects 'last Saturday' → resolves to the most recent Saturday")
-    it.todo("detects 'last Friday' → resolves to the most recent Friday")
-    it.todo("detects 'last weekend' → resolves to the most recent Sat-Sun range")
+    it("detects 'last Saturday' → resolves to the most recent Saturday", () => {
+      throw new Error("implement me: extractTemporalRange needs named day-of-week parsing — see test_query_analyzer.py::test_last_saturday")
+    })
+    it("detects 'last Friday' → resolves to the most recent Friday", () => {
+      throw new Error("implement me: extractTemporalRange needs named day-of-week parsing — see test_query_analyzer.py::test_last_friday")
+    })
+    it("detects 'last weekend' → resolves to the most recent Sat-Sun range", () => {
+      throw new Error("implement me: extractTemporalRange needs 'last weekend' support — see test_query_analyzer.py::test_last_weekend")
+    })
   })
 
   describe("TDD targets: fuzzy temporal phrases", () => {
-    it.todo("detects 'a couple of days ago' → 1-3 days ago range")
-    it.todo("detects 'a few days ago' → 2-5 days ago range")
-    it.todo("detects 'a couple of weeks ago' → 1-3 weeks ago range")
+    it("detects 'a couple of days ago' → 1-3 days ago range", () => {
+      throw new Error("implement me: extractTemporalRange needs fuzzy temporal phrase parsing — see test_query_analyzer.py::test_couple_of_days_ago")
+    })
+    it("detects 'a few days ago' → 2-5 days ago range", () => {
+      throw new Error("implement me: extractTemporalRange needs fuzzy temporal phrase parsing — see test_query_analyzer.py::test_few_days_ago")
+    })
+    it("detects 'a couple of weeks ago' → 1-3 weeks ago range", () => {
+      throw new Error("implement me: extractTemporalRange needs fuzzy temporal phrase parsing — see test_query_analyzer.py::test_couple_of_weeks_ago")
+    })
   })
 
   describe("TDD targets: last year", () => {
-    it.todo("detects 'last year' → full previous calendar year (Jan 1 to Dec 31)")
+    it("detects 'last year' → full previous calendar year (Jan 1 to Dec 31)", () => {
+      throw new Error("implement me: extractTemporalRange needs 'last year' → full calendar year — see test_query_analyzer.py::test_last_year_full_range")
+    })
   })
 })
 
 describe("compute_temporal_links (TDD targets)", () => {
-  it.todo("candidate within temporal window creates a link")
-  // Python: test_candidate_within_window_creates_link — fact within
-  // TIME_WINDOW_DAYS of another → temporal link created
-
-  it.todo("candidate outside temporal window creates no link")
-  // Python: test_candidate_outside_window_no_link
-
-  it.todo("link weight decreases with temporal distance")
-  // Python: test_weight_decreases_with_distance — closer = higher weight
-
-  it.todo("minimum link weight is 0.3")
-  // Python: test_weight_minimum_is_0_3
-
-  it.todo("maximum 10 temporal links per memory unit")
-  // Python: test_max_10_links_per_unit
+  it("candidate within temporal window creates a link", () => {
+    throw new Error("implement me: computeTemporalLinks not exposed as standalone function — see test_link_utils.py::test_candidate_within_window_creates_link")
+  })
+  it("candidate outside temporal window creates no link", () => {
+    throw new Error("implement me: computeTemporalLinks not exposed as standalone function — see test_link_utils.py::test_candidate_outside_window_no_link")
+  })
+  it("link weight decreases with temporal distance", () => {
+    throw new Error("implement me: computeTemporalLinks not exposed as standalone function — see test_link_utils.py::test_weight_decreases_with_distance")
+  })
+  it("minimum link weight is 0.3", () => {
+    throw new Error("implement me: computeTemporalLinks not exposed as standalone function — see test_link_utils.py::test_weight_minimum_is_0_3")
+  })
+  it("maximum 10 temporal links per memory unit", () => {
+    throw new Error("implement me: computeTemporalLinks not exposed as standalone function — see test_link_utils.py::test_max_10_links_per_unit")
+  })
 })
 
-// ── Temporal fields written to DB (port of test_temporal_ranges.py) ────────
-
 describe("temporal fields written to DB", () => {
-  it.todo("occurred_start, occurred_end, and mentioned_at are written to the database after retain")
-  it.todo("mentioned_at is close to the event_date provided at retain time")
-  it.todo("point event: occurred_start and occurred_end are within the same day")
-  it.todo("period event: occurred_start is in the correct month/year (e.g. February 2024)")
-  it.todo("temporal fields are present and populated in search/recall results")
+  it("occurred_start, occurred_end, and mentioned_at are written to the database after retain", () => {
+    throw new Error("implement me: MemoryUnit lacks occurredStart/occurredEnd/mentionedAt fields — see test_temporal_ranges.py::test_temporal_fields_stored")
+  })
+  it("mentioned_at is close to the event_date provided at retain time", () => {
+    throw new Error("implement me: MemoryUnit lacks mentionedAt field — see test_temporal_ranges.py::test_mentioned_at_close_to_event_date")
+  })
+  it("point event: occurred_start and occurred_end are within the same day", () => {
+    throw new Error("implement me: MemoryUnit lacks occurredStart/occurredEnd fields — see test_temporal_ranges.py::test_point_event_same_day")
+  })
+  it("period event: occurred_start is in the correct month/year (e.g. February 2024)", () => {
+    throw new Error("implement me: MemoryUnit lacks occurredStart/occurredEnd fields — see test_temporal_ranges.py::test_period_event_correct_month")
+  })
+  it("temporal fields are present and populated in search/recall results", () => {
+    throw new Error("implement me: MemoryUnit lacks occurredStart/occurredEnd/mentionedAt fields — see test_temporal_ranges.py::test_temporal_fields_in_recall")
+  })
 })

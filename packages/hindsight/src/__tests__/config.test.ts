@@ -81,11 +81,31 @@ describe("BankConfig validation", () => {
 // ── Hindsight instance config validation (port of test_config_validation.py) ──
 
 describe("Hindsight instance config validation", () => {
-  it.todo("throws when retainMaxCompletionTokens <= retainChunkSize (tokens must exceed chunk size)")
-  it.todo("throws when retainMaxCompletionTokens equals retainChunkSize")
-  it.todo("error message names both offending parameters and their values")
-  it.todo("error message includes guidance on how to fix the invalid combination")
-  it.todo("accepts valid config where retainMaxCompletionTokens > retainChunkSize")
+  it("throws when retainMaxCompletionTokens <= retainChunkSize (tokens must exceed chunk size)", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
+    )
+  })
+  it("throws when retainMaxCompletionTokens equals retainChunkSize", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_equal_to_chunk_size_fails",
+    )
+  })
+  it("error message names both offending parameters and their values", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
+    )
+  })
+  it("error message includes guidance on how to fix the invalid combination", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
+    )
+  })
+  it("accepts valid config where retainMaxCompletionTokens > retainChunkSize", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_valid_retain_config_succeeds",
+    )
+  })
 })
 
 describe("Defaults merging", () => {
@@ -112,16 +132,27 @@ describe("Defaults merging", () => {
 })
 
 describe("Hindsight instance config validation (TDD targets)", () => {
-  it.todo("throws when retainMaxCompletionTokens <= retainChunkSize")
-  // Python: test_retain_max_completion_tokens_must_be_greater_than_chunk_size
+  it("throws when retainMaxCompletionTokens <= retainChunkSize", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
+    )
+  })
 
-  it.todo("throws when retainMaxCompletionTokens equals retainChunkSize")
-  // Python: test_retain_max_completion_tokens_equal_to_chunk_size_fails
+  it("throws when retainMaxCompletionTokens equals retainChunkSize", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_equal_to_chunk_size_fails",
+    )
+  })
 
-  it.todo("error message includes both parameter names and their values")
-  // Python: test_retain_max_completion_tokens_must_be_greater_than_chunk_size
-  // — error says which params violated the constraint
+  it("error message includes both parameter names and their values", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
+    )
+  })
 
-  it.todo("valid config with maxCompletionTokens > chunkSize succeeds")
-  // Python: test_valid_retain_config_succeeds
+  it("valid config with maxCompletionTokens > chunkSize succeeds", () => {
+    throw new Error(
+      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_valid_retain_config_succeeds",
+    )
+  })
 })

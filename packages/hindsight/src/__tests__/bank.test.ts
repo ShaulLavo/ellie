@@ -136,11 +136,29 @@ describe("Bank management", () => {
   // ── Update name/description ──────────────────────────────────────────
 
   describe("updateBank name/description", () => {
-    it.todo("updates bank name and is reflected in getBank")
-    it.todo("updates bank description/mission field")
-    it.todo("sets and retrieves bank mission field")
-    // Python: test_set_and_get_mission — bank has a mission/background
-    // field distinct from description; can be set and retrieved
+    it("updates bank name and is reflected in getBank", () => {
+      // TS Hindsight has no updateBankName method yet
+      throw new Error(
+        "implement me: Hindsight needs updateBankName method — see test_http_api_integration.py::test_update_bank_name",
+      )
+    })
+
+    it("updates bank description/mission field", () => {
+      const bank = t.hs.createBank("mission-test")
+      const updated = t.hs.setMission(bank.id, "I am a helpful assistant.")
+      expect(updated.mission).toBe("I am a helpful assistant.")
+      const retrieved = t.hs.getBankById(bank.id)
+      expect(retrieved).toBeDefined()
+      expect(retrieved!.mission).toBe("I am a helpful assistant.")
+    })
+
+    it("sets and retrieves bank mission field", () => {
+      const bank = t.hs.createBank("mission-roundtrip")
+      t.hs.setMission(bank.id, "I specialize in cooking advice.")
+      const found = t.hs.getBankById(bank.id)
+      expect(found).toBeDefined()
+      expect(found!.mission).toBe("I specialize in cooking advice.")
+    })
   })
 
   // ── Update config ────────────────────────────────────────────────────
