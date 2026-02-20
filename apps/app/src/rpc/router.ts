@@ -1,5 +1,6 @@
 import * as v from "valibot"
 import { createRouter } from "@ellie/streams-rpc/server"
+import type { StreamDef, CollectionDef } from "@ellie/streams-rpc"
 
 // ============================================================================
 // Schemas
@@ -16,17 +17,9 @@ export const messageSchema = v.object({
 // Router
 // ============================================================================
 
-export const appRouter = createRouter({
-  chat: {
-    path: `/chat/:chatId`,
-    collections: {
-      messages: {
-        schema: messageSchema,
-        type: `message`,
-        primaryKey: `id`,
-      },
-    },
-  },
-})
+export const appRouter = createRouter()
+  .stream(`chat`, `/chat/:chatId`)
+    .collection(`messages`, messageSchema)
+  .build()
 
 export type AppRouter = typeof appRouter
