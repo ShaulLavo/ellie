@@ -56,16 +56,24 @@ export class EmbeddingStore {
       `INSERT INTO ${this.tableName} (id, embedding) VALUES (?, ?)`,
     )
 
-    for (const item of items) {
-      if (item.vector.length !== this.dims) {
-        throw new Error(
-          `Embedding dimension mismatch: expected ${this.dims}, got ${item.vector.length}`,
-        )
-      }
+    // Wrap in SAVEPOINT for atomicity (supports nesting inside existing transactions)
+    this.sqlite.exec("SAVEPOINT vec_upsert")
+    try {
+      for (const item of items) {
+        if (item.vector.length !== this.dims) {
+          throw new Error(
+            `Embedding dimension mismatch: expected ${this.dims}, got ${item.vector.length}`,
+          )
+        }
 
-      // vec0 doesn't support ON CONFLICT — delete then insert
-      this.sqlite.run(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id])
-      insert.run(item.id, item.vector)
+        // vec0 doesn't support ON CONFLICT — delete then insert
+        this.sqlite.run(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id])
+        insert.run(item.id, item.vector)
+      }
+      this.sqlite.exec("RELEASE vec_upsert")
+    } catch (error) {
+      this.sqlite.exec("ROLLBACK TO vec_upsert")
+      throw error
     }
   }
 

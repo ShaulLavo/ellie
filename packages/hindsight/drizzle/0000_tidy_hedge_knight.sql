@@ -45,10 +45,11 @@ CREATE TABLE `hs_entity_cooccurrences` (
 	`entity_a` text NOT NULL,
 	`entity_b` text NOT NULL,
 	`count` integer DEFAULT 1 NOT NULL,
-	PRIMARY KEY(`entity_a`, `entity_b`),
+	PRIMARY KEY(`bank_id`, `entity_a`, `entity_b`),
 	FOREIGN KEY (`bank_id`) REFERENCES `hs_banks`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`entity_a`) REFERENCES `hs_entities`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`entity_b`) REFERENCES `hs_entities`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`entity_b`) REFERENCES `hs_entities`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "hs_cooc_canonical_order" CHECK(entity_a <= entity_b)
 );
 --> statement-breakpoint
 CREATE INDEX `idx_hs_cooc_bank` ON `hs_entity_cooccurrences` (`bank_id`);--> statement-breakpoint

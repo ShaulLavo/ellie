@@ -197,8 +197,10 @@ export function loadDirectivesForReflect(
   }
 
   // Tag-aware mode: filter by tag matching
+  // Exclude tagless directives — they should not leak into tag-scoped reflect
   return allActive.filter((d) => {
     const directiveTags = d.tags ?? []
+    if (directiveTags.length === 0) return false
     return matchesTags(directiveTags, tags, tagsMatch ?? "any")
   })
 }

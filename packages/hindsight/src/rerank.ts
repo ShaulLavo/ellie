@@ -38,6 +38,12 @@ export async function rerankCandidates(
   // Call user-provided reranker
   const scores = await rerank(query, documents)
 
+  if (scores.length !== withContent.length) {
+    throw new Error(
+      `Rerank score count mismatch: expected ${withContent.length}, got ${scores.length}`,
+    )
+  }
+
   // Sigmoid-normalize and re-sort
   return withContent
     .map((candidate, i) => ({

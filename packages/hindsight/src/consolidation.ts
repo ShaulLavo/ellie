@@ -34,6 +34,17 @@ import { parseLLMJson } from "./sanitize"
 import { refreshMentalModel } from "./mental-models"
 import type { BankProfile } from "./reflect"
 
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function safeJsonParse<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
 // ── Valibot schema for LLM consolidation response ───────────────────────
 
 const ConsolidationActionSchema = v.array(
@@ -115,8 +126,13 @@ export async function consolidate(
   for (const memory of unconsolidated) {
     const now = Date.now()
 
-    // Parse memory tags for tracking
-    const memoryTags: string[] = memory.tags ? JSON.parse(memory.tags) : []
+    // Parse memory tags for tracking (safe fallback on corrupt data)
+    let memoryTags: string[] = []
+    try {
+      memoryTags = memory.tags ? JSON.parse(memory.tags) : []
+    } catch {
+      // malformed JSON → treat as untagged
+    }
     for (const tag of memoryTags) allTags.add(tag)
 
     try {
@@ -415,7 +431,7 @@ async function executeCreateAction(
       bankId,
       content: action.text,
       factType: "observation",
-      confidence: 1.0,
+      confidence: sourceMemory.confidence,
       validFrom: sourceMemory.validFrom,
       validTo: sourceMemory.validTo,
       mentionedAt: sourceMemory.mentionedAt,
@@ -466,10 +482,8 @@ async function executeUpdateAction(
 
   if (!existing) return "skipped"
 
-  // Build history entry
-  const history: ObservationHistoryEntry[] = existing.history
-    ? JSON.parse(existing.history)
-    : []
+  // Build history entry (safe parse in case of corrupt data)
+  const history: ObservationHistoryEntry[] = safeJsonParse(existing.history, [])
 
   history.push({
     previousText: existing.content,
@@ -478,19 +492,15 @@ async function executeUpdateAction(
     sourceMemoryId: sourceMemory.id,
   })
 
-  // Merge source memory IDs
-  const existingSourceIds: string[] = existing.sourceMemoryIds
-    ? JSON.parse(existing.sourceMemoryIds)
-    : []
+  // Merge source memory IDs (safe parse)
+  const existingSourceIds: string[] = safeJsonParse(existing.sourceMemoryIds, [])
   if (!existingSourceIds.includes(sourceMemory.id)) {
     existingSourceIds.push(sourceMemory.id)
   }
 
-  // Merge tags (union of existing + source)
-  const existingTags: string[] = existing.tags ? JSON.parse(existing.tags) : []
-  const sourceTags: string[] = sourceMemory.tags
-    ? JSON.parse(sourceMemory.tags)
-    : []
+  // Merge tags (union of existing + source, safe parse)
+  const existingTags: string[] = safeJsonParse(existing.tags, [])
+  const sourceTags: string[] = safeJsonParse(sourceMemory.tags, [])
   const mergedTags = [...new Set([...existingTags, ...sourceTags])]
 
   // Expand temporal range

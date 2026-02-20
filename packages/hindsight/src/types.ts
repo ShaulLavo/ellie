@@ -403,7 +403,7 @@ export interface UpdateDirectiveOptions {
   content?: string
   priority?: number
   isActive?: boolean
-  tags?: string[]
+  tags?: string[] | null
 }
 
 // ── Reflect 3-tier result types ─────────────────────────────────────────

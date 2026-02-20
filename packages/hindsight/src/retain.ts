@@ -25,6 +25,17 @@ import { resolveEntity } from "./entity-resolver"
 import { consolidate } from "./consolidation"
 import type { BankProfile } from "./reflect"
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function safeJsonParse<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
 // ── Valibot schema for LLM extraction response ────────────────────────────
 
 const ExtractedEntitySchema = v.object({
@@ -336,13 +347,13 @@ function rowToMemoryUnit(
     confidence: row.confidence,
     validFrom: row.validFrom,
     validTo: row.validTo,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
-    tags: row.tags ? JSON.parse(row.tags) : null,
+    metadata: safeJsonParse<Record<string, unknown> | null>(row.metadata, null),
+    tags: safeJsonParse<string[] | null>(row.tags, null),
     sourceText: row.sourceText,
     consolidatedAt: row.consolidatedAt,
     proofCount: row.proofCount,
-    sourceMemoryIds: row.sourceMemoryIds ? JSON.parse(row.sourceMemoryIds) : null,
-    history: row.history ? JSON.parse(row.history) : null,
+    sourceMemoryIds: safeJsonParse<string[] | null>(row.sourceMemoryIds, null),
+    history: safeJsonParse<import("./types").ObservationHistoryEntry[] | null>(row.history, null),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
@@ -357,7 +368,7 @@ function rowToEntity(
     name: row.name,
     entityType: row.entityType as EntityType,
     description: row.description,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    metadata: safeJsonParse<Record<string, unknown> | null>(row.metadata, null),
     firstSeen: row.firstSeen,
     lastUpdated: row.lastUpdated,
   }
@@ -401,7 +412,28 @@ export async function retain(
       extracted,
       dedupThreshold,
     )
+
+    // Build old→new index mapping so causal targetIndex refs stay valid
+    const indexRemap = new Map<number, number>()
+    let newIdx = 0
+    for (let oldIdx = 0; oldIdx < extracted.length; oldIdx++) {
+      if (!dupes[oldIdx]) {
+        indexRemap.set(oldIdx, newIdx++)
+      }
+    }
+
     extracted = extracted.filter((_, i) => !dupes[i])
+
+    // Remap causal relation targetIndex values
+    for (const fact of extracted) {
+      if (!fact.causalRelations) continue
+      fact.causalRelations = fact.causalRelations
+        .map((rel) => ({
+          ...rel,
+          targetIndex: indexRemap.get(rel.targetIndex) ?? -1,
+        }))
+        .filter((rel) => rel.targetIndex >= 0)
+    }
   }
 
   if (extracted.length === 0) {
@@ -420,6 +452,8 @@ export async function retain(
   const cooccurrences = loadCooccurrences(hdb, bankId)
 
   const entityMap = new Map<string, Entity>()
+  // Track additional mentions per entity ID for batch mentionCount update
+  const mentionDeltas = new Map<string, number>()
 
   for (const fact of extracted) {
     // Collect all entity names in this fact for co-occurrence context
@@ -427,7 +461,12 @@ export async function retain(
 
     for (const ent of fact.entities) {
       const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-      if (entityMap.has(key)) continue
+      if (entityMap.has(key)) {
+        // Entity already resolved in this batch — just count the additional mention
+        const entity = entityMap.get(key)!
+        mentionDeltas.set(entity.id, (mentionDeltas.get(entity.id) ?? 0) + 1)
+        continue
+      }
 
       // Try entity resolution first (multi-factor scoring)
       const resolved = resolveEntity(
@@ -442,14 +481,7 @@ export async function retain(
       if (resolved) {
         // Found a match — update existing entity
         const matchedEntity = existingEntities.find((e) => e.id === resolved.entityId)!
-        hdb.db
-          .update(schema.entities)
-          .set({
-            lastUpdated: now,
-            mentionCount: matchedEntity.mentionCount + 1,
-          })
-          .where(eq(schema.entities.id, resolved.entityId))
-          .run()
+        mentionDeltas.set(matchedEntity.id, (mentionDeltas.get(matchedEntity.id) ?? 0) + 1)
 
         entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }))
       } else {
@@ -461,14 +493,7 @@ export async function retain(
         )
 
         if (exactMatch) {
-          hdb.db
-            .update(schema.entities)
-            .set({
-              lastUpdated: now,
-              mentionCount: exactMatch.mentionCount + 1,
-            })
-            .where(eq(schema.entities.id, exactMatch.id))
-            .run()
+          mentionDeltas.set(exactMatch.id, (mentionDeltas.get(exactMatch.id) ?? 0) + 1)
           entityMap.set(key, rowToEntity({ ...exactMatch, lastUpdated: now }))
         } else {
           // Create new entity
@@ -515,6 +540,20 @@ export async function retain(
         }
       }
     }
+  }
+
+  // Flush accumulated mention deltas to DB
+  for (const [entityId, delta] of mentionDeltas) {
+    const entity = existingEntities.find((e) => e.id === entityId)
+    if (!entity) continue
+    hdb.db
+      .update(schema.entities)
+      .set({
+        lastUpdated: now,
+        mentionCount: entity.mentionCount + delta,
+      })
+      .where(eq(schema.entities.id, entityId))
+      .run()
   }
 
   // ── Step 3: Store memory units + FTS + embeddings ──
@@ -1259,7 +1298,7 @@ function updateCooccurrences(
       hdb.sqlite.run(
         `INSERT INTO hs_entity_cooccurrences (bank_id, entity_a, entity_b, count)
          VALUES (?, ?, ?, 1)
-         ON CONFLICT (entity_a, entity_b)
+         ON CONFLICT (bank_id, entity_a, entity_b)
          DO UPDATE SET count = count + 1`,
         [bankId, entityA, entityB],
       )

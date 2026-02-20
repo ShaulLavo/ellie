@@ -32,12 +32,12 @@ export async function findDuplicates(
   facts: Array<{ content: string }>,
   threshold: number = DEFAULT_THRESHOLD,
 ): Promise<boolean[]> {
-  const isDuplicate: boolean[] = []
+  // Run all vector searches in parallel — they are independent
+  const allHits = await Promise.all(
+    facts.map((fact) => memoryVec.search(fact.content, SEARCH_K)),
+  )
 
-  for (const fact of facts) {
-    const hits = await memoryVec.search(fact.content, SEARCH_K)
-
-    let found = false
+  return allHits.map((hits) => {
     for (const hit of hits) {
       const similarity = 1 - hit.distance
       if (similarity < threshold) break // hits are sorted by distance; no point continuing
@@ -50,13 +50,9 @@ export async function findDuplicates(
         .get()
 
       if (row?.bankId === bankId) {
-        found = true
-        break
+        return true
       }
     }
-
-    isDuplicate.push(found)
-  }
-
-  return isDuplicate
+    return false
+  })
 }

@@ -72,10 +72,9 @@ describe("Retrieval methods", () => {
         methods: ["fulltext"],
       })
 
-      if (result.memories.length > 0) {
-        expect(result.memories[0]!.memory.content).toContain("Python")
-        expect(result.memories[0]!.sources).toContain("fulltext")
-      }
+      expect(result.memories.length).toBeGreaterThan(0)
+      expect(result.memories[0]!.memory.content).toContain("Python")
+      expect(result.memories[0]!.sources).toContain("fulltext")
     })
 
     it("handles porter stemming (run/running/runs)", async () => {
@@ -89,9 +88,8 @@ describe("Retrieval methods", () => {
       })
 
       // FTS5 with porter tokenizer should match "running" with "run"
-      if (result.memories.length > 0) {
-        expect(result.memories[0]!.memory.content).toContain("running")
-      }
+      expect(result.memories.length).toBeGreaterThan(0)
+      expect(result.memories[0]!.memory.content).toContain("running")
     })
   })
 
@@ -258,9 +256,8 @@ describe("Retrieval methods", () => {
       })
 
       // Should find the recent meeting, not the old conference
-      if (result.memories.length > 0) {
-        expect(result.memories[0]!.sources).toContain("temporal")
-      }
+      expect(result.memories.length).toBeGreaterThan(0)
+      expect(result.memories[0]!.sources).toContain("temporal")
     })
 
     it("returns empty when no memories in range", async () => {

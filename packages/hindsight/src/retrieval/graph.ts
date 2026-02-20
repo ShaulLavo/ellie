@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, or } from "drizzle-orm"
 import type { HindsightDatabase } from "../db"
 import type { EmbeddingStore } from "../embedding"
 import type { FactType, TagsMatch } from "../types"
+import { matchesTags } from "../recall"
 import type { RetrievalHit } from "./semantic"
 
 /**
@@ -36,14 +37,14 @@ export async function searchGraph(
   if (seedIds.length === 0) return []
 
   const seedSet = new Set(seedIds)
-  const entityScores = await expandViaEntities(
+  const entityScores = expandViaEntities(
     hdb,
     bankId,
     seedIds,
     seedSet,
     options,
   )
-  const causalScores = await expandViaCausalLinks(
+  const causalScores = expandViaCausalLinks(
     hdb,
     bankId,
     seedIds,
@@ -137,24 +138,24 @@ async function resolveSeedIds(
   return seeds
 }
 
-async function expandViaEntities(
+function expandViaEntities(
   hdb: HindsightDatabase,
   bankId: string,
   seedIds: string[],
   seedSet: Set<string>,
   options: GraphSearchOptions,
-): Promise<Map<string, number>> {
-  const entityIds = await getRelevantEntityIds(hdb, bankId, seedIds, options)
+): Map<string, number> {
+  const entityIds = getRelevantEntityIds(hdb, bankId, seedIds, options)
   if (entityIds.length === 0) return new Map()
 
-  const directScores = await scoreDirectEntityExpansion(
+  const directScores = scoreDirectEntityExpansion(
     hdb,
     bankId,
     entityIds,
     seedSet,
     options,
   )
-  const observationScores = await scoreObservationEntityExpansion(
+  const observationScores = scoreObservationEntityExpansion(
     hdb,
     bankId,
     seedIds,
@@ -165,15 +166,15 @@ async function expandViaEntities(
   return mergeScoreMaps(directScores, observationScores)
 }
 
-async function getRelevantEntityIds(
+function getRelevantEntityIds(
   hdb: HindsightDatabase,
   bankId: string,
   seedIds: string[],
   options: GraphSearchOptions,
-): Promise<string[]> {
-  const directEntityIds = await getEntityIdsForMemoryIds(hdb, seedIds)
-  const observationSourceIds = await getObservationSourceIds(hdb, bankId, seedIds)
-  const sourceEntityIds = await getEntityIdsForMemoryIds(hdb, observationSourceIds)
+): string[] {
+  const directEntityIds = getEntityIdsForMemoryIds(hdb, seedIds)
+  const observationSourceIds = getObservationSourceIds(hdb, bankId, seedIds)
+  const sourceEntityIds = getEntityIdsForMemoryIds(hdb, observationSourceIds)
   const allEntityIds = unique([...directEntityIds, ...sourceEntityIds])
   if (allEntityIds.length === 0) return []
 
@@ -194,10 +195,10 @@ async function getRelevantEntityIds(
     .map((r) => r.id)
 }
 
-async function getEntityIdsForMemoryIds(
+function getEntityIdsForMemoryIds(
   hdb: HindsightDatabase,
   memoryIds: string[],
-): Promise<string[]> {
+): string[] {
   if (memoryIds.length === 0) return []
 
   const rows = hdb.db
@@ -211,13 +212,13 @@ async function getEntityIdsForMemoryIds(
   return unique(rows.map((r) => r.entityId))
 }
 
-async function scoreDirectEntityExpansion(
+function scoreDirectEntityExpansion(
   hdb: HindsightDatabase,
   bankId: string,
   entityIds: string[],
   seedSet: Set<string>,
   options: GraphSearchOptions,
-): Promise<Map<string, number>> {
+): Map<string, number> {
   if (!shouldSearchDirectFactTypes(options.factTypes)) return new Map()
   if (entityIds.length === 0) return new Map()
 
@@ -246,21 +247,21 @@ async function scoreDirectEntityExpansion(
   )
 }
 
-async function scoreObservationEntityExpansion(
+function scoreObservationEntityExpansion(
   hdb: HindsightDatabase,
   bankId: string,
   seedIds: string[],
   entityIds: string[],
   seedSet: Set<string>,
   options: GraphSearchOptions,
-): Promise<Map<string, number>> {
+): Map<string, number> {
   if (!shouldSearchObservationFactType(options.factTypes)) return new Map()
   if (entityIds.length === 0) return new Map()
 
-  const seedSourceIds = await getObservationSourceIds(hdb, bankId, seedIds)
+  const seedSourceIds = getObservationSourceIds(hdb, bankId, seedIds)
   if (seedSourceIds.length === 0) return new Map()
 
-  const connectedSourceIds = await getConnectedSourceIds(
+  const connectedSourceIds = getConnectedSourceIds(
     hdb,
     bankId,
     entityIds,
@@ -300,11 +301,11 @@ async function scoreObservationEntityExpansion(
   return scores
 }
 
-async function getObservationSourceIds(
+function getObservationSourceIds(
   hdb: HindsightDatabase,
   bankId: string,
   memoryIds: string[],
-): Promise<string[]> {
+): string[] {
   if (memoryIds.length === 0) return []
 
   const rows = hdb.db
@@ -325,11 +326,11 @@ async function getObservationSourceIds(
   return unique(sourceIds)
 }
 
-async function getConnectedSourceIds(
+function getConnectedSourceIds(
   hdb: HindsightDatabase,
   bankId: string,
   entityIds: string[],
-): Promise<string[]> {
+): string[] {
   if (entityIds.length === 0) return []
 
   const sourceRelations = hdb.db
@@ -355,13 +356,13 @@ async function getConnectedSourceIds(
   return rows.filter((row) => row.bankId === bankId).map((row) => row.id)
 }
 
-async function expandViaCausalLinks(
+function expandViaCausalLinks(
   hdb: HindsightDatabase,
   bankId: string,
   seedIds: string[],
   seedSet: Set<string>,
   options: GraphSearchOptions,
-): Promise<Map<string, number>> {
+): Map<string, number> {
   if (seedIds.length === 0) return new Map()
 
   const causalThreshold =
@@ -418,10 +419,13 @@ function filterOutSeeds(
   scores: Map<string, number>,
   seedSet: Set<string>,
 ): Map<string, number> {
-  for (const id of seedSet) {
-    scores.delete(id)
+  const filtered = new Map<string, number>()
+  for (const [id, score] of scores) {
+    if (!seedSet.has(id)) {
+      filtered.set(id, score)
+    }
   }
-  return scores
+  return filtered
 }
 
 function mergeScoreMaps(
@@ -460,14 +464,14 @@ function countOverlap(values: string[], lookup: Set<string>): number {
   return count
 }
 
-async function filterScoreMapByMemoryRows(
+function filterScoreMapByMemoryRows(
   hdb: HindsightDatabase,
   bankId: string,
   scores: Map<string, number>,
   factTypeSet: Set<FactType>,
   tags?: string[],
   tagsMatch?: TagsMatch,
-): Promise<Map<string, number>> {
+): Map<string, number> {
   if (scores.size === 0) return scores
 
   const ids = [...scores.keys()]
@@ -517,27 +521,6 @@ function passesTagFilter(
 ): boolean {
   if (!filterTags || filterTags.length === 0) return true
   return matchesTags(parseStringArray(rawTags), filterTags, mode)
-}
-
-function matchesTags(
-  memoryTags: string[],
-  filterTags: string[],
-  mode: TagsMatch,
-): boolean {
-  if (filterTags.length === 0) return true
-
-  const isUntagged = memoryTags.length === 0
-
-  if (mode === "any") {
-    return isUntagged || memoryTags.some((tag) => filterTags.includes(tag))
-  }
-  if (mode === "all") {
-    return isUntagged || filterTags.every((tag) => memoryTags.includes(tag))
-  }
-  if (mode === "any_strict") {
-    return !isUntagged && memoryTags.some((tag) => filterTags.includes(tag))
-  }
-  return !isUntagged && filterTags.every((tag) => memoryTags.includes(tag))
 }
 
 function unique(values: string[]): string[] {

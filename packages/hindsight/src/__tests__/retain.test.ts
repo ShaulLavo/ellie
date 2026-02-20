@@ -59,7 +59,7 @@ describe("retain", () => {
       expect(result.memories[0]!.bankId).toBe(bankId)
     })
 
-    it("defaults factType to experience", async () => {
+    it("defaults factType to a valid type when none specified", async () => {
       const result = await t.hs.retain(bankId, "test", {
         facts: [{ content: "No type specified" }],
         consolidate: false,
@@ -196,8 +196,8 @@ describe("retain", () => {
 
       const semanticLinks = result.links.filter((l) => l.linkType === "semantic")
       // Semantic links may or may not be created depending on embedding similarity
-      // The test verifies the mechanism exists without asserting a specific count
-      expect(semanticLinks).toBeDefined()
+      // The test verifies the mechanism runs without error and returns an array
+      expect(Array.isArray(semanticLinks)).toBe(true)
     })
   })
 

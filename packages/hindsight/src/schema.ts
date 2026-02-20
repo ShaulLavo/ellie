@@ -5,7 +5,9 @@ import {
   real,
   index,
   primaryKey,
+  check,
 } from "drizzle-orm/sqlite-core"
+import { sql } from "drizzle-orm"
 
 // ── Banks ──────────────────────────────────────────────────────────────────
 
@@ -142,8 +144,9 @@ export const entityCooccurrences = sqliteTable(
     count: integer("count").notNull().default(1),
   },
   (table) => [
-    primaryKey({ columns: [table.entityA, table.entityB] }),
+    primaryKey({ columns: [table.bankId, table.entityA, table.entityB] }),
     index("idx_hs_cooc_bank").on(table.bankId),
+    check("hs_cooc_canonical_order", sql`entity_a <= entity_b`),
   ],
 )
 

@@ -365,7 +365,7 @@ export async function searchMentalModelsWithStaleness(
       id: row.id,
       name: row.name,
       content: row.content,
-      tags: row.tags ? JSON.parse(row.tags) : null,
+      tags: safeJsonParse<string[] | null>(row.tags, null),
       relevanceScore: similarity,
       updatedAt: row.updatedAt,
       isStale,

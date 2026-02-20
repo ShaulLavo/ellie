@@ -185,11 +185,9 @@ describe("Config resolution hierarchy", () => {
   it("uses hardcoded defaults when no overrides", () => {
     const t = createTestHindsight()
     try {
-      const bankId = t.hs.createBank("defaults").id
-      // Retain should use default extraction mode "concise" and dedup threshold 0.92
-      // We can't directly test resolveConfig (it's private), but we can verify
-      // behavior indirectly through retain
-      expect(bankId).toBeDefined()
+      const bank = t.hs.createBank("defaults")
+      // No config provided → config should be empty (defaults applied at runtime)
+      expect(bank.config).toEqual({})
     } finally {
       t.cleanup()
     }
@@ -200,9 +198,9 @@ describe("Config resolution hierarchy", () => {
       defaults: { extractionMode: "verbose", dedupThreshold: 0.5 },
     })
     try {
-      const bankId = t.hs.createBank("instance-defaults").id
-      // Instance defaults should be applied — verified indirectly
-      expect(bankId).toBeDefined()
+      const bank = t.hs.createBank("instance-defaults")
+      // Bank has no per-bank config — instance defaults are resolved at runtime
+      expect(bank.config).toEqual({})
     } finally {
       t.cleanup()
     }
