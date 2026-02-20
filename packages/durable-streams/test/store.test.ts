@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { StreamStore } from "./store"
+import { StreamStore } from "../src/store"
 
 function makeOffset(readSeq: number, byteOffset: number): string {
   return `${String(readSeq).padStart(16, "0")}_${String(byteOffset).padStart(16, "0")}`
