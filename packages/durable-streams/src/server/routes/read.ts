@@ -108,7 +108,10 @@ export function waitForStoreMessages(
       if (settled) return
       settled = true
       unsubscribe()
-      // Fresh lookup intentional: stream may have been closed during the wait by another request.
+      // Fresh lookup after unsubscribe: the stream may have been closed or deleted
+      // in the gap between the subscription expiring and this timeout firing.
+      // If deleted, `s` is undefined and streamClosed defaults to false — correct
+      // because the caller handles 404 on the next read attempt.
       const s = ctx.store.get(path)
       resolve({ messages: [], timedOut: true, streamClosed: s?.closed ?? false })
     }, timeoutMs)
@@ -416,6 +419,8 @@ function handleSSE(
         ctx.activeSSEResponses.delete(controller)
       }
 
+      // INVARIANT: Must be called sequentially — mutates `currentOffset` via closure.
+      // Safe because the SSE loop is await-based; no concurrent calls are possible.
       const emitMessages = (messages: Array<{ data: Uint8Array; offset: string }>) => {
         for (const message of messages) {
           const dataPayload = formatMessagePayload(message.data, useBase64, isJsonStream)

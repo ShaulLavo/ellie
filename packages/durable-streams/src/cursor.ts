@@ -1,6 +1,10 @@
 export const DEFAULT_CURSOR_EPOCH = 1728432000000 // 2024-10-09T00:00:00.000Z
 export const DEFAULT_CURSOR_INTERVAL_SECONDS = 20
 
+// Jitter is intentionally wide (up to 1 hour). It only triggers on collision —
+// when two clients poll with the same cursor in the same interval. The large
+// window permanently desynchronizes lock-step clients so they never collide
+// again, which is the goal for CDN response collapsing at high fanout.
 const MAX_JITTER_SECONDS = 3600
 const MIN_JITTER_SECONDS = 1
 
