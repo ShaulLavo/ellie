@@ -28,8 +28,13 @@ CLASSIFICATION:
 - "observation": Descriptions of people, places, or things observed
 
 CAUSAL RELATIONS:
-If a fact has a cause-effect relationship with another fact you are extracting, note it.
-"causalRelations" links this fact to a previously listed fact (by 0-based index) that it is caused by.
+If a fact has a directional relationship with another fact you are extracting, note it.
+"causalRelations" links this fact to a previously listed fact (by 0-based index).
+Use "relationType" to specify the direction:
+  - "causes": this fact causes the target fact
+  - "caused_by": this fact is caused by the target fact
+  - "enables": this fact enables or makes the target fact possible
+  - "prevents": this fact prevents or blocks the target fact
 
 RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
 {
@@ -45,7 +50,7 @@ RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
       ],
       "tags": ["optional", "topic", "tags"],
       "causalRelations": [
-        { "targetIndex": 0, "strength": 0.8 }
+        { "targetIndex": 0, "relationType": "causes", "strength": 0.8 }
       ]
     }
   ]
@@ -53,7 +58,7 @@ RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
 
 For opinions, set confidence between 0.0 and 1.0 based on how strongly the opinion is held.
 For temporal facts, set validFrom/validTo as ISO date strings. Use null for unknown or open-ended.
-causalRelations is optional — only include when there is a clear cause-effect relationship.
+causalRelations is optional — only include when there is a clear directional relationship.
 Return an empty facts array if there is nothing worth extracting.`
 
 // ── Fact Extraction (Verbose — capture everything) ─────────────────────────
@@ -81,8 +86,13 @@ CLASSIFICATION:
 - "observation": Descriptions of people, places, or things observed
 
 CAUSAL RELATIONS:
-If a fact has a cause-effect relationship with another fact you are extracting, note it.
-"causalRelations" links this fact to a previously listed fact (by 0-based index) that it is caused by.
+If a fact has a directional relationship with another fact you are extracting, note it.
+"causalRelations" links this fact to a previously listed fact (by 0-based index).
+Use "relationType" to specify the direction:
+  - "causes": this fact causes the target fact
+  - "caused_by": this fact is caused by the target fact
+  - "enables": this fact enables or makes the target fact possible
+  - "prevents": this fact prevents or blocks the target fact
 
 RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
 {
@@ -98,7 +108,7 @@ RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
       ],
       "tags": ["optional", "topic", "tags"],
       "causalRelations": [
-        { "targetIndex": 0, "strength": 0.8 }
+        { "targetIndex": 0, "relationType": "causes", "strength": 0.8 }
       ]
     }
   ]
@@ -106,7 +116,7 @@ RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
 
 For opinions, set confidence between 0.0 and 1.0 based on how strongly the opinion is held.
 For temporal facts, set validFrom/validTo as ISO date strings. Use null for unknown or open-ended.
-causalRelations is optional — only include when there is a clear cause-effect relationship.
+causalRelations is optional — only include when there is a clear directional relationship.
 NEVER return an empty facts array — there is ALWAYS something worth extracting.`
 
 // ── Extraction mode selector ───────────────────────────────────────────────

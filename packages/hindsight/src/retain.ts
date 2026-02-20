@@ -33,8 +33,11 @@ const ExtractedEntitySchema = v.object({
   ]),
 })
 
+const CAUSAL_LINK_TYPES = ["causes", "caused_by", "enables", "prevents"] as const
+
 const CausalRelationSchema = v.object({
   targetIndex: v.number(),
+  relationType: v.optional(v.picklist(CAUSAL_LINK_TYPES), "causes"),
   strength: v.optional(v.number(), 1.0),
 })
 
@@ -418,6 +421,8 @@ export async function retain(
       const targetId = memories[rel.targetIndex]!.id
       if (sourceId === targetId) continue
 
+      const linkType = rel.relationType ?? "causes"
+
       hdb.db
         .insert(schema.memoryLinks)
         .values({
@@ -425,13 +430,13 @@ export async function retain(
           bankId,
           sourceId,
           targetId,
-          linkType: "causal",
+          linkType,
           weight: rel.strength,
           createdAt: now,
         })
         .run()
 
-      links.push({ sourceId, targetId, linkType: "causal" as LinkType })
+      links.push({ sourceId, targetId, linkType })
     }
   }
 

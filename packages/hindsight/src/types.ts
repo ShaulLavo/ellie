@@ -14,7 +14,14 @@ export type EntityType =
   | "other"
 
 /** Relationship types between memories */
-export type LinkType = "temporal" | "semantic" | "entity" | "causal"
+export type LinkType =
+  | "temporal"
+  | "semantic"
+  | "entity"
+  | "causes"
+  | "caused_by"
+  | "enables"
+  | "prevents"
 
 // ── Data objects ───────────────────────────────────────────────────────────
 

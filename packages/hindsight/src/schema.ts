@@ -108,7 +108,7 @@ export const memoryLinks = sqliteTable(
     targetId: text("target_id")
       .notNull()
       .references(() => memoryUnits.id, { onDelete: "cascade" }),
-    linkType: text("link_type").notNull(), // temporal | semantic | entity | causal
+    linkType: text("link_type").notNull(), // temporal | semantic | entity | causes | caused_by | enables | prevents
     weight: real("weight").notNull().default(1.0),
     metadata: text("metadata"), // JSON blob
     createdAt: integer("created_at").notNull(),
