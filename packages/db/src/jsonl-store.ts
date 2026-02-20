@@ -155,6 +155,11 @@ export class JsonlEngine {
     }
   }
 
+  // TODO: Implement reaper — background job or CLI command that hard-deletes
+  // streams where deleted_at < Date.now() - RETENTION_PERIOD. The reaper would:
+  //   1. Find streams with deleted_at older than the retention window
+  //   2. DELETE the SQLite row (cascade removes messages/producers)
+
   // -- Append ---------------------------------------------------------------
 
   /**
