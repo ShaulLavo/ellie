@@ -50,6 +50,7 @@ const DONE_CALL_PATTERN = /done\s*\(\s*\{.*$/is
 const LEAKED_JSON_SUFFIX = /\s*```(?:json)?\s*\{[^}]*(?:"(?:observation_ids|memory_ids|mental_model_ids)"|\})\s*```\s*$/is
 const LEAKED_JSON_OBJECT = /\s*\{[^{]*"(?:observation_ids|memory_ids|mental_model_ids|answer)"[^}]*\}\s*$/is
 const TRAILING_IDS_PATTERN = /\s*(?:observation_ids|memory_ids|mental_model_ids)\s*[=:]\s*\[.*?\]\s*$/is
+const SPECIAL_TOKEN_SUFFIX_PATTERN = /<\|[^|]+?\|>.*$/s
 
 /**
  * @param modelVec - Embedding store for mental models. Pass null to skip
@@ -639,12 +640,112 @@ function normalizeExpandDepth(depth: string | undefined): "chunk" | "document" {
 }
 
 function cleanReflectAnswer(text: string): string {
-  let cleaned = (text ?? "").trim()
-  cleaned = cleaned.replace(DONE_CALL_PATTERN, "").trim()
+  return _cleanDoneAnswer(_cleanAnswerText(text))
+}
+
+export function _cleanAnswerText(text: string): string {
+  const source = text ?? ""
+  if (!source) return ""
+  const cleaned = source.trim().replace(DONE_CALL_PATTERN, "").trim()
+  return cleaned || source.trim()
+}
+
+export function _cleanDoneAnswer(text: string): string {
+  const source = text ?? ""
+  if (!source) return ""
+  let cleaned = source.trim()
   cleaned = cleaned.replace(LEAKED_JSON_SUFFIX, "").trim()
   cleaned = cleaned.replace(LEAKED_JSON_OBJECT, "").trim()
   cleaned = cleaned.replace(TRAILING_IDS_PATTERN, "").trim()
-  return cleaned || (text ?? "").trim()
+  return cleaned || source.trim()
+}
+
+export function _normalizeToolName(name: string): string {
+  let normalized = (name ?? "").trim()
+  if (!normalized) return normalized
+
+  if (normalized.startsWith("call=")) {
+    normalized = normalized.slice("call=".length).trim()
+  }
+  if (normalized.startsWith("functions.")) {
+    normalized = normalized.slice("functions.".length).trim()
+  }
+  normalized = normalized.replace(SPECIAL_TOKEN_SUFFIX_PATTERN, "").trim()
+  return normalized
+}
+
+export function _isDoneTool(name: string): boolean {
+  return _normalizeToolName(name) === "done"
+}
+
+export interface ReflectAgentToolCallLike {
+  id: string
+  name: string
+  arguments?: Record<string, unknown>
+}
+
+export interface ReflectAgentToolCallResultLike {
+  toolCalls: ReflectAgentToolCallLike[]
+  finishReason?: string
+}
+
+export interface ReflectAgentLoopResultLike {
+  text: string
+  usedMemoryIds: string[]
+  iterations: number
+}
+
+export async function _runReflectAgentLoopForTesting(input: {
+  callWithTools: () => Promise<ReflectAgentToolCallResultLike>
+  tools: Record<string, (args: Record<string, unknown>) => Promise<unknown>>
+  maxIterations?: number
+}): Promise<ReflectAgentLoopResultLike> {
+  const maxIterations = input.maxIterations ?? 5
+
+  for (let iteration = 1; iteration <= maxIterations; iteration++) {
+    const result = await input.callWithTools()
+    const toolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : []
+    for (const toolCall of toolCalls) {
+      const normalized = _normalizeToolName(toolCall.name)
+      const args = toolCall.arguments ?? {}
+
+      if (_isDoneTool(normalized)) {
+        const answer = typeof args.answer === "string" ? args.answer : ""
+        const usedMemoryIds = parseStringArray(args.memory_ids, args.memoryIds)
+        return {
+          text: _cleanDoneAnswer(answer),
+          usedMemoryIds,
+          iterations: iteration,
+        }
+      }
+
+      const tool = input.tools[normalized]
+      if (!tool) {
+        continue
+      }
+
+      try {
+        await tool(args)
+      } catch {
+        // Keep looping to allow recovery on subsequent iterations.
+      }
+    }
+  }
+
+  return {
+    text: "",
+    usedMemoryIds: [],
+    iterations: maxIterations,
+  }
+}
+
+function parseStringArray(...values: unknown[]): string[] {
+  for (const value of values) {
+    if (!Array.isArray(value)) continue
+    const strings = value.filter((entry): entry is string => typeof entry === "string")
+    return strings
+  }
+  return []
 }
 
 async function generateStructuredOutput(
