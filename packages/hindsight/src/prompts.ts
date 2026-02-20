@@ -152,7 +152,8 @@ DECIDE what to do with the new fact:
 ACTIONS:
 - "create" — The fact contains new durable knowledge not covered by existing observations. Create a new observation.
 - "update" — The fact adds to, refines, or changes an existing observation. Update it with the new information.
-- Return empty array [] — The fact is ephemeral, trivial, or already fully captured. No action needed.
+- "merge" — Multiple existing observations should be combined into one consolidated observation.
+- "skip" — The fact is ephemeral, trivial, or already fully captured. No action needed.
 
 RULES:
 - Extract DURABLE knowledge: patterns, relationships, preferences, capabilities, recurring themes
@@ -167,10 +168,12 @@ RULES:
 RESPONSE FORMAT: Return ONLY valid JSON — an array of actions:
 [
   {"action": "create", "text": "Durable observation text", "reason": "Why this is worth remembering"},
-  {"action": "update", "observationId": "existing-id", "text": "Updated observation text", "reason": "What changed"}
+  {"action": "update", "observationId": "existing-id", "text": "Updated observation text", "reason": "What changed"},
+  {"action": "merge", "observationIds": ["obs-1", "obs-2"], "text": "Merged observation text", "reason": "Why these observations should be merged"},
+  {"action": "skip", "reason": "No durable knowledge to store"}
 ]
 
-Or return [] if no action is needed.`
+You may also return [] if no action is needed.`
 
 export function getConsolidationUserPrompt(
   newFact: string,
@@ -187,7 +190,8 @@ export function getConsolidationUserPrompt(
     prompt += "\nNo existing related observations found.\n"
   }
 
-  prompt += "\nDecide: create new observation, update existing, or skip (return [])."
+  prompt +=
+    "\nDecide: create, update, merge observations when needed, or skip."
   return prompt
 }
 

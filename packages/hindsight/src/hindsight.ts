@@ -495,6 +495,8 @@ export class Hindsight {
         memoriesProcessed: r.memoriesProcessed,
         observationsCreated: r.observationsCreated,
         observationsUpdated: r.observationsUpdated,
+        observationsMerged: r.observationsMerged,
+        skipped: r.skipped,
       }),
     )
   }

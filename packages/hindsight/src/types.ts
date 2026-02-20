@@ -322,6 +322,10 @@ export interface ConsolidateResult {
   observationsCreated: number
   /** Number of existing observations updated */
   observationsUpdated: number
+  /** Number of observations merged into a single observation */
+  observationsMerged: number
+  /** Number of memories skipped during consolidation */
+  skipped: number
   /** Number of mental model refreshes queued (fire-and-forget) */
   mentalModelsRefreshQueued: number
 }
@@ -330,6 +334,13 @@ export interface ConsolidateResult {
 export type ConsolidationAction =
   | { action: "create"; text: string; reason: string }
   | { action: "update"; observationId: string; text: string; reason: string }
+  | {
+      action: "merge"
+      observationIds: string[]
+      text: string
+      reason: string
+    }
+  | { action: "skip"; reason?: string }
 
 // ── Mental Model options/results ──────────────────────────────────────────
 

@@ -35,6 +35,115 @@ describe("Consolidation", () => {
       expect(result.memoriesProcessed).toBe(0)
       expect(result.observationsCreated).toBe(0)
       expect(result.observationsUpdated).toBe(0)
+      expect(result.observationsMerged).toBe(0)
+      expect(result.skipped).toBe(0)
+    })
+  })
+
+  describe("action execution", () => {
+    it("counts explicit skip actions", async () => {
+      await t.hs.retain(bankId, "ephemeral source", {
+        facts: [{ content: "It is sunny right now." }],
+        consolidate: false,
+      })
+
+      t.adapter.setResponse(
+        JSON.stringify([{ action: "skip", reason: "ephemeral state" }]),
+      )
+
+      const result = await t.hs.consolidate(bankId)
+      expect(result.memoriesProcessed).toBe(1)
+      expect(result.observationsCreated).toBe(0)
+      expect(result.observationsUpdated).toBe(0)
+      expect(result.observationsMerged).toBe(0)
+      expect(result.skipped).toBe(1)
+    })
+
+    it("merges multiple observations into one", async () => {
+      await t.hs.retain(bankId, "source 1", {
+        facts: [{ content: "Alice likes sushi." }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+      await t.hs.retain(bankId, "source 2", {
+        facts: [{ content: "Alice likes Japanese food." }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      t.adapter.setResponses([
+        JSON.stringify([
+          {
+            action: "create",
+            text: "Alice likes sushi.",
+            reason: "durable preference",
+          },
+        ]),
+        JSON.stringify([
+          {
+            action: "create",
+            text: "Alice likes Japanese food.",
+            reason: "durable preference",
+          },
+        ]),
+      ])
+
+      const firstPass = await t.hs.consolidate(bankId)
+      expect(firstPass.observationsCreated).toBe(2)
+
+      const listObservations = () => {
+        const hdb = (t.hs as any).hdb
+        return hdb.sqlite
+          .prepare(
+            `SELECT id, content, source_memory_ids
+             FROM hs_memory_units
+             WHERE bank_id = ? AND fact_type = 'observation'
+             ORDER BY created_at ASC`,
+          )
+          .all(bankId) as Array<{
+            id: string
+            content: string
+            source_memory_ids: string | null
+          }>
+      }
+
+      const initialObservations = listObservations()
+      expect(initialObservations).toHaveLength(2)
+      const observationIds = initialObservations.map((obs) => obs.id)
+
+      await t.hs.retain(bankId, "source 3", {
+        facts: [{ content: "Alice often chooses sushi restaurants." }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      t.adapter.setResponse(
+        JSON.stringify([
+          {
+            action: "merge",
+            observationIds,
+            text: "Alice likes sushi and Japanese food.",
+            reason: "same durable preference cluster",
+          },
+        ]),
+      )
+
+      const secondPass = await t.hs.consolidate(bankId)
+      expect(secondPass.observationsMerged).toBe(1)
+      expect(secondPass.observationsCreated).toBe(0)
+      expect(secondPass.observationsUpdated).toBe(0)
+      expect(secondPass.skipped).toBe(0)
+
+      const mergedObservations = listObservations()
+      expect(mergedObservations).toHaveLength(1)
+      expect(mergedObservations[0]!.content).toBe(
+        "Alice likes sushi and Japanese food.",
+      )
+
+      const sourceIds = mergedObservations[0]!.source_memory_ids
+        ? (JSON.parse(mergedObservations[0]!.source_memory_ids!) as string[])
+        : []
+      expect(sourceIds.length).toBeGreaterThanOrEqual(3)
     })
   })
 
