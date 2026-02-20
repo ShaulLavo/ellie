@@ -79,6 +79,7 @@ CREATE TABLE `hs_memory_links` (
 CREATE INDEX `idx_hs_link_source` ON `hs_memory_links` (`source_id`);--> statement-breakpoint
 CREATE INDEX `idx_hs_link_target` ON `hs_memory_links` (`target_id`);--> statement-breakpoint
 CREATE INDEX `idx_hs_link_bank_type` ON `hs_memory_links` (`bank_id`,`link_type`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_hs_link_edge` ON `hs_memory_links` (`source_id`,`target_id`,`link_type`);--> statement-breakpoint
 CREATE TABLE `hs_memory_units` (
 	`id` text PRIMARY KEY NOT NULL,
 	`bank_id` text NOT NULL,
@@ -120,4 +121,4 @@ CREATE TABLE `hs_mental_models` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_hs_mm_bank` ON `hs_mental_models` (`bank_id`);--> statement-breakpoint
-CREATE INDEX `idx_hs_mm_bank_name` ON `hs_mental_models` (`bank_id`,`name`);
+CREATE UNIQUE INDEX `idx_hs_mm_bank_name` ON `hs_mental_models` (`bank_id`,`name`);

@@ -4,6 +4,7 @@ import {
   integer,
   real,
   index,
+  uniqueIndex,
   primaryKey,
   check,
 } from "drizzle-orm/sqlite-core"
@@ -173,6 +174,7 @@ export const memoryLinks = sqliteTable(
     index("idx_hs_link_source").on(table.sourceId),
     index("idx_hs_link_target").on(table.targetId),
     index("idx_hs_link_bank_type").on(table.bankId, table.linkType),
+    uniqueIndex("idx_hs_link_edge").on(table.sourceId, table.targetId, table.linkType),
   ],
 )
 
@@ -220,7 +222,7 @@ export const mentalModels = sqliteTable(
   },
   (table) => [
     index("idx_hs_mm_bank").on(table.bankId),
-    index("idx_hs_mm_bank_name").on(table.bankId, table.name),
+    uniqueIndex("idx_hs_mm_bank_name").on(table.bankId, table.name),
   ],
 )
 

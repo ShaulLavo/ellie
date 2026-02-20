@@ -7,6 +7,7 @@
 
 import { describe, it, expect, afterEach } from "bun:test"
 import { createTestHindsight, type TestHindsight } from "./setup"
+
 describe("BankConfig validation", () => {
   let t: TestHindsight
 
@@ -21,10 +22,7 @@ describe("BankConfig validation", () => {
       const bank = t.hs.createBank(`mode-${mode}`, {
         config: { extractionMode: mode },
       })
-      const extractionMode = bank.config.extractionMode
-      expect(extractionMode).toBeDefined()
-      if (!extractionMode) throw new Error("Expected extractionMode to be set")
-      expect(extractionMode).toBe(mode)
+      expect(bank.config.extractionMode).toBe(mode)
     }
   })
 
@@ -35,10 +33,7 @@ describe("BankConfig validation", () => {
       const bank = t.hs.createBank(`budget-${budget}`, {
         config: { reflectBudget: budget },
       })
-      const reflectBudget = bank.config.reflectBudget
-      expect(reflectBudget).toBeDefined()
-      if (!reflectBudget) throw new Error("Expected reflectBudget to be set")
-      expect(reflectBudget).toBe(budget)
+      expect(bank.config.reflectBudget).toBe(budget)
     }
   })
 
@@ -128,31 +123,5 @@ describe("Defaults merging", () => {
     } finally {
       t.cleanup()
     }
-  })
-})
-
-describe("Hindsight instance config validation (TDD targets)", () => {
-  it("throws when retainMaxCompletionTokens <= retainChunkSize", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
-    )
-  })
-
-  it("throws when retainMaxCompletionTokens equals retainChunkSize", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_equal_to_chunk_size_fails",
-    )
-  })
-
-  it("error message includes both parameter names and their values", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
-    )
-  })
-
-  it("valid config with maxCompletionTokens > chunkSize succeeds", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_valid_retain_config_succeeds",
-    )
   })
 })

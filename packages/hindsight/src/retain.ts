@@ -847,6 +847,7 @@ export async function retain(
             weight,
             createdAt: now,
           })
+          .onConflictDoNothing()
           .run()
 
         links.push({
@@ -881,6 +882,7 @@ export async function retain(
           weight: rel.strength,
           createdAt: now,
         })
+        .onConflictDoNothing()
         .run()
 
       links.push({ sourceId, targetId, linkType })
@@ -1359,6 +1361,7 @@ function createEntityLinksFromMemories(
           weight,
           createdAt,
         })
+        .onConflictDoNothing()
         .run()
 
       output.push({ sourceId, targetId, linkType: "entity" })
@@ -1576,6 +1579,7 @@ function createCausalLinksFromGroups(
             weight: relation.strength,
             createdAt,
           })
+          .onConflictDoNothing()
           .run()
 
         output.push({ sourceId, targetId, linkType })
@@ -1620,6 +1624,7 @@ function createSemanticLinksFromVectors(
           weight: similarity,
           createdAt,
         })
+        .onConflictDoNothing()
         .run()
 
       output.push({
@@ -1687,6 +1692,7 @@ async function createSemanticLinks(
           weight: similarity,
           createdAt: Date.now(),
         })
+        .onConflictDoNothing()
         .run()
 
       links.push({

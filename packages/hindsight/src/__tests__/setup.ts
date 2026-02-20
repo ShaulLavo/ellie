@@ -3,42 +3,70 @@
  *
  * Equivalent of conftest.py from the original Hindsight project.
  * Provides a factory for creating test Hindsight instances with temp DBs
- * and deterministic (non-semantic) mock embeddings.
+ * and pre-generated real embeddings (nomic-embed-text via Ollama).
  */
 
 import { tmpdir } from "os"
 import { join } from "path"
-import { rmSync } from "fs"
+import { rmSync, readFileSync } from "fs"
 import { Hindsight } from "../hindsight"
 import type { HindsightConfig } from "../types"
 import { createMockAdapter, type MockAdapter } from "./mock-adapter"
 
+// ── Load pre-generated embeddings fixture ────────────────────────────────────
+//
+// Real embeddings from nomic-embed-text (768 dims) generated via:
+//   bun run generate-embeddings
+//
+// Falls back to hash-based embeddings if fixture is missing.
+
+let EMBEDDING_FIXTURE: Record<string, number[]> = {}
+try {
+  const fixturePath = join(import.meta.dir, "fixtures", "embeddings.json")
+  EMBEDDING_FIXTURE = JSON.parse(readFileSync(fixturePath, "utf-8"))
+} catch {
+  // Fixture not yet generated — fall back to hash-based embeddings
+}
+
+const HAS_REAL_EMBEDDINGS = Object.keys(EMBEDDING_FIXTURE).length > 0
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const EMBED_DIMS = 16
+export const EMBED_DIMS = HAS_REAL_EMBEDDINGS ? 768 : 16
 
-// ── Mock embed function ──────────────────────────────────────────────────────
+// ── Embedding function ───────────────────────────────────────────────────────
 
 /**
- * Deterministic hash-based embedding function.
+ * Hash-based fallback embedding (NOT semantically meaningful).
+ * Used when a text is not found in the pre-generated fixture.
+ */
+function hashEmbed(text: string, dims: number): number[] {
+  const vec = Array.from<number>({ length: dims }).fill(0)
+  for (let i = 0; i < text.length; i++) {
+    vec[i % dims] += text.charCodeAt(i) / 1000
+  }
+  const norm = Math.sqrt(vec.reduce((s: number, v: number) => s + v * v, 0))
+  return norm > 0 ? vec.map((v: number) => v / norm) : vec
+}
+
+/**
+ * Embedding function backed by pre-generated real embeddings.
  *
- * NOT semantically meaningful — the same text always produces the same
- * vector, and different texts produce different vectors, but similarity
- * between vectors does NOT correlate with semantic similarity.
+ * With the fixture loaded (default):
+ * - Returns real nomic-embed-text vectors for known strings
+ * - Cosine similarity between "Peter" and "Peter works at Acme Corp" is high
+ * - Semantic search and graph seed resolution work correctly
  *
- * Sufficient for testing:
- * - Dedup thresholds (exact same text → identical vector → distance 0)
- * - Vector storage / retrieval plumbing
- * - KNN search mechanics
+ * Without fixture or for unknown strings:
+ * - Falls back to deterministic hash-based embeddings
+ * - Same text → same vector, but similarity is not semantically meaningful
  */
 export function mockEmbed(text: string): Promise<number[]> {
-  const vec = Array.from<number>({ length: EMBED_DIMS }).fill(0)
-  for (let i = 0; i < text.length; i++) {
-    vec[i % EMBED_DIMS] += text.charCodeAt(i) / 1000
+  const precomputed = EMBEDDING_FIXTURE[text]
+  if (precomputed) {
+    return Promise.resolve(precomputed)
   }
-  // Normalize to unit vector
-  const norm = Math.sqrt(vec.reduce((s: number, v: number) => s + v * v, 0))
-  return Promise.resolve(norm > 0 ? vec.map((v: number) => v / norm) : vec)
+  return Promise.resolve(hashEmbed(text, EMBED_DIMS))
 }
 
 // ── Test Hindsight factory ──────────────────────────────────────────────────

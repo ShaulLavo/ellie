@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "04247d88-4a96-453c-9d6c-50ced3b0b438",
+  "id": "a9ef6699-f38d-4a3f-b237-d8940079088e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "hs_banks": {
@@ -540,6 +540,15 @@
             "link_type"
           ],
           "isUnique": false
+        },
+        "idx_hs_link_edge": {
+          "name": "idx_hs_link_edge",
+          "columns": [
+            "source_id",
+            "target_id",
+            "link_type"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -861,7 +870,7 @@
             "bank_id",
             "name"
           ],
-          "isUnique": false
+          "isUnique": true
         }
       },
       "foreignKeys": {

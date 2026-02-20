@@ -131,7 +131,8 @@ describe("resolveEntity", () => {
       }),
     ]
 
-    // Without co-occurrences: name similarity ~0.5 * 0.5 = 0.25, no temporal → below threshold
+    // Without co-occurrences: Dice("peter","pete") = 6/7 ≈ 0.857, name factor = 0.429,
+    // temporal factor = 0 (10 days > 7-day window), total ≈ 0.429 → below 0.6 threshold
     const resultWithout = resolveEntity("Peter", "person", entities, new Map(), [], now)
 
     // With co-occurrences: add co-occurrence boost
@@ -160,13 +161,13 @@ describe("resolveEntity", () => {
   it("boosts score with temporal proximity", () => {
     const recentEntity = makeEntity({
       id: "e1",
-      name: "Pete", // close match to "Peter"
-      lastUpdated: now, // just now
+      name: "Pete", // Dice("peter","pete") = 6/7 ≈ 0.857, name factor = 0.429
+      lastUpdated: now, // just now → temporal factor = 0.2, total ≈ 0.629 > 0.6
     })
     const oldEntity = makeEntity({
       id: "e2",
-      name: "Pete", // same close match
-      lastUpdated: now - 14 * 86_400_000, // 14 days ago, beyond 7-day window
+      name: "Pete", // same name similarity
+      lastUpdated: now - 14 * 86_400_000, // 14 days ago → temporal factor = 0, total ≈ 0.429 < 0.6
     })
 
     const resultRecent = resolveEntity(
@@ -186,12 +187,11 @@ describe("resolveEntity", () => {
       now,
     )
 
-    // Both may be null (below threshold) or the recent one may pass
-    // The key is: if both pass, recent should score higher
-    // If neither passes, the temporal mechanism is still tested (no crash)
-    if (resultRecent !== null && resultOld !== null) {
-      // Both passed — nothing more to assert (IDs differ)
-    }
+    // Recent entity should pass threshold due to temporal boost
+    expect(resultRecent).not.toBeNull()
+    expect(resultRecent!.entityId).toBe("e1")
+    // Old entity should fail — no temporal boost, name factor alone is below threshold
+    expect(resultOld).toBeNull()
   })
 
   it("selects highest scoring candidate", () => {

@@ -66,13 +66,15 @@ describe("Causal relations validation", () => {
   })
 
   it("relation types match the schema (causes, caused_by, enables, prevents)", () => {
+    // Causal relation types from types.ts LinkType union:
+    // forward-looking: causes, enables, prevents
+    // backward-looking: caused_by
     const validRelationTypes = ["causes", "caused_by", "enables", "prevents"]
-    // Relation types are bidirectional: some forward-looking (causes, enables, prevents),
-    // some backward-looking (caused_by). All describe how facts relate to PREVIOUS facts.
-    for (const type of validRelationTypes) {
-      expect(typeof type).toBe("string")
-      expect(type.length).toBeGreaterThan(0)
-    }
+    expect(validRelationTypes).toHaveLength(4)
+    expect(validRelationTypes).toContain("causes")
+    expect(validRelationTypes).toContain("caused_by")
+    expect(validRelationTypes).toContain("enables")
+    expect(validRelationTypes).toContain("prevents")
   })
 })
 

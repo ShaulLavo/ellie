@@ -186,11 +186,12 @@ describe("Bank management", () => {
       expect(updated.config.dedupThreshold).toBe(0.8) // updated
     })
 
-    it("updates the updatedAt timestamp", () => {
+    it("updates the updatedAt timestamp", async () => {
       const bank = t.hs.createBank("ts-update")
-      // Small delay to ensure different timestamp
+      // Wait across a millisecond boundary so timestamps differ
+      await new Promise((resolve) => setTimeout(resolve, 5))
       const updated = t.hs.updateBankConfig(bank.id, { reflectBudget: "high" })
-      expect(updated.updatedAt).toBeGreaterThanOrEqual(bank.createdAt)
+      expect(updated.updatedAt).toBeGreaterThan(bank.createdAt)
     })
   })
 })

@@ -51,8 +51,8 @@ describe("Retrieval methods", () => {
         methods: ["semantic"],
       })
 
-      // Semantic search should return results (even with mock embeddings)
-      expect(result.memories).toBeDefined()
+      expect(result.memories.length).toBeGreaterThan(0)
+      expect(result.memories[0]!.sources).toContain("semantic")
     })
   })
 
@@ -97,7 +97,7 @@ describe("Retrieval methods", () => {
 
   describe("graph retrieval", () => {
     it("finds memories via shared entities", async () => {
-      await t.hs.retain(bankId, "test", {
+      const retained = await t.hs.retain(bankId, "test", {
         facts: [
           { content: "Peter works at Acme Corp", entities: ["Peter", "Acme Corp"] },
           { content: "Peter loves hiking", entities: ["Peter"] },
@@ -105,12 +105,17 @@ describe("Retrieval methods", () => {
         consolidate: false,
       })
 
-      const result = await t.hs.recall(bankId, "Peter", {
-        methods: ["graph"],
+      const acmeFact = retained.memories.find((m) => m.content.includes("Acme Corp"))!
+      const hikingFact = retained.memories.find((m) => m.content.includes("hiking"))!
+
+      // Seed from "Peter works at Acme Corp" → entity "Peter" links to "Peter loves hiking"
+      const { hdb, memoryVec } = getInternals(t.hs)
+      const graphResults = await searchGraph(hdb, memoryVec, bankId, "ignored", 10, {
+        seedMemoryIds: [acmeFact.id],
       })
 
-      // Graph search should find memories connected via "Peter" entity
-      expect(result.memories).toBeDefined()
+      expect(graphResults.length).toBeGreaterThan(0)
+      expect(graphResults.some((r) => r.id === hikingFact.id)).toBe(true)
     })
 
     it("expands directional causal links from seed memories", async () => {
@@ -539,8 +544,8 @@ describe("Retrieval methods", () => {
         methods: ["semantic", "fulltext", "graph", "temporal"],
       })
 
-      // Should return results from multiple sources
-      expect(result.memories).toBeDefined()
+      // Should return results — at least fulltext + graph should match "Peter hiking"
+      expect(result.memories.length).toBeGreaterThan(0)
     })
   })
 })
