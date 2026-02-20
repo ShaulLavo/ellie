@@ -445,10 +445,10 @@ describe("JsonlEngine", () => {
     })
   })
 
-  // ── deleteStream file cleanup ──────────────────────────────────────────
+  // ── Soft-delete ─────────────────────────────────────────────────────────
 
-  describe("deleteStream file cleanup", () => {
-    it("deletes the JSONL file on disk", () => {
+  describe("soft-delete", () => {
+    it("keeps the JSONL file on disk after delete", () => {
       store.createStream("/cleanup-test")
       store.append("/cleanup-test", new TextEncoder().encode('{"x":1}'))
 
@@ -456,7 +456,8 @@ describe("JsonlEngine", () => {
       expect(existsSync(filePath)).toBe(true)
 
       store.deleteStream("/cleanup-test")
-      expect(existsSync(filePath)).toBe(false)
+      // File should still be on disk — soft-delete only marks the stream
+      expect(existsSync(filePath)).toBe(true)
     })
 
     it("does not throw when JSONL file does not exist", () => {
@@ -464,12 +465,24 @@ describe("JsonlEngine", () => {
       // No append — no JSONL file created
       expect(() => store.deleteStream("/no-file")).not.toThrow()
     })
-  })
 
-  // ── Cascade deletes ────────────────────────────────────────────────────
+    it("soft-deleted stream is invisible to getStream", () => {
+      store.createStream("/deleteme")
+      store.deleteStream("/deleteme")
+      expect(store.getStream("/deleteme")).toBeUndefined()
+    })
 
-  describe("cascade deletes", () => {
-    it("deleting stream clears index entries", () => {
+    it("soft-deleted stream is invisible to listStreams", () => {
+      store.createStream("/visible")
+      store.createStream("/ghost")
+      store.deleteStream("/ghost")
+
+      const paths = store.listStreams().map((s) => s.path)
+      expect(paths).toContain("/visible")
+      expect(paths).not.toContain("/ghost")
+    })
+
+    it("preserves messages and producers after soft-delete", () => {
       store.createStream("/cascade")
 
       for (let i = 0; i < 5; i++) {
@@ -479,18 +492,111 @@ describe("JsonlEngine", () => {
       expect(store.messageCount("/cascade")).toBe(5)
       store.deleteStream("/cascade")
 
-      // Index entries should be gone — verify via a fresh DB handle
-      const fresh = createDB(dbPath)
+      // Messages should still exist — soft-delete does not cascade
+      expect(store.messageCount("/cascade")).toBe(5)
+    })
+  })
+
+  // ── Resurrect ─────────────────────────────────────────────────────────
+
+  describe("resurrect", () => {
+    it("throws when creating at soft-deleted path without resurrect", () => {
+      store.createStream("/revive")
+      store.deleteStream("/revive")
+
+      expect(() => store.createStream("/revive")).toThrow("Stream was deleted")
+    })
+
+    it("throws SoftDeletedError with stream path and timestamp", () => {
+      store.createStream("/revive-err")
+      store.deleteStream("/revive-err")
+
       try {
-        const rows = fresh.db
-          .select()
-          .from(fresh.schema.messages)
-          .where(eq(fresh.schema.messages.streamPath, "/cascade"))
-          .all()
-        expect(rows).toHaveLength(0)
-      } finally {
-        fresh.sqlite.close()
+        store.createStream("/revive-err")
+        throw new Error("should have thrown")
+      } catch (e: any) {
+        expect(e.code).toBe("soft_deleted")
+        expect(e.streamPath).toBe("/revive-err")
+        expect(typeof e.deletedAt).toBe("number")
       }
+    })
+
+    it("resurrects a soft-deleted stream with resurrect: true", () => {
+      store.createStream("/revive-ok")
+      store.append("/revive-ok", new TextEncoder().encode('{"old":true}'))
+      store.deleteStream("/revive-ok")
+
+      const resurrected = store.createStream("/revive-ok", { resurrect: true })
+      expect(resurrected.path).toBe("/revive-ok")
+      expect(resurrected.closed).toBe(false)
+      expect(resurrected.deletedAt).toBeNull()
+    })
+
+    it("resurrected stream starts fresh — old messages not readable", () => {
+      store.createStream("/revive-fresh")
+      store.append("/revive-fresh", new TextEncoder().encode('{"old":1}'))
+      store.append("/revive-fresh", new TextEncoder().encode('{"old":2}'))
+      store.deleteStream("/revive-fresh")
+
+      store.createStream("/revive-fresh", { resurrect: true })
+      const messages = store.read("/revive-fresh")
+      expect(messages).toHaveLength(0)
+    })
+
+    it("resurrected stream can append and read new messages", () => {
+      store.createStream("/revive-append")
+      store.append("/revive-append", new TextEncoder().encode('{"old":true}'))
+      store.deleteStream("/revive-append")
+
+      store.createStream("/revive-append", { resurrect: true })
+      store.append("/revive-append", new TextEncoder().encode('{"new":true}'))
+
+      const messages = store.read("/revive-append")
+      expect(messages).toHaveLength(1)
+      expect(new TextDecoder().decode(messages[0]!.data)).toBe('{"new":true}')
+    })
+
+    it("resurrected stream bumps readSeq so old offsets are unreachable", () => {
+      store.createStream("/revive-seq")
+      store.append("/revive-seq", new TextEncoder().encode('{"v":1}'))
+      const oldOffset = store.getCurrentOffset("/revive-seq")!
+
+      store.deleteStream("/revive-seq")
+      store.createStream("/revive-seq", { resurrect: true })
+
+      store.append("/revive-seq", new TextEncoder().encode('{"v":2}'))
+      const newOffset = store.getCurrentOffset("/revive-seq")!
+
+      // New offset should be greater than old offset (higher readSeq)
+      expect(newOffset > oldOffset).toBe(true)
+    })
+
+    it("JSONL file is preserved through resurrect", () => {
+      store.createStream("/revive-file")
+      store.append("/revive-file", new TextEncoder().encode('{"before":true}'))
+
+      const filePath = join(logDir, "revive-file.jsonl")
+      expect(existsSync(filePath)).toBe(true)
+
+      store.deleteStream("/revive-file")
+      expect(existsSync(filePath)).toBe(true)
+
+      store.createStream("/revive-file", { resurrect: true })
+      expect(existsSync(filePath)).toBe(true)
+
+      // New data appends to same file
+      store.append("/revive-file", new TextEncoder().encode('{"after":true}'))
+      store.close()
+
+      const content = readFileSync(filePath, "utf-8")
+      const lines = content.trim().split("\n")
+      // Both old and new data are in the file
+      expect(lines.length).toBeGreaterThanOrEqual(2)
+      expect(lines[0]).toContain('"before"')
+      expect(lines[lines.length - 1]).toContain('"after"')
+
+      // Reopen for afterEach close
+      store = new JsonlEngine(dbPath, logDir)
     })
   })
 

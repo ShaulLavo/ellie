@@ -23,6 +23,7 @@ export interface IStreamStore {
       expiresAt?: string
       initialData?: Uint8Array
       closed?: boolean
+      resurrect?: boolean
     }
   ): Stream
   append(path: string, data: Uint8Array, options?: AppendOptions): AppendResult

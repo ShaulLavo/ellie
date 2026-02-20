@@ -30,5 +30,6 @@ CREATE TABLE `streams` (
 	`closed_by_epoch` integer,
 	`closed_by_seq` integer,
 	`current_read_seq` integer DEFAULT 0 NOT NULL,
-	`current_byte_offset` integer DEFAULT 0 NOT NULL
+	`current_byte_offset` integer DEFAULT 0 NOT NULL,
+	`deleted_at` integer
 );

@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import { migrate } from "drizzle-orm/bun-sqlite/migrator"
-import { eq, and, gt, sql } from "drizzle-orm"
+import { eq, and, gt, isNull, sql } from "drizzle-orm"
 import { join } from "path"
-import { mkdirSync, unlinkSync } from "fs"
+import { mkdirSync } from "fs"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
 import { LogFile, streamPathToFilename } from "./log"
@@ -50,6 +50,7 @@ export class JsonlEngine {
       contentType?: string
       ttlSeconds?: number
       expiresAt?: string
+      resurrect?: boolean
     } = {}
   ): schema.StreamRow {
     const now = Date.now()
@@ -70,7 +71,58 @@ export class JsonlEngine {
 
     if (inserted) return inserted
 
-    // Stream already existed — fetch it
+    // Stream already existed — fetch it (including soft-deleted)
+    const existing = this.db
+      .select()
+      .from(schema.streams)
+      .where(eq(schema.streams.path, streamPath))
+      .get()!
+
+    // If the existing stream is live (not soft-deleted), return it as-is (idempotent)
+    if (existing.deletedAt === null || existing.deletedAt === undefined) {
+      return existing
+    }
+
+    // Stream was soft-deleted — require explicit opt-in to resurrect
+    if (!options.resurrect) {
+      throw new SoftDeletedError(
+        `Stream was deleted at ${new Date(existing.deletedAt).toISOString()}. ` +
+          `Pass resurrect: true to reuse this path.`,
+        streamPath,
+        existing.deletedAt
+      )
+    }
+
+    // Resurrect: clear old index rows + producer state, reset the stream row.
+    // The JSONL file stays on disk. Bumping currentReadSeq makes old offsets
+    // unreachable so stale subscribers/cursors can't read previous-incarnation data.
+    this.db.transaction((tx) => {
+      tx.delete(schema.messages)
+        .where(eq(schema.messages.streamPath, streamPath))
+        .run()
+
+      tx.delete(schema.producers)
+        .where(eq(schema.producers.streamPath, streamPath))
+        .run()
+
+      tx.update(schema.streams)
+        .set({
+          deletedAt: null,
+          closed: false,
+          closedByProducerId: null,
+          closedByEpoch: null,
+          closedBySeq: null,
+          currentReadSeq: existing.currentReadSeq + 1,
+          currentByteOffset: 0,
+          createdAt: now,
+          contentType: options.contentType ?? null,
+          ttlSeconds: options.ttlSeconds ?? null,
+          expiresAt: options.expiresAt ?? null,
+        })
+        .where(eq(schema.streams.path, streamPath))
+        .run()
+    })
+
     return this.db
       .select()
       .from(schema.streams)
@@ -82,34 +134,40 @@ export class JsonlEngine {
     return this.db
       .select()
       .from(schema.streams)
-      .where(eq(schema.streams.path, streamPath))
+      .where(
+        and(eq(schema.streams.path, streamPath), isNull(schema.streams.deletedAt))
+      )
       .get()
   }
 
   listStreams(): schema.StreamRow[] {
-    return this.db.select().from(schema.streams).all()
+    return this.db
+      .select()
+      .from(schema.streams)
+      .where(isNull(schema.streams.deletedAt))
+      .all()
   }
 
+  // TODO: Implement reaper — background job or CLI command that hard-deletes
+  // streams where deleted_at < Date.now() - RETENTION_PERIOD. The reaper would:
+  //   1. Find streams with deleted_at older than the retention window
+  //   2. DELETE the SQLite row (cascade removes messages/producers)
+  //   3. unlinkSync the JSONL file from disk
   deleteStream(streamPath: string): void {
+    // Soft-delete: mark the stream as deleted, keep JSONL file on disk
     this.db
-      .delete(schema.streams)
-      .where(eq(schema.streams.path, streamPath))
+      .update(schema.streams)
+      .set({ deletedAt: Date.now() })
+      .where(
+        and(eq(schema.streams.path, streamPath), isNull(schema.streams.deletedAt))
+      )
       .run()
 
-    // Close and remove the log file handle
+    // Release the file descriptor — don't hold handles for dead streams
     const log = this.openLogs.get(streamPath)
     if (log) {
       log.close()
       this.openLogs.delete(streamPath)
-    }
-
-    // Remove the JSONL file from disk
-    const filename = streamPathToFilename(streamPath)
-    const filePath = join(this.logDir, filename)
-    try {
-      unlinkSync(filePath)
-    } catch (e: any) {
-      if (e.code !== "ENOENT") throw e
     }
   }
 
@@ -276,6 +334,20 @@ export class JsonlEngine {
     } catch {
       // sqlite-vec not available, skip vector table
     }
+  }
+}
+
+// -- Errors -------------------------------------------------------------------
+
+export class SoftDeletedError extends Error {
+  readonly code = "soft_deleted"
+  constructor(
+    message: string,
+    readonly streamPath: string,
+    readonly deletedAt: number
+  ) {
+    super(message)
+    this.name = "SoftDeletedError"
   }
 }
 

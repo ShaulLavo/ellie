@@ -76,6 +76,7 @@ export class DurableStore implements IStreamStore {
       expiresAt?: string
       initialData?: Uint8Array
       closed?: boolean
+      resurrect?: boolean
     } = {}
   ): Stream {
     const existing = this.getIfNotExpired(path)
@@ -106,6 +107,7 @@ export class DurableStore implements IStreamStore {
       contentType: options.contentType,
       ttlSeconds: options.ttlSeconds,
       expiresAt: options.expiresAt,
+      resurrect: options.resurrect,
     })
 
     if (options.closed) {
