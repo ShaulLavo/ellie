@@ -828,31 +828,52 @@ describe("retain", () => {
 
   describe("temporal fields", () => {
     it("stores event_date as mentioned_at on retained facts", async () => {
-      implementMe(
-        "mentionedAt field not mapped to MemoryUnit in TS",
-        "test_retain.py::test_event_date_storage",
-      )
+      const eventDate = 1_700_000_000_000 // fixed timestamp
+      const result = await t.hs.retain(bankId, "test", {
+        facts: [{ content: "Timestamped fact" }],
+        eventDate,
+        consolidate: false,
+      })
+
+      expect(result.memories[0]!.mentionedAt).toBe(eventDate)
     })
 
     it("occurred_start and occurred_end are null when not extractable (TDD)", async () => {
-      implementMe(
-        "occurredStart/occurredEnd fields not mapped to MemoryUnit in TS",
-        "test_retain.py::test_occurred_dates_not_defaulted",
-      )
+      const result = await t.hs.retain(bankId, "test", {
+        facts: [{ content: "No temporal bounds" }],
+        consolidate: false,
+      })
+
+      // validFrom/validTo map to occurredStart/occurredEnd in the display layer
+      expect(result.memories[0]!.validFrom).toBeNull()
+      expect(result.memories[0]!.validTo).toBeNull()
     })
 
     it("mentioned_at vs occurred_start are distinct fields (TDD)", async () => {
-      implementMe(
-        "mentionedAt/occurredStart/occurredEnd fields not mapped — these are distinct temporal concepts",
-        "test_retain.py::test_mentioned_at_vs_occurred",
-      )
+      const eventDate = 1_700_000_000_000
+      const validFrom = 1_600_000_000_000 // deliberately different from eventDate
+      const result = await t.hs.retain(bankId, "test", {
+        facts: [{ content: "Distinct temporal fields", validFrom }],
+        eventDate,
+        consolidate: false,
+      })
+
+      // mentionedAt comes from eventDate, validFrom comes from the fact
+      expect(result.memories[0]!.mentionedAt).toBe(eventDate)
+      expect(result.memories[0]!.validFrom).toBe(validFrom)
+      expect(result.memories[0]!.mentionedAt).not.toBe(result.memories[0]!.validFrom)
     })
 
     it("ISO date string in context sets mentioned_at (TDD)", async () => {
-      implementMe(
-        "mentionedAt field not mapped to MemoryUnit — context string ISO date parsing not implemented",
-        "test_retain.py::test_mentioned_at_from_context_string",
-      )
+      const isoDate = "2024-06-15T10:30:00Z"
+      const expectedMs = new Date(isoDate).getTime()
+      const result = await t.hs.retain(bankId, "test", {
+        facts: [{ content: "ISO date context" }],
+        eventDate: isoDate,
+        consolidate: false,
+      })
+
+      expect(result.memories[0]!.mentionedAt).toBe(expectedMs)
     })
   })
 
