@@ -3,6 +3,9 @@ import { createServerContext, handleDurableStreamRequest } from "@ellie/durable-
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
 import { env } from "@ellie/env/server";
+import { handleAgentRequest } from "./routes/agent";
+import { AgentManager } from "./agent/manager";
+import { anthropicText } from "@tanstack/ai-anthropic";
 
 const parsedUrl = new URL(env.API_BASE_URL);
 const port = parsedUrl.port !== "" ? Number(parsedUrl.port) : parsedUrl.protocol === "https:" ? 443 : 80;
@@ -13,6 +16,15 @@ console.log(`[server] DATA_DIR=${DATA_DIR}`);
 const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
 const durableStore = new DurableStore(engine);
 export const ctx = createServerContext({ store: durableStore });
+
+// ── Agent manager ────────────────────────────────────────────────
+// Initialized eagerly at startup. Requires ANTHROPIC_API_KEY in env.
+const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
+  ? new AgentManager(durableStore, {
+      adapter: anthropicText(env.ANTHROPIC_MODEL as any),
+      systemPrompt: "You are a helpful assistant.",
+    })
+  : null;
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
@@ -44,6 +56,40 @@ async function fetch(req: Request): Promise<Response> {
     const response = new Response(file, {
       headers: { "Content-Type": "application/manifest+json" },
     });
+    logRequest(req.method, path, response.status);
+    return response;
+  }
+
+  // Agent action routes (prompt, steer, abort, history)
+  if (!agentManager) {
+    if (path.match(/^\/agent\/[^/]+\/(prompt|steer|abort|history)$/)) {
+      return Response.json(
+        { error: "Agent routes unavailable: no ANTHROPIC_API_KEY configured" },
+        { status: 503 },
+      );
+    }
+  }
+  const agentResponse = agentManager ? handleAgentRequest(agentManager, req, path) : undefined;
+  if (agentResponse) {
+    const response = await agentResponse;
+    logRequest(req.method, path, response.status);
+    return response;
+  }
+
+  // /agent/:id/events/:runId — agent events stream (must match before /agent/:id)
+  const agentEventsMatch = path.match(/^\/agent\/([^/]+)\/events\/([^/]+)$/);
+  if (agentEventsMatch) {
+    const chatId = decodeURIComponent(agentEventsMatch[1]);
+    const runId = decodeURIComponent(agentEventsMatch[2]);
+    const response = await handleDurableStreamRequest(ctx, req, `/agent/${chatId}/events/${runId}`);
+    logRequest(req.method, path, response.status);
+    return response;
+  }
+
+  // /agent/:id — agent messages stream (only for GET/PUT — stream reads)
+  if (path.match(/^\/agent\/([^/]+)$/) && (req.method === "GET" || req.method === "PUT")) {
+    const id = decodeURIComponent(path.slice("/agent/".length));
+    const response = await handleDurableStreamRequest(ctx, req, `/agent/${id}`);
     logRequest(req.method, path, response.status);
     return response;
   }

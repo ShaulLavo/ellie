@@ -1,5 +1,7 @@
 import * as v from "valibot"
 import { createRouter } from "@ellie/rpc/server"
+import { agentMessageSchema, agentEventSchema } from "@ellie/agent"
+
 // ============================================================================
 // Schemas
 // ============================================================================
@@ -18,6 +20,12 @@ export const messageSchema = v.object({
 export const appRouter = createRouter()
   .stream(`chat`, `/chat/:chatId`, {
     messages: messageSchema,
+  })
+  .stream(`agent`, `/agent/:chatId`, {
+    messages: agentMessageSchema,
+  })
+  .stream(`agentEvents`, `/agent/:chatId/events/:runId`, {
+    events: agentEventSchema,
   })
 
 export type AppRouter = typeof appRouter[`_def`]

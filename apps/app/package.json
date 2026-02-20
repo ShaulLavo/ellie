@@ -7,11 +7,16 @@
     "check-types": "tsgo --noEmit"
   },
   "dependencies": {
+    "@ellie/agent": "workspace:*",
+    "@ellie/ai": "workspace:*",
     "@ellie/db": "workspace:*",
     "@ellie/env": "workspace:*",
     "@ellie/durable-streams": "workspace:*",
     "@ellie/router": "workspace:*",
     "@ellie/rpc": "workspace:*",
+    "@ellie/utils": "workspace:*",
+    "@tanstack/ai": "^0.5.1",
+    "@tanstack/ai-anthropic": "^0.5.0",
     "valibot": "^1.2.0"
   },
   "devDependencies": {

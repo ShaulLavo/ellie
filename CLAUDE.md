@@ -24,6 +24,7 @@ AI chat application built on a custom Durable Streams protocol for real-time, pe
 
 | Package | What it does |
 |---|---|
+| `@ellie/agent` | Stateful AI agent — conversation loop, tool execution, event streaming, steering/follow-up queues |
 | `@ellie/rpc` | Type-safe RPC framework: `createRouter()` (server), `createRpcClient()` (client), `useStream()` (React) |
 | `@ellie/router` | App-specific router definition — connects chat routes to schemas |
 | `@ellie/durable-streams` | Core streaming backend — `DurableStore`, subscriptions, producer state, HTTP handler |

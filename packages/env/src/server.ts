@@ -14,6 +14,9 @@ const ServerEnvSchema = v.object({
   /** Anthropic API key (optional — only needed if using Anthropic provider). */
   ANTHROPIC_API_KEY: v.optional(v.string()),
 
+  /** Anthropic model ID for the agent adapter (default: claude-sonnet-4-5). */
+  ANTHROPIC_MODEL: v.optional(v.pipe(v.string(), v.nonEmpty()), "claude-sonnet-4-5"),
+
   /** OpenAI API key (optional — only needed if using OpenAI provider). */
   OPENAI_API_KEY: v.optional(v.string()),
 
@@ -39,6 +42,7 @@ export const env: ServerEnv = v.parse(ServerEnvSchema, {
   API_BASE_URL: Bun.env.API_BASE_URL,
   DATA_DIR: Bun.env.DATA_DIR,
   ANTHROPIC_API_KEY: Bun.env.ANTHROPIC_API_KEY,
+  ANTHROPIC_MODEL: Bun.env.ANTHROPIC_MODEL,
   OPENAI_API_KEY: Bun.env.OPENAI_API_KEY,
   OPENROUTER_API_KEY: Bun.env.OPENROUTER_API_KEY,
 })
