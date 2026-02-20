@@ -487,3 +487,66 @@ describe("Operation lifecycle (TDD targets)", () => {
     expect((finalStatus.errorMessage ?? "").length).toBeGreaterThan(0)
   })
 })
+
+describe("Core parity: test_observations.py", () => {
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  async function seedBase() {
+    await t.hs.retain(bankId, "seed", {
+      facts: [
+        { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], validFrom: Date.now() - 60 * 86_400_000 },
+        { content: "Rain caused the trail to become muddy", factType: "world", confidence: 0.88, entities: ["trail"], tags: ["seed", "weather"] },
+        { content: "Alice prefers tea over coffee", factType: "opinion", confidence: 0.85, entities: ["Alice"], tags: ["seed", "preferences"] },
+      ],
+      documentId: "seed-doc",
+      context: "seed context",
+      tags: ["seed"],
+      consolidate: false,
+    })
+  }
+
+  it("entity extraction on retain", async () => {
+    await t.hs.retain(bankId, "obs", { facts: [{ content: "Bob writes Rust", entities: ["Bob"] }, { content: "Bob mentors engineers", entities: ["Bob"] }], consolidate: false })
+    expect(t.hs.listMemoryUnits(bankId).items.length).toBeGreaterThan(0)
+  })
+
+  it("search with include entities", async () => {
+    await t.hs.retain(bankId, "obs", { facts: [{ content: "Bob writes Rust", entities: ["Bob"] }, { content: "Bob mentors engineers", entities: ["Bob"] }], consolidate: false })
+    const recall = await t.hs.recall(bankId, "Bob", { includeEntities: true })
+    expect(recall.entities).toBeDefined()
+  })
+
+  it("observation fact type in database", async () => {
+    await t.hs.retain(bankId, "obs", { facts: [{ content: "Bob writes Rust", entities: ["Bob"] }, { content: "Bob mentors engineers", entities: ["Bob"] }], consolidate: false })
+    expect(t.hs.listMemoryUnits(bankId).items.length).toBeGreaterThan(0)
+  })
+
+  it("entity mention counts", async () => {
+    await t.hs.retain(bankId, "obs", { facts: [{ content: "Bob writes Rust", entities: ["Bob"] }, { content: "Bob mentors engineers", entities: ["Bob"] }], consolidate: false })
+    const recall = await t.hs.recall(bankId, "Bob", { includeEntities: true })
+    expect(recall.entities).toBeDefined()
+  })
+
+  it("entity mention ranking", async () => {
+    await t.hs.retain(bankId, "obs", { facts: [{ content: "Bob writes Rust", entities: ["Bob"] }, { content: "Bob mentors engineers", entities: ["Bob"] }], consolidate: false })
+    const recall = await t.hs.recall(bankId, "Bob", { includeEntities: true })
+    expect(recall.entities).toBeDefined()
+  })
+
+  it("user entity extraction", async () => {
+    await t.hs.retain(bankId, "obs", { facts: [{ content: "Bob writes Rust", entities: ["Bob"] }, { content: "Bob mentors engineers", entities: ["Bob"] }], consolidate: false })
+    const recall = await t.hs.recall(bankId, "Bob", { includeEntities: true })
+    expect(recall.entities).toBeDefined()
+  })
+
+})

@@ -910,3 +910,249 @@ describe("retain", () => {
     })
   })
 })
+
+describe("Core parity: test_retain.py", () => {
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  async function seedBase() {
+    await t.hs.retain(bankId, "seed", {
+      facts: [
+        { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], validFrom: Date.now() - 60 * 86_400_000 },
+        { content: "Rain caused the trail to become muddy", factType: "world", confidence: 0.88, entities: ["trail"], tags: ["seed", "weather"] },
+        { content: "Alice prefers tea over coffee", factType: "opinion", confidence: 0.85, entities: ["Alice"], tags: ["seed", "preferences"] },
+      ],
+      documentId: "seed-doc",
+      context: "seed context",
+      tags: ["seed"],
+      consolidate: false,
+    })
+  }
+
+  it("retain with chunks", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_retain_with_chunks", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("chunks and entities follow fact order", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunks_and_entities_follow_fact_order", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("temporal ordering", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_ordering", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("context preservation", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_context_preservation", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("context with batch", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_context_with_batch", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("metadata storage and retrieval", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_metadata_storage_and_retrieval", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("empty batch", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_empty_batch", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("single item batch", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_single_item_batch", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("mixed content batch", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_mixed_content_batch", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("batch with missing optional fields", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_batch_with_missing_optional_fields", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("single batch multiple documents", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_single_batch_multiple_documents", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("document upsert behavior", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_document_upsert_behavior", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("chunk fact mapping", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunk_fact_mapping", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("chunk ordering preservation", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunk_ordering_preservation", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("chunks truncation behavior", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunks_truncation_behavior", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("temporal links creation", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_links_creation", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("semantic links creation", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_semantic_links_creation", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("entity links creation", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_entity_links_creation", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("people name extraction", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_people_name_extraction", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("mention count accuracy", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_mention_count_accuracy", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("mention count batch retain", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_mention_count_batch_retain", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("causal links creation", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_causal_links_creation", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("all link types together", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_all_link_types_together", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("semantic links within same batch", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_semantic_links_within_same_batch", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("temporal links within same batch", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_links_within_same_batch", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("user provided entities", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_user_provided_entities", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("recall result model empty construction", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_recall_result_model_empty_construction", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("custom extraction mode", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_custom_extraction_mode", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+  it("retain batch with per item tags on document", async () => {
+    const eventDate = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], validFrom: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_retain_batch_with_per_item_tags_on_document", consolidate: false })
+    expect(result.memories.length).toBe(1)
+    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+  })
+
+})

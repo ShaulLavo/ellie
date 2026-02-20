@@ -11,7 +11,7 @@
  *   # or: bun run generate-embeddings
  *
  * Output:
- *   src/__tests__/fixtures/embeddings.json
+ *   src/test/fixtures/embeddings.json
  */
 
 import { writeFileSync, mkdirSync } from "fs"
@@ -216,7 +216,7 @@ async function main() {
   console.log(`Total embeddings: ${Object.keys(embeddings).length}`)
 
   // Write fixture (sorted keys for stable diffs)
-  const fixtureDir = join(__dirname, "..", "src", "__tests__", "fixtures")
+  const fixtureDir = join(__dirname, "..", "src", "test", "fixtures")
   mkdirSync(fixtureDir, { recursive: true })
 
   const sorted: Record<string, number[]> = {}
