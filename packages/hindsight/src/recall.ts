@@ -25,7 +25,7 @@ import { extractTemporalRange } from "./temporal"
  * Runs up to 4 retrieval strategies in parallel:
  * 1. Semantic (sqlite-vec KNN)
  * 2. Fulltext (FTS5 BM25)
- * 3. Graph (entity/link BFS)
+ * 3. Graph (link expansion: entity + causal + observation traversal)
  * 4. Temporal (time-range filter)
  *
  * Results are merged via RRF, hydrated with full memory + entity data,
@@ -68,7 +68,11 @@ export async function recall(
   }
   if (methods.includes("graph")) {
     promises.push(
-      Promise.resolve(searchGraph(hdb, bankId, query, candidateLimit)),
+      searchGraph(hdb, memoryVec, bankId, query, candidateLimit, {
+        factTypes: options.factTypes,
+        tags: options.tags,
+        tagsMatch: options.tagsMatch,
+      }),
     )
   }
   if (methods.includes("temporal")) {

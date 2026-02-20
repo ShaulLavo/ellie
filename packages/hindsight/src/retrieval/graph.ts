@@ -1,312 +1,545 @@
-/**
- * Meta-Path Forward Push (MPFP) graph retrieval.
- *
- * Replaces the previous type-blind BFS with typed meta-path traversals
- * that follow specific sequences of link types through the heterogeneous
- * memory graph. Enables multi-hop causal chains, cross-type expansions,
- * and semantically meaningful graph exploration.
- *
- * Algorithm:
- *   1. Seed resolution — find memories linked to entities mentioned in query
- *   2. Forward push — for each meta-path, push scores through typed link steps
- *   3. Aggregate — sum scores across all meta-paths (multi-path = stronger signal)
- *   4. Normalize — scale to [0, 1] and return top results
- */
-
-import { eq } from "drizzle-orm"
+import { and, eq, gte, inArray, or } from "drizzle-orm"
 import type { HindsightDatabase } from "../db"
+import type { EmbeddingStore } from "../embedding"
+import type { FactType, TagsMatch } from "../types"
 import type { RetrievalHit } from "./semantic"
-import type { MetaPath, LinkType, LinkDirection } from "../types"
-
-// ── Default Meta-Paths ────────────────────────────────────────────────────
-
-export const DEFAULT_META_PATHS: MetaPath[] = [
-  // Direct entity expansion (1 hop) — same entities as seeds
-  {
-    name: "entity-direct",
-    steps: [{ linkType: "entity", direction: "both", decay: 0.6 }],
-    weight: 1.0,
-  },
-
-  // Direct semantic neighbors (1 hop) — similar to seeds
-  {
-    name: "semantic-direct",
-    steps: [{ linkType: "semantic", direction: "both", decay: 0.7 }],
-    weight: 0.8,
-  },
-
-  // 2-hop forward causal chain — what do seeds cause, and what does that cause?
-  {
-    name: "causal-chain-forward",
-    steps: [
-      { linkType: "causes", direction: "forward", decay: 0.7 },
-      { linkType: "causes", direction: "forward", decay: 0.5 },
-    ],
-    weight: 1.2,
-  },
-
-  // 2-hop backward causal chain — what caused the seeds, and what caused that?
-  {
-    name: "causal-chain-backward",
-    steps: [
-      { linkType: "caused_by", direction: "forward", decay: 0.7 },
-      { linkType: "caused_by", direction: "forward", decay: 0.5 },
-    ],
-    weight: 1.2,
-  },
-
-  // Entity → Causal (2 hops) — find entity neighbors, then their causal effects
-  {
-    name: "entity-then-causal",
-    steps: [
-      { linkType: "entity", direction: "both", decay: 0.5 },
-      { linkType: "causes", direction: "forward", decay: 0.6 },
-    ],
-    weight: 0.9,
-  },
-
-  // Semantic → Entity (2 hops) — broaden semantic via structural expansion
-  {
-    name: "semantic-then-entity",
-    steps: [
-      { linkType: "semantic", direction: "both", decay: 0.6 },
-      { linkType: "entity", direction: "both", decay: 0.4 },
-    ],
-    weight: 0.7,
-  },
-
-  // What do seeds enable?
-  {
-    name: "enables-forward",
-    steps: [{ linkType: "enables", direction: "forward", decay: 0.6 }],
-    weight: 1.0,
-  },
-
-  // What do seeds prevent?
-  {
-    name: "prevents-forward",
-    steps: [{ linkType: "prevents", direction: "forward", decay: 0.6 }],
-    weight: 1.0,
-  },
-]
-
-// ── Seed Resolution ───────────────────────────────────────────────────────
 
 /**
- * Find seed memory IDs from entity name matches in the query.
- * Uses word-boundary regex for precision.
+ * LinkExpansion graph retrieval.
+ *
+ * Expands from semantic seeds via:
+ * 1) entity links (with mention-count frequency filtering)
+ * 2) causal links (directional: causes/caused_by/enables/prevents)
+ * 3) observation traversal through source_memory_ids
+ *
+ * Observation traversal path:
+ *   seed observation -> source memories -> entities -> connected sources -> observations
  */
-function resolveSeedMemories(
+export async function searchGraph(
   hdb: HindsightDatabase,
+  memoryVec: EmbeddingStore,
   bankId: string,
   query: string,
-): Map<string, number> {
-  const { schema } = hdb
+  limit: number,
+  options: GraphSearchOptions = {},
+): Promise<RetrievalHit[]> {
+  if (limit <= 0) return []
 
-  const allEntities = hdb.db
-    .select()
-    .from(schema.entities)
-    .where(eq(schema.entities.bankId, bankId))
-    .all()
+  const seedIds = await resolveSeedIds(
+    hdb,
+    memoryVec,
+    bankId,
+    query,
+    limit,
+    options,
+  )
+  if (seedIds.length === 0) return []
 
-  const seedEntities = allEntities.filter((e) => {
-    if (e.name.length < 2) return false
-    const escaped = e.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    return new RegExp(`\\b${escaped}\\b`, "i").test(query)
-  })
+  const seedSet = new Set(seedIds)
+  const entityScores = await expandViaEntities(
+    hdb,
+    bankId,
+    seedIds,
+    seedSet,
+    options,
+  )
+  const causalScores = await expandViaCausalLinks(
+    hdb,
+    bankId,
+    seedIds,
+    seedSet,
+    options,
+  )
+  const merged = mergeScoreMaps(entityScores, causalScores)
+  const filtered = filterOutSeeds(merged, seedSet)
 
-  if (seedEntities.length === 0) return new Map()
+  return Array.from(filtered.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id, score]) => ({ id, score, source: "graph" }))
+}
 
-  const seeds = new Map<string, number>()
-  for (const entity of seedEntities) {
-    const junctions = hdb.db
-      .select()
-      .from(schema.memoryEntities)
-      .where(eq(schema.memoryEntities.entityId, entity.id))
-      .all()
-    for (const j of junctions) {
-      seeds.set(j.memoryId, 1.0)
-    }
+export interface GraphSearchOptions {
+  factTypes?: FactType[]
+  tags?: string[]
+  tagsMatch?: TagsMatch
+  maxEntityFrequency?: number
+  causalWeightThreshold?: number
+  causalLimitPerSeed?: number
+  seedLimit?: number
+  seedThreshold?: number
+  /** Test hook: bypass semantic seed lookup when provided. */
+  seedMemoryIds?: string[]
+}
+
+const CAUSAL_LINK_TYPES = ["causes", "caused_by", "enables", "prevents"] as const
+const ALL_FACT_TYPES: FactType[] = [
+  "world",
+  "experience",
+  "opinion",
+  "observation",
+]
+const DEFAULT_MAX_ENTITY_FREQUENCY = 500
+const DEFAULT_CAUSAL_WEIGHT_THRESHOLD = 0.3
+const DEFAULT_CAUSAL_LIMIT_PER_SEED = 10
+const DEFAULT_SEED_LIMIT = 20
+const DEFAULT_SEED_THRESHOLD = 0.3
+
+async function resolveSeedIds(
+  hdb: HindsightDatabase,
+  memoryVec: EmbeddingStore,
+  bankId: string,
+  query: string,
+  limit: number,
+  options: GraphSearchOptions,
+): Promise<string[]> {
+  if (options.seedMemoryIds?.length) {
+    return unique(options.seedMemoryIds)
+  }
+
+  const desiredSeedCount = Math.max(
+    1,
+    Math.min(options.seedLimit ?? DEFAULT_SEED_LIMIT, Math.max(limit, 1)),
+  )
+  const searchLimit = desiredSeedCount * 4
+  const seedThreshold = options.seedThreshold ?? DEFAULT_SEED_THRESHOLD
+  const factTypes = getFactTypeSet(options.factTypes)
+  const hits = await memoryVec.search(query, searchLimit)
+  const seeds: string[] = []
+  const seen = new Set<string>()
+
+  for (const hit of hits) {
+    if (seeds.length >= desiredSeedCount) break
+    if (seen.has(hit.id)) continue
+
+    const similarity = 1 - hit.distance
+    if (similarity < seedThreshold) continue
+
+    const row = hdb.db
+      .select({
+        id: hdb.schema.memoryUnits.id,
+        bankId: hdb.schema.memoryUnits.bankId,
+        factType: hdb.schema.memoryUnits.factType,
+        tags: hdb.schema.memoryUnits.tags,
+      })
+      .from(hdb.schema.memoryUnits)
+      .where(eq(hdb.schema.memoryUnits.id, hit.id))
+      .get()
+
+    if (!row || row.bankId !== bankId) continue
+    if (!factTypes.has(row.factType as FactType)) continue
+    if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
+
+    seen.add(hit.id)
+    seeds.push(hit.id)
   }
 
   return seeds
 }
 
-// ── Batched Link Fetching ─────────────────────────────────────────────────
-
-interface LinkRow {
-  sourceId: string
-  targetId: string
-  weight: number
-}
-
-/** Max IDs per SQL IN-clause to stay within SQLite limits */
-const CHUNK_SIZE = 500
-
-/**
- * Batch-fetch links of a given type connected to frontier node IDs.
- * Uses raw SQL with IN-clauses for performance, respecting direction.
- */
-function fetchLinks(
+async function expandViaEntities(
   hdb: HindsightDatabase,
   bankId: string,
-  nodeIds: string[],
-  linkType: LinkType,
-  direction: LinkDirection,
-): LinkRow[] {
-  if (nodeIds.length === 0) return []
+  seedIds: string[],
+  seedSet: Set<string>,
+  options: GraphSearchOptions,
+): Promise<Map<string, number>> {
+  const entityIds = await getRelevantEntityIds(hdb, bankId, seedIds, options)
+  if (entityIds.length === 0) return new Map()
 
-  const results: LinkRow[] = []
+  const directScores = await scoreDirectEntityExpansion(
+    hdb,
+    bankId,
+    entityIds,
+    seedSet,
+    options,
+  )
+  const observationScores = await scoreObservationEntityExpansion(
+    hdb,
+    bankId,
+    seedIds,
+    entityIds,
+    seedSet,
+    options,
+  )
+  return mergeScoreMaps(directScores, observationScores)
+}
 
-  for (let i = 0; i < nodeIds.length; i += CHUNK_SIZE) {
-    const chunk = nodeIds.slice(i, i + CHUNK_SIZE)
-    const placeholders = chunk.map(() => "?").join(", ")
+async function getRelevantEntityIds(
+  hdb: HindsightDatabase,
+  bankId: string,
+  seedIds: string[],
+  options: GraphSearchOptions,
+): Promise<string[]> {
+  const directEntityIds = await getEntityIdsForMemoryIds(hdb, seedIds)
+  const observationSourceIds = await getObservationSourceIds(hdb, bankId, seedIds)
+  const sourceEntityIds = await getEntityIdsForMemoryIds(hdb, observationSourceIds)
+  const allEntityIds = unique([...directEntityIds, ...sourceEntityIds])
+  if (allEntityIds.length === 0) return []
 
-    let sql: string
-    let params: string[]
+  const maxEntityFrequency =
+    options.maxEntityFrequency ?? DEFAULT_MAX_ENTITY_FREQUENCY
+  const rows = hdb.db
+    .select({
+      id: hdb.schema.entities.id,
+      mentionCount: hdb.schema.entities.mentionCount,
+      bankId: hdb.schema.entities.bankId,
+    })
+    .from(hdb.schema.entities)
+    .where(inArray(hdb.schema.entities.id, allEntityIds))
+    .all()
 
-    if (direction === "forward") {
-      sql = `SELECT source_id, target_id, weight FROM hs_memory_links
-             WHERE bank_id = ? AND link_type = ? AND source_id IN (${placeholders})`
-      params = [bankId, linkType, ...chunk]
-    } else if (direction === "backward") {
-      sql = `SELECT source_id, target_id, weight FROM hs_memory_links
-             WHERE bank_id = ? AND link_type = ? AND target_id IN (${placeholders})`
-      params = [bankId, linkType, ...chunk]
-    } else {
-      sql = `SELECT source_id, target_id, weight FROM hs_memory_links
-             WHERE bank_id = ? AND link_type = ?
-               AND (source_id IN (${placeholders}) OR target_id IN (${placeholders}))`
-      params = [bankId, linkType, ...chunk, ...chunk]
-    }
+  return rows
+    .filter((r) => r.bankId === bankId && r.mentionCount < maxEntityFrequency)
+    .map((r) => r.id)
+}
 
-    const rows = hdb.sqlite.prepare(sql).all(...params) as Array<{
-      source_id: string
-      target_id: string
-      weight: number
-    }>
+async function getEntityIdsForMemoryIds(
+  hdb: HindsightDatabase,
+  memoryIds: string[],
+): Promise<string[]> {
+  if (memoryIds.length === 0) return []
 
-    for (const row of rows) {
-      results.push({
-        sourceId: row.source_id,
-        targetId: row.target_id,
-        weight: row.weight,
-      })
-    }
+  const rows = hdb.db
+    .select({
+      entityId: hdb.schema.memoryEntities.entityId,
+    })
+    .from(hdb.schema.memoryEntities)
+    .where(inArray(hdb.schema.memoryEntities.memoryId, memoryIds))
+    .all()
+
+  return unique(rows.map((r) => r.entityId))
+}
+
+async function scoreDirectEntityExpansion(
+  hdb: HindsightDatabase,
+  bankId: string,
+  entityIds: string[],
+  seedSet: Set<string>,
+  options: GraphSearchOptions,
+): Promise<Map<string, number>> {
+  if (!shouldSearchDirectFactTypes(options.factTypes)) return new Map()
+  if (entityIds.length === 0) return new Map()
+
+  const relations = hdb.db
+    .select({
+      memoryId: hdb.schema.memoryEntities.memoryId,
+    })
+    .from(hdb.schema.memoryEntities)
+    .where(inArray(hdb.schema.memoryEntities.entityId, entityIds))
+    .all()
+
+  const scores = new Map<string, number>()
+  for (const relation of relations) {
+    if (seedSet.has(relation.memoryId)) continue
+    const current = scores.get(relation.memoryId) ?? 0
+    scores.set(relation.memoryId, current + 1)
   }
 
-  return results
+  return filterScoreMapByMemoryRows(
+    hdb,
+    bankId,
+    scores,
+    getFactTypeSet(options.factTypes),
+    options.tags,
+    options.tagsMatch,
+  )
 }
 
-// ── Meta-Path Walker ──────────────────────────────────────────────────────
-
-/**
- * Walk a single meta-path from the seed set, pushing scores forward
- * through each step. Returns nodes reached at the final step with
- * their accumulated scores.
- */
-function walkMetaPath(
+async function scoreObservationEntityExpansion(
   hdb: HindsightDatabase,
   bankId: string,
-  seeds: Map<string, number>,
-  metaPath: MetaPath,
+  seedIds: string[],
+  entityIds: string[],
+  seedSet: Set<string>,
+  options: GraphSearchOptions,
+): Promise<Map<string, number>> {
+  if (!shouldSearchObservationFactType(options.factTypes)) return new Map()
+  if (entityIds.length === 0) return new Map()
+
+  const seedSourceIds = await getObservationSourceIds(hdb, bankId, seedIds)
+  if (seedSourceIds.length === 0) return new Map()
+
+  const connectedSourceIds = await getConnectedSourceIds(
+    hdb,
+    bankId,
+    entityIds,
+  )
+  if (connectedSourceIds.length === 0) return new Map()
+
+  const sourceIdSet = new Set(connectedSourceIds)
+  const observationRows = hdb.db
+    .select({
+      id: hdb.schema.memoryUnits.id,
+      tags: hdb.schema.memoryUnits.tags,
+      sourceMemoryIds: hdb.schema.memoryUnits.sourceMemoryIds,
+    })
+    .from(hdb.schema.memoryUnits)
+    .where(
+      and(
+        eq(hdb.schema.memoryUnits.bankId, bankId),
+        eq(hdb.schema.memoryUnits.factType, "observation"),
+      ),
+    )
+    .all()
+
+  const scores = new Map<string, number>()
+
+  for (const row of observationRows) {
+    if (seedSet.has(row.id)) continue
+    if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
+
+    const sourceIds = parseStringArray(row.sourceMemoryIds)
+    const overlap = countOverlap(sourceIds, sourceIdSet)
+    if (overlap === 0) continue
+
+    const current = scores.get(row.id) ?? 0
+    scores.set(row.id, current + overlap)
+  }
+
+  return scores
+}
+
+async function getObservationSourceIds(
+  hdb: HindsightDatabase,
+  bankId: string,
+  memoryIds: string[],
+): Promise<string[]> {
+  if (memoryIds.length === 0) return []
+
+  const rows = hdb.db
+    .select({
+      sourceMemoryIds: hdb.schema.memoryUnits.sourceMemoryIds,
+    })
+    .from(hdb.schema.memoryUnits)
+    .where(
+      and(
+        inArray(hdb.schema.memoryUnits.id, memoryIds),
+        eq(hdb.schema.memoryUnits.bankId, bankId),
+        eq(hdb.schema.memoryUnits.factType, "observation"),
+      ),
+    )
+    .all()
+
+  const sourceIds = rows.flatMap((row) => parseStringArray(row.sourceMemoryIds))
+  return unique(sourceIds)
+}
+
+async function getConnectedSourceIds(
+  hdb: HindsightDatabase,
+  bankId: string,
+  entityIds: string[],
+): Promise<string[]> {
+  if (entityIds.length === 0) return []
+
+  const sourceRelations = hdb.db
+    .select({
+      memoryId: hdb.schema.memoryEntities.memoryId,
+    })
+    .from(hdb.schema.memoryEntities)
+    .where(inArray(hdb.schema.memoryEntities.entityId, entityIds))
+    .all()
+
+  const candidateIds = unique(sourceRelations.map((r) => r.memoryId))
+  if (candidateIds.length === 0) return []
+
+  const rows = hdb.db
+    .select({
+      id: hdb.schema.memoryUnits.id,
+      bankId: hdb.schema.memoryUnits.bankId,
+    })
+    .from(hdb.schema.memoryUnits)
+    .where(inArray(hdb.schema.memoryUnits.id, candidateIds))
+    .all()
+
+  return rows.filter((row) => row.bankId === bankId).map((row) => row.id)
+}
+
+async function expandViaCausalLinks(
+  hdb: HindsightDatabase,
+  bankId: string,
+  seedIds: string[],
+  seedSet: Set<string>,
+  options: GraphSearchOptions,
+): Promise<Map<string, number>> {
+  if (seedIds.length === 0) return new Map()
+
+  const causalThreshold =
+    options.causalWeightThreshold ?? DEFAULT_CAUSAL_WEIGHT_THRESHOLD
+  const perSeedLimit = options.causalLimitPerSeed ?? DEFAULT_CAUSAL_LIMIT_PER_SEED
+  const rawLimit = Math.max(1, seedIds.length * perSeedLimit)
+
+  const links = hdb.db
+    .select({
+      sourceId: hdb.schema.memoryLinks.sourceId,
+      targetId: hdb.schema.memoryLinks.targetId,
+      weight: hdb.schema.memoryLinks.weight,
+    })
+    .from(hdb.schema.memoryLinks)
+    .where(
+      and(
+        eq(hdb.schema.memoryLinks.bankId, bankId),
+        inArray(hdb.schema.memoryLinks.linkType, [...CAUSAL_LINK_TYPES]),
+        gte(hdb.schema.memoryLinks.weight, causalThreshold),
+        or(
+          inArray(hdb.schema.memoryLinks.sourceId, seedIds),
+          inArray(hdb.schema.memoryLinks.targetId, seedIds),
+        ),
+      ),
+    )
+    .all()
+
+  const rankedLinks = [...links]
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, rawLimit)
+
+  const scores = new Map<string, number>()
+
+  for (const link of rankedLinks) {
+    const neighborId = seedSet.has(link.sourceId) ? link.targetId : link.sourceId
+    if (seedSet.has(neighborId)) continue
+
+    const score = link.weight + 1
+    const current = scores.get(neighborId) ?? 0
+    scores.set(neighborId, Math.max(current, score))
+  }
+
+  return filterScoreMapByMemoryRows(
+    hdb,
+    bankId,
+    scores,
+    getFactTypeSet(options.factTypes),
+    options.tags,
+    options.tagsMatch,
+  )
+}
+
+function filterOutSeeds(
+  scores: Map<string, number>,
+  seedSet: Set<string>,
 ): Map<string, number> {
-  let frontier = new Map(seeds)
-
-  for (const step of metaPath.steps) {
-    const nodeIds = Array.from(frontier.keys())
-    if (nodeIds.length === 0) break
-
-    const links = fetchLinks(hdb, bankId, nodeIds, step.linkType, step.direction)
-    const nextFrontier = new Map<string, number>()
-    const decay = step.decay ?? 0.5
-
-    for (const link of links) {
-      let sourceNodeId: string
-      let neighborId: string
-
-      if (step.direction === "forward") {
-        sourceNodeId = link.sourceId
-        neighborId = link.targetId
-      } else if (step.direction === "backward") {
-        sourceNodeId = link.targetId
-        neighborId = link.sourceId
-      } else {
-        // "both" — the node in the frontier is the source
-        if (frontier.has(link.sourceId)) {
-          sourceNodeId = link.sourceId
-          neighborId = link.targetId
-        } else {
-          sourceNodeId = link.targetId
-          neighborId = link.sourceId
-        }
-      }
-
-      const frontierScore = frontier.get(sourceNodeId)
-      if (frontierScore == null) continue
-
-      const newScore = frontierScore * link.weight * decay
-      const existing = nextFrontier.get(neighborId) ?? 0
-      nextFrontier.set(neighborId, Math.max(existing, newScore))
-    }
-
-    frontier = nextFrontier
+  for (const id of seedSet) {
+    scores.delete(id)
   }
-
-  return frontier
+  return scores
 }
 
-// ── Main Entry Point ──────────────────────────────────────────────────────
+function mergeScoreMaps(
+  first: Map<string, number>,
+  second: Map<string, number>,
+): Map<string, number> {
+  const merged = new Map(first)
 
-/**
- * MPFP graph retrieval: typed meta-path traversal over the memory graph.
- *
- * 1. Find seed memories from entity mentions in query
- * 2. Run all meta-paths from seeds, pushing scores forward
- * 3. Aggregate scores across paths (sum — multi-path = stronger signal)
- * 4. Normalize to [0, 1], return top results
- */
-export function searchGraph(
+  for (const [id, score] of second.entries()) {
+    const current = merged.get(id) ?? 0
+    merged.set(id, Math.max(current, score))
+  }
+
+  return merged
+}
+
+function getFactTypeSet(factTypes?: FactType[]): Set<FactType> {
+  return new Set(factTypes && factTypes.length > 0 ? factTypes : ALL_FACT_TYPES)
+}
+
+function shouldSearchObservationFactType(factTypes?: FactType[]): boolean {
+  if (!factTypes || factTypes.length === 0) return true
+  return factTypes.includes("observation")
+}
+
+function shouldSearchDirectFactTypes(factTypes?: FactType[]): boolean {
+  if (!factTypes || factTypes.length === 0) return true
+  return factTypes.some((factType) => factType !== "observation")
+}
+
+function countOverlap(values: string[], lookup: Set<string>): number {
+  let count = 0
+  for (const value of values) {
+    if (lookup.has(value)) count++
+  }
+  return count
+}
+
+async function filterScoreMapByMemoryRows(
   hdb: HindsightDatabase,
   bankId: string,
-  query: string,
-  limit: number,
-): RetrievalHit[] {
-  // Phase 1: Seed resolution
-  const seeds = resolveSeedMemories(hdb, bankId, query)
-  if (seeds.size === 0) return []
+  scores: Map<string, number>,
+  factTypeSet: Set<FactType>,
+  tags?: string[],
+  tagsMatch?: TagsMatch,
+): Promise<Map<string, number>> {
+  if (scores.size === 0) return scores
 
-  // Phase 2 + 3: Run meta-paths and aggregate
-  const aggregated = new Map<string, number>()
+  const ids = [...scores.keys()]
+  const rows = hdb.db
+    .select({
+      id: hdb.schema.memoryUnits.id,
+      bankId: hdb.schema.memoryUnits.bankId,
+      factType: hdb.schema.memoryUnits.factType,
+      tags: hdb.schema.memoryUnits.tags,
+    })
+    .from(hdb.schema.memoryUnits)
+    .where(inArray(hdb.schema.memoryUnits.id, ids))
+    .all()
 
-  // Seeds get base score
-  for (const [id, score] of seeds) {
-    aggregated.set(id, score)
+  const validIds = new Set<string>()
+  for (const row of rows) {
+    if (row.bankId !== bankId) continue
+    if (!factTypeSet.has(row.factType as FactType)) continue
+    if (!passesTagFilter(row.tags, tags, tagsMatch)) continue
+    validIds.add(row.id)
   }
 
-  for (const metaPath of DEFAULT_META_PATHS) {
-    const pathResults = walkMetaPath(hdb, bankId, seeds, metaPath)
-    const pathWeight = metaPath.weight ?? 1.0
-
-    for (const [nodeId, score] of pathResults) {
-      const current = aggregated.get(nodeId) ?? 0
-      aggregated.set(nodeId, current + score * pathWeight)
-    }
+  for (const id of ids) {
+    if (validIds.has(id)) continue
+    scores.delete(id)
   }
 
-  // Phase 4: Normalize to [0, 1]
-  let maxScore = 0
-  for (const score of aggregated.values()) {
-    if (score > maxScore) maxScore = score
-  }
-  if (maxScore === 0) return []
+  return scores
+}
 
-  return Array.from(aggregated.entries())
-    .map(([id, score]) => ({
-      id,
-      score: score / maxScore,
-      source: "graph",
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
+function parseStringArray(raw: string | null): string[] {
+  if (!raw) return []
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((value): value is string => typeof value === "string")
+  } catch {
+    return []
+  }
+}
+
+function passesTagFilter(
+  rawTags: string | null,
+  filterTags?: string[],
+  mode: TagsMatch = "any",
+): boolean {
+  if (!filterTags || filterTags.length === 0) return true
+  return matchesTags(parseStringArray(rawTags), filterTags, mode)
+}
+
+function matchesTags(
+  memoryTags: string[],
+  filterTags: string[],
+  mode: TagsMatch,
+): boolean {
+  if (filterTags.length === 0) return true
+
+  const isUntagged = memoryTags.length === 0
+
+  if (mode === "any") {
+    return isUntagged || memoryTags.some((tag) => filterTags.includes(tag))
+  }
+  if (mode === "all") {
+    return isUntagged || filterTags.every((tag) => memoryTags.includes(tag))
+  }
+  if (mode === "any_strict") {
+    return !isUntagged && memoryTags.some((tag) => filterTags.includes(tag))
+  }
+  return !isUntagged && filterTags.every((tag) => memoryTags.includes(tag))
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)]
 }

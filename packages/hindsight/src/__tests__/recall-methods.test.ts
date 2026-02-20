@@ -6,7 +6,21 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
+import { eq } from "drizzle-orm"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { searchGraph } from "../retrieval/graph"
+import type { HindsightDatabase } from "../db"
+import type { EmbeddingStore } from "../embedding"
+
+function getInternals(hs: TestHindsight["hs"]): {
+  hdb: HindsightDatabase
+  memoryVec: EmbeddingStore
+} {
+  return hs as unknown as {
+    hdb: HindsightDatabase
+    memoryVec: EmbeddingStore
+  }
+}
 
 describe("Retrieval methods", () => {
   let t: TestHindsight
@@ -101,6 +115,107 @@ describe("Retrieval methods", () => {
       expect(result.memories).toBeDefined()
     })
 
+    it("expands directional causal links from seed memories", async () => {
+      t.adapter.setResponse(
+        JSON.stringify({
+          facts: [
+            {
+              content: "Heavy rain started in the afternoon",
+              factType: "world",
+              confidence: 1,
+              validFrom: null,
+              validTo: null,
+              entities: [],
+              tags: [],
+              causalRelations: [],
+            },
+            {
+              content: "The hiking trail became muddy",
+              factType: "world",
+              confidence: 1,
+              validFrom: null,
+              validTo: null,
+              entities: [],
+              tags: [],
+              causalRelations: [{ targetIndex: 0, relationType: "causes", strength: 0.9 }],
+            },
+          ],
+        }),
+      )
+
+      const retained = await t.hs.retain(bankId, "storm report", {
+        consolidate: false,
+      })
+
+      const cause = retained.memories.find((m) =>
+        m.content.includes("Heavy rain"),
+      )
+      const effect = retained.memories.find((m) =>
+        m.content.includes("muddy"),
+      )
+
+      expect(cause).toBeDefined()
+      expect(effect).toBeDefined()
+
+      const { hdb, memoryVec } = getInternals(t.hs)
+      const graphResults = await searchGraph(
+        hdb,
+        memoryVec,
+        bankId,
+        "ignored",
+        10,
+        {
+          factTypes: ["world"],
+          seedMemoryIds: [effect!.id],
+        },
+      )
+
+      expect(graphResults.some((r) => r.id === cause!.id)).toBe(true)
+    })
+
+    it("applies entity frequency filtering", async () => {
+      const retained = await t.hs.retain(bankId, "test", {
+        facts: [
+          { content: "Alice writes Python services", factType: "world", entities: ["Alice", "Python"] },
+          { content: "Bob writes Python pipelines", factType: "world", entities: ["Bob", "Python"] },
+          { content: "Carol writes Python scripts", factType: "world", entities: ["Carol", "Python"] },
+        ],
+        consolidate: false,
+      })
+
+      const alice = retained.memories.find((m) => m.content.includes("Alice"))
+      expect(alice).toBeDefined()
+
+      const { hdb, memoryVec } = getInternals(t.hs)
+      const strictResults = await searchGraph(
+        hdb,
+        memoryVec,
+        bankId,
+        "ignored",
+        10,
+        {
+          factTypes: ["world"],
+          seedMemoryIds: [alice!.id],
+          maxEntityFrequency: 1,
+        },
+      )
+      const relaxedResults = await searchGraph(
+        hdb,
+        memoryVec,
+        bankId,
+        "ignored",
+        10,
+        {
+          factTypes: ["world"],
+          seedMemoryIds: [alice!.id],
+          maxEntityFrequency: 100,
+        },
+      )
+
+      expect(strictResults).toHaveLength(0)
+      expect(relaxedResults.length).toBeGreaterThan(0)
+    })
+
     it("returns empty for unrelated entities", async () => {
       await t.hs.retain(bankId, "test", {
         facts: [{ content: "Alice enjoys reading", entities: ["Alice"] }],
@@ -190,9 +305,73 @@ describe("Retrieval methods", () => {
   // ── Link expansion retrieval (port of test_link_expansion_retrieval.py) ─
 
   describe("link expansion retrieval", () => {
-    it.todo("observations find other observations via shared entities from source world facts")
-    it.todo("world facts find other world facts via direct entity links")
-    it.todo("graph trace is present in recall result when enabled")
+    it("observations traverse source_memory_ids to find related observations", async () => {
+      t.adapter.setResponses([
+        JSON.stringify([
+          {
+            action: "create",
+            text: "Alice works with Python APIs",
+            reason: "Durable profile detail",
+          },
+        ]),
+        JSON.stringify([
+          {
+            action: "create",
+            text: "Bob builds Python data pipelines",
+            reason: "Durable profile detail",
+          },
+        ]),
+      ])
+
+      await t.hs.retain(bankId, "test", {
+        facts: [
+          {
+            content: "Alice works with Python at TechCorp",
+            factType: "world",
+            entities: ["Alice", "Python", "TechCorp"],
+          },
+          {
+            content: "Bob uses Python at DataSoft",
+            factType: "world",
+            entities: ["Bob", "Python", "DataSoft"],
+          },
+        ],
+        consolidate: false,
+      })
+
+      await t.hs.consolidate(bankId)
+
+      const { hdb, memoryVec } = getInternals(t.hs)
+      const observations = hdb.db
+        .select({
+          id: hdb.schema.memoryUnits.id,
+          content: hdb.schema.memoryUnits.content,
+        })
+        .from(hdb.schema.memoryUnits)
+        .where(eq(hdb.schema.memoryUnits.factType, "observation"))
+        .all()
+
+      expect(observations.length).toBeGreaterThanOrEqual(2)
+
+      const aliceObs = observations.find((obs) => obs.content.includes("Alice"))
+      const bobObs = observations.find((obs) => obs.content.includes("Bob"))
+      expect(aliceObs).toBeDefined()
+      expect(bobObs).toBeDefined()
+
+      const graphResults = await searchGraph(
+        hdb,
+        memoryVec,
+        bankId,
+        "ignored",
+        10,
+        {
+          factTypes: ["observation"],
+          seedMemoryIds: [aliceObs!.id],
+        },
+      )
+
+      expect(graphResults.some((r) => r.id === bobObs!.id)).toBe(true)
+    })
   })
 
   // ── Multi-method fusion ─────────────────────────────────────────────────
