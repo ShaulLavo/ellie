@@ -7,8 +7,14 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { eq } from "drizzle-orm"
-import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
 import { searchGraph } from "../retrieval/graph"
+import {
+  EdgeCache,
+  mpfpTraverseAsync,
+  rrfFusion,
+  type EdgesByType,
+} from "../retrieval/mpfp"
 import type { HindsightDatabase } from "../db"
 import type { EmbeddingStore } from "../embedding"
 
@@ -292,88 +298,275 @@ describe("Retrieval methods", () => {
   // ── MPFP graph retrieval (port of test_mpfp_retrieval.py) ──────────────
 
   describe("MPFP graph retrieval", () => {
-    it("finds facts related via graph traversal through shared entities (integration)", () => {
-      implementMe(
-        "MPFP graph traversal not exposed as standalone function",
-        "test_mpfp_retrieval.py::test_graph_traversal_shared_entities",
+    it("finds facts related via graph traversal through shared entities (integration)", async () => {
+      const retained = await t.hs.retain(bankId, "test", {
+        facts: [
+          { content: "Alice works at TechCorp", factType: "world", entities: ["Alice", "TechCorp"] },
+          { content: "Bob is Alice's manager", factType: "world", entities: ["Bob", "Alice"] },
+        ],
+        consolidate: false,
+      })
+
+      const aliceFact = retained.memories.find((memory) =>
+        memory.content.includes("TechCorp"),
       )
+      const bobFact = retained.memories.find((memory) =>
+        memory.content.includes("manager"),
+      )
+      expect(aliceFact).toBeDefined()
+      expect(bobFact).toBeDefined()
+
+      const { hdb, memoryVec } = getInternals(t.hs)
+      const results = await searchGraph(hdb, memoryVec, bankId, "ignored", 10, {
+        factTypes: ["world"],
+        seedMemoryIds: [aliceFact!.id],
+      })
+
+      expect(results.some((hit) => hit.id === bobFact!.id)).toBe(true)
     })
 
-    it("loads edges lazily — only fetches edges for frontier nodes actually reached", () => {
-      implementMe(
-        "MPFP lazy edge loading not exposed for testing",
-        "test_mpfp_retrieval.py::test_lazy_edge_loading",
+    it("loads edges lazily — only fetches edges for frontier nodes actually reached", async () => {
+      const cache = new EdgeCache()
+      cache.addAllEdges(
+        {
+          semantic: {
+            "seed-1": [{ nodeId: "hop-1", weight: 1 }],
+          },
+        },
+        ["seed-1"],
       )
+
+      const loadedFrontiers: string[][] = []
+      const loadEdges = async (frontierNodeIds: string[]): Promise<EdgesByType> => {
+        loadedFrontiers.push([...frontierNodeIds])
+        return {
+          semantic: {
+            "hop-1": [{ nodeId: "hop-2", weight: 1 }],
+          },
+        }
+      }
+
+      await mpfpTraverseAsync(
+        [{ nodeId: "seed-1", score: 1 }],
+        ["semantic", "semantic"],
+        loadEdges,
+        cache,
+      )
+
+      expect(loadedFrontiers).toHaveLength(1)
+      expect(loadedFrontiers[0]).toEqual(["hop-1"])
     })
 
-    it("empty seeds return empty results (no traversal)", () => {
-      implementMe(
-        "MPFP empty seeds behavior not exposed for testing",
-        "test_mpfp_retrieval.py::test_empty_seeds",
+    it("empty seeds return empty results (no traversal)", async () => {
+      const cache = new EdgeCache()
+      let loadCalls = 0
+      const loadEdges = async (): Promise<EdgesByType> => {
+        loadCalls += 1
+        return {}
+      }
+
+      const result = await mpfpTraverseAsync(
+        [],
+        ["semantic"],
+        loadEdges,
+        cache,
       )
+
+      expect(result.scores).toEqual({})
+      expect(loadCalls).toBe(0)
     })
 
-    it("single-hop traversal deposits alpha mass at seed node", () => {
-      implementMe(
-        "MPFP alpha mass deposit not exposed for testing",
-        "test_mpfp_retrieval.py::test_single_hop_alpha",
+    it("single-hop traversal deposits alpha mass at seed node", async () => {
+      const cache = new EdgeCache()
+      cache.addAllEdges({}, ["seed-1"])
+
+      const result = await mpfpTraverseAsync(
+        [{ nodeId: "seed-1", score: 1 }],
+        ["semantic"],
+        async () => ({}),
+        cache,
+        { alpha: 0.15, threshold: 1e-9 },
       )
+
+      expect(result.scores["seed-1"]).toBeCloseTo(0.15, 5)
     })
 
-    it("single-hop traversal spreads remaining mass to neighbours proportionally", () => {
-      implementMe(
-        "MPFP mass spreading not exposed for testing",
-        "test_mpfp_retrieval.py::test_single_hop_spread",
+    it("single-hop traversal spreads remaining mass to neighbours proportionally", async () => {
+      const cache = new EdgeCache()
+      cache.addAllEdges(
+        {
+          semantic: {
+            "seed-1": [
+              { nodeId: "neighbor-1", weight: 0.8 },
+              { nodeId: "neighbor-2", weight: 0.4 },
+            ],
+          },
+        },
+        ["seed-1"],
       )
+
+      const result = await mpfpTraverseAsync(
+        [{ nodeId: "seed-1", score: 1 }],
+        ["semantic"],
+        async () => ({}),
+        cache,
+        { alpha: 0.15, threshold: 1e-9, topKNeighbors: 10 },
+      )
+
+      expect(result.scores["neighbor-1"]).toBeGreaterThan(
+        result.scores["neighbor-2"] ?? 0,
+      )
+      expect(result.scores["neighbor-1"]).toBeCloseTo((1 - 0.15) * (0.8 / 1.2), 5)
+      expect(result.scores["neighbor-2"]).toBeCloseTo((1 - 0.15) * (0.4 / 1.2), 5)
     })
 
-    it("two-hop traversal propagates mass through intermediate nodes", () => {
-      implementMe(
-        "MPFP two-hop propagation not exposed for testing",
-        "test_mpfp_retrieval.py::test_two_hop_propagation",
+    it("two-hop traversal propagates mass through intermediate nodes", async () => {
+      const cache = new EdgeCache()
+      cache.addAllEdges(
+        {
+          semantic: {
+            "seed-1": [{ nodeId: "hop-1", weight: 1 }],
+          },
+        },
+        ["seed-1"],
       )
+
+      const loadEdges = async (frontierNodeIds: string[]): Promise<EdgesByType> => {
+        if (frontierNodeIds.includes("hop-1")) {
+          return {
+            semantic: {
+              "hop-1": [{ nodeId: "hop-2", weight: 1 }],
+            },
+          }
+        }
+        return {}
+      }
+
+      const result = await mpfpTraverseAsync(
+        [{ nodeId: "seed-1", score: 1 }],
+        ["semantic", "semantic"],
+        loadEdges,
+        cache,
+        { alpha: 0.15, threshold: 1e-9, topKNeighbors: 10 },
+      )
+
+      expect(result.scores["seed-1"]).toBeDefined()
+      expect(result.scores["hop-1"]).toBeDefined()
+      expect(result.scores["hop-2"]).toBeDefined()
     })
 
-    it("cache reuse prevents redundant edge loading for already-cached nodes", () => {
-      implementMe(
-        "MPFP cache reuse not exposed for testing",
-        "test_mpfp_retrieval.py::test_cache_reuse",
+    it("cache reuse prevents redundant edge loading for already-cached nodes", async () => {
+      const cache = new EdgeCache()
+      cache.addAllEdges(
+        {
+          semantic: {
+            "seed-1": [{ nodeId: "neighbor-1", weight: 1 }],
+            "neighbor-1": [],
+          },
+        },
+        ["seed-1", "neighbor-1"],
       )
+
+      let loadCalls = 0
+      const loadEdges = async (): Promise<EdgesByType> => {
+        loadCalls += 1
+        return {}
+      }
+
+      await mpfpTraverseAsync(
+        [{ nodeId: "seed-1", score: 1 }],
+        ["semantic"],
+        loadEdges,
+        cache,
+        { alpha: 0.15, threshold: 1e-9 },
+      )
+
+      expect(loadCalls).toBe(0)
     })
 
     it("RRF fusion: empty pattern results return empty list", () => {
-      implementMe(
-        "MPFP RRF fusion internals not exposed for testing",
-        "test_mpfp_retrieval.py::test_rrf_empty",
-      )
+      const fused = rrfFusion([])
+      expect(fused).toEqual([])
     })
 
     it("RRF fusion: single pattern preserves rank order", () => {
-      implementMe(
-        "MPFP RRF fusion internals not exposed for testing",
-        "test_mpfp_retrieval.py::test_rrf_single_pattern",
+      const fused = rrfFusion(
+        [
+          {
+            pattern: ["semantic"],
+            scores: {
+              "node-1": 0.9,
+              "node-2": 0.7,
+              "node-3": 0.5,
+            },
+          },
+        ],
+        3,
       )
+      expect(fused).toHaveLength(3)
+      expect(fused[0]![0]).toBe("node-1")
+      expect(fused[1]![0]).toBe("node-2")
+      expect(fused[2]![0]).toBe("node-3")
     })
 
     it("RRF fusion: nodes appearing in multiple patterns get boosted score", () => {
-      implementMe(
-        "MPFP RRF fusion internals not exposed for testing",
-        "test_mpfp_retrieval.py::test_rrf_boost",
+      const fused = rrfFusion(
+        [
+          {
+            pattern: ["semantic", "semantic"],
+            scores: {
+              "node-1": 0.9,
+              "node-2": 0.7,
+            },
+          },
+          {
+            pattern: ["entity", "temporal"],
+            scores: {
+              "node-1": 0.8,
+              "node-3": 0.6,
+            },
+          },
+        ],
+        3,
       )
+      expect(fused[0]![0]).toBe("node-1")
+      expect(fused[0]![1]).toBeGreaterThan(fused[1]![1])
     })
 
     it("RRF fusion: top_k limits returned results", () => {
-      implementMe(
-        "MPFP RRF fusion internals not exposed for testing",
-        "test_mpfp_retrieval.py::test_rrf_top_k",
+      const fused = rrfFusion(
+        [
+          {
+            pattern: ["semantic"],
+            scores: Object.fromEntries(
+              Array.from({ length: 10 }, (_, i) => [
+                `node-${i}`,
+                1 / (i + 1),
+              ]),
+            ),
+          },
+        ],
+        3,
       )
+      expect(fused).toHaveLength(3)
     })
 
     it("RRF fusion: patterns with empty scores are ignored", () => {
-      implementMe(
-        "MPFP RRF fusion internals not exposed for testing",
-        "test_mpfp_retrieval.py::test_rrf_empty_scores",
+      const fused = rrfFusion(
+        [
+          {
+            pattern: ["semantic"],
+            scores: {},
+          },
+          {
+            pattern: ["entity"],
+            scores: { "node-1": 0.5 },
+          },
+        ],
+        3,
       )
+      expect(fused).toHaveLength(1)
+      expect(fused[0]![0]).toBe("node-1")
     })
   })
 
