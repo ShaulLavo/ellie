@@ -24,7 +24,7 @@ export function createDB(dbPath: string) {
 }
 
 // Re-exports
-export { openDatabase, isVecAvailable } from "./init"
+export { openDatabase } from "./init"
 export { MIGRATIONS_DIR }
 export { LogFile } from "./log"
 export { JsonlEngine, formatOffset } from "./jsonl-store"

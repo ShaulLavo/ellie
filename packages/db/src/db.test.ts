@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createDB, isVecAvailable } from "./index"
+import { createDB } from "./index"
 import { LogFile } from "./log"
 import { JsonlEngine, formatOffset } from "./jsonl-store"
 import { typedLog } from "./typed-log"
@@ -607,6 +607,117 @@ describe("JsonlEngine", () => {
       expect(elapsed).toBeLessThan(5_000)
     })
   })
+
+  // ── Edge case: orphan on SQLite failure ──────────────────────────────
+
+  describe("orphan on SQLite failure", () => {
+    it("JSONL has orphaned data when SQLite transaction fails", () => {
+      store.createStream("/orphan-test")
+      store.append("/orphan-test", new TextEncoder().encode('{"n":1}'))
+
+      const stream = store.getStream("/orphan-test")!
+      const logPath = join(logDir, `${stream.logFileId}.jsonl`)
+
+      // Close SQLite to force the next transaction to fail.
+      // The JSONL write (line 186 of jsonl-store.ts) happens before
+      // the SQLite transaction (line 203), so the file gets the data
+      // but the index doesn't.
+      store.sqlite.close()
+
+      expect(() => {
+        store.append("/orphan-test", new TextEncoder().encode('{"n":2}'))
+      }).toThrow()
+
+      // JSONL file has both lines (the orphan was written first)
+      const lines = readFileSync(logPath, "utf-8").trim().split("\n")
+      expect(lines).toHaveLength(2)
+      expect(lines[0]).toBe('{"n":1}')
+      expect(lines[1]).toBe('{"n":2}')
+
+      // Reopen engine — SQLite index only has 1 message
+      store = new JsonlEngine(dbPath, logDir)
+      expect(store.messageCount("/orphan-test")).toBe(1)
+    })
+
+    it("subsequent valid append works after orphan", () => {
+      store.createStream("/orphan-recover")
+      store.append("/orphan-recover", new TextEncoder().encode('{"n":1}'))
+
+      const stream = store.getStream("/orphan-recover")!
+      const logPath = join(logDir, `${stream.logFileId}.jsonl`)
+
+      store.sqlite.close()
+
+      expect(() => {
+        store.append("/orphan-recover", new TextEncoder().encode('{"orphan":true}'))
+      }).toThrow()
+
+      // Reopen and append a valid message
+      store = new JsonlEngine(dbPath, logDir)
+      store.append("/orphan-recover", new TextEncoder().encode('{"n":3}'))
+
+      // Read returns 2 indexed messages (n:1 and n:3), not the orphan
+      const messages = store.read("/orphan-recover")
+      expect(messages).toHaveLength(2)
+      expect(new TextDecoder().decode(messages[0]!.data)).toBe('{"n":1}')
+      expect(new TextDecoder().decode(messages[1]!.data)).toBe('{"n":3}')
+
+      // But JSONL file has 3 lines (including orphan)
+      const lines = readFileSync(logPath, "utf-8").trim().split("\n")
+      expect(lines).toHaveLength(3)
+    })
+  })
+
+  // ── Edge case: append to soft-deleted stream ────────────────────────
+
+  describe("append to soft-deleted stream", () => {
+    it("append succeeds because getOrOpenLog has no deletedAt filter", () => {
+      // Documents current behavior: getOrOpenLog (line 303) queries the
+      // streams table WITHOUT filtering on deletedAt, so appends to
+      // soft-deleted streams succeed.
+      store.createStream("/delete-then-append")
+      store.append("/delete-then-append", new TextEncoder().encode('{"before":1}'))
+
+      store.deleteStream("/delete-then-append")
+      expect(store.getStream("/delete-then-append")).toBeUndefined()
+
+      // Append still works — stream row exists, just has deletedAt set
+      expect(() => {
+        store.append("/delete-then-append", new TextEncoder().encode('{"after":1}'))
+      }).not.toThrow()
+
+      expect(store.messageCount("/delete-then-append")).toBe(2)
+    })
+  })
+
+  // ── Edge case: resurrection clears openLogs cache ───────────────────
+
+  describe("resurrection clears openLogs cache", () => {
+    it("after resurrection, appends go to the new JSONL file", () => {
+      const original = store.createStream("/cache-test")
+      store.append("/cache-test", new TextEncoder().encode('{"old":1}'))
+
+      store.deleteStream("/cache-test")
+      // deleteStream closes the LogFile and removes from openLogs
+
+      const resurrected = store.createStream("/cache-test")
+      expect(resurrected.logFileId).not.toBe(original.logFileId)
+
+      store.append("/cache-test", new TextEncoder().encode('{"new":1}'))
+
+      const newFilePath = join(logDir, `${resurrected.logFileId}.jsonl`)
+      const oldFilePath = join(logDir, `${original.logFileId}.jsonl`)
+      store.close()
+
+      const newContent = readFileSync(newFilePath, "utf-8")
+      expect(newContent.trim()).toBe('{"new":1}')
+
+      const oldContent = readFileSync(oldFilePath, "utf-8")
+      expect(oldContent).not.toContain('"new"')
+
+      store = new JsonlEngine(dbPath, logDir)
+    })
+  })
 })
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -779,7 +890,7 @@ describe("createDB (raw SQLite)", () => {
 // sqlite-vec (vector operations)
 // ════════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!isVecAvailable())("sqlite-vec", () => {
+describe("sqlite-vec", () => {
   let tmpDir: string
   let dbPath: string
   let sqlite: Database
@@ -799,10 +910,6 @@ describe.skipIf(!isVecAvailable())("sqlite-vec", () => {
   it("vec_version() returns a version string", () => {
     const result = sqlite.prepare("SELECT vec_version() as v").get() as { v: string }
     expect(result.v).toMatch(/^v\d+\.\d+\.\d+/)
-  })
-
-  it("isVecAvailable() returns true", () => {
-    expect(isVecAvailable()).toBe(true)
   })
 
   it("KNN cosine similarity search", () => {
