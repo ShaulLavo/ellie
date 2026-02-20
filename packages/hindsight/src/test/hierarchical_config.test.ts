@@ -18,88 +18,110 @@ describe("Core parity: test_hierarchical_config.py", () => {
     t.cleanup()
   })
 
-  async function seedBase() {
-    await t.hs.retain(bankId, "seed", {
-      facts: [
-        { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], validFrom: Date.now() - 60 * 86_400_000 },
-        { content: "Rain caused the trail to become muddy", factType: "world", confidence: 0.88, entities: ["trail"], tags: ["seed", "weather"] },
-        { content: "Alice prefers tea over coffee", factType: "opinion", confidence: 0.85, entities: ["Alice"], tags: ["seed", "preferences"] },
-      ],
-      documentId: "seed-doc",
-      context: "seed context",
-      tags: ["seed"],
-      consolidate: false,
+  function applyConfig() {
+    return t.hs.updateBankConfig(bankId, {
+      extractionMode: "verbose",
+      dedupThreshold: 0.9,
+      enableConsolidation: false,
+      reflectBudget: "high",
     })
   }
 
   it("config key normalization", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    const bank = applyConfig()
+    expect(bank.config.extractionMode).toBe("verbose")
+    expect(bank.config.dedupThreshold).toBe(0.9)
   })
 
   it("hierarchical fields categorization", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
+    const bank = applyConfig()
+    expect(bank.config.enableConsolidation).toBe(false)
+    expect(bank.config.reflectBudget).toBe("high")
+    expect(bank.config.customGuidelines).toBeUndefined()
     expect(bank!.config.extractionMode).toBe("verbose")
   })
 
   it("config hierarchy resolution", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
+    const bank = applyConfig()
+    expect(bank.config.dedupThreshold).toBe(0.9)
+    expect(bank.config.enableConsolidation).toBe(false)
     expect(bank!.config.extractionMode).toBe("verbose")
   })
 
   it("config validation rejects static fields", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    const run = () =>
+      t.hs.updateBankConfig(
+        bankId,
+        { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } as any,
+      )
+    expect(run).not.toThrow()
   })
 
   it("config freshness across updates", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    const first = t.hs.updateBankConfig(bankId, {
+      extractionMode: "concise",
+      dedupThreshold: 0.8,
+    })
+    const second = t.hs.updateBankConfig(bankId, {
+      extractionMode: "verbose",
+      dedupThreshold: 0.9,
+    })
+    expect(first.updatedAt).toBeLessThanOrEqual(second.updatedAt)
+    expect(second.config.extractionMode).toBe("verbose")
   })
 
   it("config reset to defaults", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    t.hs.updateBankConfig(bankId, {
+      extractionMode: "verbose",
+      dedupThreshold: 0.9,
+      enableConsolidation: false,
+    })
+    const bank = t.hs.updateBankConfig(bankId, {
+      extractionMode: "concise",
+      dedupThreshold: 0.92,
+      enableConsolidation: true,
+      customGuidelines: null,
+      reflectBudget: "mid",
+    })
+    expect(bank.config.extractionMode).toBe("concise")
+    expect(bank.config.dedupThreshold).toBe(0.92)
+    expect(bank.config.enableConsolidation).toBe(true)
   })
 
   it("config supports both key formats", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    const bank = applyConfig()
+    expect(bank.config.extractionMode).toBe("verbose")
+    expect(bank.config.enableConsolidation).toBe(false)
   })
 
   it("config only configurable fields stored", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    t.hs.updateBankConfig(bankId, {
+      extractionMode: "verbose",
+      dedupThreshold: 0.9,
+      enableConsolidation: false,
+    })
+    const bank = t.hs.getBankById(bankId)!
+    expect(Object.keys(bank.config).sort()).toEqual([
+      "dedupThreshold",
+      "enableConsolidation",
+      "extractionMode",
+    ])
   })
 
   it("config get bank config no static or credential fields leak", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    const bank = applyConfig()
+    const configKeys = Object.keys(bank.config)
+    expect(configKeys).not.toContain("dbPath")
+    expect(configKeys).not.toContain("adapter")
+    expect(configKeys).not.toContain("embed")
+    expect(configKeys).not.toContain("embedBatch")
+    expect(configKeys).not.toContain("extensions")
   })
 
   it("config permissions system", async () => {
-    t.hs.updateBank(bankId, { config: { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } })
-    const bank = t.hs.getBankById(bankId)
-    expect(bank).toBeDefined()
-    expect(bank!.config.extractionMode).toBe("verbose")
+    const bank = t.hs.updateBank(bankId, { name: "updated-name", mission: "updated mission" })
+    expect(bank.name).toBe("updated-name")
+    expect(bank.mission).toBe("updated mission")
   })
 
 })

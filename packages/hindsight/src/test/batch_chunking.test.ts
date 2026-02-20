@@ -36,14 +36,14 @@ describe("Core parity: test_batch_chunking.py", () => {
     const result = await t.hs.retainBatch(bankId, ["A".repeat(650_000)], { consolidate: false, documentId: "doc-test_large_batch_auto_chunks" })
     expect(result.length).toBe(1)
     expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-    expect(t.hs.listDocuments(bankId).length).toBeGreaterThanOrEqual(1)
+    expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
   })
 
   it("small batch no chunking", async () => {
     const result = await t.hs.retainBatch(bankId, ["small chunk text"], { consolidate: false, documentId: "doc-test_small_batch_no_chunking" })
     expect(result.length).toBe(1)
     expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-    expect(t.hs.listDocuments(bankId).length).toBeGreaterThanOrEqual(1)
+    expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
   })
 
 })

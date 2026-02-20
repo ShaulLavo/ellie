@@ -36,21 +36,21 @@ describe("Core parity: test_chunking.py", () => {
     const result = await t.hs.retainBatch(bankId, ["small chunk text"], { consolidate: false, documentId: "doc-test_chunk_text_small" })
     expect(result.length).toBe(1)
     expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-    expect(t.hs.listDocuments(bankId).length).toBeGreaterThanOrEqual(1)
+    expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
   })
 
   it("chunk text large", async () => {
     const result = await t.hs.retainBatch(bankId, ["A".repeat(650_000)], { consolidate: false, documentId: "doc-test_chunk_text_large" })
     expect(result.length).toBe(1)
     expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-    expect(t.hs.listDocuments(bankId).length).toBeGreaterThanOrEqual(1)
+    expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
   })
 
   it("chunk text 64k", async () => {
     const result = await t.hs.retainBatch(bankId, ["A".repeat(650_000)], { consolidate: false, documentId: "doc-test_chunk_text_64k" })
     expect(result.length).toBe(1)
     expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-    expect(t.hs.listDocuments(bankId).length).toBeGreaterThanOrEqual(1)
+    expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
   })
 
 })

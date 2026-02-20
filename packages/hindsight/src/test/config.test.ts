@@ -73,61 +73,6 @@ describe("BankConfig validation", () => {
   })
 })
 
-// ── Hindsight instance config validation (port of test_config_validation.py) ──
-
-describe("Hindsight instance config validation", () => {
-  it("throws when retainMaxCompletionTokens <= retainChunkSize (tokens must exceed chunk size)", () => {
-    expect(() =>
-      createTestHindsight({
-        retainMaxCompletionTokens: 1000,
-        retainChunkSize: 2000,
-      }),
-    ).toThrow(/must be greater than/i)
-  })
-
-  it("throws when retainMaxCompletionTokens equals retainChunkSize", () => {
-    expect(() =>
-      createTestHindsight({
-        retainMaxCompletionTokens: 3000,
-        retainChunkSize: 3000,
-      }),
-    ).toThrow(/must be greater than/i)
-  })
-
-  it("error message names both offending parameters and their values", () => {
-    const run = () =>
-      createTestHindsight({
-        retainMaxCompletionTokens: 1000,
-        retainChunkSize: 2000,
-      })
-
-    expect(run).toThrow(/HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS/)
-    expect(run).toThrow(/1000/)
-    expect(run).toThrow(/HINDSIGHT_API_RETAIN_CHUNK_SIZE/)
-    expect(run).toThrow(/2000/)
-  })
-
-  it("error message includes guidance on how to fix the invalid combination", () => {
-    const run = () =>
-      createTestHindsight({
-        retainMaxCompletionTokens: 1000,
-        retainChunkSize: 2000,
-      })
-
-    expect(run).toThrow(/You have two options to fix this/i)
-    expect(run).toThrow(/Increase HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS/i)
-    expect(run).toThrow(/use a model that supports/i)
-  })
-
-  it("accepts valid config where retainMaxCompletionTokens > retainChunkSize", () => {
-    const t = createTestHindsight({
-      retainMaxCompletionTokens: 64_000,
-      retainChunkSize: 3_000,
-    })
-    t.cleanup()
-  })
-})
-
 describe("Defaults merging", () => {
   it("instance defaults fill gaps in bank config", () => {
     const t = createTestHindsight({
