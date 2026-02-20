@@ -33,6 +33,12 @@ const HAS_REAL_EMBEDDINGS = Object.keys(EMBEDDING_FIXTURE).length > 0
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const EMBED_DIMS = HAS_REAL_EMBEDDINGS ? 768 : 16
+export const EXTRACTION_TEST_MODE = process.env.HINDSIGHT_EXTRACTION_TEST_MODE ?? "deterministic"
+export const EXTRACTION_TEST_CANONICAL_TIMEZONE = "Asia/Jerusalem"
+
+export function useRealLLMExtractionTests(): boolean {
+  return EXTRACTION_TEST_MODE === "real-llm"
+}
 
 // ── Embedding function ───────────────────────────────────────────────────────
 
@@ -78,6 +84,12 @@ export interface TestHindsight {
   cleanup: () => void
 }
 
+export interface RealLLMTestHindsight {
+  hs: Hindsight
+  dbPath: string
+  cleanup: () => void
+}
+
 /**
  * Create a Hindsight instance backed by a temporary SQLite database.
  *
@@ -117,6 +129,45 @@ export function createTestHindsight(
   }
 
   return { hs, adapter, dbPath, cleanup }
+}
+
+/**
+ * Create a Hindsight instance for real-LLM extraction tests.
+ *
+ * Uses the package default adapter (Anthropic) unless caller overrides it.
+ * Requires valid provider credentials in the environment when executed.
+ */
+export function createRealLLMTestHindsight(
+  overrides?: Partial<HindsightConfig>,
+): RealLLMTestHindsight {
+  const dbPath = join(
+    tmpdir(),
+    `hindsight-real-llm-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+  )
+
+  const hs = new Hindsight({
+    dbPath,
+    embed: mockEmbed,
+    embeddingDimensions: EMBED_DIMS,
+    ...overrides,
+  })
+
+  const cleanup = () => {
+    try {
+      hs.close()
+    } catch {
+      // already closed
+    }
+    try {
+      rmSync(dbPath, { force: true })
+      rmSync(dbPath + "-wal", { force: true })
+      rmSync(dbPath + "-shm", { force: true })
+    } catch {
+      // file may not exist
+    }
+  }
+
+  return { hs, dbPath, cleanup }
 }
 
 /**

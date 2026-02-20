@@ -1,123 +1,99 @@
-// ── Fact Extraction (Concise — default) ────────────────────────────────────
+// ── Fact Extraction (Python parity) ────────────────────────────────────────
 
-export const EXTRACT_FACTS_SYSTEM = `You extract structured facts from text. Be SELECTIVE — only extract facts worth remembering long-term.
+export const EXTRACTION_CANONICAL_TIMEZONE = "Asia/Jerusalem"
 
-LANGUAGE: Detect the language of the input. All extracted facts, entity names, and descriptions MUST be in the SAME language as the input.
+const FACT_TYPES_INSTRUCTION =
+  `Extract ONLY "world" and "assistant" type facts.`
 
-ONLY extract facts that are:
-- Personal info: names, relationships, roles, background
-- Preferences: likes, dislikes, habits, interests
-- Significant events: milestones, decisions, achievements, changes
-- Plans/goals: future intentions, deadlines, commitments
-- Expertise: skills, knowledge, certifications, experience
-- Important context: projects, problems, constraints
-- Observations: descriptions of people, places, things with specific details
+const EXTRACTION_RESPONSE_FORMAT = `RESPONSE FORMAT: Return ONLY valid JSON:
+{
+  "facts": [
+    {
+      "what": "Core fact (1-2 concise sentences)",
+      "when": "Temporal description or N/A",
+      "where": "Location or N/A",
+      "who": "People/entities involved or N/A",
+      "why": "Context/significance or N/A",
+      "fact_kind": "event" | "conversation",
+      "fact_type": "world" | "assistant",
+      "occurred_start": "ISO datetime or null",
+      "occurred_end": "ISO datetime or null",
+      "entities": [{ "text": "Entity name" }],
+      "causal_relations": [{ "target_index": 0, "relation_type": "caused_by", "strength": 1.0 }]
+    }
+  ]
+}`
+
+const BASE_FACT_EXTRACTION_PROMPT = `Extract SIGNIFICANT facts from text. Be SELECTIVE — only extract facts worth remembering long-term.
+
+LANGUAGE REQUIREMENT: Detect the language of the input text. All extracted facts, entity names, descriptions, and output MUST be in the SAME language as the input. Do not translate.
+
+${FACT_TYPES_INSTRUCTION}
+
+{extraction_guidelines}
+
+FACT FORMAT (all fields required):
+1. what: Core fact (concise but complete, 1-2 sentences)
+2. when: Temporal info if mentioned, otherwise "N/A"
+3. where: Location if relevant, otherwise "N/A"
+4. who: People involved with relationships, otherwise "N/A"
+5. why: Context/significance if important, otherwise "N/A"
+
+COREFERENCE RESOLUTION:
+- Resolve generic references to names when both appear.
+- "my roommate" + "Emily" -> use "Emily (user's roommate)"
+
+CLASSIFICATION:
+- fact_kind="event": specific datable occurrence
+- fact_kind="conversation": ongoing state, preference, trait
+- fact_type="world": user life, other people, external events
+- fact_type="assistant": interaction with assistant (requests/help)
+
+TEMPORAL HANDLING (CRITICAL):
+- Use "Event Date" from input as the reference for relative dates.
+- For events: set occurred_start and occurred_end.
+- For conversations: do not set occurred dates.
+- If text has an absolute date (e.g. "March 15, 2024"), preserve it in occurred_start.
+
+ENTITIES:
+- Include people, organizations, places, key objects, and abstract concepts.
+- Always include "user" when fact is about the user.
+
+${EXTRACTION_RESPONSE_FORMAT}`
+
+const CONCISE_GUIDELINES = `SELECTIVITY — extract only facts worth remembering long-term.
+
+ONLY extract:
+- Personal info, relationships, background
+- Preferences, habits, interests (non-trivial)
+- Significant events, milestones, decisions, changes
+- Plans/goals/commitments
+- Expertise, skills, certifications
+- Important context and constraints
+- Sensory/emotional details that characterize an experience
+- Observations with specific details
 
 DO NOT extract:
-- Generic greetings, filler, or process chatter
-- Information that is trivially obvious from context
-- Repeated information
+- Generic greetings/pleasantries ("hello", "how are you")
+- Pure filler ("thanks", "ok", "sure", "sounds good")
+- Process chatter ("let me check", "one moment")
+- Repeated info
 
-COREFERENCE RESOLUTION:
-Replace pronouns with actual names/entities when possible. "She went to the store" → "Alice went to the store" (if Alice was previously mentioned).
+CONSOLIDATE related statements into one fact where possible.
+QUALITY OVER QUANTITY: ask "Would this be useful to recall in 6 months?"`
 
-CLASSIFICATION:
-- "world": External knowledge and general facts
-- "experience": Personal experiences, interactions, events that happened
-- "opinion": Beliefs, preferences, judgments (include confidence 0.0-1.0)
-- "observation": Descriptions of people, places, or things observed
+const VERBOSE_GUIDELINES = `Extract facts with maximum detail and preserve all specific information.
+Still apply temporal handling, coreference resolution, and classification rules exactly.`
 
-CAUSAL RELATIONS:
-If a fact has a directional relationship with another fact you are extracting, note it.
-"causalRelations" links this fact to a previously listed fact (by 0-based index).
-Use "relationType" to specify the direction:
-  - "causes": this fact causes the target fact
-  - "caused_by": this fact is caused by the target fact
-  - "enables": this fact enables or makes the target fact possible
-  - "prevents": this fact prevents or blocks the target fact
+export const EXTRACT_FACTS_SYSTEM = BASE_FACT_EXTRACTION_PROMPT.replace(
+  "{extraction_guidelines}",
+  CONCISE_GUIDELINES,
+)
 
-RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
-{
-  "facts": [
-    {
-      "content": "Clear, self-contained fact statement",
-      "factType": "world" | "experience" | "opinion" | "observation",
-      "confidence": 1.0,
-      "validFrom": "ISO date or null",
-      "validTo": "ISO date or null",
-      "entities": [
-        { "name": "Entity Name", "entityType": "person" | "organization" | "place" | "concept" | "other" }
-      ],
-      "tags": ["optional", "topic", "tags"],
-      "causalRelations": [
-        { "targetIndex": 0, "relationType": "causes", "strength": 0.8 }
-      ]
-    }
-  ]
-}
-
-For opinions, set confidence between 0.0 and 1.0 based on how strongly the opinion is held.
-For temporal facts, set validFrom/validTo as ISO date strings. Use null for unknown or open-ended.
-causalRelations is optional — only include when there is a clear directional relationship.
-Return an empty facts array if there is nothing worth extracting.`
-
-// ── Fact Extraction (Verbose — capture everything) ─────────────────────────
-
-export const EXTRACT_FACTS_VERBOSE_SYSTEM = `You extract ALL facts from text. Capture EVERY detail — nothing is too small.
-
-LANGUAGE: Detect the language of the input. All extracted facts, entity names, and descriptions MUST be in the SAME language as the input.
-
-Extract EVERYTHING including:
-- All names, dates, numbers, quantities mentioned
-- All relationships between people, organizations, concepts
-- Every event, action, decision, or change described
-- All opinions, preferences, likes, dislikes — even casual ones
-- Context, setting, atmosphere, emotions
-- Technical details, specifications, versions
-- Implicit facts and reasonable inferences from the text
-
-COREFERENCE RESOLUTION:
-Replace ALL pronouns with actual names/entities when possible. Be thorough.
-
-CLASSIFICATION:
-- "world": External knowledge and general facts
-- "experience": Personal experiences, interactions, events that happened
-- "opinion": Beliefs, preferences, judgments (include confidence 0.0-1.0)
-- "observation": Descriptions of people, places, or things observed
-
-CAUSAL RELATIONS:
-If a fact has a directional relationship with another fact you are extracting, note it.
-"causalRelations" links this fact to a previously listed fact (by 0-based index).
-Use "relationType" to specify the direction:
-  - "causes": this fact causes the target fact
-  - "caused_by": this fact is caused by the target fact
-  - "enables": this fact enables or makes the target fact possible
-  - "prevents": this fact prevents or blocks the target fact
-
-RESPONSE FORMAT: Return ONLY valid JSON matching this structure:
-{
-  "facts": [
-    {
-      "content": "Clear, self-contained fact statement",
-      "factType": "world" | "experience" | "opinion" | "observation",
-      "confidence": 1.0,
-      "validFrom": "ISO date or null",
-      "validTo": "ISO date or null",
-      "entities": [
-        { "name": "Entity Name", "entityType": "person" | "organization" | "place" | "concept" | "other" }
-      ],
-      "tags": ["optional", "topic", "tags"],
-      "causalRelations": [
-        { "targetIndex": 0, "relationType": "causes", "strength": 0.8 }
-      ]
-    }
-  ]
-}
-
-For opinions, set confidence between 0.0 and 1.0 based on how strongly the opinion is held.
-For temporal facts, set validFrom/validTo as ISO date strings. Use null for unknown or open-ended.
-causalRelations is optional — only include when there is a clear directional relationship.
-NEVER return an empty facts array — there is ALWAYS something worth extracting.`
+export const EXTRACT_FACTS_VERBOSE_SYSTEM = BASE_FACT_EXTRACTION_PROMPT.replace(
+  "{extraction_guidelines}",
+  VERBOSE_GUIDELINES,
+)
 
 // ── Extraction mode selector ───────────────────────────────────────────────
 
@@ -127,15 +103,46 @@ export function getExtractionPrompt(
 ): string {
   if (mode === "verbose") return EXTRACT_FACTS_VERBOSE_SYSTEM
   if (mode === "custom" && customGuidelines) {
-    return EXTRACT_FACTS_SYSTEM + "\n\nADDITIONAL GUIDELINES:\n" + customGuidelines
+    return BASE_FACT_EXTRACTION_PROMPT.replace(
+      "{extraction_guidelines}",
+      customGuidelines,
+    )
   }
   return EXTRACT_FACTS_SYSTEM
 }
 
 // ── User message ───────────────────────────────────────────────────────────
 
-export const EXTRACT_FACTS_USER = (content: string) =>
-  `Extract the significant facts from the following text:\n\n---\n\n${content}`
+export interface ExtractFactsUserPromptInput {
+  text: string
+  chunkIndex: number
+  totalChunks: number
+  eventDateMs: number
+  context?: string | null
+}
+
+function formatEventDate(eventDateMs: number): string {
+  const date = new Date(eventDateMs)
+  if (Number.isNaN(date.getTime())) return "Unknown date (invalid)"
+  const readable = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: EXTRACTION_CANONICAL_TIMEZONE,
+  }).format(date)
+  return `${readable} (${date.toISOString()})`
+}
+
+export const EXTRACT_FACTS_USER = (input: ExtractFactsUserPromptInput) =>
+  `Extract facts from the following text chunk.
+
+Chunk: ${input.chunkIndex + 1}/${input.totalChunks}
+Event Date: ${formatEventDate(input.eventDateMs)}
+Context: ${input.context?.trim() || "none"}
+
+Text:
+${input.text}`
 
 // ── Consolidation ─────────────────────────────────────────────────────────
 

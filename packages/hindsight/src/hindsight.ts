@@ -39,6 +39,7 @@ import type {
   RetainOptions,
   RetainBatchOptions,
   RetainBatchItem,
+  RetainContentInput,
   RetainResult,
   RetainBatchResult,
   RecallOptions,
@@ -448,9 +449,11 @@ Instructions:
 
   async retain(
     bankId: string,
-    content: string,
+    content: RetainContentInput,
     options?: RetainOptions,
   ): Promise<RetainResult> {
+    const normalizedContent =
+      typeof content === "string" ? content : JSON.stringify(content)
     const cfg = this.resolveConfig(bankId)
     const resolvedOptions: RetainOptions = {
       mode: cfg.extractionMode,
@@ -468,7 +471,7 @@ Instructions:
       "retain",
       "retain",
       bankId,
-      { contentLength: content.length, hasOptions: Boolean(options) },
+      { contentLength: normalizedContent.length, hasOptions: Boolean(options) },
       () =>
         retainImpl(
           this.hdb,
@@ -477,7 +480,7 @@ Instructions:
           this.modelVec,
           this.adapter,
           bankId,
-          content,
+          normalizedContent,
           resolvedOptions,
           this.rerank,
           retainProfile,

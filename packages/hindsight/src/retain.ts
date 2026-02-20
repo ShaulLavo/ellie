@@ -2,7 +2,6 @@ import { chat, streamToText } from "@ellie/ai"
 import { ulid } from "@ellie/utils"
 import { createHash } from "crypto"
 import { and, eq } from "drizzle-orm"
-import * as v from "valibot"
 import type { AnyTextAdapter } from "@tanstack/ai"
 import { RecursiveChunker } from "@chonkiejs/core"
 import type { HindsightDatabase } from "./db"
@@ -19,6 +18,7 @@ import type {
   EntityType,
   LinkType,
   RerankFunction,
+  TranscriptTurn,
 } from "./types"
 import { getExtractionPrompt, EXTRACT_FACTS_USER } from "./prompts"
 import { sanitizeText, parseLLMJson } from "./sanitize"
@@ -38,43 +38,38 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
   }
 }
 
-// ── Valibot schema for LLM extraction response ────────────────────────────
+// ── Extraction response normalization (Python + TS parity) ────────────────
 
-const ExtractedEntitySchema = v.object({
-  name: v.string(),
-  entityType: v.picklist([
-    "person",
-    "organization",
-    "place",
-    "concept",
-    "other",
-  ]),
-})
+const CAUSAL_LINK_TYPES = new Set([
+  "causes",
+  "caused_by",
+  "enables",
+  "prevents",
+] as const)
 
-const CAUSAL_LINK_TYPES = ["causes", "caused_by", "enables", "prevents"] as const
+type CausalLinkType = "causes" | "caused_by" | "enables" | "prevents"
 
-const CausalRelationSchema = v.object({
-  targetIndex: v.number(),
-  relationType: v.optional(v.picklist(CAUSAL_LINK_TYPES), "causes"),
-  strength: v.optional(v.number(), 1.0),
-})
+interface ExtractedEntity {
+  name: string
+  entityType: EntityType
+}
 
-const ExtractedFactSchema = v.object({
-  facts: v.array(
-    v.object({
-      content: v.string(),
-      factType: v.picklist(["world", "experience", "opinion", "observation"]),
-      confidence: v.optional(v.number(), 1.0),
-      validFrom: v.optional(v.nullable(v.string()), null),
-      validTo: v.optional(v.nullable(v.string()), null),
-      entities: v.optional(v.array(ExtractedEntitySchema), []),
-      tags: v.optional(v.array(v.string()), []),
-      causalRelations: v.optional(v.array(CausalRelationSchema), []),
-    }),
-  ),
-})
+interface ExtractedCausalRelation {
+  targetIndex: number
+  relationType: CausalLinkType
+  strength: number
+}
 
-type ExtractedFact = v.InferOutput<typeof ExtractedFactSchema>["facts"][number]
+interface ExtractedFact {
+  content: string
+  factType: FactType
+  confidence: number
+  validFrom: string | null
+  validTo: string | null
+  entities: ExtractedEntity[]
+  tags: string[]
+  causalRelations: ExtractedCausalRelation[]
+}
 
 const CHARS_PER_BATCH = 600_000
 
@@ -104,6 +99,7 @@ interface ExpandedBatchContent {
   originalIndex: number
   content: string
   chunkIndex: number
+  chunkCount: number
   chunkId: string
   context: string | null
   eventDateMs: number
@@ -135,6 +131,202 @@ function parseISOToEpoch(iso: string | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms
 }
 
+function mapFactType(value: unknown): FactType {
+  if (value === "assistant") return "experience"
+  if (
+    value === "world" ||
+    value === "experience" ||
+    value === "opinion" ||
+    value === "observation"
+  ) {
+    return value
+  }
+  return "world"
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? sanitizeText(value).trim()
+    : null
+}
+
+function readIsoDate(value: unknown): string | null {
+  const text = readString(value)
+  if (!text) return null
+  const ms = new Date(text).getTime()
+  if (Number.isNaN(ms)) return null
+  return new Date(ms).toISOString()
+}
+
+function inferTemporalDate(content: string, eventDateMs: number): string | null {
+  const lowered = content.toLowerCase()
+  const patterns: Array<[RegExp, number]> = [
+    [/\blast night\b/, -1],
+    [/\byesterday\b/, -1],
+    [/\btoday\b/, 0],
+    [/\bthis morning\b/, 0],
+    [/\bthis afternoon\b/, 0],
+    [/\bthis evening\b/, 0],
+    [/\btonight\b/, 0],
+    [/\btomorrow\b/, 1],
+    [/\blast week\b/, -7],
+    [/\bthis week\b/, 0],
+    [/\bnext week\b/, 7],
+    [/\blast month\b/, -30],
+    [/\bthis month\b/, 0],
+    [/\bnext month\b/, 30],
+  ]
+
+  for (const [pattern, offset] of patterns) {
+    if (!pattern.test(lowered)) continue
+    const date = new Date(eventDateMs + offset * 24 * 60 * 60 * 1000)
+    date.setUTCHours(0, 0, 0, 0)
+    return date.toISOString()
+  }
+  return null
+}
+
+function parseEntity(entry: unknown): ExtractedEntity | null {
+  if (typeof entry === "string") {
+    const name = readString(entry)
+    if (!name) return null
+    return { name, entityType: "concept" }
+  }
+  if (!entry || typeof entry !== "object") return null
+  const record = entry as Record<string, unknown>
+  const name = readString(record.name) ?? readString(record.text)
+  if (!name) return null
+  const entityType = (
+    record.entityType ??
+    record.entity_type ??
+    "concept"
+  ) as EntityType
+  if (
+    entityType !== "person" &&
+    entityType !== "organization" &&
+    entityType !== "place" &&
+    entityType !== "concept" &&
+    entityType !== "other"
+  ) {
+    return { name, entityType: "concept" }
+  }
+  return { name, entityType }
+}
+
+function parseCausalRelation(entry: unknown): ExtractedCausalRelation | null {
+  if (!entry || typeof entry !== "object") return null
+  const record = entry as Record<string, unknown>
+  const rawTarget = record.targetIndex ?? record.target_index
+  const targetIndex =
+    typeof rawTarget === "number" && Number.isFinite(rawTarget)
+      ? Math.floor(rawTarget)
+      : null
+  if (targetIndex == null || targetIndex < 0) return null
+
+  const rawType = String(
+    record.relationType ?? record.relation_type ?? "caused_by",
+  ) as CausalLinkType
+  const relationType = CAUSAL_LINK_TYPES.has(rawType) ? rawType : "caused_by"
+  const rawStrength = record.strength
+  const strength =
+    typeof rawStrength === "number" && Number.isFinite(rawStrength)
+      ? Math.max(0, Math.min(1, rawStrength))
+      : 1
+
+  return { targetIndex, relationType, strength }
+}
+
+function normalizeExtractedFacts(
+  parsed: unknown,
+  eventDateMs: number,
+): ExtractedFact[] {
+  if (!parsed || typeof parsed !== "object") return []
+  const facts = (parsed as { facts?: unknown }).facts
+  if (!Array.isArray(facts)) return []
+
+  const normalized: ExtractedFact[] = []
+  for (const entry of facts) {
+    if (!entry || typeof entry !== "object") continue
+    const fact = entry as Record<string, unknown>
+
+    const what = readString(fact.what) ?? readString(fact.factual_core)
+    const when = readString(fact.when)
+    const who = readString(fact.who)
+    const why = readString(fact.why)
+    const content =
+      readString(fact.content) ??
+      [
+        what,
+        when ? `When: ${when}` : null,
+        who ? `Involving: ${who}` : null,
+        why,
+      ]
+        .filter((part): part is string => Boolean(part))
+        .join(" | ")
+
+    if (!content) continue
+
+    const factType = mapFactType(fact.factType ?? fact.fact_type)
+    const factKind = String(
+      fact.factKind ?? fact.fact_kind ?? "conversation",
+    ).toLowerCase()
+    let validFrom =
+      readIsoDate(fact.validFrom) ??
+      readIsoDate(fact.valid_from) ??
+      readIsoDate(fact.occurredStart) ??
+      readIsoDate(fact.occurred_start)
+    let validTo =
+      readIsoDate(fact.validTo) ??
+      readIsoDate(fact.valid_to) ??
+      readIsoDate(fact.occurredEnd) ??
+      readIsoDate(fact.occurred_end)
+
+    if (!validFrom && factKind === "event") {
+      validFrom = inferTemporalDate(content, eventDateMs)
+    }
+    if (!validTo && validFrom && factKind === "event") {
+      validTo = validFrom
+    }
+
+    const confidence =
+      typeof fact.confidence === "number" && Number.isFinite(fact.confidence)
+        ? fact.confidence
+        : 1
+    const tags = Array.isArray(fact.tags)
+      ? fact.tags
+          .map((tag) => readString(tag))
+          .filter((tag): tag is string => Boolean(tag))
+      : []
+    const entities = Array.isArray(fact.entities)
+      ? fact.entities
+          .map((entity) => parseEntity(entity))
+          .filter((entity): entity is ExtractedEntity => Boolean(entity))
+      : []
+    const causalSource = Array.isArray(fact.causalRelations)
+      ? fact.causalRelations
+      : Array.isArray(fact.causal_relations)
+        ? fact.causal_relations
+        : []
+    const causalRelations = causalSource
+      .map((relation) => parseCausalRelation(relation))
+      .filter(
+        (relation): relation is ExtractedCausalRelation => Boolean(relation),
+      )
+
+    normalized.push({
+      content,
+      factType,
+      confidence,
+      validFrom,
+      validTo,
+      entities,
+      tags,
+      causalRelations,
+    })
+  }
+  return normalized
+}
+
 function parseEventDateToEpoch(
   input: number | Date | string | null | undefined,
   fallback: number,
@@ -160,6 +352,28 @@ function mergeMetadata(
   }
 }
 
+function isTranscriptTurnArray(value: unknown): value is TranscriptTurn[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (turn) =>
+        turn &&
+        typeof turn === "object" &&
+        typeof (turn as { role?: unknown }).role === "string" &&
+        typeof (turn as { content?: unknown }).content === "string",
+    )
+  )
+}
+
+function normalizeContentInput(content: string | TranscriptTurn[]): string {
+  if (typeof content === "string") return sanitizeText(content)
+  const normalizedTurns = content.map((turn) => ({
+    role: turn.role,
+    content: sanitizeText(turn.content),
+  }))
+  return JSON.stringify(normalizedTurns)
+}
+
 function normalizeBatchInputs(
   bankId: string,
   contents: string[] | RetainBatchItem[],
@@ -171,7 +385,7 @@ function normalizeBatchInputs(
   for (let i = 0; i < contents.length; i++) {
     const value = contents[i]
     const item = typeof value === "string" ? { content: value } : value
-    const sanitizedContent = sanitizeText(item.content)
+    const sanitizedContent = normalizeContentInput(item.content)
     const documentId = item.documentId ?? `${bankId}-${ulid()}`
     normalized.push({
       content: sanitizedContent,
@@ -191,6 +405,9 @@ async function extractFactsFromContent(
   content: string,
   options: RetainOptions | RetainBatchOptions,
   context?: string | null,
+  eventDateMs = Date.now(),
+  chunkIndex = 0,
+  totalChunks = 1,
 ): Promise<ExtractedFact[]> {
   if ("facts" in options && options.facts) {
     return options.facts.map((f) => ({
@@ -208,9 +425,7 @@ async function extractFactsFromContent(
     }))
   }
 
-  const extractionInput = context
-    ? `${content}\n\nContext:\n${context}`
-    : content
+  const extractionInput = content
 
   try {
     const systemPrompt = getExtractionPrompt(
@@ -221,14 +436,24 @@ async function extractFactsFromContent(
     const text = await streamToText(
       chat({
         adapter,
-        messages: [{ role: "user", content: EXTRACT_FACTS_USER(extractionInput) }],
+        messages: [
+          {
+            role: "user",
+            content: EXTRACT_FACTS_USER({
+              text: extractionInput,
+              chunkIndex,
+              totalChunks,
+              eventDateMs,
+              context,
+            }),
+          },
+        ],
         systemPrompts: [systemPrompt],
       }),
     )
 
     const parsed = parseLLMJson(text, { facts: [] })
-    const validated = v.safeParse(ExtractedFactSchema, parsed)
-    const extracted = validated.success ? validated.output.facts : []
+    const extracted = normalizeExtractedFacts(parsed, eventDateMs)
     for (const fact of extracted) {
       fact.content = sanitizeText(fact.content)
     }
@@ -252,6 +477,26 @@ function runInTransaction(hdb: HindsightDatabase, fn: () => void): void {
 
 async function chunkWithChonkie(content: string): Promise<string[]> {
   if (content.length <= CHARS_PER_BATCH) return [content]
+  const parsed = parseLLMJson<unknown>(content, null)
+  if (isTranscriptTurnArray(parsed)) {
+    const chunks: string[] = []
+    let current: TranscriptTurn[] = []
+    let currentChars = 2
+    for (const turn of parsed) {
+      const turnText = JSON.stringify(turn)
+      const turnChars = turnText.length + 1
+      if (current.length > 0 && currentChars + turnChars > CHARS_PER_BATCH) {
+        chunks.push(JSON.stringify(current))
+        current = []
+        currentChars = 2
+      }
+      current.push(turn)
+      currentChars += turnChars
+    }
+    if (current.length > 0) chunks.push(JSON.stringify(current))
+    if (chunks.length > 0) return chunks
+  }
+
   const chunker = await RecursiveChunker.create({
     chunkSize: CHARS_PER_BATCH,
     tokenizer: "character",
@@ -277,6 +522,7 @@ async function explodeBatchContents(
           originalIndex,
           content: chunk,
           chunkIndex,
+          chunkCount: chunks.length,
           chunkId,
           context: item.context,
           eventDateMs: item.eventDateMs,
@@ -540,6 +786,9 @@ export async function retain(
     cleanContent,
     options,
     context,
+    eventDateMs,
+    0,
+    1,
   )
 
   if (extracted.length === 0) {
@@ -984,8 +1233,16 @@ export async function retainBatch(
 
   for (const subBatch of subBatches) {
     const extractedPerContent = await Promise.all(
-      subBatch.map(async ({ content, context }) =>
-        extractFactsFromContent(adapter, content, options, context),
+      subBatch.map(async ({ content, context, eventDateMs, chunkIndex, chunkCount }) =>
+        extractFactsFromContent(
+          adapter,
+          content,
+          options,
+          context,
+          eventDateMs,
+          chunkIndex,
+          chunkCount,
+        ),
       ),
     )
 

@@ -116,13 +116,12 @@ describe("getExtractionPrompt", () => {
   it("returns verbose prompt", () => {
     const prompt = getExtractionPrompt("verbose")
     expect(prompt).toBe(EXTRACT_FACTS_VERBOSE_SYSTEM)
-    expect(prompt).toContain("ALL facts")
+    expect(prompt).toContain("maximum detail")
   })
 
-  it("appends custom guidelines", () => {
+  it("injects custom guidelines", () => {
     const prompt = getExtractionPrompt("custom", "Focus on technical details.")
-    expect(prompt).toContain(EXTRACT_FACTS_SYSTEM)
-    expect(prompt).toContain("ADDITIONAL GUIDELINES")
+    expect(prompt).not.toBe(EXTRACT_FACTS_SYSTEM)
     expect(prompt).toContain("Focus on technical details.")
   })
 

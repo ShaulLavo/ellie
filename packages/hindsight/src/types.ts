@@ -23,6 +23,15 @@ export type LinkType =
   | "enables"
   | "prevents"
 
+/** Canonical transcript turn format for extraction parity with Python Hindsight. */
+export interface TranscriptTurn {
+  role: string
+  content: string
+}
+
+/** Supported retain content input. */
+export type RetainContentInput = string | TranscriptTurn[]
+
 // ── Meta-Path Graph Retrieval ─────────────────────────────────────────────
 
 /** Direction constraint for a meta-path step */
@@ -287,7 +296,8 @@ export interface RetainBatchOptions
 
 /** Rich retain-batch item. */
 export interface RetainBatchItem {
-  content: string
+  /** Plain text or transcript turns array ({ role, content }). */
+  content: RetainContentInput
   context?: string
   eventDate?: number | Date | string
   documentId?: string

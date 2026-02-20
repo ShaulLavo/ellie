@@ -81,6 +81,22 @@ describe("retain", () => {
 
       expect(result.memories).toHaveLength(3)
     })
+
+    it("accepts canonical transcript format content ({role, content}[])", async () => {
+      const transcript = [
+        { role: "user", content: "I love hiking." },
+        { role: "assistant", content: "Nice, where do you hike?" },
+      ]
+
+      const result = await t.hs.retain(bankId, transcript, {
+        facts: [{ content: "User loves hiking", factType: "experience" }],
+        consolidate: false,
+      })
+
+      expect(result.memories).toHaveLength(1)
+      expect(result.memories[0]!.sourceText).toContain("\"role\":\"user\"")
+      expect(result.memories[0]!.sourceText).toContain("\"content\":\"I love hiking.\"")
+    })
   })
 
   // ── Entity extraction ─────────────────────────────────────────────────
