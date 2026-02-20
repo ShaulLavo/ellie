@@ -255,6 +255,45 @@ describe("retain", () => {
       expect(result.memories[0]!.validFrom).toBeNull()
       expect(result.memories[0]!.validTo).toBeNull()
     })
+
+    it("creates temporal links for memories close in time", async () => {
+      const now = Date.now()
+      const result = await t.hs.retain(bankId, "test", {
+        facts: [
+          {
+            content: "Deployment started",
+            validFrom: now - 60 * 60 * 1000,
+            validTo: now - 55 * 60 * 1000,
+          },
+          {
+            content: "Deployment finished",
+            validFrom: now - 20 * 60 * 1000,
+            validTo: now - 10 * 60 * 1000,
+          },
+        ],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      const memoryIds = new Set(result.memories.map((memory) => memory.id))
+      const hdb = (t.hs as any).hdb
+      const temporalLinks = hdb.db
+        .select({
+          sourceId: hdb.schema.memoryLinks.sourceId,
+          targetId: hdb.schema.memoryLinks.targetId,
+          linkType: hdb.schema.memoryLinks.linkType,
+        })
+        .from(hdb.schema.memoryLinks)
+        .all()
+        .filter(
+          (link: { sourceId: string; targetId: string; linkType: string }) =>
+            link.linkType === "temporal" &&
+            memoryIds.has(link.sourceId) &&
+            memoryIds.has(link.targetId),
+        )
+
+      expect(temporalLinks.length).toBeGreaterThanOrEqual(2)
+    })
   })
 
   // ── Metadata ──────────────────────────────────────────────────────────

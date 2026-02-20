@@ -195,6 +195,7 @@ describe("Retrieval methods", () => {
           factTypes: ["world"],
           seedMemoryIds: [alice!.id],
           maxEntityFrequency: 1,
+          causalWeightThreshold: 1.1,
         },
       )
       const relaxedResults = await searchGraph(
@@ -207,6 +208,7 @@ describe("Retrieval methods", () => {
           factTypes: ["world"],
           seedMemoryIds: [alice!.id],
           maxEntityFrequency: 100,
+          causalWeightThreshold: 1.1,
         },
       )
 
@@ -368,6 +370,85 @@ describe("Retrieval methods", () => {
       )
 
       expect(graphResults.some((r) => r.id === bobObs!.id)).toBe(true)
+    })
+
+    it("uses fallback memory_links (semantic/temporal/entity) when primary expansion has no hits", async () => {
+      const retained = await t.hs.retain(bankId, "test", {
+        facts: [
+          { content: "Quantum computing roadmap update", factType: "world" },
+          { content: "Compiler optimization milestone reached", factType: "world" },
+        ],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      expect(retained.memories).toHaveLength(2)
+      const source = retained.memories[0]!
+      const target = retained.memories[1]!
+      const { hdb, memoryVec } = getInternals(t.hs)
+
+      hdb.db
+        .insert(hdb.schema.memoryLinks)
+        .values({
+          id: crypto.randomUUID(),
+          bankId,
+          sourceId: source.id,
+          targetId: target.id,
+          linkType: "semantic",
+          weight: 0.9,
+          createdAt: Date.now(),
+        })
+        .run()
+
+      const graphResults = await searchGraph(
+        hdb,
+        memoryVec,
+        bankId,
+        "ignored",
+        10,
+        {
+          factTypes: ["world"],
+          seedMemoryIds: [source.id],
+        },
+      )
+
+      expect(graphResults.some((hit) => hit.id === target.id)).toBe(true)
+    })
+
+    it("merges temporal seeds with semantic seeds", async () => {
+      const retained = await t.hs.retain(bankId, "test", {
+        facts: [
+          { content: "Alice writes backend services", factType: "world", entities: ["Alice"] },
+          { content: "Alice maintains deployment scripts", factType: "world", entities: ["Alice"] },
+        ],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+
+      const first = retained.memories.find((memory) =>
+        memory.content.includes("backend"),
+      )
+      const second = retained.memories.find((memory) =>
+        memory.content.includes("deployment"),
+      )
+      expect(first).toBeDefined()
+      expect(second).toBeDefined()
+
+      const { hdb, memoryVec } = getInternals(t.hs)
+      const graphResults = await searchGraph(
+        hdb,
+        memoryVec,
+        bankId,
+        "query that should not seed semantically",
+        10,
+        {
+          factTypes: ["world"],
+          seedThreshold: 1,
+          temporalSeedMemoryIds: [first!.id],
+        },
+      )
+
+      expect(graphResults.some((hit) => hit.id === second!.id)).toBe(true)
     })
   })
 

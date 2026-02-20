@@ -67,6 +67,8 @@ export interface MemoryUnit {
   confidence: number
   validFrom: number | null
   validTo: number | null
+  /** Epoch ms when content was mentioned in source context (nullable). */
+  mentionedAt: number | null
   metadata: Record<string, unknown> | null
   tags: string[] | null
   sourceText: string | null
@@ -236,6 +238,8 @@ export interface RetainBatchOptions
 export interface RecallOptions {
   /** Maximum results to return. Default: 10 */
   limit?: number
+  /** Optional token budget for returned memory content. */
+  maxTokens?: number
   /** Minimum confidence threshold. Default: 0 */
   minConfidence?: number
   /** Filter by fact types */
@@ -250,6 +254,14 @@ export interface RecallOptions {
   tags?: string[]
   /** Tag matching mode. Default: "any" */
   tagsMatch?: TagsMatch
+  /** Include aggregated entity states in the response. */
+  includeEntities?: boolean
+  /** Optional token budget for entity payload. */
+  maxEntityTokens?: number
+  /** Include chunk-style context payload in the response. */
+  includeChunks?: boolean
+  /** Optional token budget for chunk payload. */
+  maxChunkTokens?: number
 }
 
 /** Tag matching mode for recall/reflect tag filtering */
@@ -293,6 +305,22 @@ export type RetainBatchResult = RetainResult[]
 export interface RecallResult {
   memories: ScoredMemory[]
   query: string
+  entities?: Record<string, RecallEntityState>
+  chunks?: Record<string, RecallChunk>
+}
+
+/** Aggregated entity state payload returned by recall(includeEntities=true). */
+export interface RecallEntityState {
+  id: string
+  name: string
+  entityType: EntityType
+  memoryIds: string[]
+}
+
+/** Lightweight chunk payload returned by recall(includeChunks=true). */
+export interface RecallChunk {
+  memoryId: string
+  content: string
 }
 
 /** Result from reflect() */

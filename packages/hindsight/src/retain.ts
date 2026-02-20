@@ -1,6 +1,6 @@
 import { chat, streamToText } from "@ellie/ai"
 import { ulid } from "@ellie/utils"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import * as v from "valibot"
 import type { AnyTextAdapter } from "@tanstack/ai"
 import { RecursiveChunker } from "@chonkiejs/core"
@@ -347,6 +347,7 @@ function rowToMemoryUnit(
     confidence: row.confidence,
     validFrom: row.validFrom,
     validTo: row.validTo,
+    mentionedAt: row.mentionedAt,
     metadata: safeJsonParse<Record<string, unknown> | null>(row.metadata, null),
     tags: safeJsonParse<string[] | null>(row.tags, null),
     sourceText: row.sourceText,
@@ -616,6 +617,7 @@ export async function retain(
       confidence: fact.confidence,
       validFrom: parseISOToEpoch(fact.validFrom),
       validTo: parseISOToEpoch(fact.validTo),
+      mentionedAt: null,
       metadata: options.metadata ?? null,
       tags: tags.length > 0 ? tags : null,
       sourceText: cleanContent,
@@ -698,7 +700,11 @@ export async function retain(
     }
   }
 
-  // ── Step 6: Create semantic links ──
+  // ── Step 6: Create temporal links ──
+
+  createTemporalLinksFromMemories(hdb, bankId, memories, now, links)
+
+  // ── Step 7: Create semantic links ──
 
   const semanticLinks = await createSemanticLinks(
     hdb,
@@ -708,7 +714,7 @@ export async function retain(
   )
   links.push(...semanticLinks)
 
-  // ── Step 7: Auto-consolidate (creates observations + refreshes mental models) ──
+  // ── Step 8: Auto-consolidate (creates observations + refreshes mental models) ──
 
   const shouldConsolidate = options.consolidate !== false
 
@@ -848,6 +854,7 @@ export async function retainBatch(
         confidence: item.fact.confidence,
         validFrom: parseISOToEpoch(item.fact.validFrom),
         validTo: parseISOToEpoch(item.fact.validTo),
+        mentionedAt: null,
         metadata: options.metadata ?? null,
         tags: tags.length > 0 ? tags : null,
         sourceText: item.sourceText,
@@ -964,6 +971,14 @@ export async function retainBatch(
         createdLinks,
       )
 
+      createTemporalLinksFromMemories(
+        hdb,
+        bankId,
+        memoryRecords.map((record) => record.memory),
+        now,
+        createdLinks,
+      )
+
       createSemanticLinksFromVectors(
         hdb,
         memoryVec,
@@ -1013,6 +1028,9 @@ export async function retainBatch(
 const DUPLICATE_SEARCH_K = 5
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
+const TEMPORAL_LINK_WINDOW_HOURS = 24
+const TEMPORAL_LINK_MIN_WEIGHT = 0.3
+const TEMPORAL_LINK_MAX_NEIGHBORS = 10
 
 function findDuplicateFlagsByVector(
   hdb: HindsightDatabase,
@@ -1086,6 +1104,177 @@ function createEntityLinksFromMemories(
       output.push({ sourceId, targetId, linkType: "entity" })
     }
   }
+}
+
+function createTemporalLinksFromMemories(
+  hdb: HindsightDatabase,
+  bankId: string,
+  newMemories: MemoryUnit[],
+  createdAt: number,
+  output: RetainResult["links"],
+): void {
+  if (newMemories.length === 0) return
+
+  const windowMs = TEMPORAL_LINK_WINDOW_HOURS * 60 * 60 * 1000
+  const newMemoryIds = new Set(newMemories.map((memory) => memory.id))
+  const candidateRows = hdb.db
+    .select({
+      id: hdb.schema.memoryUnits.id,
+      bankId: hdb.schema.memoryUnits.bankId,
+      validFrom: hdb.schema.memoryUnits.validFrom,
+      validTo: hdb.schema.memoryUnits.validTo,
+      mentionedAt: hdb.schema.memoryUnits.mentionedAt,
+      createdAt: hdb.schema.memoryUnits.createdAt,
+    })
+    .from(hdb.schema.memoryUnits)
+    .where(eq(hdb.schema.memoryUnits.bankId, bankId))
+    .all()
+
+  const candidateAnchors = candidateRows
+    .filter((row) => row.bankId === bankId && !newMemoryIds.has(row.id))
+    .map((row) => ({
+      id: row.id,
+      anchor: getTemporalAnchor(
+        row.validFrom,
+        row.validTo,
+        row.mentionedAt,
+        row.createdAt,
+      ),
+    }))
+    .filter((row): row is { id: string; anchor: number } => row.anchor != null)
+
+  for (const memory of newMemories) {
+    const sourceAnchor = getTemporalAnchor(
+      memory.validFrom,
+      memory.validTo,
+      memory.mentionedAt,
+      memory.createdAt,
+    )
+    if (sourceAnchor == null) continue
+
+    const rankedNeighbors = candidateAnchors
+      .map((candidate) => ({
+        id: candidate.id,
+        distanceMs: Math.abs(sourceAnchor - candidate.anchor),
+      }))
+      .filter((neighbor) => neighbor.distanceMs <= windowMs)
+      .sort((a, b) => a.distanceMs - b.distanceMs)
+      .slice(0, TEMPORAL_LINK_MAX_NEIGHBORS)
+
+    for (const neighbor of rankedNeighbors) {
+      const weight = temporalWeightFromDistance(neighbor.distanceMs, windowMs)
+      insertTemporalLinkIfMissing(
+        hdb,
+        bankId,
+        memory.id,
+        neighbor.id,
+        weight,
+        createdAt,
+        output,
+      )
+    }
+  }
+
+  for (let i = 0; i < newMemories.length; i++) {
+    const source = newMemories[i]!
+    const sourceAnchor = getTemporalAnchor(
+      source.validFrom,
+      source.validTo,
+      source.mentionedAt,
+      source.createdAt,
+    )
+    if (sourceAnchor == null) continue
+
+    for (let j = i + 1; j < newMemories.length; j++) {
+      const target = newMemories[j]!
+      const targetAnchor = getTemporalAnchor(
+        target.validFrom,
+        target.validTo,
+        target.mentionedAt,
+        target.createdAt,
+      )
+      if (targetAnchor == null) continue
+
+      const distanceMs = Math.abs(sourceAnchor - targetAnchor)
+      if (distanceMs > windowMs) continue
+      const weight = temporalWeightFromDistance(distanceMs, windowMs)
+
+      insertTemporalLinkIfMissing(
+        hdb,
+        bankId,
+        source.id,
+        target.id,
+        weight,
+        createdAt,
+        output,
+      )
+      insertTemporalLinkIfMissing(
+        hdb,
+        bankId,
+        target.id,
+        source.id,
+        weight,
+        createdAt,
+        output,
+      )
+    }
+  }
+}
+
+function getTemporalAnchor(
+  validFrom: number | null,
+  validTo: number | null,
+  mentionedAt: number | null,
+  createdAt: number,
+): number | null {
+  return validFrom ?? validTo ?? mentionedAt ?? createdAt
+}
+
+function temporalWeightFromDistance(distanceMs: number, windowMs: number): number {
+  if (windowMs <= 0) return TEMPORAL_LINK_MIN_WEIGHT
+  const linearWeight = 1 - distanceMs / windowMs
+  return Math.max(TEMPORAL_LINK_MIN_WEIGHT, linearWeight)
+}
+
+function insertTemporalLinkIfMissing(
+  hdb: HindsightDatabase,
+  bankId: string,
+  sourceId: string,
+  targetId: string,
+  weight: number,
+  createdAt: number,
+  output: RetainResult["links"],
+): void {
+  if (sourceId === targetId) return
+
+  const existing = hdb.db
+    .select({ id: hdb.schema.memoryLinks.id })
+    .from(hdb.schema.memoryLinks)
+    .where(
+      and(
+        eq(hdb.schema.memoryLinks.bankId, bankId),
+        eq(hdb.schema.memoryLinks.sourceId, sourceId),
+        eq(hdb.schema.memoryLinks.targetId, targetId),
+        eq(hdb.schema.memoryLinks.linkType, "temporal"),
+      ),
+    )
+    .get()
+  if (existing) return
+
+  hdb.db
+    .insert(hdb.schema.memoryLinks)
+    .values({
+      id: ulid(),
+      bankId,
+      sourceId,
+      targetId,
+      linkType: "temporal",
+      weight,
+      createdAt,
+    })
+    .run()
+
+  output.push({ sourceId, targetId, linkType: "temporal" })
 }
 
 function createCausalLinksFromGroups(

@@ -102,6 +102,13 @@ describe("recall", () => {
       // May still return some results from graph/temporal — just verify no crash
       expect(result.memories).toBeDefined()
     })
+
+    it("respects maxTokens budget", async () => {
+      const result = await t.hs.recall(bankId, "test", {
+        maxTokens: 10,
+      })
+      expect(result.memories.length).toBeLessThanOrEqual(1)
+    })
   })
 
   // ── Source tracking ─────────────────────────────────────────────────────
@@ -115,6 +122,15 @@ describe("recall", () => {
           expect(validSources).toContain(source)
         }
       }
+    })
+
+    it("can include entities and chunk payloads", async () => {
+      const result = await t.hs.recall(bankId, "Peter", {
+        includeEntities: true,
+        includeChunks: true,
+      })
+      expect(result.entities).toBeDefined()
+      expect(result.chunks).toBeDefined()
     })
   })
 

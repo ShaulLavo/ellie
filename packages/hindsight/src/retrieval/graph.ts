@@ -51,7 +51,18 @@ export async function searchGraph(
     seedSet,
     options,
   )
-  const merged = mergeScoreMaps(entityScores, causalScores)
+  const fallbackScores = expandViaFallbackLinks(
+    hdb,
+    bankId,
+    seedIds,
+    seedSet,
+    limit,
+    options,
+  )
+  const merged = mergeScoreMaps(
+    mergeScoreMaps(entityScores, causalScores),
+    fallbackScores,
+  )
   const filtered = filterOutSeeds(merged, seedSet)
 
   return Array.from(filtered.entries())
@@ -71,9 +82,12 @@ export interface GraphSearchOptions {
   seedThreshold?: number
   /** Test hook: bypass semantic seed lookup when provided. */
   seedMemoryIds?: string[]
+  /** Optional temporal seeds merged with semantic seeds. */
+  temporalSeedMemoryIds?: string[]
 }
 
 const CAUSAL_LINK_TYPES = ["causes", "caused_by", "enables", "prevents"] as const
+const FALLBACK_LINK_TYPES = ["semantic", "temporal", "entity"] as const
 const ALL_FACT_TYPES: FactType[] = [
   "world",
   "experience",
@@ -95,7 +109,10 @@ async function resolveSeedIds(
   options: GraphSearchOptions,
 ): Promise<string[]> {
   if (options.seedMemoryIds?.length) {
-    return unique(options.seedMemoryIds)
+    return unique([
+      ...options.seedMemoryIds,
+      ...(options.temporalSeedMemoryIds ?? []),
+    ])
   }
 
   const desiredSeedCount = Math.max(
@@ -133,6 +150,29 @@ async function resolveSeedIds(
 
     seen.add(hit.id)
     seeds.push(hit.id)
+  }
+
+  const temporalSeedIds = unique(options.temporalSeedMemoryIds ?? [])
+  for (const temporalSeedId of temporalSeedIds) {
+    if (seen.has(temporalSeedId)) continue
+
+    const row = hdb.db
+      .select({
+        id: hdb.schema.memoryUnits.id,
+        bankId: hdb.schema.memoryUnits.bankId,
+        factType: hdb.schema.memoryUnits.factType,
+        tags: hdb.schema.memoryUnits.tags,
+      })
+      .from(hdb.schema.memoryUnits)
+      .where(eq(hdb.schema.memoryUnits.id, temporalSeedId))
+      .get()
+
+    if (!row || row.bankId !== bankId) continue
+    if (!factTypes.has(row.factType as FactType)) continue
+    if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
+
+    seen.add(temporalSeedId)
+    seeds.push(temporalSeedId)
   }
 
   return seeds
@@ -382,10 +422,7 @@ function expandViaCausalLinks(
         eq(hdb.schema.memoryLinks.bankId, bankId),
         inArray(hdb.schema.memoryLinks.linkType, [...CAUSAL_LINK_TYPES]),
         gte(hdb.schema.memoryLinks.weight, causalThreshold),
-        or(
-          inArray(hdb.schema.memoryLinks.sourceId, seedIds),
-          inArray(hdb.schema.memoryLinks.targetId, seedIds),
-        ),
+        inArray(hdb.schema.memoryLinks.sourceId, seedIds),
       ),
     )
     .all()
@@ -403,6 +440,66 @@ function expandViaCausalLinks(
     const score = link.weight + 1
     const current = scores.get(neighborId) ?? 0
     scores.set(neighborId, Math.max(current, score))
+  }
+
+  return filterScoreMapByMemoryRows(
+    hdb,
+    bankId,
+    scores,
+    getFactTypeSet(options.factTypes),
+    options.tags,
+    options.tagsMatch,
+  )
+}
+
+function expandViaFallbackLinks(
+  hdb: HindsightDatabase,
+  bankId: string,
+  seedIds: string[],
+  seedSet: Set<string>,
+  limit: number,
+  options: GraphSearchOptions,
+): Map<string, number> {
+  if (seedIds.length === 0 || limit <= 0) return new Map()
+
+  const threshold = options.causalWeightThreshold ?? DEFAULT_CAUSAL_WEIGHT_THRESHOLD
+  const perSeedLimit = options.causalLimitPerSeed ?? DEFAULT_CAUSAL_LIMIT_PER_SEED
+  const rawLimit = Math.max(1, limit * perSeedLimit)
+
+  const links = hdb.db
+    .select({
+      sourceId: hdb.schema.memoryLinks.sourceId,
+      targetId: hdb.schema.memoryLinks.targetId,
+      weight: hdb.schema.memoryLinks.weight,
+    })
+    .from(hdb.schema.memoryLinks)
+    .where(
+      and(
+        eq(hdb.schema.memoryLinks.bankId, bankId),
+        inArray(hdb.schema.memoryLinks.linkType, [...FALLBACK_LINK_TYPES]),
+        gte(hdb.schema.memoryLinks.weight, threshold),
+        or(
+          inArray(hdb.schema.memoryLinks.sourceId, seedIds),
+          inArray(hdb.schema.memoryLinks.targetId, seedIds),
+        ),
+      ),
+    )
+    .all()
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, rawLimit)
+
+  const scores = new Map<string, number>()
+
+  for (const link of links) {
+    if (seedSet.has(link.sourceId) && !seedSet.has(link.targetId)) {
+      const current = scores.get(link.targetId) ?? 0
+      scores.set(link.targetId, Math.max(current, link.weight * 0.5))
+      continue
+    }
+    if (seedSet.has(link.targetId) && !seedSet.has(link.sourceId)) {
+      const current = scores.get(link.sourceId) ?? 0
+      scores.set(link.sourceId, Math.max(current, link.weight * 0.5))
+    }
   }
 
   return filterScoreMapByMemoryRows(

@@ -40,6 +40,7 @@ export async function recall(
   rerank?: RerankFunction,
 ): Promise<RecallResult> {
   const limit = options.limit ?? 10
+  const maxTokens = options.maxTokens
   const methods = options.methods ?? [
     "semantic",
     "fulltext",
@@ -51,39 +52,55 @@ export async function recall(
   // Auto-extract temporal range from query if not explicitly provided
   const timeRange = options.timeRange ?? extractTemporalRange(query)
 
-  // Run retrieval methods in parallel
-  const promises: Array<Promise<RetrievalHit[]>> = []
+  const methodSet = new Set(methods)
+  const semanticPromise = methodSet.has("semantic")
+    ? searchSemantic(hdb, memoryVec, bankId, query, candidateLimit)
+    : Promise.resolve<RetrievalHit[]>([])
+  const fulltextPromise = methodSet.has("fulltext")
+    ? Promise.resolve(
+        searchFulltext(
+          hdb,
+          bankId,
+          query,
+          candidateLimit,
+          options.tags,
+          options.tagsMatch,
+        ),
+      )
+    : Promise.resolve<RetrievalHit[]>([])
+  const temporalPromise = methodSet.has("temporal")
+    ? Promise.resolve(
+        searchTemporal(
+          hdb,
+          bankId,
+          timeRange,
+          candidateLimit,
+          options.tags,
+          options.tagsMatch,
+        ),
+      )
+    : Promise.resolve<RetrievalHit[]>([])
 
-  if (methods.includes("semantic")) {
-    promises.push(
-      searchSemantic(hdb, memoryVec, bankId, query, candidateLimit),
-    )
-  }
-  if (methods.includes("fulltext")) {
-    promises.push(
-      Promise.resolve(
-        searchFulltext(hdb, bankId, query, candidateLimit, options.tags, options.tagsMatch),
-      ),
-    )
-  }
-  if (methods.includes("graph")) {
-    promises.push(
-      searchGraph(hdb, memoryVec, bankId, query, candidateLimit, {
+  const [semanticHits, fulltextHits, temporalHits] = await Promise.all([
+    semanticPromise,
+    fulltextPromise,
+    temporalPromise,
+  ])
+
+  const graphHits = methodSet.has("graph")
+    ? await searchGraph(hdb, memoryVec, bankId, query, candidateLimit, {
         factTypes: options.factTypes,
         tags: options.tags,
         tagsMatch: options.tagsMatch,
-      }),
-    )
-  }
-  if (methods.includes("temporal")) {
-    promises.push(
-      Promise.resolve(
-        searchTemporal(hdb, bankId, timeRange, candidateLimit, options.tags, options.tagsMatch),
-      ),
-    )
-  }
+        temporalSeedMemoryIds: temporalHits.map((hit) => hit.id),
+      })
+    : []
 
-  const resultSets = await Promise.all(promises)
+  const resultSets: RetrievalHit[][] = []
+  if (methodSet.has("semantic")) resultSets.push(semanticHits)
+  if (methodSet.has("fulltext")) resultSets.push(fulltextHits)
+  if (methodSet.has("graph")) resultSets.push(graphHits)
+  if (methodSet.has("temporal")) resultSets.push(temporalHits)
 
   // Merge via Reciprocal Rank Fusion
   const fused = reciprocalRankFusion(resultSets, limit * 2)
@@ -105,6 +122,13 @@ export async function recall(
 
   // Hydrate full memory objects with entities, apply filters
   const memories: ScoredMemory[] = []
+  const entityStates = new Map<string, {
+    id: string
+    name: string
+    entityType: ScoredMemory["entities"][number]["entityType"]
+    memoryIds: Set<string>
+  }>()
+  let usedTokens = 0
 
   for (const { id, score, sources } of ranked) {
     if (memories.length >= limit) break
@@ -116,6 +140,12 @@ export async function recall(
       .get()
 
     if (!row) continue
+
+    if (maxTokens != null) {
+      const contentTokens = estimateTokens(row.content)
+      if (usedTokens + contentTokens > maxTokens) break
+      usedTokens += contentTokens
+    }
 
     // Apply filters
     if (
@@ -178,9 +208,45 @@ export async function recall(
       sources: sources as ScoredMemory["sources"],
       entities: entityRows.map((e) => rowToEntity(e!)),
     })
+
+    if (options.includeEntities) {
+      for (const entityRow of entityRows) {
+        if (!entityRow) continue
+        const entity = rowToEntity(entityRow)
+        const existing = entityStates.get(entity.id)
+        if (existing) {
+          existing.memoryIds.add(row.id)
+          continue
+        }
+        entityStates.set(entity.id, {
+          id: entity.id,
+          name: entity.name,
+          entityType: entity.entityType,
+          memoryIds: new Set([row.id]),
+        })
+      }
+    }
   }
 
-  return { memories, query }
+  const entities = options.includeEntities
+    ? Object.fromEntries(
+        Array.from(entityStates.entries()).map(([entityId, entityState]) => [
+          entityId,
+          {
+            id: entityState.id,
+            name: entityState.name,
+            entityType: entityState.entityType,
+            memoryIds: Array.from(entityState.memoryIds),
+          },
+        ]),
+      )
+    : undefined
+
+  const chunks = options.includeChunks
+    ? buildChunkPayload(memories, options.maxChunkTokens)
+    : undefined
+
+  return { memories, query, entities, chunks }
 }
 
 // ── Tag matching ──────────────────────────────────────────────────────────
@@ -213,4 +279,31 @@ export function matchesTags(
     case "all_strict":
       return !isUntagged && filterTags.every((t) => memoryTags.includes(t))
   }
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4)
+}
+
+function buildChunkPayload(
+  memories: ScoredMemory[],
+  maxChunkTokens?: number,
+): Record<string, { memoryId: string; content: string }> {
+  const payload: Record<string, { memoryId: string; content: string }> = {}
+  let usedTokens = 0
+
+  for (const scored of memories) {
+    const chunkContent = scored.memory.sourceText ?? scored.memory.content
+    const chunkTokens = estimateTokens(chunkContent)
+    if (maxChunkTokens != null && usedTokens + chunkTokens > maxChunkTokens) {
+      break
+    }
+    usedTokens += chunkTokens
+    payload[scored.memory.id] = {
+      memoryId: scored.memory.id,
+      content: chunkContent,
+    }
+  }
+
+  return payload
 }
