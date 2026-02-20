@@ -5,9 +5,14 @@
  * Pure unit tests — no DB or LLM needed.
  */
 
-import { describe, it, expect } from "bun:test"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { reciprocalRankFusion } from "../fusion"
 import type { RetrievalHit } from "../retrieval/semantic"
+import {
+  createTestHindsight,
+  createTestBank,
+  type TestHindsight,
+} from "./setup"
 
 function makeHits(
   ids: string[],
@@ -181,15 +186,78 @@ describe("reciprocalRankFusion", () => {
 })
 
 describe("Combined scoring trace (TDD targets)", () => {
-  it("trace has normalized RRF scores (not raw)", () => {
-    throw new Error(
-      "implement me: recall trace/scoring metadata not implemented — see test_combined_scoring.py::test_trace_has_normalized_rrf",
-    )
+  let t: TestHindsight
+  let bankId: string
+
+  beforeEach(async () => {
+    t = createTestHindsight()
+    bankId = createTestBank(t.hs)
+    const now = Date.now()
+    await t.hs.retain(bankId, "test", {
+      facts: [
+        {
+          content: "Alpha timeline includes launch and migration milestones.",
+          factType: "world",
+          validFrom: now - 2 * 24 * 60 * 60 * 1000,
+        },
+        {
+          content: "Beta launch checklist tracks testing and rollout readiness.",
+          factType: "world",
+          validFrom: now - 12 * 24 * 60 * 60 * 1000,
+        },
+        {
+          content: "Gamma release notes mention deployment blockers and risks.",
+          factType: "experience",
+          validFrom: now - 45 * 24 * 60 * 60 * 1000,
+        },
+      ],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
   })
 
-  it("combined_score matches semantic_score and rrf_normalized components", () => {
-    throw new Error(
-      "implement me: recall trace/scoring metadata not implemented — see test_combined_scoring.py::test_combined_score_matches_components",
-    )
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("trace has normalized RRF scores (not raw)", async () => {
+    const result = await t.hs.recall(bankId, "launch timeline", {
+      enableTrace: true,
+      limit: 5,
+    })
+
+    const trace = result.trace
+    expect(trace).toBeDefined()
+    expect(trace!.candidates.length).toBeGreaterThan(0)
+
+    let differsFromRaw = false
+    for (const candidate of trace!.candidates) {
+      expect(candidate.rrfNormalized).toBeGreaterThanOrEqual(0)
+      expect(candidate.rrfNormalized).toBeLessThanOrEqual(1)
+      if (Math.abs(candidate.rrfNormalized - candidate.rrfScore) > 1e-6) {
+        differsFromRaw = true
+      }
+    }
+    expect(differsFromRaw).toBe(true)
+  })
+
+  it("combined_score matches semantic_score and rrf_normalized components", async () => {
+    const result = await t.hs.recall(bankId, "launch timeline", {
+      enableTrace: true,
+      limit: 5,
+    })
+
+    const trace = result.trace
+    expect(trace).toBeDefined()
+    expect(trace!.candidates.length).toBeGreaterThan(0)
+
+    for (const candidate of trace!.candidates) {
+      const expected =
+        0.6 * candidate.crossEncoderScoreNormalized +
+        0.2 * candidate.rrfNormalized +
+        0.1 * candidate.temporal +
+        0.1 * candidate.recency
+      expect(candidate.combinedScore).toBeCloseTo(expected, 8)
+    }
   })
 })

@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import {
+  createTestHindsight,
+  createRealTestHindsight,
+  createTestBank,
+  describeWithLLM,
+  type TestHindsight,
+  type RealTestHindsight,
+} from "./setup"
 import { loadDirectivesForReflect } from "../directives"
 import type { HindsightDatabase } from "../db"
 
@@ -287,25 +294,121 @@ describe("Directives", () => {
   // ── Directives in reflect (TDD — need agentic mock to verify prompt content) ─
 
   describe("directives in reflect", () => {
-    it("reflect includes active directives in system prompt (verified via adapter call)", () => {
-      throw new Error(
-        "implement me: requires agentic mock adapter to inspect system prompt — see test_reflections.py::test_directives_in_reflect_system_prompt",
-      )
+    it("reflect includes active directives in system prompt (verified via adapter call)", async () => {
+      t.hs.createDirective(bankId, {
+        name: "Active Rule",
+        content: "Always begin with Hello.",
+      })
+
+      t.adapter.setResponse("Hello. Mock response.")
+      await t.hs.reflect(bankId, "What is the summary?", { saveObservations: false })
+
+      const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+      const optionsText = JSON.stringify(lastCall?.options ?? {})
+      expect(optionsText).toContain("DIRECTIVES")
+      expect(optionsText).toContain("Always begin with Hello.")
     })
-    it("inactive directives are excluded from reflect system prompt", () => {
-      throw new Error(
-        "implement me: requires agentic mock adapter to inspect system prompt — see test_reflections.py::test_inactive_directives_excluded",
-      )
+
+    it("inactive directives are excluded from reflect system prompt", async () => {
+      t.hs.createDirective(bankId, {
+        name: "Inactive Rule",
+        content: "This should not appear in prompt.",
+        isActive: false,
+      })
+      t.hs.createDirective(bankId, {
+        name: "Active Rule",
+        content: "This should appear in prompt.",
+      })
+
+      t.adapter.setResponse("Hello. Mock response.")
+      await t.hs.reflect(bankId, "What is the summary?", { saveObservations: false })
+
+      const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+      const optionsText = JSON.stringify(lastCall?.options ?? {})
+      expect(optionsText).toContain("This should appear in prompt.")
+      expect(optionsText).not.toContain("This should not appear in prompt.")
     })
-    it("reflect follows language directive (e.g., respond in Spanish)", () => {
-      throw new Error(
-        "implement me: requires real LLM to verify language compliance — see test_reflections.py::test_language_directive",
-      )
+
+    it("reflect follows language directive (e.g., respond in Spanish)", async () => {
+      t.hs.createDirective(bankId, {
+        name: "Language Policy",
+        content: "ALWAYS respond in Spanish.",
+      })
+
+      t.adapter.setResponse("Respuesta en español.")
+      const result = await t.hs.reflect(bankId, "What does Alice do for work?", {
+        saveObservations: false,
+      })
+
+      const optionsText = JSON.stringify(t.adapter.calls[t.adapter.calls.length - 1]?.options ?? {})
+      expect(optionsText).toContain("ALWAYS respond in Spanish")
+      expect(result.answer.toLowerCase()).toContain("español")
     })
-    it("tagged directive not applied when session has no matching tags", () => {
-      throw new Error(
-        "implement me: requires agentic mock adapter to inspect system prompt — see test_reflections.py::test_tagged_directive_not_applied_without_tags",
-      )
+
+    it("tagged directive not applied when session has no matching tags", async () => {
+      t.hs.createDirective(bankId, {
+        name: "General Policy",
+        content: "Always be polite and start responses with Hello.",
+      })
+      t.hs.createDirective(bankId, {
+        name: "Tagged Policy",
+        content: "ALWAYS RESPOND IN ALL CAPS. PROJECT-X ONLY.",
+        tags: ["project-x"],
+      })
+
+      t.adapter.setResponse("Hello. Mock response.")
+      await t.hs.reflect(bankId, "What color is the sky?", { saveObservations: false })
+
+      const optionsText = JSON.stringify(t.adapter.calls[t.adapter.calls.length - 1]?.options ?? {})
+      expect(optionsText).toContain("Always be polite and start responses with Hello.")
+      expect(optionsText).not.toContain("PROJECT-X ONLY")
     })
   })
+})
+
+describeWithLLM("Directives with real LLM", () => {
+  let t: RealTestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createRealTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("reflect follows language directive with real LLM", async () => {
+    await t.hs.retain(bankId, "facts", {
+      facts: [
+        { content: "Alice is a software engineer at Google." },
+        { content: "Alice enjoys hiking on weekends." },
+      ],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+
+    t.hs.createDirective(bankId, {
+      name: "Language Policy",
+      content: "ALWAYS respond in French language. Never respond in English.",
+    })
+
+    const result = await t.hs.reflect(bankId, "What does Alice do for work?", {
+      saveObservations: false,
+      budget: "low",
+    })
+
+    const answer = result.answer.toLowerCase()
+    const frenchIndicators = [
+      "elle",
+      "travaille",
+      "ingénieur",
+      "ingénieure",
+      "logiciel",
+      "chez",
+    ]
+    const matches = frenchIndicators.filter((word) => answer.includes(word)).length
+    expect(matches).toBeGreaterThanOrEqual(2)
+  }, 30_000)
 })

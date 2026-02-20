@@ -7,7 +7,14 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { matchesTags } from "../recall"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import {
+  createTestHindsight,
+  createRealTestHindsight,
+  createTestBank,
+  describeWithLLM,
+  type TestHindsight,
+  type RealTestHindsight,
+} from "./setup"
 
 // ════════════════════════════════════════════════════════════════════════════
 // matchesTags (unit tests)
@@ -238,12 +245,6 @@ describe("recall with tag filtering", () => {
 
   // ── reflect with tags ───────────────────────────────────────────────
 
-  it("reflect with tags only uses matching memories", () => {
-    throw new Error(
-      "implement me: requires agentic mock adapter to verify tag filtering in reflect — see test_tags_visibility.py::test_reflect_with_tags",
-    )
-  })
-
   // ── Multi-user isolation ──────────────────────────────────────────────
 
   describe("multi-user isolation via tags", () => {
@@ -325,6 +326,51 @@ describe("recall with tag filtering", () => {
       const teacherResult = await t.hs.recall(bankId, "homework")
       expect(teacherResult.memories.length).toBeGreaterThanOrEqual(2)
     })
+  })
+})
+
+describeWithLLM("reflect with tags (real LLM parity)", () => {
+  let t: RealTestHindsight
+  let bankId: string
+
+  beforeEach(() => {
+    t = createRealTestHindsight()
+    bankId = createTestBank(t.hs)
+  })
+
+  afterEach(() => {
+    t.cleanup()
+  })
+
+  it("reflect with tags only uses matching memories", async () => {
+    const userAToken = "USER_A_ONLY_TOKEN_7f2a1c"
+    const userBToken = "USER_B_ONLY_TOKEN_9d3e4b"
+
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: `User A private token is ${userAToken}` }],
+      tags: ["user-a"],
+      consolidate: false,
+    })
+    await t.hs.retain(bankId, "test", {
+      facts: [{ content: `User B private token is ${userBToken}` }],
+      tags: ["user-b"],
+      consolidate: false,
+    })
+
+    const result = await t.hs.reflect(
+      bankId,
+      "What is user A's private token? Return only the exact token.",
+      {
+        tags: ["user-a"],
+        tagsMatch: "any_strict",
+        saveObservations: false,
+        budget: "high",
+        context: "Use memory tools and return only the exact token string.",
+      },
+    )
+
+    expect(result.answer).toContain(userAToken)
+    expect(result.answer).not.toContain(userBToken)
   })
 })
 

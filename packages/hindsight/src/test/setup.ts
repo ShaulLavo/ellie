@@ -227,14 +227,6 @@ export function createRealLLMTestHindsight(
 }
 
 /**
- * Standard "implement me" throw for tests that need missing modules or real LLM.
- * Throws an error with a description and a reference to the Python source test.
- */
-export function implementMe(description: string, pythonRef: string): never {
-  throw new Error(`implement me: ${description} — see ${pythonRef}`)
-}
-
-/**
  * Create a bank in the test Hindsight instance and return its ID.
  */
 export function createTestBank(

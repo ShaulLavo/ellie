@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
 
 describe("retain", () => {
   let t: TestHindsight

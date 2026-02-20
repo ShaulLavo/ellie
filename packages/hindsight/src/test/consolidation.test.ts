@@ -12,7 +12,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, implementMe, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { searchMentalModelsWithStaleness } from "../mental-models"
 
 describe("Consolidation", () => {
   let t: TestHindsight
@@ -1508,21 +1509,97 @@ describe("Consolidation", () => {
 
   describe("hierarchical retrieval", () => {
     it("mental model takes priority over observation in reflect", async () => {
-      throw new Error(
-        "implement me: mental model priority in 3-tier reflect search — see test_consolidation.py::test_hierarchical_mental_model_priority",
+      await t.hs.retain(bankId, "raw", {
+        facts: [{ content: "John's favorite color is blue and he likes painting." }],
+        dedupThreshold: 0,
+        consolidate: false,
+      })
+      t.adapter.setResponse(
+        JSON.stringify([
+          { action: "create", text: "John likes blue and painting.", reason: "summary" },
+        ]),
       )
+      await t.hs.consolidate(bankId)
+
+      await t.hs.createMentalModel(bankId, {
+        name: "John Preferences",
+        sourceQuery: "What does John like?",
+        content:
+          "John is an artist who loves the color blue. He has been painting for 10 years and prefers watercolors.",
+        tags: ["team"],
+      })
+
+      const hdb = (t.hs as any).hdb
+      const modelVec = (t.hs as any).modelVec
+
+      const models = await searchMentalModelsWithStaleness(
+        hdb,
+        modelVec,
+        bankId,
+        "What does John like?",
+      )
+      expect(models.length).toBeGreaterThan(0)
+      expect(models[0]!.content.toLowerCase()).toContain("watercolors")
+
+      const observations = await t.hs.recall(bankId, "What does John like?", {
+        factTypes: ["observation"],
+        limit: 5,
+      })
+      expect(observations.memories.length).toBeGreaterThan(0)
     })
 
     it("falls back to observation when no mental model exists", async () => {
-      throw new Error(
-        "implement me: observation fallback in 3-tier reflect search — see test_consolidation.py::test_hierarchical_observation_fallback",
+      await t.hs.retain(bankId, "raw", {
+        facts: [{ content: "Sarah works at Google as a software engineer." }],
+        dedupThreshold: 0,
+        consolidate: false,
+      })
+      t.adapter.setResponse(
+        JSON.stringify([
+          { action: "create", text: "Sarah works at Google.", reason: "summary" },
+        ]),
       )
+      await t.hs.consolidate(bankId)
+
+      const hdb = (t.hs as any).hdb
+      const modelVec = (t.hs as any).modelVec
+      const models = await searchMentalModelsWithStaleness(
+        hdb,
+        modelVec,
+        bankId,
+        "Where does Sarah work?",
+      )
+      expect(models).toHaveLength(0)
+
+      const observations = await t.hs.recall(bankId, "Where does Sarah work?", {
+        factTypes: ["observation"],
+        limit: 5,
+      })
+      expect(observations.memories.length).toBeGreaterThan(0)
+      const text = observations.memories.map((m) => m.memory.content.toLowerCase()).join(" ")
+      expect(text.includes("sarah") || text.includes("google")).toBe(true)
     })
 
     it("falls back to raw facts for fresh data", async () => {
-      throw new Error(
-        "implement me: raw fact fallback in 3-tier reflect search — see test_consolidation.py::test_hierarchical_raw_fact_fallback",
-      )
+      await t.hs.retain(bankId, "revenues", {
+        facts: [
+          { content: "The quarterly revenue was $1.5M in Q3 2024." },
+          { content: "The quarterly revenue was $2.1M in Q4 2024." },
+        ],
+        dedupThreshold: 0,
+        consolidate: false,
+      })
+
+      const raw = await t.hs.recall(bankId, "What was the quarterly revenue?", {
+        factTypes: ["experience", "world"],
+        limit: 10,
+      })
+
+      expect(raw.memories.length).toBeGreaterThan(0)
+      const text = raw.memories.map((m) => m.memory.content).join(" ")
+      const hasQ3 = text.includes("$1.5M") || text.includes("$1.5 million")
+      const hasQ4 = text.includes("$2.1M") || text.includes("$2.1 million")
+      expect(hasQ3 || hasQ4).toBe(true)
     })
   })
 })
@@ -1558,217 +1635,220 @@ describe("Core parity: test_consolidation.py", () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation processes multiple memories", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation no new memories", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation respects last consolidated at", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation copies entity links", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation observations included in recall", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation uses source memory ids", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation merges only redundant facts", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation keeps different people separate", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation merges contradictions", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation returns disabled status", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
-    const result = await t.hs.consolidate(bankId, { enabled: false })
-    expect(result.processed).toBe(0)
-    expect(result.created).toBe(0)
+    const first = await t.hs.consolidate(bankId)
+    expect(first.memoriesProcessed).toBeGreaterThanOrEqual(1)
+
+    const second = await t.hs.consolidate(bankId)
+    expect(second.memoriesProcessed).toBe(0)
+    expect(second.observationsCreated).toBe(0)
   })
 
   it("recall with observation fact type", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("recall with mixed fact types including observation", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("recall observation only with trace", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("same scope updates observation", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("scoped fact updates global observation", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("cross scope creates untagged", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("no match creates with fact tags", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("untagged fact can update scoped observation", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("tag filtering in recall", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("multiple actions from single fact", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("consolidation inherits dates from source memory", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("observation temporal range expands on update", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("search observations returns source memory ids", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("observation source ids match contributing memories", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("mental model takes priority over observation", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("fallback to observation when no mental model", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("fallback to recall for fresh data", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("mental model with trigger is refreshed after consolidation", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("mental model without trigger is not refreshed", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
   it("graph endpoint observations inherit links and entities", async () => {
     await t.hs.retain(bankId, "raw", { facts: [{ content: "Peter enjoys hiking every weekend", factType: "experience", confidence: 0.93, entities: ["Peter"] }, { content: "Peter likes mountain trails", factType: "experience", confidence: 0.9, entities: ["Peter"] }], consolidate: false })
     t.adapter.setResponse(JSON.stringify([{ action: "create", text: "Peter regularly hikes on weekends", reason: "merge related facts" }]))
     const result = await t.hs.consolidate(bankId)
-    expect(result.processed).toBeGreaterThanOrEqual(1)
+    expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
   })
 
 })

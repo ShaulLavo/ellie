@@ -77,29 +77,54 @@ describe("BankConfig validation", () => {
 
 describe("Hindsight instance config validation", () => {
   it("throws when retainMaxCompletionTokens <= retainChunkSize (tokens must exceed chunk size)", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
-    )
+    expect(() =>
+      createTestHindsight({
+        retainMaxCompletionTokens: 1000,
+        retainChunkSize: 2000,
+      }),
+    ).toThrow(/must be greater than/i)
   })
+
   it("throws when retainMaxCompletionTokens equals retainChunkSize", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_equal_to_chunk_size_fails",
-    )
+    expect(() =>
+      createTestHindsight({
+        retainMaxCompletionTokens: 3000,
+        retainChunkSize: 3000,
+      }),
+    ).toThrow(/must be greater than/i)
   })
+
   it("error message names both offending parameters and their values", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
-    )
+    const run = () =>
+      createTestHindsight({
+        retainMaxCompletionTokens: 1000,
+        retainChunkSize: 2000,
+      })
+
+    expect(run).toThrow(/HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS/)
+    expect(run).toThrow(/1000/)
+    expect(run).toThrow(/HINDSIGHT_API_RETAIN_CHUNK_SIZE/)
+    expect(run).toThrow(/2000/)
   })
+
   it("error message includes guidance on how to fix the invalid combination", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_retain_max_completion_tokens_must_be_greater_than_chunk_size",
-    )
+    const run = () =>
+      createTestHindsight({
+        retainMaxCompletionTokens: 1000,
+        retainChunkSize: 2000,
+      })
+
+    expect(run).toThrow(/You have two options to fix this/i)
+    expect(run).toThrow(/Increase HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS/i)
+    expect(run).toThrow(/use a model that supports/i)
   })
+
   it("accepts valid config where retainMaxCompletionTokens > retainChunkSize", () => {
-    throw new Error(
-      "implement me: HindsightConfig needs retainMaxCompletionTokens/retainChunkSize validation — see test_config_validation.py::test_valid_retain_config_succeeds",
-    )
+    const t = createTestHindsight({
+      retainMaxCompletionTokens: 64_000,
+      retainChunkSize: 3_000,
+    })
+    t.cleanup()
   })
 })
 

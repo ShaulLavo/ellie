@@ -216,6 +216,16 @@ export interface HindsightConfig {
   onTrace?: TraceCallback
   /** Optional auth/tenant/operation validator extension hooks. */
   extensions?: HindsightExtensions
+  /**
+   * Retain extraction chunk size (characters), used for validation parity with Python config.
+   * Optional in TS runtime; when set alongside retainMaxCompletionTokens it must be smaller.
+   */
+  retainChunkSize?: number
+  /**
+   * Retain extraction max completion tokens, used for validation parity with Python config.
+   * Optional in TS runtime; when set alongside retainChunkSize it must be greater.
+   */
+  retainMaxCompletionTokens?: number
 }
 
 // ── Tracing ───────────────────────────────────────────────────────────────

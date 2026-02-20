@@ -95,6 +95,20 @@ const HARDCODED_DEFAULTS: Required<BankConfig> = {
   dedupThreshold: 0.92,
 }
 
+function validateRetainTokenConfig(config: HindsightConfig): void {
+  const chunkSize = config.retainChunkSize
+  const maxCompletionTokens = config.retainMaxCompletionTokens
+  if (chunkSize == null || maxCompletionTokens == null) return
+  if (maxCompletionTokens > chunkSize) return
+
+  throw new Error(
+    `Invalid retain config: HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS (${maxCompletionTokens}) ` +
+      `must be greater than HINDSIGHT_API_RETAIN_CHUNK_SIZE (${chunkSize}). ` +
+      `You have two options to fix this: Increase HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS, ` +
+      `or reduce HINDSIGHT_API_RETAIN_CHUNK_SIZE / use a model that supports larger completion output.`,
+  )
+}
+
 /**
  * Hindsight — biomimetic agent memory built on SQLite.
  *
@@ -121,6 +135,7 @@ export class Hindsight {
   private readonly cancelledOperations = new Set<string>()
 
   constructor(config: HindsightConfig) {
+    validateRetainTokenConfig(config)
     const runtime = resolveModelRuntime(config)
     const dims = runtime.embeddingDimensions
 
