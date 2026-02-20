@@ -64,6 +64,8 @@ Read these before working on the relevant subsystem:
 | [agent_docs/durable-streams.md](agent_docs/durable-streams.md) | Working on the streaming protocol, subscriptions, producers, or HTTP handlers |
 | [agent_docs/database.md](agent_docs/database.md) | Working on storage, schema, JSONL files, or the JsonlEngine |
 | [agent_docs/rpc-layer.md](agent_docs/rpc-layer.md) | Working on the RPC framework, router, client proxy, or `useStream` hook |
+| [agent_docs/jsonl-logger.md](agent_docs/jsonl-logger.md) | Working on JSONL persistence, LogFile, JsonlEngine, TypedLog, or on-disk format |
+| [agent_docs/ai-package.md](agent_docs/ai-package.md) | Working on LLM integration, model registry, cost calculation, or thinking support |
 
 ## Conventions
 
