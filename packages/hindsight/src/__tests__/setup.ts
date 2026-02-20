@@ -10,7 +10,7 @@ import { tmpdir } from "os"
 import { join } from "path"
 import { rmSync } from "fs"
 import { Hindsight } from "../hindsight"
-import type { HindsightConfig, EmbedFunction } from "../types"
+import type { HindsightConfig } from "../types"
 import { createMockAdapter, type MockAdapter } from "./mock-adapter"
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ export const EMBED_DIMS = 16
  * - KNN search mechanics
  */
 export function mockEmbed(text: string): Promise<number[]> {
-  const vec = new Array(EMBED_DIMS).fill(0)
+  const vec = Array.from<number>({ length: EMBED_DIMS }).fill(0)
   for (let i = 0; i < text.length; i++) {
     vec[i % EMBED_DIMS] += text.charCodeAt(i) / 1000
   }

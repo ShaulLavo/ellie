@@ -7,8 +7,12 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
-import { loadDirectivesForReflect } from "../directives"
-import { buildDirectivesSection, buildDirectivesReminder } from "../prompts"
+// Used by .todo tests below — keep for when they're implemented
+import { loadDirectivesForReflect as _loadDirectivesForReflect } from "../directives"
+import {
+  buildDirectivesSection as _buildDirectivesSection,
+  buildDirectivesReminder as _buildDirectivesReminder,
+} from "../prompts"
 
 describe("Directives", () => {
   let t: TestHindsight

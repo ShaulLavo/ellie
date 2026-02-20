@@ -81,7 +81,7 @@ describe("Entity extraction on retain", () => {
   })
 
   it("creates junction entries linking memories to entities", async () => {
-    const result = await t.hs.retain(bankId, "test", {
+    await t.hs.retain(bankId, "test", {
       facts: [
         { content: "Alice met Bob at the conference", entities: ["Alice", "Bob"] },
       ],
