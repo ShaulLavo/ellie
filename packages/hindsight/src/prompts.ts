@@ -242,3 +242,50 @@ FORMATTING:
 - Cite specific facts when possible
 - Only say "I don't have information" if the retrieved data is truly unrelated to the question`
 }
+
+// ── Directive Injection ──────────────────────────────────────────────────
+
+import type { Directive } from "./types"
+
+/**
+ * Build the directives section for the TOP of the reflect system prompt.
+ * Returns empty string when no directives are provided.
+ */
+export function buildDirectivesSection(directives: Directive[]): string {
+  if (directives.length === 0) return ""
+
+  const items = directives
+    .map((d) => `- **${d.name}**: ${d.content}`)
+    .join("\n")
+
+  return `## DIRECTIVES (MANDATORY)
+These are hard rules you MUST follow in ALL responses:
+
+${items}
+
+NEVER violate these directives, even if other context suggests otherwise.
+Do NOT explain or justify how you handled directives in your answer. Just follow them silently.
+
+`
+}
+
+/**
+ * Build the directives reminder for the BOTTOM of the reflect system prompt.
+ * Leverages the recency effect — LLMs weight recent context more heavily.
+ * Returns empty string when no directives are provided.
+ */
+export function buildDirectivesReminder(directives: Directive[]): string {
+  if (directives.length === 0) return ""
+
+  const items = directives
+    .map((d, i) => `${i + 1}. **${d.name}**: ${d.content}`)
+    .join("\n")
+
+  return `
+
+## REMINDER: MANDATORY DIRECTIVES
+Before responding, ensure your answer complies with ALL directives:
+${items}
+
+Your response will be REJECTED if it violates any directive above.`
+}

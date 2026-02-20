@@ -300,6 +300,39 @@ export interface RefreshMentalModelResult {
   reflectResult: ReflectResult
 }
 
+// ── Directives ────────────────────────────────────────────────────────────
+
+/** A behavioral directive (hard rule for reflect) */
+export interface Directive {
+  id: string
+  bankId: string
+  name: string
+  content: string
+  priority: number
+  isActive: boolean
+  tags: string[] | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** Options for creating a directive */
+export interface CreateDirectiveOptions {
+  name: string
+  content: string
+  priority?: number
+  isActive?: boolean
+  tags?: string[]
+}
+
+/** Options for updating a directive */
+export interface UpdateDirectiveOptions {
+  name?: string
+  content?: string
+  priority?: number
+  isActive?: boolean
+  tags?: string[]
+}
+
 // ── Reflect 3-tier result types ─────────────────────────────────────────
 
 /** Return shape from search_mental_models tool (Tier 1) */

@@ -26,7 +26,12 @@ import type {
 } from "./types"
 import { recall } from "./recall"
 import { searchMentalModelsWithStaleness } from "./mental-models"
-import { getReflectSystemPrompt } from "./prompts"
+import { loadDirectivesForReflect } from "./directives"
+import {
+  getReflectSystemPrompt,
+  buildDirectivesSection,
+  buildDirectivesReminder,
+} from "./prompts"
 
 // ── Budget → iterations mapping ─────────────────────────────────────────
 
@@ -224,7 +229,13 @@ export async function reflect(
     ? `${query}\n\nAdditional context: ${options.context}`
     : query
 
-  const systemPrompt = getReflectSystemPrompt(budget)
+  // Load directives and build system prompt with injection at top + bottom
+  const activeDirectives = loadDirectivesForReflect(hdb, bankId, options.tags, options.tagsMatch)
+  const basePrompt = getReflectSystemPrompt(budget)
+  const systemPrompt =
+    buildDirectivesSection(activeDirectives) +
+    basePrompt +
+    buildDirectivesReminder(activeDirectives)
 
   const answer = await streamToText(
     chat({

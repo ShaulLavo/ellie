@@ -167,6 +167,29 @@ export const mentalModels = sqliteTable(
   ],
 )
 
+// ── Directives ──────────────────────────────────────────────────────────
+
+export const directives = sqliteTable(
+  "hs_directives",
+  {
+    id: text("id").primaryKey(),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    content: text("content").notNull(),
+    priority: integer("priority").notNull().default(0),
+    isActive: integer("is_active").notNull().default(1), // 0=false, 1=true
+    tags: text("tags"), // JSON string[]
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_hs_dir_bank").on(table.bankId),
+    index("idx_hs_dir_bank_active").on(table.bankId, table.isActive),
+  ],
+)
+
 // ── Type exports ───────────────────────────────────────────────────────────
 
 export type BankRow = typeof banks.$inferSelect
@@ -181,3 +204,5 @@ export type NewMemoryLinkRow = typeof memoryLinks.$inferInsert
 export type EntityCooccurrenceRow = typeof entityCooccurrences.$inferSelect
 export type MentalModelRow = typeof mentalModels.$inferSelect
 export type NewMentalModelRow = typeof mentalModels.$inferInsert
+export type DirectiveRow = typeof directives.$inferSelect
+export type NewDirectiveRow = typeof directives.$inferInsert

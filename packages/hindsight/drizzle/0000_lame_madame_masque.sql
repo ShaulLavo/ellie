@@ -8,6 +8,21 @@ CREATE TABLE `hs_banks` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `hs_banks_name_unique` ON `hs_banks` (`name`);--> statement-breakpoint
+CREATE TABLE `hs_directives` (
+	`id` text PRIMARY KEY NOT NULL,
+	`bank_id` text NOT NULL,
+	`name` text NOT NULL,
+	`content` text NOT NULL,
+	`priority` integer DEFAULT 0 NOT NULL,
+	`is_active` integer DEFAULT 1 NOT NULL,
+	`tags` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`bank_id`) REFERENCES `hs_banks`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_hs_dir_bank` ON `hs_directives` (`bank_id`);--> statement-breakpoint
+CREATE INDEX `idx_hs_dir_bank_active` ON `hs_directives` (`bank_id`,`is_active`);--> statement-breakpoint
 CREATE TABLE `hs_entities` (
 	`id` text PRIMARY KEY NOT NULL,
 	`bank_id` text NOT NULL,

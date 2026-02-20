@@ -16,6 +16,13 @@ import {
   deleteMentalModel as deleteMentalModelImpl,
   refreshMentalModel as refreshMentalModelImpl,
 } from "./mental-models"
+import {
+  createDirective as createDirectiveImpl,
+  getDirective as getDirectiveImpl,
+  listDirectives as listDirectivesImpl,
+  updateDirective as updateDirectiveImpl,
+  deleteDirective as deleteDirectiveImpl,
+} from "./directives"
 import type {
   HindsightConfig,
   BankConfig,
@@ -24,6 +31,9 @@ import type {
   CreateMentalModelOptions,
   UpdateMentalModelOptions,
   RefreshMentalModelResult,
+  Directive,
+  CreateDirectiveOptions,
+  UpdateDirectiveOptions,
   RetainOptions,
   RetainResult,
   RecallOptions,
@@ -368,6 +378,35 @@ export class Hindsight {
       bankId,
       id,
     )
+  }
+
+  // ── Directives ──────────────────────────────────────────────────────
+
+  createDirective(
+    bankId: string,
+    options: CreateDirectiveOptions,
+  ): Directive {
+    return createDirectiveImpl(this.hdb, bankId, options)
+  }
+
+  getDirective(bankId: string, id: string): Directive | undefined {
+    return getDirectiveImpl(this.hdb, bankId, id)
+  }
+
+  listDirectives(bankId: string, activeOnly?: boolean): Directive[] {
+    return listDirectivesImpl(this.hdb, bankId, activeOnly)
+  }
+
+  updateDirective(
+    bankId: string,
+    id: string,
+    options: UpdateDirectiveOptions,
+  ): Directive {
+    return updateDirectiveImpl(this.hdb, bankId, id, options)
+  }
+
+  deleteDirective(bankId: string, id: string): void {
+    deleteDirectiveImpl(this.hdb, bankId, id)
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────
