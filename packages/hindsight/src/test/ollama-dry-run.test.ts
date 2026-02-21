@@ -17,18 +17,18 @@
 
 import { afterEach, beforeEach, expect, it } from "bun:test"
 import {
-  describeWithOllama,
-  createOllamaTestHindsight,
+  describeWithLLM,
+  createRealTestHindsight,
   createTestBank,
-  type OllamaTestHindsight,
+  type RealTestHindsight,
 } from "./setup"
 
-describeWithOllama("Ollama dry run (qwen2.5:7b-instruct)", () => {
-  let t: OllamaTestHindsight
+describeWithLLM("Ollama dry run (qwen2.5:7b-instruct)", () => {
+  let t: RealTestHindsight
   let bankId: string
 
-  beforeEach(() => {
-    t = createOllamaTestHindsight()
+  beforeEach(async () => {
+    t = await createRealTestHindsight()
     bankId = createTestBank(t.hs)
   })
 

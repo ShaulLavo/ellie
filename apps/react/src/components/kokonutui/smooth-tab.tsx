@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 interface TabItem {
   id: string;
   title: string;
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  icon?: React.ComponentType<{ size?: number; className?: string; }>;
   content?: React.ReactNode;
   cardContent?: React.ReactNode;
   color: string;
@@ -86,7 +86,7 @@ const DEFAULT_TABS: TabItem[] = [
         </div>
         <div className="relative flex h-full flex-col p-6">
           <div className="space-y-2">
-            <h3 className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-2xl tracking-tight [text-shadow:_0_1px_1px_rgb(0_0_0_/_10%)]">
+            <h3 className="bg-linear-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-2xl tracking-tight [text-shadow:0_1px_1px_rgb(0_0_0/10%)]">
               Models
             </h3>
             <p className="max-w-[90%] text-black/50 text-sm leading-relaxed dark:text-white/50">
@@ -136,7 +136,7 @@ const DEFAULT_TABS: TabItem[] = [
         </div>
         <div className="relative flex h-full flex-col p-6">
           <div className="space-y-2">
-            <h3 className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-xl tracking-tight [text-shadow:_0_1px_1px_rgb(0_0_0_/_10%)]">
+            <h3 className="bg-linear-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-xl tracking-tight [text-shadow:0_1px_1px_rgb(0_0_0/10%)]">
               MCPs
             </h3>
             <p className="max-w-[90%] text-black/50 text-sm leading-relaxed dark:text-white/50">
@@ -186,7 +186,7 @@ const DEFAULT_TABS: TabItem[] = [
         </div>
         <div className="relative flex h-full flex-col p-6">
           <div className="space-y-2">
-            <h3 className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-2xl tracking-tight [text-shadow:_0_1px_1px_rgb(0_0_0_/_10%)]">
+            <h3 className="bg-linear-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-2xl tracking-tight [text-shadow:0_1px_1px_rgb(0_0_0/10%)]">
               Agents
             </h3>
             <p className="max-w-[90%] text-black/50 text-sm leading-relaxed dark:text-white/50">
@@ -236,7 +236,7 @@ const DEFAULT_TABS: TabItem[] = [
         </div>
         <div className="relative flex h-full flex-col p-6">
           <div className="space-y-2">
-            <h3 className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-2xl tracking-tight [text-shadow:_0_1px_1px_rgb(0_0_0_/_10%)]">
+            <h3 className="bg-linear-to-r from-foreground via-foreground/90 to-foreground/70 font-semibold text-2xl tracking-tight [text-shadow:0_1px_1px_rgb(0_0_0/10%)]">
               Users
             </h3>
             <p className="max-w-[90%] text-black/50 text-sm leading-relaxed dark:text-white/50">
@@ -401,7 +401,7 @@ export default function SmoothTab({
             opacity: 1,
           }}
           className={cn(
-            "absolute z-[1] rounded-lg",
+            "absolute z-1 rounded-lg",
             selectedItem?.color || activeColor
           )}
           initial={false}
@@ -413,7 +413,7 @@ export default function SmoothTab({
           }}
         />
 
-        <div className="relative z-[2] grid w-full grid-cols-4 gap-1">
+        <div className="relative z-2 grid w-full grid-cols-4 gap-1">
           {items.map((item) => {
             const isSelected = selected === item.id;
             return (

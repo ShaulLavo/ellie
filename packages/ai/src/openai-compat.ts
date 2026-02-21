@@ -14,11 +14,8 @@ import {
 } from "@tanstack/ai/adapters"
 import type {
   DefaultMessageMetadataByModality,
-  Modality,
   StreamChunk,
   TextOptions,
-  Message,
-  ContentPart,
 } from "@tanstack/ai"
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -104,7 +101,7 @@ export class OpenAICompatTextAdapter<
 > extends BaseTextAdapter<
   TModel,
   Record<string, unknown>,
-  readonly [typeof Modality.TEXT],
+  readonly ["text"],
   DefaultMessageMetadataByModality
 > {
   readonly name: string
@@ -297,6 +294,7 @@ export class OpenAICompatTextAdapter<
       threadId: runId,
       runId,
       finishReason,
+      timestamp: Date.now(),
     } as StreamChunk
   }
 
@@ -366,16 +364,17 @@ export class OpenAICompatTextAdapter<
     // Messages
     if (options.messages) {
       for (const msg of options.messages) {
-        const m = msg as Message
-        if (m.role === "user") {
+        const m = msg as unknown as Record<string, unknown>
+        const role = m.role as string
+        if (role === "user") {
           result.push({ role: "user", content: this.extractTextContent(m) })
-        } else if (m.role === "assistant") {
+        } else if (role === "assistant") {
           // TanStack AI stores tool calls in `toolCalls` field (array of ToolCall objects)
-          const tcArray = (m as Record<string, unknown>).toolCalls as Array<Record<string, unknown>> | undefined
+          const tcArray = m.toolCalls as Array<Record<string, unknown>> | undefined
           if (tcArray && tcArray.length > 0) {
             result.push({
               role: "assistant",
-              content: (m as Record<string, unknown>).content as string | null ?? null,
+              content: (m.content as string | null) ?? null,
               tool_calls: tcArray.map((tc) => {
                 const fn = tc.function as Record<string, unknown> | undefined
                 return {
@@ -392,23 +391,24 @@ export class OpenAICompatTextAdapter<
               }),
             })
           } else {
-            // Check for tool calls in content parts (ContentPart[] format)
-            const toolCallParts = (m.content as ContentPart[])?.filter?.(
-              (p: ContentPart) => p.type === "tool-call",
+            // Check for tool calls in parts (UIMessage format)
+            const parts = m.parts as Array<Record<string, unknown>> | undefined
+            const toolCallParts = parts?.filter(
+              (p) => p.type === "tool-call",
             )
             if (toolCallParts && toolCallParts.length > 0) {
               result.push({
                 role: "assistant",
                 content: null,
-                tool_calls: toolCallParts.map((tc: ContentPart) => ({
-                  id: (tc as Record<string, unknown>).toolCallId as string,
+                tool_calls: toolCallParts.map((tc) => ({
+                  id: tc.toolCallId as string,
                   type: "function" as const,
                   function: {
-                    name: (tc as Record<string, unknown>).toolName as string,
+                    name: tc.toolName as string,
                     arguments:
-                      typeof (tc as Record<string, unknown>).args === "string"
-                        ? ((tc as Record<string, unknown>).args as string)
-                        : JSON.stringify((tc as Record<string, unknown>).args),
+                      typeof tc.args === "string"
+                        ? tc.args
+                        : JSON.stringify(tc.args),
                   },
                 })),
               })
@@ -416,14 +416,14 @@ export class OpenAICompatTextAdapter<
               result.push({ role: "assistant", content: this.extractTextContent(m) })
             }
           }
-        } else if (m.role === "tool") {
+        } else if (role === "tool") {
           result.push({
             role: "tool",
             content:
-              typeof (m as Record<string, unknown>).content === "string"
-                ? ((m as Record<string, unknown>).content as string)
-                : JSON.stringify((m as Record<string, unknown>).content),
-            tool_call_id: (m as Record<string, unknown>).toolCallId as string,
+              typeof m.content === "string"
+                ? m.content
+                : JSON.stringify(m.content),
+            tool_call_id: m.toolCallId as string,
           })
         }
       }
@@ -432,12 +432,19 @@ export class OpenAICompatTextAdapter<
     return result
   }
 
-  private extractTextContent(msg: Message): string {
+  private extractTextContent(msg: Record<string, unknown>): string {
     if (typeof msg.content === "string") return msg.content
     if (Array.isArray(msg.content)) {
-      return (msg.content as ContentPart[])
-        .filter((p: ContentPart) => p.type === "text")
-        .map((p: ContentPart) => (p as { type: "text"; text: string }).text)
+      return (msg.content as Array<Record<string, unknown>>)
+        .filter((p) => p.type === "text")
+        .map((p) => p.text as string)
+        .join("")
+    }
+    // UIMessage format uses `parts` instead of `content`
+    if (Array.isArray(msg.parts)) {
+      return (msg.parts as Array<Record<string, unknown>>)
+        .filter((p) => p.type === "text")
+        .map((p) => p.text as string)
         .join("")
     }
     return ""
@@ -449,14 +456,17 @@ export class OpenAICompatTextAdapter<
     if (!options.tools) return []
     // TanStack AI passes tools as an array of Tool objects with { name, description, inputSchema }
     const tools = Array.isArray(options.tools) ? options.tools : Object.values(options.tools)
-    return tools.map((tool: Record<string, unknown>) => ({
-      type: "function" as const,
-      function: {
-        name: (tool.name as string) ?? "unknown",
-        description: tool.description as string | undefined,
-        parameters: (tool.inputSchema ?? tool.parameters) as Record<string, unknown> | undefined,
-      },
-    }))
+    return tools.map((t: unknown) => {
+      const tool = t as Record<string, unknown>
+      return {
+        type: "function" as const,
+        function: {
+          name: (tool.name as string) ?? "unknown",
+          description: tool.description as string | undefined,
+          parameters: (tool.inputSchema ?? tool.parameters) as Record<string, unknown> | undefined,
+        },
+      }
+    })
   }
 
   private mapCommonOptions(

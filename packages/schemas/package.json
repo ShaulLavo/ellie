@@ -1,20 +1,21 @@
 {
-  "name": "@ellie/router",
+  "name": "@ellie/schemas",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./hindsight": "./src/hindsight.ts",
+    "./agent": "./src/agent.ts",
+    "./router": "./src/router.ts"
   },
   "scripts": {
-    "check-types": "tsgo --noEmit",
-    "test": "bun test"
+    "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@ellie/rpc": "workspace:*",
-    "@ellie/schemas": "workspace:*",
     "valibot": "^1.2.0"
   },
   "devDependencies": {

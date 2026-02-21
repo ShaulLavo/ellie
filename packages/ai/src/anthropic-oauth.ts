@@ -8,10 +8,8 @@
 
 import { createAnthropicChat, type AnthropicChatModel } from "@tanstack/ai-anthropic"
 import type { AnyTextAdapter } from "@tanstack/ai"
-import { loadCredential, type OAuthCredential } from "./credentials"
+import { loadProviderCredential, type OAuthCredential } from "./credentials"
 
-// Anthropic's Claude Code OAuth client ID — shared across all deployments
-const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
 
 // Required beta header for OAuth token authentication
@@ -64,11 +62,11 @@ export async function anthropicFromCredentials(
   credentialsPath: string,
   name = "anthropic",
 ): Promise<AnyTextAdapter | null> {
-  const cred = await loadCredential(credentialsPath, name)
+  const cred = await loadProviderCredential(credentialsPath, name)
   if (!cred) return null
 
   if (cred.type === "oauth") {
-    return anthropicOAuth(model, cred.access)
+    return anthropicOAuth(model, cred.access_token)
   }
 
   if (cred.type === "api_key") {
@@ -95,8 +93,8 @@ export async function refreshOAuthToken(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         grant_type: "refresh_token",
-        client_id: CLIENT_ID,
-        refresh_token: cred.refresh,
+        client_id: cred.client_id,
+        refresh_token: cred.refresh_token,
       }),
     })
 
@@ -116,9 +114,11 @@ export async function refreshOAuthToken(
 
     return {
       type: "oauth",
-      access: json.access_token,
-      refresh: json.refresh_token,
-      expires: Date.now() + json.expires_in * 1000,
+      access_token: json.access_token,
+      refresh_token: json.refresh_token,
+      expires_at: Date.now() + json.expires_in * 1000,
+      client_id: cred.client_id,
+      client_secret: cred.client_secret,
     }
   } catch (err) {
     console.error(

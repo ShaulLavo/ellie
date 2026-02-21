@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@ellie/ai": "workspace:*",
+    "@ellie/schemas": "workspace:*",
     "valibot": "^1.2.0"
   },
   "peerDependencies": {

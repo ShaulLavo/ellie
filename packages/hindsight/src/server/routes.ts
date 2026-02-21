@@ -152,8 +152,6 @@ export function createHindsightHandlers(
 /**
  * Handle Hindsight-specific HTTP routes via the RPC procedure handler.
  * Returns a Response Promise if matched, or null.
- *
- * This is the convenience wrapper — drop-in replacement for the old regex dispatcher.
  */
 export function handleHindsightRequest(
 	hs: Hindsight,
