@@ -244,7 +244,7 @@ describe("Directives", () => {
 
   describe("loadDirectivesForReflect", () => {
     it("returns only tagless directives when no session tags", () => {
-      const hdb = (t.hs as any).hdb as HindsightDatabase
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 
       t.hs.createDirective(bankId, { name: "Global", content: "global rule" })
       t.hs.createDirective(bankId, { name: "Tagged", content: "scoped rule", tags: ["team-a"] })
@@ -255,7 +255,7 @@ describe("Directives", () => {
     })
 
     it("returns matching directives when session tags provided", () => {
-      const hdb = (t.hs as any).hdb as HindsightDatabase
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 
       t.hs.createDirective(bankId, { name: "Team A Rule", content: "for team a", tags: ["team-a"] })
       t.hs.createDirective(bankId, { name: "Team B Rule", content: "for team b", tags: ["team-b"] })
@@ -266,7 +266,7 @@ describe("Directives", () => {
     })
 
     it("excludes tag-scoped directives from tagless session", () => {
-      const hdb = (t.hs as any).hdb as HindsightDatabase
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 
       t.hs.createDirective(bankId, { name: "Global", content: "global" })
       t.hs.createDirective(bankId, { name: "Scoped", content: "scoped", tags: ["private"] })
@@ -277,7 +277,7 @@ describe("Directives", () => {
     })
 
     it("excludes tagless directives from tagged session (any mode)", () => {
-      const hdb = (t.hs as any).hdb as HindsightDatabase
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 
       t.hs.createDirective(bankId, { name: "Global", content: "global" })
       t.hs.createDirective(bankId, { name: "Scoped", content: "scoped", tags: ["team-a"] })

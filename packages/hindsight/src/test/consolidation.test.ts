@@ -14,6 +14,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
 import { searchMentalModelsWithStaleness } from "../mental-models"
+import type { HindsightDatabase } from "../db"
+import type { EmbeddingStore } from "../embedding"
 
 describe("Consolidation", () => {
   let t: TestHindsight
@@ -31,7 +33,7 @@ describe("Consolidation", () => {
   // ── Helper: query observations from DB ─────────────────────────────────
 
   function listObservations(bid: string = bankId) {
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     return hdb.sqlite
       .prepare(
         `SELECT id, content, fact_type, source_memory_ids, proof_count, tags, occurred_start, occurred_end, history
@@ -52,8 +54,8 @@ describe("Consolidation", () => {
       }>
   }
 
-  function listAllMemories(bid: string = bankId) {
-    const hdb = (t.hs as any).hdb
+  function _listAllMemories(bid: string = bankId) {
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     return hdb.sqlite
       .prepare(
         `SELECT id, content, fact_type, tags, source_memory_ids
@@ -71,7 +73,7 @@ describe("Consolidation", () => {
   }
 
   function listRawFacts(bid: string = bankId) {
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     return hdb.sqlite
       .prepare(
         `SELECT id, content, fact_type
@@ -86,8 +88,8 @@ describe("Consolidation", () => {
       }>
   }
 
-  function listMemoryEntities(memoryId: string) {
-    const hdb = (t.hs as any).hdb
+  function _listMemoryEntities(memoryId: string) {
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     return hdb.sqlite
       .prepare(
         `SELECT me.memory_id, me.entity_id, e.name
@@ -167,7 +169,7 @@ describe("Consolidation", () => {
       expect(firstPass.observationsCreated).toBe(2)
 
       const listObservations = () => {
-        const hdb = (t.hs as any).hdb
+        const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
         return hdb.sqlite
           .prepare(
             `SELECT id, content, source_memory_ids
@@ -447,7 +449,7 @@ describe("Consolidation", () => {
       expect(sourceIds.length).toBeGreaterThanOrEqual(1)
 
       // Each source ID should exist in the DB
-      const hdb = (t.hs as any).hdb
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
       for (const sid of sourceIds) {
         const row = hdb.sqlite
           .prepare("SELECT id FROM hs_memory_units WHERE id = ?")
@@ -861,7 +863,7 @@ describe("Consolidation", () => {
       )
       await t.hs.consolidate(bankId)
 
-      const hdb = (t.hs as any).hdb
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
       const observation = hdb.sqlite
         .prepare(
           `SELECT id, occurred_start, occurred_end, mentioned_at
@@ -947,7 +949,7 @@ describe("Consolidation", () => {
       )
       await t.hs.consolidate(bankId)
 
-      const hdb = (t.hs as any).hdb
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
       const observation = hdb.sqlite
         .prepare(
           `SELECT occurred_start, occurred_end, mentioned_at
@@ -1493,7 +1495,7 @@ describe("Consolidation", () => {
       expect(sourceIds.length).toBeGreaterThanOrEqual(2)
 
       // All sourceIds should exist as raw facts in the DB
-      const hdb = (t.hs as any).hdb
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
       for (const sid of sourceIds) {
         const row = hdb.sqlite
           .prepare("SELECT id, fact_type FROM hs_memory_units WHERE id = ?")
@@ -1529,8 +1531,8 @@ describe("Consolidation", () => {
         tags: ["team"],
       })
 
-      const hdb = (t.hs as any).hdb
-      const modelVec = (t.hs as any).modelVec
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+      const modelVec = (t.hs as unknown as { modelVec: EmbeddingStore }).modelVec
 
       const models = await searchMentalModelsWithStaleness(
         hdb,
@@ -1561,8 +1563,8 @@ describe("Consolidation", () => {
       )
       await t.hs.consolidate(bankId)
 
-      const hdb = (t.hs as any).hdb
-      const modelVec = (t.hs as any).modelVec
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+      const modelVec = (t.hs as unknown as { modelVec: EmbeddingStore }).modelVec
       const models = await searchMentalModelsWithStaleness(
         hdb,
         modelVec,
@@ -1617,7 +1619,7 @@ describe("Core parity: test_consolidation.py", () => {
     t.cleanup()
   })
 
-  async function seedBase() {
+  async function _seedBase() {
     await t.hs.retain(bankId, "seed", {
       facts: [
         { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], occurredStart: Date.now() - 60 * 86_400_000 },

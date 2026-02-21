@@ -3,9 +3,6 @@ import * as v from "valibot";
 import {
 	agentMessageSchema,
 	agentEventSchema,
-	userMessageSchema,
-	assistantMessageSchema,
-	toolResultMessageSchema,
 } from "../src/schemas";
 import type {
 	UserMessage,

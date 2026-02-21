@@ -66,7 +66,7 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 		if (this.resolve) {
 			const r = this.resolve;
 			this.resolve = null;
-			r({ value: undefined as any, done: true });
+			r({ done: true, value: undefined } as IteratorResult<T>);
 		}
 	}
 

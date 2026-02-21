@@ -1,7 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { StreamStore } from "@ellie/durable-streams";
 import { AgentManager } from "./manager";
-import type { AgentMessage, AgentEvent } from "@ellie/agent";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 
 // ============================================================================
@@ -15,17 +14,17 @@ function createMockAdapter(): AnyTextAdapter {
 	return {
 		name: "mock",
 		chat: async function* (): AsyncIterable<StreamChunk> {
-			yield { type: "RUN_STARTED", threadId: "t1", runId: "r1" } as any;
-			yield { type: "TEXT_MESSAGE_START", messageId: "m1" } as any;
-			yield { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "Hello from mock!" } as any;
-			yield { type: "TEXT_MESSAGE_END", messageId: "m1" } as any;
+			yield { type: "RUN_STARTED", threadId: "t1", runId: "r1" } as unknown as StreamChunk;
+			yield { type: "TEXT_MESSAGE_START", messageId: "m1" } as unknown as StreamChunk;
+			yield { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "Hello from mock!" } as unknown as StreamChunk;
+			yield { type: "TEXT_MESSAGE_END", messageId: "m1" } as unknown as StreamChunk;
 			yield {
 				type: "RUN_FINISHED",
 				threadId: "t1",
 				runId: "r1",
 				finishReason: "stop",
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-			} as any;
+			} as unknown as StreamChunk;
 		},
 	} as unknown as AnyTextAdapter;
 }
@@ -105,7 +104,7 @@ describe("AgentManager", () => {
 		// First message should be the user message
 		const userMsg = history.find((m) => m.role === "user");
 		expect(userMsg).toBeDefined();
-		expect((userMsg as any)?.content[0]?.text).toBe("Hello");
+		expect(((userMsg as unknown as { content: { text: string }[] })?.content[0]?.text)).toBe("Hello");
 
 		// Should have an assistant response
 		const assistantMsg = history.find((m) => m.role === "assistant");

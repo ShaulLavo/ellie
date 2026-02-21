@@ -52,7 +52,7 @@ describe("Core parity: test_hierarchical_config.py", () => {
     const run = () =>
       t.hs.updateBankConfig(
         bankId,
-        { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false } as any,
+        { extractionMode: "verbose", dedupThreshold: 0.9, enableConsolidation: false },
       )
     expect(run).not.toThrow()
   })

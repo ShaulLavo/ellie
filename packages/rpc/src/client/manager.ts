@@ -14,8 +14,8 @@ import type { ProcedureDef, StreamDef, SubscriptionHandle } from "../types"
 // ============================================================================
 
 interface CacheEntry {
-  db: StreamDB<any>
-  schema: StateSchema<any>
+  db: StreamDB<Record<string, CollectionDefinition>>
+  schema: StateSchema<Record<string, CollectionDefinition>>
   refs: number
   ready: Promise<void>
   /** True once the ready promise has settled (resolved or rejected) */
@@ -159,7 +159,7 @@ export class StreamManager {
     streamDef: StreamDef,
     collectionName: string,
     params: Record<string, string>
-  ): SubscriptionHandle<any> {
+  ): SubscriptionHandle<unknown> {
     const entry = this.#getOrCreate(streamDef, params)
     entry.refs++
 
@@ -286,14 +286,15 @@ export class StreamManager {
     const entry = this.#getOrCreate(streamDef, params)
     await entry.ready
 
-    const helpers = (entry.schema as Record<string, any>)[collectionName]
-    if (!helpers || typeof helpers[operation] !== `function`) {
+    const helpers = (entry.schema as unknown as Record<string, Record<string, unknown>>)[collectionName]
+    const fn = helpers?.[operation]
+    if (!fn || typeof fn !== `function`) {
       throw new Error(
         `[streams-rpc] No "${operation}" helper for collection "${collectionName}"`
       )
     }
 
-    const event = helpers[operation](payload)
+    const event = (fn as (payload: { value?: unknown; key?: string }) => unknown)(payload)
     if (event == null) {
       throw new Error(
         `[streams-rpc] "${operation}" helper returned ${event} for collection "${collectionName}"`

@@ -10,7 +10,7 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, type Variants, type Transition } from "motion/react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -370,8 +370,8 @@ export default function SmoothTab({
                   backfaceVisibility: "hidden",
                   WebkitBackfaceVisibility: "hidden",
                 }}
-                transition={transition as any}
-                variants={slideVariants as any}
+                transition={transition as unknown as Transition}
+                variants={slideVariants as unknown as Variants}
               >
                 {selectedItem?.cardContent}
               </motion.div>

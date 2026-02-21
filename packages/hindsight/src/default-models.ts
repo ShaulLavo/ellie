@@ -186,7 +186,7 @@ async function runWithConcurrency<T, R>(
   worker: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
   if (items.length === 0) return []
-  const results: R[] = new Array(items.length)
+  const results: R[] = Array.from({ length: items.length }) as R[]
   let cursor = 0
   const laneCount = Math.max(1, Math.min(concurrency, items.length))
 
@@ -254,7 +254,7 @@ export const defaultTeiRerank: RerankFunction = async (query, documents) => {
     documents.map((text, index) => ({ index, text })),
     config.rerankBatchSize,
   )
-  const scores = new Array<number>(documents.length).fill(0)
+  const scores = Array.from({ length: documents.length }, () => 0)
 
   await runWithConcurrency(
     grouped,

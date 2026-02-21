@@ -14,6 +14,7 @@ import {
   type TestHindsight,
   type RealTestHindsight,
 } from "./setup"
+import type { HindsightDatabase } from "../db"
 
 describe("Causal relations validation", () => {
   it("causal relations only reference previous facts (targetIndex < current)", () => {
@@ -219,7 +220,7 @@ The renovation took three months and cost $15,000.`,
 
   // Port of test_causal_relations.py::test_causal_strength
   it("strength reflects causal certainty (strong vs weak)", async () => {
-    const result = await t.hs.retain(
+    const _result = await t.hs.retain(
       bankId,
       `The stock market crash directly caused the company to lay off employees.
 The layoffs indirectly led to reduced consumer spending in the area.
@@ -228,7 +229,7 @@ Reduced spending somewhat affected local businesses.`,
     )
 
     // Query DB for stored weight values
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const dbLinks = hdb.db
       .select({
         linkType: hdb.schema.memoryLinks.linkType,
@@ -313,7 +314,7 @@ The new role enabled me to lead a team of engineers.`,
 
   // Port of test_causal_relationships.py::test_causal_relation_strength_values
   it("strength values are within [0.0, 1.0]", async () => {
-    const result = await t.hs.retain(
+    const _result = await t.hs.retain(
       bankId,
       `The stock market crash directly caused the company to lay off employees.
 The layoffs indirectly led to reduced consumer spending in the area.
@@ -322,7 +323,7 @@ Reduced spending somewhat affected local businesses.`,
     )
 
     // Query DB for stored weight values
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const dbLinks = hdb.db
       .select({
         linkType: hdb.schema.memoryLinks.linkType,

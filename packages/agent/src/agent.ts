@@ -140,7 +140,7 @@ export class Agent {
 		return this.followUpMode;
 	}
 
-	setTools(t: AgentTool<any>[]) {
+	setTools(t: AgentTool[]) {
 		this._state.tools = t;
 	}
 
@@ -443,7 +443,8 @@ export class Agent {
 					this.appendMessage(partial);
 				}
 			}
-		} catch (err: any) {
+		} catch (err: unknown) {
+			const errorMessage = err instanceof Error ? err.message : String(err);
 			const errorMsg: AgentMessage = {
 				role: "assistant",
 				content: [{ type: "text", text: "" }],
@@ -466,12 +467,12 @@ export class Agent {
 				stopReason: this.abortController?.signal.aborted
 					? "aborted"
 					: "error",
-				errorMessage: err?.message || String(err),
+				errorMessage,
 				timestamp: Date.now(),
 			};
 
 			this.appendMessage(errorMsg);
-			this._state.error = err?.message || String(err);
+			this._state.error = errorMessage;
 			this.emit({ type: "agent_end", messages: [errorMsg] });
 		} finally {
 			this._state.isStreaming = false;

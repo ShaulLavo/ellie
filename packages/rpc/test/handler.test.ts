@@ -18,7 +18,7 @@ const testRouter = createRouter()
 type TestRouterDef = typeof testRouter._def
 
 const handlers: ProcedureHandlers<TestRouterDef> = {
-  createBank: async (input) => ({ id: `bank-1`, name: (input as any)?.name }),
+  createBank: async (input) => ({ id: `bank-1`, name: (input as Record<string, unknown>)?.name }),
   listBanks: async () => [{ id: `bank-1`, name: `My Bank` }],
   getBank: async (_input, params) => ({ id: params.bankId, name: `Bank` }),
   deleteBank: async (_input, params) => {
@@ -27,7 +27,7 @@ const handlers: ProcedureHandlers<TestRouterDef> = {
   },
   recall: async (input, params) => ({
     bankId: params.bankId,
-    query: (input as any)?.query,
+    query: (input as Record<string, unknown>)?.query,
     results: [],
   }),
 }

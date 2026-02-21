@@ -117,16 +117,18 @@ export class JsonlEngine {
    * // Now createStream("/agent/chat-123") auto-enforces agentMessageSchema
    * ```
    */
-  registerRouter(router: { _def: Record<string, any> }): void {
+  registerRouter(router: { _def: Record<string, object> }): void {
     for (const [name, def] of Object.entries(router._def)) {
+      const entry = def as Record<string, unknown>
       // Skip procedure definitions (they have `method`)
-      if ("method" in def) continue
+      if ("method" in entry) continue
       // Stream defs have `path` and `collections`
-      if (!def.path || !def.collections) continue
+      if (!entry.path || !entry.collections) continue
 
       // Build merged schema from all collections
       const collectionSchemas: GenericSchema[] = []
-      for (const col of Object.values(def.collections) as any[]) {
+      const collections = entry.collections as Record<string, { schema?: GenericSchema }>
+      for (const col of Object.values(collections)) {
         if (col.schema) collectionSchemas.push(col.schema)
       }
 
@@ -141,7 +143,7 @@ export class JsonlEngine {
       this.registerSchema(name, mergedSchema)
 
       // Convert path pattern to regex: /agent/:chatId → ^/agent/[^/]+$
-      const regexStr = "^" + def.path.replace(/:[^/]+/g, "[^/]+") + "$"
+      const regexStr = "^" + (entry.path as string).replace(/:[^/]+/g, "[^/]+") + "$"
       this.schemaPatterns.push({ regex: new RegExp(regexStr), schemaKey: name })
     }
   }

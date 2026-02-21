@@ -77,7 +77,7 @@ describe("messageSchema", () => {
   })
 
   it("conforms to StandardSchemaV1", () => {
-    const schema = messageSchema as any
+    const schema = messageSchema as unknown as Record<string, Record<string, unknown>>
     expect(schema).toHaveProperty("~standard")
     expect(schema["~standard"].version).toBe(1)
     expect(schema["~standard"]).toHaveProperty("vendor")

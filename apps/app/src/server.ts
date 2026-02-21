@@ -5,7 +5,7 @@ import { JsonlEngine } from "@ellie/db";
 import { env } from "@ellie/env/server";
 import { handleAgentRequest } from "./routes/agent";
 import { AgentManager } from "./agent/manager";
-import { anthropicText } from "@tanstack/ai-anthropic";
+import { anthropicText, type AnthropicChatModel } from "@tanstack/ai-anthropic";
 import { appRouter } from "@ellie/router";
 
 const parsedUrl = new URL(env.API_BASE_URL);
@@ -26,7 +26,7 @@ export const ctx = createServerContext({ store: durableStore });
 // Initialized eagerly at startup. Requires ANTHROPIC_API_KEY in env.
 const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
   ? new AgentManager(durableStore, {
-      adapter: anthropicText(env.ANTHROPIC_MODEL as any),
+      adapter: anthropicText(env.ANTHROPIC_MODEL as AnthropicChatModel),
       systemPrompt: "You are a helpful assistant.",
     })
   : null;

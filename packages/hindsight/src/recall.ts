@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm"
+import { inArray } from "drizzle-orm"
 import type { HindsightDatabase } from "./db"
 import type { EmbeddingStore } from "./embedding"
 import type {

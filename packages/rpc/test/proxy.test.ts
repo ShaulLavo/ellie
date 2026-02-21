@@ -1,5 +1,5 @@
 import { describe, expect, it, mock, beforeEach } from "bun:test"
-import { fakeSchema, chatRouter, multiStreamRouter, procedureRouter, mixedRouter } from "./helpers"
+import { fakeSchema, chatRouter, procedureRouter, mixedRouter } from "./helpers"
 import { createRouter } from "../src/server/router"
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ describe(`createRpcClient`, () => {
 describe(`proxy method routing`, () => {
   it(`.get() calls manager.get with correct args`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     await rpc.chat.messages.get({ chatId: `abc` })
 
@@ -73,7 +73,7 @@ describe(`proxy method routing`, () => {
 
   it(`.subscribe() calls manager.subscribe with correct args`, () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     rpc.chat.messages.subscribe({ chatId: `abc` })
 
@@ -86,7 +86,7 @@ describe(`proxy method routing`, () => {
 
   it(`.insert() separates value from path params`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
     const value = { id: `1`, content: `hello` }
 
     await rpc.chat.messages.insert({ chatId: `abc`, value })
@@ -102,7 +102,7 @@ describe(`proxy method routing`, () => {
 
   it(`.update() separates value from path params`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
     const value = { id: `1`, content: `updated` }
 
     await rpc.chat.messages.update({ chatId: `abc`, value })
@@ -116,7 +116,7 @@ describe(`proxy method routing`, () => {
 
   it(`.delete() separates key from path params`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     await rpc.chat.messages.delete({ chatId: `abc`, key: `msg-1` })
 
@@ -129,7 +129,7 @@ describe(`proxy method routing`, () => {
 
   it(`.upsert() separates value from path params`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
     const value = { id: `1`, content: `upserted` }
 
     await rpc.chat.messages.upsert({ chatId: `abc`, value })
@@ -143,7 +143,7 @@ describe(`proxy method routing`, () => {
 
   it(`collection .clear() calls manager.clearStream`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     await rpc.chat.messages.clear({ chatId: `abc` })
 
@@ -155,7 +155,7 @@ describe(`proxy method routing`, () => {
 
   it(`stream-level .clear() calls manager.clearStream`, async () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     await rpc.chat.clear({ chatId: `abc` })
 
@@ -169,7 +169,7 @@ describe(`proxy method routing`, () => {
     const router = createRouter().stream(`settings`, `/settings`, {
       prefs: fakeSchema(),
     })
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     await rpc.settings.prefs.get()
 
@@ -183,14 +183,14 @@ describe(`proxy method routing`, () => {
 describe(`proxy error handling`, () => {
   it(`throws on unknown stream name`, () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     expect(() => rpc.nonexistent).toThrow(`Unknown name`)
   })
 
   it(`throws on unknown collection name`, () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     expect(() => rpc.chat.nonexistent).toThrow(`Unknown collection`)
   })
@@ -199,7 +199,7 @@ describe(`proxy error handling`, () => {
 describe(`introspection safety`, () => {
   it(`introspection keys return undefined without throwing`, () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     expect(rpc.then).toBeUndefined()
     expect(rpc.toJSON).toBeUndefined()
@@ -210,7 +210,7 @@ describe(`introspection safety`, () => {
 
   it(`symbol keys return undefined without throwing`, () => {
     const router = chatRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     expect(rpc[Symbol.toPrimitive]).toBeUndefined()
     expect(rpc[Symbol.iterator]).toBeUndefined()
@@ -220,14 +220,14 @@ describe(`introspection safety`, () => {
 describe(`procedure proxy`, () => {
   it(`procedure returns a callable function`, () => {
     const router = procedureRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     expect(typeof rpc.recall).toBe(`function`)
   })
 
   it(`calling a procedure invokes manager.call with correct args`, async () => {
     const router = procedureRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     await rpc.recall({ bankId: `b1`, input: { query: `hiking` } })
 
@@ -240,7 +240,7 @@ describe(`procedure proxy`, () => {
 
   it(`mixed router: stream access still works alongside procedures`, async () => {
     const router = mixedRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     // Procedure is callable
     expect(typeof rpc.recall).toBe(`function`)
@@ -257,7 +257,7 @@ describe(`procedure proxy`, () => {
 
   it(`introspection keys return undefined for procedure proxy`, () => {
     const router = procedureRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
+    const rpc = createRpcClient(router, { baseUrl: `http://localhost` })
 
     expect(rpc.then).toBeUndefined()
     expect(rpc[Symbol.toPrimitive]).toBeUndefined()

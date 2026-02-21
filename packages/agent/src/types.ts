@@ -108,7 +108,7 @@ export interface AgentState {
 	systemPrompt: string;
 	model: Model;
 	thinkingLevel: ThinkingLevel | "off";
-	tools: AgentTool<any>[];
+	tools: AgentTool[];
 	messages: AgentMessage[];
 	isStreaming: boolean;
 	streamMessage: AgentMessage | null;
@@ -118,7 +118,7 @@ export interface AgentState {
 export interface AgentContext {
 	systemPrompt: string;
 	messages: AgentMessage[];
-	tools?: AgentTool<any>[];
+	tools?: AgentTool[];
 }
 
 // ============================================================================

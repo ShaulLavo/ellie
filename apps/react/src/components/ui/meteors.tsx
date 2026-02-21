@@ -26,7 +26,7 @@ export const Meteors = ({
   )
 
   useEffect(() => {
-    const styles = [...new Array(number)].map(() => ({
+    const styles = Array.from({ length: number }).map(() => ({
       "--angle": -angle + "deg",
       top: "-5%",
       left: `calc(0% + ${Math.floor(Math.random() * window.innerWidth)}px)`,
@@ -40,7 +40,7 @@ export const Meteors = ({
 
   return (
     <>
-      {[...meteorStyles].map((style, idx) => (
+      {meteorStyles.map((style, idx) => (
         // Meteor Head
         <span
           key={idx}

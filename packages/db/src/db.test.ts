@@ -1354,11 +1354,11 @@ describe("Schema-enforced engine", () => {
     engine.registerSchema("event", eventSchema)
     const jsonSchema = engine.getJsonSchema("event")
     expect(jsonSchema).toBeDefined()
-    expect((jsonSchema as any).type).toBe("object")
-    expect((jsonSchema as any).properties).toHaveProperty("type")
-    expect((jsonSchema as any).properties).toHaveProperty("value")
-    expect((jsonSchema as any).required).toContain("type")
-    expect((jsonSchema as any).required).toContain("value")
+    expect((jsonSchema as Record<string, unknown>).type).toBe("object")
+    expect((jsonSchema as Record<string, unknown>).properties).toHaveProperty("type")
+    expect((jsonSchema as Record<string, unknown>).properties).toHaveProperty("value")
+    expect((jsonSchema as Record<string, unknown>).required).toContain("type")
+    expect((jsonSchema as Record<string, unknown>).required).toContain("value")
   })
 
   it("re-registration updates the JSON Schema", () => {
@@ -1371,7 +1371,7 @@ describe("Schema-enforced engine", () => {
     })
     engine.registerSchema("event", updatedSchema, 2)
 
-    const jsonSchema = engine.getJsonSchema("event") as any
+    const jsonSchema = engine.getJsonSchema("event") as Record<string, unknown>
     expect(jsonSchema.properties).toHaveProperty("extra")
   })
 
@@ -1479,7 +1479,7 @@ describe("Schema-enforced engine", () => {
     engine = new JsonlEngine(dbPath, logDir)
     const jsonSchema = engine.getJsonSchema("event")
     expect(jsonSchema).toBeDefined()
-    expect((jsonSchema as any).type).toBe("object")
+    expect((jsonSchema as Record<string, unknown>).type).toBe("object")
   })
 
   // -- typedLog with schemaKey (engine-level enforcement) -------------------
@@ -1627,7 +1627,7 @@ describe("Router-driven schema resolution", () => {
 
   it("registerRouter persists JSON Schema to registry", () => {
     engine.registerRouter(mockRouter)
-    const jsonSchema = engine.getJsonSchema("chat") as any
+    const jsonSchema = engine.getJsonSchema("chat") as Record<string, unknown>
     expect(jsonSchema).toBeDefined()
     expect(jsonSchema.type).toBe("object")
     expect(jsonSchema.properties).toHaveProperty("role")

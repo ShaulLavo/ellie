@@ -19,6 +19,17 @@ import { handleHindsightRequest } from "./routes"
 import { createRpcClient } from "@ellie/rpc/client"
 import { appRouter, type AppRouter } from "@ellie/router"
 import type { RpcClient } from "@ellie/rpc"
+import type {
+	Bank,
+	RetainResult,
+	RecallResult,
+	ReflectResult,
+	ListMemoryUnitsResult,
+	ListEntitiesResult,
+	BankStats,
+	DeleteMemoryUnitResult,
+	MemoryUnitDetail,
+} from "../types"
 
 // ── Test server setup ────────────────────────────────────────────────────
 
@@ -102,7 +113,7 @@ async function reflect(
 describe("Hindsight HTTP Server Integration", () => {
 	describe("Bank CRUD", () => {
 		it("creates a bank via POST /banks", async () => {
-			const bank = await createBank(uniqueName("create")) as any
+			const bank = await createBank(uniqueName("create")) as Bank
 			expect(bank.id).toBeDefined()
 			expect(typeof bank.id).toBe("string")
 			expect(bank.id.length).toBeGreaterThan(0)
@@ -114,7 +125,7 @@ describe("Hindsight HTTP Server Integration", () => {
 				description: "A test bank",
 				config: { extractionMode: "verbose" },
 				mission: "I am a test bank for integration testing.",
-			}) as any
+			}) as Bank
 			expect(bank.description).toBe("A test bank")
 			expect(bank.config.extractionMode).toBe("verbose")
 			expect(bank.mission).toBe(
@@ -125,7 +136,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		it("creates a bank with disposition traits", async () => {
 			const bank = await createBank(uniqueName("disposition"), {
 				disposition: { skepticism: 5, literalism: 1, empathy: 4 },
-			}) as any
+			}) as Bank
 			expect(bank.disposition.skepticism).toBe(5)
 			expect(bank.disposition.literalism).toBe(1)
 			expect(bank.disposition.empathy).toBe(4)
@@ -137,23 +148,23 @@ describe("Hindsight HTTP Server Integration", () => {
 			await createBank(name1)
 			await createBank(name2)
 
-			const banks = await rpc.listBanks({ input: undefined }) as any[]
+			const banks = await rpc.listBanks({ input: undefined }) as Bank[]
 			expect(Array.isArray(banks)).toBe(true)
-			const names = banks.map((b: any) => b.name)
+			const names = banks.map((b: Bank) => b.name)
 			expect(names).toContain(name1)
 			expect(names).toContain(name2)
 		})
 
 		it("each bank has .id field (not bank_id or agent_id)", async () => {
-			const bank = await createBank(uniqueName("id-field")) as any
+			const bank = await createBank(uniqueName("id-field")) as Bank
 			expect(bank).toHaveProperty("id")
 			expect(bank).not.toHaveProperty("bank_id")
 			expect(bank).not.toHaveProperty("agent_id")
 		})
 
 		it("gets a bank by ID via GET /banks/:bankId", async () => {
-			const created = await createBank(uniqueName("get-by-id")) as any
-			const found = await rpc.getBank({ bankId: created.id, input: undefined }) as any
+			const created = await createBank(uniqueName("get-by-id")) as Bank
+			const found = await rpc.getBank({ bankId: created.id, input: undefined }) as Bank
 			expect(found).not.toBeNull()
 			expect(found.id).toBe(created.id)
 			expect(found.name).toBe(created.name)
@@ -166,17 +177,17 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("updates a bank via PATCH /banks/:bankId", async () => {
-			const bank = await createBank(uniqueName("update")) as any
+			const bank = await createBank(uniqueName("update")) as Bank
 			const updated = await rpc.updateBank({
 				bankId: bank.id,
 				input: { name: "updated-name", mission: "Updated mission." },
-			}) as any
+			}) as Bank
 			expect(updated.name).toBe("updated-name")
 			expect(updated.mission).toBe("Updated mission.")
 		})
 
 		it("deletes a bank via DELETE /banks/:bankId", async () => {
-			const bank = await createBank(uniqueName("delete-me")) as any
+			const bank = await createBank(uniqueName("delete-me")) as Bank
 			await rpc.deleteBank({ bankId: bank.id, input: undefined })
 			// After delete, getting it should throw (404)
 			await expect(
@@ -202,7 +213,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		let bankId: string
 
 		beforeEach(async () => {
-			const bank = await createBank(uniqueName("retain")) as any
+			const bank = await createBank(uniqueName("retain")) as Bank
 			bankId = bank.id
 		})
 
@@ -216,7 +227,7 @@ describe("Hindsight HTTP Server Integration", () => {
 					},
 				],
 				consolidate: false,
-			}) as any
+			}) as RetainResult
 			expect(result.memories).toBeDefined()
 			expect(result.memories.length).toBeGreaterThan(0)
 			expect(result.memories[0]!.content).toBe("Peter loves hiking")
@@ -232,7 +243,7 @@ describe("Hindsight HTTP Server Integration", () => {
 					},
 				],
 				consolidate: false,
-			}) as any
+			}) as RetainResult
 			expect(result).toHaveProperty("memories")
 			expect(result).toHaveProperty("entities")
 			expect(result).toHaveProperty("links")
@@ -249,7 +260,7 @@ describe("Hindsight HTTP Server Integration", () => {
 					{ content: "Fact C", factType: "opinion" },
 				],
 				consolidate: false,
-			}) as any
+			}) as RetainResult
 			expect(result.memories.length).toBe(3)
 		})
 
@@ -258,7 +269,7 @@ describe("Hindsight HTTP Server Integration", () => {
 				bankId,
 				["First item", "Second item"],
 				{ consolidate: false },
-			) as any
+			) as RetainResult[]
 			expect(Array.isArray(results)).toBe(true)
 			expect(results.length).toBe(2)
 		})
@@ -282,7 +293,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		let bankId: string
 
 		beforeEach(async () => {
-			const bank = await createBank(uniqueName("recall")) as any
+			const bank = await createBank(uniqueName("recall")) as Bank
 			bankId = bank.id
 			await retain(bankId, "seed content", {
 				facts: [
@@ -300,7 +311,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("recalls memories via POST /banks/:bankId/recall", async () => {
-			const result = await recall(bankId, "hiking") as any
+			const result = await recall(bankId, "hiking") as RecallResult
 			expect(result).toHaveProperty("query")
 			expect(result.query).toBe("hiking")
 			expect(result).toHaveProperty("memories")
@@ -308,7 +319,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("returns scored memories with correct structure", async () => {
-			const result = await recall(bankId, "hiking") as any
+			const result = await recall(bankId, "hiking") as RecallResult
 			if (result.memories.length > 0) {
 				const first = result.memories[0]!
 				expect(first).toHaveProperty("memory")
@@ -321,12 +332,12 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("recall results have >= 0 items (lax assertion)", async () => {
-			const result = await recall(bankId, "anything") as any
+			const result = await recall(bankId, "anything") as RecallResult
 			expect(result.memories.length).toBeGreaterThanOrEqual(0)
 		})
 
 		it("respects limit option", async () => {
-			const directResult = await recall(bankId, "hiking") as any
+			const directResult = await recall(bankId, "hiking") as RecallResult
 			expect(directResult.memories.length).toBeGreaterThanOrEqual(0)
 		})
 
@@ -349,19 +360,19 @@ describe("Hindsight HTTP Server Integration", () => {
 		let bankId: string
 
 		beforeEach(async () => {
-			const bank = await createBank(uniqueName("reflect")) as any
+			const bank = await createBank(uniqueName("reflect")) as Bank
 			bankId = bank.id
 		})
 
 		it("reflects on a query and returns .answer (not .text)", async () => {
-			const result = await reflect(bankId, "What do you know?") as any
+			const result = await reflect(bankId, "What do you know?") as ReflectResult
 			expect(result).toHaveProperty("answer")
 			expect(result).not.toHaveProperty("text")
 			expect(typeof result.answer).toBe("string")
 		})
 
 		it("returns memories and observations arrays", async () => {
-			const result = await reflect(bankId, "What do you know?") as any
+			const result = await reflect(bankId, "What do you know?") as ReflectResult
 			expect(Array.isArray(result.memories)).toBe(true)
 			expect(Array.isArray(result.observations)).toBe(true)
 		})
@@ -370,7 +381,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			const result = await reflect(bankId, "Tell me everything", {
 				budget: "low",
 				saveObservations: false,
-			}) as any
+			}) as ReflectResult
 			expect(typeof result.answer).toBe("string")
 		})
 
@@ -378,7 +389,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			const result = await reflect(bankId, "Summarize", {
 				context: "This is a test context",
 				saveObservations: false,
-			}) as any
+			}) as ReflectResult
 			expect(typeof result.answer).toBe("string")
 		})
 	})
@@ -389,7 +400,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		let bankId: string
 
 		beforeEach(async () => {
-			const bank = await createBank(uniqueName("memory")) as any
+			const bank = await createBank(uniqueName("memory")) as Bank
 			bankId = bank.id
 			await retain(bankId, "seed", {
 				facts: [
@@ -410,7 +421,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			const result = await rpc.listMemoryUnits({
 				bankId,
 				input: {},
-			}) as any
+			}) as ListMemoryUnitsResult
 			expect(result).toHaveProperty("items")
 			expect(result).toHaveProperty("total")
 			expect(result).toHaveProperty("limit")
@@ -423,7 +434,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			const result = await rpc.listMemoryUnits({
 				bankId,
 				input: { limit: 1, offset: 0 },
-			}) as any
+			}) as ListMemoryUnitsResult
 			expect(result.items.length).toBe(1)
 			expect(result.total).toBeGreaterThan(1)
 		})
@@ -432,13 +443,13 @@ describe("Hindsight HTTP Server Integration", () => {
 			const list = await rpc.listMemoryUnits({
 				bankId,
 				input: {},
-			}) as any
+			}) as ListMemoryUnitsResult
 			const memoryId = list.items[0]!.id
 			const detail = await rpc.getMemoryUnit({
 				bankId,
 				memoryId,
 				input: undefined,
-			}) as any
+			}) as MemoryUnitDetail
 			expect(detail).not.toBeNull()
 			expect(detail.id).toBe(memoryId)
 		})
@@ -457,13 +468,13 @@ describe("Hindsight HTTP Server Integration", () => {
 			const list = await rpc.listMemoryUnits({
 				bankId,
 				input: {},
-			}) as any
+			}) as ListMemoryUnitsResult
 			const memoryId = list.items[0]!.id
 			const result = await rpc.deleteMemoryUnit({
 				bankId,
 				memoryId,
 				input: undefined,
-			}) as any
+			}) as DeleteMemoryUnitResult
 			expect(result.success).toBe(true)
 		})
 	})
@@ -474,7 +485,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		let bankId: string
 
 		beforeEach(async () => {
-			const bank = await createBank(uniqueName("entity")) as any
+			const bank = await createBank(uniqueName("entity")) as Bank
 			bankId = bank.id
 			await retain(bankId, "seed", {
 				facts: [
@@ -492,7 +503,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			const result = await rpc.listEntities({
 				bankId,
 				input: {},
-			}) as any
+			}) as ListEntitiesResult
 			expect(result).toHaveProperty("items")
 			expect(result).toHaveProperty("total")
 			expect(result).toHaveProperty("limit")
@@ -504,7 +515,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			const result = await rpc.listEntities({
 				bankId,
 				input: {},
-			}) as any
+			}) as ListEntitiesResult
 			if (result.items.length > 0) {
 				const entity = result.items[0]!
 				expect(entity).toHaveProperty("id")
@@ -528,11 +539,11 @@ describe("Hindsight HTTP Server Integration", () => {
 
 	describe("Bank Stats", () => {
 		it("returns stats via GET /banks/:bankId/stats", async () => {
-			const bank = await createBank(uniqueName("stats")) as any
+			const bank = await createBank(uniqueName("stats")) as Bank
 			const stats = await rpc.getBankStats({
 				bankId: bank.id,
 				input: undefined,
-			}) as any
+			}) as BankStats
 			expect(stats).toHaveProperty("bankId")
 			expect(stats.bankId).toBe(bank.id)
 			expect(stats).toHaveProperty("nodeCounts")
@@ -570,7 +581,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("returns 400 for missing required fields on retain", async () => {
-			const bank = await createBank(uniqueName("err")) as any
+			const bank = await createBank(uniqueName("err")) as Bank
 			const res = await fetch(
 				`${baseUrl}/banks/${bank.id}/retain`,
 				{
@@ -583,7 +594,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("returns 400 for missing required fields on recall", async () => {
-			const bank = await createBank(uniqueName("err2")) as any
+			const bank = await createBank(uniqueName("err2")) as Bank
 			const res = await fetch(
 				`${baseUrl}/banks/${bank.id}/recall`,
 				{
@@ -596,7 +607,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("returns 400 for missing required fields on reflect", async () => {
-			const bank = await createBank(uniqueName("err3")) as any
+			const bank = await createBank(uniqueName("err3")) as Bank
 			const res = await fetch(
 				`${baseUrl}/banks/${bank.id}/reflect`,
 				{
@@ -609,7 +620,7 @@ describe("Hindsight HTTP Server Integration", () => {
 		})
 
 		it("returns 400 for empty contents on retain-batch", async () => {
-			const bank = await createBank(uniqueName("err4")) as any
+			const bank = await createBank(uniqueName("err4")) as Bank
 			const res = await fetch(
 				`${baseUrl}/banks/${bank.id}/retain-batch`,
 				{
@@ -629,7 +640,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			// 1. Create bank
 			const bank = await createBank(uniqueName("workflow"), {
 				mission: "I help remember things.",
-			}) as any
+			}) as Bank
 			expect(bank.id).toBeDefined()
 			expect(bank.name).toContain("workflow")
 
@@ -643,7 +654,7 @@ describe("Hindsight HTTP Server Integration", () => {
 					},
 				],
 				consolidate: false,
-			}) as any
+			}) as RetainResult
 			expect(r1.memories.length).toBeGreaterThan(0)
 
 			const r2 = await retain(bank.id, "Alice reads sci-fi", {
@@ -655,7 +666,7 @@ describe("Hindsight HTTP Server Integration", () => {
 					},
 				],
 				consolidate: false,
-			}) as any
+			}) as RetainResult
 			expect(r2.memories.length).toBeGreaterThan(0)
 
 			const r3 = await retain(bank.id, "Bob is a chef", {
@@ -667,7 +678,7 @@ describe("Hindsight HTTP Server Integration", () => {
 					},
 				],
 				consolidate: false,
-			}) as any
+			}) as RetainResult
 			expect(r3.memories.length).toBeGreaterThan(0)
 
 			// 3. Retain batch
@@ -675,11 +686,11 @@ describe("Hindsight HTTP Server Integration", () => {
 				bank.id,
 				["Carol plays piano", "Dave enjoys swimming"],
 				{ consolidate: false },
-			) as any
+			) as RetainResult[]
 			expect(batchResults.length).toBe(2)
 
 			// 4. Recall
-			const recallResult = await recall(bank.id, "hobbies") as any
+			const recallResult = await recall(bank.id, "hobbies") as RecallResult
 			expect(recallResult.query).toBe("hobbies")
 			expect(Array.isArray(recallResult.memories)).toBe(true)
 			expect(recallResult.memories.length).toBeGreaterThanOrEqual(0)
@@ -689,17 +700,17 @@ describe("Hindsight HTTP Server Integration", () => {
 				bank.id,
 				"What hobbies do people have?",
 				{ budget: "low", saveObservations: false },
-			) as any
+			) as ReflectResult
 			expect(typeof reflectResult.answer).toBe("string")
 			expect(Array.isArray(reflectResult.memories)).toBe(true)
 			expect(Array.isArray(reflectResult.observations)).toBe(true)
 		})
 
 		it("create 2 banks → list → verify correct field names", async () => {
-			const bank1 = await createBank(uniqueName("multi-a")) as any
-			const bank2 = await createBank(uniqueName("multi-b")) as any
+			const bank1 = await createBank(uniqueName("multi-a")) as Bank
+			const bank2 = await createBank(uniqueName("multi-b")) as Bank
 
-			const banks = await rpc.listBanks({ input: undefined }) as any[]
+			const banks = await rpc.listBanks({ input: undefined }) as Bank[]
 			expect(banks.length).toBeGreaterThanOrEqual(2)
 
 			// Verify field names (the specific regression that Python PR #35 tests)
@@ -712,7 +723,7 @@ describe("Hindsight HTTP Server Integration", () => {
 			}
 
 			// Verify our banks are in the list
-			const ids = banks.map((b: any) => b.id)
+			const ids = banks.map((b: Bank) => b.id)
 			expect(ids).toContain(bank1.id)
 			expect(ids).toContain(bank2.id)
 		})

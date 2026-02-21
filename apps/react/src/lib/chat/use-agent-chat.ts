@@ -30,7 +30,7 @@ async function agentAction<T = void>(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error((data as any).error || `Request failed: ${endpoint}`)
+    throw new Error((data as Record<string, unknown>).error as string || `Request failed: ${endpoint}`)
   }
 
   const text = await res.text()

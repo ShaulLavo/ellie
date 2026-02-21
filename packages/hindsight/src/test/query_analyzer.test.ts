@@ -2,8 +2,7 @@
  * Core parity port for test_query_analyzer.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { describe, it, expect } from "bun:test"
 import { extractTemporalRange } from "../temporal"
 
 describe("Core parity: test_query_analyzer.py", () => {

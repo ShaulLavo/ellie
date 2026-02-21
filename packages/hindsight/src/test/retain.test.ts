@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import type { HindsightDatabase } from "../db"
 
 describe("retain", () => {
   let t: TestHindsight
@@ -292,7 +293,7 @@ describe("retain", () => {
       })
 
       const memoryIds = new Set(result.memories.map((memory) => memory.id))
-      const hdb = (t.hs as any).hdb
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
       const temporalLinks = hdb.db
         .select({
           sourceId: hdb.schema.memoryLinks.sourceId,
@@ -576,7 +577,7 @@ describe("retain", () => {
       const nearId = near.memories[0]!.id
       const floorId = floor.memories[0]!.id
 
-      const hdb = (t.hs as any).hdb
+      const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
       const rows = hdb.db
         .select({
           sourceId: hdb.schema.memoryLinks.sourceId,
@@ -836,7 +837,7 @@ describe("retain", () => {
       }
 
       // Query the entities table directly to check mention count
-      const result = await t.hs.recall(bankId, "Alice", {
+      const _result = await t.hs.recall(bankId, "Alice", {
         methods: ["graph"],
       })
       // Graph-only retrieval can be sparse depending on seed resolution;
@@ -1044,7 +1045,7 @@ describe("Core parity: test_retain.py", () => {
     t.cleanup()
   })
 
-  async function seedBase() {
+  async function _seedBase() {
     await t.hs.retain(bankId, "seed", {
       facts: [
         { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], occurredStart: Date.now() - 60 * 86_400_000 },

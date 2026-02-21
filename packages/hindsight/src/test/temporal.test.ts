@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { extractTemporalRange } from "../temporal"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import type { HindsightDatabase } from "../db"
 
 const REFERENCE = new Date("2025-01-15T12:00:00.000Z") // Wednesday
 
@@ -122,7 +123,7 @@ describe("temporal link behavior via retain pipeline", () => {
   })
 
   function getTemporalLinks(sourceId: string, targetId?: string): Array<{ source_id: string; target_id: string; weight: number }> {
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     if (targetId) {
       return hdb.sqlite
         .prepare(

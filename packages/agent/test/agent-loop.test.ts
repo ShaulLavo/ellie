@@ -168,7 +168,7 @@ describe("agentLoop", () => {
 		);
 		expect(msgEnd.length).toBe(1);
 
-		const assistantMsg = (msgEnd[0] as any).message as AssistantMessage;
+		const assistantMsg = (msgEnd[0] as { type: "message_end"; message: AssistantMessage }).message;
 		expect(assistantMsg.content[0]).toEqual({
 			type: "text",
 			text: "Hello!",
@@ -179,7 +179,7 @@ describe("agentLoop", () => {
 	});
 
 	test("tool call triggers execution and result events", async () => {
-		const calculatorTool: AgentTool<any> = {
+		const calculatorTool: AgentTool = {
 			name: "calculate",
 			description: "Calculate a math expression",
 			parameters: v.object({ expression: v.string() }),
@@ -192,7 +192,7 @@ describe("agentLoop", () => {
 
 		// First call returns tool call, second call returns text
 		let callCount = 0;
-		const streamFn: StreamFn = async function* (options) {
+		const streamFn: StreamFn = async function* (_options) {
 			callCount++;
 			if (callCount === 1) {
 				yield* toolCallResponseStream("tc_1", "calculate", {
@@ -289,7 +289,7 @@ describe("agentLoop", () => {
 
 	test("steering messages interrupt tool execution", async () => {
 		let toolExecutionCount = 0;
-		const slowTool: AgentTool<any> = {
+		const slowTool: AgentTool = {
 			name: "slow_task",
 			description: "A slow task",
 			parameters: v.object({ id: v.number() }),
@@ -527,7 +527,7 @@ describe("agentLoop", () => {
 			(e) => e.type === "message_end" && e.message.role === "assistant",
 		);
 		expect(assistantMsgs.length).toBe(1);
-		const msg = (assistantMsgs[0] as any).message as AssistantMessage;
+		const msg = (assistantMsgs[0] as { type: "message_end"; message: AssistantMessage }).message;
 		expect(msg.stopReason).toBe("error");
 		expect(msg.errorMessage).toBe("Rate limit exceeded");
 	});

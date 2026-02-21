@@ -90,9 +90,9 @@ export type StateSchema<T extends Record<string, CollectionDefinition>> = {
 /**
  * Definition for a single action that can be passed to createOptimisticAction
  */
-export interface ActionDefinition<TParams = any, TContext = any> {
+export interface ActionDefinition<TParams = unknown, TContext = unknown> {
   onMutate: (params: TParams) => void
-  mutationFn: (params: TParams, context: TContext) => Promise<any>
+  mutationFn: (params: TParams, context: TContext) => Promise<unknown>
 }
 
 /**
@@ -100,15 +100,15 @@ export interface ActionDefinition<TParams = any, TContext = any> {
  */
 export type ActionFactory<
   TDef extends StreamStateDefinition,
-  TActions extends Record<string, ActionDefinition<any>>,
+  TActions extends Record<string, ActionDefinition>,
 > = (context: { db: StreamDB<TDef>; stream: DurableStream }) => TActions
 
 /**
  * Map action definitions to callable action functions
  */
-export type ActionMap<TActions extends Record<string, ActionDefinition<any>>> =
+export type ActionMap<TActions extends Record<string, ActionDefinition>> =
   {
-    [K in keyof TActions]: ReturnType<typeof createOptimisticAction<any>>
+    [K in keyof TActions]: ReturnType<typeof createOptimisticAction<unknown>>
   }
 
 /**
@@ -116,7 +116,7 @@ export type ActionMap<TActions extends Record<string, ActionDefinition<any>>> =
  */
 export interface CreateStreamDBOptions<
   TDef extends StreamStateDefinition = StreamStateDefinition,
-  TActions extends Record<string, ActionDefinition<any>> = Record<
+  TActions extends Record<string, ActionDefinition> = Record<
     string,
     never
   >,
@@ -154,7 +154,7 @@ export type StreamDB<TDef extends StreamStateDefinition> = {
  */
 export type StreamDBWithActions<
   TDef extends StreamStateDefinition,
-  TActions extends Record<string, ActionDefinition<any>>,
+  TActions extends Record<string, ActionDefinition>,
 > = StreamDB<TDef> & {
   actions: ActionMap<TActions>
 }
@@ -296,7 +296,7 @@ class EventDispatcher {
     const value = { ...originalValue }
 
     // Set the primary key field on the value object from the event key
-    ;(value as any)[handler.primaryKey] = event.key
+    ;(value as Record<string, unknown>)[handler.primaryKey] = event.key
 
     // Begin transaction on first write to this handler
     if (!this.pendingHandlers.has(handler)) {
@@ -320,11 +320,7 @@ class EventDispatcher {
       keys?.delete(event.key)
     }
 
-    try {
-      handler.write(value, operation)
-    } catch (error) {
-      throw error
-    }
+    handler.write(value, operation)
   }
 
   /**
@@ -362,11 +358,7 @@ class EventDispatcher {
   markUpToDate(): void {
     // Commit all handlers that have pending writes
     for (const handler of this.pendingHandlers) {
-      try {
-        handler.commit()
-      } catch (error) {
-        throw error
-      }
+      handler.commit()
     }
     this.pendingHandlers.clear()
 
@@ -551,7 +543,7 @@ function createCollectionHelpers<T>(
       }
 
       // Derive key from value if not explicitly provided
-      const derived = (value as any)[primaryKey]
+      const derived = (value as Record<string, unknown>)[primaryKey]
       const finalKey =
         key ?? (derived != null && derived !== `` ? String(derived) : undefined)
       if (finalKey == null || finalKey === ``) {
@@ -587,7 +579,7 @@ function createCollectionHelpers<T>(
       }
 
       // Derive key from value if not explicitly provided
-      const derived = (value as any)[primaryKey]
+      const derived = (value as Record<string, unknown>)[primaryKey]
       const finalKey =
         key ?? (derived != null && derived !== `` ? String(derived) : undefined)
       if (finalKey == null || finalKey === ``) {
@@ -617,7 +609,7 @@ function createCollectionHelpers<T>(
 
       // Ensure we have either key or oldValue to derive the key from
       const finalKey =
-        key ?? (oldValue ? String((oldValue as any)[primaryKey]) : undefined)
+        key ?? (oldValue ? String((oldValue as Record<string, unknown>)[primaryKey]) : undefined)
       if (!finalKey) {
         throw new Error(
           `Cannot create ${eventType} delete event: must provide either 'key' or 'oldValue' with a ${primaryKey} field`
@@ -641,7 +633,7 @@ function createCollectionHelpers<T>(
       }
 
       // Derive key from value if not explicitly provided
-      const derived = (value as any)[primaryKey]
+      const derived = (value as Record<string, unknown>)[primaryKey]
       const finalKey =
         key ?? (derived != null && derived !== `` ? String(derived) : undefined)
       if (finalKey == null || finalKey === ``) {
@@ -688,9 +680,9 @@ export function createStateSchema<
   }
 
   // Enhance collections with helper methods
-  const enhancedCollections: any = {}
+  const enhancedCollections = {} as StateSchema<T>
   for (const [name, collectionDef] of Object.entries(collections)) {
-    enhancedCollections[name] = {
+    ;(enhancedCollections as Record<string, CollectionWithHelpers>)[name] = {
       ...collectionDef,
       ...createCollectionHelpers(
         collectionDef.type,
@@ -716,7 +708,7 @@ function createCollections(
     const collection = createCollection({
       id: `stream-db:${name}`,
       schema: definition.schema as StandardSchemaV1<object>,
-      getKey: (item: any) => String(item[definition.primaryKey]),
+      getKey: (item: object) => String((item as Record<string, unknown>)[definition.primaryKey]),
       sync: createStreamSyncConfig(
         definition.type,
         dispatcher,
@@ -822,7 +814,7 @@ function createConsumer(
       if (explicitlyClosed || abortController.signal.aborted) return
       try {
         await connect()
-      } catch (err) {
+      } catch {
         scheduleReconnect(attempt + 1)
       }
     }, delay)
@@ -851,7 +843,7 @@ function createConsumer(
  */
 function wrapActions<
   TDef extends StreamStateDefinition,
-  TActions extends Record<string, ActionDefinition<any>>,
+  TActions extends Record<string, ActionDefinition>,
 >(
   actionsFactory: ActionFactory<TDef, TActions>,
   db: StreamDB<TDef>,
@@ -898,7 +890,7 @@ function wrapActions<
  */
 export function createStreamDB<
   TDef extends StreamStateDefinition,
-  TActions extends Record<string, ActionDefinition<any>> = Record<
+  TActions extends Record<string, ActionDefinition> = Record<
     string,
     never
   >,
@@ -907,6 +899,10 @@ export function createStreamDB<
 ): TActions extends Record<string, never>
   ? StreamDB<TDef>
   : StreamDBWithActions<TDef, TActions> {
+  type ReturnType = TActions extends Record<string, never>
+    ? StreamDB<TDef>
+    : StreamDBWithActions<TDef, TActions>
+
   const { streamOptions, state, actions: actionsFactory } = options
 
   const stream = new DurableStreamClass(streamOptions)
@@ -933,8 +929,8 @@ export function createStreamDB<
     return {
       ...db,
       actions: wrapActions(actionsFactory, db, stream),
-    } as any
+    } as unknown as ReturnType
   }
 
-  return db as any
+  return db as unknown as ReturnType
 }

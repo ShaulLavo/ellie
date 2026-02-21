@@ -321,7 +321,7 @@ describe("reflect", () => {
       })
 
       // Default recall (no factTypes filter) includes all types
-      const allRecall = await t.hs.recall(bankId, "weather")
+      const _allRecall = await t.hs.recall(bankId, "weather")
 
       // Recall with only experience/world should exclude observations
       const rawRecall = await t.hs.recall(bankId, "weather", {

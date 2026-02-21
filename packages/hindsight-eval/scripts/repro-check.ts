@@ -11,7 +11,6 @@
 import { resolve, join } from "path"
 import { readFileSync, existsSync } from "fs"
 import { runBaseline } from "../src/runner"
-import { generateReport } from "../src/report"
 import type { EvalRunConfig, EvalReport } from "../src/types"
 
 const PKG_ROOT = resolve(import.meta.dir, "..")

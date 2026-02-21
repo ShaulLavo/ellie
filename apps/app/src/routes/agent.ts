@@ -60,9 +60,10 @@ async function handlePrompt(
 		const { runId } = await manager.prompt(chatId, body.message);
 
 		return Response.json({ runId, chatId, status: "started" });
-	} catch (err: any) {
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : "Failed to start prompt";
 		return Response.json(
-			{ error: err?.message || "Failed to start prompt" },
+			{ error: message },
 			{ status: 500 },
 		);
 	}
@@ -90,12 +91,13 @@ async function handleSteer(
 	try {
 		manager.steer(chatId, body.message);
 		return Response.json({ status: "queued" });
-	} catch (err: any) {
-		if (err?.message?.includes("No agent found")) {
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : "Failed to steer";
+		if (message.includes("No agent found")) {
 			return Response.json({ error: "Agent not found" }, { status: 404 });
 		}
 		return Response.json(
-			{ error: err?.message || "Failed to steer" },
+			{ error: message },
 			{ status: 500 },
 		);
 	}
@@ -108,12 +110,13 @@ async function handleAbort(
 	try {
 		manager.abort(chatId);
 		return Response.json({ status: "aborted" });
-	} catch (err: any) {
-		if (err?.message?.includes("No agent found")) {
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : "Failed to abort";
+		if (message.includes("No agent found")) {
 			return Response.json({ error: "Agent not found" }, { status: 404 });
 		}
 		return Response.json(
-			{ error: err?.message || "Failed to abort" },
+			{ error: message },
 			{ status: 500 },
 		);
 	}
@@ -126,9 +129,10 @@ async function handleHistory(
 	try {
 		const messages = manager.loadHistory(chatId);
 		return Response.json({ messages });
-	} catch (err: any) {
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : "Failed to load history";
 		return Response.json(
-			{ error: err?.message || "Failed to load history" },
+			{ error: message },
 			{ status: 500 },
 		);
 	}

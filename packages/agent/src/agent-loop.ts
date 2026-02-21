@@ -57,7 +57,7 @@ export function agentLoop(
 			}
 
 			await runLoop(currentContext, newMessages, config, signal, stream, emit, streamFn);
-		} catch (err) {
+		} catch {
 			emit({ type: "agent_end", messages: [] });
 			stream.end([]);
 		}
@@ -97,7 +97,7 @@ export function agentLoopContinue(
 			emit({ type: "turn_start" });
 
 			await runLoop(currentContext, newMessages, config, signal, stream, emit, streamFn);
-		} catch (err) {
+		} catch {
 			emit({ type: "agent_end", messages: [] });
 			stream.end([]);
 		}
@@ -126,9 +126,9 @@ function createEmitter(
 	return (event: AgentEvent) => {
 		stream.push(event);
 		try {
-			const result = config.onEvent?.(event);
-			if (result && typeof (result as any).catch === "function") {
-				(result as any).catch((err: unknown) => {
+			const result: unknown = config.onEvent?.(event);
+			if (result instanceof Promise) {
+				result.catch((err: unknown) => {
 					console.error("[agent-loop] async onEvent error:", err);
 				});
 			}
@@ -196,7 +196,7 @@ function createToolCallTracker(): ToolCallTracker {
  * - Returns text content for TanStack's conversation history
  */
 function wrapToolsForTanStack(
-	tools: AgentTool<any>[],
+	tools: AgentTool[],
 	tracker: ToolCallTracker,
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
@@ -440,7 +440,7 @@ async function runLoop(
  */
 async function executeToolCall(
 	toolCall: ToolCall,
-	tools: AgentTool<any>[],
+	tools: AgentTool[],
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
 ): Promise<ToolResultMessage[]> {
@@ -666,9 +666,9 @@ async function processAgentStream(
 				emittedStart = true;
 			}
 		}
-	} catch (err: any) {
+	} catch (err: unknown) {
 		partial.stopReason = signal?.aborted ? "aborted" : "error";
-		partial.errorMessage = err?.message || String(err);
+		partial.errorMessage = err instanceof Error ? err.message : String(err);
 	} finally {
 		cleanupAbortListener?.();
 	}

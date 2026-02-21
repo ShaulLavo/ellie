@@ -6,6 +6,7 @@ import {
 } from "@ellie/durable-streams/server"
 import { createRouter } from "../src/server/router"
 import { StreamManager } from "../src/client/manager"
+import type { StreamDef } from "../src/types"
 import { fakeSchema } from "./helpers"
 
 // ---------------------------------------------------------------------------
@@ -62,7 +63,7 @@ function uniqueParams() {
  */
 async function waitFor(
   manager: StreamManager,
-  streamDef: any,
+  streamDef: StreamDef,
   collection: string,
   params: Record<string, string>,
   predicate: (items: unknown[]) => boolean,
@@ -156,7 +157,7 @@ describe(`StreamManager`, () => {
       })
       const result = await waitFor(
         manager, chatStreamDef, `messages`, params,
-        (items) => items.length === 1 && (items[0] as any).content === `updated`
+        (items) => items.length === 1 && (items[0] as Record<string, unknown>).content === `updated`
       )
 
       expect(result).toEqual([updated])
@@ -204,7 +205,7 @@ describe(`StreamManager`, () => {
       })
       const afterUpdate = await waitFor(
         manager, chatStreamDef, `messages`, params,
-        (items) => items.length === 1 && (items[0] as any).content === `v2`
+        (items) => items.length === 1 && (items[0] as Record<string, unknown>).content === `v2`
       )
       expect(afterUpdate).toEqual([v2])
     })
@@ -517,7 +518,7 @@ describe(`StreamManager`, () => {
     it(`sends POST with JSON body`, async () => {
       const procManager = new StreamManager(procBaseUrl)
       const result = await procManager.call(
-        { path: `/banks/:bankId/recall`, input: {} as any, output: {} as any, method: `POST` },
+        { path: `/banks/:bankId/recall`, input: fakeSchema(), output: fakeSchema(), method: `POST` },
         { bankId: `b1`, input: { query: `hiking` } }
       )
 
@@ -527,7 +528,7 @@ describe(`StreamManager`, () => {
     it(`sends GET with query params`, async () => {
       const procManager = new StreamManager(procBaseUrl)
       const result = await procManager.call(
-        { path: `/banks`, input: {} as any, output: {} as any, method: `GET` },
+        { path: `/banks`, input: fakeSchema(), output: fakeSchema(), method: `GET` },
         { input: {} }
       )
 
@@ -537,7 +538,7 @@ describe(`StreamManager`, () => {
     it(`handles 204 No Content`, async () => {
       const procManager = new StreamManager(procBaseUrl)
       const result = await procManager.call(
-        { path: `/banks/:bankId`, input: {} as any, output: {} as any, method: `DELETE` },
+        { path: `/banks/:bankId`, input: fakeSchema(), output: fakeSchema(), method: `DELETE` },
         { bankId: `b1`, input: {} }
       )
 
@@ -548,7 +549,7 @@ describe(`StreamManager`, () => {
       const procManager = new StreamManager(procBaseUrl)
       await expect(
         procManager.call(
-          { path: `/error`, input: {} as any, output: {} as any, method: `POST` },
+          { path: `/error`, input: fakeSchema(), output: fakeSchema(), method: `POST` },
           { input: {} }
         )
       ).rejects.toThrow(`500`)

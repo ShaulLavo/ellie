@@ -120,7 +120,7 @@ export function useStream<
       if (!collection) return null
       const query = q.from({ items: collection })
       if (orderByField) {
-        return query.orderBy(({ items }) => (items as any)[orderByField], orderByDirection)
+        return query.orderBy(({ items }) => (items as Record<string, unknown>)[orderByField], orderByDirection)
       }
       return query
     },

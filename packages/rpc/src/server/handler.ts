@@ -19,7 +19,7 @@ export type ProcedureHandler<TInput = unknown, TOutput = unknown> = (
  */
 export type ProcedureHandlers<T extends RouterDef> = {
   [K in keyof T as T[K] extends ProcedureDef ? K : never]: T[K] extends ProcedureDef
-    ? ProcedureHandler<any, any>
+    ? ProcedureHandler
     : never
 }
 

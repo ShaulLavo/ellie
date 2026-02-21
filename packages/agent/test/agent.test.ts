@@ -90,7 +90,7 @@ describe("Agent", () => {
 
 		const agent = new Agent({
 			adapter: mockAdapter,
-			streamFn: async function* (options) {
+			streamFn: async function* (_options) {
 				yield {
 					type: "RUN_STARTED",
 					runId: "r1",

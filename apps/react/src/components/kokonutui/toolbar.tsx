@@ -19,7 +19,7 @@ import PaintIcon from "@/components/ui/paint-icon";
 import SlidersHorizontalIcon from "@/components/ui/sliders-horizontal-icon";
 import UserIcon from "@/components/ui/user-icon";
 import { PencilSimple, ShareNetwork } from "@phosphor-icons/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, type Variants, type Transition } from "motion/react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -153,7 +153,7 @@ export function Toolbar({
               exit="exit"
               initial="initial"
               transition={{ duration: 0.3 }}
-              variants={notificationVariants as any}
+              variants={notificationVariants as Variants}
             >
               <div className="rounded-full bg-primary px-3 py-1 text-primary-foreground text-xs">
                 {
@@ -167,7 +167,7 @@ export function Toolbar({
                 className="-bottom-1 absolute left-1/2 h-[2px] w-full origin-left bg-primary"
                 exit="exit"
                 initial="initial"
-                variants={lineVariants as any}
+                variants={lineVariants as Variants}
               />
             </motion.div>
           )}
@@ -188,8 +188,8 @@ export function Toolbar({
               initial={false}
               key={item.id}
               onClick={() => handleItemClick(item.id)}
-              transition={transition as any}
-              variants={buttonVariants as any}
+              transition={transition as Transition}
+              variants={buttonVariants as Variants}
             >
               <item.icon
                 className={cn(selected === item.id && "text-white")}
@@ -202,8 +202,8 @@ export function Toolbar({
                     className="overflow-hidden"
                     exit="exit"
                     initial="initial"
-                    transition={transition as any}
-                    variants={spanVariants as any}
+                    transition={transition as Transition}
+                    variants={spanVariants as Variants}
                   >
                     {item.title}
                   </motion.span>

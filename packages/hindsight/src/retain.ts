@@ -361,8 +361,8 @@ function mergeMetadata(
 ): Record<string, unknown> | null {
   if (!base && !extra) return null
   return {
-    ...(base ?? {}),
-    ...(extra ?? {}),
+    ...base,
+    ...extra,
   }
 }
 

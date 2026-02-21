@@ -11,8 +11,8 @@ import type { CollectionDef, ProcedureDef, Router, RouterDef, StreamDef } from "
  * - Or an object with { schema, type?, primaryKey? } for overrides
  */
 type CollectionInput =
-  | StandardSchemaV1<any>
-  | { schema: StandardSchemaV1<any>; type?: string; primaryKey?: string }
+  | StandardSchemaV1
+  | { schema: StandardSchemaV1; type?: string; primaryKey?: string }
 
 /** Normalize a CollectionInput to a CollectionDef */
 function toCollectionDef(
@@ -41,9 +41,9 @@ function toCollectionDef(
  * Objects with { schema } → CollectionDef<TSchema, string, string>
  */
 type NormalizeCollections<T extends Record<string, CollectionInput>> = {
-  [K in keyof T]: T[K] extends StandardSchemaV1<any>
+  [K in keyof T]: T[K] extends StandardSchemaV1
     ? CollectionDef<T[K], string, string>
-    : T[K] extends { schema: infer S extends StandardSchemaV1<any> }
+    : T[K] extends { schema: infer S extends StandardSchemaV1 }
       ? CollectionDef<S, string, string>
       : never
 }

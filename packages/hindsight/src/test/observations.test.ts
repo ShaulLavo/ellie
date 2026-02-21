@@ -58,7 +58,7 @@ describe("Entity extraction on retain", () => {
     })
 
     // Peter should now have mentionCount >= 2
-    const hdb = (t.hs as any).hdb as HindsightDatabase
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const peter = hdb.db
       .select()
       .from(hdb.schema.entities)
@@ -132,7 +132,7 @@ describe("Entity mention ranking (TDD targets)", () => {
     })
 
     // Query entities via DB to check mention counts
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const entities = db.db
       .select({
         name: db.schema.entities.name,
@@ -142,8 +142,8 @@ describe("Entity mention ranking (TDD targets)", () => {
       .where((await import("drizzle-orm")).eq(db.schema.entities.bankId, bankId))
       .all()
 
-    const alice = entities.find((e: any) => e.name === "Alice")
-    const bob = entities.find((e: any) => e.name === "Bob")
+    const alice = entities.find((e: { name: string; mentionCount: number }) => e.name === "Alice")
+    const bob = entities.find((e: { name: string; mentionCount: number }) => e.name === "Bob")
     expect(alice).toBeDefined()
     expect(bob).toBeDefined()
     expect(alice!.mentionCount).toBeGreaterThan(bob!.mentionCount)
@@ -160,7 +160,7 @@ describe("Entity mention ranking (TDD targets)", () => {
       dedupThreshold: 0,
     })
 
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const { desc } = await import("drizzle-orm")
     const entities = db.db
       .select({
@@ -188,7 +188,7 @@ describe("Entity mention ranking (TDD targets)", () => {
       consolidate: false,
     })
 
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const { eq, and } = await import("drizzle-orm")
     const bank1Alice = db.db
       .select({ mentionCount: db.schema.entities.mentionCount })
@@ -233,7 +233,7 @@ describe("Entity mention ranking (TDD targets)", () => {
       dedupThreshold: 0,
     })
 
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const { eq, desc } = await import("drizzle-orm")
     const entities = db.db
       .select({
@@ -264,7 +264,7 @@ describe("Entity mention ranking (TDD targets)", () => {
       })
     }
 
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const { eq, and } = await import("drizzle-orm")
     const shaul = db.db
       .select({
@@ -360,7 +360,7 @@ describe("Entity state tracking (TDD targets)", () => {
     })
     const after = Date.now()
 
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const { eq, and } = await import("drizzle-orm")
     const alice = db.db
       .select({
@@ -386,7 +386,7 @@ describe("Entity state tracking (TDD targets)", () => {
       consolidate: false,
     })
 
-    const db = (t.hs as any).hdb
+    const db = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const { eq, and } = await import("drizzle-orm")
     const first = db.db
       .select({ lastUpdated: db.schema.entities.lastUpdated })
@@ -601,7 +601,7 @@ describe("Core parity: test_observations.py", () => {
     t.cleanup()
   })
 
-  async function seedBase() {
+  async function _seedBase() {
     await t.hs.retain(bankId, "seed", {
       facts: [
         { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], occurredStart: Date.now() - 60 * 86_400_000 },

@@ -5,14 +5,14 @@ import { createRouter } from "../src/server/router"
  * Minimal fake schema conforming to StandardSchemaV1.
  * Only needs `~standard` property for the router's runtime check.
  */
-export function fakeSchema(): StandardSchemaV1<any> {
+export function fakeSchema(): StandardSchemaV1 {
   return {
     "~standard": {
       version: 1,
       vendor: `test`,
       validate: (value: unknown) => ({ value }),
     },
-  } as StandardSchemaV1<any>
+  } as StandardSchemaV1
 }
 
 /** Single-stream router: chat with messages collection */
