@@ -42,6 +42,9 @@ yarn-error.log*
 # Data directory (JSONL logs, SQLite stores)
 data/
 
+# Credentials
+.credentials.json
+
 # Misc
 .DS_Store
 *.pem
