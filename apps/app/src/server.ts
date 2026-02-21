@@ -53,7 +53,7 @@ async function fetch(req: Request): Promise<Response> {
 
   // Status endpoint — connected client count
   if (path === "/api/status" && req.method === "GET") {
-    const response = Response.json({ connectedClients: ctx.activeSSEResponses.size });
+    const response = Response.json({ connectedClients: ctx.activeSSEResponses.size + ctx.activeLongPollRequests });
     logRequest(req.method, path, response.status);
     return response;
   }
