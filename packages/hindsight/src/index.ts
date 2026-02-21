@@ -91,3 +91,4 @@ export type {
 } from "./types"
 
 export * as schema from "./schema"
+export * as schemas from "./schemas"

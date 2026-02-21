@@ -46,9 +46,6 @@ data/
 .DS_Store
 *.pem
 
-# Credentials
-.credentials.json
-
 # Tailwind CLI output
 apps/react/src/output.css
 

@@ -185,14 +185,13 @@ export function createFetchWithBackoff(
 const NO_BODY_STATUS_CODES = [201, 204, 205]
 
 /**
- * Creates a fetch client that drains response bodies to release connections.
+ * Creates a fetch client that ensures the response body is fully consumed.
  * This prevents issues with connection pooling when bodies aren't read.
  *
- * Only used for control-plane operations (head/create/delete/close/append)
- * where callers read headers but never the body.
+ * Uses arrayBuffer() instead of text() to preserve binary data integrity.
  *
  * @param fetchClient - The base fetch client to wrap
- * @returns A fetch function that drains response bodies for connection pool health
+ * @returns A fetch function that consumes response bodies
  */
 export function createFetchWithConsumedBody(
   fetchClient: typeof fetch
@@ -206,9 +205,13 @@ export function createFetchWithConsumedBody(
         return res
       }
 
-      // Drain the body to release the connection back to the pool.
-      // All callers only read headers from success responses — the body is unused.
-      await res.arrayBuffer()
+      // Read body as arrayBuffer to preserve binary data integrity
+      const buf = await res.arrayBuffer()
+      return new Response(buf, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: res.headers,
+      })
     } catch (err) {
       if (args[1]?.signal?.aborted) {
         throw new FetchBackoffAbortError()
@@ -224,11 +227,9 @@ export function createFetchWithConsumedBody(
           ? err.message
           : typeof err === `string`
             ? err
-            : `failed to drain body`
+            : `failed to read body`
       )
     }
-
-    return res
   }
 }
 

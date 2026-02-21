@@ -1,7 +1,6 @@
 import { formatInternalOffset } from "../../store"
 import { StoreError, STORE_ERROR_STATUS } from "../../errors"
-import type { ProducerValidationResult } from "../../types"
-import type { ServerContext, IStreamStore } from "../lib/context"
+import type { ServerContext } from "../lib/context"
 import {
   STREAM_OFFSET_HEADER,
   STREAM_SEQ_HEADER,
@@ -12,80 +11,6 @@ import {
   PRODUCER_EXPECTED_SEQ_HEADER,
   PRODUCER_RECEIVED_SEQ_HEADER,
 } from "../lib/constants"
-
-/**
- * Maps a non-accepted ProducerValidationResult to its HTTP error response.
- * Returns null for `accepted` status (caller should handle the success path).
- */
-function producerErrorResponse(
-  producerResult: ProducerValidationResult,
-  producerEpoch: number,
-  opts: {
-    store: IStreamStore
-    path: string
-    streamClosed?: boolean
-    /** Extra headers merged into the duplicate-status 204 response */
-    duplicateHeaders?: Record<string, string>
-  }
-): Response | null {
-  switch (producerResult.status) {
-    case `accepted`:
-      return null
-
-    case `duplicate`: {
-      const dupHeaders: Record<string, string> = {
-        [PRODUCER_EPOCH_HEADER]: producerEpoch.toString(),
-        [PRODUCER_SEQ_HEADER]: producerResult.lastSeq.toString(),
-      }
-      if (opts.streamClosed) {
-        dupHeaders[STREAM_CLOSED_HEADER] = `true`
-      }
-      Object.assign(dupHeaders, opts.duplicateHeaders)
-      return new Response(null, { status: 204, headers: dupHeaders })
-    }
-
-    case `stale_epoch`:
-      return new Response(`Stale producer epoch`, {
-        status: 403,
-        headers: {
-          "content-type": `text/plain`,
-          [PRODUCER_EPOCH_HEADER]: producerResult.currentEpoch.toString(),
-        },
-      })
-
-    case `invalid_epoch_seq`:
-      return new Response(`New epoch must start with sequence 0`, {
-        status: 400,
-        headers: { "content-type": `text/plain` },
-      })
-
-    case `sequence_gap`:
-      return new Response(`Producer sequence gap`, {
-        status: 409,
-        headers: {
-          "content-type": `text/plain`,
-          [PRODUCER_EXPECTED_SEQ_HEADER]:
-            producerResult.expectedSeq.toString(),
-          [PRODUCER_RECEIVED_SEQ_HEADER]:
-            producerResult.receivedSeq.toString(),
-        },
-      })
-
-    case `stream_closed`: {
-      const stream = opts.store.get(opts.path)
-      return new Response(`Stream is closed`, {
-        status: 409,
-        headers: {
-          "content-type": `text/plain`,
-          [STREAM_CLOSED_HEADER]: `true`,
-          [STREAM_OFFSET_HEADER]: stream
-            ? formatInternalOffset(stream.currentOffset)
-            : ``,
-        },
-      })
-    }
-  }
-}
 
 export async function handleAppend(
   ctx: ServerContext,
@@ -180,20 +105,60 @@ export async function handleAppend(
         })
       }
 
-      if (closeResult.producerResult) {
-        const errorResp = producerErrorResponse(
-          closeResult.producerResult,
-          producerEpoch!,
-          {
-            store: ctx.store,
-            path,
-            streamClosed: true,
-            duplicateHeaders: {
-              [STREAM_OFFSET_HEADER]: closeResult.finalOffset,
-            },
-          }
-        )
-        if (errorResp) return errorResp
+      if (closeResult.producerResult?.status === `duplicate`) {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            [STREAM_OFFSET_HEADER]: closeResult.finalOffset,
+            [STREAM_CLOSED_HEADER]: `true`,
+            [PRODUCER_EPOCH_HEADER]: producerEpoch!.toString(),
+            [PRODUCER_SEQ_HEADER]:
+              closeResult.producerResult.lastSeq.toString(),
+          },
+        })
+      }
+
+      if (closeResult.producerResult?.status === `stale_epoch`) {
+        return new Response(`Stale producer epoch`, {
+          status: 403,
+          headers: {
+            "content-type": `text/plain`,
+            [PRODUCER_EPOCH_HEADER]:
+              closeResult.producerResult.currentEpoch.toString(),
+          },
+        })
+      }
+
+      if (closeResult.producerResult?.status === `invalid_epoch_seq`) {
+        return new Response(`New epoch must start with sequence 0`, {
+          status: 400,
+          headers: { "content-type": `text/plain` },
+        })
+      }
+
+      if (closeResult.producerResult?.status === `sequence_gap`) {
+        return new Response(`Producer sequence gap`, {
+          status: 409,
+          headers: {
+            "content-type": `text/plain`,
+            [PRODUCER_EXPECTED_SEQ_HEADER]:
+              closeResult.producerResult.expectedSeq.toString(),
+            [PRODUCER_RECEIVED_SEQ_HEADER]:
+              closeResult.producerResult.receivedSeq.toString(),
+          },
+        })
+      }
+
+      if (closeResult.producerResult?.status === `stream_closed`) {
+        const stream = ctx.store.get(path)
+        return new Response(`Stream is closed`, {
+          status: 409,
+          headers: {
+            "content-type": `text/plain`,
+            [STREAM_CLOSED_HEADER]: `true`,
+            [STREAM_OFFSET_HEADER]: stream ? formatInternalOffset(stream.currentOffset) : ``,
+          },
+        })
       }
 
       return new Response(null, {
@@ -269,31 +234,28 @@ export async function handleAppend(
 
   const { message, producerResult, streamClosed } = result
 
-  // Handle append to closed stream (no message produced)
+  // Handle append to closed stream
   if (streamClosed && !message) {
-    const stream = ctx.store.get(path)
-    const closedOffset = stream ? formatInternalOffset(stream.currentOffset) : ``
-
-    if (producerResult) {
-      const errorResp = producerErrorResponse(
-        producerResult,
-        producerEpoch!,
-        {
-          store: ctx.store,
-          path,
-          streamClosed: true,
-          duplicateHeaders: { [STREAM_OFFSET_HEADER]: closedOffset },
-        }
-      )
-      if (errorResp) return errorResp
+    if (producerResult?.status === `duplicate`) {
+      const stream = ctx.store.get(path)
+      return new Response(null, {
+        status: 204,
+        headers: {
+          [STREAM_OFFSET_HEADER]: stream ? formatInternalOffset(stream.currentOffset) : ``,
+          [STREAM_CLOSED_HEADER]: `true`,
+          [PRODUCER_EPOCH_HEADER]: producerEpoch!.toString(),
+          [PRODUCER_SEQ_HEADER]: producerResult.lastSeq.toString(),
+        },
+      })
     }
 
+    const closedStream = ctx.store.get(path)
     return new Response(`Stream is closed`, {
       status: 409,
       headers: {
         "content-type": `text/plain`,
         [STREAM_CLOSED_HEADER]: `true`,
-        [STREAM_OFFSET_HEADER]: closedOffset,
+        [STREAM_OFFSET_HEADER]: closedStream ? formatInternalOffset(closedStream.currentOffset) : ``,
       },
     })
   }
@@ -316,9 +278,47 @@ export async function handleAppend(
   }
 
   // Handle producer validation failures
-  return producerErrorResponse(
-    producerResult,
-    producerEpoch!,
-    { store: ctx.store, path, streamClosed }
-  ) ?? new Response(null, { status: 204 })
+  switch (producerResult.status) {
+    case `duplicate`: {
+      const dupHeaders: Record<string, string> = {
+        [PRODUCER_EPOCH_HEADER]: producerEpoch!.toString(),
+        [PRODUCER_SEQ_HEADER]: producerResult.lastSeq.toString(),
+      }
+      if (streamClosed) {
+        dupHeaders[STREAM_CLOSED_HEADER] = `true`
+      }
+      return new Response(null, { status: 204, headers: dupHeaders })
+    }
+
+    case `stale_epoch`:
+      return new Response(`Stale producer epoch`, {
+        status: 403,
+        headers: {
+          "content-type": `text/plain`,
+          [PRODUCER_EPOCH_HEADER]:
+            producerResult.currentEpoch.toString(),
+        },
+      })
+
+    case `invalid_epoch_seq`:
+      return new Response(`New epoch must start with sequence 0`, {
+        status: 400,
+        headers: { "content-type": `text/plain` },
+      })
+
+    case `sequence_gap`:
+      return new Response(`Producer sequence gap`, {
+        status: 409,
+        headers: {
+          "content-type": `text/plain`,
+          [PRODUCER_EXPECTED_SEQ_HEADER]:
+            producerResult.expectedSeq.toString(),
+          [PRODUCER_RECEIVED_SEQ_HEADER]:
+            producerResult.receivedSeq.toString(),
+        },
+      })
+  }
+
+  // Unreachable but TypeScript doesn't know the switch is exhaustive on the union
+  return new Response(null, { status: 204 })
 }

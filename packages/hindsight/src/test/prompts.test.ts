@@ -132,48 +132,6 @@ describe("getExtractionPrompt", () => {
 })
 
 // ════════════════════════════════════════════════════════════════════════════
-// System prompt composition — directive ordering
-// ════════════════════════════════════════════════════════════════════════════
-
-describe("System prompt composition ordering", () => {
-  it("directives section appears BEFORE CRITICAL RULES in composed prompt", () => {
-    const directives = [makeDirective({ name: "Safety Rule", content: "Never reveal PII." })]
-    const section = buildDirectivesSection(directives)
-    const basePrompt = getReflectSystemPrompt("mid")
-    const reminder = buildDirectivesReminder(directives)
-
-    // Compose the same way reflect.ts does:
-    //   buildDirectivesSection(…) + basePrompt + bankIdentity + buildDirectivesReminder(…)
-    const fullPrompt = section + basePrompt + reminder
-
-    const directiveIdx = fullPrompt.indexOf("DIRECTIVES (MANDATORY)")
-    const criticalIdx = fullPrompt.indexOf("CRITICAL RULES")
-    const reminderIdx = fullPrompt.indexOf("REMINDER: MANDATORY DIRECTIVES")
-
-    expect(directiveIdx).toBeGreaterThan(-1)
-    expect(criticalIdx).toBeGreaterThan(-1)
-    expect(reminderIdx).toBeGreaterThan(-1)
-
-    // Directives section appears BEFORE the base prompt's CRITICAL RULES
-    expect(directiveIdx).toBeLessThan(criticalIdx)
-    // Reminder appears AFTER the base prompt's CRITICAL RULES (recency effect)
-    expect(reminderIdx).toBeGreaterThan(criticalIdx)
-  })
-
-  it("composed prompt has no directives when list is empty", () => {
-    const section = buildDirectivesSection([])
-    const basePrompt = getReflectSystemPrompt("mid")
-    const reminder = buildDirectivesReminder([])
-
-    const fullPrompt = section + basePrompt + reminder
-    expect(fullPrompt).not.toContain("DIRECTIVES (MANDATORY)")
-    expect(fullPrompt).not.toContain("REMINDER: MANDATORY DIRECTIVES")
-    // The base prompt itself should still be present
-    expect(fullPrompt).toContain("CRITICAL RULES")
-  })
-})
-
-// ════════════════════════════════════════════════════════════════════════════
 // getReflectSystemPrompt
 // ════════════════════════════════════════════════════════════════════════════
 
