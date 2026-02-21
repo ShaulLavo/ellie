@@ -224,6 +224,9 @@ export interface RetainBatchItem {
   metadata?: Record<string, unknown>
 }
 
+/** Recall scoring mode: "hybrid" (default, unchanged) or "cognitive" (ACT-R inspired). */
+export type RecallMode = "hybrid" | "cognitive"
+
 /** Options for recall() */
 export interface RecallOptions {
   /** Maximum results to return. Default: 10 */
@@ -254,6 +257,10 @@ export interface RecallOptions {
   maxChunkTokens?: number
   /** Include detailed retrieval/ranking trace. */
   enableTrace?: boolean
+  /** Scoring mode. Default: "hybrid" (unchanged behavior). "cognitive" uses ACT-R scoring. */
+  mode?: RecallMode
+  /** Session ID for working-memory boost effects (only used in "cognitive" mode). */
+  sessionId?: string
 }
 
 /** Options for reflect() */

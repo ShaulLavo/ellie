@@ -194,6 +194,7 @@ Lower leads resulted in decreased sales.`
   }, 60_000)
 
   // Port of test_causal_relationships.py::test_complex_causal_web
+  // NOTE: Flaky — LLM extraction may return 3 facts instead of >= 4 depending on model behavior
   it("extracts complex multi-node causal graph", async () => {
     const result = await t.hs.retain(
       bankId,

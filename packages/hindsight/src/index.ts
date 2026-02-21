@@ -28,6 +28,7 @@ export type {
   RetainBatchItem,
   RetainResult,
   RetainBatchResult,
+  RecallMode,
   RecallOptions,
   RecallResult,
   ReflectOptions,

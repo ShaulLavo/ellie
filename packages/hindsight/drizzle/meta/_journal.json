@@ -8,6 +8,13 @@
       "when": 1771655648971,
       "tag": "0000_orange_quicksilver",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1771742048971,
+      "tag": "0001_cognitive_access_metadata",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { resolveModelRuntime } from "./default-models"
 import { EmbeddingStore } from "./embedding"
 import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain"
 import { recall as recallImpl } from "./recall"
+import { WorkingMemoryStore } from "./working-memory"
 import { reflect as reflectImpl } from "./reflect"
 import { consolidate as consolidateImpl } from "./consolidation"
 import {
@@ -117,6 +118,7 @@ export class Hindsight {
   private readonly instanceDefaults: BankConfig | undefined
   private readonly onTrace: TraceCallback | undefined
   private readonly extensions: HindsightExtensions | undefined
+  private readonly workingMemory = new WorkingMemoryStore()
   private readonly activeOperationTasks = new Map<string, Promise<void>>()
   private readonly cancelledOperations = new Set<string>()
 
@@ -566,7 +568,7 @@ Instructions:
         hasOptions: Boolean(options),
         maxTokens: options?.maxTokens ?? null,
       },
-      () => recallImpl(this.hdb, this.memoryVec, bankId, query, options, this.rerank),
+      () => recallImpl(this.hdb, this.memoryVec, bankId, query, options, this.rerank, this.workingMemory),
       (r) => ({
         memoriesReturned: r.memories.length,
         limit: options?.limit ?? 10,
