@@ -222,7 +222,6 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
 
       {/* ── Messages ───────────────────────────────────── */}
       <ChatMessages ref={messagesRef} onCopy={handleMessagesCopy}>
-        {/* rendered bottom-to-top because of flex-col-reverse */}
         {error && (
           <p className="mx-4 my-2 text-xs text-destructive">
             {error.message}
