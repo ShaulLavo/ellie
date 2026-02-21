@@ -341,6 +341,11 @@ export interface RecallTraceCandidate {
   temporal: number
   recency: number
   combinedScore: number
+  // Cognitive mode fields (present when mode="cognitive")
+  probeActivation?: number
+  baseLevelActivation?: number
+  spreadingActivation?: number
+  wmBoost?: number
 }
 
 export interface RecallTrace {

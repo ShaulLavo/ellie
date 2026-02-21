@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm"
+import { inArray, sql } from "drizzle-orm"
 import type { HindsightDatabase } from "./db"
 import type { EmbeddingStore } from "./embedding"
 import type {
@@ -25,6 +25,7 @@ import { reciprocalRankFusion } from "./fusion"
 import { rowToMemoryUnit, rowToEntity } from "./retain"
 import { extractTemporalRange } from "./temporal"
 import { matchesTags, parseStringArray } from "./tags"
+import { clamp } from "./util"
 
 interface TimedHits {
   hits: RetrievalHit[]
@@ -214,6 +215,7 @@ export async function recall(
     // Apply working memory boost if sessionId is provided
     const sessionId = options.sessionId
     const hasWm = workingMemory != null && sessionId != null
+    const fusedById = new Map(fused.map((f) => [f.id, f]))
 
     rankedCandidates = cogScored.map((scored, index) => {
       const wmBoost =
@@ -221,7 +223,7 @@ export async function recall(
           ? workingMemory.getBoost(bankId, sessionId, scored.id, now)
           : 0
       const finalScore = scored.cognitiveScore + wmBoost
-      const candidate = fused.find((f) => f.id === scored.id)!
+      const candidate = fusedById.get(scored.id)!
 
       return {
         id: scored.id,
@@ -234,6 +236,10 @@ export async function recall(
         temporal: 0,
         recency: 0,
         combinedScore: finalScore,
+        probeActivation: scored.probe,
+        baseLevelActivation: scored.base,
+        spreadingActivation: scored.spread,
+        wmBoost,
       } satisfies RankedCandidate
     })
 
@@ -564,8 +570,8 @@ function computeRecency(
   now: number,
 ): number {
   let anchor: number | null = null
-  const occurredStart = row.occurredStart ?? row.occurredStart
-  const occurredEnd = row.occurredEnd ?? row.occurredEnd
+  const occurredStart = row.occurredStart
+  const occurredEnd = row.occurredEnd
   if (occurredStart != null && occurredEnd != null) {
     anchor = Math.round((occurredStart + occurredEnd) / 2)
   } else {
@@ -579,10 +585,6 @@ function computeRecency(
   if (anchor == null) return 0.5
   const daysAgo = (now - anchor) / (1000 * 60 * 60 * 24)
   return clamp(Math.max(0.1, 1 - daysAgo / 365), 0.1, 1)
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
 }
 
 function estimateTokens(text: string): number {
@@ -728,14 +730,14 @@ function updateAccessMetadata(
 ): void {
   if (memoryIds.length === 0) return
 
-  // Use a single parameterized UPDATE with IN clause for efficiency
-  const placeholders = memoryIds.map(() => "?").join(",")
-  hdb.sqlite.run(
-    `UPDATE hs_memory_units
-     SET access_count = access_count + 1,
-         last_accessed = ?,
-         encoding_strength = MIN(3.0, encoding_strength + 0.02)
-     WHERE id IN (${placeholders})`,
-    [now, ...memoryIds],
-  )
+  const mu = hdb.schema.memoryUnits
+  hdb.db
+    .update(mu)
+    .set({
+      accessCount: sql`${mu.accessCount} + 1`,
+      lastAccessed: now,
+      encodingStrength: sql`MIN(3.0, ${mu.encodingStrength} + 0.02)`,
+    })
+    .where(inArray(mu.id, memoryIds))
+    .run()
 }

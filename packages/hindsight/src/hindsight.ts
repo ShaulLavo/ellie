@@ -9,6 +9,7 @@ import { EmbeddingStore } from "./embedding"
 import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain"
 import { recall as recallImpl } from "./recall"
 import { WorkingMemoryStore } from "./working-memory"
+import { clamp } from "./util"
 import { reflect as reflectImpl } from "./reflect"
 import { consolidate as consolidateImpl } from "./consolidation"
 import {
@@ -1873,10 +1874,6 @@ function toBank(row: typeof import("./schema").banks.$inferSelect): Bank {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
 }
 
 function safeJson<T>(value: string, fallback: T): T {

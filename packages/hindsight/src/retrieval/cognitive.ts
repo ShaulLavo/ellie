@@ -14,6 +14,7 @@
 
 import type { HindsightDatabase } from "../db"
 import { inArray } from "drizzle-orm"
+import { clamp } from "../util"
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -49,10 +50,6 @@ interface LinkRow {
 }
 
 // ── Pure scoring helpers ───────────────────────────────────────────────────
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
-}
 
 /**
  * Probe activation: power-law transform of semantic similarity.

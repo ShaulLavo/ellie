@@ -114,6 +114,7 @@ export const memoryUnits = sqliteTable(
     index("idx_hs_mu_consolidated").on(table.bankId, table.consolidatedAt),
     index("idx_hs_mu_last_accessed").on(table.bankId, table.lastAccessed),
     index("idx_hs_mu_access_count").on(table.bankId, table.accessCount),
+    check("hs_mu_encoding_strength_range", sql`encoding_strength >= 0 AND encoding_strength <= 3.0`),
   ],
 )
 

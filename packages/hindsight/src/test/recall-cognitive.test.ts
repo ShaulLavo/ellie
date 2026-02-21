@@ -279,19 +279,36 @@ describe("working memory integration", () => {
   })
 
   test("cognitive recall with sessionId touches working memory", async () => {
+    // First recall without sessionId — no WM boost
+    const baseline = await t.hs.recall(bankId, "hiking", {
+      mode: "cognitive",
+    })
+    expect(baseline.memories.length).toBeGreaterThan(0)
+    const baselineScores = new Map(
+      baseline.memories.map((m) => [m.memory.id, m.score]),
+    )
+
+    // Recall with sessionId — touches WM for returned memories
     const result = await t.hs.recall(bankId, "hiking", {
       mode: "cognitive",
       sessionId: "test-session-1",
     })
     expect(result.memories.length).toBeGreaterThan(0)
 
-    // Second recall with same sessionId should benefit from WM boost
-    // (returned memories were touched in WM during first recall)
+    // Second recall with same sessionId — WM boost should increase scores
     const result2 = await t.hs.recall(bankId, "hiking", {
       mode: "cognitive",
       sessionId: "test-session-1",
     })
     expect(result2.memories.length).toBeGreaterThan(0)
+
+    // Overlapping memories should have higher scores due to WM boost
+    for (const m of result2.memories) {
+      const baseScore = baselineScores.get(m.memory.id)
+      if (baseScore != null) {
+        expect(m.score).toBeGreaterThanOrEqual(baseScore)
+      }
+    }
   })
 
   test("cognitive recall without sessionId does not use WM", async () => {
