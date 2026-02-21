@@ -3,6 +3,7 @@
 import type { RiveParameters } from "@rive-app/react-webgl2";
 import type { FC, ReactNode } from "react";
 
+import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import {
   useRive,
@@ -11,7 +12,7 @@ import {
   useViewModelInstance,
   useViewModelInstanceColor,
 } from "@rive-app/react-webgl2";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 
 export type PersonaState =
   | "idle"
@@ -74,59 +75,6 @@ const sources = {
   },
 };
 
-const getCurrentTheme = (): "light" | "dark" => {
-  if (typeof window !== "undefined") {
-    if (document.documentElement.classList.contains("dark")) {
-      return "dark";
-    }
-    if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-      return "dark";
-    }
-  }
-  return "light";
-};
-
-const useTheme = (enabled: boolean) => {
-  const [theme, setTheme] = useState<"light" | "dark">(getCurrentTheme);
-
-  useEffect(() => {
-    // Skip if not enabled (avoids unnecessary observers for non-dynamic-color variants)
-    if (!enabled) {
-      return;
-    }
-
-    // Watch for classList changes
-    const observer = new MutationObserver(() => {
-      setTheme(getCurrentTheme());
-    });
-
-    observer.observe(document.documentElement, {
-      attributeFilter: ["class"],
-      attributes: true,
-    });
-
-    // Watch for OS-level theme changes
-    let mql: MediaQueryList | null = null;
-    const handleMediaChange = () => {
-      setTheme(getCurrentTheme());
-    };
-
-    if (window.matchMedia) {
-      mql = window.matchMedia("(prefers-color-scheme: dark)");
-      mql.addEventListener("change", handleMediaChange);
-    }
-
-    return () => {
-      observer.disconnect();
-      if (mql) {
-        mql.removeEventListener("change", handleMediaChange);
-      }
-    };
-  }, [enabled]);
-
-  return theme;
-};
-
 interface PersonaWithModelProps {
   rive: ReturnType<typeof useRive>["rive"];
   source: (typeof sources)[keyof typeof sources];
@@ -135,7 +83,7 @@ interface PersonaWithModelProps {
 
 const PersonaWithModel = memo(
   ({ rive, source, children }: PersonaWithModelProps) => {
-    const theme = useTheme(source.dynamicColor);
+    const { theme } = useTheme();
     const viewModel = useViewModel(rive, { useDefault: true });
     const viewModelInstance = useViewModelInstance(viewModel, {
       rive,

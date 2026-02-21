@@ -31,11 +31,21 @@ import { Separator } from "./components/ui/separator"
 import { Spinner } from "./components/ui/spinner"
 import {
   ArrowUp,
+  Moon,
   Paperclip,
+  Sun,
   Trash,
   Robot,
   User,
+  Monitor,
 } from "@phosphor-icons/react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu"
+import { useTheme } from "./hooks/use-theme"
 
 interface ChatPanelProps {
   chatId: string
@@ -58,6 +68,35 @@ function groupMessages(messages: Message[]) {
     groups.push({ msg, isFirst })
   }
   return groups
+}
+
+function ModeToggle() {
+  const { setPreference } = useTheme()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>
+        <ChatHeaderButton title="Toggle theme">
+          <Sun className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+          <Moon className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+          <span className="sr-only">Toggle theme</span>
+        </ChatHeaderButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setPreference("light")}>
+          <Sun className="size-4" />
+          Light
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setPreference("dark")}>
+          <Moon className="size-4" />
+          Dark
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setPreference("system")}>
+          <Monitor className="size-4" />
+          System
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 export function ChatPanel({ chatId }: ChatPanelProps) {
@@ -95,6 +134,7 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
         </ChatHeaderMain>
         <ChatHeaderAddon>
           {isLoading && <Spinner className="size-4 text-muted-foreground" />}
+          <ModeToggle />
           <ChatHeaderButton
             onClick={clearChat}
             disabled={isLoading || messages.length === 0}

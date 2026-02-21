@@ -109,6 +109,7 @@
 
 /* ─── Light Mode: Warm Stone + Sage ─── */
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(0.98 0.003 90);
   --foreground: oklch(0.14 0.01 260);
@@ -150,6 +151,7 @@
 
 /* ─── Dark Mode: Deep Slate + Muted Teal ─── */
 .dark {
+  color-scheme: dark;
   --background: oklch(0.14 0.01 260);
   --foreground: oklch(0.92 0.008 90);
   --card: oklch(0.18 0.01 260);
