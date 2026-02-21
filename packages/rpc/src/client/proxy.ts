@@ -1,5 +1,5 @@
 import { StreamManager } from "./manager"
-import type { Router, RouterDef, RpcClient, StreamDef } from "../types"
+import type { ProcedureDef, Router, RouterDef, RpcClient, StreamDef } from "../types"
 
 // ============================================================================
 // Introspection Guard
@@ -72,18 +72,25 @@ export function createRpcClient<TRouter extends RouterDef>(
   const routerDef = (`_def` in router ? router._def : router) as TRouter
   const manager = new StreamManager(options.baseUrl)
 
-  // Level 1: stream namespace proxy (rpc.chat → ...)
+  // Level 1: namespace proxy (rpc.chat → stream proxy, rpc.retain → procedure fn)
   return new Proxy({} as RpcClient<TRouter>, {
-    get(_, streamName: string | symbol) {
-      if (isIntrospectionKey(streamName)) return undefined
-      const streamDef = (routerDef as Record<string, StreamDef>)[streamName as string]
-      if (!streamDef) {
+    get(_, name: string | symbol) {
+      if (isIntrospectionKey(name)) return undefined
+      const def = (routerDef as Record<string, StreamDef | ProcedureDef>)[name as string]
+      if (!def) {
         throw new Error(
-          `[streams-rpc] Unknown stream "${String(streamName)}" — not defined in router`
+          `[streams-rpc] Unknown name "${String(name)}" — not defined in router`
         )
       }
 
-      // Level 2: collection proxy (rpc.chat.messages → ...)
+      // ── Procedure: return a callable function ──
+      if (!(`collections` in def)) {
+        const procDef = def as ProcedureDef
+        return (args: Record<string, unknown>) => manager.call(procDef, args ?? {})
+      }
+
+      // ── Stream: Level 2 collection proxy ──
+      const streamDef = def as StreamDef
       return new Proxy(
         {},
         {
@@ -101,7 +108,7 @@ export function createRpcClient<TRouter extends RouterDef>(
               !(colName in streamDef.collections)
             ) {
               throw new Error(
-                `[streams-rpc] Unknown collection "${colName}" in stream "${String(streamName)}". ` +
+                `[streams-rpc] Unknown collection "${colName}" in stream "${String(name)}". ` +
                   `Available: ${Object.keys(streamDef.collections).join(`, `)}`
               )
             }

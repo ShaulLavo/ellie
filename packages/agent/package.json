@@ -6,8 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./schemas": "./src/schemas.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",
@@ -15,7 +14,6 @@
   },
   "dependencies": {
     "@ellie/ai": "workspace:*",
-    "@ellie/schemas": "workspace:*",
     "valibot": "^1.2.0"
   },
   "peerDependencies": {

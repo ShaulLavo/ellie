@@ -36,6 +36,7 @@
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource/geist-mono": "^5.2.7",
-    "@fontsource/google-sans-flex": "^5.2.2"
+    "@fontsource/google-sans-flex": "^5.2.2",
+    "@tanstack/ai-ollama": "^0.5.0"
   }
 }

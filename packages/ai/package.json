@@ -12,8 +12,9 @@
     "./overflow": "./src/overflow.ts",
     "./env": "./src/env.ts",
     "./thinking": "./src/thinking.ts",
-    "./credentials": "./src/credentials.ts",
-    "./anthropic-oauth": "./src/anthropic-oauth.ts"
+    "./ollama": "./src/ollama.ts",
+    "./openai-compat": "./src/openai-compat.ts",
+    "./credentials": "./src/credentials.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",
@@ -23,13 +24,11 @@
     "@ellie/env": "workspace:*"
   },
   "peerDependencies": {
-    "@tanstack/ai": ">=0.5.0",
-    "@tanstack/ai-anthropic": ">=0.5.0"
+    "@tanstack/ai": ">=0.5.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@tanstack/ai": "^0.5.1",
-    "@tanstack/ai-anthropic": "^0.5.0",
     "typescript": "^5.0.0"
   }
 }

@@ -13,8 +13,9 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@ellie/agent": "workspace:*",
+    "@ellie/hindsight": "workspace:*",
     "@ellie/rpc": "workspace:*",
-    "@ellie/schemas": "workspace:*",
     "valibot": "^1.2.0"
   },
   "devDependencies": {

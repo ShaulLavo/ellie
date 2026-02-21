@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec"
-import type { CollectionDef, Router, StreamDef } from "../types"
+import type { CollectionDef, ProcedureDef, Router, RouterDef, StreamDef } from "../types"
 
 // ============================================================================
 // Collection Input
@@ -53,18 +53,18 @@ type NormalizeCollections<T extends Record<string, CollectionInput>> = {
 // ============================================================================
 
 /**
- * Fluent router builder — each `.stream()` call defines a complete stream.
+ * Fluent router builder — each `.stream()` / verb method call defines an endpoint.
  *
  * Implements `Router<T>` so it can be passed directly to `createRpcClient`
  * without a `.build()` call.
  */
-class RouterBuilder<TStreams extends Record<string, StreamDef>>
-  implements Router<TStreams>
+class RouterBuilder<TDefs extends RouterDef>
+  implements Router<TDefs>
 {
-  readonly _def: TStreams
+  readonly _def: TDefs
 
-  constructor(streams: TStreams) {
-    this._def = streams
+  constructor(defs: TDefs) {
+    this._def = defs
   }
 
   /**
@@ -83,11 +83,11 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
     path: SPath,
     collections: TInput
   ): RouterBuilder<
-    TStreams & { [K in SName]: StreamDef<SPath, NormalizeCollections<TInput>> }
+    TDefs & { [K in SName]: StreamDef<SPath, NormalizeCollections<TInput>> }
   > {
     if (name in this._def) {
       throw new Error(
-        `[streams-rpc] Duplicate stream name "${name}" in router`
+        `[streams-rpc] Duplicate name "${name}" in router`
       )
     }
 
@@ -122,12 +122,123 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
     const next = {
       ...this._def,
       [name]: { path, collections: normalized },
-    } as TStreams & {
+    } as TDefs & {
       [K in SName]: StreamDef<SPath, NormalizeCollections<TInput>>
     }
 
     return new RouterBuilder(next)
   }
+
+  // ── HTTP verb methods ─────────────────────────────────────────────────
+
+  /** Define a GET procedure. */
+  get<
+    PName extends string,
+    PPath extends string,
+    TInput extends StandardSchemaV1,
+    TOutput extends StandardSchemaV1,
+  >(
+    name: PName,
+    path: PPath,
+    config: { input: TInput; output: TOutput }
+  ): RouterBuilder<
+    TDefs & { [K in PName]: ProcedureDef<PPath, TInput, TOutput, "GET"> }
+  > {
+    return addProcedure(this, name, path, config, `GET`)
+  }
+
+  /** Define a POST procedure. */
+  post<
+    PName extends string,
+    PPath extends string,
+    TInput extends StandardSchemaV1,
+    TOutput extends StandardSchemaV1,
+  >(
+    name: PName,
+    path: PPath,
+    config: { input: TInput; output: TOutput }
+  ): RouterBuilder<
+    TDefs & { [K in PName]: ProcedureDef<PPath, TInput, TOutput, "POST"> }
+  > {
+    return addProcedure(this, name, path, config, `POST`)
+  }
+
+  /** Define a PATCH procedure. */
+  patch<
+    PName extends string,
+    PPath extends string,
+    TInput extends StandardSchemaV1,
+    TOutput extends StandardSchemaV1,
+  >(
+    name: PName,
+    path: PPath,
+    config: { input: TInput; output: TOutput }
+  ): RouterBuilder<
+    TDefs & { [K in PName]: ProcedureDef<PPath, TInput, TOutput, "PATCH"> }
+  > {
+    return addProcedure(this, name, path, config, `PATCH`)
+  }
+
+  /** Define a DELETE procedure. */
+  delete<
+    PName extends string,
+    PPath extends string,
+    TInput extends StandardSchemaV1,
+    TOutput extends StandardSchemaV1,
+  >(
+    name: PName,
+    path: PPath,
+    config: { input: TInput; output: TOutput }
+  ): RouterBuilder<
+    TDefs & { [K in PName]: ProcedureDef<PPath, TInput, TOutput, "DELETE"> }
+  > {
+    return addProcedure(this, name, path, config, `DELETE`)
+  }
+}
+
+// ============================================================================
+// Internal Helper
+// ============================================================================
+
+function addProcedure<
+  TDefs extends RouterDef,
+  PName extends string,
+  PPath extends string,
+  TInput extends StandardSchemaV1,
+  TOutput extends StandardSchemaV1,
+  TMethod extends "POST" | "GET" | "PATCH" | "DELETE",
+>(
+  builder: RouterBuilder<TDefs>,
+  name: PName,
+  path: PPath,
+  config: { input: TInput; output: TOutput },
+  method: TMethod
+): RouterBuilder<
+  TDefs & { [K in PName]: ProcedureDef<PPath, TInput, TOutput, TMethod> }
+> {
+  if (name in builder._def) {
+    throw new Error(
+      `[streams-rpc] Duplicate name "${name}" in router`
+    )
+  }
+
+  // "input" is reserved — the proxy client destructures { input, ...pathParams }
+  const reserved = path.match(/:input\b/g)
+  if (reserved) {
+    throw new Error(
+      `[streams-rpc] Path "${path}" uses reserved param name ":input". ` +
+        `"input" is used by the RPC client for procedure payloads.`
+    )
+  }
+
+  const next = {
+    ...builder._def,
+    [name]: { path, input: config.input, output: config.output, method },
+  } as TDefs & {
+    [K in PName]: ProcedureDef<PPath, TInput, TOutput, TMethod>
+  }
+
+  return new RouterBuilder(next)
 }
 
 // ============================================================================
@@ -137,9 +248,8 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
 /**
  * Create a typed router definition using fluent method chaining.
  *
- * Each `.stream()` call defines a complete stream — name, path, and collections.
- * Collections can be a bare schema (defaults: type = collection name, primaryKey = "id")
- * or an object `{ schema, type?, primaryKey? }` for overrides.
+ * - `.stream()` defines event-sourced collections backed by durable streams.
+ * - `.get()`, `.post()`, `.patch()`, `.delete()` define request/response endpoints.
  *
  * The returned router is passed directly to `createRpcClient` — no `.build()` needed.
  *
@@ -148,19 +258,13 @@ class RouterBuilder<TStreams extends Record<string, StreamDef>>
  * import * as v from "valibot"
  * import { createRouter } from "@ellie/rpc/server"
  *
- * const messageSchema = v.object({
- *   id: v.string(),
- *   role: v.picklist(["user", "assistant", "system"]),
- *   content: v.string(),
- *   createdAt: v.string(),
- * })
- *
  * export const appRouter = createRouter()
  *   .stream("chat", "/chat/:chatId", {
  *     messages: messageSchema,
  *   })
- *   .stream("settings", "/settings", {
- *     prefs: prefSchema,
+ *   .post("retain", "/banks/:bankId/retain", {
+ *     input: retainInputSchema,
+ *     output: retainOutputSchema,
  *   })
  *
  * export type AppRouter = typeof appRouter["_def"]
