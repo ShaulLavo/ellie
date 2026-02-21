@@ -226,6 +226,88 @@ export function createRealLLMTestHindsight(
   return { hs, dbPath, cleanup }
 }
 
+// ── Ollama test factory ─────────────────────────────────────────────────────
+
+/**
+ * Check if Ollama is reachable at module load time.
+ * Uses a synchronous-ish approach: we probe at import time and cache the result.
+ */
+let _ollamaAvailable: boolean | null = null
+
+async function checkOllama(): Promise<boolean> {
+  try {
+    const response = await fetch("http://localhost:11434/api/tags", {
+      signal: AbortSignal.timeout(2000),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// Eagerly probe on import so HAS_OLLAMA is available synchronously in test files.
+// Bun supports top-level await in modules.
+_ollamaAvailable = await checkOllama()
+
+export const HAS_OLLAMA = _ollamaAvailable
+
+/** Use instead of `describe` for test blocks that require a running Ollama instance. */
+export const describeWithOllama = HAS_OLLAMA ? describe : describe.skip
+
+export interface OllamaTestHindsight {
+  hs: Hindsight
+  dbPath: string
+  cleanup: () => void
+}
+
+/**
+ * Create a Hindsight instance backed by Ollama for text generation.
+ *
+ * Uses `ollamaAdapter` from `@ellie/ai/ollama` for chat/extraction/reflection.
+ * Uses `mockEmbed` (pre-generated fixture) for embeddings.
+ *
+ * Requires Ollama running at localhost:11434. Use `describeWithOllama` to skip
+ * entire test blocks when Ollama is not available.
+ */
+export function createOllamaTestHindsight(
+  model: string = "qwen2.5:7b-instruct",
+  overrides?: Partial<HindsightConfig>,
+): OllamaTestHindsight {
+  // Lazy import to avoid pulling in @tanstack/ai-ollama when not needed
+  const { ollamaAdapter } = require("@ellie/ai/ollama") as typeof import("@ellie/ai/ollama")
+
+  const dbPath = join(
+    tmpdir(),
+    `hindsight-ollama-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+  )
+  const adapter = ollamaAdapter(model)
+
+  const hs = new Hindsight({
+    dbPath,
+    embed: mockEmbed,
+    embeddingDimensions: EMBED_DIMS,
+    adapter,
+    ...overrides,
+  })
+
+  const cleanup = () => {
+    try {
+      hs.close()
+    } catch {
+      // already closed
+    }
+    try {
+      rmSync(dbPath, { force: true })
+      rmSync(dbPath + "-wal", { force: true })
+      rmSync(dbPath + "-shm", { force: true })
+    } catch {
+      // file may not exist
+    }
+  }
+
+  return { hs, dbPath, cleanup }
+}
+
 /**
  * Create a bank in the test Hindsight instance and return its ID.
  */
