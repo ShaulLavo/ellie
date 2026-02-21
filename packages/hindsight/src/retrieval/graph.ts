@@ -86,7 +86,8 @@ export interface GraphSearchOptions {
   temporalSeedMemoryIds?: string[]
 }
 
-const CAUSAL_LINK_TYPES = ["causes", "caused_by", "enables", "prevents"] as const
+// Python parity: only "caused_by" is a valid causal relation type.
+const CAUSAL_LINK_TYPES = ["caused_by"] as const
 const FALLBACK_LINK_TYPES = ["semantic", "temporal", "entity"] as const
 const ALL_FACT_TYPES: FactType[] = [
   "world",

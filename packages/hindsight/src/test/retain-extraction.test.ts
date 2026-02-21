@@ -109,46 +109,22 @@ Marcus felt anxious about the upcoming interview.`,
   })
 
   describe("sensory dimension preservation", () => {
-    it("captures taste descriptions (spicy, sweet)", async () => {
+    // Port of test_sensory_dimension_preservation from Python:
+    // Sends a combined 3-sentence block and checks for at least 2 sensory indicators.
+    it("preserves sensory details across a multi-sentence block", async () => {
       const memories = await extract(
-        "I went to the new Thai restaurant downtown last night. The soup was incredibly spicy and the mango dessert was sweet and refreshing.",
-        { context: "Food review" },
+        `The coffee tasted bitter and burnt.
+She showed me her bright orange hair, which looked stunning under the lights.
+The music was so loud I could barely hear myself think.`,
+        { context: "Personal experience" },
       )
-      const text = lowerJoined(memories)
       expect(memories.length).toBeGreaterThan(0)
-      expect(text.includes("spicy") || text.includes("sweet") || text.includes("thai") || text.includes("restaurant")).toBe(true)
-    }, 60_000)
 
-    it("captures color descriptions (vibrant red, pale blue)", async () => {
-      const memories = await extract(
-        "Sarah wore a vibrant red jacket and a pale blue scarf to the gallery opening on Friday. She stood out among the crowd.",
-        { context: "Personal journal entry" },
-      )
       const text = lowerJoined(memories)
-      expect(memories.length).toBeGreaterThan(0)
-      expect(text.includes("red") || text.includes("blue") || text.includes("sarah") || text.includes("gallery")).toBe(true)
-    }, 60_000)
+      const sensoryIndicators = ["bitter", "burnt", "bright orange", "loud", "stunning"]
+      const found = sensoryIndicators.filter((term) => text.includes(term))
 
-    it("captures sound descriptions (loud, quiet, melodic)", async () => {
-      const memories = await extract(
-        "At the concert venue, the first room was incredibly loud with heavy bass. The back room was quiet and the acoustic guitar sounded melodic. I preferred the quiet room.",
-        { context: "Concert review" },
-      )
-      const text = lowerJoined(memories)
-      expect(memories.length).toBeGreaterThan(0)
-      expect(
-        ["loud", "quiet", "melodic", "concert", "acoustic", "guitar"].some((term) => text.includes(term)),
-      ).toBe(true)
-    }, 60_000)
-
-    it("captures texture descriptions (smooth, rough)", async () => {
-      const memories = await extract(
-        "While renovating the kitchen, I noticed the new marble countertop felt smooth and polished, while the old brick wall was rough and crumbling. I need to get the wall replastered.",
-        { context: "Home renovation diary" },
-      )
-      const text = lowerJoined(memories)
-      expect(memories.length).toBeGreaterThan(0)
-      expect(text.includes("smooth") || text.includes("rough") || text.includes("countertop") || text.includes("kitchen") || text.includes("renovating") || text.includes("wall")).toBe(true)
+      expect(found.length).toBeGreaterThanOrEqual(2)
     }, 60_000)
   })
 
