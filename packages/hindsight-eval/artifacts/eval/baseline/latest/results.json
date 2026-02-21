@@ -1,0 +1,824 @@
+{
+  "version": "1.0.0",
+  "datasetVersion": "assistant-baseline.v1",
+  "runConfig": {
+    "datasetPath": "/Users/shaul/Desktop/ai/pa/ellie/.claude/worktrees/charming-pasteur/packages/hindsight-eval/fixtures/assistant-baseline.v1.jsonl",
+    "mode": "hybrid",
+    "seed": 42,
+    "topK": 10,
+    "outputDir": "/Users/shaul/Desktop/ai/pa/ellie/.claude/worktrees/charming-pasteur/packages/hindsight-eval/artifacts/eval/baseline"
+  },
+  "runMetadata": {
+    "gitSha": "11058e3754cc6118ab7bc81d0da6f3121d860d58",
+    "bunVersion": "1.3.10",
+    "timestamp": "2026-02-21T15:12:03.916Z",
+    "seed": 42,
+    "topK": 10
+  },
+  "scenarios": [
+    {
+      "scenario": "follow_up_recall",
+      "caseCount": 3,
+      "metrics": {
+        "recall@1": 0.5,
+        "recall@3": 0.8333333333333334,
+        "recall@5": 1,
+        "mrr": 0.7000000000000001
+      }
+    },
+    {
+      "scenario": "temporal_narrative",
+      "caseCount": 2,
+      "metrics": {
+        "orderingAccuracy": 0.8,
+        "predecessorHitRate": 1,
+        "successorHitRate": 1,
+        "recall@5": 1
+      }
+    },
+    {
+      "scenario": "dedup_conflict",
+      "caseCount": 2,
+      "metrics": {
+        "duplicateHitRatio": 0.5,
+        "contradictionRetrievalRate": 1,
+        "recall@5": 1
+      }
+    },
+    {
+      "scenario": "code_location_recall",
+      "caseCount": 2,
+      "metrics": {
+        "pathRecall@k": 1,
+        "exactPathPrecision": 0.30000000000000004,
+        "mrr": 0.35416666666666663
+      }
+    },
+    {
+      "scenario": "token_budget_packing",
+      "caseCount": 2,
+      "metrics": {
+        "factRetentionRate": 1,
+        "truncationLossRate": 0,
+        "budgetUtilization": 0.575
+      }
+    }
+  ],
+  "globalScore": 0.87,
+  "globalWeights": {
+    "follow_up_recall": 0.3,
+    "temporal_narrative": 0.2,
+    "dedup_conflict": 0.15,
+    "code_location_recall": 0.2,
+    "token_budget_packing": 0.15
+  },
+  "cases": [
+    {
+      "caseId": "fur-001",
+      "scenario": "follow_up_recall",
+      "query": "What are the user's preferences?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C402C24DNX2SG6T4TFV7Q",
+          "content": "User prefers dark mode in all applications",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C402G94ZG3MW197XV67DM",
+          "content": "User's project uses Bun as the runtime",
+          "score": 0.8369131415033059,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C402F8HGNVSVNB916Y07B",
+          "content": "User's favorite editor is VS Code with Vim keybindings",
+          "score": 0.8353727753727753,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C402D3JEQVVCHTANG89XF",
+          "content": "User works primarily with TypeScript and React",
+          "score": 0.09695976154992553,
+          "rank": 4,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C402F1G8M081ZQ1A5FQZ9",
+          "content": "User dislikes auto-formatting on save",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "opinion"
+        }
+      ],
+      "durationMs": 35,
+      "metrics": {
+        "recall@1": 0.5,
+        "recall@3": 0.5,
+        "recall@5": 1,
+        "mrr": 0.6
+      }
+    },
+    {
+      "caseId": "fur-002",
+      "scenario": "follow_up_recall",
+      "query": "Why did we switch from Zod to Valibot?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C403HQ5AHRBED38NGJ7J0",
+          "content": "The migration from Zod to Valibot reduced bundle size by 40%",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C403G7SCSXBY7Y1W3RX3M",
+          "content": "Team decided to use Valibot instead of Zod for schema validation",
+          "score": 0.5488120839733731,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C403NQJVTTP73W8G0HYKB",
+          "content": "Valibot supports Standard Schema v1 spec natively",
+          "score": 0.5488120839733731,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C403JSS8WEXK9ZZVDF8Z5",
+          "content": "All new schemas must use Valibot going forward",
+          "score": 0.2506249999999994,
+          "rank": 4,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C403M94XM5NVCMB1FZ9D9",
+          "content": "Legacy Zod schemas remain in the auth module until Q2 refactor",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 23,
+      "metrics": {
+        "recall@1": 0.5,
+        "recall@3": 1,
+        "recall@5": 1,
+        "mrr": 0.75
+      }
+    },
+    {
+      "caseId": "fur-003",
+      "scenario": "follow_up_recall",
+      "query": "What was the WebSocket issue and how did we fix it?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C404DHF7KXPRH22FY776S",
+          "content": "Increasing the proxy keep-alive to 120s fixed the WebSocket drops",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C404CW4FG9ERHGHV71XX6",
+          "content": "The WebSocket connection drops every 30 seconds due to a proxy timeout",
+          "score": 0.8595769434161817,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C404E8ZWZKXE011XY5NS3",
+          "content": "The server runs behind an nginx reverse proxy",
+          "score": 0.8212704918032786,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C404FTE2NFD9Q021BJ11J",
+          "content": "Server-sent events work fine because they reconnect automatically",
+          "score": 0.060000000000000005,
+          "rank": 4,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 11,
+      "metrics": {
+        "recall@1": 0.5,
+        "recall@3": 1,
+        "recall@5": 1,
+        "mrr": 0.75
+      }
+    },
+    {
+      "caseId": "tn-001",
+      "scenario": "temporal_narrative",
+      "query": "What is the project timeline?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C404W93WQJY4PRTTW2GR7",
+          "content": "Project kickoff meeting held on January 5th",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C404XTE6G65PHA0W2YQQ9",
+          "content": "Initial architecture review completed January 12th",
+          "score": 0.10709233325421313,
+          "rank": 2,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C404XZZXBXBJ8TT17PXMH",
+          "content": "First prototype deployed to staging January 19th",
+          "score": 0.082798669273865,
+          "rank": 3,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C404Z6JPYGKNHNWZC4CVK",
+          "content": "Production release scheduled for February 2nd",
+          "score": 0.07122122003323045,
+          "rank": 4,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C404YWHTZ4C205BETZP79",
+          "content": "User testing began January 26th with 5 beta testers",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        }
+      ],
+      "durationMs": 10,
+      "metrics": {
+        "orderingAccuracy": 0.9,
+        "predecessorHitRate": 1,
+        "successorHitRate": 1,
+        "recall@5": 1
+      }
+    },
+    {
+      "caseId": "tn-002",
+      "scenario": "temporal_narrative",
+      "query": "How did our database choice evolve?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C405J9QJ9AG22MKJF7MYM",
+          "content": "Initially chose PostgreSQL for the database layer",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C405KVS0SEBN442T929M9",
+          "content": "Discovered SQLite with WAL mode handles our write patterns better",
+          "score": 0.8600000000000001,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C405N037E0652GAZD20X7",
+          "content": "Current database stack is SQLite with FTS5 and sqlite-vec",
+          "score": 0.8237554206744806,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C405NG03VRYC9N4SPN7R9",
+          "content": "Added sqlite-vec extension for vector similarity search",
+          "score": 0.07122122003323045,
+          "rank": 4,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C405MRGJFMWZBGX4JXPRD",
+          "content": "Migrated from PostgreSQL to SQLite in week 3",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        }
+      ],
+      "durationMs": 11,
+      "metrics": {
+        "orderingAccuracy": 0.7,
+        "predecessorHitRate": 1,
+        "successorHitRate": 1,
+        "recall@5": 1
+      }
+    },
+    {
+      "caseId": "dc-001",
+      "scenario": "dedup_conflict",
+      "query": "What is the current API rate limit?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C4060JMFR03N03S83PWAG",
+          "content": "The API rate limit is 100 requests per minute",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4062Q7FMJ3CQPXD6EVBP",
+          "content": "The API rate limit is 100 requests per minute",
+          "score": 0.8427610442033291,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4063HDDJNZ3J56XJAZ15",
+          "content": "Premium tier users have a rate limit of 1000 requests per minute",
+          "score": 0.6072334128093422,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4061RRZZ8PT47K0WSHWV",
+          "content": "The API rate limit was increased to 500 requests per minute after the infrastructure upgrade",
+          "score": 0.5819701209113805,
+          "rank": 4,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4061BKP3PFKA5ESHZERB",
+          "content": "Rate limiting is enforced at the nginx level using the limit_req module",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 13,
+      "metrics": {
+        "duplicateHitRatio": 1,
+        "contradictionRetrievalRate": 1,
+        "recall@5": 1
+      }
+    },
+    {
+      "caseId": "dc-002",
+      "scenario": "dedup_conflict",
+      "query": "How does our deployment pipeline work?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C406P5CMZF375A9DTT22X",
+          "content": "Deployments are triggered automatically on merge to main",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C406MFRMZK8X2GESJV6HE",
+          "content": "The CI/CD pipeline runs on GitHub Actions",
+          "score": 0.8482469765235952,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C406KD8XSTN3DJAQPJ8ZE",
+          "content": "The deployment uses Docker containers on AWS ECS",
+          "score": 0.8474700712171165,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C406N6RDP67GVCXE1ZA0B",
+          "content": "Docker images are built and pushed by GitHub Actions CI/CD",
+          "score": 0.09527656872719478,
+          "rank": 4,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C406KR5YSQACP3PNVMGH4",
+          "content": "We deploy using Docker containers on Amazon ECS",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 14,
+      "metrics": {
+        "duplicateHitRatio": 0,
+        "contradictionRetrievalRate": 1,
+        "recall@5": 1
+      }
+    },
+    {
+      "caseId": "clr-001",
+      "scenario": "code_location_recall",
+      "query": "Where is the authentication code?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C4077YXMAPV70FGFGY47V",
+          "content": "The main server entry point is apps/app/src/server.ts",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4075F1ZPESAZSPT85SZ0",
+          "content": "Authentication middleware is defined in packages/auth/src/middleware.ts",
+          "score": 0.8242310600919123,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4076EE225ACA2GXR34T1",
+          "content": "Rate limiting is implemented in packages/api/src/rate-limiter.ts",
+          "score": 0.82307663221578,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4075F48PGJSGPKHY5DMB",
+          "content": "The JWT token validation logic lives in packages/auth/src/jwt.ts",
+          "score": 0.8107751449458027,
+          "rank": 4,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4077M71T8W11Z895B8S2",
+          "content": "Database migrations are stored in packages/db/drizzle/",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 12,
+      "metrics": {
+        "pathRecall@k": 1,
+        "exactPathPrecision": 0.4,
+        "mrr": 0.375
+      }
+    },
+    {
+      "caseId": "clr-002",
+      "scenario": "code_location_recall",
+      "query": "What does the @ellie/agent package do?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C407Q6KRZQQ75SY4FEHCT",
+          "content": "The @ellie/hindsight package implements biomimetic agent memory with hybrid retrieval",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C407N98C5Z996DB2STYPQ",
+          "content": "The @ellie/durable-streams package provides the streaming backend with DurableStore",
+          "score": 0.854657102537713,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C407NH0BMNW07G90ZKGAZ",
+          "content": "The @ellie/agent package contains the stateful AI agent loop and tool execution",
+          "score": 0.5491255661175551,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C407MVDDDWXZS0WGF7B71",
+          "content": "The @ellie/rpc package handles type-safe RPC with createRouter and createRpcClient",
+          "score": 0.37087443388244484,
+          "rank": 4,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C407PSYS6YRWJX29M0Z49",
+          "content": "The @ellie/db package wraps Drizzle ORM with Bun SQLite and JsonlEngine",
+          "score": 0.060000000000000005,
+          "rank": 5,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 14,
+      "metrics": {
+        "pathRecall@k": 1,
+        "exactPathPrecision": 0.2,
+        "mrr": 0.3333333333333333
+      }
+    },
+    {
+      "caseId": "tbp-001",
+      "scenario": "token_budget_packing",
+      "query": "What is the tech stack?",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C408CS77ETE0V688E3PQ8",
+          "content": "Formatting is handled by Prettier with default config",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C408ADJ5YC28XCQWGTYR9",
+          "content": "The frontend is React 19 with TanStack Router for navigation",
+          "score": 0.8484070490670352,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C408C7GM4KQP3KYJZACXG",
+          "content": "The test runner is Bun's built-in test framework",
+          "score": 0.8033452706594322,
+          "rank": 3,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4088TNY6V0CP6HDSYFRM",
+          "content": "The server uses Bun HTTP with a custom router",
+          "score": 0.8012516612620275,
+          "rank": 4,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C408DV77RPHB8MBTM0R6G",
+          "content": "Linting uses oxlint for fast TypeScript linting",
+          "score": 0.10569186526071733,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C408BQQYKSRDRHRHD0XRM",
+          "content": "State management uses TanStack DB for reactive collections",
+          "score": 0.09372494816862467,
+          "rank": 6,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C4089XBHFDXFGT8SRS9SV",
+          "content": "WebSocket connections are managed via Durable Streams protocol",
+          "score": 0.060000000000000005,
+          "rank": 7,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 23,
+      "metrics": {
+        "factRetentionRate": 1,
+        "truncationLossRate": 0,
+        "budgetUtilization": 0.48
+      }
+    },
+    {
+      "caseId": "tbp-002",
+      "scenario": "token_budget_packing",
+      "query": "Tell me about Alice's engineering background",
+      "candidates": [
+        {
+          "memoryId": "01KJ0C4096XXKBJNRE060NK262",
+          "content": "Alice's team meets every Tuesday for sprint planning",
+          "score": 0.8600000000000001,
+          "rank": 1,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "world"
+        },
+        {
+          "memoryId": "01KJ0C40939VS6YARBD5RK8N2S",
+          "content": "User's name is Alice and she is a senior engineer",
+          "score": 0.8254954168485376,
+          "rank": 2,
+          "sources": [
+            "semantic",
+            "fulltext"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C4094NZ5RP4QWP3CE43G0",
+          "content": "Alice prefers functional programming patterns over OOP",
+          "score": 0.13577477084242695,
+          "rank": 3,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "opinion"
+        },
+        {
+          "memoryId": "01KJ0C4095JAQKE4GZJW64E15N",
+          "content": "Alice is currently leading the migration to TypeScript 5.9",
+          "score": 0.11240658754408206,
+          "rank": 4,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "experience"
+        },
+        {
+          "memoryId": "01KJ0C40947ZK6DAKGJF697GDQ",
+          "content": "Alice has 8 years of experience with JavaScript",
+          "score": 0.09047644629486626,
+          "rank": 5,
+          "sources": [
+            "semantic"
+          ],
+          "factType": "world"
+        }
+      ],
+      "durationMs": 28,
+      "metrics": {
+        "factRetentionRate": 1,
+        "truncationLossRate": 0,
+        "budgetUtilization": 0.67
+      }
+    }
+  ],
+  "totalDurationMs": 469
+}

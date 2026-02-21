@@ -1,0 +1,2 @@
+# Ignore timestamped run artifacts (only commit latest/)
+artifacts/eval/baseline/2*
