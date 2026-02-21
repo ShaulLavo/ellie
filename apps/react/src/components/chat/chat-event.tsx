@@ -38,7 +38,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import {
+import type {
   AvatarFallbackProps,
   AvatarImageProps,
   AvatarProps,
@@ -67,8 +67,8 @@ export type ChatEventTimeFormat =
   | "relative";
 
 export interface ChatEventTimeProps extends React.ComponentProps<"time"> {
-  /** Unix timestamp (ms) or Date object. */
-  timestamp: number | Date;
+  /** Unix timestamp (ms), Date object, or ISO date string. */
+  timestamp: number | Date | string;
   /** Preset display format. Defaults to `"dateTime"`. */
   format?: ChatEventTimeFormat;
   /** BCP 47 locale string. Defaults to the browser locale. */
@@ -165,7 +165,7 @@ export function ChatEventAddon({
   return (
     <div
       className={cn(
-        "w-10 @md/chat:w-12 h-full flex justify-center pt-1 shrink-0",
+        "w-10 @md/chat:w-12 flex items-start justify-center pt-1 shrink-0",
         className,
       )}
       {...props}
