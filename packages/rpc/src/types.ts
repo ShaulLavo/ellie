@@ -30,7 +30,7 @@ export type ExtractParams<T extends string> =
 /**
  * Check if a path has parameters.
  */
-export type HasParams<T extends string> = keyof ExtractParams<T> extends never
+type HasParams<T extends string> = keyof ExtractParams<T> extends never
   ? false
   : true
 
@@ -74,41 +74,19 @@ export interface StreamDef<
 }
 
 // ============================================================================
-// Procedure Definition
-// ============================================================================
-
-/**
- * A procedure definition with its URL path pattern, input/output schemas, and HTTP method.
- *
- * Procedures are typed request/response endpoints (unlike streams which are event-sourced).
- * The path supports Express-style params: "/banks/:bankId/recall"
- */
-export interface ProcedureDef<
-  TPath extends string = string,
-  TInput extends StandardSchemaV1 = StandardSchemaV1,
-  TOutput extends StandardSchemaV1 = StandardSchemaV1,
-  TMethod extends "POST" | "GET" | "PATCH" | "DELETE" = "POST" | "GET" | "PATCH" | "DELETE",
-> {
-  path: TPath
-  input: TInput
-  output: TOutput
-  method: TMethod
-}
-
-// ============================================================================
 // Router Definition
 // ============================================================================
 
 /**
- * The router is a record of named stream and procedure definitions.
+ * The router is a record of named stream definitions.
  * This is the single source of truth for types — defined on the server,
  * imported as `type` on the client.
  */
-export type RouterDef = Record<string, StreamDef | ProcedureDef>
+export type RouterDef = Record<string, StreamDef>
 
 /**
- * A router instance that carries its definitions.
- * Returned by `createRouter().stream(...).post(...).get(...)` etc.
+ * A router instance that carries its stream definitions.
+ * Returned by `createRouter().stream(...).stream(...)`.
  */
 export interface Router<T extends RouterDef = RouterDef> {
   readonly _def: T
@@ -213,41 +191,18 @@ type StreamClearMethod<TPath extends string> = HasParams<TPath> extends true
   : { clear(): Promise<void> }
 
 // ============================================================================
-// Client-Side Procedure API
-// ============================================================================
-
-/**
- * The API surface for a procedure on the client.
- *
- * If the procedure path has params (e.g., "/banks/:bankId/recall"),
- * the call signature includes both path params and input payload.
- * If no path params, just the input payload.
- */
-export type ProcedureClient<TDef extends ProcedureDef> =
-  HasParams<TDef[`path`]> extends true
-    ? (
-        args: ExtractParams<TDef[`path`]> & {
-          input: InferSchema<TDef[`input`]>
-        },
-      ) => Promise<InferSchema<TDef[`output`]>>
-    : (args: {
-        input: InferSchema<TDef[`input`]>
-      }) => Promise<InferSchema<TDef[`output`]>>
-
-// ============================================================================
 // Full RPC Client
 // ============================================================================
 
 /**
  * The fully typed RPC client.
  *
- * Streams are accessed as `rpc.chat.messages.get(...)`.
- * Procedures are accessed as `rpc.retain({ bankId, input: {...} })`.
+ * For a router like:
+ *   { chat: { path: "/chat/:chatId", collections: { messages: { ... } } } }
+ *
+ * The client type is:
+ *   { chat: { messages: CollectionClient<MessagesDef, { chatId: string }> } }
  */
 export type RpcClient<T extends RouterDef> = {
-  [K in keyof T]: T[K] extends StreamDef
-    ? StreamClient<T[K]>
-    : T[K] extends ProcedureDef
-      ? ProcedureClient<T[K]>
-      : never
+  [K in keyof T]: StreamClient<T[K]>
 }

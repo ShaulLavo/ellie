@@ -1,5 +1,5 @@
 import { describe, expect, it, mock, beforeEach } from "bun:test"
-import { fakeSchema, chatRouter, multiStreamRouter, procedureRouter, mixedRouter } from "./helpers"
+import { fakeSchema, chatRouter, multiStreamRouter } from "./helpers"
 import { createRouter } from "../src/server/router"
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,6 @@ const mockSubscribe = mock(() => ({
 const mockMutate = mock(() => Promise.resolve())
 const mockClearStream = mock(() => Promise.resolve())
 const mockDeleteStream = mock(() => Promise.resolve())
-const mockCall = mock(() => Promise.resolve({ result: `ok` }))
 
 mock.module(`../src/client/manager`, () => ({
   StreamManager: class MockStreamManager {
@@ -25,7 +24,6 @@ mock.module(`../src/client/manager`, () => ({
     mutate = mockMutate
     clearStream = mockClearStream
     deleteStream = mockDeleteStream
-    call = mockCall
   },
 }))
 
@@ -42,7 +40,6 @@ beforeEach(() => {
   mockMutate.mockClear()
   mockClearStream.mockClear()
   mockDeleteStream.mockClear()
-  mockCall.mockClear()
 })
 
 describe(`createRpcClient`, () => {
@@ -185,7 +182,7 @@ describe(`proxy error handling`, () => {
     const router = chatRouter()
     const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
 
-    expect(() => rpc.nonexistent).toThrow(`Unknown name`)
+    expect(() => rpc.nonexistent).toThrow(`Unknown stream`)
   })
 
   it(`throws on unknown collection name`, () => {
@@ -214,52 +211,5 @@ describe(`introspection safety`, () => {
 
     expect(rpc[Symbol.toPrimitive]).toBeUndefined()
     expect(rpc[Symbol.iterator]).toBeUndefined()
-  })
-})
-
-describe(`procedure proxy`, () => {
-  it(`procedure returns a callable function`, () => {
-    const router = procedureRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
-
-    expect(typeof rpc.recall).toBe(`function`)
-  })
-
-  it(`calling a procedure invokes manager.call with correct args`, async () => {
-    const router = procedureRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
-
-    await rpc.recall({ bankId: `b1`, input: { query: `hiking` } })
-
-    expect(mockCall).toHaveBeenCalledTimes(1)
-    const [procDef, args] = mockCall.mock.calls[0]!
-    expect(procDef.path).toBe(`/banks/:bankId/recall`)
-    expect(procDef.method).toBe(`POST`)
-    expect(args).toEqual({ bankId: `b1`, input: { query: `hiking` } })
-  })
-
-  it(`mixed router: stream access still works alongside procedures`, async () => {
-    const router = mixedRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
-
-    // Procedure is callable
-    expect(typeof rpc.recall).toBe(`function`)
-    expect(typeof rpc.listBanks).toBe(`function`)
-
-    // Stream still returns nested proxy
-    await rpc.chat.messages.get({ chatId: `abc` })
-    expect(mockGet).toHaveBeenCalledTimes(1)
-
-    // Procedure call works
-    await rpc.recall({ bankId: `b1`, input: { query: `test` } })
-    expect(mockCall).toHaveBeenCalledTimes(1)
-  })
-
-  it(`introspection keys return undefined for procedure proxy`, () => {
-    const router = procedureRouter()
-    const rpc = createRpcClient(router, { baseUrl: `http://localhost` }) as any
-
-    expect(rpc.then).toBeUndefined()
-    expect(rpc[Symbol.toPrimitive]).toBeUndefined()
   })
 })

@@ -7,7 +7,7 @@ import {
   type CollectionDefinition,
 } from "@ellie/streams-state"
 import type { Collection } from "@tanstack/db"
-import type { ProcedureDef, StreamDef, SubscriptionHandle } from "../types"
+import type { StreamDef, SubscriptionHandle } from "../types"
 
 // ============================================================================
 // Types
@@ -300,65 +300,5 @@ export class StreamManager {
       )
     }
     await entry.db.stream.append(JSON.stringify(event))
-  }
-
-  // --------------------------------------------------------------------------
-  // Procedure Calls
-  // --------------------------------------------------------------------------
-
-  /**
-   * Call a procedure: send an HTTP request and return the parsed response.
-   *
-   * Destructures `{ input, ...pathParams }` from args.
-   * - POST/PATCH: JSON body with input
-   * - GET/DELETE: serialize input as query params
-   */
-  async call(
-    procedureDef: ProcedureDef,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
-    const { input, ...pathParams } = args
-    const resolvedPath = resolvePath(
-      procedureDef.path,
-      pathParams as Record<string, string>
-    )
-    const method = procedureDef.method ?? `POST`
-    const url = new URL(`${this.#baseUrl}${resolvedPath}`)
-
-    const init: RequestInit = { method, headers: {} }
-
-    if (method === `GET` || method === `DELETE`) {
-      // Serialize input as query params for body-less methods
-      if (input != null && typeof input === `object`) {
-        for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-          if (v !== undefined) {
-            url.searchParams.set(k, String(v))
-          }
-        }
-      }
-    } else {
-      // POST/PATCH: JSON body
-      ;(init.headers as Record<string, string>)[`content-type`] = `application/json`
-      init.body = JSON.stringify(input)
-    }
-
-    const res = await fetch(url.toString(), init)
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => ``)
-      throw new Error(
-        `[streams-rpc] Procedure call failed: ${method} ${resolvedPath} → ${res.status} ${text}`
-      )
-    }
-
-    // 204 No Content — return undefined
-    if (res.status === 204) return undefined
-
-    const contentType = res.headers.get(`content-type`) ?? ``
-    if (contentType.includes(`application/json`)) {
-      return res.json()
-    }
-
-    return res.text()
   }
 }

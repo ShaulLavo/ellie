@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { createRouter } from "../src/server/router"
-import { fakeSchema, mixedRouter } from "./helpers"
+import { fakeSchema } from "./helpers"
 
 describe(`createRouter`, () => {
   it(`returns a router with empty _def`, () => {
@@ -77,7 +77,7 @@ describe(`createRouter`, () => {
       createRouter()
         .stream(`chat`, `/chat/:chatId`, { messages: fakeSchema() })
         .stream(`chat`, `/chat/:otherId`, { items: fakeSchema() })
-    ).toThrow(`Duplicate name`)
+    ).toThrow(`Duplicate stream name`)
   })
 
   it(`throws when path uses reserved param :value`, () => {
@@ -111,95 +111,5 @@ describe(`createRouter`, () => {
         .stream(`a`, `/a`, { items: fakeSchema() })
         .stream(`b`, `/b`, { items: fakeSchema() })
     ).not.toThrow()
-  })
-})
-
-describe(`createRouter verb methods`, () => {
-  it(`.post() adds a procedure definition to _def`, () => {
-    const input = fakeSchema()
-    const output = fakeSchema()
-    const router = createRouter().post(`recall`, `/banks/:bankId/recall`, {
-      input,
-      output,
-    })
-
-    expect(router._def.recall).toBeDefined()
-    expect(router._def.recall.path).toBe(`/banks/:bankId/recall`)
-    expect(router._def.recall.input).toBe(input)
-    expect(router._def.recall.output).toBe(output)
-    expect(router._def.recall.method).toBe(`POST`)
-  })
-
-  it(`.get() sets method to GET`, () => {
-    const router = createRouter().get(`listBanks`, `/banks`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-    expect(router._def.listBanks.method).toBe(`GET`)
-  })
-
-  it(`.patch() sets method to PATCH`, () => {
-    const router = createRouter().patch(`updateBank`, `/banks/:bankId`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-    expect(router._def.updateBank.method).toBe(`PATCH`)
-  })
-
-  it(`.delete() sets method to DELETE`, () => {
-    const router = createRouter().delete(`deleteBank`, `/banks/:bankId`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-    expect(router._def.deleteBank.method).toBe(`DELETE`)
-  })
-
-  it(`throws on duplicate name`, () => {
-    expect(() =>
-      createRouter()
-        .post(`recall`, `/recall`, { input: fakeSchema(), output: fakeSchema() })
-        .post(`recall`, `/other`, { input: fakeSchema(), output: fakeSchema() })
-    ).toThrow(`Duplicate name`)
-  })
-
-  it(`throws on duplicate name across stream and procedure`, () => {
-    expect(() =>
-      createRouter()
-        .stream(`chat`, `/chat/:chatId`, { messages: fakeSchema() })
-        .post(`chat`, `/chat/action`, { input: fakeSchema(), output: fakeSchema() })
-    ).toThrow(`Duplicate name`)
-  })
-
-  it(`throws when path uses reserved param :input`, () => {
-    expect(() =>
-      createRouter().post(`bad`, `/items/:input`, {
-        input: fakeSchema(),
-        output: fakeSchema(),
-      })
-    ).toThrow(`reserved param`)
-  })
-
-  it(`is chainable with .stream()`, () => {
-    const router = mixedRouter()
-    expect(router._def.chat).toBeDefined()
-    expect(router._def.recall).toBeDefined()
-    expect(router._def.listBanks).toBeDefined()
-    expect(`collections` in router._def.chat).toBe(true)
-    expect(`collections` in router._def.recall).toBe(false)
-  })
-
-  it(`returns a new builder on each verb call (immutable)`, () => {
-    const first = createRouter().post(`a`, `/a`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-    const second = first.post(`b`, `/b`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-
-    expect(first._def).not.toHaveProperty(`b`)
-    expect(second._def).toHaveProperty(`a`)
-    expect(second._def).toHaveProperty(`b`)
   })
 })

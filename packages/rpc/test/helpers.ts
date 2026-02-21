@@ -44,33 +44,3 @@ export function multiCollectionRouter() {
     },
   })
 }
-
-/** Procedure-only router with path params */
-export function procedureRouter() {
-  return createRouter().post(`recall`, `/banks/:bankId/recall`, {
-    input: fakeSchema(),
-    output: fakeSchema(),
-  })
-}
-
-/** Procedure without path params */
-export function paramlessProcedureRouter() {
-  return createRouter().get(`listBanks`, `/banks`, {
-    input: fakeSchema(),
-    output: fakeSchema(),
-  })
-}
-
-/** Mixed router: streams + procedures */
-export function mixedRouter() {
-  return createRouter()
-    .stream(`chat`, `/chat/:chatId`, { messages: fakeSchema() })
-    .post(`recall`, `/banks/:bankId/recall`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-    .get(`listBanks`, `/banks`, {
-      input: fakeSchema(),
-      output: fakeSchema(),
-    })
-}

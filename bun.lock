@@ -62,7 +62,7 @@
         "@streamdown/math": "^1.0.2",
         "@streamdown/mermaid": "^1.0.2",
         "@tanstack/ai": "^0.5.1",
-        "@tanstack/db": "0.5.27",
+        "@tanstack/db": "^0.5.27",
         "@tanstack/react-db": "^0.1.71",
         "@tanstack/react-query": "^5.90.21",
         "@tanstack/react-query-devtools": "^5.91.3",
@@ -221,8 +221,6 @@
         "@chonkiejs/core": "^0.0.7",
         "@ellie/ai": "workspace:*",
         "@ellie/db": "workspace:*",
-        "@ellie/router": "workspace:*",
-        "@ellie/rpc": "workspace:*",
         "@ellie/utils": "workspace:*",
         "@tanstack/ai-anthropic": "^0.5.0",
         "chrono-node": "^2.9.0",
@@ -259,7 +257,7 @@
       "devDependencies": {
         "@ellie/durable-streams": "workspace:*",
         "@repo/typescript-config": "workspace:*",
-        "@tanstack/db": "0.5.27",
+        "@tanstack/db": "^0.5.27",
         "@tanstack/react-db": "^0.1.71",
         "@types/react": "^19.2.7",
         "react": "^19.2.0",
@@ -292,7 +290,7 @@
       },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
-        "@tanstack/db": "0.5.27",
+        "@tanstack/db": "latest",
         "typescript": "^5.0.0",
       },
       "peerDependencies": {

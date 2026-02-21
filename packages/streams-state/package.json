@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@tanstack/db": "0.5.27",
+    "@tanstack/db": "latest",
     "typescript": "^5.0.0"
   }
 }
