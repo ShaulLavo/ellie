@@ -24,6 +24,7 @@
   "registries": {
     "@abui": "https://abui.io/r/{name}.json",
     "@kokonutui": "https://kokonutui.com/r/{name}.json",
-    "@animate-ui": "https://animate-ui.com/r/{name}.json"
+    "@animate-ui": "https://animate-ui.com/r/{name}.json",
+    "@magicui": "https://magicui.design/r/{name}"
   }
 }
