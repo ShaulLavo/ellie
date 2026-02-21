@@ -19,6 +19,8 @@ import { searchSemantic } from "./retrieval/semantic"
 import { searchFulltext } from "./retrieval/fulltext"
 import { searchGraph } from "./retrieval/graph"
 import { searchTemporal } from "./retrieval/temporal"
+import { scoreCognitive, type CognitiveCandidate } from "./retrieval/cognitive"
+import type { WorkingMemoryStore } from "./working-memory"
 import { reciprocalRankFusion } from "./fusion"
 import { rowToMemoryUnit, rowToEntity } from "./retain"
 import { extractTemporalRange } from "./temporal"
@@ -34,8 +36,13 @@ interface RankedCandidate extends RecallTraceCandidate {
 }
 
 /**
- * Multi-strategy retrieval with combined scoring parity:
- * combined = 0.6 * crossEncoder + 0.2 * normalizedRrf + 0.1 * temporal + 0.1 * recency
+ * Multi-strategy retrieval with combined scoring.
+ *
+ * mode="hybrid" (default):
+ *   combined = 0.6 * crossEncoder + 0.2 * normalizedRrf + 0.1 * temporal + 0.1 * recency
+ *
+ * mode="cognitive":
+ *   cognitive_score = 0.50*probe + 0.35*base + 0.15*spread (+ WM boost)
  */
 export async function recall(
   hdb: HindsightDatabase,
@@ -44,6 +51,7 @@ export async function recall(
   query: string,
   options: RecallOptions = {},
   rerank?: RerankFunction,
+  workingMemory?: WorkingMemoryStore,
 ): Promise<RecallResult> {
   const startedAt = Date.now()
   const phaseMetrics: RecallTraceMetric[] = []
@@ -173,88 +181,165 @@ export async function recall(
   const memoryRowById = new Map(memoryRows.map((row) => [row.id, row]))
 
   const rerankStart = Date.now()
-  const rrfMin = Math.min(...fused.map((candidate) => candidate.score))
-  const rrfMax = Math.max(...fused.map((candidate) => candidate.score))
-  const rrfRange = rrfMax - rrfMin
-
-  let crossEncoderRawScores = fused.map((candidate) => candidate.score)
-  let crossEncoderNormalizedScores = fused.map((candidate) =>
-    normalizeRrf(candidate.score, rrfMin, rrfRange),
-  )
-  if (rerank) {
-    const candidatesWithContent = fused.filter((candidate) => {
-      const row = memoryRowById.get(candidate.id)
-      return typeof row?.content === "string" && row.content.length > 0
-    })
-    if (candidatesWithContent.length > 0) {
-      const docs = candidatesWithContent.map(
-        (candidate) => memoryRowById.get(candidate.id)!.content,
-      )
-      const scores = await rerank(query, docs)
-      if (scores.length !== candidatesWithContent.length) {
-        throw new Error(
-          `Rerank score count mismatch: expected ${candidatesWithContent.length}, got ${scores.length}`,
-        )
-      }
-      const scoreById = new Map<string, number>()
-      for (let i = 0; i < candidatesWithContent.length; i++) {
-        scoreById.set(candidatesWithContent[i]!.id, scores[i]!)
-      }
-      crossEncoderRawScores = fused.map((candidate) => scoreById.get(candidate.id) ?? 0)
-      crossEncoderNormalizedScores = crossEncoderRawScores.map(sigmoid)
-    }
-  }
-
-  const temporalById = new Map(temporalTimed.hits.map((hit) => [hit.id, hit.score]))
+  const mode = options.mode ?? "hybrid"
   const now = Date.now()
-  const rankedCandidates: RankedCandidate[] = fused
-    .map((candidate, index) => {
-      const row = memoryRowById.get(candidate.id)
-      if (!row) return null
 
-      const rrfNormalized = normalizeRrf(candidate.score, rrfMin, rrfRange)
-      const temporal = temporalById.get(candidate.id) ?? 0.5
-      const recency = computeRecency(row, now)
-      const crossEncoderScoreNormalized = crossEncoderNormalizedScores[index] ?? 0.5
-      const combinedScore =
-        0.6 * crossEncoderScoreNormalized +
-        0.2 * rrfNormalized +
-        0.1 * temporal +
-        0.1 * recency
+  let rankedCandidates: RankedCandidate[]
+
+  if (mode === "cognitive") {
+    // ── Cognitive scoring path ──────────────────────────────────────────
+    // Build semantic similarity map from the original retrieval hits
+    const semanticScoreById = new Map<string, number>()
+    for (const hit of semanticTimed.hits) {
+      semanticScoreById.set(hit.id, hit.score)
+    }
+
+    // Build cognitive candidates with access metadata from loaded rows
+    const cogCandidates: CognitiveCandidate[] = fused
+      .map((candidate) => {
+        const row = memoryRowById.get(candidate.id)
+        if (!row) return null
+        return {
+          id: candidate.id,
+          semanticSimilarity: semanticScoreById.get(candidate.id) ?? 0,
+          accessCount: row.accessCount,
+          lastAccessed: row.lastAccessed,
+          encodingStrength: row.encodingStrength,
+        }
+      })
+      .filter((c): c is CognitiveCandidate => c != null)
+
+    const cogScored = scoreCognitive(hdb, cogCandidates, now)
+
+    // Apply working memory boost if sessionId is provided
+    const sessionId = options.sessionId
+    const hasWm = workingMemory != null && sessionId != null
+
+    rankedCandidates = cogScored.map((scored, index) => {
+      const wmBoost =
+        hasWm
+          ? workingMemory.getBoost(bankId, sessionId, scored.id, now)
+          : 0
+      const finalScore = scored.cognitiveScore + wmBoost
+      const candidate = fused.find((f) => f.id === scored.id)!
 
       return {
-        id: candidate.id,
-        rank: 0,
+        id: scored.id,
+        rank: index + 1,
         sources: candidate.sources as RankedCandidate["sources"],
         rrfScore: candidate.score,
-        rawCrossEncoderScore: crossEncoderRawScores[index] ?? 0,
-        crossEncoderScoreNormalized,
-        rrfNormalized,
-        temporal,
-        recency,
-        combinedScore,
+        rawCrossEncoderScore: 0,
+        crossEncoderScoreNormalized: 0,
+        rrfNormalized: 0,
+        temporal: 0,
+        recency: 0,
+        combinedScore: finalScore,
       } satisfies RankedCandidate
     })
-    .filter((candidate): candidate is RankedCandidate => candidate != null)
-    .sort((a, b) => b.combinedScore - a.combinedScore)
 
-  rankedCandidates.forEach((candidate, index) => {
-    candidate.rank = index + 1
-  })
-  phaseMetrics.push({
-    phaseName: "combined_scoring",
-    durationMs: Date.now() - rerankStart,
-    details: {
-      candidatesScored: rankedCandidates.length,
-      withReranker: Boolean(rerank),
-      weights: {
-        crossEncoder: 0.6,
-        rrf: 0.2,
-        temporal: 0.1,
-        recency: 0.1,
+    // Re-sort with WM boost applied, deterministic tie-break by id
+    rankedCandidates.sort((a, b) => {
+      if (b.combinedScore !== a.combinedScore) {
+        return b.combinedScore - a.combinedScore
+      }
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    })
+    rankedCandidates.forEach((c, i) => { c.rank = i + 1 })
+
+    phaseMetrics.push({
+      phaseName: "combined_scoring",
+      durationMs: Date.now() - rerankStart,
+      details: {
+        candidatesScored: rankedCandidates.length,
+        mode: "cognitive",
+        withWorkingMemory: hasWm,
       },
-    },
-  })
+    })
+  } else {
+    // ── Hybrid scoring path (unchanged) ─────────────────────────────────
+    const rrfMin = Math.min(...fused.map((candidate) => candidate.score))
+    const rrfMax = Math.max(...fused.map((candidate) => candidate.score))
+    const rrfRange = rrfMax - rrfMin
+
+    let crossEncoderRawScores = fused.map((candidate) => candidate.score)
+    let crossEncoderNormalizedScores = fused.map((candidate) =>
+      normalizeRrf(candidate.score, rrfMin, rrfRange),
+    )
+    if (rerank) {
+      const candidatesWithContent = fused.filter((candidate) => {
+        const row = memoryRowById.get(candidate.id)
+        return typeof row?.content === "string" && row.content.length > 0
+      })
+      if (candidatesWithContent.length > 0) {
+        const docs = candidatesWithContent.map(
+          (candidate) => memoryRowById.get(candidate.id)!.content,
+        )
+        const scores = await rerank(query, docs)
+        if (scores.length !== candidatesWithContent.length) {
+          throw new Error(
+            `Rerank score count mismatch: expected ${candidatesWithContent.length}, got ${scores.length}`,
+          )
+        }
+        const scoreById = new Map<string, number>()
+        for (let i = 0; i < candidatesWithContent.length; i++) {
+          scoreById.set(candidatesWithContent[i]!.id, scores[i]!)
+        }
+        crossEncoderRawScores = fused.map((candidate) => scoreById.get(candidate.id) ?? 0)
+        crossEncoderNormalizedScores = crossEncoderRawScores.map(sigmoid)
+      }
+    }
+
+    const temporalById = new Map(temporalTimed.hits.map((hit) => [hit.id, hit.score]))
+    rankedCandidates = fused
+      .map((candidate, index) => {
+        const row = memoryRowById.get(candidate.id)
+        if (!row) return null
+
+        const rrfNormalized = normalizeRrf(candidate.score, rrfMin, rrfRange)
+        const temporal = temporalById.get(candidate.id) ?? 0.5
+        const recency = computeRecency(row, now)
+        const crossEncoderScoreNormalized = crossEncoderNormalizedScores[index] ?? 0.5
+        const combinedScore =
+          0.6 * crossEncoderScoreNormalized +
+          0.2 * rrfNormalized +
+          0.1 * temporal +
+          0.1 * recency
+
+        return {
+          id: candidate.id,
+          rank: 0,
+          sources: candidate.sources as RankedCandidate["sources"],
+          rrfScore: candidate.score,
+          rawCrossEncoderScore: crossEncoderRawScores[index] ?? 0,
+          crossEncoderScoreNormalized,
+          rrfNormalized,
+          temporal,
+          recency,
+          combinedScore,
+        } satisfies RankedCandidate
+      })
+      .filter((candidate): candidate is RankedCandidate => candidate != null)
+      .sort((a, b) => b.combinedScore - a.combinedScore)
+
+    rankedCandidates.forEach((candidate, index) => {
+      candidate.rank = index + 1
+    })
+    phaseMetrics.push({
+      phaseName: "combined_scoring",
+      durationMs: Date.now() - rerankStart,
+      details: {
+        candidatesScored: rankedCandidates.length,
+        withReranker: Boolean(rerank),
+        mode: "hybrid",
+        weights: {
+          crossEncoder: 0.6,
+          rrf: 0.2,
+          temporal: 0.1,
+          recency: 0.1,
+        },
+      },
+    })
+  }
 
   const hydrationStart = Date.now()
 
@@ -385,6 +470,24 @@ export async function recall(
       usedTokens: maxTokens != null ? usedTokens : undefined,
     },
   })
+
+  // ── Access write-through (both modes) ────────────────────────────────────
+  // For returned memories only: increment access_count, update last_accessed,
+  // bump encoding_strength (capped at 3.0). Executed synchronously before return.
+  const returnedIds = memories.map((m) => m.memory.id)
+  if (returnedIds.length > 0) {
+    updateAccessMetadata(hdb, returnedIds, now)
+  }
+
+  // ── Working memory touch (cognitive mode only) ──────────────────────────
+  if (
+    mode === "cognitive" &&
+    workingMemory != null &&
+    options.sessionId != null &&
+    returnedIds.length > 0
+  ) {
+    workingMemory.touch(bankId, options.sessionId, returnedIds, now)
+  }
 
   const entities = options.includeEntities
     ? buildEntityPayload(entityStates, options.maxEntityTokens)
@@ -608,4 +711,31 @@ function truncateToApproxTokens(text: string, tokenBudget: number): string {
   const maxChars = Math.max(0, tokenBudget * 4)
   if (text.length <= maxChars) return text
   return text.slice(0, maxChars)
+}
+
+/**
+ * Batch-update access metadata for returned memory IDs.
+ *
+ * For each returned ID:
+ * - access_count = access_count + 1
+ * - last_accessed = now
+ * - encoding_strength = MIN(3.0, encoding_strength + 0.02)
+ */
+function updateAccessMetadata(
+  hdb: HindsightDatabase,
+  memoryIds: string[],
+  now: number,
+): void {
+  if (memoryIds.length === 0) return
+
+  // Use a single parameterized UPDATE with IN clause for efficiency
+  const placeholders = memoryIds.map(() => "?").join(",")
+  hdb.sqlite.run(
+    `UPDATE hs_memory_units
+     SET access_count = access_count + 1,
+         last_accessed = ?,
+         encoding_strength = MIN(3.0, encoding_strength + 0.02)
+     WHERE id IN (${placeholders})`,
+    [now, ...memoryIds],
+  )
 }

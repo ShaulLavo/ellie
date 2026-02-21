@@ -185,6 +185,9 @@ export const retainBatchInputSchema = v.object({
   })),
 })
 
+export const recallModeSchema = v.picklist([`hybrid`, `cognitive`])
+export type RecallMode = v.InferOutput<typeof recallModeSchema>
+
 export const recallInputSchema = v.object({
   query: v.string(),
   options: v.optional(v.object({
@@ -205,6 +208,8 @@ export const recallInputSchema = v.object({
     includeChunks: v.optional(v.boolean()),
     maxChunkTokens: v.optional(v.number()),
     enableTrace: v.optional(v.boolean()),
+    mode: v.optional(recallModeSchema),
+    sessionId: v.optional(v.string()),
   })),
 })
 

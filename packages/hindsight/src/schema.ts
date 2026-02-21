@@ -93,6 +93,9 @@ export const memoryUnits = sqliteTable(
     proofCount: integer("proof_count").notNull().default(0), // observations: number of supporting facts
     sourceMemoryIds: text("source_memory_ids"), // observations: JSON array of ULID refs
     history: text("history"), // observations: JSON array of change entries
+    accessCount: integer("access_count").notNull().default(0), // cognitive: times recalled
+    lastAccessed: integer("last_accessed"), // cognitive: epoch ms of last recall (nullable for legacy rows)
+    encodingStrength: real("encoding_strength").notNull().default(1.0), // cognitive: strengthened by recall
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -109,6 +112,8 @@ export const memoryUnits = sqliteTable(
     ),
     index("idx_hs_mu_mentioned_at").on(table.bankId, table.mentionedAt),
     index("idx_hs_mu_consolidated").on(table.bankId, table.consolidatedAt),
+    index("idx_hs_mu_last_accessed").on(table.bankId, table.lastAccessed),
+    index("idx_hs_mu_access_count").on(table.bankId, table.accessCount),
   ],
 )
 

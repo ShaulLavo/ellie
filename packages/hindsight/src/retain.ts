@@ -1041,6 +1041,9 @@ export async function retain(
         metadata: memoryMetadata ? JSON.stringify(memoryMetadata) : null,
         tags: tags.length > 0 ? JSON.stringify(tags) : null,
         sourceText,
+        accessCount: 0,
+        lastAccessed: null,
+        encodingStrength: 1.0,
         createdAt: now,
         updatedAt: now,
       })
@@ -1378,6 +1381,9 @@ export async function retainBatch(
         metadata: item.metadata ? JSON.stringify(item.metadata) : null,
         tags: tags.length > 0 ? JSON.stringify(tags) : null,
         sourceText,
+        accessCount: 0,
+        lastAccessed: null,
+        encodingStrength: 1.0,
         createdAt: now,
         updatedAt: now,
       })
