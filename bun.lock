@@ -251,6 +251,18 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/hindsight-eval": {
+      "name": "@ellie/hindsight-eval",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/hindsight": "workspace:*",
+        "@ellie/utils": "workspace:*",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "typescript": "^5.0.0",
+      },
+    },
     "packages/router": {
       "name": "@ellie/router",
       "version": "0.1.0",
@@ -454,6 +466,8 @@
     "@ellie/env": ["@ellie/env@workspace:packages/env"],
 
     "@ellie/hindsight": ["@ellie/hindsight@workspace:packages/hindsight"],
+
+    "@ellie/hindsight-eval": ["@ellie/hindsight-eval@workspace:packages/hindsight-eval"],
 
     "@ellie/router": ["@ellie/router@workspace:packages/router"],
 
