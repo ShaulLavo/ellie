@@ -51,6 +51,13 @@ async function fetch(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
+  // Status endpoint — connected client count
+  if (path === "/api/status" && req.method === "GET") {
+    const response = Response.json({ connectedClients: ctx.activeSSEResponses.size });
+    logRequest(req.method, path, response.status);
+    return response;
+  }
+
   if (path === "/manifest.json") {
     const file = Bun.file(manifestPath);
     const response = new Response(file, {

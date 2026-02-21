@@ -411,7 +411,7 @@ export const PromptInput = ({
 
   // ----- Local attachments (only used when no provider)
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
-  const files = usingProvider ? controller.attachments.files : items;
+  const files = controller ? controller.attachments.files : items;
 
   // ----- Local referenced sources (always local to PromptInput)
   const [referencedSources, setReferencedSources] = useState<
@@ -579,9 +579,9 @@ export const PromptInput = ({
     []
   );
 
-  const add = usingProvider ? addWithProviderValidation : addLocal;
-  const remove = usingProvider ? controller.attachments.remove : removeLocal;
-  const openFileDialog = usingProvider
+  const add = controller ? addWithProviderValidation : addLocal;
+  const remove = controller ? controller.attachments.remove : removeLocal;
+  const openFileDialog = controller
     ? controller.attachments.openFileDialog
     : openFileDialogLocal;
 
@@ -592,11 +592,11 @@ export const PromptInput = ({
 
   // Let provider know about our hidden file input so external menus can call openFileDialog()
   useEffect(() => {
-    if (!usingProvider) {
+    if (!controller) {
       return;
     }
     controller.__registerFileInput(inputRef, () => inputRef.current?.click());
-  }, [usingProvider, controller]);
+  }, [controller]);
 
   // Note: File input cannot be programmatically set for security reasons
   // The syncHiddenInput prop is no longer functional
@@ -723,7 +723,7 @@ export const PromptInput = ({
       event.preventDefault();
 
       const form = event.currentTarget;
-      const text = usingProvider
+      const text = controller
         ? controller.textInput.value
         : (() => {
             const formData = new FormData(form);
@@ -759,7 +759,7 @@ export const PromptInput = ({
           try {
             await result;
             clear();
-            if (usingProvider) {
+            if (controller) {
               controller.textInput.clear();
             }
           } catch {
@@ -768,7 +768,7 @@ export const PromptInput = ({
         } else {
           // Sync function completed without throwing, clear inputs
           clear();
-          if (usingProvider) {
+          if (controller) {
             controller.textInput.clear();
           }
         }
