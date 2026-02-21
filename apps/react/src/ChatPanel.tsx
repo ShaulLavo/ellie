@@ -37,6 +37,7 @@ import {
   Trash,
   Robot,
   User,
+  Users,
   Monitor,
 } from "@phosphor-icons/react"
 import {
@@ -46,6 +47,7 @@ import {
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu"
 import { useTheme } from "./hooks/use-theme"
+import { useConnectedClients } from "./hooks/use-connected-clients"
 
 interface ChatPanelProps {
   chatId: string
@@ -109,6 +111,7 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
     sendMessage(text)
   }
 
+  const connectedClients = useConnectedClients()
   const label = CHAT_LABEL[chatId] ?? chatId
   const grouped = groupMessages(messages)
 
@@ -132,6 +135,12 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
           </div>
         </ChatHeaderMain>
         <ChatHeaderAddon>
+          {connectedClients !== null && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Connected clients">
+              <Users weight="fill" className="size-3.5" />
+              {connectedClients}
+            </span>
+          )}
           {isLoading && <Spinner className="size-4 text-muted-foreground" />}
           <ModeToggle />
           <ChatHeaderButton
