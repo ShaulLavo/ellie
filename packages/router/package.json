@@ -15,6 +15,7 @@
   "dependencies": {
     "@ellie/rpc": "workspace:*",
     "@ellie/schemas": "workspace:*",
+    "@standard-schema/spec": "^1.0.0",
     "valibot": "^1.2.0"
   },
   "devDependencies": {
