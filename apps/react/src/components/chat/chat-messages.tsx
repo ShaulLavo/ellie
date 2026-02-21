@@ -1,21 +1,18 @@
-import { cn } from "@/lib/utils";
+import { forwardRef } from "react"
+import { cn } from "@/lib/utils"
 
-export interface ChatMessagesProps extends React.ComponentProps<"div"> {}
+export type ChatMessagesProps = React.ComponentProps<"div">
 
-export function ChatMessages({
-  children,
-  className,
-  ...props
-}: ChatMessagesProps) {
-  return (
-    <div
-      className={cn(
-        "flex-1 flex flex-col-reverse overflow-auto py-2",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </div>
-  );
-}
+export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(
+  function ChatMessages({ children, className, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        className={cn("flex-1 flex flex-col-reverse overflow-auto py-2", className)}
+        {...props}
+      >
+        {children}
+      </div>
+    )
+  }
+)

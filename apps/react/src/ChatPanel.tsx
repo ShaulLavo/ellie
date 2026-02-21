@@ -1,7 +1,13 @@
-import { useState } from "react"
+import { useCallback, useMemo, useRef, useState, type ClipboardEvent } from "react"
 import { cn } from "./lib/utils"
 import { useChat } from "./lib/chat/use-chat"
 import type { Message } from "./lib/chat/use-chat"
+import { useHotkey } from "@tanstack/react-hotkeys"
+import {
+  resolveSelectedMarkdown,
+  setMarkdownClipboardData,
+  writeMarkdownToSystemClipboard,
+} from "./lib/chat/markdown-copy"
 import { Chat } from "./components/chat/chat"
 import {
   ChatHeader,
@@ -103,27 +109,84 @@ function ModeToggle() {
 export function ChatPanel({ chatId }: ChatPanelProps) {
   const { messages, isLoading, error, sendMessage, clearChat } = useChat(chatId)
   const [input, setInput] = useState("")
+  const messagesRef = useRef<HTMLDivElement>(null)
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     const text = input.trim()
     if (!text) return
     setInput("")
     sendMessage(text)
-  }
+  }, [input, sendMessage])
 
   const connectedClients = useConnectedClients()
   const label = CHAT_LABEL[chatId] ?? chatId
-  const grouped = groupMessages(messages)
+  const grouped = useMemo(() => groupMessages(messages), [messages])
+  const messageOrder = useMemo(() => grouped.map(({ msg }) => msg.id), [grouped])
+  const markdownById = useMemo(() => {
+    const markdownMap = new Map<string, string>()
+    for (const { msg } of grouped) {
+      markdownMap.set(msg.id, msg.content)
+    }
+    return markdownMap
+  }, [grouped])
+
+  const getSelectedMarkdown = useCallback(
+    () =>
+      resolveSelectedMarkdown({
+        container: messagesRef.current,
+        messageOrder,
+        markdownById,
+      }),
+    [markdownById, messageOrder]
+  )
+
+  const handleHotkeyCopy = useCallback(async () => {
+    const markdown = getSelectedMarkdown()
+    if (!markdown) return
+
+    try {
+      await writeMarkdownToSystemClipboard(markdown)
+    } catch (error) {
+      console.error(
+        "[ChatPanel] Failed to write markdown to clipboard:",
+        error instanceof Error ? error.message : JSON.stringify(error)
+      )
+    }
+  }, [getSelectedMarkdown])
+
+  useHotkey(
+    "Mod+C",
+    () => {
+      void handleHotkeyCopy()
+    },
+    {
+      target: messagesRef,
+      eventType: "keydown",
+      preventDefault: true,
+      stopPropagation: true,
+    }
+  )
+
+  const handleMessagesCopy = useCallback(
+    (event: ClipboardEvent<HTMLDivElement>) => {
+      const markdown = getSelectedMarkdown()
+      if (!markdown) return
+
+      event.preventDefault()
+      setMarkdownClipboardData(event.clipboardData, markdown)
+    },
+    [getSelectedMarkdown]
+  )
 
   return (
     <Chat className="flex-1 min-w-0">
       {/* ── Header ─────────────────────────────────────── */}
       <ChatHeader className="border-b">
-        <ChatHeaderAddon>
+        <ChatHeaderAddon data-chat-meta>
           <ChatHeaderAvatar fallback={label[0]} />
         </ChatHeaderAddon>
         <ChatHeaderMain>
-          <div className="grid">
+          <div className="grid" data-chat-meta>
             <span className="text-sm font-semibold leading-tight truncate">
               {label}
             </span>
@@ -136,7 +199,11 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
         </ChatHeaderMain>
         <ChatHeaderAddon>
           {connectedClients !== null && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Connected clients">
+            <span
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+              title="Connected clients"
+              data-chat-meta
+            >
               <Users weight="fill" className="size-3.5" />
               {connectedClients}
             </span>
@@ -154,7 +221,7 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
       </ChatHeader>
 
       {/* ── Messages ───────────────────────────────────── */}
-      <ChatMessages>
+      <ChatMessages ref={messagesRef} onCopy={handleMessagesCopy}>
         {/* rendered bottom-to-top because of flex-col-reverse */}
         {error && (
           <p className="mx-4 my-2 text-xs text-destructive">
@@ -181,14 +248,15 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
                 new Date(prev.createdAt).toDateString()
 
             return (
-              <div key={msg.id}>
+              <div key={msg.id} data-chat-message-id={msg.id}>
                 {showDateSep && (
-                  <ChatEvent className="items-center gap-1 my-4">
+                  <ChatEvent className="items-center gap-1 my-4" data-chat-meta>
                     <Separator className="flex-1" />
                     <ChatEventTime
                       timestamp={msg.createdAt}
                       format="longDate"
                       className="text-xs text-muted-foreground font-semibold min-w-max"
+                      data-chat-meta
                     />
                     <Separator className="flex-1" />
                   </ChatEvent>
@@ -198,7 +266,10 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
                   "group hover:bg-accent transition-colors py-0.5",
                   isFirst && idx > 0 && !showDateSep && "mt-3"
                 )}>
-                  <ChatEventAddon className={isFirst ? "" : "pt-0 items-center"}>
+                  <ChatEventAddon
+                    className={isFirst ? "" : "pt-0 items-center"}
+                    data-chat-meta
+                  >
                     {isFirst ? (
                       <ChatEventAvatar
                         fallback={
@@ -220,19 +291,21 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
                         timestamp={msg.createdAt}
                         format="time"
                         className="text-right text-[10px] leading-tight opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-full text-muted-foreground/50"
+                        data-chat-meta
                       />
                     )}
                   </ChatEventAddon>
 
                   <ChatEventBody>
                     {isFirst && (
-                      <ChatEventTitle>
+                      <ChatEventTitle data-chat-meta>
                         <span className="font-medium capitalize">
                           {msg.role}
                         </span>
                         <ChatEventTime
                           timestamp={msg.createdAt}
                           className="text-[10px] text-muted-foreground/50"
+                          data-chat-meta
                         />
                       </ChatEventTitle>
                     )}

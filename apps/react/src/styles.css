@@ -142,6 +142,8 @@
   --sidebar-accent-foreground: oklch(0.20 0.01 260);
   --sidebar-border: oklch(0.91 0.005 90);
   --sidebar-ring: oklch(0.47 0.08 170);
+  --selection-bg: oklch(0.88 0.07 170 / 70%);
+  --selection-fg: oklch(0.18 0.02 260);
   --color-1: oklch(66.2% 0.225 25.9);
   --color-2: oklch(60.4% 0.26 302);
   --color-3: oklch(69.6% 0.165 251);
@@ -183,6 +185,8 @@
   --sidebar-accent-foreground: oklch(0.92 0.008 90);
   --sidebar-border: oklch(1 0 0 / 9%);
   --sidebar-ring: oklch(0.72 0.10 175);
+  --selection-bg: oklch(0.48 0.11 175 / 65%);
+  --selection-fg: oklch(0.96 0.01 90);
   --color-1: oklch(66.2% 0.225 25.9);
   --color-2: oklch(60.4% 0.26 302);
   --color-3: oklch(69.6% 0.165 251);
@@ -201,6 +205,21 @@
   html {
     @apply font-sans;
   }
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
+::-moz-selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
+[data-chat-meta] {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ─── Keyframes ─── */
