@@ -4,9 +4,9 @@
  * Pipeline: load fixture → seed memories → execute recall → collect candidates → score.
  *
  * Reproducibility knobs:
- * - Fixed seed for deterministic ID generation
+ * - Hash-based deterministic embeddings (not semantically meaningful)
+ * - Stable sort tie-breakers (score DESC, content ASC)
  * - Fixed topK (default 10)
- * - Stable sort tie-breakers by (score DESC, id ASC)
  * - UTC timestamps in outputs
  */
 
@@ -65,21 +65,6 @@ function createEvalAdapter(): HindsightConfig["adapter"] {
       return Promise.resolve({ data: {}, rawResponse: "{}" })
     },
   } as unknown as NonNullable<HindsightConfig["adapter"]>
-}
-
-// ── Deterministic ID generator ────────────────────────────────────────────
-
-/**
- * Creates a seeded ULID-like ID generator for reproducible memory IDs.
- * Format: "eval-{caseIndex}-{factIndex}" padded for lexicographic sort.
- */
-function makeIdGenerator(caseIndex: number) {
-  let factCounter = 0
-  return () => {
-    const id = `eval_${String(caseIndex).padStart(4, "0")}_${String(factCounter).padStart(4, "0")}`
-    factCounter++
-    return id
-  }
 }
 
 // ── Fixture loading ───────────────────────────────────────────────────────
@@ -153,8 +138,6 @@ async function runSingleCase(
     // Create bank
     const bank = hs.createBank(`eval-bank-${caseIndex}`)
     const bankId = bank.id
-    const nextId = makeIdGenerator(caseIndex)
-
     // Seed memories using pre-extracted facts (bypasses LLM)
     const baseTimestamp = new Date("2025-01-01T00:00:00Z").getTime()
     const facts = evalCase.seedFacts.map((fact, i) => ({
@@ -195,7 +178,8 @@ async function runSingleCase(
       }))
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score
-        return a.memoryId.localeCompare(b.memoryId)
+        // Tie-break on content (deterministic) rather than memoryId (ULID, timestamp-dependent)
+        return a.content.localeCompare(b.content)
       })
       .map((c, idx) => ({ ...c, rank: idx + 1 }))
 

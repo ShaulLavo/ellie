@@ -116,7 +116,8 @@ describe("scoring", () => {
       ]
       const metrics = scoreCase(evalCase, candidates)
       expect(metrics.orderingAccuracy).toBe(0) // all pairs reversed
-      expect(metrics.predecessorHitRate).toBe(1.0) // predecessors are present
+      expect(metrics.predecessorHitRate).toBe(0) // no predecessor appears before its successor
+      expect(metrics.successorHitRate).toBe(0) // no successor appears after its predecessor
     })
 
     it("scores partial ordering", () => {
@@ -128,6 +129,10 @@ describe("scoring", () => {
       const metrics = scoreCase(evalCase, candidates)
       // Pairs: (first,second): idx 0<2 correct, (first,third): idx 0<1 correct, (second,third): idx 2>1 wrong
       expect(metrics.orderingAccuracy).toBeCloseTo(2 / 3, 3)
+      // Predecessor: "second"→pred "first" at 0<2 ✓, "third"→pred "second" at 2>1 ✗ → 1/2
+      expect(metrics.predecessorHitRate).toBeCloseTo(0.5, 3)
+      // Successor: "first"→succ "second" at 2>0 ✓, "second"→succ "third" at 1<2 ✗ → 1/2
+      expect(metrics.successorHitRate).toBeCloseTo(0.5, 3)
     })
   })
 
@@ -150,7 +155,7 @@ describe("scoring", () => {
         makeCandidate("unrelated content", 0.8, 2),
       ]
       const metrics = scoreCase(evalCase, candidates)
-      expect(metrics.duplicateHitRatio).toBe(0)
+      expect(metrics.duplicateLeakRate).toBe(0)
       expect(metrics.contradictionRetrievalRate).toBe(1.0)
     })
 
@@ -160,7 +165,7 @@ describe("scoring", () => {
         makeCandidate("the correct answer is here", 0.8, 2),
       ]
       const metrics = scoreCase(evalCase, candidates)
-      expect(metrics.duplicateHitRatio).toBe(1.0)
+      expect(metrics.duplicateLeakRate).toBe(1.0)
     })
   })
 

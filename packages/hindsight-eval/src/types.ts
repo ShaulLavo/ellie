@@ -53,6 +53,10 @@ export interface EvalCase {
 export interface EvalRunConfig {
   datasetPath: string
   mode: "hybrid"
+  /**
+   * Metadata-only seed value recorded in reports for traceability.
+   * Determinism comes from hash-based embeddings and stable sort, not from a PRNG.
+   */
   seed: number
   topK: number
   outputDir: string
@@ -95,7 +99,8 @@ export interface TemporalNarrativeMetrics {
 }
 
 export interface DedupConflictMetrics {
-  duplicateHitRatio: number
+  /** Fraction of excluded (duplicate/stale) items that leaked into results (lower is better) */
+  duplicateLeakRate: number
   contradictionRetrievalRate: number
 }
 
@@ -133,4 +138,6 @@ export interface EvalReport {
   globalWeights: Record<Scenario, number>
   cases: EvalCaseResult[]
   totalDurationMs: number
+  /** Warnings about data quality (e.g., missing scenario families) */
+  warnings?: string[]
 }

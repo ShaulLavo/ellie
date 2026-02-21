@@ -4,7 +4,7 @@
  * Each scenario family has specialized metrics:
  * - follow_up_recall: Recall@1/3/5, MRR
  * - temporal_narrative: ordering accuracy, predecessor/successor hit rate
- * - dedup_conflict: duplicate hit ratio, contradiction retrieval rate
+ * - dedup_conflict: duplicate leak rate (penalty), contradiction retrieval rate
  * - code_location_recall: path Recall@k, exact-path precision
  * - token_budget_packing: fact retention rate, truncation loss rate
  */
@@ -91,25 +91,31 @@ function scoreTemporalNarrative(
   }
   const orderingAccuracy = totalPairs > 0 ? correctPairs / totalPairs : 1.0
 
-  // Predecessor hit rate: can we find each hint's predecessor in results?
+  // Predecessor hit rate: for each hint at position i>0, check that
+  // hint[i-1] appears at a LOWER rank (earlier in candidates) than hint[i]
   let predecessorHits = 0
   let predecessorTotal = 0
   for (let i = 1; i < orderedHints.length; i++) {
-    predecessorTotal++
-    const current = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
-    const prev = candidates.findIndex((c) => contentContains(c, orderedHints[i - 1]!))
-    if (current >= 0 && prev >= 0) predecessorHits++
+    const currentIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
+    const prevIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i - 1]!))
+    if (currentIdx >= 0 && prevIdx >= 0) {
+      predecessorTotal++
+      if (prevIdx < currentIdx) predecessorHits++
+    }
   }
   const predecessorHitRate = predecessorTotal > 0 ? predecessorHits / predecessorTotal : 1.0
 
-  // Successor hit rate: same but forward
+  // Successor hit rate: for each hint at position i<N-1, check that
+  // hint[i+1] appears at a HIGHER rank (later in candidates) than hint[i]
   let successorHits = 0
   let successorTotal = 0
   for (let i = 0; i < orderedHints.length - 1; i++) {
-    successorTotal++
-    const current = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
-    const next = candidates.findIndex((c) => contentContains(c, orderedHints[i + 1]!))
-    if (current >= 0 && next >= 0) successorHits++
+    const currentIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
+    const nextIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i + 1]!))
+    if (currentIdx >= 0 && nextIdx >= 0) {
+      successorTotal++
+      if (nextIdx > currentIdx) successorHits++
+    }
   }
   const successorHitRate = successorTotal > 0 ? successorHits / successorTotal : 1.0
 
@@ -132,7 +138,7 @@ function scoreDedupConflict(
   const duplicateHits = mustExclude.filter((excluded) =>
     candidates.some((c) => contentContains(c, excluded)),
   ).length
-  const duplicateHitRatio =
+  const duplicateLeakRate =
     mustExclude.length > 0 ? duplicateHits / mustExclude.length : 0
 
   // Contradiction retrieval rate: how many expected items were actually retrieved
@@ -143,7 +149,7 @@ function scoreDedupConflict(
   )
 
   return {
-    duplicateHitRatio,
+    duplicateLeakRate,
     contradictionRetrievalRate,
     "recall@5": recallAtK(candidates, mustInclude, 5),
   }

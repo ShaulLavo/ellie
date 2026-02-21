@@ -7,7 +7,7 @@
  *   bun run eval:baseline -- --output-dir ./artifacts/eval/baseline/custom
  */
 
-import { resolve, join } from "path"
+import { resolve, join, relative } from "path"
 import { mkdirSync, writeFileSync, existsSync, cpSync } from "fs"
 import { runBaseline } from "../src/runner"
 import { generateReport, formatMarkdownReport } from "../src/report"
@@ -65,8 +65,15 @@ const bunVersion = Bun.version
 
 // ── Generate report ───────────────────────────────────────────────────────
 
+// Store relative paths in the committed report (relative to package root)
+const reportConfig: EvalRunConfig = {
+  ...config,
+  datasetPath: relative(PKG_ROOT, config.datasetPath),
+  outputDir: relative(PKG_ROOT, config.outputDir),
+}
+
 const report = generateReport({
-  config,
+  config: reportConfig,
   cases,
   gitSha,
   bunVersion,

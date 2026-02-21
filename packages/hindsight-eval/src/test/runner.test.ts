@@ -9,7 +9,7 @@ describe("runner", () => {
   describe("loadFixture", () => {
     it("loads all cases from the JSONL fixture", () => {
       const cases = loadFixture(FIXTURE_PATH)
-      expect(cases.length).toBe(11)
+      expect(cases.length).toBe(25)
     })
 
     it("parses each case with required fields", () => {
@@ -88,7 +88,7 @@ describe("runner", () => {
       }
     })
 
-    it("respects stable tie-breaking (score DESC, id ASC)", async () => {
+    it("respects stable tie-breaking (score DESC, content ASC)", async () => {
       const config: EvalRunConfig = {
         datasetPath: FIXTURE_PATH,
         mode: "hybrid",
@@ -105,8 +105,8 @@ describe("runner", () => {
           const curr = result.candidates[i]!
 
           if (prev.score === curr.score) {
-            // Same score → id should be ascending
-            expect(prev.memoryId.localeCompare(curr.memoryId)).toBeLessThanOrEqual(0)
+            // Same score → content should be ascending
+            expect(prev.content.localeCompare(curr.content)).toBeLessThanOrEqual(0)
           } else {
             // Scores should be descending
             expect(prev.score).toBeGreaterThanOrEqual(curr.score)

@@ -34,6 +34,10 @@ const PRIMARY_METRIC: Record<Scenario, string> = {
   token_budget_packing: "factRetentionRate",
 }
 
+// ── Penalty metrics (lower is better) ──────────────────────────────────────
+
+const PENALTY_METRICS = new Set(["duplicateLeakRate", "truncationLossRate"])
+
 // ── Report generation ─────────────────────────────────────────────────────
 
 export interface GenerateReportOptions {
@@ -81,17 +85,32 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
     (a, b) => scenarioOrder.indexOf(a.scenario) - scenarioOrder.indexOf(b.scenario),
   )
 
-  // Compute global weighted score
+  // Compute global weighted score (weights sum to 1.0, no re-normalization)
   let globalScore = 0
-  let totalWeight = 0
   for (const summary of scenarios) {
     const weight = GLOBAL_WEIGHTS[summary.scenario]
     const primaryMetric = PRIMARY_METRIC[summary.scenario]
     const value = summary.metrics[primaryMetric] ?? 0
     globalScore += weight * value
-    totalWeight += weight
   }
-  if (totalWeight > 0) globalScore /= totalWeight
+
+  // Flag partial-scenario runs
+  const allScenarios: Scenario[] = [
+    "follow_up_recall",
+    "temporal_narrative",
+    "dedup_conflict",
+    "code_location_recall",
+    "token_budget_packing",
+  ]
+  const presentScenarios = new Set(scenarios.map((s) => s.scenario))
+  const missingScenarios = allScenarios.filter((s) => !presentScenarios.has(s))
+  const warnings: string[] = []
+  if (missingScenarios.length > 0) {
+    warnings.push(
+      `Partial dataset: missing scenario families: ${missingScenarios.join(", ")}. ` +
+      `Global score only reflects ${presentScenarios.size}/5 families.`,
+    )
+  }
 
   return {
     version: "1.0.0",
@@ -109,6 +128,7 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
     globalWeights: GLOBAL_WEIGHTS,
     cases,
     totalDurationMs,
+    ...(warnings.length > 0 ? { warnings } : {}),
   }
 }
 
@@ -157,6 +177,15 @@ export function formatMarkdownReport(report: EvalReport): string {
   lines.push(`**Total Duration:** ${report.totalDurationMs}ms`)
   lines.push("")
 
+  // Warnings
+  if (report.warnings && report.warnings.length > 0) {
+    lines.push("> **Warning:**")
+    for (const warning of report.warnings) {
+      lines.push(`> ${warning}`)
+    }
+    lines.push("")
+  }
+
   // Global score
   lines.push(`## Global Score: ${(report.globalScore * 100).toFixed(1)}%`)
   lines.push("")
@@ -183,7 +212,8 @@ export function formatMarkdownReport(report: EvalReport): string {
     lines.push("| Metric | Value |")
     lines.push("|--------|-------|")
     for (const [key, value] of Object.entries(summary.metrics)) {
-      lines.push(`| ${key} | ${(value * 100).toFixed(1)}% |`)
+      const annotation = PENALTY_METRICS.has(key) ? " (lower is better)" : ""
+      lines.push(`| ${key}${annotation} | ${(value * 100).toFixed(1)}% |`)
     }
     lines.push("")
   }

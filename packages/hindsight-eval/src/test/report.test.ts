@@ -87,6 +87,63 @@ describe("report", () => {
       expect(report.datasetVersion).toBe("assistant-baseline.v1")
     })
 
+    it("does not re-normalize global score for partial scenarios", () => {
+      const cases: EvalCaseResult[] = [
+        makeCaseResult("fur-1", "follow_up_recall", { mrr: 1.0 }),
+        makeCaseResult("tn-1", "temporal_narrative", { orderingAccuracy: 1.0 }),
+      ]
+
+      const report = generateReport({
+        config: mockConfig,
+        cases,
+        gitSha: "abc123",
+        bunVersion: "1.0.0",
+        totalDurationMs: 100,
+      })
+
+      // With no re-normalization: 0.30*1.0 + 0.20*1.0 = 0.50 (not 1.0)
+      expect(report.globalScore).toBeCloseTo(0.50, 3)
+    })
+
+    it("adds warning when scenario families are missing", () => {
+      const cases: EvalCaseResult[] = [
+        makeCaseResult("fur-1", "follow_up_recall", { mrr: 1.0 }),
+      ]
+
+      const report = generateReport({
+        config: mockConfig,
+        cases,
+        gitSha: "abc123",
+        bunVersion: "1.0.0",
+        totalDurationMs: 100,
+      })
+
+      expect(report.warnings).toBeDefined()
+      expect(report.warnings!.length).toBe(1)
+      expect(report.warnings![0]).toContain("Partial dataset")
+      expect(report.warnings![0]).toContain("1/5 families")
+    })
+
+    it("has no warnings when all scenario families are present", () => {
+      const cases: EvalCaseResult[] = [
+        makeCaseResult("fur-1", "follow_up_recall", { mrr: 1.0 }),
+        makeCaseResult("tn-1", "temporal_narrative", { orderingAccuracy: 1.0 }),
+        makeCaseResult("dc-1", "dedup_conflict", { contradictionRetrievalRate: 1.0 }),
+        makeCaseResult("clr-1", "code_location_recall", { "pathRecall@k": 1.0 }),
+        makeCaseResult("tbp-1", "token_budget_packing", { factRetentionRate: 1.0 }),
+      ]
+
+      const report = generateReport({
+        config: mockConfig,
+        cases,
+        gitSha: "abc123",
+        bunVersion: "1.0.0",
+        totalDurationMs: 100,
+      })
+
+      expect(report.warnings).toBeUndefined()
+    })
+
     it("sorts scenarios in deterministic order", () => {
       const cases: EvalCaseResult[] = [
         makeCaseResult("tbp-1", "token_budget_packing", { factRetentionRate: 1.0 }),
@@ -132,6 +189,41 @@ describe("report", () => {
       expect(md).toContain("## Scenario Results")
       expect(md).toContain("## Case Details")
       expect(md).toContain("fur-1")
+    })
+
+    it("annotates penalty metrics in scenario tables", () => {
+      const report = generateReport({
+        config: mockConfig,
+        cases: [
+          makeCaseResult("dc-1", "dedup_conflict", {
+            duplicateLeakRate: 0.5,
+            contradictionRetrievalRate: 1.0,
+          }),
+        ],
+        gitSha: "abc123",
+        bunVersion: "1.0.0",
+        totalDurationMs: 100,
+      })
+
+      const md = formatMarkdownReport(report)
+      expect(md).toContain("duplicateLeakRate (lower is better)")
+      expect(md).not.toContain("contradictionRetrievalRate (lower is better)")
+    })
+
+    it("shows warnings in markdown when present", () => {
+      const report = generateReport({
+        config: mockConfig,
+        cases: [
+          makeCaseResult("fur-1", "follow_up_recall", { mrr: 0.8 }),
+        ],
+        gitSha: "abc123",
+        bunVersion: "1.0.0",
+        totalDurationMs: 100,
+      })
+
+      const md = formatMarkdownReport(report)
+      expect(md).toContain("> **Warning:**")
+      expect(md).toContain("Partial dataset")
     })
 
     it("includes scenario weight table", () => {

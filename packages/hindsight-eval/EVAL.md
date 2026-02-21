@@ -26,10 +26,10 @@ bun test --cwd packages/hindsight-eval
 
 | Knob | Value | Purpose |
 |------|-------|---------|
-| Seed | 42 | Fixed for deterministic ID generation |
+| Seed | 42 | Report metadata only (not used as PRNG seed) |
 | TopK | 10 | Default result limit |
 | Embeddings | Hash-based (16 dims) | NOT semantically meaningful — ensures deterministic vectors |
-| Tie-breaking | (score DESC, id ASC) | Stable candidate ordering |
+| Tie-breaking | (score DESC, content ASC) | Stable candidate ordering |
 | Timestamps | UTC | Consistent across timezones |
 | LLM | No-op mock | Seeds use pre-extracted facts, no LLM calls |
 
@@ -37,11 +37,11 @@ bun test --cwd packages/hindsight-eval
 
 | Scenario | Cases | Primary Metric | Description |
 |----------|-------|----------------|-------------|
-| `follow_up_recall` | 3 | MRR | Recall user preferences and prior decisions |
-| `temporal_narrative` | 2 | Ordering accuracy | Reconstruct timelines from memory |
-| `dedup_conflict` | 2 | Contradiction retrieval rate | Handle conflicting/duplicate facts |
-| `code_location_recall` | 2 | Path recall@k | Find where code lives in the repo |
-| `token_budget_packing` | 2 | Fact retention rate | Pack maximum facts under token budget |
+| `follow_up_recall` | 5 | MRR | Recall user preferences and prior decisions |
+| `temporal_narrative` | 5 | Ordering accuracy | Reconstruct timelines from memory |
+| `dedup_conflict` | 5 | Contradiction retrieval rate | Handle conflicting/duplicate facts |
+| `code_location_recall` | 5 | Path recall@k | Find where code lives in the repo |
+| `token_budget_packing` | 5 | Fact retention rate | Pack maximum facts under token budget |
 
 ### Scenario Weights (Global Score)
 

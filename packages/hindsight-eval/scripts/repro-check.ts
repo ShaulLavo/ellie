@@ -145,8 +145,9 @@ if (existsSync(baselineJsonPath)) {
   }
 } else {
   console.log("")
-  console.log("No committed baseline found at:", LATEST_DIR)
-  console.log("Run `bun run eval:baseline` first to generate one.")
+  console.error("ERROR: No committed baseline found at:", LATEST_DIR)
+  console.error("Run `bun run eval:baseline` first to generate one.")
+  baselineMatch = false
 }
 
 // ── Result ────────────────────────────────────────────────────────────────
@@ -154,8 +155,8 @@ if (existsSync(baselineJsonPath)) {
 console.log("")
 if (allMatch) {
   console.log("PASS: Both runs produced identical quality metrics.")
-  if (existsSync(baselineJsonPath) && !baselineMatch) {
-    console.log("WARN: Current run differs from committed baseline.")
+  if (!baselineMatch) {
+    console.error("FAIL: Baseline comparison failed (missing or differs).")
     process.exit(1)
   }
   process.exit(0)
