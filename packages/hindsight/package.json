@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./server": "./src/server/index.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",
@@ -20,6 +21,8 @@
     "@chonkiejs/core": "^0.0.7",
     "@ellie/ai": "workspace:*",
     "@ellie/db": "workspace:*",
+    "@ellie/router": "workspace:*",
+    "@ellie/rpc": "workspace:*",
     "@ellie/utils": "workspace:*",
     "@tanstack/ai-anthropic": "^0.5.0",
     "chrono-node": "^2.9.0",
