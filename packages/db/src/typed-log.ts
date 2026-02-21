@@ -47,8 +47,14 @@ const decoder = new TextDecoder()
  * Wraps a LogStore stream with Valibot validation on write
  * and typed JSON deserialization on read.
  *
+ * When a `schemaKey` is provided, the schema is registered on the engine
+ * and the stream is created with schema enforcement — the engine validates
+ * every append against the Valibot schema, even for direct `engine.append()`.
+ *
  * ```typescript
- * const events = typedLog(store, "/events/ui", eventSchema)
+ * const events = typedLog(store, "/events/ui", eventSchema, {
+ *   schemaKey: "uiEvent",  // enables engine-level enforcement
+ * })
  * events.append({ type: "click", x: 100 })  // validated + typed
  * events.read()  // Array<{ data: Event, offset, timestamp }>
  * ```
@@ -57,11 +63,17 @@ export function typedLog<S extends GenericSchema>(
   store: LogStore,
   streamPath: string,
   schema: S,
-  options?: { contentType?: string }
+  options?: { contentType?: string; schemaKey?: string }
 ): TypedLog<InferOutput<S>> {
+  // Register schema on the engine if a key is provided
+  if (options?.schemaKey) {
+    store.registerSchema(options.schemaKey, schema)
+  }
+
   // Ensure the stream exists (idempotent)
   store.createStream(streamPath, {
     contentType: options?.contentType ?? "application/json",
+    schemaKey: options?.schemaKey,
   })
 
   return {

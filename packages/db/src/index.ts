@@ -39,4 +39,6 @@ export type {
   NewMessageRow,
   ProducerRow,
   NewProducerRow,
+  SchemaRegistryRow,
+  NewSchemaRegistryRow,
 } from "./schema"

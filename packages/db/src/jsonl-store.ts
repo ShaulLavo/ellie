@@ -4,6 +4,9 @@ import { migrate } from "drizzle-orm/bun-sqlite/migrator"
 import { eq, and, gt, isNull, sql } from "drizzle-orm"
 import { join } from "path"
 import { mkdirSync } from "fs"
+import type { GenericSchema } from "valibot"
+import { parse } from "valibot"
+import { toJsonSchema } from "@valibot/to-json-schema"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
 import { LogFile } from "./log"
@@ -11,6 +14,8 @@ import { ulid } from "@ellie/utils"
 
 /** Resolved path to the drizzle migrations folder shipped with this package. */
 const MIGRATIONS_DIR = join(import.meta.dir, "..", "drizzle")
+
+const decoder = new TextDecoder()
 
 export type JsonlEngineDB = ReturnType<typeof drizzle<typeof schema>>
 
@@ -31,6 +36,7 @@ export class JsonlEngine {
   readonly sqlite: Database
   private logDir: string
   private openLogs = new Map<string, LogFile>()
+  private schemas = new Map<string, GenericSchema>()
 
   constructor(dbPath: string, logDir: string) {
     this.logDir = logDir
@@ -43,6 +49,60 @@ export class JsonlEngine {
     this.initTables()
   }
 
+  // -- Schema registration --------------------------------------------------
+
+  /**
+   * Register a Valibot schema under a key.
+   *
+   * Stores the schema in memory for append-time validation and persists
+   * its JSON Schema representation to the schema_registry table for
+   * external tool interop.
+   */
+  registerSchema(key: string, valibotSchema: GenericSchema, version = 1): void {
+    this.schemas.set(key, valibotSchema)
+
+    const jsonSchemaObj = toJsonSchema(valibotSchema)
+    const now = Date.now()
+
+    this.db
+      .insert(schema.schemaRegistry)
+      .values({
+        key,
+        jsonSchema: JSON.stringify(jsonSchemaObj),
+        version,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: schema.schemaRegistry.key,
+        set: {
+          jsonSchema: JSON.stringify(jsonSchemaObj),
+          version,
+          updatedAt: now,
+        },
+      })
+      .run()
+  }
+
+  /**
+   * Get the Valibot schema registered under a key.
+   */
+  getSchema(key: string): GenericSchema | undefined {
+    return this.schemas.get(key)
+  }
+
+  /**
+   * Get the JSON Schema for a registered key (from SQLite).
+   */
+  getJsonSchema(key: string): object | undefined {
+    const row = this.db
+      .select()
+      .from(schema.schemaRegistry)
+      .where(eq(schema.schemaRegistry.key, key))
+      .get()
+    return row ? JSON.parse(row.jsonSchema) : undefined
+  }
+
   // -- Stream operations ----------------------------------------------------
 
   createStream(
@@ -51,8 +111,15 @@ export class JsonlEngine {
       contentType?: string
       ttlSeconds?: number
       expiresAt?: string
+      schemaKey?: string
     } = {}
   ): schema.StreamRow {
+    if (options.schemaKey && !this.schemas.has(options.schemaKey)) {
+      throw new Error(
+        `Schema "${options.schemaKey}" not registered. Call registerSchema() first.`
+      )
+    }
+
     const now = Date.now()
 
     // Idempotent insert — returns inserted row, or fetches existing on conflict
@@ -63,6 +130,7 @@ export class JsonlEngine {
         contentType: options.contentType,
         ttlSeconds: options.ttlSeconds,
         expiresAt: options.expiresAt,
+        schemaKey: options.schemaKey,
         createdAt: now,
         logFileId: ulid(),
       })
@@ -111,6 +179,7 @@ export class JsonlEngine {
           contentType: options.contentType ?? null,
           ttlSeconds: options.ttlSeconds ?? null,
           expiresAt: options.expiresAt ?? null,
+          schemaKey: options.schemaKey ?? null,
           logFileId: newLogFileId,
         })
         .where(eq(schema.streams.path, streamPath))
@@ -172,20 +241,19 @@ export class JsonlEngine {
   /**
    * Append a message to a stream.
    *
-   * 1. Write data to the JSONL file (1 syscall)
-   * 2. Insert metadata into SQLite index (no blob, just pointers)
+   * If the stream has a schemaKey, the data is decoded, parsed as JSON,
+   * and validated against the registered Valibot schema before writing.
+   * Invalid records are rejected (throws ValiError).
+   *
+   * 1. (Optional) Validate against schema
+   * 2. Write data to the JSONL file (1 syscall)
+   * 3. Insert metadata into SQLite index (no blob, just pointers)
    */
   append(
     streamPath: string,
     data: Uint8Array
   ): { offset: string; bytePos: number; length: number; timestamp: number } {
-    const log = this.getOrOpenLog(streamPath)
-    const timestamp = Date.now()
-
-    // 1. Write to JSONL file
-    const { bytePos, length } = log.append(data)
-
-    // 2. Get current stream offset and compute new one
+    // 1. Get stream metadata (needed for offset + schema check)
     const stream = this.db
       .select()
       .from(schema.streams)
@@ -196,10 +264,27 @@ export class JsonlEngine {
       throw new Error(`Stream not found: ${streamPath}`)
     }
 
+    // 2. Validate against schema if stream is schema-enforced
+    if (stream.schemaKey) {
+      const valibotSchema = this.schemas.get(stream.schemaKey)
+      if (!valibotSchema) {
+        throw new Error(
+          `Schema "${stream.schemaKey}" not registered but stream "${streamPath}" requires it.`
+        )
+      }
+      const json = JSON.parse(decoder.decode(data))
+      parse(valibotSchema, json) // throws ValiError on invalid input
+    }
+
+    // 3. Write to JSONL file
+    const log = this.getOrOpenLog(streamPath)
+    const timestamp = Date.now()
+    const { bytePos, length } = log.append(data)
+
     const newByteOffset = stream.currentByteOffset + length
     const offset = formatOffset(stream.currentReadSeq, newByteOffset)
 
-    // 3. Insert index entry + update stream offset (single transaction)
+    // 4. Insert index entry + update stream offset (single transaction)
     this.db.transaction((tx) => {
       tx.insert(schema.messages)
         .values({ streamPath, bytePos, length, offset, timestamp })

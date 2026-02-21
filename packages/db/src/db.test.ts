@@ -611,40 +611,35 @@ describe("JsonlEngine", () => {
   // ── Edge case: orphan on SQLite failure ──────────────────────────────
 
   describe("orphan on SQLite failure", () => {
-    it("JSONL has orphaned data when SQLite transaction fails", () => {
+    it("append fails cleanly when SQLite is closed — no orphan created", () => {
       store.createStream("/orphan-test")
       store.append("/orphan-test", new TextEncoder().encode('{"n":1}'))
 
       const stream = store.getStream("/orphan-test")!
       const logPath = join(logDir, `${stream.logFileId}.jsonl`)
 
-      // Close SQLite to force the next transaction to fail.
-      // The JSONL write (line 186 of jsonl-store.ts) happens before
-      // the SQLite transaction (line 203), so the file gets the data
-      // but the index doesn't.
+      // Close SQLite to force the next append to fail.
+      // The stream metadata read happens before the JSONL write,
+      // so the file doesn't get orphaned data.
       store.sqlite.close()
 
       expect(() => {
         store.append("/orphan-test", new TextEncoder().encode('{"n":2}'))
       }).toThrow()
 
-      // JSONL file has both lines (the orphan was written first)
+      // JSONL file has only the first line (no orphan created)
       const lines = readFileSync(logPath, "utf-8").trim().split("\n")
-      expect(lines).toHaveLength(2)
+      expect(lines).toHaveLength(1)
       expect(lines[0]).toBe('{"n":1}')
-      expect(lines[1]).toBe('{"n":2}')
 
-      // Reopen engine — SQLite index only has 1 message
+      // Reopen engine — SQLite index has 1 message, JSONL matches
       store = new JsonlEngine(dbPath, logDir)
       expect(store.messageCount("/orphan-test")).toBe(1)
     })
 
-    it("subsequent valid append works after orphan", () => {
+    it("subsequent valid append works after failure", () => {
       store.createStream("/orphan-recover")
       store.append("/orphan-recover", new TextEncoder().encode('{"n":1}'))
-
-      const stream = store.getStream("/orphan-recover")!
-      const logPath = join(logDir, `${stream.logFileId}.jsonl`)
 
       store.sqlite.close()
 
@@ -656,15 +651,17 @@ describe("JsonlEngine", () => {
       store = new JsonlEngine(dbPath, logDir)
       store.append("/orphan-recover", new TextEncoder().encode('{"n":3}'))
 
-      // Read returns 2 indexed messages (n:1 and n:3), not the orphan
+      // Read returns 2 indexed messages (n:1 and n:3)
       const messages = store.read("/orphan-recover")
       expect(messages).toHaveLength(2)
       expect(new TextDecoder().decode(messages[0]!.data)).toBe('{"n":1}')
       expect(new TextDecoder().decode(messages[1]!.data)).toBe('{"n":3}')
 
-      // But JSONL file has 3 lines (including orphan)
+      // JSONL file also has exactly 2 lines (no orphan)
+      const stream = store.getStream("/orphan-recover")!
+      const logPath = join(logDir, `${stream.logFileId}.jsonl`)
       const lines = readFileSync(logPath, "utf-8").trim().split("\n")
-      expect(lines).toHaveLength(3)
+      expect(lines).toHaveLength(2)
     })
   })
 
@@ -1313,5 +1310,228 @@ describe("typedLog", () => {
     expect(records).toHaveLength(2)
     expect(records[0]!.data.event).toBe("good")
     expect(records[1]!.data.event).toBe("also-good")
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Schema-enforced engine — Valibot validation at the engine level
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("Schema-enforced engine", () => {
+  let tmpDir: string
+  let dbPath: string
+  let logDir: string
+  let engine: JsonlEngine
+
+  const encoder = new TextEncoder()
+
+  const eventSchema = v.object({
+    type: v.string(),
+    value: v.number(),
+    tags: v.optional(v.array(v.string())),
+  })
+
+  beforeEach(() => {
+    tmpDir = makeTempDir("ellie-schema-enforced-")
+    dbPath = join(tmpDir, "test.db")
+    logDir = join(tmpDir, "logs")
+    engine = new JsonlEngine(dbPath, logDir)
+  })
+
+  afterEach(() => {
+    engine.close()
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  // -- registerSchema -------------------------------------------------------
+
+  it("registers a schema in memory", () => {
+    engine.registerSchema("event", eventSchema)
+    expect(engine.getSchema("event")).toBe(eventSchema)
+  })
+
+  it("persists JSON Schema to the registry table", () => {
+    engine.registerSchema("event", eventSchema)
+    const jsonSchema = engine.getJsonSchema("event")
+    expect(jsonSchema).toBeDefined()
+    expect((jsonSchema as any).type).toBe("object")
+    expect((jsonSchema as any).properties).toHaveProperty("type")
+    expect((jsonSchema as any).properties).toHaveProperty("value")
+    expect((jsonSchema as any).required).toContain("type")
+    expect((jsonSchema as any).required).toContain("value")
+  })
+
+  it("re-registration updates the JSON Schema", () => {
+    engine.registerSchema("event", eventSchema, 1)
+
+    const updatedSchema = v.object({
+      type: v.string(),
+      value: v.number(),
+      extra: v.string(),
+    })
+    engine.registerSchema("event", updatedSchema, 2)
+
+    const jsonSchema = engine.getJsonSchema("event") as any
+    expect(jsonSchema.properties).toHaveProperty("extra")
+  })
+
+  // -- createStream with schemaKey ------------------------------------------
+
+  it("creates a schema-enforced stream", () => {
+    engine.registerSchema("event", eventSchema)
+    const stream = engine.createStream("/enforced/test", { schemaKey: "event" })
+    expect(stream.schemaKey).toBe("event")
+  })
+
+  it("throws when creating stream with unregistered schemaKey", () => {
+    expect(() => {
+      engine.createStream("/enforced/bad", { schemaKey: "nonexistent" })
+    }).toThrow('Schema "nonexistent" not registered')
+  })
+
+  it("creates non-schema stream without schemaKey", () => {
+    const stream = engine.createStream("/raw/test")
+    expect(stream.schemaKey).toBeNull()
+  })
+
+  // -- append with schema enforcement ---------------------------------------
+
+  it("accepts valid records on schema-enforced stream", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/valid", { schemaKey: "event" })
+
+    const data = encoder.encode(JSON.stringify({ type: "click", value: 42 }))
+    const result = engine.append("/enforced/valid", data)
+    expect(result.offset).toBeDefined()
+    expect(result.bytePos).toBe(0)
+  })
+
+  it("rejects invalid records on schema-enforced stream", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/invalid", { schemaKey: "event" })
+
+    const badData = encoder.encode(JSON.stringify({ type: 123, value: "wrong" }))
+    expect(() => engine.append("/enforced/invalid", badData)).toThrow()
+  })
+
+  it("allows any data on non-schema stream", () => {
+    engine.createStream("/raw/anything")
+    const data = encoder.encode("not even json")
+    // Should not throw — no schema enforcement
+    expect(() => engine.append("/raw/anything", data)).not.toThrow()
+  })
+
+  it("validates optional fields correctly", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/optional", { schemaKey: "event" })
+
+    // With optional tags
+    const withTags = encoder.encode(
+      JSON.stringify({ type: "click", value: 1, tags: ["ui"] })
+    )
+    expect(() => engine.append("/enforced/optional", withTags)).not.toThrow()
+
+    // Without optional tags
+    const withoutTags = encoder.encode(
+      JSON.stringify({ type: "click", value: 2 })
+    )
+    expect(() => engine.append("/enforced/optional", withoutTags)).not.toThrow()
+
+    // With wrong type for tags
+    const badTags = encoder.encode(
+      JSON.stringify({ type: "click", value: 3, tags: "not-an-array" })
+    )
+    expect(() => engine.append("/enforced/optional", badTags)).toThrow()
+  })
+
+  // -- schema survives close/reopen -----------------------------------------
+
+  it("schema enforcement works after close/reopen (re-register required)", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/persist", { schemaKey: "event" })
+    engine.append(
+      "/enforced/persist",
+      encoder.encode(JSON.stringify({ type: "before", value: 1 }))
+    )
+    engine.close()
+
+    // Reopen — schema must be re-registered (in-memory only)
+    engine = new JsonlEngine(dbPath, logDir)
+    engine.registerSchema("event", eventSchema)
+
+    // Stream still has schemaKey from SQLite, validation still works
+    const bad = encoder.encode(JSON.stringify({ type: 123 }))
+    expect(() => engine.append("/enforced/persist", bad)).toThrow()
+
+    // Valid data works
+    const good = encoder.encode(JSON.stringify({ type: "after", value: 2 }))
+    expect(() => engine.append("/enforced/persist", good)).not.toThrow()
+
+    // Data is readable
+    const messages = engine.read("/enforced/persist")
+    expect(messages).toHaveLength(2)
+  })
+
+  it("JSON Schema persists across close/reopen", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.close()
+
+    engine = new JsonlEngine(dbPath, logDir)
+    const jsonSchema = engine.getJsonSchema("event")
+    expect(jsonSchema).toBeDefined()
+    expect((jsonSchema as any).type).toBe("object")
+  })
+
+  // -- typedLog with schemaKey (engine-level enforcement) -------------------
+
+  it("typedLog with schemaKey enables engine-level enforcement", () => {
+    const log = typedLog(engine, "/typed-enforced/test", eventSchema, {
+      schemaKey: "event",
+    })
+
+    log.append({ type: "click", value: 42 })
+    const records = log.read()
+    expect(records).toHaveLength(1)
+    expect(records[0]!.data.type).toBe("click")
+
+    // Direct engine.append with bad data should be rejected
+    const bad = encoder.encode(JSON.stringify({ type: 123, value: "wrong" }))
+    expect(() => engine.append("/typed-enforced/test", bad)).toThrow()
+  })
+
+  it("typedLog without schemaKey still validates at the TypedLog level", () => {
+    const log = typedLog(engine, "/typed-only/test", eventSchema)
+
+    // TypedLog validates
+    expect(() => {
+      // @ts-expect-error — intentionally passing wrong types
+      log.append({ type: 123, value: "wrong" })
+    }).toThrow()
+
+    // But direct engine.append accepts anything (no engine-level enforcement)
+    const bad = encoder.encode(JSON.stringify({ type: 123, value: "wrong" }))
+    expect(() => engine.append("/typed-only/test", bad)).not.toThrow()
+  })
+
+  // -- stream resurrection preserves schemaKey ------------------------------
+
+  it("stream resurrection preserves schema enforcement", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/resurrect", { schemaKey: "event" })
+    engine.append(
+      "/enforced/resurrect",
+      encoder.encode(JSON.stringify({ type: "alive", value: 1 }))
+    )
+
+    // Soft-delete and recreate
+    engine.deleteStream("/enforced/resurrect")
+    engine.createStream("/enforced/resurrect", { schemaKey: "event" })
+
+    // Validation still works on the resurrected stream
+    const bad = encoder.encode(JSON.stringify({ nope: true }))
+    expect(() => engine.append("/enforced/resurrect", bad)).toThrow()
+
+    const good = encoder.encode(JSON.stringify({ type: "reborn", value: 2 }))
+    expect(() => engine.append("/enforced/resurrect", good)).not.toThrow()
   })
 })

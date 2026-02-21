@@ -26,6 +26,9 @@ export const streams = sqliteTable("streams", {
   // ULID-based filename for the JSONL log file. Each stream incarnation
   // gets a unique ID so clear + recreate produces a fresh file.
   logFileId: text("log_file_id"),
+  // Optional reference to a registered schema. When set, every append
+  // is validated against the Valibot schema before writing.
+  schemaKey: text("schema_key"),
 })
 
 // -- Stream messages (append-only log index) ----------------------------------
@@ -64,6 +67,19 @@ export const producers = sqliteTable(
     primaryKey({ columns: [table.streamPath, table.producerId] }),
   ]
 )
+
+// -- Schema registry (Valibot → JSON Schema for external tool interop) --------
+
+export const schemaRegistry = sqliteTable("schema_registry", {
+  key: text("key").primaryKey(),
+  jsonSchema: text("json_schema").notNull(),
+  version: integer("version").notNull().default(1),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+})
+
+export type SchemaRegistryRow = typeof schemaRegistry.$inferSelect
+export type NewSchemaRegistryRow = typeof schemaRegistry.$inferInsert
 
 // -- Virtual tables (created via raw DDL in JsonlEngine.initTables) -----------
 //
