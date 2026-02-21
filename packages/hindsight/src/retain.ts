@@ -494,26 +494,32 @@ function runInTransaction(hdb: HindsightDatabase, fn: () => void): void {
   }
 }
 
+function chunkTranscriptTurns(turns: TranscriptTurn[]): string[] {
+  const chunks: string[] = []
+  let current: TranscriptTurn[] = []
+  let currentChars = 2
+  for (const turn of turns) {
+    const turnText = JSON.stringify(turn)
+    const turnChars = turnText.length + 1
+    if (current.length > 0 && currentChars + turnChars > CHARS_PER_BATCH) {
+      chunks.push(JSON.stringify(current))
+      current = []
+      currentChars = 2
+    }
+    current.push(turn)
+    currentChars += turnChars
+  }
+  if (current.length > 0) chunks.push(JSON.stringify(current))
+  return chunks
+}
+
 async function chunkWithChonkie(content: string): Promise<string[]> {
   if (content.length <= CHARS_PER_BATCH) return [content]
+
   const parsed = parseLLMJson<unknown>(content, null)
   if (isTranscriptTurnArray(parsed)) {
-    const chunks: string[] = []
-    let current: TranscriptTurn[] = []
-    let currentChars = 2
-    for (const turn of parsed) {
-      const turnText = JSON.stringify(turn)
-      const turnChars = turnText.length + 1
-      if (current.length > 0 && currentChars + turnChars > CHARS_PER_BATCH) {
-        chunks.push(JSON.stringify(current))
-        current = []
-        currentChars = 2
-      }
-      current.push(turn)
-      currentChars += turnChars
-    }
-    if (current.length > 0) chunks.push(JSON.stringify(current))
-    if (chunks.length > 0) return chunks
+    const transcriptChunks = chunkTranscriptTurns(parsed)
+    if (transcriptChunks.length > 0) return transcriptChunks
   }
 
   const chunker = await RecursiveChunker.create({
@@ -781,6 +787,98 @@ function rowToEntity(
   }
 }
 
+// ── Entity resolution (single entity) ────────────────────────────────────────
+
+async function resolveOrCreateEntity(
+  hdb: HindsightDatabase,
+  entityVec: EmbeddingStore,
+  schema: HindsightDatabase["schema"],
+  bankId: string,
+  ent: ExtractedEntity,
+  nearbyNames: string[],
+  existingEntities: Array<typeof import("./schema").entities.$inferSelect>,
+  cooccurrences: Map<string, Set<string>>,
+  entityMap: Map<string, Entity>,
+  mentionDeltas: Map<string, number>,
+  now: number,
+): Promise<void> {
+  const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+
+  if (entityMap.has(key)) {
+    const entity = entityMap.get(key)!
+    mentionDeltas.set(entity.id, (mentionDeltas.get(entity.id) ?? 0) + 1)
+    return
+  }
+
+  const resolved = resolveEntity(
+    ent.name,
+    ent.entityType,
+    existingEntities,
+    cooccurrences,
+    nearbyNames.filter((n) => n !== ent.name),
+    now,
+  )
+
+  if (resolved) {
+    const matchedEntity = existingEntities.find((e) => e.id === resolved.entityId)!
+    mentionDeltas.set(matchedEntity.id, (mentionDeltas.get(matchedEntity.id) ?? 0) + 1)
+    entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }))
+    return
+  }
+
+  const exactMatch = existingEntities.find(
+    (e) =>
+      e.name.toLowerCase() === ent.name.toLowerCase() &&
+      e.entityType === ent.entityType,
+  )
+
+  if (exactMatch) {
+    mentionDeltas.set(exactMatch.id, (mentionDeltas.get(exactMatch.id) ?? 0) + 1)
+    entityMap.set(key, rowToEntity({ ...exactMatch, lastUpdated: now }))
+    return
+  }
+
+  const entityId = ulid()
+  hdb.db
+    .insert(schema.entities)
+    .values({
+      id: entityId,
+      bankId,
+      name: ent.name,
+      entityType: ent.entityType,
+      mentionCount: 1,
+      firstSeen: now,
+      lastUpdated: now,
+    })
+    .run()
+
+  await entityVec.upsert(entityId, ent.name)
+
+  const newEntity: Entity = {
+    id: entityId,
+    bankId,
+    name: ent.name,
+    entityType: ent.entityType as EntityType,
+    description: null,
+    metadata: null,
+    firstSeen: now,
+    lastUpdated: now,
+  }
+  entityMap.set(key, newEntity)
+
+  existingEntities.push({
+    id: entityId,
+    bankId,
+    name: ent.name,
+    entityType: ent.entityType,
+    description: null,
+    metadata: null,
+    mentionCount: 1,
+    firstSeen: now,
+    lastUpdated: now,
+  })
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export async function retain(
@@ -909,89 +1007,12 @@ export async function retain(
   const mentionDeltas = new Map<string, number>()
 
   for (const fact of extracted) {
-    // Collect all entity names in this fact for co-occurrence context
     const nearbyNames = fact.entities.map((e) => e.name)
-
     for (const ent of fact.entities) {
-      const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-      if (entityMap.has(key)) {
-        // Entity already resolved in this batch — just count the additional mention
-        const entity = entityMap.get(key)!
-        mentionDeltas.set(entity.id, (mentionDeltas.get(entity.id) ?? 0) + 1)
-        continue
-      }
-
-      // Try entity resolution first (multi-factor scoring)
-      const resolved = resolveEntity(
-        ent.name,
-        ent.entityType,
-        existingEntities,
-        cooccurrences,
-        nearbyNames.filter((n) => n !== ent.name),
-        now,
+      await resolveOrCreateEntity(
+        hdb, entityVec, schema, bankId, ent, nearbyNames, existingEntities,
+        cooccurrences, entityMap, mentionDeltas, now,
       )
-
-      if (resolved) {
-        // Found a match — update existing entity
-        const matchedEntity = existingEntities.find((e) => e.id === resolved.entityId)!
-        mentionDeltas.set(matchedEntity.id, (mentionDeltas.get(matchedEntity.id) ?? 0) + 1)
-
-        entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }))
-      } else {
-        // Exact name + type match (fallback before creating new)
-        const exactMatch = existingEntities.find(
-          (e) =>
-            e.name.toLowerCase() === ent.name.toLowerCase() &&
-            e.entityType === ent.entityType,
-        )
-
-        if (exactMatch) {
-          mentionDeltas.set(exactMatch.id, (mentionDeltas.get(exactMatch.id) ?? 0) + 1)
-          entityMap.set(key, rowToEntity({ ...exactMatch, lastUpdated: now }))
-        } else {
-          // Create new entity
-          const entityId = ulid()
-          hdb.db
-            .insert(schema.entities)
-            .values({
-              id: entityId,
-              bankId,
-              name: ent.name,
-              entityType: ent.entityType,
-              mentionCount: 1,
-              firstSeen: now,
-              lastUpdated: now,
-            })
-            .run()
-
-          await entityVec.upsert(entityId, ent.name)
-
-          const newEntity: Entity = {
-            id: entityId,
-            bankId,
-            name: ent.name,
-            entityType: ent.entityType as EntityType,
-            description: null,
-            metadata: null,
-            firstSeen: now,
-            lastUpdated: now,
-          }
-          entityMap.set(key, newEntity)
-
-          // Add to local cache so subsequent facts in this batch can reference it
-          existingEntities.push({
-            id: entityId,
-            bankId,
-            name: ent.name,
-            entityType: ent.entityType,
-            description: null,
-            metadata: null,
-            mentionCount: 1,
-            firstSeen: now,
-            lastUpdated: now,
-          })
-        }
-      }
     }
   }
 
@@ -1112,32 +1133,31 @@ export async function retain(
         extracted[j]!.entities.map((e) => e.name.toLowerCase()),
       )
       const shared = [...entitiesI].filter((e) => entitiesJ.has(e))
+      if (shared.length === 0) continue
 
-      if (shared.length > 0) {
-        const linkId = ulid()
-        const weight =
-          shared.length / Math.max(entitiesI.size, entitiesJ.size, 1)
+      const linkId = ulid()
+      const weight =
+        shared.length / Math.max(entitiesI.size, entitiesJ.size, 1)
 
-        hdb.db
-          .insert(schema.memoryLinks)
-          .values({
-            id: linkId,
-            bankId,
-            sourceId: memories[i]!.id,
-            targetId: memories[j]!.id,
-            linkType: "entity",
-            weight,
-            createdAt: now,
-          })
-          .onConflictDoNothing()
-          .run()
-
-        links.push({
+      hdb.db
+        .insert(schema.memoryLinks)
+        .values({
+          id: linkId,
+          bankId,
           sourceId: memories[i]!.id,
           targetId: memories[j]!.id,
-          linkType: "entity" as LinkType,
+          linkType: "entity",
+          weight,
+          createdAt: now,
         })
-      }
+        .onConflictDoNothing()
+        .run()
+
+      links.push({
+        sourceId: memories[i]!.id,
+        targetId: memories[j]!.id,
+        linkType: "entity" as LinkType,
+      })
     }
   }
 
@@ -1575,6 +1595,51 @@ const DEDUP_TIME_WINDOW_HOURS = 24
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
 
+function isDuplicateByVector(
+  hdb: HindsightDatabase,
+  memoryVec: EmbeddingStore,
+  bankId: string,
+  vector: Float32Array,
+  anchor: number | null,
+  threshold: number,
+  windowMs: number,
+): boolean {
+  const hits = memoryVec.searchByVector(vector, DUPLICATE_SEARCH_K)
+
+  for (const hit of hits) {
+    const similarity = 1 - hit.distance
+    if (similarity < threshold) break
+
+    const row = hdb.db
+      .select({
+        bankId: hdb.schema.memoryUnits.bankId,
+        eventDate: hdb.schema.memoryUnits.eventDate,
+        occurredStart: hdb.schema.memoryUnits.occurredStart,
+        occurredEnd: hdb.schema.memoryUnits.occurredEnd,
+        mentionedAt: hdb.schema.memoryUnits.mentionedAt,
+        createdAt: hdb.schema.memoryUnits.createdAt,
+      })
+      .from(hdb.schema.memoryUnits)
+      .where(eq(hdb.schema.memoryUnits.id, hit.id))
+      .get()
+    if (row?.bankId !== bankId) continue
+
+    if (anchor == null) return true
+
+    const candidateAnchor =
+      row.eventDate ??
+      row.occurredStart ??
+      row.occurredEnd ??
+      row.occurredStart ??
+      row.occurredEnd ??
+      row.mentionedAt ??
+      row.createdAt
+    if (Math.abs(anchor - candidateAnchor) <= windowMs) return true
+  }
+
+  return false
+}
+
 function findDuplicateFlagsByVector(
   hdb: HindsightDatabase,
   memoryVec: EmbeddingStore,
@@ -1583,54 +1648,14 @@ function findDuplicateFlagsByVector(
   anchors: number[],
   threshold: number,
 ): boolean[] {
-  const flags: boolean[] = []
   const windowMs = DEDUP_TIME_WINDOW_HOURS * 60 * 60 * 1000
 
-  for (let vectorIndex = 0; vectorIndex < vectors.length; vectorIndex++) {
-    const vector = vectors[vectorIndex]!
-    const anchor = anchors[vectorIndex] ?? null
-    const hits = memoryVec.searchByVector(vector, DUPLICATE_SEARCH_K)
-    let isDuplicate = false
-
-    for (const hit of hits) {
-      const similarity = 1 - hit.distance
-      if (similarity < threshold) break
-
-      const row = hdb.db
-        .select({
-          bankId: hdb.schema.memoryUnits.bankId,
-          eventDate: hdb.schema.memoryUnits.eventDate,
-          occurredStart: hdb.schema.memoryUnits.occurredStart,
-          occurredEnd: hdb.schema.memoryUnits.occurredEnd,
-          mentionedAt: hdb.schema.memoryUnits.mentionedAt,
-          createdAt: hdb.schema.memoryUnits.createdAt,
-        })
-        .from(hdb.schema.memoryUnits)
-        .where(eq(hdb.schema.memoryUnits.id, hit.id))
-        .get()
-      if (row?.bankId !== bankId) continue
-
-      if (anchor != null) {
-        const candidateAnchor =
-          row.eventDate ??
-          row.occurredStart ??
-          row.occurredEnd ??
-          row.occurredStart ??
-          row.occurredEnd ??
-          row.mentionedAt ??
-          row.createdAt
-        if (Math.abs(anchor - candidateAnchor) > windowMs) {
-          continue
-        }
-      }
-      isDuplicate = true
-      break
-    }
-
-    flags.push(isDuplicate)
-  }
-
-  return flags
+  return vectors.map((vector, index) =>
+    isDuplicateByVector(
+      hdb, memoryVec, bankId, vector,
+      anchors[index] ?? null, threshold, windowMs,
+    ),
+  )
 }
 
 function createEntityLinksFromMemories(
@@ -1865,6 +1890,40 @@ function insertTemporalLinkIfMissing(
   output.push({ sourceId, targetId, linkType: "temporal" })
 }
 
+function insertCausalRelations(
+  hdb: HindsightDatabase,
+  bankId: string,
+  sourceId: string,
+  factIndex: number,
+  groupMemoryIds: string[],
+  relations: ExtractedCausalRelation[],
+  createdAt: number,
+  output: RetainResult["links"],
+): void {
+  for (const relation of relations) {
+    if (relation.targetIndex < 0 || relation.targetIndex >= factIndex) continue
+    const targetId = groupMemoryIds[relation.targetIndex]
+    if (!targetId || sourceId === targetId) continue
+
+    const linkType = relation.relationType ?? "caused_by"
+    hdb.db
+      .insert(hdb.schema.memoryLinks)
+      .values({
+        id: ulid(),
+        bankId,
+        sourceId,
+        targetId,
+        linkType,
+        weight: relation.strength,
+        createdAt,
+      })
+      .onConflictDoNothing()
+      .run()
+
+    output.push({ sourceId, targetId, linkType })
+  }
+}
+
 function createCausalLinksFromGroups(
   hdb: HindsightDatabase,
   bankId: string,
@@ -1886,29 +1945,7 @@ function createCausalLinksFromGroups(
       const sourceId = groupMemoryIds[i]
       const fact = groupFacts[i]
       if (!sourceId || !fact) continue
-
-      for (const relation of fact.fact.causalRelations ?? []) {
-        if (relation.targetIndex < 0 || relation.targetIndex >= i) continue
-        const targetId = groupMemoryIds[relation.targetIndex]
-        if (!targetId || sourceId === targetId) continue
-
-        const linkType = relation.relationType ?? "caused_by"
-        hdb.db
-          .insert(hdb.schema.memoryLinks)
-          .values({
-            id: ulid(),
-            bankId,
-            sourceId,
-            targetId,
-            linkType,
-            weight: relation.strength,
-            createdAt,
-          })
-          .onConflictDoNothing()
-          .run()
-
-        output.push({ sourceId, targetId, linkType })
-      }
+      insertCausalRelations(hdb, bankId, sourceId, i, groupMemoryIds, fact.fact.causalRelations ?? [], createdAt, output)
     }
   }
 }

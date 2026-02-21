@@ -692,6 +692,32 @@ async function executeMergeAction(
   return "merged"
 }
 
+// ── Mental model refresh helpers ─────────────────────────────────────────
+
+/**
+ * SECURITY: Determines whether a mental model should be refreshed based on tag boundaries.
+ *
+ * - Tagged memories consolidated → refresh overlapping-tag models + untagged (global) models
+ * - Untagged memories consolidated → only refresh untagged models
+ */
+function shouldRefreshModel(
+  model: { tags: string | null },
+  consolidatedTags: Set<string>,
+): boolean {
+  const modelTags: string[] = model.tags ? JSON.parse(model.tags) : []
+  const modelIsTagged = modelTags.length > 0
+  const hasConsolidatedTags = consolidatedTags.size > 0
+
+  // Untagged memories consolidated → only refresh untagged mental models
+  if (!hasConsolidatedTags) return !modelIsTagged
+
+  // Tagged memories consolidated + untagged model → always refresh (global model)
+  if (!modelIsTagged) return true
+
+  // Tagged memories consolidated + tagged model → only if tags overlap
+  return modelTags.some((t) => consolidatedTags.has(t))
+}
+
 // ── Mental model refresh trigger ────────────────────────────────────────
 
 /**
@@ -734,26 +760,7 @@ async function triggerMentalModelRefreshes(
   let refreshed = 0
 
   for (const model of autoRefreshModels) {
-    const modelTags: string[] = model.tags ? JSON.parse(model.tags) : []
-    const modelIsTagged = modelTags.length > 0
-    const hasConsolidatedTags = consolidatedTags.size > 0
-
-    if (hasConsolidatedTags) {
-      // Tagged memories were consolidated — refresh:
-      // 1. Mental models with overlapping tags (security boundary)
-      // 2. Untagged mental models (they're "global")
-      // DO NOT refresh mental models with different tags
-      if (modelIsTagged) {
-        const hasOverlap = modelTags.some((t) => consolidatedTags.has(t))
-        if (!hasOverlap) continue
-      }
-      // Untagged models always get refreshed when tagged memories are consolidated
-    } else {
-      // Only untagged memories were consolidated — SECURITY: only refresh untagged
-      // mental models. Tagged mental models are NOT refreshed when untagged memories
-      // are consolidated to prevent info leakage across tag boundaries.
-      if (modelIsTagged) continue
-    }
+    if (!shouldRefreshModel(model, consolidatedTags)) continue
 
     // Fire-and-forget refresh
     refreshMentalModel(hdb, memoryVec, modelVec, adapter, bankId, model.id, rerank, bankProfile)

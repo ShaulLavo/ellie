@@ -43,24 +43,7 @@ export function resolveEntity(
     score += nameSim * 0.5
 
     // Factor 2: Co-occurring entities (weight 0.3)
-    if (nearbyEntityNames.length > 0) {
-      const candidateCoocs = cooccurrences.get(candidate.id) ?? new Set()
-      // Map nearby names to entity IDs
-      const nearbyIds = nearbyEntityNames
-        .map(
-          (n) =>
-            existingEntities.find(
-              (e) => e.name.toLowerCase() === n.toLowerCase(),
-            )?.id,
-        )
-        .filter(Boolean) as string[]
-      if (nearbyIds.length > 0) {
-        const overlap = nearbyIds.filter((id) =>
-          candidateCoocs.has(id),
-        ).length
-        score += (overlap / nearbyEntityNames.length) * 0.3
-      }
-    }
+    score += cooccurrenceScore(candidate.id, existingEntities, cooccurrences, nearbyEntityNames) * 0.3
 
     // Factor 3: Temporal proximity (weight 0.2) — decay over 7 days
     const daysDiff = Math.abs(now - candidate.lastUpdated) / 86_400_000
@@ -78,6 +61,33 @@ export function resolveEntity(
     return { entityId: bestEntity.id, isNew: false }
   }
   return null
+}
+
+/**
+ * Score based on co-occurring entity overlap (0–1).
+ */
+function cooccurrenceScore(
+  candidateId: string,
+  existingEntities: EntityRow[],
+  cooccurrences: Map<string, Set<string>>,
+  nearbyEntityNames: string[],
+): number {
+  if (nearbyEntityNames.length === 0) return 0
+
+  const candidateCoocs = cooccurrences.get(candidateId) ?? new Set()
+  const nearbyIds = nearbyEntityNames
+    .map(
+      (n) =>
+        existingEntities.find(
+          (e) => e.name.toLowerCase() === n.toLowerCase(),
+        )?.id,
+    )
+    .filter(Boolean) as string[]
+
+  if (nearbyIds.length === 0) return 0
+
+  const overlap = nearbyIds.filter((id) => candidateCoocs.has(id)).length
+  return overlap / nearbyEntityNames.length
 }
 
 /**

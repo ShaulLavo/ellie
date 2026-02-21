@@ -836,6 +836,64 @@ Instructions:
     }
   }
 
+  private async executeAsyncOperation(
+    operationId: string,
+    task: () => Promise<unknown>,
+  ): Promise<void> {
+    try {
+      if (this.cancelledOperations.has(operationId)) return
+
+      const pendingRow = this.hdb.db
+        .select({ operationId: this.hdb.schema.asyncOperations.operationId })
+        .from(this.hdb.schema.asyncOperations)
+        .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+        .get()
+      if (!pendingRow) return
+
+      this.hdb.db
+        .update(this.hdb.schema.asyncOperations)
+        .set({
+          status: "processing",
+          updatedAt: Date.now(),
+        })
+        .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+        .run()
+
+      await task()
+
+      if (this.cancelledOperations.has(operationId)) return
+
+      const completedAt = Date.now()
+      this.hdb.db
+        .update(this.hdb.schema.asyncOperations)
+        .set({
+          status: "completed",
+          updatedAt: completedAt,
+          completedAt,
+          errorMessage: null,
+        })
+        .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+        .run()
+    } catch (error) {
+      if (this.cancelledOperations.has(operationId)) return
+      const message =
+        error instanceof Error ? error.message : String(error)
+      const truncated = message.length > 5000 ? message.slice(0, 5000) : message
+      this.hdb.db
+        .update(this.hdb.schema.asyncOperations)
+        .set({
+          status: "failed",
+          updatedAt: Date.now(),
+          errorMessage: truncated,
+        })
+        .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+        .run()
+    } finally {
+      this.activeOperationTasks.delete(operationId)
+      this.cancelledOperations.delete(operationId)
+    }
+  }
+
   private toOperationApiStatus(
     status: AsyncOperationStatus,
   ): Exclude<AsyncOperationApiStatus, "not_found"> {
@@ -899,60 +957,8 @@ Instructions:
         })
         .run()
 
-      const run = async () => {
-        try {
-          if (this.cancelledOperations.has(operationId)) return
-
-          const pendingRow = this.hdb.db
-            .select({ operationId: this.hdb.schema.asyncOperations.operationId })
-            .from(this.hdb.schema.asyncOperations)
-            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-            .get()
-          if (!pendingRow) return
-
-          this.hdb.db
-            .update(this.hdb.schema.asyncOperations)
-            .set({
-              status: "processing",
-              updatedAt: Date.now(),
-            })
-            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-            .run()
-
-          await task()
-
-          if (this.cancelledOperations.has(operationId)) return
-
-          const completedAt = Date.now()
-          this.hdb.db
-            .update(this.hdb.schema.asyncOperations)
-            .set({
-              status: "completed",
-              updatedAt: completedAt,
-              completedAt,
-              errorMessage: null,
-            })
-            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-            .run()
-        } catch (error) {
-          if (this.cancelledOperations.has(operationId)) return
-          const message =
-            error instanceof Error ? error.message : String(error)
-          const truncated = message.length > 5000 ? message.slice(0, 5000) : message
-          this.hdb.db
-            .update(this.hdb.schema.asyncOperations)
-            .set({
-              status: "failed",
-              updatedAt: Date.now(),
-              errorMessage: truncated,
-            })
-            .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-            .run()
-        } finally {
-          this.activeOperationTasks.delete(operationId)
-          this.cancelledOperations.delete(operationId)
-        }
-      }
+      const run = () =>
+        this.executeAsyncOperation(operationId, task)
 
       const taskPromise = new Promise<void>((resolve) => {
         setTimeout(() => {

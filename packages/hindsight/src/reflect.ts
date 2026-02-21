@@ -420,53 +420,9 @@ export async function reflect(
       const documentMap = new Map(documentRows.map((row) => [row.id, row]))
       const memoryMap = new Map(memoryRows.map((row) => [row.id, row]))
 
-      const results: Array<Record<string, unknown>> = []
-      for (const memoryId of memoryIds) {
-        const memory = memoryMap.get(memoryId)
-        if (!memory) continue
-
-        const item: Record<string, unknown> = {
-          memory: {
-            id: memory.id,
-            content: memory.content,
-            factType: memory.factType,
-            context: memory.sourceText,
-            chunkId: memory.chunkId,
-            documentId: memory.documentId,
-          },
-        }
-
-        if (memory.chunkId) {
-          const chunk = chunkMap.get(memory.chunkId)
-          if (chunk) {
-            item.chunk = {
-              id: chunk.id,
-              text: chunk.content,
-              index: chunk.chunkIndex,
-              documentId: chunk.documentId,
-            }
-            if (depth === "document" && chunk.documentId) {
-              const document = documentMap.get(chunk.documentId)
-              if (document) {
-                item.document = {
-                  id: document.id,
-                  text: document.originalText,
-                }
-              }
-            }
-          }
-        } else if (depth === "document" && memory.documentId) {
-          const document = documentMap.get(memory.documentId)
-          if (document) {
-            item.document = {
-              id: document.id,
-              text: document.originalText,
-            }
-          }
-        }
-
-        results.push(item)
-      }
+      const results: Array<Record<string, unknown>> = memoryIds
+        .map((id) => buildExpandItem(memoryMap.get(id), chunkMap, documentMap, depth))
+        .filter(Boolean) as Array<Record<string, unknown>>
 
       return { results }
     })
@@ -675,6 +631,55 @@ function buildBankIdentitySection(profile: BankProfile): string {
   )
 
   return parts.join("\n")
+}
+
+function buildExpandItem(
+  memory: { id: string; content: string; factType: string; sourceText: string | null; chunkId: string | null; documentId: string | null } | undefined,
+  chunkMap: Map<string, { id: string; content: string; chunkIndex: number | null; documentId: string | null }>,
+  documentMap: Map<string, { id: string; originalText: string | null }>,
+  depth: "chunk" | "document",
+): Record<string, unknown> | null {
+  if (!memory) return null
+
+  const item: Record<string, unknown> = {
+    memory: {
+      id: memory.id,
+      content: memory.content,
+      factType: memory.factType,
+      context: memory.sourceText,
+      chunkId: memory.chunkId,
+      documentId: memory.documentId,
+    },
+  }
+
+  if (!memory.chunkId) {
+    attachDirectDocument(item, memory.documentId, documentMap, depth)
+    return item
+  }
+
+  const chunk = chunkMap.get(memory.chunkId)
+  if (!chunk) return item
+
+  item.chunk = {
+    id: chunk.id,
+    text: chunk.content,
+    index: chunk.chunkIndex,
+    documentId: chunk.documentId,
+  }
+  attachDirectDocument(item, chunk.documentId, documentMap, depth)
+  return item
+}
+
+function attachDirectDocument(
+  item: Record<string, unknown>,
+  documentId: string | null | undefined,
+  documentMap: Map<string, { id: string; originalText: string | null }>,
+  depth: "chunk" | "document",
+): void {
+  if (depth !== "document" || !documentId) return
+  const document = documentMap.get(documentId)
+  if (!document) return
+  item.document = { id: document.id, text: document.originalText }
 }
 
 function normalizeExpandMemoryIds(args: {

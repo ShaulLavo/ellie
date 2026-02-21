@@ -170,19 +170,7 @@ export async function mpfpTraverseAsync(
       const spill = (1 - effective.alpha) * mass
       if (spill < effective.threshold) continue
 
-      const neighbors = cache.getNormalizedNeighbors(
-        edgeType,
-        nodeId,
-        effective.topKNeighbors,
-      )
-      for (const neighbor of neighbors) {
-        const propagated = spill * neighbor.weight
-        if (propagated < effective.threshold) continue
-        nextFrontier.set(
-          neighbor.nodeId,
-          (nextFrontier.get(neighbor.nodeId) ?? 0) + propagated,
-        )
-      }
+      propagateMass(cache, edgeType, nodeId, spill, effective, nextFrontier)
     }
     frontier = nextFrontier
   }
@@ -194,6 +182,29 @@ export async function mpfpTraverseAsync(
   }
 
   return { pattern, scores: Object.fromEntries(scores.entries()) }
+}
+
+function propagateMass(
+  cache: EdgeCache,
+  edgeType: MpfpEdgeType,
+  nodeId: string,
+  spill: number,
+  config: MpfpConfig,
+  nextFrontier: Map<string, number>,
+): void {
+  const neighbors = cache.getNormalizedNeighbors(
+    edgeType,
+    nodeId,
+    config.topKNeighbors,
+  )
+  for (const neighbor of neighbors) {
+    const propagated = spill * neighbor.weight
+    if (propagated < config.threshold) continue
+    nextFrontier.set(
+      neighbor.nodeId,
+      (nextFrontier.get(neighbor.nodeId) ?? 0) + propagated,
+    )
+  }
 }
 
 /**
