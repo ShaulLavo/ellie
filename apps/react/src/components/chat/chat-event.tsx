@@ -38,11 +38,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import type {
-  AvatarFallbackProps,
-  AvatarImageProps,
-  AvatarProps,
-} from "@radix-ui/react-avatar";
+import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar";
 import {
   Avatar,
   AvatarFallback,
@@ -257,24 +253,24 @@ export function ChatEventTitle({
   );
 }
 
-export interface ChatEventAvatarProps extends AvatarProps {
+export interface ChatEventAvatarProps extends AvatarPrimitive.Root.Props {
   className?: string;
   /** Image URL for the avatar. */
-  src?: AvatarImageProps["src"];
+  src?: AvatarPrimitive.Image.Props["src"];
   /** Alt text for the avatar image. */
   alt?: string;
   /** Fallback content shown while the image loads or if it fails (e.g. initials). */
   fallback?: React.ReactNode;
   /** Additional props forwarded to the inner `AvatarImage`. */
-  imageProps?: AvatarImageProps;
+  imageProps?: AvatarPrimitive.Image.Props;
   /** Additional props forwarded to the inner `AvatarFallback`. */
-  fallbackProps?: AvatarFallbackProps;
+  fallbackProps?: AvatarPrimitive.Fallback.Props;
 }
 
 /**
  * Avatar sized for message rows. Responsive sizing via container
  * queries (`size-8` → `@md/chat:size-10`). Built on Radix UI Avatar
- * primitives.
+ * primitives (Base UI).
  *
  * @example
  * ```tsx

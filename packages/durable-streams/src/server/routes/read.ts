@@ -231,12 +231,14 @@ export async function handleRead(
       })
     }
 
+    ctx.activeLongPollRequests++
     const result = await waitForStoreMessages(
       ctx,
       path,
       effectiveOffset ?? streamOffset,
       ctx.config.longPollTimeout
     )
+    ctx.activeLongPollRequests--
 
     if (result.streamClosed) {
       const responseCursor = generateResponseCursor(
