@@ -12,7 +12,9 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
+    "@types/babel__core": "^7.20.5",
     "@typescript/native-preview": "latest",
+    "app": "workspace:*",
     "oxlint": "^1.48.0",
     "prettier": "^3.7.4",
     "turbo": "^2.8.10",

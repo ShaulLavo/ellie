@@ -72,6 +72,7 @@ export interface ServerContext {
   store: IStreamStore
   config: ServerConfig
   activeSSEResponses: Set<ReadableStreamDefaultController>
+  activeLongPollRequests: number
   isShuttingDown: boolean
   injectedFaults: Map<string, InjectedFault>
 }
@@ -107,6 +108,7 @@ export function createServerContext(options: {
       cursorOptions: options.cursorOptions ?? {},
     },
     activeSSEResponses: new Set(),
+    activeLongPollRequests: 0,
     isShuttingDown: false,
     injectedFaults: new Map(),
   }

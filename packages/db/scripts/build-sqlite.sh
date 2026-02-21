@@ -160,4 +160,10 @@ case "$OS" in
     ;;
 esac
 
+# --- Copy to vendor/ (committed to git) ---
+VENDOR_DIR="$PKG_DIR/vendor"
+mkdir -p "$VENDOR_DIR"
+cp "$OUT_LIB" "$VENDOR_DIR/"
+echo "[build-sqlite] Copied to vendor/"
+
 echo "[build-sqlite] Done."

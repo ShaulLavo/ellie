@@ -10,9 +10,10 @@ export interface SQLiteManagerConfig {
 
 const EXT = process.platform === "darwin" ? "dylib" : "so";
 
-const DEFAULTS = {
-  customLibPath: resolve(import.meta.dirname, `../dist/libsqlite3-vec.${EXT}`),
-} satisfies Required<SQLiteManagerConfig>;
+const CUSTOM_LIB_PATHS = [
+  resolve(import.meta.dirname, `../vendor/libsqlite3-vec.${EXT}`), // committed
+  resolve(import.meta.dirname, `../dist/libsqlite3-vec.${EXT}`),   // build output
+];
 
 /**
  * Singleton managing SQLite library initialization with sqlite-vec.
@@ -29,10 +30,10 @@ class SQLiteManager {
   private initialized = false;
   private needsLoadExtension = false;
 
-  private readonly customLibPath: string;
+  private readonly customLibPath: string | undefined;
 
   private constructor(config: SQLiteManagerConfig = {}) {
-    this.customLibPath = config.customLibPath ?? DEFAULTS.customLibPath;
+    this.customLibPath = config.customLibPath ?? CUSTOM_LIB_PATHS.find(existsSync);
   }
 
   static get instance(): SQLiteManager {
@@ -58,7 +59,7 @@ class SQLiteManager {
     if (this.initialized) return;
     this.initialized = true;
 
-    if (existsSync(this.customLibPath)) {
+    if (this.customLibPath) {
       try {
         Database.setCustomSQLite(this.customLibPath);
       } catch {
@@ -75,7 +76,7 @@ class SQLiteManager {
     } catch {
       throw new Error(
         `[db] sqlite-vec is required but not available.\n` +
-        `  Tried custom lib: ${this.customLibPath}\n` +
+        `  Tried custom libs: ${CUSTOM_LIB_PATHS.join(", ")}\n` +
         `  Tried npm package: sqlite-vec (not found)\n` +
         `  Fix: run 'bun run build' in packages/db to compile the custom lib,\n` +
         `       or install the package with: bun add sqlite-vec`,
