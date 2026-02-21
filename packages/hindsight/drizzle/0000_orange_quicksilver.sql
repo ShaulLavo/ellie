@@ -1,3 +1,19 @@
+CREATE TABLE `hs_async_operations` (
+	`operation_id` text PRIMARY KEY NOT NULL,
+	`bank_id` text NOT NULL,
+	`operation_type` text NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`result_metadata` text,
+	`error_message` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`completed_at` integer,
+	FOREIGN KEY (`bank_id`) REFERENCES `hs_banks`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_hs_ops_bank` ON `hs_async_operations` (`bank_id`);--> statement-breakpoint
+CREATE INDEX `idx_hs_ops_status` ON `hs_async_operations` (`status`);--> statement-breakpoint
+CREATE INDEX `idx_hs_ops_bank_status` ON `hs_async_operations` (`bank_id`,`status`);--> statement-breakpoint
 CREATE TABLE `hs_banks` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -10,6 +26,19 @@ CREATE TABLE `hs_banks` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `hs_banks_name_unique` ON `hs_banks` (`name`);--> statement-breakpoint
+CREATE TABLE `hs_chunks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`document_id` text NOT NULL,
+	`bank_id` text NOT NULL,
+	`content` text NOT NULL,
+	`chunk_index` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`document_id`) REFERENCES `hs_documents`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`bank_id`) REFERENCES `hs_banks`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_hs_chunk_bank` ON `hs_chunks` (`bank_id`);--> statement-breakpoint
+CREATE INDEX `idx_hs_chunk_doc` ON `hs_chunks` (`document_id`);--> statement-breakpoint
 CREATE TABLE `hs_directives` (
 	`id` text PRIMARY KEY NOT NULL,
 	`bank_id` text NOT NULL,
@@ -25,6 +54,21 @@ CREATE TABLE `hs_directives` (
 --> statement-breakpoint
 CREATE INDEX `idx_hs_dir_bank` ON `hs_directives` (`bank_id`);--> statement-breakpoint
 CREATE INDEX `idx_hs_dir_bank_active` ON `hs_directives` (`bank_id`,`is_active`);--> statement-breakpoint
+CREATE TABLE `hs_documents` (
+	`id` text PRIMARY KEY NOT NULL,
+	`bank_id` text NOT NULL,
+	`original_text` text,
+	`content_hash` text,
+	`metadata` text,
+	`retain_params` text,
+	`tags` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`bank_id`) REFERENCES `hs_banks`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_hs_doc_bank` ON `hs_documents` (`bank_id`);--> statement-breakpoint
+CREATE INDEX `idx_hs_doc_hash` ON `hs_documents` (`content_hash`);--> statement-breakpoint
 CREATE TABLE `hs_entities` (
 	`id` text PRIMARY KEY NOT NULL,
 	`bank_id` text NOT NULL,
@@ -86,13 +130,15 @@ CREATE TABLE `hs_memory_units` (
 	`content` text NOT NULL,
 	`fact_type` text NOT NULL,
 	`confidence` real DEFAULT 1 NOT NULL,
+	`document_id` text,
+	`chunk_id` text,
 	`event_date` integer,
 	`occurred_start` integer,
 	`occurred_end` integer,
+	`mentioned_at` integer,
 	`metadata` text,
 	`tags` text,
 	`source_text` text,
-	`mentioned_at` integer,
 	`consolidated_at` integer,
 	`proof_count` integer DEFAULT 0 NOT NULL,
 	`source_memory_ids` text,
@@ -104,6 +150,8 @@ CREATE TABLE `hs_memory_units` (
 --> statement-breakpoint
 CREATE INDEX `idx_hs_mu_bank` ON `hs_memory_units` (`bank_id`);--> statement-breakpoint
 CREATE INDEX `idx_hs_mu_fact_type` ON `hs_memory_units` (`bank_id`,`fact_type`);--> statement-breakpoint
+CREATE INDEX `idx_hs_mu_document` ON `hs_memory_units` (`bank_id`,`document_id`);--> statement-breakpoint
+CREATE INDEX `idx_hs_mu_chunk` ON `hs_memory_units` (`chunk_id`);--> statement-breakpoint
 CREATE INDEX `idx_hs_mu_event_date` ON `hs_memory_units` (`bank_id`,`event_date`);--> statement-breakpoint
 CREATE INDEX `idx_hs_mu_occurred_range` ON `hs_memory_units` (`bank_id`,`occurred_start`,`occurred_end`);--> statement-breakpoint
 CREATE INDEX `idx_hs_mu_mentioned_at` ON `hs_memory_units` (`bank_id`,`mentioned_at`);--> statement-breakpoint

@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1771603497009,
-      "tag": "0000_wooden_excalibur",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1771612140000,
-      "tag": "0001_documents_chunks",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1771615200000,
-      "tag": "0002_async_operations",
+      "when": 1771655648971,
+      "tag": "0000_orange_quicksilver",
       "breakpoints": true
     }
   ]

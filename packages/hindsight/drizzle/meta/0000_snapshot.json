@@ -1,9 +1,120 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a9ef6699-f38d-4a3f-b237-d8940079088e",
+  "id": "6243823d-3acd-40af-8f95-611448d6b4d7",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
+    "hs_async_operations": {
+      "name": "hs_async_operations",
+      "columns": {
+        "operation_id": {
+          "name": "operation_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bank_id": {
+          "name": "bank_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "operation_type": {
+          "name": "operation_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "result_metadata": {
+          "name": "result_metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_hs_ops_bank": {
+          "name": "idx_hs_ops_bank",
+          "columns": [
+            "bank_id"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_ops_status": {
+          "name": "idx_hs_ops_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_ops_bank_status": {
+          "name": "idx_hs_ops_bank_status",
+          "columns": [
+            "bank_id",
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "hs_async_operations_bank_id_hs_banks_id_fk": {
+          "name": "hs_async_operations_bank_id_hs_banks_id_fk",
+          "tableFrom": "hs_async_operations",
+          "tableTo": "hs_banks",
+          "columnsFrom": [
+            "bank_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "hs_banks": {
       "name": "hs_banks",
       "columns": {
@@ -75,6 +186,100 @@
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "hs_chunks": {
+      "name": "hs_chunks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bank_id": {
+          "name": "bank_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "chunk_index": {
+          "name": "chunk_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_hs_chunk_bank": {
+          "name": "idx_hs_chunk_bank",
+          "columns": [
+            "bank_id"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_chunk_doc": {
+          "name": "idx_hs_chunk_doc",
+          "columns": [
+            "document_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "hs_chunks_document_id_hs_documents_id_fk": {
+          "name": "hs_chunks_document_id_hs_documents_id_fk",
+          "tableFrom": "hs_chunks",
+          "tableTo": "hs_documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "hs_chunks_bank_id_hs_banks_id_fk": {
+          "name": "hs_chunks_bank_id_hs_banks_id_fk",
+          "tableFrom": "hs_chunks",
+          "tableTo": "hs_banks",
+          "columnsFrom": [
+            "bank_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -169,6 +374,108 @@
         "hs_directives_bank_id_hs_banks_id_fk": {
           "name": "hs_directives_bank_id_hs_banks_id_fk",
           "tableFrom": "hs_directives",
+          "tableTo": "hs_banks",
+          "columnsFrom": [
+            "bank_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "hs_documents": {
+      "name": "hs_documents",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bank_id": {
+          "name": "bank_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "original_text": {
+          "name": "original_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "retain_params": {
+          "name": "retain_params",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_hs_doc_bank": {
+          "name": "idx_hs_doc_bank",
+          "columns": [
+            "bank_id"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_doc_hash": {
+          "name": "idx_hs_doc_hash",
+          "columns": [
+            "content_hash"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "hs_documents_bank_id_hs_banks_id_fk": {
+          "name": "hs_documents_bank_id_hs_banks_id_fk",
+          "tableFrom": "hs_documents",
           "tableTo": "hs_banks",
           "columnsFrom": [
             "bank_id"
@@ -635,6 +942,27 @@
           "autoincrement": false,
           "default": 1
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "chunk_id": {
+          "name": "chunk_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_date": {
+          "name": "event_date",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "occurred_start": {
           "name": "occurred_start",
           "type": "integer",
@@ -644,6 +972,13 @@
         },
         "occurred_end": {
           "name": "occurred_end",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mentioned_at": {
+          "name": "mentioned_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -666,13 +1001,6 @@
         "source_text": {
           "name": "source_text",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "mentioned_at": {
-          "name": "mentioned_at",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -737,12 +1065,43 @@
           ],
           "isUnique": false
         },
-        "idx_hs_mu_temporal": {
-          "name": "idx_hs_mu_temporal",
+        "idx_hs_mu_document": {
+          "name": "idx_hs_mu_document",
+          "columns": [
+            "bank_id",
+            "document_id"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_mu_chunk": {
+          "name": "idx_hs_mu_chunk",
+          "columns": [
+            "chunk_id"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_mu_event_date": {
+          "name": "idx_hs_mu_event_date",
+          "columns": [
+            "bank_id",
+            "event_date"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_mu_occurred_range": {
+          "name": "idx_hs_mu_occurred_range",
           "columns": [
             "bank_id",
             "occurred_start",
             "occurred_end"
+          ],
+          "isUnique": false
+        },
+        "idx_hs_mu_mentioned_at": {
+          "name": "idx_hs_mu_mentioned_at",
+          "columns": [
+            "bank_id",
+            "mentioned_at"
           ],
           "isUnique": false
         },
