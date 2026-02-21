@@ -3,7 +3,8 @@ import { createServerContext, handleDurableStreamRequest } from "@ellie/durable-
 import { DurableStore } from "@ellie/durable-streams";
 import { JsonlEngine } from "@ellie/db";
 import { env } from "@ellie/env/server";
-import { handleAgentRequest } from "./routes/agent";
+import { createAgentProcedureHandlers } from "./routes/agent";
+import { dispatchAppApiRequest } from "./routes/dispatch";
 import { AgentManager } from "./agent/manager";
 import { anthropicText, type AnthropicChatModel } from "@tanstack/ai-anthropic";
 import { appRouter } from "@ellie/router";
@@ -30,6 +31,10 @@ const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
       systemPrompt: "You are a helpful assistant.",
     })
   : null;
+
+const procedureHandlers = agentManager
+  ? createAgentProcedureHandlers(agentManager)
+  : {}
 
 // ── Studio frontend ───────────────────────────────────────────────
 // import.meta.dir = .../apps/app/src/
@@ -72,58 +77,15 @@ async function fetch(req: Request): Promise<Response> {
     return response;
   }
 
-  // Agent action routes (prompt, steer, abort, history)
-  if (!agentManager) {
-    if (path.match(/^\/agent\/[^/]+\/(prompt|steer|abort|history)$/)) {
-      return Response.json(
-        { error: "Agent routes unavailable: no ANTHROPIC_API_KEY configured" },
-        { status: 503 },
-      );
-    }
-  }
-  const agentResponse = agentManager ? handleAgentRequest(agentManager, req, path) : undefined;
-  if (agentResponse) {
-    const response = await agentResponse;
-    logRequest(req.method, path, response.status);
-    return response;
-  }
-
-  // /agent/:id/events/:runId — agent events stream (must match before /agent/:id)
-  const agentEventsMatch = path.match(/^\/agent\/([^/]+)\/events\/([^/]+)$/);
-  if (agentEventsMatch) {
-    const chatId = decodeURIComponent(agentEventsMatch[1]);
-    const runId = decodeURIComponent(agentEventsMatch[2]);
-    const response = await handleDurableStreamRequest(ctx, req, `/agent/${chatId}/events/${runId}`);
-    logRequest(req.method, path, response.status);
-    return response;
-  }
-
-  // /agent/:id — agent messages stream (only for GET/PUT — stream reads)
-  if (path.match(/^\/agent\/([^/]+)$/) && (req.method === "GET" || req.method === "PUT")) {
-    const id = decodeURIComponent(path.slice("/agent/".length));
-    const response = await handleDurableStreamRequest(ctx, req, `/agent/${id}`);
-    logRequest(req.method, path, response.status);
-    return response;
-  }
-
-  // /chat/:id
-  if (path.startsWith("/chat/")) {
-    const id = decodeURIComponent(path.slice("/chat/".length));
-    if (id) {
-      const response = await handleDurableStreamRequest(ctx, req, `/chat/${id}`);
-      logRequest(req.method, path, response.status);
-      return response;
-    }
-  }
-
-  // /streams/*
-  if (path.startsWith("/streams/")) {
-    const rest = decodeURIComponent(path.slice("/streams/".length));
-    if (rest) {
-      const response = await handleDurableStreamRequest(ctx, req, `/${rest}`);
-      logRequest(req.method, path, response.status);
-      return response;
-    }
+  const apiResponse = await dispatchAppApiRequest(req, path, {
+    procedureHandlers,
+    agentProceduresEnabled: agentManager !== null,
+    handleStreamRequest: (request, pathname) =>
+      handleDurableStreamRequest(ctx, request, pathname),
+  })
+  if (apiResponse) {
+    logRequest(req.method, path, apiResponse.status);
+    return apiResponse;
   }
 
   // Non-API routes fall through to SPA handler via `routes`

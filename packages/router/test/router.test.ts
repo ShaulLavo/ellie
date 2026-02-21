@@ -17,6 +17,20 @@ describe("appRouter", () => {
     expect(appRouter._def.chat.collections.messages).toBeDefined()
     expect(appRouter._def.chat.collections.messages.schema).toBeDefined()
   })
+
+  it("has agent action procedures with expected paths and methods", () => {
+    expect(appRouter._def.agentPrompt.path).toBe("/agent/:chatId/prompt")
+    expect(appRouter._def.agentPrompt.method).toBe("POST")
+
+    expect(appRouter._def.agentSteer.path).toBe("/agent/:chatId/steer")
+    expect(appRouter._def.agentSteer.method).toBe("POST")
+
+    expect(appRouter._def.agentAbort.path).toBe("/agent/:chatId/abort")
+    expect(appRouter._def.agentAbort.method).toBe("POST")
+
+    expect(appRouter._def.agentHistory.path).toBe("/agent/:chatId/history")
+    expect(appRouter._def.agentHistory.method).toBe("GET")
+  })
 })
 
 describe("messageSchema", () => {

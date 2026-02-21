@@ -101,6 +101,48 @@ export const agentMessageSchema = v.variant("role", [
 ]);
 
 // ============================================================================
+// Agent action procedure schemas
+// ============================================================================
+
+export const agentPromptInputSchema = v.object({
+	message: v.string(),
+});
+export type AgentPromptInput = v.InferOutput<typeof agentPromptInputSchema>
+
+export const agentPromptOutputSchema = v.object({
+	runId: v.string(),
+	chatId: v.string(),
+	status: v.literal("started"),
+});
+export type AgentPromptOutput = v.InferOutput<typeof agentPromptOutputSchema>
+
+export const agentSteerInputSchema = v.object({
+	message: v.string(),
+});
+export type AgentSteerInput = v.InferOutput<typeof agentSteerInputSchema>
+
+export const agentSteerOutputSchema = v.object({
+	status: v.literal("queued"),
+});
+export type AgentSteerOutput = v.InferOutput<typeof agentSteerOutputSchema>
+
+export const agentAbortInputSchema = v.undefined_()
+export type AgentAbortInput = v.InferOutput<typeof agentAbortInputSchema>
+
+export const agentAbortOutputSchema = v.object({
+	status: v.literal("aborted"),
+});
+export type AgentAbortOutput = v.InferOutput<typeof agentAbortOutputSchema>
+
+export const agentHistoryInputSchema = v.undefined_()
+export type AgentHistoryInput = v.InferOutput<typeof agentHistoryInputSchema>
+
+export const agentHistoryOutputSchema = v.object({
+	messages: v.array(agentMessageSchema),
+});
+export type AgentHistoryOutput = v.InferOutput<typeof agentHistoryOutputSchema>
+
+// ============================================================================
 // Agent event schemas
 // ============================================================================
 

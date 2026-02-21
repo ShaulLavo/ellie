@@ -5,7 +5,7 @@
  */
 
 import { handleProcedureRequest } from "@ellie/rpc/server"
-import type { ProcedureHandlers } from "@ellie/rpc/server"
+import type { PartialProcedureHandlers } from "@ellie/rpc/server"
 import { appRouter, type AppRouter } from "@ellie/router"
 import type { Hindsight } from "../hindsight"
 import type {
@@ -27,7 +27,7 @@ type RpcInput = Record<string, unknown> | undefined | null
  */
 export function createHindsightHandlers(
 	hs: Hindsight,
-): ProcedureHandlers<AppRouter> {
+): PartialProcedureHandlers<AppRouter> {
 	return {
 		// ── Bank CRUD ──
 

@@ -56,8 +56,7 @@ export class FetchStreamTransport implements StreamTransport {
   readonly #name: string
 
   constructor(opts: FetchStreamTransportOptions) {
-    // Build the canonical URL for this stream: /chat/room-1 → baseUrl/chat/room-1
-    // The server routes /chat/:id and /streams/* both work; we use the direct path.
+    // Build the canonical URL for this stream: /chat/room-1 → baseUrl/chat/room-1.
     const base = opts.baseUrl.replace(/\/$/, ``)
     const streamPath = opts.streamId.startsWith(`/`) ? opts.streamId : `/${opts.streamId}`
     this.#url = `${base}${streamPath}`
