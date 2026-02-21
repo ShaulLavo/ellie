@@ -52,8 +52,7 @@ interface ChatPanelProps {
 }
 
 const CHAT_LABEL: Record<string, string> = {
-  "chat-1": "General",
-  "chat-2": "Research",
+  "chat-1": "Ellie",
 }
 
 function groupMessages(messages: Message[]) {
@@ -114,7 +113,7 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
   const grouped = groupMessages(messages)
 
   return (
-    <Chat className="flex-1 min-w-0 border-r last:border-r-0">
+    <Chat className="flex-1 min-w-0">
       {/* ── Header ─────────────────────────────────────── */}
       <ChatHeader className="border-b">
         <ChatHeaderAddon>
