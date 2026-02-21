@@ -70,16 +70,13 @@ describe("Causal relations validation", () => {
     }
   })
 
-  it("relation types match the schema (causes, caused_by, enables, prevents)", () => {
-    // Causal relation types from types.ts LinkType union:
-    // forward-looking: causes, enables, prevents
-    // backward-looking: caused_by
-    const validRelationTypes = ["causes", "caused_by", "enables", "prevents"]
-    expect(validRelationTypes).toHaveLength(4)
-    expect(validRelationTypes).toContain("causes")
-    expect(validRelationTypes).toContain("caused_by")
-    expect(validRelationTypes).toContain("enables")
-    expect(validRelationTypes).toContain("prevents")
+  it("only 'caused_by' is a valid causal relation type (Python parity)", () => {
+    // Python parity: valid_types = {"caused_by"}
+    // The extraction prompt instructs the LLM to use only "caused_by".
+    // Other link types (temporal, semantic, entity) are non-causal.
+    const validCausalTypes = ["caused_by"]
+    expect(validCausalTypes).toHaveLength(1)
+    expect(validCausalTypes).toContain("caused_by")
   })
 })
 
@@ -124,7 +121,8 @@ describe("Causal relation storage", () => {
 // Skipped when ANTHROPIC_API_KEY is not set.
 // TODO: Set ANTHROPIC_API_KEY in test environment to enable real LLM tests.
 
-const CAUSAL_TYPES = ["causes", "caused_by", "enables", "prevents"]
+// Python parity: only "caused_by" is a valid causal relation type.
+const CAUSAL_TYPES = ["caused_by"]
 
 function isCausal(linkType: string): boolean {
   return CAUSAL_TYPES.includes(linkType)
@@ -143,8 +141,9 @@ describeWithLLM("Causal relation extraction", () => {
     t.cleanup()
   })
 
-  // Port of test_causal_relations.py::test_causal_chain_extraction
-  //      + test_causal_relationships.py::test_causal_chain_extraction
+  // Port of test_causal_relationships.py::test_causal_chain_extraction
+  // Python asserts: len(facts) >= 3, len(all_causal_relations) >= 2,
+  // all target_index < from_index, valid relation types
   it("extracts causal chain from narrative text", async () => {
     const result = await t.hs.retain(
       bankId,
@@ -155,15 +154,17 @@ After searching for weeks, I finally found a cheaper apartment in Brooklyn.`,
       { consolidate: false, context: "Personal story about housing change" },
     )
 
-    expect(result.memories.length).toBeGreaterThanOrEqual(2)
+    // Python: assert len(facts) >= 3
+    expect(result.memories.length).toBeGreaterThanOrEqual(3)
 
     const causalLinks = result.links.filter((l) => isCausal(l.linkType))
 
-    // If causal links were extracted, verify they connect distinct memories
-    if (causalLinks.length > 0) {
-      for (const link of causalLinks) {
-        expect(link.sourceId).not.toBe(link.targetId)
-      }
+    // Python: assert len(all_causal_relations) >= 2
+    expect(causalLinks.length).toBeGreaterThanOrEqual(2)
+
+    // All causal links must connect distinct memories
+    for (const link of causalLinks) {
+      expect(link.sourceId).not.toBe(link.targetId)
     }
   }, 60_000)
 
@@ -204,10 +205,8 @@ The renovation took three months and cost $15,000.`,
       { consolidate: false, context: "Home repair story" },
     )
 
-    // Python parity: test_complex_causal_web asserts len(facts) >= 4, but Groq
-    // model sometimes condenses heavily. Accept > 0 for now — the important
-    // validation is that causal links connect distinct memories.
-    expect(result.memories.length).toBeGreaterThan(0)
+    // Python: assert len(facts) >= 4
+    expect(result.memories.length).toBeGreaterThanOrEqual(4)
 
     // Validate all causal links connect distinct memories
     const causalLinks = result.links.filter((l) => isCausal(l.linkType))
@@ -246,8 +245,11 @@ Reduced spending somewhat affected local businesses.`,
     }
   }, 60_000)
 
-  // Port of test_causal_relationships.py::test_causal_chain_extraction (multiple relations per fact)
-  it("multiple causal relations per fact (caused_by + enabled_by)", async () => {
+  // Port of test_causal_relations.py::test_causal_chain_extraction +
+  //        test_causal_relations.py::test_relation_types_are_backward_looking
+  // Python asserts: len(facts) > 0, valid chain if relations exist,
+  //                 relation types in {"caused_by"} (Python parity)
+  it("relation types are only 'caused_by' (Python parity)", async () => {
     const result = await t.hs.retain(
       bankId,
       `Alice learned Python programming.
@@ -256,15 +258,15 @@ Her data science skills enabled her to lead the analytics team.`,
       { consolidate: false, context: "Career progression" },
     )
 
-    // Python parity: test_causal_chain_extraction asserts len(facts) > 0
+    // Python: assert len(facts) > 0
     expect(result.memories.length).toBeGreaterThan(0)
 
-    // If causal links were extracted, verify they connect distinct memories
+    // If causal links were extracted, verify valid chain + types
     const causalLinks = result.links.filter((l) => isCausal(l.linkType))
-    if (causalLinks.length > 0) {
-      for (const link of causalLinks) {
-        expect(link.sourceId).not.toBe(link.targetId)
-      }
+    const validTypes = new Set(CAUSAL_TYPES)
+    for (const link of causalLinks) {
+      expect(link.sourceId).not.toBe(link.targetId)
+      expect(validTypes.has(link.linkType)).toBe(true)
     }
   }, 60_000)
 

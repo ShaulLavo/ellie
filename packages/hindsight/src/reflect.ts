@@ -111,6 +111,7 @@ export async function reflect(
       "Search user-curated mental model summaries. Use FIRST when the question might be covered by an existing mental model. " +
       "If a result has is_stale=true, also search observations or raw facts to verify currency.",
     inputSchema: v.object({
+      reason: v.optional(v.pipe(v.string(), v.description("Brief explanation of why you're making this search (for debugging)"))),
       query: v.pipe(v.string(), v.description("Search query for mental models")),
     }),
   })
@@ -132,6 +133,7 @@ export async function reflect(
       "Observations synthesize multiple raw facts — more reliable than individual facts. " +
       "If stale (freshness != 'up_to_date'), ALSO use recall to verify with current raw facts.",
     inputSchema: v.object({
+      reason: v.optional(v.pipe(v.string(), v.description("Brief explanation of why you're making this search (for debugging)"))),
       query: v.pipe(v.string(), v.description("Search query for observations")),
       limit: v.optional(v.pipe(v.number(), v.description("Max results (default 10)"))),
       tags: v.optional(v.array(v.string(), "Filter by tags (merged with session-level tags)")),
@@ -180,6 +182,7 @@ export async function reflect(
   // ── Tier 3: recall / search_memories alias ──
 
   const recallInputSchema = v.object({
+    reason: v.optional(v.pipe(v.string(), v.description("Brief explanation of why you're making this search (for debugging)"))),
     query: v.pipe(v.string(), v.description("Search query — be specific and targeted")),
     limit: v.optional(v.number()),
     maxTokens: v.optional(v.number()),
@@ -273,6 +276,7 @@ export async function reflect(
     description:
       "Get information about a specific named entity and all associated memories. Works across all tiers.",
     inputSchema: v.object({
+      reason: v.optional(v.pipe(v.string(), v.description("Brief explanation of why you're looking up this entity (for debugging)"))),
       name: v.pipe(v.string(), v.description("Entity name to look up")),
     }),
   })
@@ -334,6 +338,7 @@ export async function reflect(
       "Expand one or more memory IDs into chunk/document context. " +
       "Use depth='chunk' for local context and depth='document' for full source text.",
     inputSchema: v.object({
+      reason: v.optional(v.pipe(v.string(), v.description("Brief explanation of why you're expanding these memories (for debugging)"))),
       memoryIds: v.optional(v.array(v.string())),
       memory_ids: v.optional(v.array(v.string())),
       depth: v.optional(v.string()),

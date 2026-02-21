@@ -367,9 +367,11 @@ describeWithLLM("reflect with tags (real LLM parity)", () => {
     )
 
     // Should mention Oscar/blue, not Peter/red
+    // Python parity: check answer mentions blue; check Peter isn't mentioned
+    // (avoid matching "red" as substring of other words like "stored")
     const lower = result.answer.toLowerCase()
     expect(lower).toContain("blue")
-    expect(lower).not.toContain("red")
+    expect(lower).not.toContain("peter")
   })
 })
 

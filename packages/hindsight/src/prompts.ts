@@ -32,12 +32,14 @@ ${FACT_TYPES_INSTRUCTION}
 
 {extraction_guidelines}
 
-FACT FORMAT (all fields required):
-1. what: Core fact (concise but complete, 1-2 sentences)
+FACT FORMAT — BE CONCISE (all fields required):
+1. what: Core fact — concise but complete (1-2 sentences max)
 2. when: Temporal info if mentioned, otherwise "N/A"
 3. where: Location if relevant, otherwise "N/A"
 4. who: People involved with relationships, otherwise "N/A"
 5. why: Context/significance if important, otherwise "N/A"
+
+CONCISENESS: Capture the essence, not every word. One good sentence beats three mediocre ones.
 
 COREFERENCE RESOLUTION:
 - Resolve generic references to names when both appear.
@@ -59,28 +61,57 @@ ENTITIES:
 - Include people, organizations, places, key objects, and abstract concepts.
 - Always include "user" when fact is about the user.
 
+CAUSAL RELATIONSHIPS:
+Link facts with causal_relations (max 2 per fact). target_index must be < this fact's index.
+Type: "caused_by" (this fact was caused by the target fact)
+
+Example: "Lost job → couldn't pay rent → moved apartment"
+- Fact 0: Lost job, causal_relations: null
+- Fact 1: Couldn't pay rent, causal_relations: [{target_index: 0, relation_type: "caused_by"}]
+- Fact 2: Moved apartment, causal_relations: [{target_index: 1, relation_type: "caused_by"}]
+
 ${EXTRACTION_RESPONSE_FORMAT}`
 
 const CONCISE_GUIDELINES = `SELECTIVITY — extract only facts worth remembering long-term.
 
-ONLY extract:
-- Personal info, relationships, background
-- Preferences, habits, interests (non-trivial)
-- Significant events, milestones, decisions, changes
-- Plans/goals/commitments
-- Expertise, skills, certifications
-- Important context and constraints
-- Sensory/emotional details that characterize an experience
-- Observations with specific details
+ONLY extract facts that are:
+✅ Personal info: names, relationships, roles, background
+✅ Preferences: likes, dislikes, habits, interests (e.g., "Alice likes coffee")
+✅ Significant events: milestones, decisions, achievements, changes
+✅ Plans/goals: future intentions, deadlines, commitments
+✅ Expertise: skills, knowledge, certifications, experience
+✅ Important context: projects, problems, constraints
+✅ Sensory/emotional details: feelings, sensations, perceptions that provide context
+✅ Observations: descriptions of people, places, things with specific details
 
 DO NOT extract:
-- Generic greetings/pleasantries ("hello", "how are you")
-- Pure filler ("thanks", "ok", "sure", "sounds good")
-- Process chatter ("let me check", "one moment")
-- Repeated info
+❌ Generic greetings: "how are you", "hello", pleasantries without substance
+❌ Pure filler: "thanks", "sounds good", "ok", "got it", "sure"
+❌ Process chatter: "let me check", "one moment", "I'll look into it"
+❌ Repeated info: if already stated, don't extract again
 
-CONSOLIDATE related statements into one fact where possible.
-QUALITY OVER QUANTITY: ask "Would this be useful to recall in 6 months?"`
+CONSOLIDATE related statements into ONE fact when possible.
+
+EXAMPLES:
+
+Example 1 — Selective extraction (Event Date: June 10, 2024):
+Input: "Hey! How's it going? Good morning! So I'm planning my wedding - want a small outdoor ceremony. Just got back from Emily's wedding, she married Sarah at a rooftop garden. It was nice weather. I grabbed a coffee on the way."
+Output: ONLY 2 facts (skip greetings, weather, coffee):
+1. what="User planning wedding, wants small outdoor ceremony", who="user", entities=["user", "wedding"]
+2. what="Emily married Sarah at rooftop garden", who="Emily (user's friend), Sarah", occurred_start="2024-06-09", entities=["Emily", "Sarah", "wedding"]
+
+Example 2 — Professional context:
+Input: "Alice has 5 years of Kubernetes experience and holds CKA certification. She's been leading the infrastructure team since March. By the way, she prefers dark roast coffee."
+Output: ONLY 2 facts (skip coffee preference — too trivial):
+1. what="Alice has 5 years Kubernetes experience, CKA certified", who="Alice", entities=["Alice", "Kubernetes", "CKA"]
+2. what="Alice leads infrastructure team since March", who="Alice", entities=["Alice", "infrastructure"]
+
+QUALITY OVER QUANTITY: ask "Would this be useful to recall in 6 months?" If no, skip it.
+
+IMPORTANT: Sensory/emotional details and observations that provide meaningful context
+about experiences ARE important to remember, even if they seem small (e.g., how food
+tasted, how someone looked, how loud music was). Extract these if they characterize
+an experience or person.`
 
 const VERBOSE_GUIDELINES = `Extract facts with maximum detail and preserve all specific information.
 Still apply temporal handling, coreference resolution, and classification rules exactly.`

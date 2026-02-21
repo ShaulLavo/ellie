@@ -46,14 +46,11 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 
 // ── Extraction response normalization (Python + TS parity) ────────────────
 
-const CAUSAL_LINK_TYPES = new Set([
-  "causes",
-  "caused_by",
-  "enables",
-  "prevents",
-] as const)
+// Python parity: only "caused_by" is a valid causal relation type.
+// The extraction prompt instructs the LLM to use "caused_by" exclusively.
+const CAUSAL_LINK_TYPES = new Set(["caused_by"] as const)
 
-type CausalLinkType = "causes" | "caused_by" | "enables" | "prevents"
+type CausalLinkType = "caused_by"
 
 interface ExtractedEntity {
   name: string
@@ -1151,7 +1148,7 @@ export async function retain(
       const targetId = memories[rel.targetIndex]!.id
       if (sourceId === targetId) continue
 
-      const linkType = rel.relationType ?? "causes"
+      const linkType = rel.relationType ?? "caused_by"
 
       hdb.db
         .insert(schema.memoryLinks)
@@ -1889,7 +1886,7 @@ function createCausalLinksFromGroups(
         const targetId = groupMemoryIds[relation.targetIndex]
         if (!targetId || sourceId === targetId) continue
 
-        const linkType = relation.relationType ?? "causes"
+        const linkType = relation.relationType ?? "caused_by"
         hdb.db
           .insert(hdb.schema.memoryLinks)
           .values({
