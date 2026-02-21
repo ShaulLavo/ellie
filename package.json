@@ -11,6 +11,7 @@
     "test": "turbo run test"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@typescript/native-preview": "latest",
     "oxlint": "^1.48.0",
     "prettier": "^3.7.4",
@@ -26,7 +27,8 @@
     "packages/*"
   ],
   "overrides": {
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "@tanstack/db": "0.5.27"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",

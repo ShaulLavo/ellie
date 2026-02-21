@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { cn } from "./lib/utils"
 import { useChat } from "./lib/chat/use-chat"
 import type { Message } from "./lib/chat/use-chat"
 import { Chat } from "./components/chat/chat"
@@ -25,10 +26,12 @@ import {
   ChatEventTime,
   ChatEventTitle,
 } from "./components/chat/chat-event"
+import { MessageResponse } from "./components/ai-elements/message"
 import { Separator } from "./components/ui/separator"
 import { Spinner } from "./components/ui/spinner"
 import {
   ArrowUp,
+  Paperclip,
   Trash,
   Robot,
   User,
@@ -117,7 +120,7 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
           </div>
         )}
 
-        <div className="flex flex-col gap-0.5 py-2">
+        <div className="flex flex-col py-2">
           {grouped.map(({ msg, isFirst }, idx) => {
             const isUser = msg.role === "user"
             const isAssistant = msg.role === "assistant"
@@ -132,58 +135,61 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
             return (
               <div key={msg.id}>
                 {showDateSep && (
-                  <ChatEvent className="items-center gap-2 my-3 px-4">
+                  <ChatEvent className="items-center gap-1 my-4">
                     <Separator className="flex-1" />
                     <ChatEventTime
                       timestamp={msg.createdAt}
                       format="longDate"
-                      className="text-xs text-muted-foreground font-medium min-w-max"
+                      className="text-xs text-muted-foreground font-semibold min-w-max"
                     />
                     <Separator className="flex-1" />
                   </ChatEvent>
                 )}
 
-                <ChatEvent className="group hover:bg-accent/40 transition-colors rounded-sm py-0.5">
-                  <ChatEventAddon>
+                <ChatEvent className={cn(
+                  "group hover:bg-accent transition-colors py-0.5",
+                  isFirst && idx > 0 && !showDateSep && "mt-3"
+                )}>
+                  <ChatEventAddon className={isFirst ? "" : "pt-0 items-center"}>
                     {isFirst ? (
                       <ChatEventAvatar
                         fallback={
                           isUser ? (
-                            <User weight="fill" className="size-4" />
+                            <User weight="fill" className="size-3.5" />
                           ) : (
-                            <Robot weight="fill" className="size-4" />
+                            <Robot weight="fill" className="size-3.5" />
                           )
                         }
-                        className={
+                        className={cn(
+                          "size-7 @md/chat:size-8",
                           isAssistant
                             ? "bg-primary text-primary-foreground"
                             : "bg-secondary text-secondary-foreground"
-                        }
+                        )}
                       />
                     ) : (
                       <ChatEventTime
                         timestamp={msg.createdAt}
                         format="time"
-                        className="text-right text-[9px] leading-none group-hover:visible invisible w-full"
+                        className="text-right text-[10px] leading-tight opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-full text-muted-foreground/50"
                       />
                     )}
                   </ChatEventAddon>
 
-                  <ChatEventBody className="pb-0.5">
+                  <ChatEventBody>
                     {isFirst && (
                       <ChatEventTitle>
-                        <span className="font-semibold text-sm capitalize">
+                        <span className="font-medium capitalize">
                           {msg.role}
                         </span>
                         <ChatEventTime
                           timestamp={msg.createdAt}
-                          format="time"
-                          className="text-xs text-muted-foreground"
+                          className="text-[10px] text-muted-foreground/50"
                         />
                       </ChatEventTitle>
                     )}
-                    <ChatEventContent className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {msg.content}
+                    <ChatEventContent className="text-sm">
+                      <MessageResponse>{msg.content}</MessageResponse>
                     </ChatEventContent>
                   </ChatEventBody>
                 </ChatEvent>
@@ -195,6 +201,11 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
 
       {/* ── Toolbar ────────────────────────────────────── */}
       <ChatToolbar>
+        <ChatToolbarAddon align="inline-start">
+          <ChatToolbarButton title="Attach" className="rounded-full size-7">
+            <Paperclip className="size-4" />
+          </ChatToolbarButton>
+        </ChatToolbarAddon>
         <ChatToolbarTextarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -206,10 +217,10 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
           <ChatToolbarButton
             onClick={handleSubmit}
             disabled={isLoading || !input.trim()}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 size-8"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 size-7 rounded-full"
             title="Send"
           >
-            <ArrowUp />
+            <ArrowUp weight="bold" className="size-3.5" />
           </ChatToolbarButton>
         </ChatToolbarAddon>
       </ChatToolbar>

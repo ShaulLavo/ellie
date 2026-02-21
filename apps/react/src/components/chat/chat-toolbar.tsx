@@ -70,8 +70,8 @@ export function ChatToolbar({
     >
       <div
         className={cn(
-          "border rounded-md py-2 px-3",
-          "flex flex-wrap items-start gap-x-2",
+          "border rounded-xl py-1 px-1.5",
+          "flex flex-wrap items-end gap-x-0.5",
         )}
       >
         {children}
@@ -128,12 +128,12 @@ export function ChatToolbarTextarea({
   };
 
   return (
-    <div className="flex-1 min-w-0 order-2 grid">
+    <div className="flex-1 min-w-0 order-2 grid self-center">
       <Textarea
         id="toolbar-input"
         placeholder="Type your message..."
         className={cn(
-          "h-fit min-h-10 max-h-30 px-1 @md/chat:text-base",
+          "h-fit min-h-9 max-h-30 px-1.5 py-1.5 text-sm @md/chat:text-[15px]",
           "border-none shadow-none focus-visible:border-none focus-visible:ring-0 placeholder:whitespace-nowrap resize-none",
           className,
         )}
@@ -195,7 +195,7 @@ export function ChatToolbarAddon({
   return (
     <div
       className={cn(
-        "h-10 flex items-center gap-1.5",
+        "h-9 flex items-center gap-1",
         chatToolbarAddonAlignStyles[align],
         className,
       )}
