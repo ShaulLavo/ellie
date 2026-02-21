@@ -494,23 +494,38 @@ export async function reflect(
 
   // Run tool-calling iterations (reserve last iteration for forced text-only)
   // Matches Python: iterations 0..N-2 call LLM with tools, iteration N-1 forces text.
+  //
+  // Retry logic: some models (e.g. Groq gpt-oss-120b) intermittently ignore tools
+  // entirely and respond without searching memories. When the model makes zero tool
+  // calls, retry once — the reflect agent's job is to search, so skipping all tools
+  // is always wrong.
   const toolIterations = Math.max(1, iterations - 1)
-  const rawAnswer = await streamToText(
-    chat({
-      adapter,
-      messages: [{ role: "user", content: userMessage }],
-      systemPrompts: [systemPrompt],
-      tools: [
-        searchMentalModels,
-        searchObservations,
-        recallTool,
-        searchMemories,
-        getEntity,
-        expand,
-      ],
-      agentLoopStrategy: maxIterations(toolIterations),
-    }),
-  )
+  const MAX_TOOL_IGNORING_RETRIES = 1
+
+  let rawAnswer = ""
+  for (let attempt = 0; attempt <= MAX_TOOL_IGNORING_RETRIES; attempt++) {
+    rawAnswer = await streamToText(
+      chat({
+        adapter,
+        messages: [{ role: "user", content: userMessage }],
+        systemPrompts: [systemPrompt],
+        tools: [
+          searchMentalModels,
+          searchObservations,
+          recallTool,
+          searchMemories,
+          getEntity,
+          expand,
+        ],
+        agentLoopStrategy: maxIterations(toolIterations),
+      }),
+    )
+
+    // If model called at least one tool, accept the result
+    if (toolCalls.length > 0) break
+
+    // Model ignored all tools — retry (unless retries exhausted)
+  }
 
   let answer: string
   if (rawAnswer.trim()) {
