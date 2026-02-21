@@ -45,7 +45,7 @@ bun test --cwd packages/hindsight-eval
 
 ### Scenario Weights (Global Score)
 
-```
+```text
 follow_up_recall:     30%
 temporal_narrative:    20%
 dedup_conflict:        15%
@@ -104,7 +104,7 @@ bun run --cwd packages/hindsight-eval eval:baseline
 
 ## Output Structure
 
-```
+```text
 packages/hindsight-eval/
 ├── artifacts/
 │   └── eval/
@@ -137,4 +137,4 @@ packages/hindsight-eval/
 - The fixture file is versioned: `assistant-baseline.v1.jsonl`
 - Once a baseline is committed, the fixture becomes immutable for that version
 - To evolve the dataset, create `v2` and update the runner config
-- Metric definitions are contract — changing a scorer requires a new dataset version
+- Metric definitions are a contract — changing a scorer requires a new dataset version

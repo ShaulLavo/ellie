@@ -1,6 +1,6 @@
 export { runBaseline } from "./runner"
 export { scoreCase } from "./scoring"
-export { generateReport, formatMarkdownReport } from "./report"
+export { generateReport, formatMarkdownReport, PRIMARY_METRIC } from "./report"
 
 export type {
   Scenario,

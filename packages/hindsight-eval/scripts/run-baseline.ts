@@ -8,9 +8,9 @@
  */
 
 import { resolve, join, relative } from "path"
-import { mkdirSync, writeFileSync, existsSync, cpSync } from "fs"
+import { mkdirSync, writeFileSync, existsSync, cpSync, rmSync } from "fs"
 import { runBaseline } from "../src/runner"
-import { generateReport, formatMarkdownReport } from "../src/report"
+import { generateReport, formatMarkdownReport, PRIMARY_METRIC } from "../src/report"
 import type { EvalRunConfig } from "../src/types"
 
 const PKG_ROOT = resolve(import.meta.dir, "..")
@@ -95,8 +95,7 @@ writeFileSync(mdPath, formatMarkdownReport(report))
 // Update latest snapshot
 const latestDir = join(outputDir, "latest")
 if (existsSync(latestDir)) {
-  // Remove old latest
-  Bun.spawnSync(["rm", "-rf", latestDir])
+  rmSync(latestDir, { recursive: true, force: true })
 }
 mkdirSync(latestDir, { recursive: true })
 cpSync(runDir, latestDir, { recursive: true })
@@ -111,7 +110,7 @@ console.log(`Global Score: ${(report.globalScore * 100).toFixed(1)}%`)
 console.log("")
 console.log("Per-scenario scores:")
 for (const scenario of report.scenarios) {
-  const primaryKey = Object.keys(scenario.metrics)[0] ?? "?"
+  const primaryKey = PRIMARY_METRIC[scenario.scenario] ?? Object.keys(scenario.metrics)[0] ?? "?"
   const primaryValue = scenario.metrics[primaryKey] ?? 0
   console.log(
     `  ${scenario.scenario}: ${(primaryValue * 100).toFixed(1)}% (${primaryKey}, ${scenario.caseCount} cases)`,

@@ -168,11 +168,11 @@ async function runSingleCase(
 
     // Collect candidates with stable tie-breaking: (score DESC, id ASC)
     const candidates: RecallCandidate[] = recallResult.memories
-      .map((scored, idx) => ({
+      .map((scored) => ({
         memoryId: scored.memory.id,
         content: scored.memory.content,
         score: scored.score,
-        rank: idx + 1,
+        rank: 0,
         sources: [...scored.sources],
         factType: scored.memory.factType,
       }))

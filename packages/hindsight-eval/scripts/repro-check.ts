@@ -56,7 +56,12 @@ console.log("Comparing runs...")
 let allMatch = true
 const TIMING_TOLERANCE = 0 // quality metrics must be exact
 
-for (let i = 0; i < casesRun1.length; i++) {
+if (casesRun1.length !== casesRun2.length) {
+  console.error(`  MISMATCH: case count differs: ${casesRun1.length} vs ${casesRun2.length}`)
+  allMatch = false
+}
+
+for (let i = 0; i < Math.min(casesRun1.length, casesRun2.length); i++) {
   const r1 = casesRun1[i]!
   const r2 = casesRun2[i]!
 
@@ -114,7 +119,12 @@ if (existsSync(baselineJsonPath)) {
     readFileSync(baselineJsonPath, "utf-8"),
   ) as EvalReport
 
-  for (let i = 0; i < casesRun1.length && i < baseline.cases.length; i++) {
+  if (casesRun1.length !== baseline.cases.length) {
+    console.warn(`  WARNING: case count differs: ${casesRun1.length} (current) vs ${baseline.cases.length} (baseline)`)
+    baselineMatch = false
+  }
+
+  for (let i = 0; i < Math.min(casesRun1.length, baseline.cases.length); i++) {
     const current = casesRun1[i]!
     const committed = baseline.cases[i]!
 
@@ -131,7 +141,8 @@ if (existsSync(baselineJsonPath)) {
     for (const key of metricKeys) {
       const v1 = current.metrics[key] ?? 0
       const v2 = committed.metrics[key] ?? 0
-      if (Math.abs(v1 - v2) > 1e-10) {
+      // Tolerance accounts for rounding in the serialized baseline (6 decimal places)
+      if (Math.abs(v1 - v2) > 1e-5) {
         console.error(
           `  BASELINE MISMATCH [${current.caseId}]: ${key} = ${v1} (current) vs ${v2} (committed)`,
         )

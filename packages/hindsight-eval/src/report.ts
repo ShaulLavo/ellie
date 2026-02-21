@@ -26,12 +26,27 @@ const GLOBAL_WEIGHTS: Record<Scenario, number> = {
 
 // ── Primary metric per scenario (used for global score) ───────────────────
 
-const PRIMARY_METRIC: Record<Scenario, string> = {
+export const PRIMARY_METRIC: Record<Scenario, string> = {
   follow_up_recall: "mrr",
   temporal_narrative: "orderingAccuracy",
   dedup_conflict: "contradictionRetrievalRate",
   code_location_recall: "pathRecall@k",
   token_budget_packing: "factRetentionRate",
+}
+
+// ── Precision helpers ─────────────────────────────────────────────────────
+
+/** Round a number to 6 decimal places to avoid IEEE 754 artifacts in serialized output. */
+function roundMetric(v: number): number {
+  return Number(v.toFixed(6))
+}
+
+function roundMetrics(metrics: Record<string, number>): Record<string, number> {
+  const rounded: Record<string, number> = {}
+  for (const [key, value] of Object.entries(metrics)) {
+    rounded[key] = roundMetric(value)
+  }
+  return rounded
 }
 
 // ── Penalty metrics (lower is better) ──────────────────────────────────────
@@ -95,15 +110,8 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
   }
 
   // Flag partial-scenario runs
-  const allScenarios: Scenario[] = [
-    "follow_up_recall",
-    "temporal_narrative",
-    "dedup_conflict",
-    "code_location_recall",
-    "token_budget_packing",
-  ]
   const presentScenarios = new Set(scenarios.map((s) => s.scenario))
-  const missingScenarios = allScenarios.filter((s) => !presentScenarios.has(s))
+  const missingScenarios = scenarioOrder.filter((s) => !presentScenarios.has(s))
   const warnings: string[] = []
   if (missingScenarios.length > 0) {
     warnings.push(
@@ -111,6 +119,21 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
       `Global score only reflects ${presentScenarios.size}/5 families.`,
     )
   }
+
+  // Round all numeric metrics/scores to avoid IEEE 754 artifacts in JSON output
+  const roundedCases = cases.map((c) => ({
+    ...c,
+    metrics: roundMetrics(c.metrics),
+    candidates: c.candidates.map((cand) => ({
+      ...cand,
+      score: roundMetric(cand.score),
+    })),
+  }))
+
+  const roundedScenarios = scenarios.map((s) => ({
+    ...s,
+    metrics: roundMetrics(s.metrics),
+  }))
 
   return {
     version: "1.0.0",
@@ -123,10 +146,10 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
       seed: config.seed,
       topK: config.topK,
     },
-    scenarios,
-    globalScore,
+    scenarios: roundedScenarios,
+    globalScore: roundMetric(globalScore),
     globalWeights: GLOBAL_WEIGHTS,
-    cases,
+    cases: roundedCases,
     totalDurationMs,
     ...(warnings.length > 0 ? { warnings } : {}),
   }

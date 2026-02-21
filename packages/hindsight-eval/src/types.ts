@@ -96,22 +96,31 @@ export interface TemporalNarrativeMetrics {
   orderingAccuracy: number
   predecessorHitRate: number
   successorHitRate: number
+  "recall@5": number
 }
 
 export interface DedupConflictMetrics {
   /** Fraction of excluded (duplicate/stale) items that leaked into results (lower is better) */
   duplicateLeakRate: number
   contradictionRetrievalRate: number
+  "recall@5": number
 }
 
+/**
+ * Metrics for code location recall scenarios.
+ * `"pathRecall@k"` is a literal key — "k" refers to the configured topK value
+ * but the key string is always the fixed literal `"pathRecall@k"`.
+ */
 export interface CodeLocationRecallMetrics {
   "pathRecall@k": number
   exactPathPrecision: number
+  mrr: number
 }
 
 export interface TokenBudgetPackingMetrics {
   factRetentionRate: number
   truncationLossRate: number
+  budgetUtilization: number
 }
 
 // ── Aggregate Report ──────────────────────────────────────────────────────

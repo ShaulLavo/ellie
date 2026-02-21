@@ -4,10 +4,10 @@
 **Mode:** hybrid
 **Seed:** 42
 **Top-K:** 10
-**Git SHA:** `01752e62ae387ba2a983aaa80b57e8344636ac75`
+**Git SHA:** `388628fa000ff9dec92ffeeb4539aebb9b8cd752`
 **Bun:** 1.3.10
-**Timestamp:** 2026-02-21T21:43:28.949Z
-**Total Duration:** 463ms
+**Timestamp:** 2026-02-21T22:19:32.273Z
+**Total Duration:** 426ms
 
 ## Global Score: 81.3%
 
@@ -45,7 +45,7 @@
 
 | Metric | Value |
 |--------|-------|
-| duplicateLeakRate (lower is better) | 80.0% |
+| duplicateLeakRate (lower is better) | 100.0% |
 | contradictionRetrievalRate | 100.0% |
 | recall@5 | 100.0% |
 
@@ -70,7 +70,7 @@
 ### fur-001 (follow_up_recall)
 
 **Query:** What are the user's preferences?
-**Duration:** 30ms
+**Duration:** 33ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -132,7 +132,7 @@
 ### fur-004 (follow_up_recall)
 
 **Query:** How did we debug and fix the memory leak?
-**Duration:** 10ms
+**Duration:** 9ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -174,7 +174,7 @@
 ### tn-001 (temporal_narrative)
 
 **Query:** What is the project timeline?
-**Duration:** 8ms
+**Duration:** 10ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -195,7 +195,7 @@
 ### tn-002 (temporal_narrative)
 
 **Query:** How did our database choice evolve?
-**Duration:** 12ms
+**Duration:** 9ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -279,7 +279,7 @@
 ### dc-001 (dedup_conflict)
 
 **Query:** What is the current API rate limit?
-**Duration:** 12ms
+**Duration:** 18ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -299,7 +299,7 @@
 ### dc-002 (dedup_conflict)
 
 **Query:** How does our deployment pipeline work?
-**Duration:** 13ms
+**Duration:** 12ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -312,14 +312,14 @@
 
 **Metrics:**
 
-- duplicateLeakRate: 0.0%
+- duplicateLeakRate: 100.0%
 - contradictionRetrievalRate: 100.0%
 - recall@5: 100.0%
 
 ### dc-003 (dedup_conflict)
 
 **Query:** Where is our application deployed?
-**Duration:** 13ms
+**Duration:** 11ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -339,7 +339,7 @@
 ### dc-004 (dedup_conflict)
 
 **Query:** When is the team standup?
-**Duration:** 9ms
+**Duration:** 8ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -379,7 +379,7 @@
 ### clr-001 (code_location_recall)
 
 **Query:** Where is the authentication code?
-**Duration:** 12ms
+**Duration:** 13ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -399,7 +399,7 @@
 ### clr-002 (code_location_recall)
 
 **Query:** What does the @ellie/agent package do?
-**Duration:** 10ms
+**Duration:** 11ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -419,7 +419,7 @@
 ### clr-003 (code_location_recall)
 
 **Query:** Where are the tests for the RPC and streaming packages?
-**Duration:** 36ms
+**Duration:** 11ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -439,7 +439,7 @@
 ### clr-004 (code_location_recall)
 
 **Query:** Where are the TypeScript and build configuration files?
-**Duration:** 11ms
+**Duration:** 10ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -459,7 +459,7 @@
 ### clr-005 (code_location_recall)
 
 **Query:** Where is the CORS and error handling middleware?
-**Duration:** 12ms
+**Duration:** 10ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -479,7 +479,7 @@
 ### tbp-001 (token_budget_packing)
 
 **Query:** What is the tech stack?
-**Duration:** 20ms
+**Duration:** 19ms
 **Candidates:** 7
 
 | Rank | Score | Content (truncated) | Sources |
@@ -501,7 +501,7 @@
 ### tbp-002 (token_budget_packing)
 
 **Query:** Tell me about Alice's engineering background
-**Duration:** 30ms
+**Duration:** 27ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -521,7 +521,7 @@
 ### tbp-003 (token_budget_packing)
 
 **Query:** What are the user's coding style preferences?
-**Duration:** 15ms
+**Duration:** 13ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |
@@ -541,7 +541,7 @@
 ### tbp-004 (token_budget_packing)
 
 **Query:** How is the project CI/CD set up?
-**Duration:** 14ms
+**Duration:** 13ms
 **Candidates:** 5
 
 | Rank | Score | Content (truncated) | Sources |

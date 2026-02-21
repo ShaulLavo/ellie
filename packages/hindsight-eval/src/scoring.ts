@@ -201,7 +201,7 @@ function scoreTokenBudgetPacking(
     0,
   )
   const budgetUtilization =
-    tokenBudget && tokenBudget > 0 ? Math.min(tokensUsed / tokenBudget, 1) : 1
+    tokenBudget && tokenBudget > 0 ? Math.min(tokensUsed / tokenBudget, 1) : 0
 
   return {
     factRetentionRate,

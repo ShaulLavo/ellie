@@ -61,6 +61,7 @@ describe("runner", () => {
           expect(r1.candidates[j]!.score).toBe(r2.candidates[j]!.score)
         }
 
+        expect(Object.keys(r1.metrics).length).toBe(Object.keys(r2.metrics).length)
         for (const key of Object.keys(r1.metrics)) {
           expect(r1.metrics[key]).toBe(r2.metrics[key])
         }
