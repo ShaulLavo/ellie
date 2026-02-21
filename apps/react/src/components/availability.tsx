@@ -1,6 +1,8 @@
 
 import * as React from "react";
-import { Clock, Settings, X } from "lucide-react";
+import ClockIcon from "@/components/ui/clock-icon";
+import GearIcon from "@/components/ui/gear-icon";
+import XIcon from "@/components/ui/x-icon";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -1048,7 +1050,7 @@ function TimeSpanCard({
       <div className="flex flex-col gap-0.5 text-inherit">
         <p className="font-semibold leading-none">{formatDisplayTime(span.start_time, useAmPm)}</p>
         <div className="flex items-center gap-0.5">
-          <Clock className="h-2 w-2" />{" "}
+          <ClockIcon size={8} />{" "}
           <p className="text-[10px] opacity-80">{calculatedDuration.toFixed(1).replace(".0", "")}h</p>
         </div>
       </div>
@@ -1065,11 +1067,11 @@ function TimeSpanCard({
             onDelete();
           }}
         >
-          <X className="h-3 w-3" />
+          <XIcon size={12} />
         </Button>
       )}
       <div className="flex flex-col gap-1 mt-auto text-inherit">
-        {!onDelete && <Settings className="h-3 w-3 opacity-50" />}
+        {!onDelete && <GearIcon size={12} className="opacity-50" />}
         <p className="font-semibold leading-none text-inherit!">{formatDisplayTime(span.end_time, useAmPm)}</p>
       </div>
     </div>

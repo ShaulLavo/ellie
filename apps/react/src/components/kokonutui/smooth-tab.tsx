@@ -10,7 +10,6 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
@@ -18,7 +17,7 @@ import { cn } from "@/lib/utils";
 interface TabItem {
   id: string;
   title: string;
-  icon?: LucideIcon;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
   content?: React.ReactNode;
   cardContent?: React.ReactNode;
   color: string;

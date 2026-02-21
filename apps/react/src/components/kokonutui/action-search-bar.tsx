@@ -13,15 +13,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "motion/react";
-import {
-    Search,
-    Send,
-    BarChart2,
-    Video,
-    PlaneTakeoff,
-    AudioLines,
-    LayoutGrid,
-} from "lucide-react";
+import MagnifierIcon from "@/components/ui/magnifier-icon";
+import SendIcon from "@/components/ui/send-icon";
+import ChartBarIcon from "@/components/ui/chart-bar-icon";
+import { Video, AirplaneTakeoff, WaveTriangle, GridFour } from "@phosphor-icons/react";
 import useDebounce from "@/hooks/use-debounce";
 
 interface Action {
@@ -76,7 +71,7 @@ const allActionsSample = [
     {
         id: "1",
         label: "Book tickets",
-        icon: <PlaneTakeoff className="h-4 w-4 text-blue-500" />,
+        icon: <AirplaneTakeoff size={16} className="text-blue-500" />,
         description: "Operator",
         short: "⌘K",
         end: "Agent",
@@ -84,7 +79,7 @@ const allActionsSample = [
     {
         id: "2",
         label: "Summarize",
-        icon: <BarChart2 className="h-4 w-4 text-orange-500" />,
+        icon: <ChartBarIcon size={16} className="text-orange-500" />,
         description: "gpt-5",
         short: "⌘cmd+p",
         end: "Command",
@@ -92,7 +87,7 @@ const allActionsSample = [
     {
         id: "3",
         label: "Screen Studio",
-        icon: <Video className="h-4 w-4 text-purple-500" />,
+        icon: <Video size={16} className="text-purple-500" />,
         description: "Claude 4.1",
         short: "",
         end: "Application",
@@ -100,7 +95,7 @@ const allActionsSample = [
     {
         id: "4",
         label: "Talk to Jarvis",
-        icon: <AudioLines className="h-4 w-4 text-green-500" />,
+        icon: <WaveTriangle size={16} className="text-green-500" />,
         description: "gpt-5 voice",
         short: "",
         end: "Active",
@@ -108,7 +103,7 @@ const allActionsSample = [
     {
         id: "5",
         label: "Kokonut UI - Pro",
-        icon: <LayoutGrid className="h-4 w-4 text-blue-500" />,
+        icon: <GridFour size={16} className="text-blue-500" />,
         description: "Components",
         short: "",
         end: "Link",
@@ -251,7 +246,7 @@ function ActionSearchBar({
                                         exit={{ y: 20, opacity: 0 }}
                                         transition={{ duration: 0.2 }}
                                     >
-                                        <Send className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                        <SendIcon size={16} className="text-gray-400 dark:text-gray-500" />
                                     </motion.div>
                                 ) : (
                                     <motion.div
@@ -261,7 +256,7 @@ function ActionSearchBar({
                                         exit={{ y: 20, opacity: 0 }}
                                         transition={{ duration: 0.2 }}
                                     >
-                                        <Search className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                        <MagnifierIcon size={16} className="text-gray-400 dark:text-gray-500" />
                                     </motion.div>
                                 )}
                             </AnimatePresence>

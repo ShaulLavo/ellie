@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Settings, CreditCard, FileText, LogOut, User } from "lucide-react";
+import GearIcon from "@/components/ui/gear-icon";
+import CreditCardIcon from "@/components/ui/credit-card";
+import FileDescriptionIcon from "@/components/ui/file-description-icon";
+import LogoutIcon from "@/components/ui/logout-icon";
+import UserIcon from "@/components/ui/user-icon";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -58,7 +62,7 @@ export default function ProfileDropdown({
         {
             label: "Profile",
             href: "#",
-            icon: <User className="w-4 h-4" />,
+            icon: <UserIcon size={16} />,
         },
         {
             label: "Model",
@@ -70,17 +74,17 @@ export default function ProfileDropdown({
             label: "Subscription",
             value: data.subscription,
             href: "#",
-            icon: <CreditCard className="w-4 h-4" />,
+            icon: <CreditCardIcon size={16} />,
         },
         {
             label: "Settings",
             href: "#",
-            icon: <Settings className="w-4 h-4" />,
+            icon: <GearIcon size={16} />,
         },
         {
             label: "Terms & Policies",
             href: "#",
-            icon: <FileText className="w-4 h-4" />,
+            icon: <FileDescriptionIcon size={16} />,
             external: true,
         },
     ];
@@ -174,7 +178,7 @@ export default function ProfileDropdown({
 
                         <DropdownMenuSeparator className="my-3 bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-800" />
 
-                        <DropdownMenuItem render={<button type="button" className="w-full flex items-center gap-3 p-3 duration-200 bg-red-500/10 rounded-xl hover:bg-red-500/20 cursor-pointer border border-transparent hover:border-red-500/30 hover:shadow-sm transition-all group" />}><LogOut className="w-4 h-4 text-red-500 group-hover:text-red-600" /><span className="text-sm font-medium text-red-500 group-hover:text-red-600">
+                        <DropdownMenuItem render={<button type="button" className="w-full flex items-center gap-3 p-3 duration-200 bg-red-500/10 rounded-xl hover:bg-red-500/20 cursor-pointer border border-transparent hover:border-red-500/30 hover:shadow-sm transition-all group" />}><LogoutIcon size={16} className="text-red-500 group-hover:text-red-600" /><span className="text-sm font-medium text-red-500 group-hover:text-red-600">
                                                             Sign Out
                                                         </span></DropdownMenuItem>
                     </DropdownMenuContent>

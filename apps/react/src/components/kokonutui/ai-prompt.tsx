@@ -10,7 +10,8 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { ArrowRight, Bot, Check, ChevronDown, Paperclip } from "lucide-react";
+import ArrowNarrowRightIcon from "@/components/ui/arrow-narrow-right-icon";
+import { Robot as BotIcon, CheckIcon, CaretDown as ChevronDownIcon, Paperclip } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import Anthropic from "@/components/kokonutui/anthropic";
@@ -205,7 +206,7 @@ export default function AI_Prompt() {
                                                                 >
                                                                   {MODEL_ICONS[selectedModel]}
                                                                   {selectedModel}
-                                                                  <ChevronDown className="h-3 w-3 opacity-50" />
+                                                                  <ChevronDownIcon size={12} className="opacity-50" />
                                                                 </motion.div>
                                                               </AnimatePresence></DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -223,13 +224,13 @@ export default function AI_Prompt() {
                         >
                           <div className="flex items-center gap-2">
                             {MODEL_ICONS[model] || (
-                              <Bot className="h-4 w-4 opacity-50" />
+                              <BotIcon size={16} className="opacity-50" />
                             )}{" "}
                             {/* Use mapped SVG or fallback */}
                             <span>{model}</span>
                           </div>
                           {selectedModel === model && (
-                            <Check className="h-4 w-4 text-blue-500" />
+                            <CheckIcon size={16} className="text-blue-500" />
                           )}
                         </DropdownMenuItem>
                       ))}
@@ -245,7 +246,7 @@ export default function AI_Prompt() {
                     )}
                   >
                     <input className="hidden" type="file" />
-                    <Paperclip className="h-4 w-4 transition-colors" />
+                    <Paperclip size={16} className="transition-colors" />
                   </label>
                 </div>
                 <button
@@ -257,9 +258,10 @@ export default function AI_Prompt() {
                   disabled={!value.trim()}
                   type="button"
                 >
-                  <ArrowRight
+                  <ArrowNarrowRightIcon
+                    size={16}
                     className={cn(
-                      "h-4 w-4 transition-opacity duration-200 dark:text-white",
+                      "transition-opacity duration-200 dark:text-white",
                       value.trim() ? "opacity-100" : "opacity-30"
                     )}
                   />

@@ -10,7 +10,9 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { Globe, Paperclip, Send } from "lucide-react";
+import GlobeIcon from "@/components/ui/globe-icon";
+import SendIcon from "@/components/ui/send-icon";
+import { Paperclip } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from "motion/react";
@@ -90,7 +92,7 @@ export default function AI_Input_Search() {
                         <div className="absolute left-3 bottom-3 flex items-center gap-2">
                             <label className="cursor-pointer rounded-lg p-2 bg-black/5 dark:bg-white/5">
                                 <input type="file" className="hidden" />
-                                <Paperclip className="w-4 h-4 text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white transition-colors" />
+                                <Paperclip size={16} className="text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white transition-colors" />
                             </label>
                             <button
                                 type="button"
@@ -125,9 +127,9 @@ export default function AI_Input_Search() {
                                             damping: 25,
                                         }}
                                     >
-                                        <Globe
+                                        <GlobeIcon
+                                            size={16}
                                             className={cn(
-                                                "w-4 h-4",
                                                 showSearch
                                                     ? "text-sky-500"
                                                     : "text-inherit"
@@ -164,7 +166,7 @@ export default function AI_Input_Search() {
                                         : "bg-black/5 dark:bg-white/5 text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white cursor-pointer"
                                 )}
                             >
-                                <Send className="w-4 h-4" />
+                                <SendIcon size={16} />
                             </button>
                         </div>
                     </div>

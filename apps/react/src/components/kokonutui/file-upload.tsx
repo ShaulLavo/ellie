@@ -10,7 +10,7 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { UploadCloud } from "lucide-react";
+import UploadIcon from "@/components/ui/upload-icon";
 import { AnimatePresence, motion } from "motion/react";
 import {
   type DragEvent,
@@ -506,7 +506,7 @@ export default function FileUpload({
                       type="button"
                     >
                       <span>Upload File</span>
-                      <UploadCloud className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+                      <UploadIcon size={16} className="transition-transform duration-200 group-hover:scale-110" />
                     </button>
 
                     <p className="mt-3 text-gray-500 text-xs dark:text-gray-400">
