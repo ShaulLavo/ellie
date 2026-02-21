@@ -6,6 +6,7 @@ import { env } from "@ellie/env/server";
 import { handleAgentRequest } from "./routes/agent";
 import { AgentManager } from "./agent/manager";
 import { anthropicText } from "@tanstack/ai-anthropic";
+import { appRouter } from "@ellie/router";
 
 const parsedUrl = new URL(env.API_BASE_URL);
 const port = parsedUrl.port !== "" ? Number(parsedUrl.port) : parsedUrl.protocol === "https:" ? 443 : 80;
@@ -14,6 +15,10 @@ const { DATA_DIR } = env;
 console.log(`[server] DATA_DIR=${DATA_DIR}`);
 
 const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
+
+// Register stream schemas from the router for JSONL enforcement
+engine.registerRouter(appRouter);
+
 const durableStore = new DurableStore(engine);
 export const ctx = createServerContext({ store: durableStore });
 

@@ -1534,4 +1534,175 @@ describe("Schema-enforced engine", () => {
     const good = encoder.encode(JSON.stringify({ type: "reborn", value: 2 }))
     expect(() => engine.append("/enforced/resurrect", good)).not.toThrow()
   })
+
+  // -- trailing comma handling (DurableStore compat) -------------------------
+
+  it("validates data with trailing comma from processJsonAppend", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/comma", { schemaKey: "event" })
+
+    // DurableStore's processJsonAppend appends a trailing comma
+    const data = encoder.encode('{"type":"click","value":42},')
+    expect(() => engine.append("/enforced/comma", data)).not.toThrow()
+
+    const messages = engine.read("/enforced/comma")
+    expect(messages).toHaveLength(1)
+  })
+
+  it("rejects invalid data even with trailing comma", () => {
+    engine.registerSchema("event", eventSchema)
+    engine.createStream("/enforced/comma-bad", { schemaKey: "event" })
+
+    const data = encoder.encode('{"type":123,"value":"wrong"},')
+    expect(() => engine.append("/enforced/comma-bad", data)).toThrow()
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Router-driven schema resolution
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("Router-driven schema resolution", () => {
+  let tmpDir: string
+  let dbPath: string
+  let logDir: string
+  let engine: JsonlEngine
+
+  const encoder = new TextEncoder()
+
+  const messageSchema = v.object({
+    role: v.picklist(["user", "assistant"]),
+    content: v.string(),
+  })
+
+  const eventSchema = v.object({
+    type: v.picklist(["start", "end"]),
+    data: v.optional(v.string()),
+  })
+
+  // Mock router matching the real appRouter shape
+  const mockRouter = {
+    _def: {
+      chat: {
+        path: "/chat/:chatId",
+        collections: {
+          messages: { schema: messageSchema, type: "messages", primaryKey: "id" },
+        },
+      },
+      chatEvents: {
+        path: "/chat/:chatId/events/:runId",
+        collections: {
+          events: { schema: eventSchema, type: "events", primaryKey: "id" },
+        },
+      },
+      // Procedure — should be skipped
+      doSomething: {
+        path: "/do",
+        method: "POST",
+        input: {},
+        output: {},
+      },
+    },
+  }
+
+  beforeEach(() => {
+    tmpDir = makeTempDir("ellie-router-schema-")
+    dbPath = join(tmpDir, "test.db")
+    logDir = join(tmpDir, "logs")
+    engine = new JsonlEngine(dbPath, logDir)
+  })
+
+  afterEach(() => {
+    engine.close()
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it("registerRouter registers schemas from stream definitions", () => {
+    engine.registerRouter(mockRouter)
+    expect(engine.getSchema("chat")).toBeDefined()
+    expect(engine.getSchema("chatEvents")).toBeDefined()
+    // Procedure should not be registered
+    expect(engine.getSchema("doSomething")).toBeUndefined()
+  })
+
+  it("registerRouter persists JSON Schema to registry", () => {
+    engine.registerRouter(mockRouter)
+    const jsonSchema = engine.getJsonSchema("chat") as any
+    expect(jsonSchema).toBeDefined()
+    expect(jsonSchema.type).toBe("object")
+    expect(jsonSchema.properties).toHaveProperty("role")
+    expect(jsonSchema.properties).toHaveProperty("content")
+  })
+
+  it("auto-resolves schema from path pattern on createStream", () => {
+    engine.registerRouter(mockRouter)
+
+    // No explicit schemaKey — engine resolves from path
+    const stream = engine.createStream("/chat/abc123")
+    expect(stream.schemaKey).toBe("chat")
+  })
+
+  it("auto-resolves nested path pattern", () => {
+    engine.registerRouter(mockRouter)
+    const stream = engine.createStream("/chat/abc123/events/run-001")
+    expect(stream.schemaKey).toBe("chatEvents")
+  })
+
+  it("validates appends on auto-resolved schema stream", () => {
+    engine.registerRouter(mockRouter)
+    engine.createStream("/chat/test-123")
+
+    // Valid message
+    const good = encoder.encode(JSON.stringify({ role: "user", content: "hello" }))
+    expect(() => engine.append("/chat/test-123", good)).not.toThrow()
+
+    // Invalid message
+    const bad = encoder.encode(JSON.stringify({ role: "invalid", content: 123 }))
+    expect(() => engine.append("/chat/test-123", bad)).toThrow()
+  })
+
+  it("validates appends on auto-resolved nested schema stream", () => {
+    engine.registerRouter(mockRouter)
+    engine.createStream("/chat/test-123/events/run-001")
+
+    const good = encoder.encode(JSON.stringify({ type: "start" }))
+    expect(() => engine.append("/chat/test-123/events/run-001", good)).not.toThrow()
+
+    const bad = encoder.encode(JSON.stringify({ type: "unknown" }))
+    expect(() => engine.append("/chat/test-123/events/run-001", bad)).toThrow()
+  })
+
+  it("no schema for paths that don't match any pattern", () => {
+    engine.registerRouter(mockRouter)
+    const stream = engine.createStream("/random/path")
+    expect(stream.schemaKey).toBeNull()
+
+    // Any data is accepted
+    const data = encoder.encode("not json at all")
+    expect(() => engine.append("/random/path", data)).not.toThrow()
+  })
+
+  it("validates data with trailing comma (DurableStore compat)", () => {
+    engine.registerRouter(mockRouter)
+    engine.createStream("/chat/comma-test")
+
+    // processJsonAppend adds trailing comma
+    const data = encoder.encode('{"role":"user","content":"hi"},')
+    expect(() => engine.append("/chat/comma-test", data)).not.toThrow()
+  })
+
+  it("explicit schemaKey overrides auto-resolution", () => {
+    engine.registerRouter(mockRouter)
+
+    // Create stream with explicit schemaKey that differs from pattern
+    const stream = engine.createStream("/chat/override", { schemaKey: "chatEvents" })
+    expect(stream.schemaKey).toBe("chatEvents")
+
+    // Should validate against event schema, not message schema
+    const event = encoder.encode(JSON.stringify({ type: "start" }))
+    expect(() => engine.append("/chat/override", event)).not.toThrow()
+
+    const message = encoder.encode(JSON.stringify({ role: "user", content: "hi" }))
+    expect(() => engine.append("/chat/override", message)).toThrow()
+  })
 })

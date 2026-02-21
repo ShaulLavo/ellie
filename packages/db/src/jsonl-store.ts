@@ -5,7 +5,7 @@ import { eq, and, gt, isNull, sql } from "drizzle-orm"
 import { join } from "path"
 import { mkdirSync } from "fs"
 import type { GenericSchema } from "valibot"
-import { parse } from "valibot"
+import { parse, union } from "valibot"
 import { toJsonSchema } from "@valibot/to-json-schema"
 import * as schema from "./schema"
 import { openDatabase } from "./init"
@@ -37,6 +37,7 @@ export class JsonlEngine {
   private logDir: string
   private openLogs = new Map<string, LogFile>()
   private schemas = new Map<string, GenericSchema>()
+  private schemaPatterns: Array<{ regex: RegExp; schemaKey: string }> = []
 
   constructor(dbPath: string, logDir: string) {
     this.logDir = logDir
@@ -103,6 +104,58 @@ export class JsonlEngine {
     return row ? JSON.parse(row.jsonSchema) : undefined
   }
 
+  /**
+   * Register all stream definitions from an RPC router.
+   *
+   * Iterates the router's `_def`, extracts stream definitions (those with
+   * `path` + `collections` and no `method`), registers each collection's
+   * schema, and builds path-pattern → schemaKey mappings so that
+   * `createStream()` can auto-resolve schemas from concrete paths.
+   *
+   * ```ts
+   * engine.registerRouter(appRouter)
+   * // Now createStream("/agent/chat-123") auto-enforces agentMessageSchema
+   * ```
+   */
+  registerRouter(router: { _def: Record<string, any> }): void {
+    for (const [name, def] of Object.entries(router._def)) {
+      // Skip procedure definitions (they have `method`)
+      if ("method" in def) continue
+      // Stream defs have `path` and `collections`
+      if (!def.path || !def.collections) continue
+
+      // Build merged schema from all collections
+      const collectionSchemas: GenericSchema[] = []
+      for (const col of Object.values(def.collections) as any[]) {
+        if (col.schema) collectionSchemas.push(col.schema)
+      }
+
+      if (collectionSchemas.length === 0) continue
+
+      const mergedSchema =
+        collectionSchemas.length === 1
+          ? collectionSchemas[0]!
+          : union(collectionSchemas)
+
+      // Register the schema under the stream name
+      this.registerSchema(name, mergedSchema)
+
+      // Convert path pattern to regex: /agent/:chatId → ^/agent/[^/]+$
+      const regexStr = "^" + def.path.replace(/:[^/]+/g, "[^/]+") + "$"
+      this.schemaPatterns.push({ regex: new RegExp(regexStr), schemaKey: name })
+    }
+  }
+
+  /**
+   * Resolve a concrete stream path to a schemaKey using registered patterns.
+   */
+  private resolveSchemaKey(path: string): string | undefined {
+    for (const { regex, schemaKey } of this.schemaPatterns) {
+      if (regex.test(path)) return schemaKey
+    }
+    return undefined
+  }
+
   // -- Stream operations ----------------------------------------------------
 
   createStream(
@@ -114,6 +167,11 @@ export class JsonlEngine {
       schemaKey?: string
     } = {}
   ): schema.StreamRow {
+    // Auto-resolve schemaKey from registered router patterns if not explicit
+    if (!options.schemaKey) {
+      options = { ...options, schemaKey: this.resolveSchemaKey(streamPath) }
+    }
+
     if (options.schemaKey && !this.schemas.has(options.schemaKey)) {
       throw new Error(
         `Schema "${options.schemaKey}" not registered. Call registerSchema() first.`
@@ -272,7 +330,9 @@ export class JsonlEngine {
           `Schema "${stream.schemaKey}" not registered but stream "${streamPath}" requires it.`
         )
       }
-      const json = JSON.parse(decoder.decode(data))
+      // Strip trailing comma/whitespace before parsing — DurableStore's
+      // processJsonAppend appends a comma to each record for JSONL streaming.
+      const json = JSON.parse(stripTrailingComma(decoder.decode(data)))
       parse(valibotSchema, json) // throws ValiError on invalid input
     }
 
@@ -428,6 +488,25 @@ export class JsonlEngine {
       // sqlite-vec not available, skip vector table
     }
   }
+}
+
+// -- Helpers ------------------------------------------------------------------
+
+/**
+ * Strip trailing comma and whitespace from a JSON string.
+ * DurableStore's processJsonAppend appends a trailing comma to each record
+ * for JSONL streaming format. We need to strip it before JSON.parse for
+ * schema validation.
+ */
+function stripTrailingComma(text: string): string {
+  let end = text.length
+  while (end > 0 && (text[end - 1] === " " || text[end - 1] === "\n" || text[end - 1] === "\r" || text[end - 1] === "\t")) {
+    end--
+  }
+  if (end > 0 && text[end - 1] === ",") {
+    return text.slice(0, end - 1)
+  }
+  return text
 }
 
 // -- Offset formatting --------------------------------------------------------
