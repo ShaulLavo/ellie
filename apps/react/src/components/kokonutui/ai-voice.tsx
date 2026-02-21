@@ -10,7 +10,7 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { Mic } from "lucide-react";
+import TelephoneIcon from "@/components/ui/telephone-icon";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +96,7 @@ export default function AI_Voice() {
                             style={{ animationDuration: "3s" }}
                         />
                     ) : (
-                        <Mic className="w-6 h-6 text-black/90 dark:text-white/90" />
+                        <TelephoneIcon size={24} className="text-black/90 dark:text-white/90" />
                     )}
                 </button>
 

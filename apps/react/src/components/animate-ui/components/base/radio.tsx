@@ -1,4 +1,4 @@
-import { CircleIcon } from 'lucide-react';
+import { Circle as CircleIcon } from "@phosphor-icons/react";
 
 import {
   RadioGroup as RadioGroupPrimitive,

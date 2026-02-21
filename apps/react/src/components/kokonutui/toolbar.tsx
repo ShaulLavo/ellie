@@ -11,30 +11,46 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import {
-  Bell,
-  CircleUserRound,
-  Edit2,
-  FileDown,
-  Frame,
-  Layers,
-  Lock,
-  type LucideIcon,
-  MousePointer2,
-  Move,
-  Palette,
-  Shapes,
-  Share2,
-  SlidersHorizontal,
-} from "lucide-react";
+import BellOffIcon from "@/components/ui/bell-off-icon";
+import LayersIcon from "@/components/ui/layers-icon";
+import LockIcon from "@/components/ui/lock-icon";
+import MousePointer2Icon from "@/components/ui/mouse-pointer-2-icon";
+import PaintIcon from "@/components/ui/paint-icon";
+import SlidersHorizontalIcon from "@/components/ui/sliders-horizontal-icon";
+import UserIcon from "@/components/ui/user-icon";
+import { PencilSimple, ShareNetwork } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
+
+// Inline SVG icons for toolbar items with no itshover/phosphor equivalent
+const MoveIcon: IconComponent = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="5 9 2 12 5 15" /><polyline points="9 5 12 2 15 5" /><polyline points="15 19 12 22 9 19" /><polyline points="19 9 22 12 19 15" /><line x1="2" y1="12" x2="22" y2="12" /><line x1="12" y1="2" x2="12" y2="22" />
+  </svg>
+);
+const ShapesIcon: IconComponent = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z" /><rect x="3" y="14" width="7" height="7" rx="1" /><circle cx="17.5" cy="17.5" r="3.5" />
+  </svg>
+);
+const FrameIcon: IconComponent = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="22" y1="6" x2="2" y2="6" /><line x1="22" y1="18" x2="2" y2="18" /><line x1="6" y1="2" x2="6" y2="22" /><line x1="18" y1="2" x2="18" y2="22" />
+  </svg>
+);
+const FileDownIcon: IconComponent = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><polyline points="14 2 14 8 20 8" /><polyline points="12 18 15 15 12 12 9 15 12 18" /><line x1="12" y1="12" x2="12" y2="18" />
+  </svg>
+);
+
 interface ToolbarItem {
   id: string;
   title: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   type?: never;
 }
 
@@ -98,17 +114,17 @@ export function Toolbar({
   const outsideClickRef = React.useRef(null);
 
   const toolbarItems: ToolbarItem[] = [
-    { id: "select", title: "Select", icon: MousePointer2 },
-    { id: "move", title: "Move", icon: Move },
-    { id: "shapes", title: "Shapes", icon: Shapes },
-    { id: "layers", title: "Layers", icon: Layers },
-    { id: "frame", title: "Frame", icon: Frame },
-    { id: "properties", title: "Properties", icon: SlidersHorizontal },
-    { id: "export", title: "Export", icon: FileDown },
-    { id: "share", title: "Share", icon: Share2 },
-    { id: "notifications", title: "Notifications", icon: Bell },
-    { id: "profile", title: "Profile", icon: CircleUserRound },
-    { id: "appearance", title: "Appearance", icon: Palette },
+    { id: "select", title: "Select", icon: MousePointer2Icon },
+    { id: "move", title: "Move", icon: MoveIcon },
+    { id: "shapes", title: "Shapes", icon: ShapesIcon },
+    { id: "layers", title: "Layers", icon: LayersIcon },
+    { id: "frame", title: "Frame", icon: FrameIcon },
+    { id: "properties", title: "Properties", icon: SlidersHorizontalIcon },
+    { id: "export", title: "Export", icon: FileDownIcon },
+    { id: "share", title: "Share", icon: ShareNetwork },
+    { id: "notifications", title: "Notifications", icon: BellOffIcon },
+    { id: "profile", title: "Profile", icon: UserIcon },
+    { id: "appearance", title: "Appearance", icon: PaintIcon },
   ];
 
   const handleItemClick = (itemId: string) => {
@@ -221,9 +237,9 @@ export function Toolbar({
             whileTap={{ scale: 0.98 }}
           >
             {isToggled ? (
-              <Edit2 className="h-3.5 w-3.5" />
+              <PencilSimple size={14} />
             ) : (
-              <Lock className="h-3.5 w-3.5" />
+              <LockIcon size={14} />
             )}
             <span className="font-medium text-sm">
               {isToggled ? "On" : "Off"}
