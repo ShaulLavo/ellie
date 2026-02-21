@@ -487,6 +487,9 @@ export async function reflect(
     bankIdentity +
     buildDirectivesReminder(activeDirectives)
 
+  // Run tool-calling iterations (reserve last iteration for forced text-only)
+  // Matches Python: iterations 0..N-2 call LLM with tools, iteration N-1 forces text.
+  const toolIterations = Math.max(1, iterations - 1)
   const rawAnswer = await streamToText(
     chat({
       adapter,
@@ -500,10 +503,34 @@ export async function reflect(
         getEntity,
         expand,
       ],
-      agentLoopStrategy: maxIterations(iterations),
+      agentLoopStrategy: maxIterations(toolIterations),
     }),
   )
-  const answer = cleanReflectAnswer(rawAnswer)
+
+  let answer: string
+  if (rawAnswer.trim()) {
+    // Model produced a text answer during tool iterations — use it directly
+    answer = cleanReflectAnswer(rawAnswer)
+  } else {
+    // Model exhausted tool iterations without producing text.
+    // Force a final text-only call (no tools) to synthesize an answer
+    // from whatever was retrieved. Matches Python's FINAL_SYSTEM_PROMPT path.
+    const contextSummary = buildToolContextSummary(allMemories)
+    const finalPrompt = buildFinalReflectPrompt(
+      query,
+      contextSummary,
+      bankProfile,
+      options.context,
+    )
+    const forcedAnswer = await streamToText(
+      chat({
+        adapter,
+        messages: [{ role: "user", content: finalPrompt }],
+        systemPrompts: [FINAL_REFLECT_SYSTEM_PROMPT],
+      }),
+    )
+    answer = cleanReflectAnswer(forcedAnswer)
+  }
 
   // ── Optionally save as observation (stored as memory_unit with factType="observation") ──
 
@@ -643,6 +670,72 @@ function normalizeExpandDepth(depth: string | undefined): "chunk" | "document" {
   return depth?.toLowerCase() === "document" ? "document" : "chunk"
 }
 
+// ── Final forced-text prompt (matches Python FINAL_SYSTEM_PROMPT) ──
+
+const FINAL_REFLECT_SYSTEM_PROMPT = `CRITICAL: You MUST ONLY use information from retrieved tool results. NEVER make up names, people, events, or entities.
+
+You are a thoughtful assistant that synthesizes answers from retrieved memories.
+
+Your approach:
+- Reason over the retrieved memories to answer the question
+- Make reasonable inferences when the exact answer isn't explicitly stated
+- Connect related memories to form a complete picture
+- Be helpful - if you have related information, use it to give the best possible answer
+- ONLY use information from tool results - no external knowledge or guessing
+
+Only say "I don't have information" if the retrieved data is truly unrelated to the question.
+
+FORMATTING: Use proper markdown formatting in your answer:
+- Headers (##, ###) for sections
+- Lists (bullet or numbered) for enumerations
+- Bold/italic for emphasis
+- CRITICAL: Always add blank lines before and after block elements
+
+IMPORTANT: Output ONLY the final answer. Do NOT include meta-commentary like "I'll search..." or "Let me analyze...". Do NOT explain your reasoning process. Just provide the direct synthesized answer.`
+
+function buildToolContextSummary(memories: ScoredMemory[]): string {
+  if (memories.length === 0) return "No data was retrieved."
+  const items = memories.map(
+    (m) => `- [${m.memory.factType}] ${m.memory.content}`,
+  )
+  return items.join("\n")
+}
+
+function buildFinalReflectPrompt(
+  query: string,
+  contextSummary: string,
+  bankProfile?: BankProfile,
+  additionalContext?: string,
+): string {
+  const parts: string[] = []
+
+  if (bankProfile) {
+    parts.push(`## Memory Bank Context\nName: ${bankProfile.name}`)
+    if (bankProfile.mission) {
+      parts.push(`Mission: ${bankProfile.mission}`)
+    }
+  }
+
+  parts.push(`\n## Retrieved Data\n${contextSummary}`)
+  parts.push(`\n## Question\n${query}`)
+
+  if (additionalContext) {
+    parts.push(`\nAdditional context: ${additionalContext}`)
+  }
+
+  parts.push(
+    "\n## Instructions\n" +
+    "Provide a thoughtful answer by synthesizing and reasoning from the retrieved data above. " +
+    "You can make reasonable inferences from the memories, but don't completely fabricate information. " +
+    "If the exact answer isn't stated, use what IS stated to give the best possible answer. " +
+    "Only say 'I don't have information' if the retrieved data is truly unrelated to the question.\n\n" +
+    "IMPORTANT: Output ONLY the final answer. Do NOT include meta-commentary. " +
+    "Just provide the direct synthesized answer.",
+  )
+
+  return parts.join("\n")
+}
+
 function cleanReflectAnswer(text: string): string {
   return _cleanDoneAnswer(_cleanAnswerText(text))
 }
@@ -776,6 +869,9 @@ async function generateStructuredOutput(
               "Return only valid JSON.",
           },
         ],
+        modelOptions: {
+          response_format: { type: "json_object" },
+        },
       }),
     )
     const parsed = parseLLMJson<Record<string, unknown> | null>(text, null)

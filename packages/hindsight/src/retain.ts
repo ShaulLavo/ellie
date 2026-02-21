@@ -468,6 +468,9 @@ async function extractFactsFromContent(
           },
         ],
         systemPrompts: [systemPrompt],
+        modelOptions: {
+          response_format: { type: "json_object" },
+        },
       }),
     )
 

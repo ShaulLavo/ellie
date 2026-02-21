@@ -3,14 +3,16 @@
  *
  * Equivalent of conftest.py from the original Hindsight project.
  * Provides a factory for creating test Hindsight instances with temp DBs
- * and pre-generated real embeddings (nomic-embed-text via Ollama).
+ * and pre-generated real embeddings (nomic-embed-text).
  */
 
 import { tmpdir } from "os"
-import { join } from "path"
-import { rmSync, readFileSync } from "fs"
+import { join, resolve } from "path"
+import { rmSync, readFileSync, existsSync } from "fs"
 import { describe } from "bun:test"
 import { anthropicText } from "@tanstack/ai-anthropic"
+import { groqChat } from "@ellie/ai/openai-compat"
+import { loadProviderCredential } from "@ellie/ai/credentials"
 import { Hindsight } from "../hindsight"
 import type { HindsightConfig } from "../types"
 import { createMockAdapter, type MockAdapter } from "./mock-adapter"
@@ -135,10 +137,37 @@ export function createTestHindsight(
 
 // ── Real LLM test factory ───────────────────────────────────────────────────
 
-export const HAS_ANTHROPIC_KEY = !!process.env.ANTHROPIC_API_KEY
+/**
+ * Find the .credentials.json file by walking up from the repo root.
+ * Handles both direct checkouts and git worktrees.
+ */
+function findCredentialsFile(): string | null {
+  let dir = resolve(import.meta.dir, "../../../..") // packages/hindsight/src/test → repo root
+  while (dir !== resolve(dir, "..")) {
+    const candidate = join(dir, ".credentials.json")
+    if (existsSync(candidate)) return candidate
+    dir = resolve(dir, "..")
+  }
+  return null
+}
 
-/** Use instead of `describe` for test blocks that require a real LLM (Anthropic API key). */
-export const describeWithLLM = HAS_ANTHROPIC_KEY ? describe : describe.skip
+const CREDENTIALS_PATH = findCredentialsFile()
+export const HAS_ANTHROPIC_KEY = !!process.env.ANTHROPIC_API_KEY
+export const HAS_CREDENTIALS = !!CREDENTIALS_PATH
+export const HAS_ANTHROPIC = HAS_ANTHROPIC_KEY || HAS_CREDENTIALS
+
+// Groq credential detection (matches Python conftest.py — uses openai/gpt-oss-120b via Groq)
+export const HAS_GROQ_KEY = !!process.env.GROQ_API_KEY
+const _hasGroqCredentials = CREDENTIALS_PATH
+  ? await loadProviderCredential(CREDENTIALS_PATH, "groq").then((c) => !!c)
+  : false
+export const HAS_GROQ = HAS_GROQ_KEY || _hasGroqCredentials
+
+/** The model to use for real LLM tests. Matches Python Hindsight conftest.py. */
+const REAL_LLM_MODEL = "openai/gpt-oss-120b"
+
+/** Use instead of `describe` for test blocks that require a real LLM. */
+export const describeWithLLM = (HAS_GROQ || HAS_ANTHROPIC) ? describe : describe.skip
 
 export interface RealTestHindsight {
   hs: Hindsight
@@ -147,140 +176,47 @@ export interface RealTestHindsight {
 }
 
 /**
- * Create a Hindsight instance with a real Anthropic adapter (claude-haiku-4-5).
+ * Resolve an LLM adapter for real tests.
  *
- * Requires ANTHROPIC_API_KEY in the environment. Use `describeWithLLM` to skip
- * entire test blocks when the key is not available.
+ * Priority: Groq (openai/gpt-oss-120b — matches Python conftest) > Anthropic.
  */
-export function createRealTestHindsight(
+async function resolveRealAdapter(): Promise<HindsightConfig["adapter"]> {
+  // Priority 1: Groq via env var
+  if (process.env.GROQ_API_KEY) {
+    return groqChat(REAL_LLM_MODEL, process.env.GROQ_API_KEY)
+  }
+
+  // Priority 2: Groq via credentials file
+  if (CREDENTIALS_PATH) {
+    const groqCred = await loadProviderCredential(CREDENTIALS_PATH, "groq")
+    if (groqCred && groqCred.type === "api_key") {
+      return groqChat(REAL_LLM_MODEL, groqCred.key)
+    }
+  }
+
+  // Priority 3: Anthropic via env var
+  if (HAS_ANTHROPIC_KEY) {
+    return anthropicText("claude-haiku-4-5")
+  }
+
+  throw new Error("No LLM credentials available (need GROQ_API_KEY, ANTHROPIC_API_KEY, or .credentials.json)")
+}
+
+/**
+ * Create a Hindsight instance with a real LLM adapter.
+ *
+ * Uses Groq (openai/gpt-oss-120b) when available, matching the Python
+ * Hindsight test setup. Falls back to Anthropic (claude-haiku-4-5).
+ */
+export async function createRealTestHindsight(
   overrides?: Partial<HindsightConfig>,
-): RealTestHindsight {
+): Promise<RealTestHindsight> {
   const dbPath = join(
     tmpdir(),
     `hindsight-test-real-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
   )
-  const adapter = anthropicText("claude-haiku-4-5")
 
-  const hs = new Hindsight({
-    dbPath,
-    embed: mockEmbed,
-    embeddingDimensions: EMBED_DIMS,
-    adapter,
-    ...overrides,
-  })
-
-  const cleanup = () => {
-    try {
-      hs.close()
-    } catch {
-      // already closed
-    }
-    try {
-      rmSync(dbPath, { force: true })
-      rmSync(dbPath + "-wal", { force: true })
-      rmSync(dbPath + "-shm", { force: true })
-    } catch {
-      // file may not exist
-    }
-  }
-
-  return { hs, dbPath, cleanup }
-}
-
-/**
- * Create a Hindsight instance for real-LLM extraction tests.
- *
- * Uses the package default adapter (Anthropic) unless caller overrides it.
- * Requires valid provider credentials in the environment when executed.
- */
-export function createRealLLMTestHindsight(
-  overrides?: Partial<HindsightConfig>,
-): RealLLMTestHindsight {
-  const dbPath = join(
-    tmpdir(),
-    `hindsight-real-llm-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
-  )
-
-  const hs = new Hindsight({
-    dbPath,
-    embed: mockEmbed,
-    embeddingDimensions: EMBED_DIMS,
-    ...overrides,
-  })
-
-  const cleanup = () => {
-    try {
-      hs.close()
-    } catch {
-      // already closed
-    }
-    try {
-      rmSync(dbPath, { force: true })
-      rmSync(dbPath + "-wal", { force: true })
-      rmSync(dbPath + "-shm", { force: true })
-    } catch {
-      // file may not exist
-    }
-  }
-
-  return { hs, dbPath, cleanup }
-}
-
-// ── Ollama test factory ─────────────────────────────────────────────────────
-
-/**
- * Check if Ollama is reachable at module load time.
- * Uses a synchronous-ish approach: we probe at import time and cache the result.
- */
-let _ollamaAvailable: boolean | null = null
-
-async function checkOllama(): Promise<boolean> {
-  try {
-    const response = await fetch("http://localhost:11434/api/tags", {
-      signal: AbortSignal.timeout(2000),
-    })
-    return response.ok
-  } catch {
-    return false
-  }
-}
-
-// Eagerly probe on import so HAS_OLLAMA is available synchronously in test files.
-// Bun supports top-level await in modules.
-_ollamaAvailable = await checkOllama()
-
-export const HAS_OLLAMA = _ollamaAvailable
-
-/** Use instead of `describe` for test blocks that require a running Ollama instance. */
-export const describeWithOllama = HAS_OLLAMA ? describe : describe.skip
-
-export interface OllamaTestHindsight {
-  hs: Hindsight
-  dbPath: string
-  cleanup: () => void
-}
-
-/**
- * Create a Hindsight instance backed by Ollama for text generation.
- *
- * Uses `ollamaAdapter` from `@ellie/ai/ollama` for chat/extraction/reflection.
- * Uses `mockEmbed` (pre-generated fixture) for embeddings.
- *
- * Requires Ollama running at localhost:11434. Use `describeWithOllama` to skip
- * entire test blocks when Ollama is not available.
- */
-export function createOllamaTestHindsight(
-  model: string = "qwen2.5:7b-instruct",
-  overrides?: Partial<HindsightConfig>,
-): OllamaTestHindsight {
-  // Lazy import to avoid pulling in @tanstack/ai-ollama when not needed
-  const { ollamaAdapter } = require("@ellie/ai/ollama") as typeof import("@ellie/ai/ollama")
-
-  const dbPath = join(
-    tmpdir(),
-    `hindsight-ollama-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
-  )
-  const adapter = ollamaAdapter(model)
+  const adapter = await resolveRealAdapter()
 
   const hs = new Hindsight({
     dbPath,

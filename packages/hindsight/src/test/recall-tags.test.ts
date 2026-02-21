@@ -333,8 +333,8 @@ describeWithLLM("reflect with tags (real LLM parity)", () => {
   let t: RealTestHindsight
   let bankId: string
 
-  beforeEach(() => {
-    t = createRealTestHindsight()
+  beforeEach(async () => {
+    t = await createRealTestHindsight()
     bankId = createTestBank(t.hs)
   })
 
@@ -343,34 +343,33 @@ describeWithLLM("reflect with tags (real LLM parity)", () => {
   })
 
   it("reflect with tags only uses matching memories", async () => {
-    const userAToken = "USER_A_ONLY_TOKEN_7f2a1c"
-    const userBToken = "USER_B_ONLY_TOKEN_9d3e4b"
-
+    // Matches Python test_reflect_with_tags_filters_memories — uses benign data
     await t.hs.retain(bankId, "test", {
-      facts: [{ content: `User A private token is ${userAToken}` }],
-      tags: ["user-a"],
+      facts: [{ content: "Oscar's favorite color is blue." }],
+      tags: ["user-oscar"],
       consolidate: false,
     })
     await t.hs.retain(bankId, "test", {
-      facts: [{ content: `User B private token is ${userBToken}` }],
-      tags: ["user-b"],
+      facts: [{ content: "Peter's favorite color is red." }],
+      tags: ["user-peter"],
       consolidate: false,
     })
 
     const result = await t.hs.reflect(
       bankId,
-      "What is user A's private token? Return only the exact token.",
+      "What is the favorite color?",
       {
-        tags: ["user-a"],
+        tags: ["user-oscar"],
         tagsMatch: "any_strict",
         saveObservations: false,
-        budget: "high",
-        context: "Use memory tools and return only the exact token string.",
+        budget: "mid",
       },
     )
 
-    expect(result.answer).toContain(userAToken)
-    expect(result.answer).not.toContain(userBToken)
+    // Should mention Oscar/blue, not Peter/red
+    const lower = result.answer.toLowerCase()
+    expect(lower).toContain("blue")
+    expect(lower).not.toContain("red")
   })
 })
 
