@@ -30,8 +30,10 @@ export function searchTemporal(
   const conditions: string[] = ["bank_id = ?"]
   const params: (string | number)[] = [
     bankId,
+    // Case 1: both occurrence bounds → overlap check only
     rangeTo,
     rangeFrom,
+    // Case 2: incomplete occurrence data → fallback to mentioned_at or partial bounds
     rangeFrom,
     rangeTo,
     rangeFrom,
@@ -40,11 +42,18 @@ export function searchTemporal(
     rangeTo,
   ]
 
+  // When both occurred_start and occurred_end are present, use only the
+  // overlap check (event time is known precisely). Only fall back to
+  // mentioned_at / partial bounds when occurrence data is incomplete.
   conditions.push(`(
     (occurred_start IS NOT NULL AND occurred_end IS NOT NULL AND occurred_start <= ? AND occurred_end >= ?)
-    OR (mentioned_at IS NOT NULL AND mentioned_at BETWEEN ? AND ?)
-    OR (occurred_start IS NOT NULL AND occurred_start BETWEEN ? AND ?)
-    OR (occurred_end IS NOT NULL AND occurred_end BETWEEN ? AND ?)
+    OR (
+      (occurred_start IS NULL OR occurred_end IS NULL) AND (
+        (mentioned_at IS NOT NULL AND mentioned_at BETWEEN ? AND ?)
+        OR (occurred_start IS NOT NULL AND occurred_start BETWEEN ? AND ?)
+        OR (occurred_end IS NOT NULL AND occurred_end BETWEEN ? AND ?)
+      )
+    )
   )`)
 
   // Only include memories that have at least some temporal data.

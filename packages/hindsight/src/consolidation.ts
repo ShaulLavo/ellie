@@ -364,6 +364,9 @@ async function consolidateWithLLM(
         adapter,
         messages: [{ role: "user", content: userPrompt }],
         systemPrompts: [CONSOLIDATION_SYSTEM],
+        modelOptions: {
+          response_format: { type: "json_object" },
+        },
       }),
     )
 

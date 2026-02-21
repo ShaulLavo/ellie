@@ -12,7 +12,9 @@
     "./overflow": "./src/overflow.ts",
     "./env": "./src/env.ts",
     "./thinking": "./src/thinking.ts",
-    "./ollama": "./src/ollama.ts"
+    "./ollama": "./src/ollama.ts",
+    "./openai-compat": "./src/openai-compat.ts",
+    "./credentials": "./src/credentials.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",
