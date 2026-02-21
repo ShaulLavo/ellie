@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test"
 import { createRouter } from "../src/server/router"
-import { handleProcedureRequest } from "../src/server/handler"
+import {
+  findMatchingProcedure,
+  findMatchingStream,
+  handleProcedureRequest,
+} from "../src/server/handler"
 import type { ProcedureHandlers } from "../src/server/handler"
 import { fakeSchema } from "./helpers"
 
@@ -9,6 +13,9 @@ import { fakeSchema } from "./helpers"
 // ---------------------------------------------------------------------------
 
 const testRouter = createRouter()
+  .stream(`chat`, `/chat/:chatId`, {
+    messages: fakeSchema(),
+  })
   .post(`createBank`, `/banks`, { input: fakeSchema(), output: fakeSchema() })
   .get(`listBanks`, `/banks`, { input: fakeSchema(), output: fakeSchema() })
   .get(`getBank`, `/banks/:bankId`, { input: fakeSchema(), output: fakeSchema() })
@@ -66,6 +73,36 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe(`handleProcedureRequest`, () => {
+  it(`finds matching stream by pathname`, () => {
+    const matched = findMatchingStream(testRouter._def, `/chat/my-room`)
+    expect(matched).not.toBeNull()
+    expect(matched?.name).toBe(`chat`)
+    expect(matched?.params.chatId).toBe(`my-room`)
+  })
+
+  it(`finds matching procedure by pathname + method`, () => {
+    const matched = findMatchingProcedure(testRouter._def, `/banks/b1/recall`, `POST`)
+    expect(matched).not.toBeNull()
+    expect(matched?.name).toBe(`recall`)
+    expect(matched?.params.bankId).toBe(`b1`)
+  })
+
+  it(`returns null when onMissingHandler is skip`, async () => {
+    const req = new Request(`${baseUrl}/banks`, {
+      method: `POST`,
+      headers: { "content-type": `application/json` },
+      body: JSON.stringify({ name: `Test` }),
+    })
+    const result = handleProcedureRequest(
+      testRouter._def,
+      req,
+      `/banks`,
+      {},
+      { onMissingHandler: `skip` }
+    )
+    expect(result).toBeNull()
+  })
+
   it(`dispatches POST /banks to createBank`, async () => {
     const res = await fetch(`${baseUrl}/banks`, {
       method: `POST`,

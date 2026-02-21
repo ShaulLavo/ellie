@@ -1,4 +1,4 @@
-import type { ProcedureDef, RouterDef } from "../types"
+import type { ProcedureDef, RouterDef, StreamDef } from "../types"
 
 // ============================================================================
 // Types
@@ -21,6 +21,19 @@ export type ProcedureHandlers<T extends RouterDef> = {
   [K in keyof T as T[K] extends ProcedureDef ? K : never]: T[K] extends ProcedureDef
     ? ProcedureHandler
     : never
+}
+
+/**
+ * Partial procedure handler map, useful when a server only implements
+ * a subset of a shared root router.
+ */
+export type PartialProcedureHandlers<T extends RouterDef> = Partial<ProcedureHandlers<T>>
+
+type ProcedureEntry = { name: string; def: ProcedureDef; params: Record<string, string> }
+type StreamEntry = { name: string; def: StreamDef; params: Record<string, string> }
+
+export interface ProcedureDispatchOptions {
+  onMissingHandler?: "error" | "skip"
 }
 
 // ============================================================================
@@ -62,6 +75,48 @@ function matchPath(
   return params
 }
 
+/**
+ * Find a procedure route by pathname + method.
+ */
+export function findMatchingProcedure<T extends RouterDef>(
+  routerDef: T,
+  pathname: string,
+  method: string
+): ProcedureEntry | null {
+  const upperMethod = method.toUpperCase()
+  for (const [name, def] of Object.entries(routerDef)) {
+    if (`collections` in def) continue
+
+    const procedureDef = def as ProcedureDef
+    if (procedureDef.method !== upperMethod) continue
+
+    const params = matchPath(pathname, procedureDef.path)
+    if (!params) continue
+
+    return { name, def: procedureDef, params }
+  }
+  return null
+}
+
+/**
+ * Find a stream route by pathname.
+ */
+export function findMatchingStream<T extends RouterDef>(
+  routerDef: T,
+  pathname: string
+): StreamEntry | null {
+  for (const [name, def] of Object.entries(routerDef)) {
+    if (!(`collections` in def)) continue
+
+    const streamDef = def as StreamDef
+    const params = matchPath(pathname, streamDef.path)
+    if (!params) continue
+
+    return { name, def: streamDef, params }
+  }
+  return null
+}
+
 // ============================================================================
 // Handler
 // ============================================================================
@@ -79,77 +134,65 @@ export function handleProcedureRequest<T extends RouterDef>(
   routerDef: T,
   req: Request,
   pathname: string,
-  handlers: ProcedureHandlers<T>
+  handlers: PartialProcedureHandlers<T>,
+  options: ProcedureDispatchOptions = {}
 ): Promise<Response> | null {
   const method = req.method.toUpperCase()
+  const matched = findMatchingProcedure(routerDef, pathname, method)
+  if (!matched) return null
 
-  // Find matching procedure by path + method
-  for (const [name, def] of Object.entries(routerDef)) {
-    // Skip stream definitions
-    if (`collections` in def) continue
-
-    const procDef = def as ProcedureDef
-    if (procDef.method !== method) continue
-
-    const params = matchPath(pathname, procDef.path)
-    if (!params) continue
-
-    // Found a match — dispatch to handler
-    const handler = (handlers as Record<string, ProcedureHandler>)[name]
-    if (!handler) {
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({ error: `No handler for procedure "${name}"` }),
-          { status: 501, headers: { "content-type": `application/json` } }
-        )
+  const handler = (handlers as Record<string, ProcedureHandler | undefined>)[matched.name]
+  if (!handler) {
+    if (options.onMissingHandler === "skip") return null
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({ error: `No handler for procedure "${matched.name}"` }),
+        { status: 501, headers: { "content-type": `application/json` } }
       )
-    }
+    )
+  }
 
-    return (async () => {
-      try {
-        let input: unknown
+  return (async () => {
+    try {
+      let input: unknown
 
-        if (method === `GET` || method === `DELETE`) {
-          // Parse input from query params
-          const url = new URL(req.url)
-          const obj: Record<string, string> = {}
-          for (const [k, v] of url.searchParams) {
-            obj[k] = v
-          }
-          input = Object.keys(obj).length > 0 ? obj : undefined
-        } else {
-          // Parse input from JSON body
-          const text = await req.text()
-          input = text ? JSON.parse(text) : undefined
+      if (method === `GET` || method === `DELETE`) {
+        const url = new URL(req.url)
+        const obj: Record<string, string> = {}
+        for (const [k, v] of url.searchParams) {
+          obj[k] = v
         }
+        input = Object.keys(obj).length > 0 ? obj : undefined
+      } else {
+        const text = await req.text()
+        input = text ? JSON.parse(text) : undefined
+      }
 
-        const result = await handler(input, params)
+      const result = await handler(input, matched.params)
 
-        if (result === undefined || result === null) {
-          return new Response(null, { status: 204 })
-        }
+      if (result === undefined || result === null) {
+        return new Response(null, { status: 204 })
+      }
 
-        return new Response(JSON.stringify(result), {
-          status: 200,
-          headers: { "content-type": `application/json` },
-        })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        const lower = message.toLowerCase()
-        const status = lower.includes(`not found`)
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "content-type": `application/json` },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      const lower = message.toLowerCase()
+      const status = err instanceof SyntaxError
+        ? 400
+        : lower.includes(`not found`)
           ? 404
           : lower.includes(`missing`) || lower.includes(`empty`)
             ? 400
             : 500
 
-        return new Response(
-          JSON.stringify({ error: message }),
-          { status, headers: { "content-type": `application/json` } }
-        )
-      }
-    })()
-  }
-
-  // No procedure matched
-  return null
+      return new Response(
+        JSON.stringify({ error: message }),
+        { status, headers: { "content-type": `application/json` } }
+      )
+    }
+  })()
 }
