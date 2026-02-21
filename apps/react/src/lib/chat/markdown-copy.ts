@@ -84,26 +84,32 @@ export function resolveSelectedMarkdown({
   const selectedSet = new Set(selectedIds)
   const orderedMarkdown = messageOrder
     .filter((id) => selectedSet.has(id))
-    .map((id) => markdownById.get(id))
-    .filter((value): value is string => typeof value === "string")
+    .map((id) => markdownById.get(id)?.trim())
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
 
   if (orderedMarkdown.length === 0) return null
-  return orderedMarkdown.join("\n\n")
+  return orderedMarkdown.join("\n\n").replace(/\n{3,}/g, "\n\n")
 }
 
 export function setMarkdownClipboardData(
   clipboardData: DataTransfer,
   markdown: string
 ) {
-  clipboardData.setData("text/plain", markdown)
+  clipboardData.setData("text/plain", markdownToPlainText(markdown))
   clipboardData.setData("text/markdown", markdown)
+}
+
+function markdownToPlainText(markdown: string): string {
+  return markdown.replace(/\n{2,}/g, "\n")
 }
 
 export async function writeMarkdownToSystemClipboard(markdown: string) {
   if (typeof navigator === "undefined" || !navigator.clipboard) return
 
+  const plainText = markdownToPlainText(markdown)
+
   if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
-    const textPlain = new Blob([markdown], { type: "text/plain" })
+    const textPlain = new Blob([plainText], { type: "text/plain" })
     const textMarkdown = new Blob([markdown], { type: "text/markdown" })
     const item = new ClipboardItem({
       "text/plain": textPlain,
@@ -115,5 +121,5 @@ export async function writeMarkdownToSystemClipboard(markdown: string) {
   }
 
   if (!navigator.clipboard.writeText) return
-  await navigator.clipboard.writeText(markdown)
+  await navigator.clipboard.writeText(plainText)
 }
