@@ -1,6 +1,6 @@
 import * as v from "valibot"
 import { createRouter } from "@ellie/rpc/server"
-import { agentMessageSchema, agentEventSchema } from "@ellie/agent"
+import { agentMessageSchema, agentEventSchema } from "@ellie/schemas"
 
 // ============================================================================
 // Schemas
