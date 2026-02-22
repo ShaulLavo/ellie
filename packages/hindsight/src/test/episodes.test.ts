@@ -176,9 +176,17 @@ describe("episodes via retain integration", () => {
     })
 
     // Check temporal links exist
-    const links = (t.hs as any).hdb.db
+    const hsInternals = Reflect.get(t.hs as object, "hdb") as {
+      db: {
+        select: () => {
+          from: (table: unknown) => { all: () => unknown[] }
+        }
+      }
+      schema: { episodeTemporalLinks: unknown }
+    }
+    const links = hsInternals.db
       .select()
-      .from((t.hs as any).hdb.schema.episodeTemporalLinks)
+      .from(hsInternals.schema.episodeTemporalLinks)
       .all()
 
     expect(links).toHaveLength(1)
@@ -203,7 +211,7 @@ describe("episodes via retain integration", () => {
   })
 
   it("narrative returns events around an anchor memory", async () => {
-    const result1 = await t.hs.retain(bankId, "first", {
+    const _result1 = await t.hs.retain(bankId, "first", {
       facts: [{ content: "Alice likes coffee", factType: "experience" }],
     })
 

@@ -10,8 +10,6 @@ import { createTestHindsight, createTestBank, type TestHindsight } from "./setup
 import {
   classifyRoute,
   detectConflict,
-  REINFORCE_THRESHOLD,
-  RECONSOLIDATE_THRESHOLD,
 } from "../routing"
 
 // ── Pure classification tests ────────────────────────────────────────────────
@@ -166,12 +164,21 @@ describe("routing integration via retain", () => {
     })
 
     // Check that decisions were logged
-    const decisions = (t.hs as any).hdb.db
+    const hsInternals = Reflect.get(t.hs as object, "hdb") as {
+      db: {
+        select: () => {
+          from: (table: unknown) => { all: () => unknown[] }
+        }
+      }
+      schema: { reconsolidationDecisions: unknown }
+    }
+    const decisions = hsInternals.db
       .select()
-      .from((t.hs as any).hdb.schema.reconsolidationDecisions)
+      .from(hsInternals.schema.reconsolidationDecisions)
       .all()
 
     expect(decisions.length).toBeGreaterThan(0)
-    expect(decisions[0]!.policyVersion).toBe("v1")
+    const first = decisions[0] as { policyVersion?: unknown } | undefined
+    expect(first?.policyVersion).toBe("v1")
   })
 })
