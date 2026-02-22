@@ -29,9 +29,9 @@ describe("findDuplicates (via retain with dedupThreshold)", () => {
     expect(result.memories[0]!.content).toBe("Peter loves hiking")
   })
 
-  it("deduplicates exact same text", async () => {
+  it("reinforces exact same text (returns existing memory)", async () => {
     // First retain
-    await t.hs.retain(bankId, "test", {
+    const first = await t.hs.retain(bankId, "test", {
       facts: [{ content: "Peter loves hiking", factType: "experience" }],
       dedupThreshold: 0.92,
     })
@@ -42,8 +42,11 @@ describe("findDuplicates (via retain with dedupThreshold)", () => {
       dedupThreshold: 0.92,
     })
 
-    // Exact same text → same embedding → distance 0 → similarity 1.0 > 0.92 → deduped
-    expect(result.memories).toHaveLength(0)
+    // Exact same text → same embedding → similarity 1.0 >= 0.92, no conflict → reinforced
+    // Reinforcement returns the existing memory (metadata-only update)
+    expect(result.memories).toHaveLength(1)
+    expect(result.memories[0]!.content).toBe("Peter loves hiking")
+    expect(result.memories[0]!.id).toBe(first.memories[0]!.id)
   })
 
   it("stores when similarity is below threshold", async () => {

@@ -89,6 +89,16 @@ export type {
   LinkDirection,
   MetaPathStep,
   MetaPath,
+  ReconRoute,
+  RetainRoute,
+  RouteDecision,
+  EpisodeBoundaryReason,
+  EpisodeSummary,
+  ListEpisodesOptions,
+  ListEpisodesResult,
+  NarrativeInput,
+  NarrativeEvent,
+  NarrativeResult,
 } from "./types"
 
 export * as schema from "./schema"

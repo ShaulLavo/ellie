@@ -158,6 +158,9 @@ export const retainInputSchema = v.object({
     customGuidelines: v.optional(v.string()),
     dedupThreshold: v.optional(v.number()),
     consolidate: v.optional(v.boolean()),
+    profile: v.optional(v.string()),
+    project: v.optional(v.string()),
+    session: v.optional(v.string()),
   })),
 })
 
@@ -182,6 +185,9 @@ export const retainBatchInputSchema = v.object({
     customGuidelines: v.optional(v.string()),
     dedupThreshold: v.optional(v.number()),
     consolidate: v.optional(v.boolean()),
+    profile: v.optional(v.string()),
+    project: v.optional(v.string()),
+    session: v.optional(v.string()),
   })),
 })
 
@@ -380,6 +386,62 @@ export const entityDetailSchema = v.object({
   observations: v.array(v.record(v.string(), v.unknown())),
 })
 export type EntityDetail = v.InferOutput<typeof entityDetailSchema>
+
+// ============================================================================
+// Episode Schemas
+// ============================================================================
+
+export const retainRouteSchema = v.picklist([`reinforce`, `reconsolidate`, `new_trace`])
+export type RetainRouteValue = v.InferOutput<typeof retainRouteSchema>
+
+export const episodeBoundaryReasonSchema = v.picklist([`time_gap`, `scope_change`, `phrase_boundary`, `initial`])
+
+export const episodeSummarySchema = v.object({
+  episodeId: v.string(),
+  startAt: v.number(),
+  endAt: v.nullable(v.number()),
+  lastEventAt: v.number(),
+  eventCount: v.number(),
+  boundaryReason: v.nullable(episodeBoundaryReasonSchema),
+  profile: v.nullable(v.string()),
+  project: v.nullable(v.string()),
+  session: v.nullable(v.string()),
+})
+export type EpisodeSummaryValue = v.InferOutput<typeof episodeSummarySchema>
+
+export const listEpisodesInputSchema = v.object({
+  profile: v.optional(v.string()),
+  project: v.optional(v.string()),
+  session: v.optional(v.string()),
+  limit: v.optional(v.number()),
+  cursor: v.optional(v.string()),
+})
+
+export const listEpisodesResultSchema = v.object({
+  items: v.array(episodeSummarySchema),
+  total: v.number(),
+  limit: v.number(),
+  cursor: v.nullable(v.string()),
+})
+
+export const narrativeInputSchema = v.object({
+  anchorMemoryId: v.string(),
+  direction: v.optional(v.picklist([`before`, `after`, `both`])),
+  steps: v.optional(v.number()),
+})
+
+export const narrativeEventSchema = v.object({
+  memoryId: v.string(),
+  episodeId: v.string(),
+  eventTime: v.number(),
+  route: retainRouteSchema,
+  contentSnippet: v.string(),
+})
+
+export const narrativeResultSchema = v.object({
+  events: v.array(narrativeEventSchema),
+  anchorMemoryId: v.string(),
+})
 
 // ============================================================================
 // Utility Schemas (used by router)

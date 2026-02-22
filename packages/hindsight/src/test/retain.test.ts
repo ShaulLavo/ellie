@@ -161,8 +161,8 @@ describe("retain", () => {
   // ── Deduplication ─────────────────────────────────────────────────────
 
   describe("deduplication", () => {
-    it("skips duplicate facts", async () => {
-      await t.hs.retain(bankId, "test", {
+    it("reinforces duplicate facts (returns existing memory)", async () => {
+      const first = await t.hs.retain(bankId, "test", {
         facts: [{ content: "Peter loves hiking" }],
         consolidate: false,
         dedupThreshold: 0.92,
@@ -174,7 +174,10 @@ describe("retain", () => {
         dedupThreshold: 0.92,
       })
 
-      expect(result.memories).toHaveLength(0) // deduped
+      // Exact duplicate → reinforced, returns existing memory
+      expect(result.memories).toHaveLength(1)
+      expect(result.memories[0]!.id).toBe(first.memories[0]!.id)
+      expect(result.memories[0]!.content).toBe("Peter loves hiking")
     })
 
     it("allows when threshold is 0 (disabled)", async () => {
@@ -515,12 +518,21 @@ describe("retain", () => {
       const hourMs = 3_600_000
       const existingIds: string[] = []
 
+      // Use radically different content per fact so hash-based mock embeddings
+      // produce similarity below 0.78 (new_trace routing).
+      // Each string uses unique special chars and numbers.
+      const uniqueTokens = [
+        "aaa @@@ 111", "bbb $$$ 222", "ccc %%% 333", "ddd ^^^ 444",
+        "eee &&& 555", "fff !!! 666", "ggg ### 777", "hhh *** 888",
+        "iii +++ 999", "jjj === 000", "kkk ~~~ 101", "lll ||| 202",
+      ]
+
       // Seed 12 existing facts, newest first by smaller hour offset.
       for (let hourOffset = 1; hourOffset <= 12; hourOffset++) {
         const retainResult = await t.hs.retain(bankId, `existing-${hourOffset}`, {
           facts: [
             {
-              content: `Existing temporal fact ${hourOffset}`,
+              content: uniqueTokens[hourOffset - 1]!,
               occurredStart: base - hourOffset * hourMs,
             },
           ],
@@ -531,7 +543,7 @@ describe("retain", () => {
       }
 
       const newResult = await t.hs.retain(bankId, "new-source", {
-        facts: [{ content: "New temporal source fact", occurredStart: base }],
+        facts: [{ content: "mmm @@@ $$$ %%% 303", occurredStart: base }],
         consolidate: false,
         dedupThreshold: 0,
       })
@@ -823,11 +835,20 @@ describe("retain", () => {
   describe("mention count", () => {
     it("accurately tracks mention count across multiple retain calls", async () => {
       // Store 5 separate contents all mentioning Alice
-      for (let i = 0; i < 5; i++) {
+      // Use radically different content so hash-based mock embeddings
+      // produce similarity below 0.78 (new_trace routing)
+      const uniqueContents = [
+        "Alice 111 @@@ zzz",
+        "Alice 222 $$$ qqq",
+        "Alice 333 %%% www",
+        "Alice 444 ^^^ xxx",
+        "Alice 555 &&& yyy",
+      ]
+      for (const content of uniqueContents) {
         await t.hs.retain(bankId, "test", {
           facts: [
             {
-              content: `Alice did activity number ${i + 1}`,
+              content,
               entities: ["Alice"],
             },
           ],
@@ -850,7 +871,7 @@ describe("retain", () => {
       // Check via entities on the latest retain result
       const lastRetain = await t.hs.retain(bankId, "test", {
         facts: [
-          { content: "Alice went to the park", entities: ["Alice"] },
+          { content: "Alice 999 !!! uuu ppp", entities: ["Alice"] },
         ],
         consolidate: false,
         dedupThreshold: 0,
@@ -864,10 +885,16 @@ describe("retain", () => {
 
     it("accurately tracks mention count with batch retain", async () => {
       // Batch retain with 6 items mentioning Bob
-      const batchTexts = Array.from(
-        { length: 6 },
-        (_, i) => `Bob completed task ${i + 1}`,
-      )
+      // Use radically different content so hash-based mock embeddings
+      // produce similarity below 0.78 (new_trace routing)
+      const batchTexts = [
+        "Bob 111 @@@ zzz aaa",
+        "Bob 222 $$$ qqq bbb",
+        "Bob 333 %%% www ccc",
+        "Bob 444 ^^^ xxx ddd",
+        "Bob 555 &&& yyy eee",
+        "Bob 666 !!! uuu fff",
+      ]
 
       t.adapter.setResponses(
         batchTexts.map((text) =>
@@ -900,10 +927,10 @@ describe("retain", () => {
       )
       expect(totalMemories).toBeGreaterThanOrEqual(6)
 
-      // Add 2 more mentions of Bob
+      // Add 2 more mentions of Bob with very different content
       const moreBatchTexts = [
-        "Bob went to the gym",
-        "Bob cooked dinner",
+        "Bob 777 *** ppp ggg",
+        "Bob 888 ### rrr hhh",
       ]
 
       t.adapter.setResponses(
@@ -1169,7 +1196,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_links_creation", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -1178,7 +1205,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_semantic_links_creation", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -1187,7 +1214,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_entity_links_creation", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -1217,7 +1244,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_causal_links_creation", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -1226,7 +1253,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_all_link_types_together", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -1235,7 +1262,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_semantic_links_within_same_batch", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -1244,7 +1271,7 @@ describe("Core parity: test_retain.py", () => {
     const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_links_within_same_batch", consolidate: false })
     expect(result.memories.length).toBe(1)
     expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false, dedupThreshold: 0 })
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 

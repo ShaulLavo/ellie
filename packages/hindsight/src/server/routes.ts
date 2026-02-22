@@ -157,6 +157,31 @@ export function createHindsightHandlers(
 			if (!detail) throw new Error("Entity not found")
 			return detail
 		},
+
+		// ── Episodes ──
+
+		listEpisodes: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			return hs.listEpisodes(params.bankId, {
+				profile: input?.profile as string | undefined,
+				project: input?.project as string | undefined,
+				session: input?.session as string | undefined,
+				limit: input?.limit ? Number(input.limit) : undefined,
+				cursor: input?.cursor as string | undefined,
+			})
+		},
+
+		narrative: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			if (!input?.anchorMemoryId || typeof input.anchorMemoryId !== "string") {
+				throw new Error("Missing 'anchorMemoryId' field")
+			}
+			return hs.narrative(params.bankId, {
+				anchorMemoryId: input.anchorMemoryId,
+				direction: input.direction as "before" | "after" | "both" | undefined,
+				steps: input.steps ? Number(input.steps) : undefined,
+			})
+		},
 	}
 }
 

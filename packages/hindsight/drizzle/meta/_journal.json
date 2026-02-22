@@ -15,6 +15,13 @@
       "when": 1771742048971,
       "tag": "0001_cognitive_access_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771719588056,
+      "tag": "0002_bright_machine_man",
+      "breakpoints": true
     }
   ]
 }

@@ -27,6 +27,10 @@ import {
   updateDirective as updateDirectiveImpl,
   deleteDirective as deleteDirectiveImpl,
 } from "./directives"
+import {
+  listEpisodes as listEpisodesImpl,
+  narrative as narrativeImpl,
+} from "./episodes"
 import type {
   HindsightConfig,
   BankConfig,
@@ -85,6 +89,10 @@ import type {
   ListTagsOptions,
   ListTagsResult,
   BankStats,
+  ListEpisodesOptions,
+  ListEpisodesResult,
+  NarrativeInput,
+  NarrativeResult,
 } from "./types"
 
 // ── Default config values ───────────────────────────────────────────────
@@ -1834,6 +1842,22 @@ Instructions:
   ): Promise<void> {
     if (!this.extensions?.onComplete) return
     await this.extensions.onComplete(context)
+  }
+
+  // ── Episodes ────────────────────────────────────────────────────────
+
+  listEpisodes(
+    bankId: string,
+    options?: Omit<ListEpisodesOptions, "bankId">,
+  ): ListEpisodesResult {
+    return listEpisodesImpl(this.hdb, bankId, options)
+  }
+
+  narrative(
+    bankId: string,
+    options: Omit<NarrativeInput, "bankId">,
+  ): NarrativeResult {
+    return narrativeImpl(this.hdb, bankId, options)
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────
