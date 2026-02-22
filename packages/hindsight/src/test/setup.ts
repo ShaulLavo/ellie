@@ -166,8 +166,15 @@ export const HAS_GROQ = HAS_GROQ_KEY || _hasGroqCredentials
 /** The model to use for real LLM tests. Matches Python Hindsight conftest.py. */
 const REAL_LLM_MODEL = "openai/gpt-oss-120b"
 
+/**
+ * Feature flag: set HINDSIGHT_RUN_LLM_TESTS=1 to enable real LLM tests.
+ * Defaults to off so CI and local runs skip them by default.
+ */
+export const RUN_LLM_TESTS = process.env.HINDSIGHT_RUN_LLM_TESTS === "1"
+
 /** Use instead of `describe` for test blocks that require a real LLM. */
-export const describeWithLLM = (HAS_GROQ || HAS_ANTHROPIC) ? describe : describe.skip
+export const describeWithLLM =
+  RUN_LLM_TESTS && (HAS_GROQ || HAS_ANTHROPIC) ? describe : describe.skip
 
 export interface RealTestHindsight {
   hs: Hindsight
