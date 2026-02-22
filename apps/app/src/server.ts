@@ -5,6 +5,7 @@ import { JsonlEngine } from "@ellie/db";
 import { env } from "@ellie/env/server";
 import { createAgentProcedureHandlers } from "./routes/agent";
 import { dispatchAppApiRequest } from "./routes/dispatch";
+import { dispatchHttpRoute } from "./routes/http";
 import { AgentManager } from "./agent/manager";
 import { anthropicText, type AnthropicChatModel } from "@tanstack/ai-anthropic";
 import { appRouter } from "@ellie/router";
@@ -61,20 +62,13 @@ async function fetch(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
-  // Status endpoint — connected client count
-  if (path === "/api/status" && req.method === "GET") {
-    const response = Response.json({ connectedClients: ctx.activeSSEResponses.size + ctx.activeLongPollRequests });
-    logRequest(req.method, path, response.status);
-    return response;
-  }
-
-  if (path === "/manifest.json") {
-    const file = Bun.file(manifestPath);
-    const response = new Response(file, {
-      headers: { "Content-Type": "application/manifest+json" },
-    });
-    logRequest(req.method, path, response.status);
-    return response;
+  const routeResponse = await dispatchHttpRoute(req, path, {
+    connectedClients: ctx.activeSSEResponses.size + ctx.activeLongPollRequests,
+    manifestPath,
+  });
+  if (routeResponse) {
+    logRequest(req.method, path, routeResponse.status);
+    return routeResponse;
   }
 
   const apiResponse = await dispatchAppApiRequest(req, path, {
