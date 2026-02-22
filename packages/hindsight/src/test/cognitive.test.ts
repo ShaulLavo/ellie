@@ -5,6 +5,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import type { HindsightDatabase } from "../db"
 import {
   computeProbe,
   computeBase,
@@ -241,11 +242,11 @@ describe("WorkingMemoryStore", () => {
 
 describe("scoreCognitive (with DB)", () => {
   let ctx: TestHindsight
-  let bankId: string
+  let _bankId: string
 
   beforeEach(() => {
     ctx = createTestHindsight()
-    bankId = createTestBank(ctx.hs)
+    _bankId = createTestBank(ctx.hs)
   })
 
   afterEach(() => {
@@ -254,7 +255,7 @@ describe("scoreCognitive (with DB)", () => {
 
   test("returns empty array for empty candidates", () => {
     const result = scoreCognitive(
-      (ctx.hs as any).hdb,
+      (ctx.hs as unknown as { hdb: HindsightDatabase }).hdb,
       [],
       Date.now(),
     )
@@ -268,7 +269,7 @@ describe("scoreCognitive (with DB)", () => {
       { id: "c", semanticSimilarity: 0.6, accessCount: 0, lastAccessed: null, encodingStrength: 1.0 },
     ]
 
-    const result = scoreCognitive((ctx.hs as any).hdb, candidates, Date.now())
+    const result = scoreCognitive((ctx.hs as unknown as { hdb: HindsightDatabase }).hdb, candidates, Date.now())
     expect(result.length).toBe(3)
     expect(result[0]!.id).toBe("b") // highest similarity
     expect(result[1]!.id).toBe("c")
@@ -282,7 +283,7 @@ describe("scoreCognitive (with DB)", () => {
       { id: "stale", semanticSimilarity: 0.5, accessCount: 0, lastAccessed: null, encodingStrength: 1.0 },
     ]
 
-    const result = scoreCognitive((ctx.hs as any).hdb, candidates, now)
+    const result = scoreCognitive((ctx.hs as unknown as { hdb: HindsightDatabase }).hdb, candidates, now)
     expect(result[0]!.id).toBe("fresh") // boosted by base activation
     expect(result[0]!.cognitiveScore).toBeGreaterThan(result[1]!.cognitiveScore)
   })
@@ -293,7 +294,7 @@ describe("scoreCognitive (with DB)", () => {
       { id: "aaa", semanticSimilarity: 0.5, accessCount: 0, lastAccessed: null, encodingStrength: 1.0 },
     ]
 
-    const result = scoreCognitive((ctx.hs as any).hdb, candidates, Date.now())
+    const result = scoreCognitive((ctx.hs as unknown as { hdb: HindsightDatabase }).hdb, candidates, Date.now())
     // Same score → sort by id ASC
     expect(result[0]!.id).toBe("aaa")
     expect(result[1]!.id).toBe("bbb")
@@ -306,8 +307,8 @@ describe("scoreCognitive (with DB)", () => {
       { id: "b", semanticSimilarity: 0.4, accessCount: 2, lastAccessed: now - 3600000, encodingStrength: 1.0 },
     ]
 
-    const run1 = scoreCognitive((ctx.hs as any).hdb, candidates, now)
-    const run2 = scoreCognitive((ctx.hs as any).hdb, candidates, now)
+    const run1 = scoreCognitive((ctx.hs as unknown as { hdb: HindsightDatabase }).hdb, candidates, now)
+    const run2 = scoreCognitive((ctx.hs as unknown as { hdb: HindsightDatabase }).hdb, candidates, now)
 
     expect(run1[0]!.cognitiveScore).toBe(run2[0]!.cognitiveScore)
     expect(run1[1]!.cognitiveScore).toBe(run2[1]!.cognitiveScore)

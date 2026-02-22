@@ -16,6 +16,8 @@ import {
   createTestBank,
   type TestHindsight,
 } from "./setup"
+import type { HindsightDatabase } from "../db"
+import type { MemoryUnitRow } from "../schema"
 
 describe("recall cognitive mode", () => {
   let t: TestHindsight
@@ -118,7 +120,7 @@ describe("access write-through on recall", () => {
   })
 
   test("retain sets access_count=0 and last_accessed=null for new memories", () => {
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const rows = hdb.db
       .select()
       .from(hdb.schema.memoryUnits)
@@ -132,12 +134,12 @@ describe("access write-through on recall", () => {
 
   test("recall increments access_count for returned memories", async () => {
     // Check initial state
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const before = hdb.db
       .select()
       .from(hdb.schema.memoryUnits)
       .all()
-    const initialCounts = new Map(before.map((r: any) => [r.id, r.accessCount]))
+    const initialCounts = new Map(before.map((r: MemoryUnitRow) => [r.id, r.accessCount]))
 
     // Perform a recall
     const result = await t.hs.recall(bankId, "hiking")
@@ -164,7 +166,7 @@ describe("access write-through on recall", () => {
     expect(result.memories.length).toBeGreaterThan(0)
     const returnedIds = new Set(result.memories.map((m) => m.memory.id))
 
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const rows = hdb.db
       .select()
       .from(hdb.schema.memoryUnits)
@@ -190,7 +192,7 @@ describe("access write-through on recall", () => {
     const intersection = new Set([...ids1].filter((id) => ids2.has(id)))
     expect(intersection.size).toBeGreaterThan(0)
 
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     const rows = hdb.db
       .select()
       .from(hdb.schema.memoryUnits)
@@ -205,7 +207,7 @@ describe("access write-through on recall", () => {
   })
 
   test("encoding_strength is capped at 3.0", async () => {
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
     // Artificially set encoding_strength to 2.99
     hdb.sqlite.run(
       `UPDATE hs_memory_units SET encoding_strength = 2.99 WHERE bank_id = ?`,
@@ -225,7 +227,7 @@ describe("access write-through on recall", () => {
   })
 
   test("write-through works in both hybrid and cognitive modes", async () => {
-    const hdb = (t.hs as any).hdb
+    const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 
     // Hybrid recall
     const r1 = await t.hs.recall(bankId, "hiking", { mode: "hybrid" })
@@ -235,7 +237,7 @@ describe("access write-through on recall", () => {
       .select()
       .from(hdb.schema.memoryUnits)
       .all()
-    const hybridCounts = new Map(afterHybrid.map((r: any) => [r.id, r.accessCount]))
+    const hybridCounts = new Map(afterHybrid.map((r: MemoryUnitRow) => [r.id, r.accessCount]))
 
     // Cognitive recall
     const r2 = await t.hs.recall(bankId, "hiking", { mode: "cognitive" })
@@ -378,7 +380,7 @@ describe("cognitive recall trace", () => {
       (p) => p.phaseName === "combined_scoring",
     )
     expect(scoringPhase).toBeDefined()
-    expect(scoringPhase!.details.mode).toBe("cognitive")
+    expect(scoringPhase!.details!.mode).toBe("cognitive")
   })
 
   test("hybrid mode reports mode in trace phaseMetrics", async () => {
@@ -391,6 +393,6 @@ describe("cognitive recall trace", () => {
       (p) => p.phaseName === "combined_scoring",
     )
     expect(scoringPhase).toBeDefined()
-    expect(scoringPhase!.details.mode).toBe("hybrid")
+    expect(scoringPhase!.details!.mode).toBe("hybrid")
   })
 })
