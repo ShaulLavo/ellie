@@ -582,7 +582,6 @@ export async function recall(
     const packResult = packContext(packCandidates, tokenBudget)
 
     // Replace memory content with packed versions where applicable
-    const packedById = new Map(packResult.packed.map((p) => [p.id, p]))
     const packedMemories: ScoredMemory[] = []
     for (const pm of packResult.packed) {
       const original = memories.find((m) => m.memory.id === pm.id)

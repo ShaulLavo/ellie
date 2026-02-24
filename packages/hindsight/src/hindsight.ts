@@ -39,7 +39,7 @@ import {
   type LocationHit,
   type LocationStats,
 } from "./location"
-import { resolveScope, type Scope } from "./scope"
+import { resolveScope } from "./scope"
 import type {
   HindsightConfig,
   BankConfig,
