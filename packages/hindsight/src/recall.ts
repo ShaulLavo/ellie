@@ -26,6 +26,21 @@ import { rowToMemoryUnit, rowToEntity } from "./retain"
 import { extractTemporalRange } from "./temporal"
 import { matchesTags, parseStringArray } from "./tags"
 import { clamp } from "./util"
+import {
+  detectLocationSignals,
+  resolveSignalsToPaths,
+  computeLocationBoost,
+  getMaxStrengthForPaths,
+} from "./location"
+import { packContext, type PackCandidate } from "./context-pack"
+import { scopeMatches, resolveScope, type Scope, type ScopeMode } from "./scope"
+
+/** Extended recall options with Phase 3 scope + tokenBudget support */
+interface RecallOptionsWithScope extends RecallOptions {
+  tokenBudget?: number
+  scope?: { profile?: string; project?: string; session?: string }
+  scopeMode?: ScopeMode
+}
 
 interface TimedHits {
   hits: RetrievalHit[]
@@ -347,6 +362,68 @@ export async function recall(
     })
   }
 
+  // ── Phase 3: Location boost ───────────────────────────────────────────────
+  // Only applied when query contains location signals (file paths, module tokens)
+  const locationBoostStart = Date.now()
+  const locationSignals = detectLocationSignals(query)
+  let locationBoostApplied = false
+
+  if (locationSignals.length > 0) {
+    const scopeFilter = options.scope
+      ? { profile: options.scope.profile, project: options.scope.project }
+      : undefined
+    const signalPathMap = resolveSignalsToPaths(hdb, bankId, locationSignals, scopeFilter)
+    const allQueryPathIds = new Set<string>()
+    for (const pathIds of signalPathMap.values()) {
+      for (const id of pathIds) allQueryPathIds.add(id)
+    }
+
+    if (allQueryPathIds.size > 0) {
+      const maxStrength = getMaxStrengthForPaths(hdb, bankId, allQueryPathIds)
+
+      for (const candidate of rankedCandidates) {
+        const boost = computeLocationBoost(
+          hdb,
+          bankId,
+          candidate.id,
+          allQueryPathIds,
+          maxStrength,
+          now,
+        )
+        if (boost > 0) {
+          candidate.combinedScore += boost
+          locationBoostApplied = true
+        }
+      }
+
+      if (locationBoostApplied) {
+        // Re-sort after boost application
+        rankedCandidates.sort((a, b) => {
+          if (b.combinedScore !== a.combinedScore) {
+            return b.combinedScore - a.combinedScore
+          }
+          return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+        })
+        rankedCandidates.forEach((c, i) => { c.rank = i + 1 })
+      }
+    }
+  }
+
+  phaseMetrics.push({
+    phaseName: "location_boost",
+    durationMs: Date.now() - locationBoostStart,
+    details: {
+      signalsDetected: locationSignals.length,
+      boostApplied: locationBoostApplied,
+    },
+  })
+
+  // ── Phase 3: Scope resolution ──────────────────────────────────────────────
+  const effectiveScope = options.scope
+    ? resolveScope(options.scope)
+    : undefined
+  const scopeMode: ScopeMode = (options as RecallOptionsWithScope).scopeMode ?? "strict"
+
   const hydrationStart = Date.now()
 
   // Batch-load all junctions + entities for ranked candidates (avoids N+1)
@@ -430,7 +507,20 @@ export async function recall(
       if (!hasMatch) continue
     }
 
-    if (maxTokens != null) {
+    // Phase 3: Scope filtering
+    if (effectiveScope) {
+      if (
+        !scopeMatches(
+          { profile: row.scopeProfile, project: row.scopeProject },
+          effectiveScope,
+          scopeMode,
+        )
+      ) {
+        continue
+      }
+    }
+
+    if (maxTokens != null && !options.tokenBudget) {
       const contentTokens = estimateTokens(row.content)
       if (usedTokens + contentTokens > maxTokens) break
       usedTokens += contentTokens
@@ -476,6 +566,59 @@ export async function recall(
       usedTokens: maxTokens != null ? usedTokens : undefined,
     },
   })
+
+  // ── Phase 3: Token budget packing ──────────────────────────────────────────
+  // When tokenBudget is specified, apply the gist-first context packing policy
+  const tokenBudget = (options as RecallOptionsWithScope).tokenBudget
+  let packOverflow = false
+
+  if (tokenBudget != null && tokenBudget > 0 && memories.length > 0) {
+    const packStart = Date.now()
+    const packCandidates: PackCandidate[] = memories.map((m) => ({
+      id: m.memory.id,
+      content: m.memory.content,
+      gist: memoryRowById.get(m.memory.id)?.gist ?? null,
+      score: m.score,
+    }))
+
+    const packResult = packContext(packCandidates, tokenBudget)
+    packOverflow = packResult.overflow
+
+    // Replace memory content with packed versions where applicable
+    const packedById = new Map(packResult.packed.map((p) => [p.id, p]))
+    const packedMemories: ScoredMemory[] = []
+    for (const pm of packResult.packed) {
+      const original = memories.find((m) => m.memory.id === pm.id)
+      if (!original) continue
+      if (pm.mode === "gist") {
+        // Replace content with gist text for downstream consumers
+        packedMemories.push({
+          ...original,
+          memory: { ...original.memory, content: pm.text },
+        })
+      } else {
+        packedMemories.push(original)
+      }
+    }
+
+    // Replace memories array with packed version
+    memories.length = 0
+    memories.push(...packedMemories)
+
+    phaseMetrics.push({
+      phaseName: "context_pack",
+      durationMs: Date.now() - packStart,
+      details: {
+        tokenBudget,
+        totalTokensUsed: packResult.totalTokensUsed,
+        budgetRemaining: packResult.budgetRemaining,
+        overflow: packResult.overflow,
+        packedCount: packResult.packed.length,
+        gistCount: packResult.packed.filter((p) => p.mode === "gist").length,
+        fullCount: packResult.packed.filter((p) => p.mode === "full").length,
+      },
+    })
+  }
 
   // ── Access write-through (both modes) ────────────────────────────────────
   // For returned memories only: increment access_count, update last_accessed,

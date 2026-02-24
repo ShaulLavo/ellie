@@ -194,6 +194,55 @@ export function createHindsightHandlers(
 			})
 		},
 
+		locationRecord: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			if (!input?.path || typeof input.path !== "string") {
+				throw new Error("Missing 'path' field")
+			}
+			if (!input?.context || typeof input.context !== "object") {
+				throw new Error("Missing 'context' field")
+			}
+			const context = input.context as { memoryId: string; session?: string; activityType?: string }
+			if (!context.memoryId) {
+				throw new Error("Missing 'context.memoryId' field")
+			}
+			hs.locationRecord(
+				params.bankId,
+				input.path,
+				{
+					memoryId: context.memoryId,
+					session: context.session,
+					activityType: context.activityType as "access" | "retain" | "recall" | undefined,
+				},
+				input.scope as { profile?: string; project?: string } | undefined,
+			)
+			return { ok: true }
+		},
+
+		locationFind: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			return hs.locationFind(params.bankId, {
+				query: input?.query as string | undefined,
+				path: input?.path as string | undefined,
+				limit: input?.limit ? Number(input.limit) : undefined,
+				scope: input?.scope as { profile?: string; project?: string } | undefined,
+			})
+		},
+
+		locationStats: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			if (!input?.path || typeof input.path !== "string") {
+				throw new Error("Missing 'path' field")
+			}
+			const stats = hs.locationStats(
+				params.bankId,
+				input.path,
+				input.scope as { profile?: string; project?: string } | undefined,
+			)
+			if (!stats) throw new Error("Path not found")
+			return stats
+		},
+
 		narrative: async (raw: unknown, params) => {
 			const input = raw as RpcInput
 			if (!input?.anchorMemoryId || typeof input.anchorMemoryId !== "string") {
@@ -328,6 +377,16 @@ function createHindsightApp(hs: Hindsight) {
 		.post("/banks/:bankId/narrative", ({ body, params }) => invoke("narrative", body, params), {
 			params: bankParamsSchema,
 			body: narrativeInputSchema,
+		})
+		// Phase 3: Location APIs
+		.post("/banks/:bankId/location/record", ({ body, params }) => invoke("locationRecord", body, params), {
+			params: bankParamsSchema,
+		})
+		.post("/banks/:bankId/location/find", ({ body, params }) => invoke("locationFind", body, params), {
+			params: bankParamsSchema,
+		})
+		.post("/banks/:bankId/location/stats", ({ body, params }) => invoke("locationStats", body, params), {
+			params: bankParamsSchema,
 		})
 }
 

@@ -101,5 +101,35 @@ export type {
   NarrativeResult,
 } from "./types"
 
+// Phase 3: Location, scope, context packing
+export type {
+  LocationContext,
+  LocationHit,
+  LocationStats,
+} from "./location"
+export {
+  normalizePath,
+  detectLocationSignals,
+  hasLocationSignals,
+} from "./location"
+export type { Scope, ScopeContext, ScopeMode } from "./scope"
+export {
+  deriveScopeTagsFromContext,
+  resolveScope,
+  scopeMatches,
+  DEFAULT_PROFILE,
+  DEFAULT_PROJECT,
+} from "./scope"
+export type {
+  PackCandidate,
+  PackedMemory,
+  PackResult,
+} from "./context-pack"
+export {
+  packContext,
+  generateFallbackGist,
+  estimateTokens,
+} from "./context-pack"
+
 export * as schema from "./schema"
 export * as schemas from "./schemas"

@@ -22,6 +22,13 @@
       "when": 1771742148971,
       "tag": "0002_bright_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1771955427127,
+      "tag": "0003_heavy_warbird",
+      "breakpoints": true
     }
   ]
 }

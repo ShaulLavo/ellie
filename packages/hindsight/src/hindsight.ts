@@ -31,6 +31,15 @@ import {
   listEpisodes as listEpisodesImpl,
   narrative as narrativeImpl,
 } from "./episodes"
+import {
+  locationRecord as locationRecordImpl,
+  locationFind as locationFindImpl,
+  locationStats as locationStatsImpl,
+  type LocationContext,
+  type LocationHit,
+  type LocationStats,
+} from "./location"
+import { resolveScope, type Scope } from "./scope"
 import type {
   HindsightConfig,
   BankConfig,
@@ -1842,6 +1851,57 @@ Instructions:
   ): Promise<void> {
     if (!this.extensions?.onComplete) return
     await this.extensions.onComplete(context)
+  }
+
+  // ── Location APIs (Phase 3) ──────────────────────────────────────────
+
+  /**
+   * Record a file/module location access event.
+   *
+   * Creates or updates the path entry, records the access context,
+   * and updates co-access associations with recently accessed paths.
+   */
+  locationRecord(
+    bankId: string,
+    path: string,
+    context: LocationContext,
+    scope?: { profile?: string; project?: string },
+  ): void {
+    const resolved = resolveScope(scope)
+    locationRecordImpl(
+      this.hdb,
+      bankId,
+      path,
+      context,
+      resolved.profile,
+      resolved.project,
+    )
+  }
+
+  /**
+   * Find location paths matching a query or path pattern.
+   */
+  locationFind(
+    bankId: string,
+    input: {
+      query?: string
+      path?: string
+      limit?: number
+      scope?: { profile?: string; project?: string }
+    },
+  ): LocationHit[] {
+    return locationFindImpl(this.hdb, bankId, input)
+  }
+
+  /**
+   * Get statistics for a specific file/module path.
+   */
+  locationStats(
+    bankId: string,
+    path: string,
+    scope?: { profile?: string; project?: string },
+  ): LocationStats | null {
+    return locationStatsImpl(this.hdb, bankId, path, scope)
   }
 
   // ── Episodes ────────────────────────────────────────────────────────

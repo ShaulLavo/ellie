@@ -281,6 +281,12 @@ export interface RecallOptions {
   mode?: RecallMode
   /** Session ID for working-memory boost effects (only used in "cognitive" mode). */
   sessionId?: string
+  /** Phase 3: Token budget for gist-first context packing. When set, memories are packed using gist/full strategy. */
+  tokenBudget?: number
+  /** Phase 3: Scope filter for preventing cross-project memory bleed. */
+  scope?: { profile?: string; project?: string; session?: string }
+  /** Phase 3: Scope matching mode. "strict" = same profile+project (default). "broad" = no scope filter. */
+  scopeMode?: "strict" | "broad"
 }
 
 /** Options for reflect() */
