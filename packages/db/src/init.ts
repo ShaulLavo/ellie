@@ -65,10 +65,13 @@ class SQLiteManager {
       } catch {
         // Already loaded (e.g. HMR reload) — safe to ignore
       }
-      return;
+
+      // Verify the custom lib actually took effect by checking for vec0.
+      // On some platforms/Bun versions, setCustomSQLite silently no-ops.
+      if (this.verifyVec0()) return;
     }
 
-    // Custom lib not found — fall back to sqlite-vec npm package.
+    // Custom lib not available or didn't load — fall back to sqlite-vec npm package.
     // Use require() for synchronous loading since open() is a sync API.
     // Bun supports require() in ESM natively; dynamic import() would force async.
     try {
@@ -84,6 +87,22 @@ class SQLiteManager {
     }
 
     this.needsLoadExtension = true;
+  }
+
+  /** Quick probe: can a fresh connection use vec0? */
+  private verifyVec0(): boolean {
+    const db = new Database(":memory:");
+    try {
+      db.run(
+        "CREATE VIRTUAL TABLE _vec_probe USING vec0(id TEXT PRIMARY KEY, v float[4])",
+      );
+      db.run("DROP TABLE _vec_probe");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      db.close();
+    }
   }
 
   open(dbPath: string): Database {

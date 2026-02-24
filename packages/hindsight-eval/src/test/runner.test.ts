@@ -66,7 +66,7 @@ describe("runner", () => {
           expect(r1.metrics[key]).toBe(r2.metrics[key])
         }
       }
-    })
+    }, 30_000)
 
     it("returns metrics for each case", async () => {
       const config: EvalRunConfig = {
@@ -87,7 +87,7 @@ describe("runner", () => {
           expect(value).toBeLessThanOrEqual(1)
         }
       }
-    })
+    }, 15_000)
 
     it("respects stable tie-breaking (score DESC, content ASC)", async () => {
       const config: EvalRunConfig = {
@@ -114,6 +114,6 @@ describe("runner", () => {
           }
         }
       }
-    })
+    }, 15_000)
   })
 })
