@@ -1,19 +1,23 @@
 /**
  * Server-side agent manager — manages Agent instances keyed by chatId.
  *
- * Wires each agent's onEvent callback to persist events to durable streams,
- * and writes finalized messages to the chat's message stream.
+ * Wires each agent's onEvent callback to persist events and messages,
+ * and exposes control methods used by HTTP routes.
  */
 
 import { Agent, type AgentOptions, type AgentEvent, type AgentMessage } from "@ellie/agent";
-import { agentMessageSchema } from "@ellie/agent";
-import type { IStreamStore } from "@ellie/durable-streams";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { ulid } from "@ellie/utils";
-import * as v from "valibot";
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+export interface AgentPersistenceStore {
+	hasAgentMessages(chatId: string): boolean;
+	ensureAgentMessages(chatId: string): void;
+	listAgentMessages(chatId: string): AgentMessage[];
+	appendAgentMessage(chatId: string, message: AgentMessage): void;
+	createAgentRun(chatId: string, runId: string, ttlSeconds: number): void;
+	appendAgentRunEvent(chatId: string, runId: string, event: AgentEvent): void;
+	closeAgentRun(chatId: string, runId: string): void;
+}
 
 export interface AgentManagerOptions {
 	/** TanStack AI adapter for LLM calls */
@@ -26,10 +30,10 @@ export interface AgentManagerOptions {
 
 export class AgentManager {
 	private agents = new Map<string, Agent>();
-	private store: IStreamStore;
+	private store: AgentPersistenceStore;
 	private options: AgentManagerOptions;
 
-	constructor(store: IStreamStore, options: AgentManagerOptions) {
+	constructor(store: AgentPersistenceStore, options: AgentManagerOptions) {
 		this.store = store;
 		this.options = options;
 	}
@@ -42,13 +46,7 @@ export class AgentManager {
 		let agent = this.agents.get(chatId);
 		if (agent) return agent;
 
-		// Ensure the messages stream exists
-		const messagesPath = this.messagesPath(chatId);
-		if (!this.store.has(messagesPath)) {
-			this.store.create(messagesPath, {
-				contentType: "application/json",
-			});
-		}
+		this.store.ensureAgentMessages(chatId);
 
 		agent = new Agent({
 			...this.options.agentOptions,
@@ -91,11 +89,7 @@ export class AgentManager {
 		const runId = ulid();
 
 		// Create the events stream for this run
-		const eventsPath = this.eventsPath(chatId, runId);
-		this.store.create(eventsPath, {
-			contentType: "application/json",
-			ttlSeconds: 3600, // 1 hour TTL for event streams
-		});
+		this.store.createAgentRun(chatId, runId, 3600);
 
 		// Store the runId so the event handler knows where to write
 		agent.runId = runId;
@@ -137,40 +131,14 @@ export class AgentManager {
 	 * Load conversation history from the messages stream.
 	 */
 	loadHistory(chatId: string): AgentMessage[] {
-		const messagesPath = this.messagesPath(chatId);
-		if (!this.store.has(messagesPath)) return [];
-
-		const { messages } = this.store.read(messagesPath);
-		const result: AgentMessage[] = [];
-		let corrupted = 0;
-
-		for (let i = 0; i < messages.length; i++) {
-			try {
-				const json = JSON.parse(decoder.decode(stripTrailingComma(messages[i].data)));
-				const parsed = v.parse(agentMessageSchema, json);
-				result.push(parsed as AgentMessage);
-			} catch (err) {
-				corrupted++;
-				console.warn(
-					`[agent-manager] corrupted message at index ${i} in ${messagesPath}:`,
-					err instanceof Error ? err.message : err,
-				);
-				continue;
-			}
-		}
-
-		if (corrupted > 0) {
-			console.warn(`[agent-manager] skipped ${corrupted} corrupted entries in ${messagesPath}`);
-		}
-
-		return result;
+		return this.store.listAgentMessages(chatId);
 	}
 
 	/**
 	 * Check if a chat exists (has a messages stream).
 	 */
 	hasChat(chatId: string): boolean {
-		return this.store.has(this.messagesPath(chatId));
+		return this.store.hasAgentMessages(chatId);
 	}
 
 	/**
@@ -200,38 +168,26 @@ export class AgentManager {
 	 * so the client doesn't hang waiting for events that will never arrive.
 	 */
 	private writeErrorEvent(chatId: string, runId: string): void {
-		const eventsPath = this.eventsPath(chatId, runId);
 		try {
 			const errorEvent: AgentEvent = { type: "agent_end", messages: [] };
-			const data = encoder.encode(JSON.stringify(errorEvent));
-			this.store.append(eventsPath, data);
-			this.store.closeStream(eventsPath);
+			this.store.appendAgentRunEvent(chatId, runId, errorEvent);
+			this.store.closeAgentRun(chatId, runId);
 		} catch {
 			// Stream may already be closed — nothing more to do
 		}
 	}
 
-	private messagesPath(chatId: string): string {
-		return `/agent/${chatId}`;
-	}
-
-	private eventsPath(chatId: string, runId: string): string {
-		return `/agent/${chatId}/events/${runId}`;
-	}
-
 	/**
-	 * Handle an AgentEvent — persist to durable streams.
+	 * Handle an AgentEvent — persist to storage.
 	 */
 	private handleEvent(chatId: string, event: AgentEvent): void {
 		const agent = this.agents.get(chatId);
 		const runId = agent?.runId;
 
-		// Write event to the events stream (if we have a runId)
+		// Write event to the run event stream (if we have a runId)
 		if (runId) {
-			const eventsPath = this.eventsPath(chatId, runId);
 			try {
-				const data = encoder.encode(JSON.stringify(event));
-				this.store.append(eventsPath, data);
+				this.store.appendAgentRunEvent(chatId, runId, event);
 			} catch {
 				// Events stream may not exist or be closed — non-fatal
 			}
@@ -239,10 +195,8 @@ export class AgentManager {
 
 		// On message_end, persist the finalized message to the messages stream
 		if (event.type === "message_end") {
-			const messagesPath = this.messagesPath(chatId);
 			try {
-				const data = encoder.encode(JSON.stringify(event.message));
-				this.store.append(messagesPath, data);
+				this.store.appendAgentMessage(chatId, event.message);
 			} catch (err) {
 				console.error(`[agent-manager] failed to persist message for ${chatId}:`, err);
 			}
@@ -250,9 +204,8 @@ export class AgentManager {
 
 		// On agent_end, close the events stream
 		if (event.type === "agent_end" && runId) {
-			const eventsPath = this.eventsPath(chatId, runId);
 			try {
-				this.store.closeStream(eventsPath);
+				this.store.closeAgentRun(chatId, runId);
 			} catch {
 				// Already closed or doesn't exist — non-fatal
 			}
@@ -262,21 +215,4 @@ export class AgentManager {
 			}
 		}
 	}
-}
-
-// -- Helpers --
-
-/**
- * Strip trailing comma from JSON store format.
- * Messages are stored comma-terminated by processJsonAppend.
- */
-function stripTrailingComma(data: Uint8Array): Uint8Array {
-	let end = data.length;
-	while (end > 0 && (data[end - 1] === 0x20 || data[end - 1] === 0x0a || data[end - 1] === 0x0d || data[end - 1] === 0x09)) {
-		end--;
-	}
-	if (end > 0 && data[end - 1] === 0x2c) {
-		return data.subarray(0, end - 1);
-	}
-	return data;
 }

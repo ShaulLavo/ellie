@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from "./setup"
 import {
   classifyRoute,
   detectConflict,
@@ -164,17 +164,10 @@ describe("routing integration via retain", () => {
     })
 
     // Check that decisions were logged
-    const hsInternals = Reflect.get(t.hs as object, "hdb") as {
-      db: {
-        select: () => {
-          from: (table: unknown) => { all: () => unknown[] }
-        }
-      }
-      schema: { reconsolidationDecisions: unknown }
-    }
-    const decisions = hsInternals.db
+    const hdb = getHdb(t.hs)
+    const decisions = hdb.db
       .select()
-      .from(hsInternals.schema.reconsolidationDecisions)
+      .from(hdb.schema.reconsolidationDecisions)
       .all()
 
     expect(decisions.length).toBeGreaterThan(0)

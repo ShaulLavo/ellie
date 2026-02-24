@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from "./setup"
 import { detectBoundary } from "../episodes"
 import type { EpisodeRow } from "../schema"
 
@@ -130,7 +130,7 @@ describe("episodes via retain integration", () => {
       facts: [{ content: "Alice likes coffee", factType: "experience" }],
     })
 
-    const episodes = t.hs.listEpisodes(bankId)
+    const episodes = await t.hs.listEpisodes(bankId)
     expect(episodes.items).toHaveLength(1)
     expect(episodes.total).toBe(1)
   })
@@ -144,7 +144,7 @@ describe("episodes via retain integration", () => {
       facts: [{ content: "Bob likes tea xyz 123", factType: "experience" }],
     })
 
-    const episodes = t.hs.listEpisodes(bankId)
+    const episodes = await t.hs.listEpisodes(bankId)
     expect(episodes.items).toHaveLength(1)
     expect(episodes.items[0]!.eventCount).toBeGreaterThanOrEqual(2)
   })
@@ -160,7 +160,7 @@ describe("episodes via retain integration", () => {
       session: "session-2",
     })
 
-    const episodes = t.hs.listEpisodes(bankId)
+    const episodes = await t.hs.listEpisodes(bankId)
     expect(episodes.items).toHaveLength(2)
   })
 
@@ -170,23 +170,17 @@ describe("episodes via retain integration", () => {
       session: "session-1",
     })
 
+    // Use same session but trigger a phrase boundary ("new task") to create a new episode
     await t.hs.retain(bankId, "second", {
-      facts: [{ content: "Bob likes tea xyz 123", factType: "experience" }],
-      session: "session-2",
+      facts: [{ content: "new task Bob likes tea xyz 123", factType: "experience" }],
+      session: "session-1",
     })
 
     // Check temporal links exist
-    const hsInternals = Reflect.get(t.hs as object, "hdb") as {
-      db: {
-        select: () => {
-          from: (table: unknown) => { all: () => unknown[] }
-        }
-      }
-      schema: { episodeTemporalLinks: unknown }
-    }
-    const links = hsInternals.db
+    const hdb = getHdb(t.hs)
+    const links = hdb.db
       .select()
-      .from(hsInternals.schema.episodeTemporalLinks)
+      .from(hdb.schema.episodeTemporalLinks)
       .all()
 
     expect(links).toHaveLength(1)
@@ -203,10 +197,10 @@ describe("episodes via retain integration", () => {
       profile: "bob",
     })
 
-    const allEpisodes = t.hs.listEpisodes(bankId)
+    const allEpisodes = await t.hs.listEpisodes(bankId)
     expect(allEpisodes.total).toBe(2)
 
-    const aliceEpisodes = t.hs.listEpisodes(bankId, { profile: "alice" })
+    const aliceEpisodes = await t.hs.listEpisodes(bankId, { profile: "alice" })
     expect(aliceEpisodes.total).toBe(1)
   })
 
@@ -221,13 +215,13 @@ describe("episodes via retain integration", () => {
 
     const anchorId = result2.memories[0]!.id
 
-    const narr = t.hs.narrative(bankId, { anchorMemoryId: anchorId })
+    const narr = await t.hs.narrative(bankId, { anchorMemoryId: anchorId })
     expect(narr.anchorMemoryId).toBe(anchorId)
     expect(narr.events.length).toBeGreaterThanOrEqual(1)
   })
 
-  it("narrative returns empty for non-existent anchor", () => {
-    const narr = t.hs.narrative(bankId, { anchorMemoryId: "nonexistent" })
+  it("narrative returns empty for non-existent anchor", async () => {
+    const narr = await t.hs.narrative(bankId, { anchorMemoryId: "nonexistent" })
     expect(narr.events).toHaveLength(0)
   })
 
@@ -240,7 +234,7 @@ describe("episodes via retain integration", () => {
       ],
     })
 
-    const episodes = t.hs.listEpisodes(bankId)
+    const episodes = await t.hs.listEpisodes(bankId)
     expect(episodes.items).toHaveLength(1)
     expect(episodes.items[0]!.eventCount).toBe(3)
   })

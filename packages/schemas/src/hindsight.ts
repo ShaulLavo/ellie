@@ -4,8 +4,8 @@
  * Single source of truth for all Hindsight data shapes.
  * TypeScript types are inferred from schemas via `v.InferOutput`.
  *
- * Lives in `@ellie/schemas` so both `@ellie/router` and `@ellie/hindsight`
- * can import these without circular dependencies.
+ * Lives in `@ellie/schemas` so consumers can import shared schemas without
+ * creating circular package dependencies.
  */
 import * as v from "valibot"
 

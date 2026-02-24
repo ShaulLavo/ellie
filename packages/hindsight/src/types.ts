@@ -124,7 +124,7 @@ export interface HindsightConfig {
 
 /** Trace emitted after each core operation completes */
 export interface HindsightTrace {
-  operation: "retain" | "recall" | "reflect" | "consolidate"
+  operation: "retain" | "recall" | "reflect" | "consolidate" | "list_episodes" | "narrative"
   bankId: string
   startedAt: number
   duration: number
@@ -140,6 +140,8 @@ export type HindsightOperationName =
   | "recall"
   | "reflect"
   | "consolidate"
+  | "list_episodes"
+  | "narrative"
   | "submit_async_retain"
   | "submit_async_consolidation"
   | "submit_async_refresh_mental_model"
@@ -188,6 +190,12 @@ export interface RetainOptions {
     occurredEnd?: number | null
     entities?: string[]
     tags?: string[]
+    /** Causal relations to other facts in this array (by index). */
+    causalRelations?: Array<{
+      targetIndex: number
+      relationType?: string
+      strength?: number
+    }>
   }>
   /** Additional metadata to attach to all extracted memories */
   metadata?: Record<string, unknown>
@@ -698,7 +706,7 @@ export interface RawFactSearchResult {
 
 /** Route decision for ingest-time reconsolidation. */
 export type ReconRoute = "reinforce" | "reconsolidate" | "new_trace"
-/** Back-compat alias. */
+/** Alias for ReconRoute; prefer ReconRoute in new code. */
 export type RetainRoute = ReconRoute
 
 /** Result of routing a single incoming fact against existing memories. */
@@ -746,10 +754,20 @@ export interface ListEpisodesResult {
   cursor: string | null
 }
 
+/** Default number of narrative steps when not specified. */
+export const NARRATIVE_STEPS_DEFAULT = 12
+/** Maximum allowed narrative steps (clamped in consumers). */
+export const NARRATIVE_STEPS_MAX = 50
+
 export interface NarrativeInput {
   bankId: string
   anchorMemoryId: string
   direction?: "before" | "after" | "both"
+  /**
+   * Number of episode-chain steps to traverse from the anchor.
+   * Defaults to {@link NARRATIVE_STEPS_DEFAULT} (12).
+   * Clamped to [1, {@link NARRATIVE_STEPS_MAX} (50)].
+   */
   steps?: number
 }
 

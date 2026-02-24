@@ -1846,18 +1846,32 @@ Instructions:
 
   // ── Episodes ────────────────────────────────────────────────────────
 
-  listEpisodes(
+  async listEpisodes(
     bankId: string,
     options?: Omit<ListEpisodesOptions, "bankId">,
-  ): ListEpisodesResult {
-    return listEpisodesImpl(this.hdb, bankId, options)
+  ): Promise<ListEpisodesResult> {
+    return this.trace(
+      "list_episodes",
+      "list_episodes",
+      bankId,
+      options ?? {},
+      async () => listEpisodesImpl(this.hdb, bankId, options),
+      (result) => ({ total: result.total, count: result.items.length }),
+    )
   }
 
-  narrative(
+  async narrative(
     bankId: string,
     options: Omit<NarrativeInput, "bankId">,
-  ): NarrativeResult {
-    return narrativeImpl(this.hdb, bankId, options)
+  ): Promise<NarrativeResult> {
+    return this.trace(
+      "narrative",
+      "narrative",
+      bankId,
+      { anchorMemoryId: options.anchorMemoryId },
+      async () => narrativeImpl(this.hdb, bankId, options),
+      (result) => ({ eventCount: result.events.length }),
+    )
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────

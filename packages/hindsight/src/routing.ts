@@ -146,6 +146,15 @@ function resolveMemoryAnchor(
   )
 }
 
+/**
+ * Check whether a candidate memory's scope (profile/project) matches the
+ * current routing context.
+ *
+ * When ctx.profile or ctx.project is set, this queries hs_episode_events for
+ * the memory's most recent event. Memories created before the episode system
+ * (migration 0002) have no event rows and return false — this is intentional.
+ * No backfill is performed; scope filtering applies only going forward.
+ */
 function candidateScopeMatches(
   ctx: RoutingContext,
   memoryId: string,
@@ -459,14 +468,15 @@ export async function applyReconsolidate(
       "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
       [candidateMemoryId, current.bankId, newContent],
     )
+
+    // Update embedding before committing so we can roll back on failure
+    await memoryVec.upsert(candidateMemoryId, newContent)
+
     hdb.sqlite.run("COMMIT")
   } catch (error) {
     hdb.sqlite.run("ROLLBACK")
     throw error
   }
-
-  // Update embedding
-  await memoryVec.upsert(candidateMemoryId, newContent)
 }
 
 // ── Decision Logging ─────────────────────────────────────────────────────────

@@ -3,17 +3,19 @@
  */
 
 import { ulid } from "@ellie/utils"
-import { eq, sql, and, desc, lt, or } from "drizzle-orm"
+import { eq, sql, and, desc, lt, or, isNull } from "drizzle-orm"
 import type { HindsightDatabase } from "./db"
-import type {
-  RetainRoute,
-  EpisodeBoundaryReason,
-  EpisodeSummary,
-  ListEpisodesOptions,
-  ListEpisodesResult,
-  NarrativeInput,
-  NarrativeEvent,
-  NarrativeResult,
+import {
+  NARRATIVE_STEPS_DEFAULT,
+  NARRATIVE_STEPS_MAX,
+  type RetainRoute,
+  type EpisodeBoundaryReason,
+  type EpisodeSummary,
+  type ListEpisodesOptions,
+  type ListEpisodesResult,
+  type NarrativeInput,
+  type NarrativeEvent,
+  type NarrativeResult,
 } from "./types"
 import type { EpisodeRow } from "./schema"
 
@@ -100,13 +102,15 @@ function collectEpisodeChain(
   maxSteps: number,
 ): string[] {
   const chain: string[] = [anchorEpisodeId]
+  const seen = new Set<string>([anchorEpisodeId])
   let cursor = anchorEpisodeId
 
   for (let i = 0; i < maxSteps; i++) {
     const nextId = getAdjacentEpisodeId(hdb, cursor, direction)
     if (!nextId) break
-    if (chain.includes(nextId)) break
+    if (seen.has(nextId)) break
     chain.push(nextId)
+    seen.add(nextId)
     cursor = nextId
   }
 
@@ -161,10 +165,23 @@ export function resolveEpisode(
   session: string | null,
   content?: string,
 ): string {
+  const scopeConditions = [
+    eq(hdb.schema.episodes.bankId, bankId),
+    profile === null
+      ? isNull(hdb.schema.episodes.profile)
+      : eq(hdb.schema.episodes.profile, profile),
+    project === null
+      ? isNull(hdb.schema.episodes.project)
+      : eq(hdb.schema.episodes.project, project),
+    session === null
+      ? isNull(hdb.schema.episodes.session)
+      : eq(hdb.schema.episodes.session, session),
+  ]
+
   const lastEpisode = hdb.db
     .select()
     .from(hdb.schema.episodes)
-    .where(eq(hdb.schema.episodes.bankId, bankId))
+    .where(and(...scopeConditions))
     .orderBy(desc(hdb.schema.episodes.lastEventAt), desc(hdb.schema.episodes.id))
     .limit(1)
     .get() as EpisodeRow | undefined
@@ -261,14 +278,11 @@ export function recordEpisodeEvent(
     .run()
 }
 
-export function listEpisodes(
-  hdb: HindsightDatabase,
+function buildEpisodeConditions(
+  schema: HindsightDatabase["schema"],
   bankId: string,
-  options?: Omit<ListEpisodesOptions, "bankId">,
-): ListEpisodesResult {
-  const limit = Math.min(Math.max(options?.limit ?? 20, 1), 100)
-  const { schema } = hdb
-
+  options?: Pick<ListEpisodesOptions, "profile" | "project" | "session">,
+) {
   const conditions = [eq(schema.episodes.bankId, bankId)]
   if (options?.profile !== undefined) {
     conditions.push(eq(schema.episodes.profile, options.profile))
@@ -279,6 +293,18 @@ export function listEpisodes(
   if (options?.session !== undefined) {
     conditions.push(eq(schema.episodes.session, options.session))
   }
+  return conditions
+}
+
+export function listEpisodes(
+  hdb: HindsightDatabase,
+  bankId: string,
+  options?: Omit<ListEpisodesOptions, "bankId">,
+): ListEpisodesResult {
+  const limit = Math.min(Math.max(options?.limit ?? 20, 1), 100)
+  const { schema } = hdb
+
+  const conditions = buildEpisodeConditions(schema, bankId, options)
 
   if (options?.cursor) {
     const cursor = decodeCursor(options.cursor)
@@ -315,16 +341,7 @@ export function listEpisodes(
       })
     : null
 
-  const totalConditions = [eq(schema.episodes.bankId, bankId)]
-  if (options?.profile !== undefined) {
-    totalConditions.push(eq(schema.episodes.profile, options.profile))
-  }
-  if (options?.project !== undefined) {
-    totalConditions.push(eq(schema.episodes.project, options.project))
-  }
-  if (options?.session !== undefined) {
-    totalConditions.push(eq(schema.episodes.session, options.session))
-  }
+  const totalConditions = buildEpisodeConditions(schema, bankId, options)
   const totalWhere =
     totalConditions.length === 1 ? totalConditions[0]! : and(...totalConditions)
 
@@ -347,8 +364,8 @@ export function narrative(
   bankId: string,
   options: Omit<NarrativeInput, "bankId">,
 ): NarrativeResult {
-  const { anchorMemoryId, direction = "both", steps = 12 } = options
-  const maxSteps = Math.min(Math.max(steps, 1), 50)
+  const { anchorMemoryId, direction = "both", steps = NARRATIVE_STEPS_DEFAULT } = options
+  const maxSteps = Math.min(Math.max(steps, 1), NARRATIVE_STEPS_MAX)
 
   const anchorEvent = hdb.db
     .select()
@@ -375,9 +392,9 @@ export function narrative(
     const inClause = buildEpisodeInClause(episodeIds)
     const beforeEvents = hdb.sqlite
       .prepare(
-        `SELECT ee.id, ee.memory_id, ee.episode_id, ee.event_time, ee.route, mu.content
+        `SELECT ee.id, ee.memory_id, ee.episode_id, ee.event_time, ee.route, COALESCE(mu.content, '[deleted]') AS content
          FROM hs_episode_events ee
-         JOIN hs_memory_units mu ON mu.id = ee.memory_id
+         LEFT JOIN hs_memory_units mu ON mu.id = ee.memory_id
          WHERE ee.bank_id = ?
            AND ee.episode_id IN (${inClause})
            AND (ee.event_time < ? OR (ee.event_time = ? AND ee.id < ?))
@@ -430,9 +447,9 @@ export function narrative(
     const inClause = buildEpisodeInClause(episodeIds)
     const afterEvents = hdb.sqlite
       .prepare(
-        `SELECT ee.id, ee.memory_id, ee.episode_id, ee.event_time, ee.route, mu.content
+        `SELECT ee.id, ee.memory_id, ee.episode_id, ee.event_time, ee.route, COALESCE(mu.content, '[deleted]') AS content
          FROM hs_episode_events ee
-         JOIN hs_memory_units mu ON mu.id = ee.memory_id
+         LEFT JOIN hs_memory_units mu ON mu.id = ee.memory_id
          WHERE ee.bank_id = ?
            AND ee.episode_id IN (${inClause})
            AND (ee.event_time > ? OR (ee.event_time = ? AND ee.id > ?))

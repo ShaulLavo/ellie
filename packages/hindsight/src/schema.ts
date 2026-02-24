@@ -8,7 +8,7 @@ import {
   primaryKey,
   check,
 } from "drizzle-orm/sqlite-core"
-import { sql } from "drizzle-orm"
+import { desc, sql } from "drizzle-orm"
 
 // ── Banks ──────────────────────────────────────────────────────────────────
 
@@ -310,6 +310,13 @@ export const memoryVersions = sqliteTable(
 
 // ── Reconsolidation Decisions ───────────────────────────────────────────
 
+/**
+ * Audit log for reconsolidation routing decisions.
+ *
+ * FK constraints are intentionally omitted for candidate_memory_id and
+ * applied_memory_id. These columns reference hs_memory_units, but decision
+ * rows must survive memory deletion to preserve the audit trail.
+ */
 export const reconsolidationDecisions = sqliteTable(
   "hs_reconsolidation_decisions",
   {
@@ -327,7 +334,7 @@ export const reconsolidationDecisions = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
-    index("idx_hs_rd_bank_created").on(table.bankId, table.createdAt),
+    index("idx_hs_rd_bank_created").on(table.bankId, desc(table.createdAt)),
     index("idx_hs_rd_applied").on(table.appliedMemoryId),
   ],
 )
@@ -351,7 +358,7 @@ export const episodes = sqliteTable(
     boundaryReason: text("boundary_reason"), // time_gap | scope_change | phrase_boundary | initial
   },
   (table) => [
-    index("idx_hs_ep_bank_last_event").on(table.bankId, table.lastEventAt),
+    index("idx_hs_ep_bank_last_event").on(table.bankId, desc(table.lastEventAt)),
     index("idx_hs_ep_scope").on(
       table.bankId,
       table.profile,
@@ -384,7 +391,7 @@ export const episodeEvents = sqliteTable(
   },
   (table) => [
     index("idx_hs_ee_episode_time").on(table.episodeId, table.eventTime),
-    index("idx_hs_ee_bank_memory").on(table.bankId, table.memoryId, table.eventTime),
+    index("idx_hs_ee_bank_memory").on(table.bankId, table.memoryId, desc(table.eventTime)),
   ],
 )
 
@@ -442,3 +449,4 @@ export type NewEpisodeRow = typeof episodes.$inferInsert
 export type EpisodeEventRow = typeof episodeEvents.$inferSelect
 export type NewEpisodeEventRow = typeof episodeEvents.$inferInsert
 export type EpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferSelect
+export type NewEpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferInsert

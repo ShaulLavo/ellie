@@ -2,6 +2,6 @@
  * Re-export all Hindsight schemas from `@ellie/schemas/hindsight`.
  *
  * The canonical definitions live in `@ellie/schemas` to avoid circular
- * dependencies between `@ellie/router` and `@ellie/hindsight`.
+ * package dependencies.
  */
 export * from "@ellie/schemas/hindsight"

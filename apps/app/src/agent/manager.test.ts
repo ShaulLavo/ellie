@@ -1,7 +1,47 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { StreamStore } from "@ellie/durable-streams";
-import { AgentManager } from "./manager";
+import { describe, expect, test, beforeEach } from "bun:test";
+import { AgentManager, type AgentPersistenceStore } from "./manager";
+import type { AgentEvent, AgentMessage } from "@ellie/agent";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+
+class InMemoryAgentStore implements AgentPersistenceStore {
+	private messagesByChat = new Map<string, AgentMessage[]>();
+	private runs = new Set<string>();
+
+	hasAgentMessages(chatId: string): boolean {
+		return this.messagesByChat.has(chatId);
+	}
+
+	ensureAgentMessages(chatId: string): void {
+		if (this.messagesByChat.has(chatId)) return;
+		this.messagesByChat.set(chatId, []);
+	}
+
+	listAgentMessages(chatId: string): AgentMessage[] {
+		return [...(this.messagesByChat.get(chatId) ?? [])];
+	}
+
+	appendAgentMessage(chatId: string, message: AgentMessage): void {
+		this.ensureAgentMessages(chatId);
+		const messages = this.messagesByChat.get(chatId)!;
+		messages.push(message);
+	}
+
+	createAgentRun(chatId: string, runId: string, _ttlSeconds: number): void {
+		this.runs.add(`${chatId}:${runId}`);
+	}
+
+	appendAgentRunEvent(_chatId: string, _runId: string, _event: AgentEvent): void {
+		// No-op for these tests.
+	}
+
+	closeAgentRun(_chatId: string, _runId: string): void {
+		// No-op for these tests.
+	}
+
+	hasRun(chatId: string, runId: string): boolean {
+		return this.runs.has(`${chatId}:${runId}`);
+	}
+}
 
 // ============================================================================
 // Test helpers
@@ -34,19 +74,15 @@ function createMockAdapter(): AnyTextAdapter {
 // ============================================================================
 
 describe("AgentManager", () => {
-	let store: StreamStore;
+	let store: InMemoryAgentStore;
 	let manager: AgentManager;
 
 	beforeEach(() => {
-		store = new StreamStore();
+		store = new InMemoryAgentStore();
 		manager = new AgentManager(store, {
 			adapter: createMockAdapter(),
 			systemPrompt: "You are a test assistant.",
 		});
-	});
-
-	afterEach(() => {
-		store.cancelAllSubscriptions();
 	});
 
 	test("getOrCreate creates agent and message stream", () => {
@@ -54,7 +90,7 @@ describe("AgentManager", () => {
 
 		expect(agent).toBeDefined();
 		expect(agent.state.systemPrompt).toBe("You are a test assistant.");
-		expect(store.has("/agent/chat-1")).toBe(true);
+		expect(store.hasAgentMessages("chat-1")).toBe(true);
 	});
 
 	test("getOrCreate returns same agent for same chatId", () => {
@@ -115,8 +151,7 @@ describe("AgentManager", () => {
 		const { runId } = await manager.prompt("chat-1", "Test");
 
 		// Events stream should exist
-		const eventsPath = `/agent/chat-1/events/${runId}`;
-		expect(store.has(eventsPath)).toBe(true);
+		expect(store.hasRun("chat-1", runId)).toBe(true);
 
 		// Wait for agent to finish
 		const agent = manager.getOrCreate("chat-1");

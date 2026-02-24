@@ -22,19 +22,19 @@
     "@chonkiejs/core": "^0.0.7",
     "@ellie/ai": "workspace:*",
     "@ellie/db": "workspace:*",
-    "@ellie/router": "workspace:*",
-    "@ellie/rpc": "workspace:*",
     "@ellie/schemas": "workspace:*",
     "@ellie/utils": "workspace:*",
     "@tanstack/ai-anthropic": "^0.5.0",
     "chrono-node": "^2.9.0",
     "drizzle-orm": "^0.45.1",
+    "elysia": "^1.4.25",
     "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@tanstack/ai": "^0.5.1",
     "@tanstack/ai-ollama": "^0.5.0",
+    "bun-types": "latest",
     "drizzle-kit": "^0.31.8",
     "typescript": "^5.0.0"
   }

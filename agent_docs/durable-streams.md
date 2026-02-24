@@ -45,7 +45,7 @@ See `packages/db/src/jsonl-store.ts:formatOffset()`.
 - `event: data` — message payload
 - `event: control` — JSON metadata (`streamNextOffset`, `upToDate`, `streamClosed`)
 
-See `packages/durable-streams/src/server/routes/read.ts`.
+See `packages/streams/stream-server/src/server/routes/read.ts`.
 
 ## Producer Idempotency
 
@@ -60,15 +60,15 @@ Producers identify via `(Producer-Id, Producer-Epoch, Producer-Seq)`. Server val
 | New epoch, seq=0 | 200 — epoch reset accepted |
 | Sequence gap | 409 — expected/received seq in headers |
 
-See `packages/durable-streams/src/store.ts:validateProducer()`.
+See `packages/streams/stream-server/src/store.ts:validateProducer()`.
 
-**Client-side:** `IdempotentProducer` in `packages/streams-client/src/idempotent-producer.ts` handles batching, pipelining (up to 5 in-flight), and auto-claim on stale epoch.
+**Client-side:** `IdempotentProducer` in `packages/streams/stream-client/src/idempotent-producer.ts` handles batching, pipelining (up to 5 in-flight), and auto-claim on stale epoch.
 
 ## JSON Append Processing
 
 Arrays are split into individual items; objects appended as single items. Server stores with comma suffix and reconstructs as valid JSON array `[item1, item2, ..., itemN]` on read.
 
-See `packages/durable-streams/src/store.ts:processJsonAppend()`.
+See `packages/streams/stream-server/src/store.ts:processJsonAppend()`.
 
 ## Stream Lifecycle
 
@@ -88,20 +88,20 @@ Each client tracks its own offset. The `subscribe()` method on DurableStore:
 
 On clear/delete: all subscribers get a `deleted` event, fresh JSONL file created on recreate.
 
-See `packages/durable-streams/src/durable-store.ts`.
+See `packages/streams/stream-server/src/durable-store.ts`.
 
 ## Two Store Implementations
 
 | Class | Location | Purpose |
 |-------|----------|---------|
-| `StreamStore` | `packages/durable-streams/src/store.ts` | In-memory, used in tests |
-| `DurableStore` | `packages/durable-streams/src/durable-store.ts` | Disk-backed via JsonlEngine, no in-memory cache |
+| `StreamStore` | `packages/streams/stream-server/src/store.ts` | In-memory, used in tests |
+| `DurableStore` | `packages/streams/stream-server/src/durable-store.ts` | Disk-backed via JsonlEngine, no in-memory cache |
 
-Both implement `IStreamStore` from `packages/durable-streams/src/server/lib/context.ts`.
+Both implement `IStreamStore` from `packages/streams/stream-server/src/server/lib/context.ts`.
 
 ## Other Details
 
 - **ETag:** `"{btoa(path)}:{startOffset}:{responseOffset}{:c if closed}"` — supports 304 Not Modified
-- **Compression:** gzip/deflate/brotli above 1KB threshold (`packages/durable-streams/src/server/lib/compression.ts`)
-- **Cursor system:** Time-interval based for CDN collapsing, with jitter (`packages/durable-streams/src/cursor.ts`)
-- **Conformance tests:** `packages/durable-streams/src/server-conformance-suite.ts` (comprehensive protocol compliance suite)
+- **Compression:** gzip/deflate/brotli above 1KB threshold (`packages/streams/stream-server/src/server/lib/compression.ts`)
+- **Cursor system:** Time-interval based for CDN collapsing, with jitter (`packages/streams/stream-server/src/cursor.ts`)
+- **Conformance tests:** `packages/streams/stream-server/src/server-conformance-suite.ts` (comprehensive protocol compliance suite)

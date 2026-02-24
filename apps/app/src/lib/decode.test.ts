@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import * as v from "valibot"
-import { decodeAndValidate } from "./decode"
-import type { StreamMessage } from "@ellie/durable-streams"
+import { decodeAndValidate, type StreamMessage } from "./decode"
 
 const encoder = new TextEncoder()
 
