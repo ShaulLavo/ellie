@@ -9,7 +9,9 @@
     "check-types": "tsgo --noEmit",
     "test": "bun test",
     "eval:baseline": "bun run scripts/run-baseline.ts",
-    "eval:baseline:repro": "bun run scripts/repro-check.ts"
+    "eval:baseline:repro": "bun run scripts/repro-check.ts",
+    "eval:phase2": "bun run scripts/run-phase2-verification.ts",
+    "eval:phase2:repro": "bun run scripts/phase2-repro-check.ts"
   },
   "dependencies": {
     "@ellie/hindsight": "workspace:*",
