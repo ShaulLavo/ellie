@@ -33,7 +33,7 @@ import {
   getMaxStrengthForPaths,
 } from "./location"
 import { packContext, type PackCandidate } from "./context-pack"
-import { scopeMatches, resolveScope, type Scope, type ScopeMode } from "./scope"
+import { scopeMatches, resolveScope, type ScopeMode } from "./scope"
 
 /** Extended recall options with Phase 3 scope + tokenBudget support */
 interface RecallOptionsWithScope extends RecallOptions {
@@ -570,8 +570,6 @@ export async function recall(
   // ── Phase 3: Token budget packing ──────────────────────────────────────────
   // When tokenBudget is specified, apply the gist-first context packing policy
   const tokenBudget = (options as RecallOptionsWithScope).tokenBudget
-  let packOverflow = false
-
   if (tokenBudget != null && tokenBudget > 0 && memories.length > 0) {
     const packStart = Date.now()
     const packCandidates: PackCandidate[] = memories.map((m) => ({
@@ -582,7 +580,6 @@ export async function recall(
     }))
 
     const packResult = packContext(packCandidates, tokenBudget)
-    packOverflow = packResult.overflow
 
     // Replace memory content with packed versions where applicable
     const packedById = new Map(packResult.packed.map((p) => [p.id, p]))
