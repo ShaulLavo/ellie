@@ -15,6 +15,7 @@ import { groqChat } from "@ellie/ai/openai-compat"
 import { loadProviderCredential } from "@ellie/ai/credentials"
 import { Hindsight } from "../hindsight"
 import type { HindsightConfig } from "../types"
+import type { HindsightDatabase } from "../db"
 import { createMockAdapter, type MockAdapter } from "./mock-adapter"
 
 // ── Load pre-generated embeddings fixture ────────────────────────────────────
@@ -249,6 +250,14 @@ export async function createRealTestHindsight(
   }
 
   return { hs, dbPath, cleanup }
+}
+
+/**
+ * Access the internal HindsightDatabase from a Hindsight instance.
+ * For test use only — reaches into private state via Reflect.
+ */
+export function getHdb(hs: Hindsight): HindsightDatabase {
+  return Reflect.get(hs as object, "hdb") as HindsightDatabase
 }
 
 /**

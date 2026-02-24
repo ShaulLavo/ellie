@@ -323,7 +323,7 @@ describe("recall with tag filtering", () => {
       }
 
       // Teacher sees all (no tag filter = all memories visible)
-      const teacherResult = await t.hs.recall(bankId, "homework")
+      const teacherResult = await t.hs.recall(bankId, "homework", { limit: 20 })
       expect(teacherResult.memories.length).toBeGreaterThanOrEqual(2)
     })
   })

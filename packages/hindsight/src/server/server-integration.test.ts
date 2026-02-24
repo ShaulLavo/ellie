@@ -1,8 +1,7 @@
 /**
  * Hindsight HTTP server integration tests.
  *
- * Tests the full HTTP round-trip: RPC Client → Bun HTTP server → Hindsight class.
- * Uses `createRpcClient` from @ellie/rpc for typed procedure calls.
+ * Tests the full HTTP round-trip: HTTP client → Bun HTTP server → Hindsight class.
  * Covers the same scenarios as the Python test_server_integration.py.
  */
 
@@ -16,9 +15,6 @@ import {
 } from "bun:test"
 import { createTestHindsight, type TestHindsight } from "../test/setup"
 import { handleHindsightRequest } from "./routes"
-import { createRpcClient } from "@ellie/rpc/client"
-import { appRouter, type AppRouter } from "@ellie/router"
-import type { RpcClient } from "@ellie/rpc"
 import type {
 	Bank,
 	RetainResult,
@@ -34,9 +30,120 @@ import type {
 // ── Test server setup ────────────────────────────────────────────────────
 
 let server: ReturnType<typeof Bun.serve>
-let rpc: RpcClient<AppRouter>
+let rpc: ReturnType<typeof createHindsightClient>
 let baseUrl: string
 let t: TestHindsight
+
+type QueryInput = Record<string, unknown> | undefined
+
+function appendQuery(path: string, input: QueryInput): string {
+	if (!input) return path
+	const query = new URLSearchParams()
+	for (const [key, value] of Object.entries(input)) {
+		if (value === undefined || value === null) continue
+		query.set(key, String(value))
+	}
+	const encoded = query.toString()
+	if (!encoded) return path
+	return `${path}?${encoded}`
+}
+
+async function callEndpoint<T>(
+	base: string,
+	method: string,
+	path: string,
+	input?: QueryInput,
+): Promise<T> {
+	const isBodyless = method === `GET` || method === `DELETE`
+	const url = isBodyless ? appendQuery(`${base}${path}`, input) : `${base}${path}`
+	const response = await fetch(url, {
+		method,
+		headers: isBodyless ? undefined : { "content-type": `application/json` },
+		body: isBodyless ? undefined : JSON.stringify(input),
+	})
+
+	if (!response.ok) {
+		const text = await response.text().catch(() => ``)
+		throw new Error(`${method} ${path} failed: ${response.status} ${text}`)
+	}
+
+	if (response.status === 204) return undefined as T
+	return response.json() as Promise<T>
+}
+
+function createHindsightClient(base: string) {
+	return {
+		createBank: ({ input }: { input: Record<string, unknown> }) =>
+			callEndpoint(base, `POST`, `/banks`, input),
+		listBanks: ({ input }: { input?: QueryInput }) =>
+			callEndpoint(base, `GET`, `/banks`, input),
+		getBank: ({ bankId, input }: { bankId: string; input?: QueryInput }) =>
+			callEndpoint(base, `GET`, `/banks/${encodeURIComponent(bankId)}`, input),
+		updateBank: ({ bankId, input }: { bankId: string; input: Record<string, unknown> }) =>
+			callEndpoint(base, `PATCH`, `/banks/${encodeURIComponent(bankId)}`, input),
+		deleteBank: ({ bankId, input }: { bankId: string; input?: QueryInput }) =>
+			callEndpoint(base, `DELETE`, `/banks/${encodeURIComponent(bankId)}`, input),
+		retain: ({ bankId, input }: { bankId: string; input: Record<string, unknown> }) =>
+			callEndpoint(base, `POST`, `/banks/${encodeURIComponent(bankId)}/retain`, input),
+		retainBatch: ({ bankId, input }: { bankId: string; input: Record<string, unknown> }) =>
+			callEndpoint(base, `POST`, `/banks/${encodeURIComponent(bankId)}/retain-batch`, input),
+		recall: ({ bankId, input }: { bankId: string; input: Record<string, unknown> }) =>
+			callEndpoint(base, `POST`, `/banks/${encodeURIComponent(bankId)}/recall`, input),
+		reflect: ({ bankId, input }: { bankId: string; input: Record<string, unknown> }) =>
+			callEndpoint(base, `POST`, `/banks/${encodeURIComponent(bankId)}/reflect`, input),
+		getBankStats: ({ bankId, input }: { bankId: string; input?: QueryInput }) =>
+			callEndpoint(base, `GET`, `/banks/${encodeURIComponent(bankId)}/stats`, input),
+		listMemoryUnits: ({ bankId, input }: { bankId: string; input?: QueryInput }) =>
+			callEndpoint(base, `GET`, `/banks/${encodeURIComponent(bankId)}/memories`, input),
+		getMemoryUnit: ({
+			bankId,
+			memoryId,
+			input,
+		}: {
+			bankId: string
+			memoryId: string
+			input?: QueryInput
+		}) =>
+			callEndpoint(
+				base,
+				`GET`,
+				`/banks/${encodeURIComponent(bankId)}/memories/${encodeURIComponent(memoryId)}`,
+				input,
+			),
+		deleteMemoryUnit: ({
+			bankId,
+			memoryId,
+			input,
+		}: {
+			bankId: string
+			memoryId: string
+			input?: QueryInput
+		}) =>
+			callEndpoint(
+				base,
+				`DELETE`,
+				`/banks/${encodeURIComponent(bankId)}/memories/${encodeURIComponent(memoryId)}`,
+				input,
+			),
+		listEntities: ({ bankId, input }: { bankId: string; input?: QueryInput }) =>
+			callEndpoint(base, `GET`, `/banks/${encodeURIComponent(bankId)}/entities`, input),
+		getEntity: ({
+			bankId,
+			entityId,
+			input,
+		}: {
+			bankId: string
+			entityId: string
+			input?: QueryInput
+		}) =>
+			callEndpoint(
+				base,
+				`GET`,
+				`/banks/${encodeURIComponent(bankId)}/entities/${encodeURIComponent(entityId)}`,
+				input,
+			),
+	}
+}
 
 beforeAll(() => {
 	t = createTestHindsight()
@@ -52,7 +159,7 @@ beforeAll(() => {
 	})
 
 	baseUrl = `http://localhost:${server.port}`
-	rpc = createRpcClient<AppRouter>(appRouter, { baseUrl })
+	rpc = createHindsightClient(baseUrl)
 })
 
 afterAll(() => {

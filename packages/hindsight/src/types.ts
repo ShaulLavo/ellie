@@ -124,7 +124,7 @@ export interface HindsightConfig {
 
 /** Trace emitted after each core operation completes */
 export interface HindsightTrace {
-  operation: "retain" | "recall" | "reflect" | "consolidate"
+  operation: "retain" | "recall" | "reflect" | "consolidate" | "list_episodes" | "narrative"
   bankId: string
   startedAt: number
   duration: number
@@ -140,6 +140,8 @@ export type HindsightOperationName =
   | "recall"
   | "reflect"
   | "consolidate"
+  | "list_episodes"
+  | "narrative"
   | "submit_async_retain"
   | "submit_async_consolidation"
   | "submit_async_refresh_mental_model"
@@ -188,6 +190,12 @@ export interface RetainOptions {
     occurredEnd?: number | null
     entities?: string[]
     tags?: string[]
+    /** Causal relations to other facts in this array (by index). */
+    causalRelations?: Array<{
+      targetIndex: number
+      relationType?: string
+      strength?: number
+    }>
   }>
   /** Additional metadata to attach to all extracted memories */
   metadata?: Record<string, unknown>
@@ -207,6 +215,12 @@ export interface RetainOptions {
   dedupThreshold?: number
   /** Trigger consolidation after retain. Default: true */
   consolidate?: boolean
+  /** Profile identifier for episode scoping */
+  profile?: string
+  /** Project identifier for episode scoping */
+  project?: string
+  /** Session identifier for episode scoping */
+  session?: string
 }
 
 /** Options for retainBatch() */
@@ -222,6 +236,12 @@ export interface RetainBatchItem {
   documentId?: string
   tags?: string[]
   metadata?: Record<string, unknown>
+  /** Profile identifier for episode scoping */
+  profile?: string
+  /** Project identifier for episode scoping */
+  project?: string
+  /** Session identifier for episode scoping */
+  session?: string
 }
 
 /** Recall scoring mode: "hybrid" (default, unchanged) or "cognitive" (ACT-R inspired). */
@@ -680,4 +700,86 @@ export interface RawFactSearchResult {
   entities: string[]
   score: number
   occurredAt: number | null
+}
+
+// ── Reconsolidation Routing ─────────────────────────────────────────────
+
+/** Route decision for ingest-time reconsolidation. */
+export type ReconRoute = "reinforce" | "reconsolidate" | "new_trace"
+/** Alias for ReconRoute; prefer ReconRoute in new code. */
+export type RetainRoute = ReconRoute
+
+/** Result of routing a single incoming fact against existing memories. */
+export interface RouteDecision {
+  route: ReconRoute
+  /** The existing memory that was matched (null for new_trace with no candidate) */
+  candidateMemoryId: string | null
+  /** Cosine similarity score with the candidate */
+  candidateScore: number | null
+  /** Whether a fact conflict was detected */
+  conflictDetected: boolean
+  /** Entity|attribute keys that conflicted */
+  conflictKeys: string[]
+}
+
+// ── Episodes ────────────────────────────────────────────────────────────
+
+export type EpisodeBoundaryReason = "time_gap" | "scope_change" | "phrase_boundary" | "initial"
+
+export interface EpisodeSummary {
+  episodeId: string
+  startAt: number
+  endAt: number | null
+  lastEventAt: number
+  eventCount: number
+  boundaryReason: EpisodeBoundaryReason | null
+  profile: string | null
+  project: string | null
+  session: string | null
+}
+
+export interface ListEpisodesOptions {
+  bankId: string
+  profile?: string
+  project?: string
+  session?: string
+  limit?: number
+  cursor?: string
+}
+
+export interface ListEpisodesResult {
+  items: EpisodeSummary[]
+  total: number
+  limit: number
+  cursor: string | null
+}
+
+/** Default number of narrative steps when not specified. */
+export const NARRATIVE_STEPS_DEFAULT = 12
+/** Maximum allowed narrative steps (clamped in consumers). */
+export const NARRATIVE_STEPS_MAX = 50
+
+export interface NarrativeInput {
+  bankId: string
+  anchorMemoryId: string
+  direction?: "before" | "after" | "both"
+  /**
+   * Number of episode-chain steps to traverse from the anchor.
+   * Defaults to {@link NARRATIVE_STEPS_DEFAULT} (12).
+   * Clamped to [1, {@link NARRATIVE_STEPS_MAX} (50)].
+   */
+  steps?: number
+}
+
+export interface NarrativeEvent {
+  memoryId: string
+  episodeId: string
+  eventTime: number
+  route: ReconRoute
+  contentSnippet: string
+}
+
+export interface NarrativeResult {
+  events: NarrativeEvent[]
+  anchorMemoryId: string
 }

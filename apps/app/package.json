@@ -1,6 +1,12 @@
 {
   "name": "app",
   "version": "1.0.50",
+  "type": "module",
+  "main": "./src/server.ts",
+  "types": "./src/server.ts",
+  "exports": {
+    ".": "./src/server.ts"
+  },
   "scripts": {
     "dev": "bun run --hot src/server.ts",
     "test": "bun test",
@@ -11,12 +17,12 @@
     "@ellie/ai": "workspace:*",
     "@ellie/db": "workspace:*",
     "@ellie/env": "workspace:*",
-    "@ellie/durable-streams": "workspace:*",
-    "@ellie/router": "workspace:*",
-    "@ellie/rpc": "workspace:*",
+    "@ellie/schemas": "workspace:*",
     "@ellie/utils": "workspace:*",
+    "@elysiajs/static": "^1.4.7",
     "@tanstack/ai": "^0.5.1",
     "@tanstack/ai-anthropic": "^0.5.0",
+    "elysia": "^1.4.25",
     "valibot": "^1.2.0"
   },
   "devDependencies": {
@@ -26,6 +32,5 @@
     "@repo/typescript-config": "workspace:*",
     "babel-plugin-react-compiler": "^1.0.0",
     "bun-types": "latest"
-  },
-  "module": "src/server.ts"
+  }
 }

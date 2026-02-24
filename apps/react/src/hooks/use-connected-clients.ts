@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { env } from "@ellie/env/client"
+import { eden } from "../lib/eden"
 
 const POLL_INTERVAL = 5_000
 
@@ -11,9 +11,8 @@ export function useConnectedClients(): number | null {
 
     async function poll() {
       try {
-        const res = await fetch(`${env.API_BASE_URL}/api/status`)
-        if (!res.ok) return
-        const data = (await res.json()) as { connectedClients: number }
+        const { data, error } = await eden.api.status.get()
+        if (error || !data) return
         if (!cancelled) setCount(data.connectedClients)
       } catch {
         // ignore — server may be restarting

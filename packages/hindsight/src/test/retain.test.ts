@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, createTestBank, type TestHindsight } from "./setup"
+import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from "./setup"
+import { eq } from "drizzle-orm"
 import type { HindsightDatabase } from "../db"
 
 describe("retain", () => {
@@ -161,8 +162,8 @@ describe("retain", () => {
   // ── Deduplication ─────────────────────────────────────────────────────
 
   describe("deduplication", () => {
-    it("skips duplicate facts", async () => {
-      await t.hs.retain(bankId, "test", {
+    it("reinforces duplicate facts (returns existing memory)", async () => {
+      const first = await t.hs.retain(bankId, "test", {
         facts: [{ content: "Peter loves hiking" }],
         consolidate: false,
         dedupThreshold: 0.92,
@@ -174,11 +175,14 @@ describe("retain", () => {
         dedupThreshold: 0.92,
       })
 
-      expect(result.memories).toHaveLength(0) // deduped
+      // Exact duplicate → reinforced, returns existing memory
+      expect(result.memories).toHaveLength(1)
+      expect(result.memories[0]!.id).toBe(first.memories[0]!.id)
+      expect(result.memories[0]!.content).toBe("Peter loves hiking")
     })
 
     it("allows when threshold is 0 (disabled)", async () => {
-      await t.hs.retain(bankId, "test", {
+      const first = await t.hs.retain(bankId, "test", {
         facts: [{ content: "Peter loves hiking" }],
         consolidate: false,
         dedupThreshold: 0,
@@ -190,7 +194,9 @@ describe("retain", () => {
         dedupThreshold: 0,
       })
 
-      expect(result.memories).toHaveLength(1) // not deduped
+      // dedup disabled → a brand-new memory is created, not the original reinforced
+      expect(result.memories).toHaveLength(1)
+      expect(result.memories[0]!.id).not.toBe(first.memories[0]!.id)
     })
   })
 
@@ -515,12 +521,21 @@ describe("retain", () => {
       const hourMs = 3_600_000
       const existingIds: string[] = []
 
+      // Use radically different content per fact so hash-based mock embeddings
+      // produce similarity below 0.78 (new_trace routing).
+      // Each string uses unique special chars and numbers.
+      const uniqueTokens = [
+        "aaa @@@ 111", "bbb $$$ 222", "ccc %%% 333", "ddd ^^^ 444",
+        "eee &&& 555", "fff !!! 666", "ggg ### 777", "hhh *** 888",
+        "iii +++ 999", "jjj === 000", "kkk ~~~ 101", "lll ||| 202",
+      ]
+
       // Seed 12 existing facts, newest first by smaller hour offset.
       for (let hourOffset = 1; hourOffset <= 12; hourOffset++) {
         const retainResult = await t.hs.retain(bankId, `existing-${hourOffset}`, {
           facts: [
             {
-              content: `Existing temporal fact ${hourOffset}`,
+              content: uniqueTokens[hourOffset - 1]!,
               occurredStart: base - hourOffset * hourMs,
             },
           ],
@@ -531,7 +546,7 @@ describe("retain", () => {
       }
 
       const newResult = await t.hs.retain(bankId, "new-source", {
-        facts: [{ content: "New temporal source fact", occurredStart: base }],
+        facts: [{ content: "mmm @@@ $$$ %%% 303", occurredStart: base }],
         consolidate: false,
         dedupThreshold: 0,
       })
@@ -823,11 +838,20 @@ describe("retain", () => {
   describe("mention count", () => {
     it("accurately tracks mention count across multiple retain calls", async () => {
       // Store 5 separate contents all mentioning Alice
-      for (let i = 0; i < 5; i++) {
+      // Use radically different content so hash-based mock embeddings
+      // produce similarity below 0.78 (new_trace routing)
+      const uniqueContents = [
+        "Alice 111 @@@ zzz",
+        "Alice 222 $$$ qqq",
+        "Alice 333 %%% www",
+        "Alice 444 ^^^ xxx",
+        "Alice 555 &&& yyy",
+      ]
+      for (const content of uniqueContents) {
         await t.hs.retain(bankId, "test", {
           facts: [
             {
-              content: `Alice did activity number ${i + 1}`,
+              content,
               entities: ["Alice"],
             },
           ],
@@ -850,7 +874,7 @@ describe("retain", () => {
       // Check via entities on the latest retain result
       const lastRetain = await t.hs.retain(bankId, "test", {
         facts: [
-          { content: "Alice went to the park", entities: ["Alice"] },
+          { content: "Alice 999 !!! uuu ppp", entities: ["Alice"] },
         ],
         consolidate: false,
         dedupThreshold: 0,
@@ -864,10 +888,16 @@ describe("retain", () => {
 
     it("accurately tracks mention count with batch retain", async () => {
       // Batch retain with 6 items mentioning Bob
-      const batchTexts = Array.from(
-        { length: 6 },
-        (_, i) => `Bob completed task ${i + 1}`,
-      )
+      // Use radically different content so hash-based mock embeddings
+      // produce similarity below 0.78 (new_trace routing)
+      const batchTexts = [
+        "Bob 111 @@@ zzz aaa",
+        "Bob 222 $$$ qqq bbb",
+        "Bob 333 %%% www ccc",
+        "Bob 444 ^^^ xxx ddd",
+        "Bob 555 &&& yyy eee",
+        "Bob 666 !!! uuu fff",
+      ]
 
       t.adapter.setResponses(
         batchTexts.map((text) =>
@@ -900,10 +930,10 @@ describe("retain", () => {
       )
       expect(totalMemories).toBeGreaterThanOrEqual(6)
 
-      // Add 2 more mentions of Bob
+      // Add 2 more mentions of Bob with very different content
       const moreBatchTexts = [
-        "Bob went to the gym",
-        "Bob cooked dinner",
+        "Bob 777 *** ppp ggg",
+        "Bob 888 ### rrr hhh",
       ]
 
       t.adapter.setResponses(
@@ -1046,7 +1076,7 @@ describe("Core parity: test_retain.py", () => {
   })
 
   async function _seedBase() {
-    await t.hs.retain(bankId, "seed", {
+    return t.hs.retain(bankId, "seed", {
       facts: [
         { content: "Peter met Alice in June 2024 and planned a hike", factType: "experience", confidence: 0.91, entities: ["Peter", "Alice"], tags: ["seed", "people"], occurredStart: Date.now() - 60 * 86_400_000 },
         { content: "Rain caused the trail to become muddy", factType: "world", confidence: 0.88, entities: ["trail"], tags: ["seed", "weather"] },
@@ -1060,220 +1090,405 @@ describe("Core parity: test_retain.py", () => {
   }
 
   it("retain with chunks", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_retain_with_chunks", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "Alice visited the Colosseum in Rome", {
+      facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"] }],
+      documentId: "travel-doc-1",
+      consolidate: false,
+    })
+    expect(result.memories).toHaveLength(1)
+    expect(result.memories[0]!.documentId).toBe("travel-doc-1")
+    expect(result.memories[0]!.content).toBe("Alice visited Rome")
   })
 
   it("chunks and entities follow fact order", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunks_and_entities_follow_fact_order", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "team notes", {
+      facts: [
+        { content: "Alice joined the team", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+        { content: "Bob led the project", factType: "experience", confidence: 0.9, entities: ["Bob"] },
+        { content: "Charlie reviewed the code", factType: "experience", confidence: 0.9, entities: ["Charlie"] },
+      ],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(result.memories).toHaveLength(3)
+    expect(result.memories[0]!.content).toContain("Alice")
+    expect(result.memories[1]!.content).toContain("Bob")
+    expect(result.memories[2]!.content).toContain("Charlie")
   })
 
   it("temporal ordering", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_ordering", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const past = Date.now() - 30 * 86_400_000
+    const recent = Date.now() - 1 * 86_400_000
+    const r1 = await t.hs.retain(bankId, "old event", {
+      facts: [{ content: "Alice visited Paris long ago", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      eventDate: past,
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    const r2 = await t.hs.retain(bankId, "new event", {
+      facts: [{ content: "Alice visited London recently", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      eventDate: recent,
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(r1.memories[0]!.eventDate).toBeLessThan(r2.memories[0]!.eventDate!)
   })
 
   it("context preservation", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_context_preservation", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "team discussion", {
+      facts: [{ content: "Alice proposed a new architecture", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      context: "team meeting notes from Q4 planning session",
+      consolidate: false,
+    })
+    expect(result.memories[0]!.sourceText).toContain("team meeting notes")
   })
 
   it("context with batch", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_context_with_batch", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    // retainBatch uses mock LLM adapter for extraction
+    const results = await t.hs.retainBatch(bankId, [
+      { content: "Alice likes hiking in the mountains" },
+      { content: "Bob prefers cycling on the coast" },
+    ], { consolidate: false })
+    expect(results).toHaveLength(2)
+    // Each batch item produces at least one memory via mock adapter extraction
+    for (const result of results) {
+      expect(result.memories.length).toBeGreaterThanOrEqual(1)
+    }
   })
 
   it("metadata storage and retrieval", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_metadata_storage_and_retrieval", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "content", {
+      facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice"] }],
+      metadata: { source: "unit-test", importance: "high" },
+      consolidate: false,
+    })
+    expect(result.memories[0]!.metadata).toEqual({ source: "unit-test", importance: "high" })
   })
 
   it("empty batch", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_empty_batch", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const results = await t.hs.retainBatch(bankId, [])
+    expect(results).toEqual([])
   })
 
   it("single item batch", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_single_item_batch", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const results = await t.hs.retainBatch(bankId, ["Alice joined the engineering team"], { consolidate: false })
+    expect(results).toHaveLength(1)
+    expect(results[0]!.memories.length).toBeGreaterThanOrEqual(1)
   })
 
   it("mixed content batch", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_mixed_content_batch", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const results = await t.hs.retainBatch(bankId, [
+      "Short note about Alice",
+      "A much longer paragraph discussing Bob's extensive contributions to the engineering team over several years of dedicated service",
+      "Medium note about Charlie's work on the project",
+    ], { consolidate: false })
+    expect(results).toHaveLength(3)
+    for (const result of results) {
+      expect(result.memories.length).toBeGreaterThanOrEqual(1)
+    }
   })
 
   it("batch with missing optional fields", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_batch_with_missing_optional_fields", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const results = await t.hs.retainBatch(bankId, [
+      { content: "Alice joined the team" },
+      { content: "Bob led the project", context: "meeting notes" },
+      { content: "Charlie reviewed the code", eventDate: Date.now() - 86_400_000, tags: ["review"] },
+    ], { consolidate: false })
+    expect(results).toHaveLength(3)
+    for (const result of results) {
+      expect(result.memories.length).toBeGreaterThanOrEqual(1)
+    }
   })
 
   it("single batch multiple documents", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_single_batch_multiple_documents", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const r1 = await t.hs.retain(bankId, "resume alice", {
+      facts: [{ content: "Alice has 5 years experience", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      documentId: "resume-alice",
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    const r2 = await t.hs.retain(bankId, "resume bob", {
+      facts: [{ content: "Bob specializes in backend", factType: "experience", confidence: 0.9, entities: ["Bob"] }],
+      documentId: "resume-bob",
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(r1.memories[0]!.documentId).toBe("resume-alice")
+    expect(r2.memories[0]!.documentId).toBe("resume-bob")
   })
 
   it("document upsert behavior", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_document_upsert_behavior", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const r1 = await t.hs.retain(bankId, "v1", {
+      facts: [{ content: "Alice works at Acme v1", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      documentId: "doc-upsert",
+      consolidate: false,
+    })
+    const r2 = await t.hs.retain(bankId, "v2", {
+      facts: [{ content: "Alice works at NewCorp v2", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      documentId: "doc-upsert",
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(r1.memories).toHaveLength(1)
+    expect(r2.memories).toHaveLength(1)
+    expect(r2.memories[0]!.documentId).toBe("doc-upsert")
   })
 
   it("chunk fact mapping", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunk_fact_mapping", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "technical documentation about APIs", {
+      facts: [{ content: "REST APIs use HTTP methods", factType: "world", confidence: 0.9, entities: [] }],
+      documentId: "chunk-test-doc",
+      consolidate: false,
+    })
+    expect(result.memories[0]!.documentId).toBe("chunk-test-doc")
+    // chunkId is set based on document chunking
+    expect(typeof result.memories[0]!.chunkId).toBe("string")
   })
 
   it("chunk ordering preservation", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunk_ordering_preservation", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "multi-section doc", {
+      facts: [
+        { content: "First section about databases", factType: "world", confidence: 0.9, entities: [] },
+        { content: "Second section about APIs", factType: "world", confidence: 0.9, entities: [] },
+        { content: "Third section about testing", factType: "world", confidence: 0.9, entities: [] },
+      ],
+      documentId: "ordered-doc",
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(result.memories).toHaveLength(3)
+    expect(result.memories[0]!.content).toContain("databases")
+    expect(result.memories[1]!.content).toContain("APIs")
+    expect(result.memories[2]!.content).toContain("testing")
   })
 
   it("chunks truncation behavior", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_chunks_truncation_behavior", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const largeContent = "A".repeat(10_000)
+    const result = await t.hs.retain(bankId, largeContent, {
+      facts: [{ content: "Summary of large content", factType: "world", confidence: 0.9, entities: [] }],
+      documentId: "large-doc",
+      consolidate: false,
+    })
+    expect(result.memories).toHaveLength(1)
+    expect(result.memories[0]!.content).toBe("Summary of large content")
   })
 
   it("temporal links creation", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_links_creation", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
-    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+    const baseTime = Date.now() - 86_400_000
+    await t.hs.retain(bankId, "morning", {
+      facts: [{ content: "Alice had coffee at 10am", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      eventDate: baseTime,
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    await t.hs.retain(bankId, "afternoon", {
+      facts: [{ content: "Alice had lunch at 2pm", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      eventDate: baseTime + 4 * 3_600_000,
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    const links = t.hs.getGraphData(bankId).edges.filter((e) => e.linkType === "temporal")
+    expect(links.length).toBeGreaterThanOrEqual(1)
+    expect(links[0]!.weight).toBeGreaterThan(0)
+    expect(links[0]!.weight).toBeLessThanOrEqual(1)
   })
 
   it("semantic links creation", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_semantic_links_creation", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
+    await t.hs.retain(bankId, "r1", {
+      facts: [{ content: "Alice is skilled at Python programming", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    await t.hs.retain(bankId, "r2", {
+      facts: [{ content: "Alice excels at Python development", factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    // Semantic links depend on embedding similarity — with hash-based embeddings these
+    // may or may not fire, so just verify the graph has edges (entity links will be present)
     expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
   })
 
   it("entity links creation", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_entity_links_creation", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
-    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+    // Entity links are created between memories in the SAME retain call that share entities
+    const result = await t.hs.retain(bankId, "r1", {
+      facts: [
+        { content: "Alice joined the engineering team", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+        { content: "Alice led the design review", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+      ],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    const entityLinks = result.links.filter((l) => l.linkType === "entity")
+    expect(entityLinks.length).toBeGreaterThanOrEqual(1)
   })
 
   it("people name extraction", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_people_name_extraction", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "team notes", {
+      facts: [
+        { content: "Alice and Bob discussed the project", factType: "experience", confidence: 0.9, entities: ["Alice", "Bob"] },
+      ],
+      consolidate: false,
+    })
+    const entityNames = result.entities.map((e) => e.name.toLowerCase())
+    expect(entityNames).toContain("alice")
+    expect(entityNames).toContain("bob")
   })
 
   it("mention count accuracy", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_mention_count_accuracy", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    for (let i = 0; i < 3; i++) {
+      await t.hs.retain(bankId, `r${i}`, {
+        facts: [{ content: `Alice did thing number ${i}`, factType: "experience", confidence: 0.9, entities: ["Alice"] }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+    }
+    const hdb = getHdb(t.hs)
+    const allEntities = hdb.db
+      .select()
+      .from(hdb.schema.entities)
+      .where(eq(hdb.schema.entities.bankId, bankId))
+      .all()
+    const alice = allEntities.find((e) => e.name.toLowerCase().includes("alice"))
+    expect(alice).toBeDefined()
+    expect(alice!.mentionCount).toBeGreaterThanOrEqual(3)
   })
 
   it("mention count batch retain", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_mention_count_batch_retain", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    // Use separate retains with pre-extracted facts mentioning "Bob"
+    for (let i = 0; i < 3; i++) {
+      await t.hs.retain(bankId, `batch-item-${i}`, {
+        facts: [{ content: `Bob completed milestone ${i}`, factType: "experience", confidence: 0.9, entities: ["Bob"] }],
+        consolidate: false,
+        dedupThreshold: 0,
+      })
+    }
+    const hdb = getHdb(t.hs)
+    const allEntities = hdb.db
+      .select()
+      .from(hdb.schema.entities)
+      .where(eq(hdb.schema.entities.bankId, bankId))
+      .all()
+    const bob = allEntities.find((e) => e.name.toLowerCase().includes("bob"))
+    expect(bob).toBeDefined()
+    expect(bob!.mentionCount).toBeGreaterThanOrEqual(3)
   })
 
   it("causal links creation", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_causal_links_creation", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
-    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+    // causalRelations: targetIndex points to a PREVIOUS fact (must be < current factIndex)
+    // fact[1] is caused_by fact[0], so targetIndex=0 on fact[1]
+    const result = await t.hs.retain(bankId, "causal chain", {
+      facts: [
+        { content: "Heavy rain flooded the roads", factType: "world", confidence: 0.9, entities: [], tags: [] },
+        { content: "Traffic was diverted because of flooding", factType: "world", confidence: 0.9, entities: [], tags: [],
+          causalRelations: [{ targetIndex: 0, relationType: "caused_by", strength: 0.9 }] },
+      ],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    const causalLinks = result.links.filter((l) => l.linkType === "caused_by")
+    expect(causalLinks.length).toBeGreaterThanOrEqual(1)
   })
 
   it("all link types together", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_all_link_types_together", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
-    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+    // Put both facts in one retain so entity + temporal links are created together
+    const baseTime = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "r1", {
+      facts: [
+        { content: "Alice excels at Python programming", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+        { content: "Alice is great at Python development", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+      ],
+      eventDate: baseTime,
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    const linkTypes = new Set(result.links.map((l) => l.linkType))
+    // Entity links created for shared entity "Alice"
+    expect(linkTypes.has("entity")).toBe(true)
+    // Temporal links created for nearby mentionedAt times
+    expect(linkTypes.has("temporal")).toBe(true)
   })
 
   it("semantic links within same batch", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_semantic_links_within_same_batch", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
-    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+    const result = await t.hs.retain(bankId, "batch", {
+      facts: [
+        { content: "Alice is skilled at Python programming", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+        { content: "Alice excels at Python coding", factType: "experience", confidence: 0.9, entities: ["Alice"] },
+      ],
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(result.memories).toHaveLength(2)
+    // At minimum entity links are created between the two Alice facts
+    expect(result.links.length).toBeGreaterThanOrEqual(1)
   })
 
   it("temporal links within same batch", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_temporal_links_within_same_batch", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
-    await t.hs.retain(bankId, "retain2", { facts: [{ content: "Alice travelled again", entities: ["Alice"] }], consolidate: false })
-    expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+    const baseTime = Date.now() - 86_400_000
+    const result = await t.hs.retain(bankId, "batch", {
+      facts: [
+        { content: "Morning standup meeting", factType: "experience", confidence: 0.9, entities: [] },
+        { content: "Afternoon code review session", factType: "experience", confidence: 0.9, entities: [] },
+      ],
+      eventDate: baseTime,
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(result.memories).toHaveLength(2)
+    const temporalLinks = result.links.filter((l) => l.linkType === "temporal")
+    expect(temporalLinks.length).toBeGreaterThanOrEqual(1)
   })
 
   it("user provided entities", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_user_provided_entities", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "test", {
+      facts: [{ content: "Working on ProjectX at ACME Corp", factType: "experience", confidence: 0.9,
+        entities: ["ProjectX", "ACME Corp"] }],
+      consolidate: false,
+    })
+    const entityNames = result.entities.map((e) => e.name.toLowerCase())
+    expect(entityNames).toContain("projectx")
+    expect(entityNames).toContain("acme corp")
   })
 
   it("recall result model empty construction", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_recall_result_model_empty_construction", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    // Verify retain with empty facts produces empty result (no crash)
+    const result = await t.hs.retain(bankId, "simple", {
+      facts: [],
+      consolidate: false,
+    })
+    expect(result.memories).toHaveLength(0)
+    expect(result.entities).toHaveLength(0)
+    expect(result.links).toHaveLength(0)
   })
 
   it("custom extraction mode", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_custom_extraction_mode", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    // mode and customGuidelines are accepted without error
+    const result = await t.hs.retain(bankId, "content", {
+      facts: [{ content: "Alice visited Rome for vacation", factType: "experience", confidence: 0.9, entities: ["Alice", "Rome"] }],
+      mode: "custom",
+      customGuidelines: "Extract only travel-related facts",
+      consolidate: false,
+    })
+    expect(result.memories).toHaveLength(1)
+    expect(result.memories[0]!.content).toContain("Rome")
   })
 
   it("retain batch with per item tags on document", async () => {
-    const eventDate = Date.now() - 86_400_000
-    const result = await t.hs.retain(bankId, "retain", { facts: [{ content: "Alice visited Rome", factType: "experience", confidence: 0.95, entities: ["Alice", "Rome"], tags: ["travel"], occurredStart: eventDate }], eventDate, context: "travel diary", metadata: { source: "unit-test" }, documentId: "doc-test_retain_batch_with_per_item_tags_on_document", consolidate: false })
-    expect(result.memories.length).toBe(1)
-    expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+    const result = await t.hs.retain(bankId, "tagged content", {
+      facts: [
+        { content: "Alice visited Rome for work", factType: "experience", confidence: 0.9, entities: ["Alice"], tags: ["travel"] },
+        { content: "Bob stayed home and coded", factType: "experience", confidence: 0.9, entities: ["Bob"], tags: ["domestic"] },
+      ],
+      tags: ["global-tag"],
+      documentId: "tagged-doc",
+      consolidate: false,
+      dedupThreshold: 0,
+    })
+    expect(result.memories).toHaveLength(2)
+    // Per-fact tags are merged with global tags
+    expect(result.memories[0]!.tags).toContain("travel")
+    expect(result.memories[0]!.tags).toContain("global-tag")
+    expect(result.memories[1]!.tags).toContain("domestic")
+    expect(result.memories[1]!.tags).toContain("global-tag")
   })
-
 })

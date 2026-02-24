@@ -1,6 +1,11 @@
 import type { GenericSchema, InferOutput } from "valibot"
 import * as v from "valibot"
-import type { StreamMessage } from "@ellie/durable-streams"
+
+export interface StreamMessage {
+  data: Uint8Array
+  offset?: string
+  timestamp?: number
+}
 
 const decoder = new TextDecoder()
 

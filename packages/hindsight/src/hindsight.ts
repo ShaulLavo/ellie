@@ -27,6 +27,10 @@ import {
   updateDirective as updateDirectiveImpl,
   deleteDirective as deleteDirectiveImpl,
 } from "./directives"
+import {
+  listEpisodes as listEpisodesImpl,
+  narrative as narrativeImpl,
+} from "./episodes"
 import type {
   HindsightConfig,
   BankConfig,
@@ -85,6 +89,10 @@ import type {
   ListTagsOptions,
   ListTagsResult,
   BankStats,
+  ListEpisodesOptions,
+  ListEpisodesResult,
+  NarrativeInput,
+  NarrativeResult,
 } from "./types"
 
 // ── Default config values ───────────────────────────────────────────────
@@ -1834,6 +1842,36 @@ Instructions:
   ): Promise<void> {
     if (!this.extensions?.onComplete) return
     await this.extensions.onComplete(context)
+  }
+
+  // ── Episodes ────────────────────────────────────────────────────────
+
+  async listEpisodes(
+    bankId: string,
+    options?: Omit<ListEpisodesOptions, "bankId">,
+  ): Promise<ListEpisodesResult> {
+    return this.trace(
+      "list_episodes",
+      "list_episodes",
+      bankId,
+      options ?? {},
+      async () => listEpisodesImpl(this.hdb, bankId, options),
+      (result) => ({ total: result.total, count: result.items.length }),
+    )
+  }
+
+  async narrative(
+    bankId: string,
+    options: Omit<NarrativeInput, "bankId">,
+  ): Promise<NarrativeResult> {
+    return this.trace(
+      "narrative",
+      "narrative",
+      bankId,
+      { anchorMemoryId: options.anchorMemoryId },
+      async () => narrativeImpl(this.hdb, bankId, options),
+      (result) => ({ eventCount: result.events.length }),
+    )
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────

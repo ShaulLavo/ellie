@@ -179,7 +179,7 @@ describe("default model wiring", () => {
     setEnv("HINDSIGHT_TEI_EMBED_URL", "http://embed-down:8080")
 
     globalThis.fetch = (async () =>
-      new Response("server exploded", { status: 500 })) as typeof fetch
+      new Response("server exploded", { status: 500 })) as unknown as typeof fetch
 
     await expect(defaultTeiEmbed("x")).rejects.toThrow(
       "Default TEI embedding failed (BAAI/bge-small-en-v1.5) at http://embed-down:8080/embed",
@@ -190,11 +190,10 @@ describe("default model wiring", () => {
     setEnv("HINDSIGHT_TEI_RERANK_URL", "http://rerank-down:8181")
 
     globalThis.fetch = (async () =>
-      new Response("broken", { status: 500 })) as typeof fetch
+      new Response("broken", { status: 500 })) as unknown as typeof fetch
 
     await expect(defaultTeiRerank("q", ["d"])).rejects.toThrow(
       "Default TEI rerank failed (cross-encoder/ms-marco-MiniLM-L-6-v2) at http://rerank-down:8181/rerank",
     )
   })
 })
-

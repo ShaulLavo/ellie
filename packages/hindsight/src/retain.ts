@@ -22,7 +22,6 @@ import type {
 } from "./types"
 import { getExtractionPrompt, EXTRACT_FACTS_USER } from "./prompts"
 import { sanitizeText, parseLLMJson } from "./sanitize"
-import { findDuplicates } from "./dedup"
 import { resolveEntity } from "./entity-resolver"
 import { consolidate } from "./consolidation"
 import type { BankProfile } from "./reflect"
@@ -32,6 +31,17 @@ import {
   computeTemporalQueryBounds,
   computeTemporalWeight,
 } from "./retain-link-utils"
+import {
+  routeFact,
+  routeFactByVector,
+  applyReinforce,
+  applyReconsolidate,
+  logDecision,
+  RECONSOLIDATE_THRESHOLD,
+  type RoutingContext,
+} from "./routing"
+import { resolveEpisode, recordEpisodeEvent } from "./episodes"
+import type { RouteDecision, RetainRoute } from "./types"
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +99,9 @@ interface PreparedExtractedFact {
   chunkId: string
   metadata: Record<string, unknown> | null
   tags: string[]
+  profile: string | null
+  project: string | null
+  session: string | null
 }
 
 interface NormalizedBatchItem {
@@ -98,6 +111,9 @@ interface NormalizedBatchItem {
   documentId: string
   metadata: Record<string, unknown> | null
   tags: string[]
+  profile: string | null
+  project: string | null
+  session: string | null
 }
 
 interface ExpandedBatchContent {
@@ -111,6 +127,9 @@ interface ExpandedBatchContent {
   documentId: string
   metadata: Record<string, unknown> | null
   tags: string[]
+  profile: string | null
+  project: string | null
+  session: string | null
 }
 
 interface EntityPlan {
@@ -408,6 +427,9 @@ function normalizeBatchInputs(
       documentId,
       metadata: mergeMetadata(options.metadata ?? null, item.metadata ?? null),
       tags: [...new Set([...(options.tags ?? []), ...(item.tags ?? [])])],
+      profile: item.profile ?? options.profile ?? null,
+      project: item.project ?? options.project ?? null,
+      session: item.session ?? options.session ?? null,
     })
   }
 
@@ -437,7 +459,11 @@ async function extractFactsFromContent(
         entityType: "concept" as const,
       })),
       tags: f.tags ?? [],
-      causalRelations: [],
+      causalRelations: Array.isArray(f.causalRelations)
+        ? f.causalRelations
+            .map((rel) => parseCausalRelation(rel))
+            .filter((rel): rel is ExtractedCausalRelation => Boolean(rel))
+        : [],
     }))
   }
 
@@ -554,6 +580,9 @@ async function explodeBatchContents(
           documentId: item.documentId,
           metadata: item.metadata,
           tags: item.tags,
+          profile: item.profile,
+          project: item.project,
+          session: item.session,
         }
       })
     }),
@@ -917,46 +946,105 @@ export async function retain(
   if (extracted.length === 0) {
     return { memories: [], entities: [], links: [] }
   }
+  const extractedOriginal = extracted.slice()
 
-  // ── Step 1b: Deduplication ──
+  // ── Step 1b: Route each fact (reinforce / reconsolidate / new_trace) ──
 
-  const dedupThreshold = options.dedupThreshold ?? 0.92
-  if (dedupThreshold > 0) {
-    const dupes = await findDuplicates(
+  const dedupThreshold = options.dedupThreshold ?? 0
+  const decisions: RouteDecision[] = []
+  const appliedMemoryIds: Array<{
+    memoryId: string
+    route: RetainRoute
+    factIndex: number
+    eventTime: number
+  }> = []
+
+  for (let i = 0; i < extracted.length; i++) {
+    const fact = extracted[i]!
+    if (dedupThreshold <= 0) {
+      decisions.push({
+        route: "new_trace",
+        candidateMemoryId: null,
+        candidateScore: null,
+        conflictDetected: false,
+        conflictKeys: [],
+      })
+      continue
+    }
+    const routingCtx: RoutingContext = {
       hdb,
       memoryVec,
       bankId,
-      extracted.map((fact, index) => ({
-        content: fact.content,
-        temporalAnchor: eventDateMs + index,
-      })),
-      dedupThreshold,
-    )
-
-    // Build old→new index mapping so causal targetIndex refs stay valid
-    const indexRemap = new Map<number, number>()
-    let newIdx = 0
-    for (let oldIdx = 0; oldIdx < extracted.length; oldIdx++) {
-      if (!dupes[oldIdx]) {
-        indexRemap.set(oldIdx, newIdx++)
-      }
+      eventTime: eventDateMs + i,
+      profile: options.profile ?? null,
+      project: options.project ?? null,
     }
+    const decision = await routeFact(routingCtx, fact.content, fact.entities, {
+      reinforceThreshold: dedupThreshold,
+      reconsolidateThreshold: Math.min(RECONSOLIDATE_THRESHOLD, dedupThreshold),
+    })
+    decisions.push(decision)
+  }
 
-    extracted = extracted.filter((_, i) => !dupes[i])
-
-    // Remap causal relation targetIndex values
-    for (const fact of extracted) {
-      if (!fact.causalRelations) continue
-      fact.causalRelations = fact.causalRelations
-        .map((rel) => ({
-          ...rel,
-          targetIndex: indexRemap.get(rel.targetIndex) ?? -1,
-        }))
-        .filter((rel) => rel.targetIndex >= 0)
+  // Apply reinforce and reconsolidate actions immediately
+  for (let i = 0; i < extracted.length; i++) {
+    const decision = decisions[i]!
+    const factEventTime = eventDateMs + i
+    if (decision.route === "reinforce" && decision.candidateMemoryId) {
+      runInTransaction(hdb, () => {
+        applyReinforce(hdb, decision.candidateMemoryId!, now)
+        logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
+      })
+      appliedMemoryIds.push({
+        memoryId: decision.candidateMemoryId,
+        route: "reinforce",
+        factIndex: i,
+        eventTime: factEventTime,
+      })
+    } else if (decision.route === "reconsolidate" && decision.candidateMemoryId) {
+      await applyReconsolidate(
+        hdb,
+        memoryVec,
+        decision.candidateMemoryId,
+        extracted[i]!.content,
+        extracted[i]!.entities,
+        `Reconsolidated: score=${decision.candidateScore?.toFixed(3)}`,
+        now,
+      )
+      runInTransaction(hdb, () => {
+        logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
+      })
+      appliedMemoryIds.push({
+        memoryId: decision.candidateMemoryId,
+        route: "reconsolidate",
+        factIndex: i,
+        eventTime: factEventTime,
+      })
     }
   }
 
-  if (extracted.length === 0) {
+  // Filter to only new_trace facts for the insert pipeline
+  const newTraceIndexRemap = new Map<number, number>()
+  let newIdx = 0
+  for (let oldIdx = 0; oldIdx < extracted.length; oldIdx++) {
+    if (decisions[oldIdx]!.route === "new_trace") {
+      newTraceIndexRemap.set(oldIdx, newIdx++)
+    }
+  }
+
+  extracted = extracted.filter((_, i) => decisions[i]!.route === "new_trace")
+  // Remap causal relation targetIndex values for new_trace facts
+  for (const fact of extracted) {
+    if (!fact.causalRelations) continue
+    fact.causalRelations = fact.causalRelations
+      .map((rel) => ({
+        ...rel,
+        targetIndex: newTraceIndexRemap.get(rel.targetIndex) ?? -1,
+      }))
+      .filter((rel) => rel.targetIndex >= 0)
+  }
+
+  if (extracted.length === 0 && appliedMemoryIds.length === 0) {
     return { memories: [], entities: [], links: [] }
   }
 
@@ -1216,11 +1304,378 @@ export async function retain(
     )
   }
 
+  // ── Step 9: Log new_trace decisions ──
+
+  const originalIndexByNewTraceIndex = new Map<number, number>()
+  for (const [originalIndex, newTraceIndex] of newTraceIndexRemap.entries()) {
+    originalIndexByNewTraceIndex.set(newTraceIndex, originalIndex)
+  }
+
+  for (let i = 0; i < memories.length; i++) {
+    const originalIdx = originalIndexByNewTraceIndex.get(i)
+    if (originalIdx !== undefined) {
+      const decision = decisions[originalIdx]!
+      logDecision(hdb, bankId, decision, memories[i]!.id, now)
+    }
+  }
+
+  // ── Step 10: Load reinforced/reconsolidated memories into result ──
+
+  const allMemories: MemoryUnit[] = []
+  for (const { memoryId } of appliedMemoryIds) {
+    const row = hdb.db
+      .select()
+      .from(hdb.schema.memoryUnits)
+      .where(eq(hdb.schema.memoryUnits.id, memoryId))
+      .get()
+    if (row) {
+      allMemories.push(rowToMemoryUnit(row))
+    }
+  }
+  allMemories.push(...memories)
+
+  // ── Step 11: Episode tracking ──
+
+  const profile = options.profile ?? null
+  const project = options.project ?? null
+  const session = options.session ?? null
+
+  for (const applied of appliedMemoryIds) {
+      const fact = extractedOriginal[applied.factIndex]
+    const episodeId = resolveEpisode(
+      hdb,
+      bankId,
+      applied.eventTime,
+      profile,
+      project,
+      session,
+      fact?.content ?? cleanContent,
+    )
+    recordEpisodeEvent(
+      hdb,
+      episodeId,
+      bankId,
+      applied.memoryId,
+      applied.route,
+      applied.eventTime,
+      profile,
+      project,
+      session,
+    )
+  }
+
+  for (let i = 0; i < memories.length; i++) {
+    const originalIdx = originalIndexByNewTraceIndex.get(i)
+    const eventTime = originalIdx != null ? eventDateMs + originalIdx : now
+    const episodeId = resolveEpisode(
+      hdb,
+      bankId,
+      eventTime,
+      profile,
+      project,
+      session,
+      memories[i]!.content,
+    )
+    recordEpisodeEvent(
+      hdb,
+      episodeId,
+      bankId,
+      memories[i]!.id,
+      "new_trace",
+      eventTime,
+      profile,
+      project,
+      session,
+    )
+  }
+
   return {
-    memories,
+    memories: allMemories,
     entities: Array.from(entityMap.values()),
     links,
   }
+}
+
+// ── Batch new-trace processing ──────────────────────────────────────────────
+
+type MemoryRecordList = Array<{
+  memory: MemoryUnit
+  originalIndex: number
+  fact: ExtractedFact
+  vector: Float32Array
+  flatIndex: number
+  profile: string | null
+  project: string | null
+  session: string | null
+  sourceText: string
+}>
+
+/**
+ * Process all new_trace facts in a batch sub-group: plan entities, build memory
+ * rows, write everything to DB in a single transaction (entities, memories, FTS,
+ * embeddings, junctions, links), distribute results into the per-input
+ * aggregates, and log routing decisions.
+ *
+ * Extracted from the `retainBatch` inner loop for readability.
+ */
+async function processNewTraceMemories(ctx: {
+  hdb: HindsightDatabase
+  bankId: string
+  retainedFacts: PreparedExtractedFact[]
+  retainedVectors: Float32Array[]
+  newTraceDecisionIndices: number[]
+  batchDecisions: RouteDecision[]
+  entityVec: EmbeddingStore
+  memoryVec: EmbeddingStore
+  now: number
+  // Mutable accumulators from outer scope
+  entityById: Map<string, Entity>
+  entityIdsByResult: Set<string>[]
+  mentionOffsetsByResult: number[]
+  aggregate: RetainResult[]
+  linkKeysByResult: Set<string>[]
+  memoryIdsToOriginalIndex: Map<string, number>
+}): Promise<MemoryRecordList> {
+  const {
+    hdb, bankId, retainedFacts, retainedVectors,
+    newTraceDecisionIndices, batchDecisions,
+    entityVec, memoryVec, now,
+    entityById, entityIdsByResult, mentionOffsetsByResult,
+    aggregate, linkKeysByResult, memoryIdsToOriginalIndex,
+  } = ctx
+
+  const entityPlan = planEntities(hdb, bankId, retainedFacts, now)
+  for (const [entityId, entity] of entityPlan.entityById.entries()) {
+    entityById.set(entityId, entity)
+  }
+  const entityVectors = await entityVec.createVectors(
+    entityPlan.newEntities.map((entity) => entity.name),
+  )
+
+  const memoryRows: Array<typeof hdb.schema.memoryUnits.$inferInsert> = []
+  const memoryEntityIds = new Map<string, string[]>()
+  const memoryEntityNames = new Map<string, Set<string>>()
+  const memoryIdsByGroup = new Map<number, string[]>()
+  const memoryRecords: MemoryRecordList = []
+
+  for (let i = 0; i < retainedFacts.length; i++) {
+    const item = retainedFacts[i]!
+    const memoryId = ulid()
+    const tags = [...new Set([...(item.fact.tags ?? []), ...item.tags])]
+    const offset = mentionOffsetsByResult[item.originalIndex] ?? 0
+    mentionOffsetsByResult[item.originalIndex] = offset + 1
+    const mentionedAt = item.eventDateMs + offset
+    const occurredStart = parseISOToEpoch(
+      item.fact.occurredStart ?? item.fact.occurredStart,
+    )
+    const occurredEnd = parseISOToEpoch(
+      item.fact.occurredEnd ?? item.fact.occurredEnd,
+    )
+    const eventDate = occurredStart ?? mentionedAt
+    const sourceText = item.context
+      ? `${item.context}\n\n${item.sourceText}`
+      : item.sourceText
+
+    memoryRows.push({
+      id: memoryId,
+      bankId,
+      documentId: item.documentId,
+      chunkId: item.chunkId,
+      content: item.fact.content,
+      factType: item.fact.factType,
+      confidence: item.fact.confidence,
+      eventDate,
+      occurredStart,
+      occurredEnd,
+      mentionedAt,
+      metadata: item.metadata ? JSON.stringify(item.metadata) : null,
+      tags: tags.length > 0 ? JSON.stringify(tags) : null,
+      sourceText,
+      accessCount: 0,
+      lastAccessed: null,
+      encodingStrength: 1.0,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const memory: MemoryUnit = {
+      id: memoryId,
+      bankId,
+      content: item.fact.content,
+      factType: item.fact.factType as FactType,
+      confidence: item.fact.confidence,
+      documentId: item.documentId,
+      chunkId: item.chunkId,
+      eventDate,
+      occurredStart,
+      occurredEnd,
+      mentionedAt,
+      metadata: item.metadata,
+      tags: tags.length > 0 ? tags : null,
+      sourceText,
+      consolidatedAt: null,
+      proofCount: 0,
+      sourceMemoryIds: null,
+      history: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    const linkedEntityIds: string[] = []
+    const linkedEntityNames = new Set<string>()
+    for (const ent of item.fact.entities) {
+      const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+      const entity = entityPlan.entityMap.get(key)
+      if (!entity) continue
+      linkedEntityIds.push(entity.id)
+      linkedEntityNames.add(ent.name.toLowerCase())
+      entityIdsByResult[item.originalIndex]!.add(entity.id)
+    }
+
+    memoryEntityIds.set(memoryId, linkedEntityIds)
+    memoryEntityNames.set(memoryId, linkedEntityNames)
+    memoryRecords.push({
+      memory,
+      originalIndex: item.originalIndex,
+      fact: item.fact,
+      vector: retainedVectors[i]!,
+      flatIndex: newTraceDecisionIndices[i]!,
+      profile: item.profile,
+      project: item.project,
+      session: item.session,
+      sourceText: item.fact.content,
+    })
+    const groupMemoryIds = memoryIdsByGroup.get(item.groupIndex) ?? []
+    groupMemoryIds.push(memoryId)
+    memoryIdsByGroup.set(item.groupIndex, groupMemoryIds)
+    memoryIdsToOriginalIndex.set(memoryId, item.originalIndex)
+  }
+
+  const existingById = new Map(
+    hdb.db
+      .select()
+      .from(hdb.schema.entities)
+      .where(eq(hdb.schema.entities.bankId, bankId))
+      .all()
+      .map((row) => [row.id, row]),
+  )
+
+  const createdLinks: RetainResult["links"] = []
+
+  runInTransaction(hdb, () => {
+    for (const [entityId, delta] of entityPlan.existingMentionDeltas.entries()) {
+      const existing = existingById.get(entityId)
+      if (!existing) continue
+      hdb.db
+        .update(hdb.schema.entities)
+        .set({
+          lastUpdated: now,
+          mentionCount: existing.mentionCount + delta,
+        })
+        .where(eq(hdb.schema.entities.id, entityId))
+        .run()
+    }
+
+    for (const newEntity of entityPlan.newEntities) {
+      hdb.db.insert(hdb.schema.entities).values(newEntity).run()
+    }
+
+    entityVec.upsertVectors(
+      entityPlan.newEntities.map((entity, index) => ({
+        id: entity.id,
+        vector: entityVectors[index]!,
+      })),
+    )
+
+    for (const row of memoryRows) {
+      hdb.db.insert(hdb.schema.memoryUnits).values(row).run()
+      hdb.sqlite.run(
+        "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
+        [row.id, bankId, row.content],
+      )
+    }
+
+    memoryVec.upsertVectors(
+      memoryRecords.map((item) => ({
+        id: item.memory.id,
+        vector: item.vector,
+      })),
+    )
+
+    for (const memory of memoryRecords) {
+      const linkedEntityIds = memoryEntityIds.get(memory.memory.id) ?? []
+      for (const entityId of linkedEntityIds) {
+        hdb.db
+          .insert(hdb.schema.memoryEntities)
+          .values({ memoryId: memory.memory.id, entityId })
+          .run()
+      }
+      updateCooccurrences(hdb, bankId, linkedEntityIds)
+    }
+
+    createEntityLinksFromMemories(
+      hdb,
+      bankId,
+      memoryRecords.map((record) => record.memory.id),
+      memoryEntityNames,
+      now,
+      createdLinks,
+    )
+
+    createCausalLinksFromGroups(
+      hdb,
+      bankId,
+      retainedFacts,
+      memoryIdsByGroup,
+      now,
+      createdLinks,
+    )
+
+    createTemporalLinksFromMemories(
+      hdb,
+      bankId,
+      memoryRecords.map((record) => record.memory),
+      now,
+      createdLinks,
+    )
+
+    createSemanticLinksFromVectors(
+      hdb,
+      memoryVec,
+      bankId,
+      memoryRecords.map((record) => ({
+        id: record.memory.id,
+        vector: record.vector,
+      })),
+      now,
+      createdLinks,
+    )
+  })
+
+  for (const memory of memoryRecords) {
+    aggregate[memory.originalIndex]!.memories.push(memory.memory)
+  }
+
+  for (const link of createdLinks) {
+    const sourceIndex = memoryIdsToOriginalIndex.get(link.sourceId)
+    const targetIndex = memoryIdsToOriginalIndex.get(link.targetId)
+    if (sourceIndex !== undefined) {
+      addUniqueLink(aggregate[sourceIndex]!, linkKeysByResult[sourceIndex]!, link)
+    }
+    if (targetIndex !== undefined && targetIndex !== sourceIndex) {
+      addUniqueLink(aggregate[targetIndex]!, linkKeysByResult[targetIndex]!, link)
+    }
+  }
+
+  // Log new_trace decisions
+  for (let i = 0; i < memoryRecords.length; i++) {
+    const flatIdx = newTraceDecisionIndices[i]
+    if (flatIdx !== undefined) {
+      logDecision(hdb, bankId, batchDecisions[flatIdx]!, memoryRecords[i]!.memory.id, now)
+    }
+  }
+
+  return memoryRecords
 }
 
 export async function retainBatch(
@@ -1252,6 +1707,7 @@ export async function retainBatch(
   const mentionOffsetsByResult = normalizedItems.map(() => 0)
 
   const now = Date.now()
+  const dedupThreshold = options.dedupThreshold ?? 0
   const documentRows: Array<typeof hdb.schema.documents.$inferInsert> = normalizedItems.map(
     (item) => ({
       id: item.documentId,
@@ -1315,261 +1771,193 @@ export async function retainBatch(
           chunkId: item.chunkId,
           metadata: item.metadata,
           tags: item.tags,
+          profile: item.profile,
+          project: item.project,
+          session: item.session,
         })
       }
     }
 
     if (flattened.length === 0) continue
 
-    const dedupThreshold = options.dedupThreshold ?? 0.92
     const allVectors = await memoryVec.createVectors(
       flattened.map((item) => item.fact.content),
     )
 
-    const dedupFlags =
-      dedupThreshold > 0
-        ? findDuplicateFlagsByVector(
-            hdb,
-            memoryVec,
-            bankId,
-            allVectors,
-            flattened.map((item, index) => item.eventDateMs + index),
-            dedupThreshold,
-          )
-        : flattened.map(() => false)
-
-    const retainedFacts: PreparedExtractedFact[] = []
-    const retainedVectors: Float32Array[] = []
-    for (let i = 0; i < flattened.length; i++) {
-      if (dedupFlags[i]) continue
-      retainedFacts.push(flattened[i]!)
-      retainedVectors.push(allVectors[i]!)
-    }
-
-    if (retainedFacts.length === 0) continue
-
-    const now = Date.now()
-    const entityPlan = planEntities(hdb, bankId, retainedFacts, now)
-    for (const [entityId, entity] of entityPlan.entityById.entries()) {
-      entityById.set(entityId, entity)
-    }
-    const entityVectors = await entityVec.createVectors(
-      entityPlan.newEntities.map((entity) => entity.name),
-    )
-
-    const memoryRows: Array<typeof hdb.schema.memoryUnits.$inferInsert> = []
-    const memoryRecords: Array<{
-      memory: MemoryUnit
+    // ── Route each fact via reconsolidation engine ──
+    const batchDecisions: RouteDecision[] = []
+    const batchAppliedMemoryIds: Array<{
+      memoryId: string
+      route: RetainRoute
       originalIndex: number
-      fact: ExtractedFact
-      vector: Float32Array
+      flatIndex: number
+      eventTime: number
+      profile: string | null
+      project: string | null
+      session: string | null
+      sourceText: string
     }> = []
-    const memoryEntityIds = new Map<string, string[]>()
-    const memoryEntityNames = new Map<string, Set<string>>()
-    const memoryIdsByGroup = new Map<number, string[]>()
 
-    for (let i = 0; i < retainedFacts.length; i++) {
-      const item = retainedFacts[i]!
-      const memoryId = ulid()
-      const tags = [...new Set([...(item.fact.tags ?? []), ...item.tags])]
-      const offset = mentionOffsetsByResult[item.originalIndex] ?? 0
-      mentionOffsetsByResult[item.originalIndex] = offset + 1
-      const mentionedAt = item.eventDateMs + offset
-      const occurredStart = parseISOToEpoch(
-        item.fact.occurredStart ?? item.fact.occurredStart,
-      )
-      const occurredEnd = parseISOToEpoch(
-        item.fact.occurredEnd ?? item.fact.occurredEnd,
-      )
-      const eventDate = occurredStart ?? mentionedAt
-      const sourceText = item.context
-        ? `${item.context}\n\n${item.sourceText}`
-        : item.sourceText
-
-      memoryRows.push({
-        id: memoryId,
-        bankId,
-        documentId: item.documentId,
-        chunkId: item.chunkId,
-        content: item.fact.content,
-        factType: item.fact.factType,
-        confidence: item.fact.confidence,
-        eventDate,
-        occurredStart,
-        occurredEnd,
-        mentionedAt,
-        metadata: item.metadata ? JSON.stringify(item.metadata) : null,
-        tags: tags.length > 0 ? JSON.stringify(tags) : null,
-        sourceText,
-        accessCount: 0,
-        lastAccessed: null,
-        encodingStrength: 1.0,
-        createdAt: now,
-        updatedAt: now,
-      })
-
-      const memory: MemoryUnit = {
-        id: memoryId,
-        bankId,
-        content: item.fact.content,
-        factType: item.fact.factType as FactType,
-        confidence: item.fact.confidence,
-        documentId: item.documentId,
-        chunkId: item.chunkId,
-        eventDate,
-        occurredStart,
-        occurredEnd,
-        mentionedAt,
-        metadata: item.metadata,
-        tags: tags.length > 0 ? tags : null,
-        sourceText,
-        consolidatedAt: null,
-        proofCount: 0,
-        sourceMemoryIds: null,
-        history: null,
-        createdAt: now,
-        updatedAt: now,
+    for (let i = 0; i < flattened.length; i++) {
+      if (dedupThreshold <= 0) {
+        batchDecisions.push({
+          route: "new_trace",
+          candidateMemoryId: null,
+          candidateScore: null,
+          conflictDetected: false,
+          conflictKeys: [],
+        })
+        continue
       }
-
-      const linkedEntityIds: string[] = []
-      const linkedEntityNames = new Set<string>()
-      for (const ent of item.fact.entities) {
-        const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-        const entity = entityPlan.entityMap.get(key)
-        if (!entity) continue
-        linkedEntityIds.push(entity.id)
-        linkedEntityNames.add(ent.name.toLowerCase())
-        entityIdsByResult[item.originalIndex]!.add(entity.id)
-      }
-
-      memoryEntityIds.set(memoryId, linkedEntityIds)
-      memoryEntityNames.set(memoryId, linkedEntityNames)
-      memoryRecords.push({
-        memory,
-        originalIndex: item.originalIndex,
-        fact: item.fact,
-        vector: retainedVectors[i]!,
-      })
-      const groupMemoryIds = memoryIdsByGroup.get(item.groupIndex) ?? []
-      groupMemoryIds.push(memoryId)
-      memoryIdsByGroup.set(item.groupIndex, groupMemoryIds)
-      memoryIdsToOriginalIndex.set(memoryId, item.originalIndex)
-    }
-
-    const existingById = new Map(
-      hdb.db
-        .select()
-        .from(hdb.schema.entities)
-        .where(eq(hdb.schema.entities.bankId, bankId))
-        .all()
-        .map((row) => [row.id, row]),
-    )
-
-    const createdLinks: RetainResult["links"] = []
-
-    runInTransaction(hdb, () => {
-      for (const [entityId, delta] of entityPlan.existingMentionDeltas.entries()) {
-        const existing = existingById.get(entityId)
-        if (!existing) continue
-        hdb.db
-          .update(hdb.schema.entities)
-          .set({
-            lastUpdated: now,
-            mentionCount: existing.mentionCount + delta,
-          })
-          .where(eq(hdb.schema.entities.id, entityId))
-          .run()
-      }
-
-      for (const newEntity of entityPlan.newEntities) {
-        hdb.db.insert(hdb.schema.entities).values(newEntity).run()
-      }
-
-      entityVec.upsertVectors(
-        entityPlan.newEntities.map((entity, index) => ({
-          id: entity.id,
-          vector: entityVectors[index]!,
-        })),
-      )
-
-      for (const row of memoryRows) {
-        hdb.db.insert(hdb.schema.memoryUnits).values(row).run()
-        hdb.sqlite.run(
-          "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
-          [row.id, bankId, row.content],
-        )
-      }
-
-      memoryVec.upsertVectors(
-        memoryRecords.map((item) => ({
-          id: item.memory.id,
-          vector: item.vector,
-        })),
-      )
-
-      for (const memory of memoryRecords) {
-        const linkedEntityIds = memoryEntityIds.get(memory.memory.id) ?? []
-        for (const entityId of linkedEntityIds) {
-          hdb.db
-            .insert(hdb.schema.memoryEntities)
-            .values({ memoryId: memory.memory.id, entityId })
-            .run()
-        }
-        updateCooccurrences(hdb, bankId, linkedEntityIds)
-      }
-
-      createEntityLinksFromMemories(
-        hdb,
-        bankId,
-        memoryRecords.map((record) => record.memory.id),
-        memoryEntityNames,
-        now,
-        createdLinks,
-      )
-
-      createCausalLinksFromGroups(
-        hdb,
-        bankId,
-        retainedFacts,
-        memoryIdsByGroup,
-        now,
-        createdLinks,
-      )
-
-      createTemporalLinksFromMemories(
-        hdb,
-        bankId,
-        memoryRecords.map((record) => record.memory),
-        now,
-        createdLinks,
-      )
-
-      createSemanticLinksFromVectors(
+      const item = flattened[i]!
+      const routingCtx: RoutingContext = {
         hdb,
         memoryVec,
         bankId,
-        memoryRecords.map((record) => ({
-          id: record.memory.id,
-          vector: record.vector,
-        })),
-        now,
-        createdLinks,
+        eventTime: item.eventDateMs + i,
+        profile: item.profile,
+        project: item.project,
+      }
+      const decision = routeFactByVector(
+        routingCtx,
+        item.fact.entities,
+        allVectors[i]!,
+        {
+          reinforceThreshold: dedupThreshold,
+          reconsolidateThreshold: Math.min(RECONSOLIDATE_THRESHOLD, dedupThreshold),
+        },
       )
-    })
-
-    for (const memory of memoryRecords) {
-      aggregate[memory.originalIndex]!.memories.push(memory.memory)
+      batchDecisions.push(decision)
     }
 
-    for (const link of createdLinks) {
-      const sourceIndex = memoryIdsToOriginalIndex.get(link.sourceId)
-      const targetIndex = memoryIdsToOriginalIndex.get(link.targetId)
-      if (sourceIndex !== undefined) {
-        addUniqueLink(aggregate[sourceIndex]!, linkKeysByResult[sourceIndex]!, link)
+    // Apply reinforce and reconsolidate actions
+    for (let i = 0; i < flattened.length; i++) {
+      const decision = batchDecisions[i]!
+      const item = flattened[i]!
+      const eventTime = item.eventDateMs + i
+      if (decision.route === "reinforce" && decision.candidateMemoryId) {
+        runInTransaction(hdb, () => {
+          applyReinforce(hdb, decision.candidateMemoryId!, now)
+          logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
+        })
+        batchAppliedMemoryIds.push({
+          memoryId: decision.candidateMemoryId,
+          route: "reinforce",
+          originalIndex: item.originalIndex,
+          flatIndex: i,
+          eventTime,
+          profile: item.profile,
+          project: item.project,
+          session: item.session,
+          sourceText: item.fact.content,
+        })
+      } else if (decision.route === "reconsolidate" && decision.candidateMemoryId) {
+        await applyReconsolidate(
+          hdb, memoryVec, decision.candidateMemoryId,
+          item.fact.content, item.fact.entities,
+          `Reconsolidated: score=${decision.candidateScore?.toFixed(3)}`,
+          now,
+        )
+        runInTransaction(hdb, () => {
+          logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
+        })
+        batchAppliedMemoryIds.push({
+          memoryId: decision.candidateMemoryId,
+          route: "reconsolidate",
+          originalIndex: item.originalIndex,
+          flatIndex: i,
+          eventTime,
+          profile: item.profile,
+          project: item.project,
+          session: item.session,
+          sourceText: item.fact.content,
+        })
       }
-      if (targetIndex !== undefined && targetIndex !== sourceIndex) {
-        addUniqueLink(aggregate[targetIndex]!, linkKeysByResult[targetIndex]!, link)
+    }
+
+    // Filter to only new_trace facts for the insert pipeline
+    const retainedFacts: PreparedExtractedFact[] = []
+    const retainedVectors: Float32Array[] = []
+    const newTraceDecisionIndices: number[] = []
+    for (let i = 0; i < flattened.length; i++) {
+      if (batchDecisions[i]!.route !== "new_trace") continue
+      retainedFacts.push(flattened[i]!)
+      retainedVectors.push(allVectors[i]!)
+      newTraceDecisionIndices.push(i)
+    }
+
+    // Load reinforced/reconsolidated memories into aggregate results
+    for (const { memoryId, originalIndex } of batchAppliedMemoryIds) {
+      const row = hdb.db
+        .select()
+        .from(hdb.schema.memoryUnits)
+        .where(eq(hdb.schema.memoryUnits.id, memoryId))
+        .get()
+      if (row) {
+        aggregate[originalIndex]!.memories.push(rowToMemoryUnit(row))
       }
+    }
+
+    if (retainedFacts.length === 0 && batchAppliedMemoryIds.length === 0) continue
+
+    let memoryRecords: MemoryRecordList = []
+
+    if (retainedFacts.length > 0) {
+      memoryRecords = await processNewTraceMemories({
+        hdb, bankId, retainedFacts, retainedVectors,
+        newTraceDecisionIndices, batchDecisions,
+        entityVec, memoryVec, now,
+        entityById, entityIdsByResult, mentionOffsetsByResult,
+        aggregate, linkKeysByResult, memoryIdsToOriginalIndex,
+      })
+    }
+
+    // ── Episode tracking ──
+
+    for (const applied of batchAppliedMemoryIds) {
+      const episodeId = resolveEpisode(
+        hdb,
+        bankId,
+        applied.eventTime,
+        applied.profile,
+        applied.project,
+        applied.session,
+        applied.sourceText,
+      )
+      recordEpisodeEvent(
+        hdb,
+        episodeId,
+        bankId,
+        applied.memoryId,
+        applied.route,
+        applied.eventTime,
+        applied.profile,
+        applied.project,
+        applied.session,
+      )
+    }
+    for (const record of memoryRecords) {
+      const eventTime = record.memory.mentionedAt ?? record.memory.eventDate ?? Date.now()
+      const episodeId = resolveEpisode(
+        hdb,
+        bankId,
+        eventTime,
+        record.profile,
+        record.project,
+        record.session,
+        record.sourceText,
+      )
+      recordEpisodeEvent(
+        hdb,
+        episodeId,
+        bankId,
+        record.memory.id,
+        "new_trace",
+        eventTime,
+        record.profile,
+        record.project,
+        record.session,
+      )
     }
   }
 
@@ -1590,73 +1978,8 @@ export async function retainBatch(
 
 // ── Semantic Links ─────────────────────────────────────────────────────────
 
-const DUPLICATE_SEARCH_K = 5
-const DEDUP_TIME_WINDOW_HOURS = 24
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
-
-function isDuplicateByVector(
-  hdb: HindsightDatabase,
-  memoryVec: EmbeddingStore,
-  bankId: string,
-  vector: Float32Array,
-  anchor: number | null,
-  threshold: number,
-  windowMs: number,
-): boolean {
-  const hits = memoryVec.searchByVector(vector, DUPLICATE_SEARCH_K)
-
-  for (const hit of hits) {
-    const similarity = 1 - hit.distance
-    if (similarity < threshold) break
-
-    const row = hdb.db
-      .select({
-        bankId: hdb.schema.memoryUnits.bankId,
-        eventDate: hdb.schema.memoryUnits.eventDate,
-        occurredStart: hdb.schema.memoryUnits.occurredStart,
-        occurredEnd: hdb.schema.memoryUnits.occurredEnd,
-        mentionedAt: hdb.schema.memoryUnits.mentionedAt,
-        createdAt: hdb.schema.memoryUnits.createdAt,
-      })
-      .from(hdb.schema.memoryUnits)
-      .where(eq(hdb.schema.memoryUnits.id, hit.id))
-      .get()
-    if (row?.bankId !== bankId) continue
-
-    if (anchor == null) return true
-
-    const candidateAnchor =
-      row.eventDate ??
-      row.occurredStart ??
-      row.occurredEnd ??
-      row.occurredStart ??
-      row.occurredEnd ??
-      row.mentionedAt ??
-      row.createdAt
-    if (Math.abs(anchor - candidateAnchor) <= windowMs) return true
-  }
-
-  return false
-}
-
-function findDuplicateFlagsByVector(
-  hdb: HindsightDatabase,
-  memoryVec: EmbeddingStore,
-  bankId: string,
-  vectors: Float32Array[],
-  anchors: number[],
-  threshold: number,
-): boolean[] {
-  const windowMs = DEDUP_TIME_WINDOW_HOURS * 60 * 60 * 1000
-
-  return vectors.map((vector, index) =>
-    isDuplicateByVector(
-      hdb, memoryVec, bankId, vector,
-      anchors[index] ?? null, threshold, windowMs,
-    ),
-  )
-}
 
 function createEntityLinksFromMemories(
   hdb: HindsightDatabase,

@@ -8,7 +8,7 @@ import {
   primaryKey,
   check,
 } from "drizzle-orm/sqlite-core"
-import { sql } from "drizzle-orm"
+import { desc, sql } from "drizzle-orm"
 
 // ── Banks ──────────────────────────────────────────────────────────────────
 
@@ -282,6 +282,142 @@ export const asyncOperations = sqliteTable(
   ],
 )
 
+// ── Memory Versions ─────────────────────────────────────────────────────
+
+export const memoryVersions = sqliteTable(
+  "hs_memory_versions",
+  {
+    id: text("id").primaryKey(),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memoryUnits.id, { onDelete: "cascade" }),
+    versionNo: integer("version_no").notNull(),
+    content: text("content").notNull(),
+    entitiesJson: text("entities_json"), // JSON: [{name, entityType}]
+    attributesJson: text("attributes_json"), // JSON: {factType, confidence, tags, metadata}
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_hs_mv_memory").on(table.memoryId),
+    index("idx_hs_mv_bank").on(table.bankId),
+    uniqueIndex("idx_hs_mv_memory_version").on(table.memoryId, table.versionNo),
+  ],
+)
+
+// ── Reconsolidation Decisions ───────────────────────────────────────────
+
+/**
+ * Audit log for reconsolidation routing decisions.
+ *
+ * FK constraints are intentionally omitted for candidate_memory_id and
+ * applied_memory_id. These columns reference hs_memory_units, but decision
+ * rows must survive memory deletion to preserve the audit trail.
+ */
+export const reconsolidationDecisions = sqliteTable(
+  "hs_reconsolidation_decisions",
+  {
+    id: text("id").primaryKey(),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    candidateMemoryId: text("candidate_memory_id"), // null for new_trace
+    appliedMemoryId: text("applied_memory_id").notNull(),
+    route: text("route").notNull(), // reinforce | reconsolidate | new_trace
+    candidateScore: real("candidate_score"),
+    conflictDetected: integer("conflict_detected").notNull().default(0), // 0=false, 1=true
+    conflictKeysJson: text("conflict_keys_json"), // JSON array of conflicting keys
+    policyVersion: text("policy_version").notNull().default("v1"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_hs_rd_bank_created").on(table.bankId, desc(table.createdAt)),
+    index("idx_hs_rd_applied").on(table.appliedMemoryId),
+  ],
+)
+
+// ── Episodes ────────────────────────────────────────────────────────────
+
+export const episodes = sqliteTable(
+  "hs_episodes",
+  {
+    id: text("id").primaryKey(),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    profile: text("profile"),
+    project: text("project"),
+    session: text("session"),
+    startAt: integer("start_at").notNull(),
+    endAt: integer("end_at"),
+    lastEventAt: integer("last_event_at").notNull(),
+    eventCount: integer("event_count").notNull().default(0),
+    boundaryReason: text("boundary_reason"), // time_gap | scope_change | phrase_boundary | initial
+  },
+  (table) => [
+    index("idx_hs_ep_bank_last_event").on(table.bankId, desc(table.lastEventAt)),
+    index("idx_hs_ep_scope").on(
+      table.bankId,
+      table.profile,
+      table.project,
+      table.session,
+    ),
+  ],
+)
+
+// ── Episode Events ──────────────────────────────────────────────────────
+
+export const episodeEvents = sqliteTable(
+  "hs_episode_events",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    bankId: text("bank_id")
+      .notNull()
+      .references(() => banks.id, { onDelete: "cascade" }),
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memoryUnits.id, { onDelete: "cascade" }),
+    eventTime: integer("event_time").notNull(),
+    route: text("route").notNull(), // reinforce | reconsolidate | new_trace
+    profile: text("profile"),
+    project: text("project"),
+    session: text("session"),
+  },
+  (table) => [
+    index("idx_hs_ee_episode_time").on(table.episodeId, table.eventTime),
+    index("idx_hs_ee_bank_memory").on(table.bankId, table.memoryId, desc(table.eventTime)),
+  ],
+)
+
+// ── Episode Temporal Links ──────────────────────────────────────────────
+
+export const episodeTemporalLinks = sqliteTable(
+  "hs_episode_temporal_links",
+  {
+    id: text("id").primaryKey(),
+    fromEpisodeId: text("from_episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    toEpisodeId: text("to_episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    gapMs: integer("gap_ms").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_hs_etl_from").on(table.fromEpisodeId),
+    index("idx_hs_etl_to").on(table.toEpisodeId),
+    uniqueIndex("idx_hs_etl_edge").on(table.fromEpisodeId, table.toEpisodeId),
+  ],
+)
+
 // ── Type exports ───────────────────────────────────────────────────────────
 
 export type BankRow = typeof banks.$inferSelect
@@ -304,3 +440,13 @@ export type DirectiveRow = typeof directives.$inferSelect
 export type NewDirectiveRow = typeof directives.$inferInsert
 export type AsyncOperationRow = typeof asyncOperations.$inferSelect
 export type NewAsyncOperationRow = typeof asyncOperations.$inferInsert
+export type MemoryVersionRow = typeof memoryVersions.$inferSelect
+export type NewMemoryVersionRow = typeof memoryVersions.$inferInsert
+export type ReconsolidationDecisionRow = typeof reconsolidationDecisions.$inferSelect
+export type NewReconsolidationDecisionRow = typeof reconsolidationDecisions.$inferInsert
+export type EpisodeRow = typeof episodes.$inferSelect
+export type NewEpisodeRow = typeof episodes.$inferInsert
+export type EpisodeEventRow = typeof episodeEvents.$inferSelect
+export type NewEpisodeEventRow = typeof episodeEvents.$inferInsert
+export type EpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferSelect
+export type NewEpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferInsert
