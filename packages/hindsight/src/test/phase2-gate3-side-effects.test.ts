@@ -229,7 +229,7 @@ describe("Gate 3: Route Side-Effect Invariants", () => {
   // function path via the decision log verifying the right route was taken.
 
   describe("reconsolidate via conflict detection", () => {
-    it("conflict triggers reconsolidate decision", async () => {
+    it("ingesting similar entity content produces multiple routing decisions", async () => {
       // Seed with an entity
       await t.hs.retain(bankId, "test", {
         facts: [{
@@ -260,8 +260,9 @@ describe("Gate 3: Route Side-Effect Invariants", () => {
         .all(bankId) as Array<Record<string, unknown>>
 
       expect(decisions.length).toBeGreaterThanOrEqual(2)
-      // First is new_trace, subsequent ones may be reinforce or reconsolidate
+      // First is always new_trace; subsequent route depends on similarity score
       expect(decisions[0]!.route).toBe("new_trace")
+      expect(["new_trace", "reinforce", "reconsolidate"]).toContain(decisions[1]!.route)
     })
   })
 

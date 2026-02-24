@@ -19,7 +19,7 @@ import {
 } from "./types"
 import type { EpisodeRow } from "./schema"
 
-const EPISODE_GAP_MS = 45 * 60 * 1000
+export const EPISODE_GAP_MS = 45 * 60 * 1000
 
 const BOUNDARY_PHRASES: RegExp[] = [
   /\bnew task\b/i,

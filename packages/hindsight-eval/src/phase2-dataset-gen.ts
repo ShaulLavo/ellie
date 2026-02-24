@@ -58,8 +58,8 @@ const VALUES: Record<string, string[]> = {
 
 const SCOPES = ["work", "personal", "research", "meetings", "admin"]
 
-const FACT_TYPES: Array<"world" | "experience" | "opinion"> = [
-  "world", "experience", "opinion",
+const FACT_TYPES: Array<"world" | "experience" | "opinion" | "observation"> = [
+  "world", "experience", "opinion", "observation",
 ]
 
 /**
@@ -200,8 +200,9 @@ export function generateTemporalNarrativeDataset(
     const numExpected = Math.floor(random() * 4) + 2
     const expectedIndices: number[] = []
 
+    const dirRoll = random()
     const direction: "before" | "after" | "both" =
-      random() < 0.33 ? "before" : random() < 0.5 ? "after" : "both"
+      dirRoll < 0.33 ? "before" : dirRoll < 0.66 ? "after" : "both"
 
     for (let j = 0; j < numExpected; j++) {
       let idx: number
@@ -244,6 +245,7 @@ export function generateTemporalNarrativeDataset(
 /**
  * Serialize a dataset to JSONL format.
  */
+/** Convert an array of items to newline-delimited JSON (JSONL) format. */
 export function toJsonl<T>(items: T[]): string {
   return items.map((item) => JSON.stringify(item)).join("\n") + "\n"
 }

@@ -15,28 +15,27 @@ import {
   getHdb,
   type TestHindsight,
 } from "./setup"
-import { detectBoundary } from "../episodes"
+import { detectBoundary, EPISODE_GAP_MS } from "../episodes"
 import type { EpisodeRow } from "../schema"
 
 // ── Helper: create a fake episode row ─────────────────────────────────────
 
 function fakeEpisode(overrides: Partial<EpisodeRow> = {}): EpisodeRow {
+  const now = Date.now()
   return {
     id: "ep-1",
     bankId: "bank-1",
     profile: null,
     project: null,
     session: null,
-    startAt: Date.now() - 1000,
+    startAt: now - 1000,
     endAt: null,
-    lastEventAt: Date.now() - 1000,
+    lastEventAt: now - 1000,
     eventCount: 1,
     boundaryReason: null,
     ...overrides,
   }
 }
-
-const FORTY_FIVE_MIN_MS = 45 * 60 * 1000
 
 describe("Gate 4: Episode Boundary + Linking", () => {
   // ── Boundary trigger rules (pure function) ──────────────────────────────
@@ -50,7 +49,7 @@ describe("Gate 4: Episode Boundary + Linking", () => {
 
     it(">45 min gap triggers new episode with reason=time_gap", () => {
       const now = Date.now()
-      const ep = fakeEpisode({ lastEventAt: now - FORTY_FIVE_MIN_MS - 1 })
+      const ep = fakeEpisode({ lastEventAt: now - EPISODE_GAP_MS - 1 })
       const result = detectBoundary(ep, now, null, null, null)
       expect(result.needsNew).toBe(true)
       expect(result.reason).toBe("time_gap")
@@ -145,7 +144,7 @@ describe("Gate 4: Episode Boundary + Linking", () => {
   describe("45-minute boundary exactness", () => {
     it("gap exactly 45 min (45*60*1000 ms) does NOT trigger", () => {
       const now = Date.now()
-      const ep = fakeEpisode({ lastEventAt: now - FORTY_FIVE_MIN_MS })
+      const ep = fakeEpisode({ lastEventAt: now - EPISODE_GAP_MS })
       const result = detectBoundary(ep, now, null, null, null)
       expect(result.needsNew).toBe(false)
       expect(result.reason).toBeNull()
@@ -153,7 +152,7 @@ describe("Gate 4: Episode Boundary + Linking", () => {
 
     it("gap 45 min + 1ms DOES trigger", () => {
       const now = Date.now()
-      const ep = fakeEpisode({ lastEventAt: now - FORTY_FIVE_MIN_MS - 1 })
+      const ep = fakeEpisode({ lastEventAt: now - EPISODE_GAP_MS - 1 })
       const result = detectBoundary(ep, now, null, null, null)
       expect(result.needsNew).toBe(true)
       expect(result.reason).toBe("time_gap")
@@ -191,6 +190,7 @@ describe("Gate 4: Episode Boundary + Linking", () => {
       const ep = fakeEpisode({ lastEventAt: now - 10_000 })
       const result = detectBoundary(ep, now, null, null, null, "Regular message content")
       expect(result.needsNew).toBe(false)
+      expect(result.reason).toBeNull()
     })
   })
 

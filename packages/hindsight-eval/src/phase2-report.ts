@@ -16,6 +16,7 @@ import type {
 
 // ── JSON Report Generation ──────────────────────────────────────────────
 
+/** Serialize a verification run to formatted JSON for artifact output. */
 export function generateVerificationRunJson(
   run: Phase2VerificationRun,
 ): string {
@@ -96,6 +97,7 @@ export function generateComparisonReport(
 
 // ── DB Invariants Report ────────────────────────────────────────────────
 
+/** Generate a markdown report of Gate 3 route side-effect invariant results. */
 export function generateDbInvariantsReport(
   gateResults: GateResult[],
 ): string {
@@ -112,20 +114,22 @@ export function generateDbInvariantsReport(
     lines.push("")
     lines.push(`**Status:** ${gate3.status.toUpperCase()}`)
     lines.push("")
+    const verified = gate3.status === "pass" ? "verified" : "NOT verified"
+
     lines.push("### reinforce invariants")
-    lines.push("- No new memory row: verified")
-    lines.push("- No hs_memory_versions row: verified")
-    lines.push("- Only strength/access metadata updated: verified")
+    lines.push(`- No new memory row: ${verified}`)
+    lines.push(`- No hs_memory_versions row: ${verified}`)
+    lines.push(`- Only strength/access metadata updated: ${verified}`)
     lines.push("")
     lines.push("### reconsolidate invariants")
-    lines.push("- Exactly one hs_memory_versions row inserted: verified")
-    lines.push("- Canonical memory row updated: verified")
-    lines.push("- Exactly one hs_reconsolidation_decisions row inserted: verified")
+    lines.push(`- Exactly one hs_memory_versions row inserted: ${verified}`)
+    lines.push(`- Canonical memory row updated: ${verified}`)
+    lines.push(`- Exactly one hs_reconsolidation_decisions row inserted: ${verified}`)
     lines.push("")
     lines.push("### new_trace invariants")
-    lines.push("- Exactly one new canonical memory row: verified")
-    lines.push("- One decision row inserted: verified")
-    lines.push("- No version row inserted: verified")
+    lines.push(`- Exactly one new canonical memory row: ${verified}`)
+    lines.push(`- One decision row inserted: ${verified}`)
+    lines.push(`- No version row inserted: ${verified}`)
     lines.push("")
 
     if (gate3.details) {
@@ -141,6 +145,7 @@ export function generateDbInvariantsReport(
 
 // ── Reproducibility Report ──────────────────────────────────────────────
 
+/** Compare two verification runs gate-by-gate and produce a Gate 8 reproducibility report. */
 export function generateReproducibilityReport(
   runA: Phase2VerificationRun,
   runB: Phase2VerificationRun,
@@ -160,21 +165,28 @@ export function generateReproducibilityReport(
   lines.push("| Gate | Run A | Run B | Match |")
   lines.push("|------|-------|-------|-------|")
 
-  for (let i = 0; i < runA.gates.length; i++) {
-    const gateA = runA.gates[i]!
+  const maxGates = Math.max(runA.gates.length, runB.gates.length)
+  for (let i = 0; i < maxGates; i++) {
+    const gateA = runA.gates[i]
     const gateB = runB.gates[i]
 
-    if (!gateB) {
+    if (!gateA && gateB) {
+      lines.push(`| ${gateB.gate} | MISSING | ${gateB.status} | NO |`)
+      allMatch = false
+      continue
+    }
+
+    if (gateA && !gateB) {
       lines.push(`| ${gateA.gate} | ${gateA.status} | MISSING | NO |`)
       allMatch = false
       continue
     }
 
-    const match = gateA.status === gateB.status
+    const match = gateA!.status === gateB!.status
     if (!match) allMatch = false
 
     lines.push(
-      `| ${gateA.gate} | ${gateA.status} | ${gateB.status} | ${match ? "YES" : "NO"} |`,
+      `| ${gateA!.gate} | ${gateA!.status} | ${gateB!.status} | ${match ? "YES" : "NO"} |`,
     )
   }
 

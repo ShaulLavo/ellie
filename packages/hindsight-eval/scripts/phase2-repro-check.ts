@@ -18,9 +18,9 @@ import { execSync } from "child_process"
 const args = process.argv.slice(2)
 const outputDirArg = args.find((a) => a.startsWith("--output-dir="))
 
-const outputDir = outputDirArg
-  ? resolve(outputDirArg.split("=")[1]!)
-  : resolve(import.meta.dir, "..", "artifacts", "phase2")
+const defaultOutputDir = resolve(import.meta.dir, "..", "artifacts", "phase2")
+const outputDirVal = outputDirArg?.split("=")[1]?.trim()
+const outputDir = outputDirVal ? resolve(outputDirVal) : defaultOutputDir
 
 let gitSha = "unknown"
 try {
@@ -36,6 +36,10 @@ async function main() {
   console.log("")
 
   mkdirSync(outputDir, { recursive: true })
+
+  // Note: This script intentionally skips Gate 1-5 unit tests. It focuses on
+  // metric determinism (Gates 6-7) and reproducibility (Gate 8). Gate 1-5 tests
+  // are run separately via `run-phase2-verification.ts` or `bun test`.
 
   // Run A
   console.log("[Run A] Starting first verification run...")

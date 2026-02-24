@@ -47,7 +47,8 @@ const DATASET_SEED = 42
 function deterministicEmbed(text: string): Promise<number[]> {
   const vec = Array.from<number>({ length: EVAL_EMBED_DIMS }).fill(0)
   for (let i = 0; i < text.length; i++) {
-    vec[i % EVAL_EMBED_DIMS]! += text.charCodeAt(i) / 1000
+    // Incorporate character position to differentiate anagrams (e.g. "ab" vs "ba")
+    vec[i % EVAL_EMBED_DIMS]! += (text.charCodeAt(i) * (i + 1)) / 1000
   }
   const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
   return Promise.resolve(norm > 0 ? vec.map((v) => v / norm) : vec)
@@ -152,6 +153,8 @@ export interface RunPhase2VerificationOptions {
   outputDir: string
   runId: string
   gitSha: string
+  /** When true, Gates 1-5 are marked "pass" instead of "skip" (caller verified they passed). */
+  gateTestsPassed?: boolean
 }
 
 /**
@@ -163,17 +166,18 @@ export interface RunPhase2VerificationOptions {
 export async function runPhase2Verification(
   options: RunPhase2VerificationOptions,
 ): Promise<Phase2VerificationRun> {
-  const { outputDir, runId, gitSha } = options
+  const { outputDir, runId, gitSha, gateTestsPassed } = options
   mkdirSync(outputDir, { recursive: true })
 
   const gates: GateResult[] = []
 
   // Gate 1-5: These are tested via bun test.
-  // We mark them as pass/skip here; the actual test results come from bun test.
+  // When gateTestsPassed is set, the caller has already run and verified them.
+  const gateStatus = gateTestsPassed ? "pass" : "skip"
   for (let i = 1; i <= 5; i++) {
     gates.push({
       gate: `Gate ${i}`,
-      status: "skip",
+      status: gateStatus,
       description: `Tested via bun test (phase2-gate${i}-*.test.ts)`,
       details: {},
     })
@@ -216,9 +220,9 @@ export async function runPhase2Verification(
     toJsonl(narrativeQuestions),
   )
 
-  // Note: Narrative accuracy requires running actual narrative queries
+  // TODO: Narrative accuracy requires running actual narrative queries
   // against the ingested data, which requires mapping between event IDs
-  // and actual memory IDs. This is handled as a placeholder here;
+  // and actual memory IDs. This is a placeholder producing zeroed metrics;
   // the full pipeline will be implemented when baseline commit is frozen.
   const narrativeMetrics = computeNarrativeAccuracy([])
 
@@ -267,6 +271,7 @@ export async function runPhase2Verification(
  * Compare baseline and candidate verification runs.
  * Evaluates Gates 6-7 pass/fail based on improvement thresholds.
  */
+/** Compare baseline and candidate runs, evaluating Gates 6-7 and producing a comparison report. */
 export function compareRuns(
   baseline: Phase2VerificationRun,
   candidate: Phase2VerificationRun,
@@ -302,6 +307,12 @@ export function compareRuns(
         improvement: gate7.improvement,
         improvementPercent: gate7.improvementPercent,
       },
+    },
+    {
+      gate: "Gate 8",
+      status: "skip",
+      description: "Reproducibility (requires separate phase2-repro-check.ts run)",
+      details: {},
     },
   ]
 

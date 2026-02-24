@@ -348,13 +348,15 @@ describe("Gate 5: API Contract Verification", () => {
     })
 
     it("traverses across episode boundaries via temporal links", async () => {
-      // Episode 1
+      // Episode 1 — same scope (null session) so resolveEpisode can find and
+      // link consecutive episodes via temporal links.
       await t.hs.retain(bankId, "ep1-fact", {
         facts: [{ content: "Episode 1 fact alpha xyz 111", factType: "experience" }],
         consolidate: false,
       })
 
-      // Trigger new episode with phrase boundary
+      // Episode 2 — phrase boundary triggers a new episode while preserving
+      // the scope lineage needed for temporal link creation.
       const r2 = await t.hs.retain(bankId, "ep2-fact", {
         facts: [{ content: "new task Episode 2 fact beta xyz 222", factType: "experience" }],
         consolidate: false,
@@ -416,17 +418,17 @@ describe("Gate 5: API Contract Verification", () => {
         )
         .get(lastEpisode.episodeId) as { memory_id: string } | undefined
 
-      if (lastEvent) {
-        const narr = await t.hs.narrative(bankId, {
-          anchorMemoryId: lastEvent.memory_id,
-          direction: "before",
-          steps: 1,
-        })
+      expect(lastEvent).toBeDefined()
 
-        // With steps=1, should only traverse 1 episode back
-        const episodeIds = new Set(narr.events.map((e) => e.episodeId))
-        expect(episodeIds.size).toBeLessThanOrEqual(2) // anchor episode + 1 step back
-      }
+      const narr = await t.hs.narrative(bankId, {
+        anchorMemoryId: lastEvent!.memory_id,
+        direction: "before",
+        steps: 1,
+      })
+
+      // With steps=1, should only traverse 1 episode back
+      const episodeIds = new Set(narr.events.map((e) => e.episodeId))
+      expect(episodeIds.size).toBeLessThanOrEqual(2) // anchor episode + 1 step back
     })
   })
 })

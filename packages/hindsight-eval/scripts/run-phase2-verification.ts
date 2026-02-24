@@ -22,13 +22,12 @@ const args = process.argv.slice(2)
 const outputDirArg = args.find((a) => a.startsWith("--output-dir="))
 const runIdArg = args.find((a) => a.startsWith("--run-id="))
 
-const outputDir = outputDirArg
-  ? resolve(outputDirArg.split("=")[1]!)
-  : resolve(import.meta.dir, "..", "artifacts", "phase2")
+const defaultOutputDir = resolve(import.meta.dir, "..", "artifacts", "phase2")
+const outputDirVal = outputDirArg?.split("=")[1]?.trim()
+const outputDir = outputDirVal ? resolve(outputDirVal) : defaultOutputDir
 
-const runId = runIdArg
-  ? runIdArg.split("=")[1]!
-  : `run-${Date.now()}`
+const runIdVal = runIdArg?.split("=")[1]?.trim()
+const runId = runIdVal || `run-${Date.now()}`
 
 // ── Get git SHA ──────────────────────────────────────────────────────────
 
@@ -74,6 +73,7 @@ async function main() {
     outputDir,
     runId,
     gitSha,
+    gateTestsPassed: true,
   })
 
   console.log("")
