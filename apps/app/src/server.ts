@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { staticPlugin } from "@elysiajs/static";
-import { JsonlEngine } from "@ellie/db";
+import { EventStore } from "@ellie/db";
 import { env } from "@ellie/env/server";
 import { anthropicText, type AnthropicChatModel } from "@tanstack/ai-anthropic";
 import { Elysia } from "elysia";
@@ -17,8 +17,31 @@ const { DATA_DIR } = env;
 
 console.log(`[server] DATA_DIR=${DATA_DIR}`);
 
-const engine = new JsonlEngine(`${DATA_DIR}/streams.db`, `${DATA_DIR}/logs`);
-const store = new RealtimeStore(engine);
+const eventStore = new EventStore(
+  `${DATA_DIR}/events.db`,
+  `${DATA_DIR}/audit`,
+);
+const store = new RealtimeStore(eventStore);
+
+// Startup recovery: find stale runs and close them via RealtimeStore
+// so in-memory #closedRuns set is updated for SSE endpoints
+const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000); // 5 min
+for (const { sessionId, runId } of staleRuns) {
+  console.log(`[server] recovering stale run: session=${sessionId} run=${runId}`);
+  try {
+    store.appendEvent(
+      sessionId,
+      "run_closed",
+      { reason: "recovered_after_crash" },
+      runId,
+    );
+  } catch {
+    // Non-fatal
+  }
+}
+if (staleRuns.length > 0) {
+  console.log(`[server] recovered ${staleRuns.length} stale run(s)`);
+}
 
 const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
   ? new AgentManager(store, {

@@ -56,11 +56,25 @@ import { useTheme } from "./hooks/use-theme"
 import { useConnectedClients } from "./hooks/use-connected-clients"
 
 interface ChatPanelProps {
-  chatId: string
+  sessionId: string
 }
 
-const CHAT_LABEL: Record<string, string> = {
-  "chat-1": "Ellie",
+const SESSION_LABEL: Record<string, string> = {
+  "session-1": "Ellie",
+}
+
+/** Extract text content from a Message's content array. */
+function getTextContent(msg: Message): string {
+  if (!msg.content || !Array.isArray(msg.content)) return ""
+  return (msg.content as Array<Record<string, unknown>>)
+    .filter((c): c is Record<string, unknown> & { type: "text"; text: string } => c.type === "text")
+    .map((c) => c.text)
+    .join("")
+}
+
+/** Generate a stable key for a message based on role + timestamp. */
+function getMsgKey(msg: Message, idx: number): string {
+  return `${msg.role}-${msg.timestamp}-${idx}`
 }
 
 function groupMessages(messages: Message[]) {
@@ -71,7 +85,7 @@ function groupMessages(messages: Message[]) {
     const isFirst =
       !prev ||
       prev.role !== msg.role ||
-      new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() > 5 * 60 * 1000
+      msg.timestamp - prev.timestamp > 5 * 60 * 1000
     groups.push({ msg, isFirst })
   }
   return groups
@@ -104,8 +118,8 @@ function ModeToggle() {
   )
 }
 
-export function ChatPanel({ chatId }: ChatPanelProps) {
-  const { messages, isLoading, error, sendMessage, clearChat } = useChat(chatId)
+export function ChatPanel({ sessionId }: ChatPanelProps) {
+  const { messages, isLoading, error, sendMessage, clearChat } = useChat(sessionId)
   const [input, setInput] = useState("")
   const messagesRef = useRef<HTMLDivElement>(null)
 
@@ -117,13 +131,14 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
   }, [input, sendMessage])
 
   const connectedClients = useConnectedClients()
-  const label = CHAT_LABEL[chatId] ?? chatId
+  const label = SESSION_LABEL[sessionId] ?? sessionId
   const grouped = useMemo(() => groupMessages(messages), [messages])
-  const messageOrder = useMemo(() => grouped.map(({ msg }) => msg.id), [grouped])
+  const messageOrder = useMemo(() => grouped.map((_item, idx) => getMsgKey(_item.msg, idx)), [grouped])
   const markdownById = useMemo(() => {
     const markdownMap = new Map<string, string>()
-    for (const { msg } of grouped) {
-      markdownMap.set(msg.id, msg.content)
+    for (let i = 0; i < grouped.length; i++) {
+      const { msg } = grouped[i]
+      markdownMap.set(getMsgKey(msg, i), getTextContent(msg))
     }
     return markdownMap
   }, [grouped])
@@ -236,21 +251,23 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
           {grouped.map(({ msg, isFirst }, idx) => {
             const isUser = msg.role === "user"
             const isAssistant = msg.role === "assistant"
+            const msgKey = getMsgKey(msg, idx)
+            const timestamp = new Date(msg.timestamp).toISOString()
 
             /* date separator between different calendar days */
             const prev = grouped[idx - 1]?.msg
             const showDateSep =
               prev &&
-              new Date(msg.createdAt).toDateString() !==
-                new Date(prev.createdAt).toDateString()
+              new Date(msg.timestamp).toDateString() !==
+                new Date(prev.timestamp).toDateString()
 
             return (
-              <div key={msg.id} data-chat-message-id={msg.id}>
+              <div key={msgKey} data-chat-message-id={msgKey}>
                 {showDateSep && (
                   <ChatEvent className="items-center gap-1 my-4" data-chat-meta>
                     <Separator className="flex-1" />
                     <ChatEventTime
-                      timestamp={msg.createdAt}
+                      timestamp={timestamp}
                       format="longDate"
                       className="text-xs text-muted-foreground font-semibold min-w-max"
                       data-chat-meta
@@ -285,7 +302,7 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
                       />
                     ) : (
                       <ChatEventTime
-                        timestamp={msg.createdAt}
+                        timestamp={timestamp}
                         format="time"
                         className="text-right text-[10px] leading-tight opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-full text-muted-foreground/50"
                         data-chat-meta
@@ -300,14 +317,14 @@ export function ChatPanel({ chatId }: ChatPanelProps) {
                           {msg.role}
                         </span>
                         <ChatEventTime
-                          timestamp={msg.createdAt}
+                          timestamp={timestamp}
                           className="text-[10px] text-muted-foreground/50"
                           data-chat-meta
                         />
                       </ChatEventTitle>
                     )}
                     <ChatEventContent className="text-sm">
-                      <MessageResponse>{msg.content}</MessageResponse>
+                      <MessageResponse>{getTextContent(msg)}</MessageResponse>
                     </ChatEventContent>
                   </ChatEventBody>
                 </ChatEvent>

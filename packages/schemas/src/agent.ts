@@ -100,6 +100,13 @@ export const agentMessageSchema = v.variant("role", [
 	toolResultMessageSchema,
 ]);
 
+// ── Inferred types (canonical message types for cross-package use) ──────────
+
+export type UserMessage = v.InferOutput<typeof userMessageSchema>;
+export type AssistantMessage = v.InferOutput<typeof assistantMessageSchema>;
+export type ToolResultMessage = v.InferOutput<typeof toolResultMessageSchema>;
+export type AgentMessage = v.InferOutput<typeof agentMessageSchema>;
+
 // ============================================================================
 // Agent action procedure schemas
 // ============================================================================
@@ -111,7 +118,7 @@ export type AgentPromptInput = v.InferOutput<typeof agentPromptInputSchema>
 
 export const agentPromptOutputSchema = v.object({
 	runId: v.string(),
-	chatId: v.string(),
+	sessionId: v.string(),
 	status: v.literal("started"),
 });
 export type AgentPromptOutput = v.InferOutput<typeof agentPromptOutputSchema>

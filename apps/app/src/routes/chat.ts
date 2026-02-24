@@ -1,9 +1,8 @@
 import { Elysia, sse } from "elysia";
-import * as v from "valibot";
-import { messageSchema } from "@ellie/schemas/router";
-import type { ChatMessage, RealtimeStore, StreamMessageEvent } from "../lib/realtime-store";
+import type { RealtimeStore, SessionEvent } from "../lib/realtime-store";
 import {
-  chatParamsSchema,
+  sessionParamsSchema,
+  afterSeqQuerySchema,
   errorSchema,
   messageInputSchema,
   normalizeMessageInput,
@@ -13,52 +12,54 @@ import {
 
 export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
   return new Elysia({ prefix: "/chat" })
-    .get("/:chatId/messages", ({ params }) => {
-      return store.listChatMessages(params.chatId);
+    .get("/:sessionId/messages", ({ params }) => {
+      return store.listAgentMessages(params.sessionId);
     }, {
-      params: chatParamsSchema,
-      response: v.array(messageSchema),
+      params: sessionParamsSchema,
     })
-    .post("/:chatId/messages", ({ params, body }) => {
+    .post("/:sessionId/messages", ({ params, body }) => {
       const input = normalizeMessageInput(body);
-      const message: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: input.role ?? `user`,
-        content: input.content,
-        createdAt: new Date().toISOString(),
-      };
-      store.appendChatMessage(params.chatId, message);
-      return message;
+      store.ensureSession(params.sessionId);
+      const row = store.appendEvent(
+        params.sessionId,
+        "user_message",
+        {
+          role: input.role ?? "user",
+          content: [{ type: "text", text: input.content }],
+          timestamp: Date.now(),
+        },
+      );
+      return { id: row.id, seq: row.seq, sessionId: row.sessionId };
     }, {
-      params: chatParamsSchema,
+      params: sessionParamsSchema,
       body: messageInputSchema,
       response: {
-        200: messageSchema,
         400: errorSchema,
       },
     })
-    .delete("/:chatId/messages", ({ params }) => {
-      store.clearChatMessages(params.chatId);
+    .delete("/:sessionId/messages", ({ params }) => {
+      store.eventStore.deleteSession(params.sessionId);
       return new Response(null, { status: 204 });
     }, {
-      params: chatParamsSchema,
+      params: sessionParamsSchema,
     })
-    .get("/:chatId/messages/sse", ({ params, request }) => {
-      const stream = toStreamGenerator<StreamMessageEvent<ChatMessage>>(
+    .get("/:sessionId/events/sse", ({ params, query, request }) => {
+      const afterSeq = query.afterSeq ? Number(query.afterSeq) : undefined;
+
+      // Snapshot: fetch existing events
+      const existingEvents = store.queryEvents(params.sessionId, afterSeq);
+
+      const stream = toStreamGenerator<SessionEvent>(
         request,
         sseState,
-        (listener) => store.subscribeToChatMessages(params.chatId, listener),
-        (event) => {
-          if (event.type === `append`) {
-            return { event: `append`, data: event.message };
-          }
-          return { event: `clear`, data: null };
-        },
-        { event: `snapshot`, data: store.listChatMessages(params.chatId) },
+        (listener) => store.subscribeToSession(params.sessionId, listener),
+        (event) => ({ event: `append`, data: event.event }),
+        { event: `snapshot`, data: existingEvents },
       );
 
       return sse(stream);
     }, {
-      params: chatParamsSchema,
+      params: sessionParamsSchema,
+      query: afterSeqQuerySchema,
     });
 }

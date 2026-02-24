@@ -3,99 +3,47 @@ import {
   text,
   integer,
   index,
-  primaryKey,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 
-// -- Stream metadata ----------------------------------------------------------
+// -- Sessions -----------------------------------------------------------------
 
-export const streams = sqliteTable("streams", {
-  path: text("path").primaryKey(),
-  contentType: text("content_type"),
-  ttlSeconds: integer("ttl_seconds"),
-  // Intentionally text (not integer) — stores ISO-8601 strings for
-  // timezone-aware expiration, human-readable JSONL grep output, etc.
-  expiresAt: text("expires_at"),
-  createdAt: integer("created_at").notNull(),
-  closed: integer("closed", { mode: "boolean" }).notNull().default(false),
-  closedByProducerId: text("closed_by_producer_id"),
-  closedByEpoch: integer("closed_by_epoch"),
-  closedBySeq: integer("closed_by_seq"),
-  currentReadSeq: integer("current_read_seq").notNull().default(0),
-  currentByteOffset: integer("current_byte_offset").notNull().default(0),
-  deletedAt: integer("deleted_at"),
-  // ULID-based filename for the JSONL log file. Each stream incarnation
-  // gets a unique ID so clear + recreate produces a fresh file.
-  logFileId: text("log_file_id"),
-  // Optional reference to a registered schema. When set, every append
-  // is validated against the Valibot schema before writing.
-  schemaKey: text("schema_key"),
-})
-
-// -- Stream messages (append-only log index) ----------------------------------
-
-export const messages = sqliteTable(
-  "messages",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    streamPath: text("stream_path")
-      .notNull()
-      .references(() => streams.path, { onDelete: "cascade" }),
-    bytePos: integer("byte_pos").notNull(),
-    length: integer("length").notNull(),
-    offset: text("offset").notNull(),
-    timestamp: integer("timestamp").notNull(),
-  },
-  (table) => [
-    index("idx_messages_stream_offset").on(table.streamPath, table.offset),
-  ]
-)
-
-// -- Producer state (idempotency tracking) ------------------------------------
-
-export const producers = sqliteTable(
-  "producers",
-  {
-    streamPath: text("stream_path")
-      .notNull()
-      .references(() => streams.path, { onDelete: "cascade" }),
-    producerId: text("producer_id").notNull(),
-    epoch: integer("epoch").notNull(),
-    lastSeq: integer("last_seq").notNull(),
-    lastUpdated: integer("last_updated").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.streamPath, table.producerId] }),
-  ]
-)
-
-// -- Schema registry (Valibot → JSON Schema for external tool interop) --------
-
-export const schemaRegistry = sqliteTable("schema_registry", {
-  key: text("key").primaryKey(),
-  jsonSchema: text("json_schema").notNull(),
-  version: integer("version").notNull().default(1),
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey().notNull(),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  currentSeq: integer("current_seq").notNull().default(0),
 })
 
-export type SchemaRegistryRow = typeof schemaRegistry.$inferSelect
-export type NewSchemaRegistryRow = typeof schemaRegistry.$inferInsert
+export type SessionRow = typeof sessions.$inferSelect
+export type NewSessionRow = typeof sessions.$inferInsert
 
-// -- Virtual tables (created via raw DDL in JsonlEngine.initTables) -----------
-//
-// These can't be defined in Drizzle — drizzle-orm has no virtual table support.
-// Bootstrapped at runtime:
-//
-//   messages_fts  — FTS5 (id, stream_path, content) with porter stemming
-//   messages_vec  — vec0 (id INTEGER PK, embedding float[384]) — optional
-//
-// TODO: wire these into the append path and implement search/embedding queries
+// -- Events -------------------------------------------------------------------
 
-// -- Type exports -------------------------------------------------------------
+export const events = sqliteTable(
+  "events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    runId: text("run_id"),
+    type: text("type").notNull(),
+    payload: text("payload").notNull(),
+    dedupeKey: text("dedupe_key"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_events_session_seq").on(table.sessionId, table.seq),
+    index("idx_events_session_type").on(table.sessionId, table.type),
+    index("idx_events_session_run_seq").on(
+      table.sessionId,
+      table.runId,
+      table.seq
+    ),
+  ]
+)
 
-export type StreamRow = typeof streams.$inferSelect
-export type NewStreamRow = typeof streams.$inferInsert
-export type MessageRow = typeof messages.$inferSelect
-export type NewMessageRow = typeof messages.$inferInsert
-export type ProducerRow = typeof producers.$inferSelect
-export type NewProducerRow = typeof producers.$inferInsert
+export type EventRow = typeof events.$inferSelect
+export type NewEventRow = typeof events.$inferInsert
