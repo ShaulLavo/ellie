@@ -8,8 +8,9 @@ export const messageInputSchema = v.object({
 
 export type MessageInput = v.InferOutput<typeof messageInputSchema>;
 
-export const chatParamsSchema = v.object({ chatId: v.string() });
-export const chatRunParamsSchema = v.object({ chatId: v.string(), runId: v.string() });
+export const sessionParamsSchema = v.object({ sessionId: v.string() });
+export const sessionRunParamsSchema = v.object({ sessionId: v.string(), runId: v.string() });
+export const afterSeqQuerySchema = v.object({ afterSeq: v.optional(v.pipe(v.string(), v.transform(Number))) });
 export const statusSchema = v.object({ connectedClients: v.number() });
 export const errorSchema = v.object({ error: v.string() });
 

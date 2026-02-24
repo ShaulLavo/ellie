@@ -7,8 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts",
-    "./typed-log": "./src/typed-log.ts"
+    "./schema": "./src/schema.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",

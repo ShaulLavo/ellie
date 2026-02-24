@@ -111,7 +111,7 @@ export type AgentPromptInput = v.InferOutput<typeof agentPromptInputSchema>
 
 export const agentPromptOutputSchema = v.object({
 	runId: v.string(),
-	chatId: v.string(),
+	sessionId: v.string(),
 	status: v.literal("started"),
 });
 export type AgentPromptOutput = v.InferOutput<typeof agentPromptOutputSchema>

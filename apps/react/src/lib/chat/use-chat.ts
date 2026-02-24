@@ -1,40 +1,51 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { env } from "@ellie/env/client"
-import { messageSchema } from "@ellie/schemas/router"
-import type { InferOutput } from "valibot"
 import { eden } from "../eden"
 
 // ============================================================================
-// Message type (derived from the router schema — stays in sync automatically)
+// Types
 // ============================================================================
 
-export type Message = InferOutput<typeof messageSchema>
+export interface Message {
+  role: string
+  content: unknown[]
+  timestamp: number
+  [key: string]: unknown
+}
 
-type SseMessageEvent = Message[] | Message | null
+interface EventRow {
+  id: number
+  sessionId: string
+  seq: number
+  runId: string | null
+  type: string
+  payload: string
+  dedupeKey: string | null
+  createdAt: number
+}
 
-function parseEventData(event: MessageEvent): SseMessageEvent {
+function parsePayload(row: EventRow): Record<string, unknown> {
   try {
-    return JSON.parse(event.data) as SseMessageEvent
+    return JSON.parse(row.payload) as Record<string, unknown>
   } catch {
-    return null
+    return {}
   }
+}
+
+function eventToMessage(row: EventRow): Message | null {
+  const payload = parsePayload(row)
+  if (
+    row.type === "user_message" ||
+    row.type === "assistant_final" ||
+    row.type === "tool_result"
+  ) {
+    return payload as unknown as Message
+  }
+  return null
 }
 
 function sortMessages(messages: Message[]): Message[] {
-  return [...messages].sort((a, b) => {
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  })
-}
-
-function upsertMessage(messages: Message[], next: Message): Message[] {
-  const index = messages.findIndex((message) => message.id === next.id)
-  if (index === -1) {
-    return sortMessages([...messages, next])
-  }
-
-  const copied = [...messages]
-  copied[index] = next
-  return sortMessages(copied)
+  return [...messages].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
 }
 
 // ============================================================================
@@ -43,40 +54,63 @@ function upsertMessage(messages: Message[], next: Message): Message[] {
 
 /**
  * Hook for a chat session backed by HTTP + SSE endpoints.
+ * Uses the new event-store protocol with afterSeq cursoring.
  */
-export function useChat(chatId: string) {
+export function useChat(sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const baseUrl = useMemo(() => env.API_BASE_URL.replace(/\/$/, ``), [])
+  const lastSeqRef = useRef(0)
 
   useEffect(() => {
     let hasSnapshot = false
-    const source = new EventSource(
-      `${baseUrl}/chat/${encodeURIComponent(chatId)}/messages/sse`
+    const url = new URL(
+      `${baseUrl}/chat/${encodeURIComponent(sessionId)}/events/sse`
     )
+
+    const source = new EventSource(url.toString())
 
     setMessages([])
     setIsLoading(true)
     setError(null)
 
     const onSnapshot = (event: MessageEvent) => {
-      const payload = parseEventData(event)
-      if (!Array.isArray(payload)) return
-      hasSnapshot = true
-      setMessages(sortMessages(payload))
-      setIsLoading(false)
-      setError(null)
+      try {
+        const rows = JSON.parse(event.data) as EventRow[]
+        hasSnapshot = true
+
+        // Track highest seq
+        for (const row of rows) {
+          if (row.seq > lastSeqRef.current) lastSeqRef.current = row.seq
+        }
+
+        // Extract messages from events
+        const msgs: Message[] = []
+        for (const row of rows) {
+          const msg = eventToMessage(row)
+          if (msg) msgs.push(msg)
+        }
+        setMessages(sortMessages(msgs))
+        setIsLoading(false)
+        setError(null)
+      } catch {
+        // Parse error
+      }
     }
 
     const onAppend = (event: MessageEvent) => {
-      const payload = parseEventData(event)
-      if (!payload || Array.isArray(payload)) return
-      setMessages((current) => upsertMessage(current, payload))
-    }
+      try {
+        const row = JSON.parse(event.data) as EventRow
+        if (row.seq > lastSeqRef.current) lastSeqRef.current = row.seq
 
-    const onClear = () => {
-      setMessages([])
+        const msg = eventToMessage(row)
+        if (msg) {
+          setMessages((current) => sortMessages([...current, msg]))
+        }
+      } catch {
+        // Parse error
+      }
     }
 
     const onError = () => {
@@ -87,30 +121,28 @@ export function useChat(chatId: string) {
 
     source.addEventListener(`snapshot`, onSnapshot)
     source.addEventListener(`append`, onAppend)
-    source.addEventListener(`clear`, onClear)
     source.addEventListener(`error`, onError)
 
     return () => {
       source.removeEventListener(`snapshot`, onSnapshot)
       source.removeEventListener(`append`, onAppend)
-      source.removeEventListener(`clear`, onClear)
       source.removeEventListener(`error`, onError)
       source.close()
     }
-  }, [baseUrl, chatId])
+  }, [baseUrl, sessionId])
 
   const sendMessage = useCallback(
-    async (content: string, role: Message[`role`] = `user`) => {
+    async (content: string, role: "user" | "assistant" | "system" = `user`) => {
       const trimmed = content.trim()
       if (!trimmed) return
 
       try {
-        const { error } = await eden.chat({ chatId }).messages.post({
+        const { error } = await eden.chat({ sessionId }).messages.post({
           role,
           content: trimmed,
         })
         if (!error) return
-        throw new Error(`POST /chat/${chatId}/messages failed`)
+        throw new Error(`POST /chat/${sessionId}/messages failed`)
       } catch (err) {
         console.error(
           `[useChat] Failed to send message:`,
@@ -119,14 +151,14 @@ export function useChat(chatId: string) {
         throw err
       }
     },
-    [chatId]
+    [sessionId]
   )
 
   const clearChat = useCallback(async () => {
     try {
-      const { error } = await eden.chat({ chatId }).messages.delete()
+      const { error } = await eden.chat({ sessionId }).messages.delete()
       if (!error) return
-      throw new Error(`DELETE /chat/${chatId}/messages failed`)
+      throw new Error(`DELETE /chat/${sessionId}/messages failed`)
     } catch (err) {
       console.error(
         `[useChat] Failed to clear chat:`,
@@ -134,7 +166,7 @@ export function useChat(chatId: string) {
       )
       throw err
     }
-  }, [chatId])
+  }, [sessionId])
 
   return {
     messages,
