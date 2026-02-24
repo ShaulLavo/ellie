@@ -11,23 +11,23 @@
  * - plain text only
  */
 
-import { chat, streamToText } from "@ellie/ai"
-import type { AnyTextAdapter } from "@tanstack/ai"
-import { generateFallbackGist } from "./context-pack"
+import { chat, streamToText } from "@ellie/ai";
+import type { AnyTextAdapter } from "@tanstack/ai";
+import { generateFallbackGist } from "./context-pack";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
 /** Content length threshold for eager vs async gist generation. */
-export const EAGER_GIST_THRESHOLD = 2000
+export const EAGER_GIST_THRESHOLD = 2000;
 
 /** Maximum gist length in characters. */
-export const MAX_GIST_LENGTH = 280
+export const MAX_GIST_LENGTH = 280;
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export interface GistResult {
-  gist: string
-  mode: "eager" | "async" | "fallback"
+  gist: string;
+  mode: "eager" | "async" | "fallback";
 }
 
 // ── LLM-based gist generation ───────────────────────────────────────────────
@@ -39,7 +39,7 @@ const GIST_SYSTEM_PROMPT = `You are a memory compression engine. Given a piece o
 - Is a single concise sentence or fragment
 - Preserves the most critical information for later retrieval
 
-Output ONLY the gist text, nothing else.`
+Output ONLY the gist text, nothing else.`;
 
 /**
  * Generate a gist from content using an LLM adapter.
@@ -50,22 +50,21 @@ export async function generateGistWithLLM(
   content: string,
 ): Promise<string> {
   const truncatedContent =
-    content.length > 4000 ? content.slice(0, 4000) + "..." : content
+    content.length > 4000 ? content.slice(0, 4000) + "..." : content;
 
   const response = await streamToText(
     chat({
       adapter,
-      messages: [
-        { role: "user", content: `${GIST_SYSTEM_PROMPT}\n\n---\n\n${truncatedContent}` },
-      ],
+      messages: [{ role: "user", content: truncatedContent }],
+      systemPrompts: [GIST_SYSTEM_PROMPT],
     }),
-  )
+  );
 
-  let gist = response.trim()
+  let gist = response.trim();
   if (gist.length > MAX_GIST_LENGTH) {
-    gist = gist.slice(0, MAX_GIST_LENGTH - 3) + "..."
+    gist = gist.slice(0, MAX_GIST_LENGTH - 3) + "...";
   }
-  return gist
+  return gist;
 }
 
 /**
@@ -87,24 +86,25 @@ export async function generateGist(
   if (content.length <= EAGER_GIST_THRESHOLD) {
     // Eager: generate inline
     try {
-      const gist = await generateGistWithLLM(adapter, content)
-      return { gist, mode: "eager" }
+      const gist = await generateGistWithLLM(adapter, content);
+      return { gist, mode: "eager" };
     } catch {
-      return { gist: generateFallbackGist(content), mode: "fallback" }
+      return { gist: generateFallbackGist(content), mode: "fallback" };
     }
   }
 
   // Async: return fallback immediately, queue LLM in background
-  const fallback = generateFallbackGist(content)
+  const fallback = generateFallbackGist(content);
 
   if (onAsyncGist) {
     // Fire-and-forget background generation
     generateGistWithLLM(adapter, content)
       .then((gist) => onAsyncGist(gist))
-      .catch(() => {
-        // Fallback already set, nothing to do
-      })
+      .catch((err) => {
+        // Fallback already set; log for diagnostics
+        console.debug?.("[gist] async generation failed:", err);
+      });
   }
 
-  return { gist: fallback, mode: "async" }
+  return { gist: fallback, mode: "async" };
 }

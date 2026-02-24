@@ -1,11 +1,11 @@
-import { chat, streamToText } from "@ellie/ai"
-import { ulid } from "@ellie/utils"
-import { createHash } from "crypto"
-import { and, eq } from "drizzle-orm"
-import type { AnyTextAdapter } from "@tanstack/ai"
-import { RecursiveChunker } from "@chonkiejs/core"
-import type { HindsightDatabase } from "./db"
-import type { EmbeddingStore } from "./embedding"
+import { chat, streamToText } from "@ellie/ai";
+import { ulid } from "@ellie/utils";
+import { createHash } from "crypto";
+import { and, eq } from "drizzle-orm";
+import type { AnyTextAdapter } from "@tanstack/ai";
+import { RecursiveChunker } from "@chonkiejs/core";
+import type { HindsightDatabase } from "./db";
+import type { EmbeddingStore } from "./embedding";
 import type {
   RetainOptions,
   RetainBatchOptions,
@@ -19,18 +19,18 @@ import type {
   LinkType,
   RerankFunction,
   TranscriptTurn,
-} from "./types"
-import { getExtractionPrompt, EXTRACT_FACTS_USER } from "./prompts"
-import { sanitizeText, parseLLMJson } from "./sanitize"
-import { resolveEntity } from "./entity-resolver"
-import { consolidate } from "./consolidation"
-import type { BankProfile } from "./reflect"
+} from "./types";
+import { getExtractionPrompt, EXTRACT_FACTS_USER } from "./prompts";
+import { sanitizeText, parseLLMJson } from "./sanitize";
+import { resolveEntity } from "./entity-resolver";
+import { consolidate } from "./consolidation";
+import type { BankProfile } from "./reflect";
 import {
   TEMPORAL_LINK_WINDOW_HOURS,
   computeTemporalLinks,
   computeTemporalQueryBounds,
   computeTemporalWeight,
-} from "./retain-link-utils"
+} from "./retain-link-utils";
 import {
   routeFact,
   routeFactByVector,
@@ -39,18 +39,20 @@ import {
   logDecision,
   RECONSOLIDATE_THRESHOLD,
   type RoutingContext,
-} from "./routing"
-import { resolveEpisode, recordEpisodeEvent } from "./episodes"
-import type { RouteDecision, RetainRoute } from "./types"
+} from "./routing";
+import { resolveEpisode, recordEpisodeEvent } from "./episodes";
+import { generateGistWithLLM } from "./gist";
+import { generateFallbackGist } from "./context-pack";
+import type { RouteDecision, RetainRoute } from "./types";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {
-  if (!value) return fallback
+  if (!value) return fallback;
   try {
-    return JSON.parse(value) as T
+    return JSON.parse(value) as T;
   } catch {
-    return fallback
+    return fallback;
   }
 }
 
@@ -58,135 +60,138 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 
 // Python parity: only "caused_by" is a valid causal relation type.
 // The extraction prompt instructs the LLM to use "caused_by" exclusively.
-const CAUSAL_LINK_TYPES = new Set(["caused_by"] as const)
+const CAUSAL_LINK_TYPES = new Set(["caused_by"] as const);
 
-type CausalLinkType = "caused_by"
+type CausalLinkType = "caused_by";
 
 interface ExtractedEntity {
-  name: string
-  entityType: EntityType
+  name: string;
+  entityType: EntityType;
 }
 
 interface ExtractedCausalRelation {
-  targetIndex: number
-  relationType: CausalLinkType
-  strength: number
+  targetIndex: number;
+  relationType: CausalLinkType;
+  strength: number;
 }
 
 interface ExtractedFact {
-  content: string
-  factType: FactType
-  confidence: number
-  eventDate: string | null
-  occurredStart: string | null
-  occurredEnd: string | null
-  mentionedAt: string | null
-  entities: ExtractedEntity[]
-  tags: string[]
-  causalRelations: ExtractedCausalRelation[]
+  content: string;
+  factType: FactType;
+  confidence: number;
+  eventDate: string | null;
+  occurredStart: string | null;
+  occurredEnd: string | null;
+  mentionedAt: string | null;
+  entities: ExtractedEntity[];
+  tags: string[];
+  causalRelations: ExtractedCausalRelation[];
 }
 
-const CHARS_PER_BATCH = 600_000
+const CHARS_PER_BATCH = 600_000;
 
 interface PreparedExtractedFact {
-  fact: ExtractedFact
-  originalIndex: number
-  groupIndex: number
-  sourceText: string
-  context: string | null
-  eventDateMs: number
-  documentId: string
-  chunkId: string
-  metadata: Record<string, unknown> | null
-  tags: string[]
-  profile: string | null
-  project: string | null
-  session: string | null
+  fact: ExtractedFact;
+  originalIndex: number;
+  groupIndex: number;
+  sourceText: string;
+  context: string | null;
+  eventDateMs: number;
+  documentId: string;
+  chunkId: string;
+  metadata: Record<string, unknown> | null;
+  tags: string[];
+  profile: string | null;
+  project: string | null;
+  session: string | null;
 }
 
 interface NormalizedBatchItem {
-  content: string
-  context: string | null
-  eventDateMs: number
-  documentId: string
-  metadata: Record<string, unknown> | null
-  tags: string[]
-  profile: string | null
-  project: string | null
-  session: string | null
+  content: string;
+  context: string | null;
+  eventDateMs: number;
+  documentId: string;
+  metadata: Record<string, unknown> | null;
+  tags: string[];
+  profile: string | null;
+  project: string | null;
+  session: string | null;
 }
 
 interface ExpandedBatchContent {
-  originalIndex: number
-  content: string
-  chunkIndex: number
-  chunkCount: number
-  chunkId: string
-  context: string | null
-  eventDateMs: number
-  documentId: string
-  metadata: Record<string, unknown> | null
-  tags: string[]
-  profile: string | null
-  project: string | null
-  session: string | null
+  originalIndex: number;
+  content: string;
+  chunkIndex: number;
+  chunkCount: number;
+  chunkId: string;
+  context: string | null;
+  eventDateMs: number;
+  documentId: string;
+  metadata: Record<string, unknown> | null;
+  tags: string[];
+  profile: string | null;
+  project: string | null;
+  session: string | null;
 }
 
 interface EntityPlan {
-  entityMap: Map<string, Entity>
-  entityById: Map<string, Entity>
-  existingMentionDeltas: Map<string, number>
+  entityMap: Map<string, Entity>;
+  entityById: Map<string, Entity>;
+  existingMentionDeltas: Map<string, number>;
   newEntities: Array<{
-    id: string
-    bankId: string
-    name: string
-    entityType: EntityType
-    mentionCount: number
-    firstSeen: number
-    lastUpdated: number
-  }>
+    id: string;
+    bankId: string;
+    name: string;
+    entityType: EntityType;
+    mentionCount: number;
+    firstSeen: number;
+    lastUpdated: number;
+  }>;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function parseISOToEpoch(iso: string | null | undefined): number | null {
-  if (!iso) return null
-  const ms = new Date(iso).getTime()
-  return Number.isNaN(ms) ? null : ms
+  if (!iso) return null;
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? null : ms;
 }
 
 function mapFactType(value: unknown): FactType {
-  if (value === "assistant") return "experience"
+  if (value === "assistant") return "experience";
   if (
     value === "world" ||
     value === "experience" ||
     value === "opinion" ||
     value === "observation"
   ) {
-    return value
+    return value;
   }
-  return "world"
+  return "world";
 }
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? sanitizeText(value).trim()
-    : null
+    : null;
 }
 
 function readIsoDate(value: unknown): string | null {
   if (typeof value === "number" && Number.isFinite(value)) {
-    return new Date(value).toISOString()
+    return new Date(value).toISOString();
   }
-  const text = readString(value)
-  if (!text) return null
-  const ms = new Date(text).getTime()
-  if (Number.isNaN(ms)) return null
-  return new Date(ms).toISOString()
+  const text = readString(value);
+  if (!text) return null;
+  const ms = new Date(text).getTime();
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
 }
 
-function inferTemporalDate(content: string, eventDateMs: number): string | null {
-  const lowered = content.toLowerCase()
+function inferTemporalDate(
+  content: string,
+  eventDateMs: number,
+): string | null {
+  const lowered = content.toLowerCase();
   const patterns: Array<[RegExp, number]> = [
     [/\blast night\b/, -1],
     [/\byesterday\b/, -1],
@@ -202,32 +207,30 @@ function inferTemporalDate(content: string, eventDateMs: number): string | null 
     [/\blast month\b/, -30],
     [/\bthis month\b/, 0],
     [/\bnext month\b/, 30],
-  ]
+  ];
 
   for (const [pattern, offset] of patterns) {
-    if (!pattern.test(lowered)) continue
-    const date = new Date(eventDateMs + offset * 24 * 60 * 60 * 1000)
-    date.setUTCHours(0, 0, 0, 0)
-    return date.toISOString()
+    if (!pattern.test(lowered)) continue;
+    const date = new Date(eventDateMs + offset * 24 * 60 * 60 * 1000);
+    date.setUTCHours(0, 0, 0, 0);
+    return date.toISOString();
   }
-  return null
+  return null;
 }
 
 function parseEntity(entry: unknown): ExtractedEntity | null {
   if (typeof entry === "string") {
-    const name = readString(entry)
-    if (!name) return null
-    return { name, entityType: "concept" }
+    const name = readString(entry);
+    if (!name) return null;
+    return { name, entityType: "concept" };
   }
-  if (!entry || typeof entry !== "object") return null
-  const record = entry as Record<string, unknown>
-  const name = readString(record.name) ?? readString(record.text)
-  if (!name) return null
-  const entityType = (
-    record.entityType ??
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as Record<string, unknown>;
+  const name = readString(record.name) ?? readString(record.text);
+  if (!name) return null;
+  const entityType = (record.entityType ??
     record.entity_type ??
-    "concept"
-  ) as EntityType
+    "concept") as EntityType;
   if (
     entityType !== "person" &&
     entityType !== "organization" &&
@@ -235,51 +238,51 @@ function parseEntity(entry: unknown): ExtractedEntity | null {
     entityType !== "concept" &&
     entityType !== "other"
   ) {
-    return { name, entityType: "concept" }
+    return { name, entityType: "concept" };
   }
-  return { name, entityType }
+  return { name, entityType };
 }
 
 function parseCausalRelation(entry: unknown): ExtractedCausalRelation | null {
-  if (!entry || typeof entry !== "object") return null
-  const record = entry as Record<string, unknown>
-  const rawTarget = record.targetIndex ?? record.target_index
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as Record<string, unknown>;
+  const rawTarget = record.targetIndex ?? record.target_index;
   const targetIndex =
     typeof rawTarget === "number" && Number.isFinite(rawTarget)
       ? Math.floor(rawTarget)
-      : null
-  if (targetIndex == null || targetIndex < 0) return null
+      : null;
+  if (targetIndex == null || targetIndex < 0) return null;
 
   const rawType = String(
     record.relationType ?? record.relation_type ?? "caused_by",
-  ) as CausalLinkType
-  const relationType = CAUSAL_LINK_TYPES.has(rawType) ? rawType : "caused_by"
-  const rawStrength = record.strength
+  ) as CausalLinkType;
+  const relationType = CAUSAL_LINK_TYPES.has(rawType) ? rawType : "caused_by";
+  const rawStrength = record.strength;
   const strength =
     typeof rawStrength === "number" && Number.isFinite(rawStrength)
       ? Math.max(0, Math.min(1, rawStrength))
-      : 1
+      : 1;
 
-  return { targetIndex, relationType, strength }
+  return { targetIndex, relationType, strength };
 }
 
 function normalizeExtractedFacts(
   parsed: unknown,
   eventDateMs: number,
 ): ExtractedFact[] {
-  if (!parsed || typeof parsed !== "object") return []
-  const facts = (parsed as { facts?: unknown }).facts
-  if (!Array.isArray(facts)) return []
+  if (!parsed || typeof parsed !== "object") return [];
+  const facts = (parsed as { facts?: unknown }).facts;
+  if (!Array.isArray(facts)) return [];
 
-  const normalized: ExtractedFact[] = []
+  const normalized: ExtractedFact[] = [];
   for (const entry of facts) {
-    if (!entry || typeof entry !== "object") continue
-    const fact = entry as Record<string, unknown>
+    if (!entry || typeof entry !== "object") continue;
+    const fact = entry as Record<string, unknown>;
 
-    const what = readString(fact.what) ?? readString(fact.factual_core)
-    const when = readString(fact.when)
-    const who = readString(fact.who)
-    const why = readString(fact.why)
+    const what = readString(fact.what) ?? readString(fact.factual_core);
+    const when = readString(fact.when);
+    const who = readString(fact.who);
+    const why = readString(fact.why);
     const content =
       readString(fact.content) ??
       [
@@ -289,60 +292,61 @@ function normalizeExtractedFacts(
         why,
       ]
         .filter((part): part is string => Boolean(part))
-        .join(" | ")
+        .join(" | ");
 
-    if (!content) continue
+    if (!content) continue;
 
-    const factType = mapFactType(fact.factType ?? fact.fact_type)
+    const factType = mapFactType(fact.factType ?? fact.fact_type);
     const factKind = String(
       fact.factKind ?? fact.fact_kind ?? "conversation",
-    ).toLowerCase()
+    ).toLowerCase();
     let occurredStart =
       readIsoDate(fact.occurredStart) ??
       readIsoDate(fact.occurred_start) ??
       readIsoDate(fact.occurredStart) ??
-      readIsoDate(fact.occurred_start)
+      readIsoDate(fact.occurred_start);
     let occurredEnd =
       readIsoDate(fact.occurredEnd) ??
       readIsoDate(fact.occurred_end) ??
       readIsoDate(fact.occurredEnd) ??
-      readIsoDate(fact.occurred_end)
-    let mentionedAt = readIsoDate(fact.mentionedAt) ?? readIsoDate(fact.mentioned_at)
+      readIsoDate(fact.occurred_end);
+    let mentionedAt =
+      readIsoDate(fact.mentionedAt) ?? readIsoDate(fact.mentioned_at);
 
     if (!occurredStart && factKind === "event") {
-      occurredStart = inferTemporalDate(content, eventDateMs)
+      occurredStart = inferTemporalDate(content, eventDateMs);
     }
     if (!occurredEnd && occurredStart && factKind === "event") {
-      occurredEnd = occurredStart
+      occurredEnd = occurredStart;
     }
     if (!mentionedAt) {
-      mentionedAt = new Date(eventDateMs).toISOString()
+      mentionedAt = new Date(eventDateMs).toISOString();
     }
 
     const confidence =
       typeof fact.confidence === "number" && Number.isFinite(fact.confidence)
         ? fact.confidence
-        : 1
+        : 1;
     const tags = Array.isArray(fact.tags)
       ? fact.tags
           .map((tag) => readString(tag))
           .filter((tag): tag is string => Boolean(tag))
-      : []
+      : [];
     const entities = Array.isArray(fact.entities)
       ? fact.entities
           .map((entity) => parseEntity(entity))
           .filter((entity): entity is ExtractedEntity => Boolean(entity))
-      : []
+      : [];
     const causalSource = Array.isArray(fact.causalRelations)
       ? fact.causalRelations
       : Array.isArray(fact.causal_relations)
         ? fact.causal_relations
-        : []
+        : [];
     const causalRelations = causalSource
       .map((relation) => parseCausalRelation(relation))
-      .filter(
-        (relation): relation is ExtractedCausalRelation => Boolean(relation),
-      )
+      .filter((relation): relation is ExtractedCausalRelation =>
+        Boolean(relation),
+      );
 
     normalized.push({
       content,
@@ -355,34 +359,35 @@ function normalizeExtractedFacts(
       entities,
       tags,
       causalRelations,
-    })
+    });
   }
-  return normalized
+  return normalized;
 }
 
 function parseEventDateToEpoch(
   input: number | Date | string | null | undefined,
   fallback: number,
 ): number {
-  if (input == null) return fallback
-  if (typeof input === "number") return Number.isFinite(input) ? input : fallback
+  if (input == null) return fallback;
+  if (typeof input === "number")
+    return Number.isFinite(input) ? input : fallback;
   if (input instanceof Date) {
-    const ms = input.getTime()
-    return Number.isFinite(ms) ? ms : fallback
+    const ms = input.getTime();
+    return Number.isFinite(ms) ? ms : fallback;
   }
-  const ms = new Date(input).getTime()
-  return Number.isFinite(ms) ? ms : fallback
+  const ms = new Date(input).getTime();
+  return Number.isFinite(ms) ? ms : fallback;
 }
 
 function mergeMetadata(
   base?: Record<string, unknown> | null,
   extra?: Record<string, unknown> | null,
 ): Record<string, unknown> | null {
-  if (!base && !extra) return null
+  if (!base && !extra) return null;
   return {
     ...base,
     ...extra,
-  }
+  };
 }
 
 function isTranscriptTurnArray(value: unknown): value is TranscriptTurn[] {
@@ -395,16 +400,16 @@ function isTranscriptTurnArray(value: unknown): value is TranscriptTurn[] {
         typeof (turn as { role?: unknown }).role === "string" &&
         typeof (turn as { content?: unknown }).content === "string",
     )
-  )
+  );
 }
 
 function normalizeContentInput(content: string | TranscriptTurn[]): string {
-  if (typeof content === "string") return sanitizeText(content)
+  if (typeof content === "string") return sanitizeText(content);
   const normalizedTurns = content.map((turn) => ({
     role: turn.role,
     content: sanitizeText(turn.content),
-  }))
-  return JSON.stringify(normalizedTurns)
+  }));
+  return JSON.stringify(normalizedTurns);
 }
 
 function normalizeBatchInputs(
@@ -412,28 +417,31 @@ function normalizeBatchInputs(
   contents: string[] | RetainBatchItem[],
   options: RetainBatchOptions,
 ): NormalizedBatchItem[] {
-  const now = Date.now()
-  const normalized: NormalizedBatchItem[] = []
+  const now = Date.now();
+  const normalized: NormalizedBatchItem[] = [];
 
   for (let i = 0; i < contents.length; i++) {
-    const value = contents[i]
-    const item = typeof value === "string" ? { content: value } : value
-    const sanitizedContent = normalizeContentInput(item.content)
-    const documentId = item.documentId ?? `${bankId}-${ulid()}`
+    const value = contents[i];
+    const item = typeof value === "string" ? { content: value } : value;
+    const sanitizedContent = normalizeContentInput(item.content);
+    const documentId = item.documentId ?? `${bankId}-${ulid()}`;
     normalized.push({
       content: sanitizedContent,
       context: item.context ?? options.context ?? null,
-      eventDateMs: parseEventDateToEpoch(item.eventDate ?? options.eventDate, now),
+      eventDateMs: parseEventDateToEpoch(
+        item.eventDate ?? options.eventDate,
+        now,
+      ),
       documentId,
       metadata: mergeMetadata(options.metadata ?? null, item.metadata ?? null),
       tags: [...new Set([...(options.tags ?? []), ...(item.tags ?? [])])],
       profile: item.profile ?? options.profile ?? null,
       project: item.project ?? options.project ?? null,
       session: item.session ?? options.session ?? null,
-    })
+    });
   }
 
-  return normalized
+  return normalized;
 }
 
 async function extractFactsFromContent(
@@ -451,8 +459,12 @@ async function extractFactsFromContent(
       factType: (f.factType ?? "world") as ExtractedFact["factType"],
       confidence: f.confidence ?? 1.0,
       eventDate: null,
-      occurredStart: f.occurredStart != null ? new Date(f.occurredStart).toISOString() : null,
-      occurredEnd: f.occurredEnd != null ? new Date(f.occurredEnd).toISOString() : null,
+      occurredStart:
+        f.occurredStart != null
+          ? new Date(f.occurredStart).toISOString()
+          : null,
+      occurredEnd:
+        f.occurredEnd != null ? new Date(f.occurredEnd).toISOString() : null,
       mentionedAt: null,
       entities: (f.entities ?? []).map((name) => ({
         name,
@@ -464,16 +476,16 @@ async function extractFactsFromContent(
             .map((rel) => parseCausalRelation(rel))
             .filter((rel): rel is ExtractedCausalRelation => Boolean(rel))
         : [],
-    }))
+    }));
   }
 
-  const extractionInput = content
+  const extractionInput = content;
 
   try {
     const systemPrompt = getExtractionPrompt(
       options.mode ?? "concise",
       options.customGuidelines,
-    )
+    );
 
     const text = await streamToText(
       chat({
@@ -495,69 +507,69 @@ async function extractFactsFromContent(
           response_format: { type: "json_object" },
         },
       }),
-    )
+    );
 
-    const parsed = parseLLMJson(text, { facts: [] })
-    const extracted = normalizeExtractedFacts(parsed, eventDateMs)
+    const parsed = parseLLMJson(text, { facts: [] });
+    const extracted = normalizeExtractedFacts(parsed, eventDateMs);
     for (const fact of extracted) {
-      fact.content = sanitizeText(fact.content)
+      fact.content = sanitizeText(fact.content);
     }
-    return extracted
+    return extracted;
   } catch {
     // Graceful degradation: LLM extraction failed, return empty result
-    return []
+    return [];
   }
 }
 
 function runInTransaction(hdb: HindsightDatabase, fn: () => void): void {
-  hdb.sqlite.run("BEGIN")
+  hdb.sqlite.run("BEGIN");
   try {
-    fn()
-    hdb.sqlite.run("COMMIT")
+    fn();
+    hdb.sqlite.run("COMMIT");
   } catch (error) {
-    hdb.sqlite.run("ROLLBACK")
-    throw error
+    hdb.sqlite.run("ROLLBACK");
+    throw error;
   }
 }
 
 function chunkTranscriptTurns(turns: TranscriptTurn[]): string[] {
-  const chunks: string[] = []
-  let current: TranscriptTurn[] = []
-  let currentChars = 2
+  const chunks: string[] = [];
+  let current: TranscriptTurn[] = [];
+  let currentChars = 2;
   for (const turn of turns) {
-    const turnText = JSON.stringify(turn)
-    const turnChars = turnText.length + 1
+    const turnText = JSON.stringify(turn);
+    const turnChars = turnText.length + 1;
     if (current.length > 0 && currentChars + turnChars > CHARS_PER_BATCH) {
-      chunks.push(JSON.stringify(current))
-      current = []
-      currentChars = 2
+      chunks.push(JSON.stringify(current));
+      current = [];
+      currentChars = 2;
     }
-    current.push(turn)
-    currentChars += turnChars
+    current.push(turn);
+    currentChars += turnChars;
   }
-  if (current.length > 0) chunks.push(JSON.stringify(current))
-  return chunks
+  if (current.length > 0) chunks.push(JSON.stringify(current));
+  return chunks;
 }
 
 async function chunkWithChonkie(content: string): Promise<string[]> {
-  if (content.length <= CHARS_PER_BATCH) return [content]
+  if (content.length <= CHARS_PER_BATCH) return [content];
 
-  const parsed = parseLLMJson<unknown>(content, null)
+  const parsed = parseLLMJson<unknown>(content, null);
   if (isTranscriptTurnArray(parsed)) {
-    const transcriptChunks = chunkTranscriptTurns(parsed)
-    if (transcriptChunks.length > 0) return transcriptChunks
+    const transcriptChunks = chunkTranscriptTurns(parsed);
+    if (transcriptChunks.length > 0) return transcriptChunks;
   }
 
   const chunker = await RecursiveChunker.create({
     chunkSize: CHARS_PER_BATCH,
     tokenizer: "character",
     minCharactersPerChunk: 1,
-  })
-  const chunks = await chunker.chunk(content)
+  });
+  const chunks = await chunker.chunk(content);
   const texts = chunks
     .map((chunk) => sanitizeText(chunk.text).trim())
-    .filter((chunkText) => chunkText.length > 0)
-  return texts.length > 0 ? texts : [content]
+    .filter((chunkText) => chunkText.length > 0);
+  return texts.length > 0 ? texts : [content];
 }
 
 async function explodeBatchContents(
@@ -566,9 +578,9 @@ async function explodeBatchContents(
 ): Promise<ExpandedBatchContent[]> {
   const chunked = await Promise.all(
     contents.map(async (item, originalIndex) => {
-      const chunks = await chunkWithChonkie(item.content)
+      const chunks = await chunkWithChonkie(item.content);
       return chunks.map((chunk, chunkIndex) => {
-        const chunkId = `${bankId}_${item.documentId}_${chunkIndex}`
+        const chunkId = `${bankId}_${item.documentId}_${chunkIndex}`;
         return {
           originalIndex,
           content: chunk,
@@ -583,44 +595,44 @@ async function explodeBatchContents(
           profile: item.profile,
           project: item.project,
           session: item.session,
-        }
-      })
+        };
+      });
     }),
-  )
-  return chunked.flat()
+  );
+  return chunked.flat();
 }
 
 function splitByCharacterBudget<T extends { content: string }>(
   items: T[],
   maxChars: number,
 ): T[][] {
-  if (items.length === 0) return []
-  const batches: T[][] = []
-  let currentBatch: T[] = []
-  let currentChars = 0
+  if (items.length === 0) return [];
+  const batches: T[][] = [];
+  let currentBatch: T[] = [];
+  let currentChars = 0;
 
   for (const item of items) {
-    const itemChars = item.content.length
+    const itemChars = item.content.length;
     if (currentBatch.length > 0 && currentChars + itemChars > maxChars) {
-      batches.push(currentBatch)
-      currentBatch = [item]
-      currentChars = itemChars
-      continue
+      batches.push(currentBatch);
+      currentBatch = [item];
+      currentChars = itemChars;
+      continue;
     }
 
-    currentBatch.push(item)
-    currentChars += itemChars
+    currentBatch.push(item);
+    currentChars += itemChars;
   }
 
   if (currentBatch.length > 0) {
-    batches.push(currentBatch)
+    batches.push(currentBatch);
   }
 
-  return batches
+  return batches;
 }
 
 function buildContentHash(content: string): string {
-  return createHash("sha256").update(content).digest("hex")
+  return createHash("sha256").update(content).digest("hex");
 }
 
 function upsertDocuments(
@@ -636,8 +648,8 @@ function upsertDocuments(
           eq(hdb.schema.documents.bankId, row.bankId),
         ),
       )
-      .run()
-    hdb.db.insert(hdb.schema.documents).values(row).run()
+      .run();
+    hdb.db.insert(hdb.schema.documents).values(row).run();
   }
 }
 
@@ -649,8 +661,8 @@ function upsertChunks(
     hdb.db
       .delete(hdb.schema.chunks)
       .where(eq(hdb.schema.chunks.id, row.id))
-      .run()
-    hdb.db.insert(hdb.schema.chunks).values(row).run()
+      .run();
+    hdb.db.insert(hdb.schema.chunks).values(row).run();
   }
 }
 
@@ -664,31 +676,31 @@ function planEntities(
     .select()
     .from(hdb.schema.entities)
     .where(eq(hdb.schema.entities.bankId, bankId))
-    .all()
-  const cooccurrences = loadCooccurrences(hdb, bankId)
+    .all();
+  const cooccurrences = loadCooccurrences(hdb, bankId);
 
-  const entityMap = new Map<string, Entity>()
-  const entityById = new Map<string, Entity>()
-  const existingMentionDeltas = new Map<string, number>()
-  const newEntities: EntityPlan["newEntities"] = []
-  const newEntityById = new Map<string, EntityPlan["newEntities"][number]>()
+  const entityMap = new Map<string, Entity>();
+  const entityById = new Map<string, Entity>();
+  const existingMentionDeltas = new Map<string, number>();
+  const newEntities: EntityPlan["newEntities"] = [];
+  const newEntityById = new Map<string, EntityPlan["newEntities"][number]>();
 
   for (const item of extracted) {
-    const nearbyNames = item.fact.entities.map((entity) => entity.name)
+    const nearbyNames = item.fact.entities.map((entity) => entity.name);
     for (const ent of item.fact.entities) {
-      const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-      const seen = entityMap.get(key)
+      const key = `${ent.name.toLowerCase()}:${ent.entityType}`;
+      const seen = entityMap.get(key);
       if (seen) {
-        const pending = newEntityById.get(seen.id)
+        const pending = newEntityById.get(seen.id);
         if (pending) {
-          pending.mentionCount += 1
-          continue
+          pending.mentionCount += 1;
+          continue;
         }
         existingMentionDeltas.set(
           seen.id,
           (existingMentionDeltas.get(seen.id) ?? 0) + 1,
-        )
-        continue
+        );
+        continue;
       }
 
       const resolved = resolveEntity(
@@ -698,31 +710,31 @@ function planEntities(
         cooccurrences,
         nearbyNames.filter((name) => name !== ent.name),
         now,
-      )
+      );
       const exactMatch = existingEntities.find(
         (row) =>
           row.name.toLowerCase() === ent.name.toLowerCase() &&
           row.entityType === ent.entityType,
-      )
+      );
 
       if (resolved || exactMatch) {
         const row =
           (resolved
             ? existingEntities.find((entity) => entity.id === resolved.entityId)
-            : exactMatch) ?? null
-        if (!row) continue
+            : exactMatch) ?? null;
+        if (!row) continue;
 
-        const entity = rowToEntity({ ...row, lastUpdated: now })
-        entityMap.set(key, entity)
-        entityById.set(entity.id, entity)
+        const entity = rowToEntity({ ...row, lastUpdated: now });
+        entityMap.set(key, entity);
+        entityById.set(entity.id, entity);
         existingMentionDeltas.set(
           entity.id,
           (existingMentionDeltas.get(entity.id) ?? 0) + 1,
-        )
-        continue
+        );
+        continue;
       }
 
-      const entityId = ulid()
+      const entityId = ulid();
       const pendingEntity: EntityPlan["newEntities"][number] = {
         id: entityId,
         bankId,
@@ -731,9 +743,9 @@ function planEntities(
         mentionCount: 1,
         firstSeen: now,
         lastUpdated: now,
-      }
-      newEntities.push(pendingEntity)
-      newEntityById.set(entityId, pendingEntity)
+      };
+      newEntities.push(pendingEntity);
+      newEntityById.set(entityId, pendingEntity);
 
       const entity: Entity = {
         id: entityId,
@@ -744,9 +756,9 @@ function planEntities(
         metadata: null,
         firstSeen: now,
         lastUpdated: now,
-      }
-      entityMap.set(key, entity)
-      entityById.set(entity.id, entity)
+      };
+      entityMap.set(key, entity);
+      entityById.set(entity.id, entity);
       existingEntities.push({
         id: entityId,
         bankId,
@@ -757,7 +769,7 @@ function planEntities(
         mentionCount: pendingEntity.mentionCount,
         firstSeen: now,
         lastUpdated: now,
-      })
+      });
     }
   }
 
@@ -766,16 +778,16 @@ function planEntities(
     entityById,
     existingMentionDeltas,
     newEntities,
-  }
+  };
 }
 
 function rowToMemoryUnit(
   row: typeof import("./schema").memoryUnits.$inferSelect,
 ): MemoryUnit {
-  const occurredStart = row.occurredStart
-  const occurredEnd = row.occurredEnd
-  const mentionedAt = row.mentionedAt
-  const eventDate = row.eventDate ?? occurredStart ?? mentionedAt
+  const occurredStart = row.occurredStart;
+  const occurredEnd = row.occurredEnd;
+  const mentionedAt = row.mentionedAt;
+  const eventDate = row.eventDate ?? occurredStart ?? mentionedAt;
 
   return {
     id: row.id,
@@ -795,10 +807,13 @@ function rowToMemoryUnit(
     consolidatedAt: row.consolidatedAt,
     proofCount: row.proofCount,
     sourceMemoryIds: safeJsonParse<string[] | null>(row.sourceMemoryIds, null),
-    history: safeJsonParse<import("./types").ObservationHistoryEntry[] | null>(row.history, null),
+    history: safeJsonParse<import("./types").ObservationHistoryEntry[] | null>(
+      row.history,
+      null,
+    ),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-  }
+  };
 }
 
 function rowToEntity(
@@ -813,7 +828,7 @@ function rowToEntity(
     metadata: safeJsonParse<Record<string, unknown> | null>(row.metadata, null),
     firstSeen: row.firstSeen,
     lastUpdated: row.lastUpdated,
-  }
+  };
 }
 
 // ── Entity resolution (single entity) ────────────────────────────────────────
@@ -831,12 +846,12 @@ async function resolveOrCreateEntity(
   mentionDeltas: Map<string, number>,
   now: number,
 ): Promise<void> {
-  const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+  const key = `${ent.name.toLowerCase()}:${ent.entityType}`;
 
   if (entityMap.has(key)) {
-    const entity = entityMap.get(key)!
-    mentionDeltas.set(entity.id, (mentionDeltas.get(entity.id) ?? 0) + 1)
-    return
+    const entity = entityMap.get(key)!;
+    mentionDeltas.set(entity.id, (mentionDeltas.get(entity.id) ?? 0) + 1);
+    return;
   }
 
   const resolved = resolveEntity(
@@ -846,28 +861,36 @@ async function resolveOrCreateEntity(
     cooccurrences,
     nearbyNames.filter((n) => n !== ent.name),
     now,
-  )
+  );
 
   if (resolved) {
-    const matchedEntity = existingEntities.find((e) => e.id === resolved.entityId)!
-    mentionDeltas.set(matchedEntity.id, (mentionDeltas.get(matchedEntity.id) ?? 0) + 1)
-    entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }))
-    return
+    const matchedEntity = existingEntities.find(
+      (e) => e.id === resolved.entityId,
+    )!;
+    mentionDeltas.set(
+      matchedEntity.id,
+      (mentionDeltas.get(matchedEntity.id) ?? 0) + 1,
+    );
+    entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }));
+    return;
   }
 
   const exactMatch = existingEntities.find(
     (e) =>
       e.name.toLowerCase() === ent.name.toLowerCase() &&
       e.entityType === ent.entityType,
-  )
+  );
 
   if (exactMatch) {
-    mentionDeltas.set(exactMatch.id, (mentionDeltas.get(exactMatch.id) ?? 0) + 1)
-    entityMap.set(key, rowToEntity({ ...exactMatch, lastUpdated: now }))
-    return
+    mentionDeltas.set(
+      exactMatch.id,
+      (mentionDeltas.get(exactMatch.id) ?? 0) + 1,
+    );
+    entityMap.set(key, rowToEntity({ ...exactMatch, lastUpdated: now }));
+    return;
   }
 
-  const entityId = ulid()
+  const entityId = ulid();
   hdb.db
     .insert(schema.entities)
     .values({
@@ -879,9 +902,9 @@ async function resolveOrCreateEntity(
       firstSeen: now,
       lastUpdated: now,
     })
-    .run()
+    .run();
 
-  await entityVec.upsert(entityId, ent.name)
+  await entityVec.upsert(entityId, ent.name);
 
   const newEntity: Entity = {
     id: entityId,
@@ -892,8 +915,8 @@ async function resolveOrCreateEntity(
     metadata: null,
     firstSeen: now,
     lastUpdated: now,
-  }
-  entityMap.set(key, newEntity)
+  };
+  entityMap.set(key, newEntity);
 
   existingEntities.push({
     id: entityId,
@@ -905,7 +928,7 @@ async function resolveOrCreateEntity(
     mentionCount: 1,
     firstSeen: now,
     lastUpdated: now,
-  })
+  });
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -922,15 +945,15 @@ export async function retain(
   rerank?: RerankFunction,
   bankProfile?: BankProfile,
 ): Promise<RetainResult> {
-  const now = Date.now()
-  const { schema } = hdb
-  const eventDateMs = parseEventDateToEpoch(options.eventDate, now)
-  const context = options.context ? sanitizeText(options.context) : null
-  const documentId = options.documentId ?? null
-  const chunkId = documentId ? `${bankId}_${documentId}_0` : null
+  const now = Date.now();
+  const { schema } = hdb;
+  const eventDateMs = parseEventDateToEpoch(options.eventDate, now);
+  const context = options.context ? sanitizeText(options.context) : null;
+  const documentId = options.documentId ?? null;
+  const chunkId = documentId ? `${bankId}_${documentId}_0` : null;
 
   // Sanitize input content
-  const cleanContent = sanitizeText(content)
+  const cleanContent = sanitizeText(content);
 
   // ── Step 1: Get facts (LLM extraction or pre-provided) ──
   let extracted = await extractFactsFromContent(
@@ -941,26 +964,26 @@ export async function retain(
     eventDateMs,
     0,
     1,
-  )
+  );
 
   if (extracted.length === 0) {
-    return { memories: [], entities: [], links: [] }
+    return { memories: [], entities: [], links: [] };
   }
-  const extractedOriginal = extracted.slice()
+  const extractedOriginal = extracted.slice();
 
   // ── Step 1b: Route each fact (reinforce / reconsolidate / new_trace) ──
 
-  const dedupThreshold = options.dedupThreshold ?? 0
-  const decisions: RouteDecision[] = []
+  const dedupThreshold = options.dedupThreshold ?? 0;
+  const decisions: RouteDecision[] = [];
   const appliedMemoryIds: Array<{
-    memoryId: string
-    route: RetainRoute
-    factIndex: number
-    eventTime: number
-  }> = []
+    memoryId: string;
+    route: RetainRoute;
+    factIndex: number;
+    eventTime: number;
+  }> = [];
 
   for (let i = 0; i < extracted.length; i++) {
-    const fact = extracted[i]!
+    const fact = extracted[i]!;
     if (dedupThreshold <= 0) {
       decisions.push({
         route: "new_trace",
@@ -968,8 +991,8 @@ export async function retain(
         candidateScore: null,
         conflictDetected: false,
         conflictKeys: [],
-      })
-      continue
+      });
+      continue;
     }
     const routingCtx: RoutingContext = {
       hdb,
@@ -978,30 +1001,33 @@ export async function retain(
       eventTime: eventDateMs + i,
       profile: options.profile ?? null,
       project: options.project ?? null,
-    }
+    };
     const decision = await routeFact(routingCtx, fact.content, fact.entities, {
       reinforceThreshold: dedupThreshold,
       reconsolidateThreshold: Math.min(RECONSOLIDATE_THRESHOLD, dedupThreshold),
-    })
-    decisions.push(decision)
+    });
+    decisions.push(decision);
   }
 
   // Apply reinforce and reconsolidate actions immediately
   for (let i = 0; i < extracted.length; i++) {
-    const decision = decisions[i]!
-    const factEventTime = eventDateMs + i
+    const decision = decisions[i]!;
+    const factEventTime = eventDateMs + i;
     if (decision.route === "reinforce" && decision.candidateMemoryId) {
       runInTransaction(hdb, () => {
-        applyReinforce(hdb, decision.candidateMemoryId!, now)
-        logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
-      })
+        applyReinforce(hdb, decision.candidateMemoryId!, now);
+        logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now);
+      });
       appliedMemoryIds.push({
         memoryId: decision.candidateMemoryId,
         route: "reinforce",
         factIndex: i,
         eventTime: factEventTime,
-      })
-    } else if (decision.route === "reconsolidate" && decision.candidateMemoryId) {
+      });
+    } else if (
+      decision.route === "reconsolidate" &&
+      decision.candidateMemoryId
+    ) {
       await applyReconsolidate(
         hdb,
         memoryVec,
@@ -1010,42 +1036,42 @@ export async function retain(
         extracted[i]!.entities,
         `Reconsolidated: score=${decision.candidateScore?.toFixed(3)}`,
         now,
-      )
+      );
       runInTransaction(hdb, () => {
-        logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
-      })
+        logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now);
+      });
       appliedMemoryIds.push({
         memoryId: decision.candidateMemoryId,
         route: "reconsolidate",
         factIndex: i,
         eventTime: factEventTime,
-      })
+      });
     }
   }
 
   // Filter to only new_trace facts for the insert pipeline
-  const newTraceIndexRemap = new Map<number, number>()
-  let newIdx = 0
+  const newTraceIndexRemap = new Map<number, number>();
+  let newIdx = 0;
   for (let oldIdx = 0; oldIdx < extracted.length; oldIdx++) {
     if (decisions[oldIdx]!.route === "new_trace") {
-      newTraceIndexRemap.set(oldIdx, newIdx++)
+      newTraceIndexRemap.set(oldIdx, newIdx++);
     }
   }
 
-  extracted = extracted.filter((_, i) => decisions[i]!.route === "new_trace")
+  extracted = extracted.filter((_, i) => decisions[i]!.route === "new_trace");
   // Remap causal relation targetIndex values for new_trace facts
   for (const fact of extracted) {
-    if (!fact.causalRelations) continue
+    if (!fact.causalRelations) continue;
     fact.causalRelations = fact.causalRelations
       .map((rel) => ({
         ...rel,
         targetIndex: newTraceIndexRemap.get(rel.targetIndex) ?? -1,
       }))
-      .filter((rel) => rel.targetIndex >= 0)
+      .filter((rel) => rel.targetIndex >= 0);
   }
 
   if (extracted.length === 0 && appliedMemoryIds.length === 0) {
-    return { memories: [], entities: [], links: [] }
+    return { memories: [], entities: [], links: [] };
   }
 
   if (documentId && chunkId) {
@@ -1065,7 +1091,7 @@ export async function retain(
           createdAt: now,
           updatedAt: now,
         },
-      ])
+      ]);
       upsertChunks(hdb, [
         {
           id: chunkId,
@@ -1075,8 +1101,8 @@ export async function retain(
           chunkIndex: 0,
           createdAt: now,
         },
-      ])
-    })
+      ]);
+    });
   }
 
   // ── Step 2: Resolve & upsert entities ──
@@ -1086,28 +1112,37 @@ export async function retain(
     .select()
     .from(schema.entities)
     .where(eq(schema.entities.bankId, bankId))
-    .all()
+    .all();
 
-  const cooccurrences = loadCooccurrences(hdb, bankId)
+  const cooccurrences = loadCooccurrences(hdb, bankId);
 
-  const entityMap = new Map<string, Entity>()
+  const entityMap = new Map<string, Entity>();
   // Track additional mentions per entity ID for batch mentionCount update
-  const mentionDeltas = new Map<string, number>()
+  const mentionDeltas = new Map<string, number>();
 
   for (const fact of extracted) {
-    const nearbyNames = fact.entities.map((e) => e.name)
+    const nearbyNames = fact.entities.map((e) => e.name);
     for (const ent of fact.entities) {
       await resolveOrCreateEntity(
-        hdb, entityVec, schema, bankId, ent, nearbyNames, existingEntities,
-        cooccurrences, entityMap, mentionDeltas, now,
-      )
+        hdb,
+        entityVec,
+        schema,
+        bankId,
+        ent,
+        nearbyNames,
+        existingEntities,
+        cooccurrences,
+        entityMap,
+        mentionDeltas,
+        now,
+      );
     }
   }
 
   // Flush accumulated mention deltas to DB
   for (const [entityId, delta] of mentionDeltas) {
-    const entity = existingEntities.find((e) => e.id === entityId)
-    if (!entity) continue
+    const entity = existingEntities.find((e) => e.id === entityId);
+    if (!entity) continue;
     hdb.db
       .update(schema.entities)
       .set({
@@ -1115,23 +1150,25 @@ export async function retain(
         mentionCount: entity.mentionCount + delta,
       })
       .where(eq(schema.entities.id, entityId))
-      .run()
+      .run();
   }
 
   // ── Step 3: Store memory units + FTS + embeddings ──
 
-  const memories: MemoryUnit[] = []
+  const memories: MemoryUnit[] = [];
 
   for (let factIndex = 0; factIndex < extracted.length; factIndex++) {
-    const fact = extracted[factIndex]!
-    const memoryId = ulid()
-    const tags = [...(fact.tags ?? []), ...(options.tags ?? [])]
-    const memoryMetadata = options.metadata ?? null
-    const sourceText = context ? `${context}\n\n${cleanContent}` : cleanContent
-    const mentionedAt = eventDateMs + factIndex
-    const occurredStart = parseISOToEpoch(fact.occurredStart ?? fact.occurredStart)
-    const occurredEnd = parseISOToEpoch(fact.occurredEnd ?? fact.occurredEnd)
-    const eventDate = occurredStart ?? mentionedAt
+    const fact = extracted[factIndex]!;
+    const memoryId = ulid();
+    const tags = [...(fact.tags ?? []), ...(options.tags ?? [])];
+    const memoryMetadata = options.metadata ?? null;
+    const sourceText = context ? `${context}\n\n${cleanContent}` : cleanContent;
+    const mentionedAt = eventDateMs + factIndex;
+    const occurredStart = parseISOToEpoch(
+      fact.occurredStart ?? fact.occurredStart,
+    );
+    const occurredEnd = parseISOToEpoch(fact.occurredEnd ?? fact.occurredEnd);
+    const eventDate = occurredStart ?? mentionedAt;
 
     hdb.db
       .insert(schema.memoryUnits)
@@ -1153,36 +1190,40 @@ export async function retain(
         accessCount: 0,
         lastAccessed: null,
         encodingStrength: 1.0,
+        gist: generateFallbackGist(fact.content),
+        scopeProfile: options.profile ?? null,
+        scopeProject: options.project ?? null,
+        scopeSession: options.session ?? null,
         createdAt: now,
         updatedAt: now,
       })
-      .run()
+      .run();
 
     // FTS5
     hdb.sqlite.run(
       "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
       [memoryId, bankId, fact.content],
-    )
+    );
 
     // Embedding
-    await memoryVec.upsert(memoryId, fact.content)
+    await memoryVec.upsert(memoryId, fact.content);
 
     // Memory ↔ Entity junction
-    const linkedEntityIds: string[] = []
+    const linkedEntityIds: string[] = [];
     for (const ent of fact.entities) {
-      const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-      const entity = entityMap.get(key)
+      const key = `${ent.name.toLowerCase()}:${ent.entityType}`;
+      const entity = entityMap.get(key);
       if (entity) {
         hdb.db
           .insert(schema.memoryEntities)
           .values({ memoryId, entityId: entity.id })
-          .run()
-        linkedEntityIds.push(entity.id)
+          .run();
+        linkedEntityIds.push(entity.id);
       }
     }
 
     // Update co-occurrence table for all entity pairs linked to this memory
-    updateCooccurrences(hdb, bankId, linkedEntityIds)
+    updateCooccurrences(hdb, bankId, linkedEntityIds);
 
     memories.push({
       id: memoryId,
@@ -1205,27 +1246,27 @@ export async function retain(
       history: null,
       createdAt: now,
       updatedAt: now,
-    })
+    });
   }
 
   // ── Step 4: Create entity-based links between co-occurring memories ──
 
-  const links: RetainResult["links"] = []
+  const links: RetainResult["links"] = [];
 
   for (let i = 0; i < memories.length; i++) {
     for (let j = i + 1; j < memories.length; j++) {
       const entitiesI = new Set(
         extracted[i]!.entities.map((e) => e.name.toLowerCase()),
-      )
+      );
       const entitiesJ = new Set(
         extracted[j]!.entities.map((e) => e.name.toLowerCase()),
-      )
-      const shared = [...entitiesI].filter((e) => entitiesJ.has(e))
-      if (shared.length === 0) continue
+      );
+      const shared = [...entitiesI].filter((e) => entitiesJ.has(e));
+      if (shared.length === 0) continue;
 
-      const linkId = ulid()
+      const linkId = ulid();
       const weight =
-        shared.length / Math.max(entitiesI.size, entitiesJ.size, 1)
+        shared.length / Math.max(entitiesI.size, entitiesJ.size, 1);
 
       hdb.db
         .insert(schema.memoryLinks)
@@ -1239,27 +1280,27 @@ export async function retain(
           createdAt: now,
         })
         .onConflictDoNothing()
-        .run()
+        .run();
 
       links.push({
         sourceId: memories[i]!.id,
         targetId: memories[j]!.id,
         linkType: "entity" as LinkType,
-      })
+      });
     }
   }
 
   // ── Step 5: Create causal links ──
 
   for (let i = 0; i < extracted.length; i++) {
-    const fact = extracted[i]!
+    const fact = extracted[i]!;
     for (const rel of fact.causalRelations ?? []) {
-      if (rel.targetIndex < 0 || rel.targetIndex >= i) continue // only backward refs
-      const sourceId = memories[i]!.id
-      const targetId = memories[rel.targetIndex]!.id
-      if (sourceId === targetId) continue
+      if (rel.targetIndex < 0 || rel.targetIndex >= i) continue; // only backward refs
+      const sourceId = memories[i]!.id;
+      const targetId = memories[rel.targetIndex]!.id;
+      if (sourceId === targetId) continue;
 
-      const linkType = rel.relationType ?? "caused_by"
+      const linkType = rel.relationType ?? "caused_by";
 
       hdb.db
         .insert(schema.memoryLinks)
@@ -1273,15 +1314,15 @@ export async function retain(
           createdAt: now,
         })
         .onConflictDoNothing()
-        .run()
+        .run();
 
-      links.push({ sourceId, targetId, linkType })
+      links.push({ sourceId, targetId, linkType });
     }
   }
 
   // ── Step 6: Create temporal links ──
 
-  createTemporalLinksFromMemories(hdb, bankId, memories, now, links)
+  createTemporalLinksFromMemories(hdb, bankId, memories, now, links);
 
   // ── Step 7: Create semantic links ──
 
@@ -1290,58 +1331,83 @@ export async function retain(
     memoryVec,
     bankId,
     memories.map((m) => m.id),
-  )
-  links.push(...semanticLinks)
+  );
+  links.push(...semanticLinks);
 
   // ── Step 8: Auto-consolidate (creates observations + refreshes mental models) ──
 
-  const shouldConsolidate = options.consolidate !== false
+  const shouldConsolidate = options.consolidate !== false;
 
   if (shouldConsolidate) {
     // Fire-and-forget — don't block retain
-    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank, bankProfile).catch(
+    consolidate(
+      hdb,
+      memoryVec,
+      modelVec,
+      adapter,
+      bankId,
+      {},
+      rerank,
+      bankProfile,
+    ).catch(
       () => {}, // swallow errors — consolidation is best-effort
-    )
+    );
+  }
+
+  // ── Step 8b: Fire-and-forget LLM gist generation ──
+  // Upgrade the deterministic fallback gist with LLM-generated gists asynchronously.
+  for (const mem of memories) {
+    generateGistWithLLM(adapter, mem.content)
+      .then((gist) => {
+        hdb.db
+          .update(schema.memoryUnits)
+          .set({ gist })
+          .where(eq(schema.memoryUnits.id, mem.id))
+          .run();
+      })
+      .catch((err) => {
+        console.debug?.("[gist] async LLM gist failed:", err);
+      });
   }
 
   // ── Step 9: Log new_trace decisions ──
 
-  const originalIndexByNewTraceIndex = new Map<number, number>()
+  const originalIndexByNewTraceIndex = new Map<number, number>();
   for (const [originalIndex, newTraceIndex] of newTraceIndexRemap.entries()) {
-    originalIndexByNewTraceIndex.set(newTraceIndex, originalIndex)
+    originalIndexByNewTraceIndex.set(newTraceIndex, originalIndex);
   }
 
   for (let i = 0; i < memories.length; i++) {
-    const originalIdx = originalIndexByNewTraceIndex.get(i)
+    const originalIdx = originalIndexByNewTraceIndex.get(i);
     if (originalIdx !== undefined) {
-      const decision = decisions[originalIdx]!
-      logDecision(hdb, bankId, decision, memories[i]!.id, now)
+      const decision = decisions[originalIdx]!;
+      logDecision(hdb, bankId, decision, memories[i]!.id, now);
     }
   }
 
   // ── Step 10: Load reinforced/reconsolidated memories into result ──
 
-  const allMemories: MemoryUnit[] = []
+  const allMemories: MemoryUnit[] = [];
   for (const { memoryId } of appliedMemoryIds) {
     const row = hdb.db
       .select()
       .from(hdb.schema.memoryUnits)
       .where(eq(hdb.schema.memoryUnits.id, memoryId))
-      .get()
+      .get();
     if (row) {
-      allMemories.push(rowToMemoryUnit(row))
+      allMemories.push(rowToMemoryUnit(row));
     }
   }
-  allMemories.push(...memories)
+  allMemories.push(...memories);
 
   // ── Step 11: Episode tracking ──
 
-  const profile = options.profile ?? null
-  const project = options.project ?? null
-  const session = options.session ?? null
+  const profile = options.profile ?? null;
+  const project = options.project ?? null;
+  const session = options.session ?? null;
 
   for (const applied of appliedMemoryIds) {
-      const fact = extractedOriginal[applied.factIndex]
+    const fact = extractedOriginal[applied.factIndex];
     const episodeId = resolveEpisode(
       hdb,
       bankId,
@@ -1350,7 +1416,7 @@ export async function retain(
       project,
       session,
       fact?.content ?? cleanContent,
-    )
+    );
     recordEpisodeEvent(
       hdb,
       episodeId,
@@ -1361,12 +1427,12 @@ export async function retain(
       profile,
       project,
       session,
-    )
+    );
   }
 
   for (let i = 0; i < memories.length; i++) {
-    const originalIdx = originalIndexByNewTraceIndex.get(i)
-    const eventTime = originalIdx != null ? eventDateMs + originalIdx : now
+    const originalIdx = originalIndexByNewTraceIndex.get(i);
+    const eventTime = originalIdx != null ? eventDateMs + originalIdx : now;
     const episodeId = resolveEpisode(
       hdb,
       bankId,
@@ -1375,7 +1441,7 @@ export async function retain(
       project,
       session,
       memories[i]!.content,
-    )
+    );
     recordEpisodeEvent(
       hdb,
       episodeId,
@@ -1386,29 +1452,29 @@ export async function retain(
       profile,
       project,
       session,
-    )
+    );
   }
 
   return {
     memories: allMemories,
     entities: Array.from(entityMap.values()),
     links,
-  }
+  };
 }
 
 // ── Batch new-trace processing ──────────────────────────────────────────────
 
 type MemoryRecordList = Array<{
-  memory: MemoryUnit
-  originalIndex: number
-  fact: ExtractedFact
-  vector: Float32Array
-  flatIndex: number
-  profile: string | null
-  project: string | null
-  session: string | null
-  sourceText: string
-}>
+  memory: MemoryUnit;
+  originalIndex: number;
+  fact: ExtractedFact;
+  vector: Float32Array;
+  flatIndex: number;
+  profile: string | null;
+  project: string | null;
+  session: string | null;
+  sourceText: string;
+}>;
 
 /**
  * Process all new_trace facts in a batch sub-group: plan entities, build memory
@@ -1419,62 +1485,72 @@ type MemoryRecordList = Array<{
  * Extracted from the `retainBatch` inner loop for readability.
  */
 async function processNewTraceMemories(ctx: {
-  hdb: HindsightDatabase
-  bankId: string
-  retainedFacts: PreparedExtractedFact[]
-  retainedVectors: Float32Array[]
-  newTraceDecisionIndices: number[]
-  batchDecisions: RouteDecision[]
-  entityVec: EmbeddingStore
-  memoryVec: EmbeddingStore
-  now: number
+  hdb: HindsightDatabase;
+  bankId: string;
+  retainedFacts: PreparedExtractedFact[];
+  retainedVectors: Float32Array[];
+  newTraceDecisionIndices: number[];
+  batchDecisions: RouteDecision[];
+  entityVec: EmbeddingStore;
+  memoryVec: EmbeddingStore;
+  now: number;
   // Mutable accumulators from outer scope
-  entityById: Map<string, Entity>
-  entityIdsByResult: Set<string>[]
-  mentionOffsetsByResult: number[]
-  aggregate: RetainResult[]
-  linkKeysByResult: Set<string>[]
-  memoryIdsToOriginalIndex: Map<string, number>
+  entityById: Map<string, Entity>;
+  entityIdsByResult: Set<string>[];
+  mentionOffsetsByResult: number[];
+  aggregate: RetainResult[];
+  linkKeysByResult: Set<string>[];
+  memoryIdsToOriginalIndex: Map<string, number>;
 }): Promise<MemoryRecordList> {
   const {
-    hdb, bankId, retainedFacts, retainedVectors,
-    newTraceDecisionIndices, batchDecisions,
-    entityVec, memoryVec, now,
-    entityById, entityIdsByResult, mentionOffsetsByResult,
-    aggregate, linkKeysByResult, memoryIdsToOriginalIndex,
-  } = ctx
+    hdb,
+    bankId,
+    retainedFacts,
+    retainedVectors,
+    newTraceDecisionIndices,
+    batchDecisions,
+    entityVec,
+    memoryVec,
+    now,
+    entityById,
+    entityIdsByResult,
+    mentionOffsetsByResult,
+    aggregate,
+    linkKeysByResult,
+    memoryIdsToOriginalIndex,
+  } = ctx;
 
-  const entityPlan = planEntities(hdb, bankId, retainedFacts, now)
+  const entityPlan = planEntities(hdb, bankId, retainedFacts, now);
   for (const [entityId, entity] of entityPlan.entityById.entries()) {
-    entityById.set(entityId, entity)
+    entityById.set(entityId, entity);
   }
   const entityVectors = await entityVec.createVectors(
     entityPlan.newEntities.map((entity) => entity.name),
-  )
+  );
 
-  const memoryRows: Array<typeof hdb.schema.memoryUnits.$inferInsert> = []
-  const memoryEntityIds = new Map<string, string[]>()
-  const memoryEntityNames = new Map<string, Set<string>>()
-  const memoryIdsByGroup = new Map<number, string[]>()
-  const memoryRecords: MemoryRecordList = []
+  const memoryRows: Array<typeof hdb.schema.memoryUnits.$inferInsert> = [];
+  const memoryEntityIds = new Map<string, string[]>();
+  const memoryEntityNames = new Map<string, Set<string>>();
+  const memoryIdsByGroup = new Map<number, string[]>();
+  const memoryRecords: MemoryRecordList = [];
 
   for (let i = 0; i < retainedFacts.length; i++) {
-    const item = retainedFacts[i]!
-    const memoryId = ulid()
-    const tags = [...new Set([...(item.fact.tags ?? []), ...item.tags])]
-    const offset = mentionOffsetsByResult[item.originalIndex] ?? 0
-    mentionOffsetsByResult[item.originalIndex] = offset + 1
-    const mentionedAt = item.eventDateMs + offset
+    const item = retainedFacts[i]!;
+    const memoryId = ulid();
+    const tags = [...new Set([...(item.fact.tags ?? []), ...item.tags])];
+    const offset = mentionOffsetsByResult[item.originalIndex] ?? 0;
+    mentionOffsetsByResult[item.originalIndex] = offset + 1;
+    const mentionedAt = item.eventDateMs + offset;
     const occurredStart = parseISOToEpoch(
       item.fact.occurredStart ?? item.fact.occurredStart,
-    )
+    );
     const occurredEnd = parseISOToEpoch(
       item.fact.occurredEnd ?? item.fact.occurredEnd,
-    )
-    const eventDate = occurredStart ?? mentionedAt
+    );
+    const eventDate = occurredStart ?? mentionedAt;
     const sourceText = item.context
       ? `${item.context}\n\n${item.sourceText}`
-      : item.sourceText
+      : item.sourceText;
 
     memoryRows.push({
       id: memoryId,
@@ -1494,9 +1570,13 @@ async function processNewTraceMemories(ctx: {
       accessCount: 0,
       lastAccessed: null,
       encodingStrength: 1.0,
+      gist: generateFallbackGist(item.fact.content),
+      scopeProfile: item.profile ?? null,
+      scopeProject: item.project ?? null,
+      scopeSession: item.session ?? null,
       createdAt: now,
       updatedAt: now,
-    })
+    });
 
     const memory: MemoryUnit = {
       id: memoryId,
@@ -1519,21 +1599,21 @@ async function processNewTraceMemories(ctx: {
       history: null,
       createdAt: now,
       updatedAt: now,
-    }
+    };
 
-    const linkedEntityIds: string[] = []
-    const linkedEntityNames = new Set<string>()
+    const linkedEntityIds: string[] = [];
+    const linkedEntityNames = new Set<string>();
     for (const ent of item.fact.entities) {
-      const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-      const entity = entityPlan.entityMap.get(key)
-      if (!entity) continue
-      linkedEntityIds.push(entity.id)
-      linkedEntityNames.add(ent.name.toLowerCase())
-      entityIdsByResult[item.originalIndex]!.add(entity.id)
+      const key = `${ent.name.toLowerCase()}:${ent.entityType}`;
+      const entity = entityPlan.entityMap.get(key);
+      if (!entity) continue;
+      linkedEntityIds.push(entity.id);
+      linkedEntityNames.add(ent.name.toLowerCase());
+      entityIdsByResult[item.originalIndex]!.add(entity.id);
     }
 
-    memoryEntityIds.set(memoryId, linkedEntityIds)
-    memoryEntityNames.set(memoryId, linkedEntityNames)
+    memoryEntityIds.set(memoryId, linkedEntityIds);
+    memoryEntityNames.set(memoryId, linkedEntityNames);
     memoryRecords.push({
       memory,
       originalIndex: item.originalIndex,
@@ -1544,11 +1624,11 @@ async function processNewTraceMemories(ctx: {
       project: item.project,
       session: item.session,
       sourceText: item.fact.content,
-    })
-    const groupMemoryIds = memoryIdsByGroup.get(item.groupIndex) ?? []
-    groupMemoryIds.push(memoryId)
-    memoryIdsByGroup.set(item.groupIndex, groupMemoryIds)
-    memoryIdsToOriginalIndex.set(memoryId, item.originalIndex)
+    });
+    const groupMemoryIds = memoryIdsByGroup.get(item.groupIndex) ?? [];
+    groupMemoryIds.push(memoryId);
+    memoryIdsByGroup.set(item.groupIndex, groupMemoryIds);
+    memoryIdsToOriginalIndex.set(memoryId, item.originalIndex);
   }
 
   const existingById = new Map(
@@ -1558,14 +1638,17 @@ async function processNewTraceMemories(ctx: {
       .where(eq(hdb.schema.entities.bankId, bankId))
       .all()
       .map((row) => [row.id, row]),
-  )
+  );
 
-  const createdLinks: RetainResult["links"] = []
+  const createdLinks: RetainResult["links"] = [];
 
   runInTransaction(hdb, () => {
-    for (const [entityId, delta] of entityPlan.existingMentionDeltas.entries()) {
-      const existing = existingById.get(entityId)
-      if (!existing) continue
+    for (const [
+      entityId,
+      delta,
+    ] of entityPlan.existingMentionDeltas.entries()) {
+      const existing = existingById.get(entityId);
+      if (!existing) continue;
       hdb.db
         .update(hdb.schema.entities)
         .set({
@@ -1573,11 +1656,11 @@ async function processNewTraceMemories(ctx: {
           mentionCount: existing.mentionCount + delta,
         })
         .where(eq(hdb.schema.entities.id, entityId))
-        .run()
+        .run();
     }
 
     for (const newEntity of entityPlan.newEntities) {
-      hdb.db.insert(hdb.schema.entities).values(newEntity).run()
+      hdb.db.insert(hdb.schema.entities).values(newEntity).run();
     }
 
     entityVec.upsertVectors(
@@ -1585,14 +1668,14 @@ async function processNewTraceMemories(ctx: {
         id: entity.id,
         vector: entityVectors[index]!,
       })),
-    )
+    );
 
     for (const row of memoryRows) {
-      hdb.db.insert(hdb.schema.memoryUnits).values(row).run()
+      hdb.db.insert(hdb.schema.memoryUnits).values(row).run();
       hdb.sqlite.run(
         "INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)",
         [row.id, bankId, row.content],
-      )
+      );
     }
 
     memoryVec.upsertVectors(
@@ -1600,17 +1683,17 @@ async function processNewTraceMemories(ctx: {
         id: item.memory.id,
         vector: item.vector,
       })),
-    )
+    );
 
     for (const memory of memoryRecords) {
-      const linkedEntityIds = memoryEntityIds.get(memory.memory.id) ?? []
+      const linkedEntityIds = memoryEntityIds.get(memory.memory.id) ?? [];
       for (const entityId of linkedEntityIds) {
         hdb.db
           .insert(hdb.schema.memoryEntities)
           .values({ memoryId: memory.memory.id, entityId })
-          .run()
+          .run();
       }
-      updateCooccurrences(hdb, bankId, linkedEntityIds)
+      updateCooccurrences(hdb, bankId, linkedEntityIds);
     }
 
     createEntityLinksFromMemories(
@@ -1620,7 +1703,7 @@ async function processNewTraceMemories(ctx: {
       memoryEntityNames,
       now,
       createdLinks,
-    )
+    );
 
     createCausalLinksFromGroups(
       hdb,
@@ -1629,7 +1712,7 @@ async function processNewTraceMemories(ctx: {
       memoryIdsByGroup,
       now,
       createdLinks,
-    )
+    );
 
     createTemporalLinksFromMemories(
       hdb,
@@ -1637,7 +1720,7 @@ async function processNewTraceMemories(ctx: {
       memoryRecords.map((record) => record.memory),
       now,
       createdLinks,
-    )
+    );
 
     createSemanticLinksFromVectors(
       hdb,
@@ -1649,33 +1732,47 @@ async function processNewTraceMemories(ctx: {
       })),
       now,
       createdLinks,
-    )
-  })
+    );
+  });
 
   for (const memory of memoryRecords) {
-    aggregate[memory.originalIndex]!.memories.push(memory.memory)
+    aggregate[memory.originalIndex]!.memories.push(memory.memory);
   }
 
   for (const link of createdLinks) {
-    const sourceIndex = memoryIdsToOriginalIndex.get(link.sourceId)
-    const targetIndex = memoryIdsToOriginalIndex.get(link.targetId)
+    const sourceIndex = memoryIdsToOriginalIndex.get(link.sourceId);
+    const targetIndex = memoryIdsToOriginalIndex.get(link.targetId);
     if (sourceIndex !== undefined) {
-      addUniqueLink(aggregate[sourceIndex]!, linkKeysByResult[sourceIndex]!, link)
+      addUniqueLink(
+        aggregate[sourceIndex]!,
+        linkKeysByResult[sourceIndex]!,
+        link,
+      );
     }
     if (targetIndex !== undefined && targetIndex !== sourceIndex) {
-      addUniqueLink(aggregate[targetIndex]!, linkKeysByResult[targetIndex]!, link)
+      addUniqueLink(
+        aggregate[targetIndex]!,
+        linkKeysByResult[targetIndex]!,
+        link,
+      );
     }
   }
 
   // Log new_trace decisions
   for (let i = 0; i < memoryRecords.length; i++) {
-    const flatIdx = newTraceDecisionIndices[i]
+    const flatIdx = newTraceDecisionIndices[i];
     if (flatIdx !== undefined) {
-      logDecision(hdb, bankId, batchDecisions[flatIdx]!, memoryRecords[i]!.memory.id, now)
+      logDecision(
+        hdb,
+        bankId,
+        batchDecisions[flatIdx]!,
+        memoryRecords[i]!.memory.id,
+        now,
+      );
     }
   }
 
-  return memoryRecords
+  return memoryRecords;
 }
 
 export async function retainBatch(
@@ -1689,27 +1786,27 @@ export async function retainBatch(
   options: RetainBatchOptions = {},
   rerank?: RerankFunction,
 ): Promise<RetainBatchResult> {
-  if (contents.length === 0) return []
-  const normalizedItems = normalizeBatchInputs(bankId, contents, options)
-  if (normalizedItems.length === 0) return []
+  if (contents.length === 0) return [];
+  const normalizedItems = normalizeBatchInputs(bankId, contents, options);
+  if (normalizedItems.length === 0) return [];
 
-  const expandedContents = await explodeBatchContents(bankId, normalizedItems)
-  const subBatches = splitByCharacterBudget(expandedContents, CHARS_PER_BATCH)
+  const expandedContents = await explodeBatchContents(bankId, normalizedItems);
+  const subBatches = splitByCharacterBudget(expandedContents, CHARS_PER_BATCH);
   const aggregate = normalizedItems.map<RetainResult>(() => ({
     memories: [],
     entities: [],
     links: [],
-  }))
-  const entityIdsByResult = normalizedItems.map(() => new Set<string>())
-  const entityById = new Map<string, Entity>()
-  const linkKeysByResult = normalizedItems.map(() => new Set<string>())
-  const memoryIdsToOriginalIndex = new Map<string, number>()
-  const mentionOffsetsByResult = normalizedItems.map(() => 0)
+  }));
+  const entityIdsByResult = normalizedItems.map(() => new Set<string>());
+  const entityById = new Map<string, Entity>();
+  const linkKeysByResult = normalizedItems.map(() => new Set<string>());
+  const memoryIdsToOriginalIndex = new Map<string, number>();
+  const mentionOffsetsByResult = normalizedItems.map(() => 0);
 
-  const now = Date.now()
-  const dedupThreshold = options.dedupThreshold ?? 0
-  const documentRows: Array<typeof hdb.schema.documents.$inferInsert> = normalizedItems.map(
-    (item) => ({
+  const now = Date.now();
+  const dedupThreshold = options.dedupThreshold ?? 0;
+  const documentRows: Array<typeof hdb.schema.documents.$inferInsert> =
+    normalizedItems.map((item) => ({
       id: item.documentId,
       bankId,
       originalText: item.content,
@@ -1722,43 +1819,42 @@ export async function retainBatch(
       tags: item.tags.length > 0 ? JSON.stringify(item.tags) : null,
       createdAt: now,
       updatedAt: now,
-    }),
-  )
-  const chunkRows: Array<typeof hdb.schema.chunks.$inferInsert> = expandedContents.map(
-    (item) => ({
+    }));
+  const chunkRows: Array<typeof hdb.schema.chunks.$inferInsert> =
+    expandedContents.map((item) => ({
       id: item.chunkId,
       documentId: item.documentId,
       bankId,
       content: item.content,
       chunkIndex: item.chunkIndex,
       createdAt: now,
-    }),
-  )
+    }));
 
   runInTransaction(hdb, () => {
-    upsertDocuments(hdb, documentRows)
-    upsertChunks(hdb, chunkRows)
-  })
+    upsertDocuments(hdb, documentRows);
+    upsertChunks(hdb, chunkRows);
+  });
 
   for (const subBatch of subBatches) {
     const extractedPerContent = await Promise.all(
-      subBatch.map(async ({ content, context, eventDateMs, chunkIndex, chunkCount }) =>
-        extractFactsFromContent(
-          adapter,
-          content,
-          options,
-          context,
-          eventDateMs,
-          chunkIndex,
-          chunkCount,
-        ),
+      subBatch.map(
+        async ({ content, context, eventDateMs, chunkIndex, chunkCount }) =>
+          extractFactsFromContent(
+            adapter,
+            content,
+            options,
+            context,
+            eventDateMs,
+            chunkIndex,
+            chunkCount,
+          ),
       ),
-    )
+    );
 
-    const flattened: PreparedExtractedFact[] = []
+    const flattened: PreparedExtractedFact[] = [];
     for (let groupIndex = 0; groupIndex < subBatch.length; groupIndex++) {
-      const item = subBatch[groupIndex]!
-      const extracted = extractedPerContent[groupIndex]!
+      const item = subBatch[groupIndex]!;
+      const extracted = extractedPerContent[groupIndex]!;
       for (const fact of extracted) {
         flattened.push({
           fact,
@@ -1774,29 +1870,29 @@ export async function retainBatch(
           profile: item.profile,
           project: item.project,
           session: item.session,
-        })
+        });
       }
     }
 
-    if (flattened.length === 0) continue
+    if (flattened.length === 0) continue;
 
     const allVectors = await memoryVec.createVectors(
       flattened.map((item) => item.fact.content),
-    )
+    );
 
     // ── Route each fact via reconsolidation engine ──
-    const batchDecisions: RouteDecision[] = []
+    const batchDecisions: RouteDecision[] = [];
     const batchAppliedMemoryIds: Array<{
-      memoryId: string
-      route: RetainRoute
-      originalIndex: number
-      flatIndex: number
-      eventTime: number
-      profile: string | null
-      project: string | null
-      session: string | null
-      sourceText: string
-    }> = []
+      memoryId: string;
+      route: RetainRoute;
+      originalIndex: number;
+      flatIndex: number;
+      eventTime: number;
+      profile: string | null;
+      project: string | null;
+      session: string | null;
+      sourceText: string;
+    }> = [];
 
     for (let i = 0; i < flattened.length; i++) {
       if (dedupThreshold <= 0) {
@@ -1806,10 +1902,10 @@ export async function retainBatch(
           candidateScore: null,
           conflictDetected: false,
           conflictKeys: [],
-        })
-        continue
+        });
+        continue;
       }
-      const item = flattened[i]!
+      const item = flattened[i]!;
       const routingCtx: RoutingContext = {
         hdb,
         memoryVec,
@@ -1817,29 +1913,32 @@ export async function retainBatch(
         eventTime: item.eventDateMs + i,
         profile: item.profile,
         project: item.project,
-      }
+      };
       const decision = routeFactByVector(
         routingCtx,
         item.fact.entities,
         allVectors[i]!,
         {
           reinforceThreshold: dedupThreshold,
-          reconsolidateThreshold: Math.min(RECONSOLIDATE_THRESHOLD, dedupThreshold),
+          reconsolidateThreshold: Math.min(
+            RECONSOLIDATE_THRESHOLD,
+            dedupThreshold,
+          ),
         },
-      )
-      batchDecisions.push(decision)
+      );
+      batchDecisions.push(decision);
     }
 
     // Apply reinforce and reconsolidate actions
     for (let i = 0; i < flattened.length; i++) {
-      const decision = batchDecisions[i]!
-      const item = flattened[i]!
-      const eventTime = item.eventDateMs + i
+      const decision = batchDecisions[i]!;
+      const item = flattened[i]!;
+      const eventTime = item.eventDateMs + i;
       if (decision.route === "reinforce" && decision.candidateMemoryId) {
         runInTransaction(hdb, () => {
-          applyReinforce(hdb, decision.candidateMemoryId!, now)
-          logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
-        })
+          applyReinforce(hdb, decision.candidateMemoryId!, now);
+          logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now);
+        });
         batchAppliedMemoryIds.push({
           memoryId: decision.candidateMemoryId,
           route: "reinforce",
@@ -1850,17 +1949,23 @@ export async function retainBatch(
           project: item.project,
           session: item.session,
           sourceText: item.fact.content,
-        })
-      } else if (decision.route === "reconsolidate" && decision.candidateMemoryId) {
+        });
+      } else if (
+        decision.route === "reconsolidate" &&
+        decision.candidateMemoryId
+      ) {
         await applyReconsolidate(
-          hdb, memoryVec, decision.candidateMemoryId,
-          item.fact.content, item.fact.entities,
+          hdb,
+          memoryVec,
+          decision.candidateMemoryId,
+          item.fact.content,
+          item.fact.entities,
           `Reconsolidated: score=${decision.candidateScore?.toFixed(3)}`,
           now,
-        )
+        );
         runInTransaction(hdb, () => {
-          logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now)
-        })
+          logDecision(hdb, bankId, decision, decision.candidateMemoryId!, now);
+        });
         batchAppliedMemoryIds.push({
           memoryId: decision.candidateMemoryId,
           route: "reconsolidate",
@@ -1871,19 +1976,19 @@ export async function retainBatch(
           project: item.project,
           session: item.session,
           sourceText: item.fact.content,
-        })
+        });
       }
     }
 
     // Filter to only new_trace facts for the insert pipeline
-    const retainedFacts: PreparedExtractedFact[] = []
-    const retainedVectors: Float32Array[] = []
-    const newTraceDecisionIndices: number[] = []
+    const retainedFacts: PreparedExtractedFact[] = [];
+    const retainedVectors: Float32Array[] = [];
+    const newTraceDecisionIndices: number[] = [];
     for (let i = 0; i < flattened.length; i++) {
-      if (batchDecisions[i]!.route !== "new_trace") continue
-      retainedFacts.push(flattened[i]!)
-      retainedVectors.push(allVectors[i]!)
-      newTraceDecisionIndices.push(i)
+      if (batchDecisions[i]!.route !== "new_trace") continue;
+      retainedFacts.push(flattened[i]!);
+      retainedVectors.push(allVectors[i]!);
+      newTraceDecisionIndices.push(i);
     }
 
     // Load reinforced/reconsolidated memories into aggregate results
@@ -1892,24 +1997,35 @@ export async function retainBatch(
         .select()
         .from(hdb.schema.memoryUnits)
         .where(eq(hdb.schema.memoryUnits.id, memoryId))
-        .get()
+        .get();
       if (row) {
-        aggregate[originalIndex]!.memories.push(rowToMemoryUnit(row))
+        aggregate[originalIndex]!.memories.push(rowToMemoryUnit(row));
       }
     }
 
-    if (retainedFacts.length === 0 && batchAppliedMemoryIds.length === 0) continue
+    if (retainedFacts.length === 0 && batchAppliedMemoryIds.length === 0)
+      continue;
 
-    let memoryRecords: MemoryRecordList = []
+    let memoryRecords: MemoryRecordList = [];
 
     if (retainedFacts.length > 0) {
       memoryRecords = await processNewTraceMemories({
-        hdb, bankId, retainedFacts, retainedVectors,
-        newTraceDecisionIndices, batchDecisions,
-        entityVec, memoryVec, now,
-        entityById, entityIdsByResult, mentionOffsetsByResult,
-        aggregate, linkKeysByResult, memoryIdsToOriginalIndex,
-      })
+        hdb,
+        bankId,
+        retainedFacts,
+        retainedVectors,
+        newTraceDecisionIndices,
+        batchDecisions,
+        entityVec,
+        memoryVec,
+        now,
+        entityById,
+        entityIdsByResult,
+        mentionOffsetsByResult,
+        aggregate,
+        linkKeysByResult,
+        memoryIdsToOriginalIndex,
+      });
     }
 
     // ── Episode tracking ──
@@ -1923,7 +2039,7 @@ export async function retainBatch(
         applied.project,
         applied.session,
         applied.sourceText,
-      )
+      );
       recordEpisodeEvent(
         hdb,
         episodeId,
@@ -1934,10 +2050,11 @@ export async function retainBatch(
         applied.profile,
         applied.project,
         applied.session,
-      )
+      );
     }
     for (const record of memoryRecords) {
-      const eventTime = record.memory.mentionedAt ?? record.memory.eventDate ?? Date.now()
+      const eventTime =
+        record.memory.mentionedAt ?? record.memory.eventDate ?? Date.now();
       const episodeId = resolveEpisode(
         hdb,
         bankId,
@@ -1946,7 +2063,7 @@ export async function retainBatch(
         record.project,
         record.session,
         record.sourceText,
-      )
+      );
       recordEpisodeEvent(
         hdb,
         episodeId,
@@ -1957,29 +2074,48 @@ export async function retainBatch(
         record.profile,
         record.project,
         record.session,
-      )
+      );
     }
   }
 
   for (let i = 0; i < aggregate.length; i++) {
     aggregate[i]!.entities = [...entityIdsByResult[i]!]
       .map((entityId) => entityById.get(entityId))
-      .filter((entity): entity is Entity => Boolean(entity))
+      .filter((entity): entity is Entity => Boolean(entity));
   }
 
   if (options.consolidate !== false) {
-    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank).catch(() => {
-      // consolidation is best-effort
-    })
+    consolidate(hdb, memoryVec, modelVec, adapter, bankId, {}, rerank).catch(
+      () => {
+        // consolidation is best-effort
+      },
+    );
   }
 
-  return aggregate
+  // Fire-and-forget LLM gist generation for batch memories
+  for (const result of aggregate) {
+    for (const mem of result.memories) {
+      generateGistWithLLM(adapter, mem.content)
+        .then((gist) => {
+          hdb.db
+            .update(hdb.schema.memoryUnits)
+            .set({ gist })
+            .where(eq(hdb.schema.memoryUnits.id, mem.id))
+            .run();
+        })
+        .catch((err) => {
+          console.debug?.("[gist] async LLM gist failed:", err);
+        });
+    }
+  }
+
+  return aggregate;
 }
 
 // ── Semantic Links ─────────────────────────────────────────────────────────
 
-const SEMANTIC_LINK_THRESHOLD = 0.7
-const SEMANTIC_LINK_TOP_K = 5
+const SEMANTIC_LINK_THRESHOLD = 0.7;
+const SEMANTIC_LINK_TOP_K = 5;
 
 function createEntityLinksFromMemories(
   hdb: HindsightDatabase,
@@ -1990,19 +2126,19 @@ function createEntityLinksFromMemories(
   output: RetainResult["links"],
 ): void {
   for (let i = 0; i < memoryIds.length; i++) {
-    const sourceId = memoryIds[i]!
-    const sourceEntities = memoryEntityNames.get(sourceId) ?? new Set<string>()
+    const sourceId = memoryIds[i]!;
+    const sourceEntities = memoryEntityNames.get(sourceId) ?? new Set<string>();
     for (let j = i + 1; j < memoryIds.length; j++) {
-      const targetId = memoryIds[j]!
-      const targetEntities = memoryEntityNames.get(targetId) ?? new Set<string>()
+      const targetId = memoryIds[j]!;
+      const targetEntities =
+        memoryEntityNames.get(targetId) ?? new Set<string>();
       const shared = [...sourceEntities].filter((name) =>
         targetEntities.has(name),
-      )
-      if (shared.length === 0) continue
+      );
+      if (shared.length === 0) continue;
 
       const weight =
-        shared.length /
-        Math.max(sourceEntities.size, targetEntities.size, 1)
+        shared.length / Math.max(sourceEntities.size, targetEntities.size, 1);
 
       hdb.db
         .insert(hdb.schema.memoryLinks)
@@ -2016,9 +2152,9 @@ function createEntityLinksFromMemories(
           createdAt,
         })
         .onConflictDoNothing()
-        .run()
+        .run();
 
-      output.push({ sourceId, targetId, linkType: "entity" })
+      output.push({ sourceId, targetId, linkType: "entity" });
     }
   }
 }
@@ -2030,10 +2166,10 @@ function createTemporalLinksFromMemories(
   createdAt: number,
   output: RetainResult["links"],
 ): void {
-  if (newMemories.length === 0) return
+  if (newMemories.length === 0) return;
 
-  const windowMs = TEMPORAL_LINK_WINDOW_HOURS * 60 * 60 * 1000
-  const newMemoryIds = new Set(newMemories.map((memory) => memory.id))
+  const windowMs = TEMPORAL_LINK_WINDOW_HOURS * 60 * 60 * 1000;
+  const newMemoryIds = new Set(newMemories.map((memory) => memory.id));
   const candidateRows = hdb.db
     .select({
       id: hdb.schema.memoryUnits.id,
@@ -2046,7 +2182,7 @@ function createTemporalLinksFromMemories(
     })
     .from(hdb.schema.memoryUnits)
     .where(eq(hdb.schema.memoryUnits.bankId, bankId))
-    .all()
+    .all();
 
   const candidateAnchors = candidateRows
     .filter((row) => row.bankId === bankId && !newMemoryIds.has(row.id))
@@ -2060,9 +2196,9 @@ function createTemporalLinksFromMemories(
         row.createdAt,
       ),
     }))
-    .filter((row): row is { id: string; anchor: number } => row.anchor != null)
+    .filter((row): row is { id: string; anchor: number } => row.anchor != null);
 
-  const newUnits: Record<string, number> = {}
+  const newUnits: Record<string, number> = {};
   for (const memory of newMemories) {
     const anchor = getTemporalAnchor(
       memory.eventDate,
@@ -2070,31 +2206,34 @@ function createTemporalLinksFromMemories(
       memory.occurredEnd,
       memory.mentionedAt,
       memory.createdAt,
-    )
-    if (anchor == null) continue
-    newUnits[memory.id] = anchor
+    );
+    if (anchor == null) continue;
+    newUnits[memory.id] = anchor;
   }
 
   const { minDate, maxDate } = computeTemporalQueryBounds(
     newUnits,
     TEMPORAL_LINK_WINDOW_HOURS,
-  )
+  );
   const boundedCandidates =
     minDate == null || maxDate == null
       ? []
       : candidateAnchors
-          .filter((candidate) => candidate.anchor >= minDate && candidate.anchor <= maxDate)
+          .filter(
+            (candidate) =>
+              candidate.anchor >= minDate && candidate.anchor <= maxDate,
+          )
           .sort((a, b) => b.anchor - a.anchor)
           .map((candidate) => ({
             id: candidate.id,
             eventDate: candidate.anchor,
-          }))
+          }));
 
   const temporalLinks = computeTemporalLinks(
     newUnits,
     boundedCandidates,
     TEMPORAL_LINK_WINDOW_HOURS,
-  )
+  );
 
   for (const [sourceId, targetId, _linkType, weight] of temporalLinks) {
     insertTemporalLinkIfMissing(
@@ -2105,34 +2244,34 @@ function createTemporalLinksFromMemories(
       weight,
       createdAt,
       output,
-    )
+    );
   }
 
   for (let i = 0; i < newMemories.length; i++) {
-    const source = newMemories[i]!
+    const source = newMemories[i]!;
     const sourceAnchor = getTemporalAnchor(
       source.eventDate,
       source.occurredStart,
       source.occurredEnd,
       source.mentionedAt,
       source.createdAt,
-    )
-    if (sourceAnchor == null) continue
+    );
+    if (sourceAnchor == null) continue;
 
     for (let j = i + 1; j < newMemories.length; j++) {
-      const target = newMemories[j]!
+      const target = newMemories[j]!;
       const targetAnchor = getTemporalAnchor(
         target.eventDate,
         target.occurredStart,
         target.occurredEnd,
         target.mentionedAt,
         target.createdAt,
-      )
-      if (targetAnchor == null) continue
+      );
+      if (targetAnchor == null) continue;
 
-      const distanceMs = Math.abs(sourceAnchor - targetAnchor)
-      if (distanceMs > windowMs) continue
-      const weight = computeTemporalWeight(distanceMs, windowMs)
+      const distanceMs = Math.abs(sourceAnchor - targetAnchor);
+      if (distanceMs > windowMs) continue;
+      const weight = computeTemporalWeight(distanceMs, windowMs);
 
       insertTemporalLinkIfMissing(
         hdb,
@@ -2142,7 +2281,7 @@ function createTemporalLinksFromMemories(
         weight,
         createdAt,
         output,
-      )
+      );
       insertTemporalLinkIfMissing(
         hdb,
         bankId,
@@ -2151,7 +2290,7 @@ function createTemporalLinksFromMemories(
         weight,
         createdAt,
         output,
-      )
+      );
     }
   }
 }
@@ -2163,13 +2302,7 @@ function getTemporalAnchor(
   mentionedAt: number | null,
   createdAt: number,
 ): number | null {
-  return (
-    eventDate ??
-    occurredStart ??
-    occurredEnd ??
-    mentionedAt ??
-    createdAt
-  )
+  return eventDate ?? occurredStart ?? occurredEnd ?? mentionedAt ?? createdAt;
 }
 
 function insertTemporalLinkIfMissing(
@@ -2181,7 +2314,7 @@ function insertTemporalLinkIfMissing(
   createdAt: number,
   output: RetainResult["links"],
 ): void {
-  if (sourceId === targetId) return
+  if (sourceId === targetId) return;
 
   const existing = hdb.db
     .select({ id: hdb.schema.memoryLinks.id })
@@ -2194,8 +2327,8 @@ function insertTemporalLinkIfMissing(
         eq(hdb.schema.memoryLinks.linkType, "temporal"),
       ),
     )
-    .get()
-  if (existing) return
+    .get();
+  if (existing) return;
 
   hdb.db
     .insert(hdb.schema.memoryLinks)
@@ -2208,9 +2341,9 @@ function insertTemporalLinkIfMissing(
       weight,
       createdAt,
     })
-    .run()
+    .run();
 
-  output.push({ sourceId, targetId, linkType: "temporal" })
+  output.push({ sourceId, targetId, linkType: "temporal" });
 }
 
 function insertCausalRelations(
@@ -2224,11 +2357,11 @@ function insertCausalRelations(
   output: RetainResult["links"],
 ): void {
   for (const relation of relations) {
-    if (relation.targetIndex < 0 || relation.targetIndex >= factIndex) continue
-    const targetId = groupMemoryIds[relation.targetIndex]
-    if (!targetId || sourceId === targetId) continue
+    if (relation.targetIndex < 0 || relation.targetIndex >= factIndex) continue;
+    const targetId = groupMemoryIds[relation.targetIndex];
+    if (!targetId || sourceId === targetId) continue;
 
-    const linkType = relation.relationType ?? "caused_by"
+    const linkType = relation.relationType ?? "caused_by";
     hdb.db
       .insert(hdb.schema.memoryLinks)
       .values({
@@ -2241,9 +2374,9 @@ function insertCausalRelations(
         createdAt,
       })
       .onConflictDoNothing()
-      .run()
+      .run();
 
-    output.push({ sourceId, targetId, linkType })
+    output.push({ sourceId, targetId, linkType });
   }
 }
 
@@ -2255,20 +2388,29 @@ function createCausalLinksFromGroups(
   createdAt: number,
   output: RetainResult["links"],
 ): void {
-  const factsByGroup = new Map<number, PreparedExtractedFact[]>()
+  const factsByGroup = new Map<number, PreparedExtractedFact[]>();
   for (const fact of facts) {
-    const list = factsByGroup.get(fact.groupIndex) ?? []
-    list.push(fact)
-    factsByGroup.set(fact.groupIndex, list)
+    const list = factsByGroup.get(fact.groupIndex) ?? [];
+    list.push(fact);
+    factsByGroup.set(fact.groupIndex, list);
   }
 
   for (const [groupIndex, groupFacts] of factsByGroup.entries()) {
-    const groupMemoryIds = memoryIdsByGroup.get(groupIndex) ?? []
+    const groupMemoryIds = memoryIdsByGroup.get(groupIndex) ?? [];
     for (let i = 0; i < groupFacts.length; i++) {
-      const sourceId = groupMemoryIds[i]
-      const fact = groupFacts[i]
-      if (!sourceId || !fact) continue
-      insertCausalRelations(hdb, bankId, sourceId, i, groupMemoryIds, fact.fact.causalRelations ?? [], createdAt, output)
+      const sourceId = groupMemoryIds[i];
+      const fact = groupFacts[i];
+      if (!sourceId || !fact) continue;
+      insertCausalRelations(
+        hdb,
+        bankId,
+        sourceId,
+        i,
+        groupMemoryIds,
+        fact.fact.causalRelations ?? [],
+        createdAt,
+        output,
+      );
     }
   }
 }
@@ -2281,22 +2423,25 @@ function createSemanticLinksFromVectors(
   createdAt: number,
   output: RetainResult["links"],
 ): void {
-  const newMemoryIds = new Set(newMemories.map((memory) => memory.id))
+  const newMemoryIds = new Set(newMemories.map((memory) => memory.id));
 
   for (const memory of newMemories) {
-    const hits = memoryVec.searchByVector(memory.vector, SEMANTIC_LINK_TOP_K + 1)
+    const hits = memoryVec.searchByVector(
+      memory.vector,
+      SEMANTIC_LINK_TOP_K + 1,
+    );
 
     for (const hit of hits) {
-      if (hit.id === memory.id || newMemoryIds.has(hit.id)) continue
-      const similarity = 1 - hit.distance
-      if (similarity < SEMANTIC_LINK_THRESHOLD) continue
+      if (hit.id === memory.id || newMemoryIds.has(hit.id)) continue;
+      const similarity = 1 - hit.distance;
+      if (similarity < SEMANTIC_LINK_THRESHOLD) continue;
 
       const row = hdb.db
         .select({ bankId: hdb.schema.memoryUnits.bankId })
         .from(hdb.schema.memoryUnits)
         .where(eq(hdb.schema.memoryUnits.id, hit.id))
-        .get()
-      if (row?.bankId !== bankId) continue
+        .get();
+      if (row?.bankId !== bankId) continue;
 
       hdb.db
         .insert(hdb.schema.memoryLinks)
@@ -2310,13 +2455,13 @@ function createSemanticLinksFromVectors(
           createdAt,
         })
         .onConflictDoNothing()
-        .run()
+        .run();
 
       output.push({
         sourceId: memory.id,
         targetId: hit.id,
         linkType: "semantic",
-      })
+      });
     }
   }
 }
@@ -2326,10 +2471,10 @@ function addUniqueLink(
   linkKeys: Set<string>,
   link: RetainResult["links"][number],
 ): void {
-  const key = `${link.sourceId}:${link.targetId}:${link.linkType}`
-  if (linkKeys.has(key)) return
-  linkKeys.add(key)
-  result.links.push(link)
+  const key = `${link.sourceId}:${link.targetId}:${link.linkType}`;
+  if (linkKeys.has(key)) return;
+  linkKeys.add(key);
+  result.links.push(link);
 }
 
 async function createSemanticLinks(
@@ -2338,33 +2483,33 @@ async function createSemanticLinks(
   bankId: string,
   newMemoryIds: string[],
 ): Promise<RetainResult["links"]> {
-  const links: RetainResult["links"] = []
-  const newIdSet = new Set(newMemoryIds)
+  const links: RetainResult["links"] = [];
+  const newIdSet = new Set(newMemoryIds);
 
   for (const memoryId of newMemoryIds) {
     const row = hdb.db
       .select({ content: hdb.schema.memoryUnits.content })
       .from(hdb.schema.memoryUnits)
       .where(eq(hdb.schema.memoryUnits.id, memoryId))
-      .get()
-    if (!row) continue
+      .get();
+    if (!row) continue;
 
-    const hits = await memoryVec.search(row.content, SEMANTIC_LINK_TOP_K + 1)
+    const hits = await memoryVec.search(row.content, SEMANTIC_LINK_TOP_K + 1);
 
     for (const hit of hits) {
       // Skip self and other new memories (entity links already cover within-batch)
-      if (hit.id === memoryId || newIdSet.has(hit.id)) continue
+      if (hit.id === memoryId || newIdSet.has(hit.id)) continue;
 
-      const similarity = 1 - hit.distance
-      if (similarity < SEMANTIC_LINK_THRESHOLD) continue
+      const similarity = 1 - hit.distance;
+      if (similarity < SEMANTIC_LINK_THRESHOLD) continue;
 
       // Verify same bank
       const memRow = hdb.db
         .select({ bankId: hdb.schema.memoryUnits.bankId })
         .from(hdb.schema.memoryUnits)
         .where(eq(hdb.schema.memoryUnits.id, hit.id))
-        .get()
-      if (memRow?.bankId !== bankId) continue
+        .get();
+      if (memRow?.bankId !== bankId) continue;
 
       hdb.db
         .insert(hdb.schema.memoryLinks)
@@ -2378,17 +2523,17 @@ async function createSemanticLinks(
           createdAt: Date.now(),
         })
         .onConflictDoNothing()
-        .run()
+        .run();
 
       links.push({
         sourceId: memoryId,
         targetId: hit.id,
         linkType: "semantic" as LinkType,
-      })
+      });
     }
   }
 
-  return links
+  return links;
 }
 
 // ── Co-occurrence Helpers ──────────────────────────────────────────────────
@@ -2400,22 +2545,22 @@ function loadCooccurrences(
   hdb: HindsightDatabase,
   bankId: string,
 ): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>()
+  const map = new Map<string, Set<string>>();
 
   const rows = hdb.db
     .select()
     .from(hdb.schema.entityCooccurrences)
     .where(eq(hdb.schema.entityCooccurrences.bankId, bankId))
-    .all()
+    .all();
 
   for (const row of rows) {
-    if (!map.has(row.entityA)) map.set(row.entityA, new Set())
-    if (!map.has(row.entityB)) map.set(row.entityB, new Set())
-    map.get(row.entityA)!.add(row.entityB)
-    map.get(row.entityB)!.add(row.entityA)
+    if (!map.has(row.entityA)) map.set(row.entityA, new Set());
+    if (!map.has(row.entityB)) map.set(row.entityB, new Set());
+    map.get(row.entityA)!.add(row.entityB);
+    map.get(row.entityB)!.add(row.entityA);
   }
 
-  return map
+  return map;
 }
 
 /**
@@ -2432,7 +2577,7 @@ function updateCooccurrences(
       const [entityA, entityB] =
         entityIds[i]! < entityIds[j]!
           ? [entityIds[i]!, entityIds[j]!]
-          : [entityIds[j]!, entityIds[i]!]
+          : [entityIds[j]!, entityIds[i]!];
 
       // Use raw SQL for upsert (ON CONFLICT UPDATE)
       hdb.sqlite.run(
@@ -2441,9 +2586,9 @@ function updateCooccurrences(
          ON CONFLICT (bank_id, entity_a, entity_b)
          DO UPDATE SET count = count + 1`,
         [bankId, entityA, entityB],
-      )
+      );
     }
   }
 }
 
-export { rowToMemoryUnit, rowToEntity }
+export { rowToMemoryUnit, rowToEntity };

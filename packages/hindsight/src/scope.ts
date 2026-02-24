@@ -10,23 +10,23 @@
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export interface Scope {
-  profile: string
-  project: string
-  session?: string
+  profile: string;
+  project: string;
+  session?: string;
 }
 
 export interface ScopeContext {
-  profile?: string
-  project?: string
-  session?: string
+  profile?: string;
+  project?: string;
+  session?: string;
 }
 
-export type ScopeMode = "strict" | "broad"
+export type ScopeMode = "strict" | "broad";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-export const DEFAULT_PROFILE = "default"
-export const DEFAULT_PROJECT = "default"
+export const DEFAULT_PROFILE = "default";
+export const DEFAULT_PROJECT = "default";
 
 // ── Derivation ──────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ export function deriveScopeTagsFromContext(ctx?: ScopeContext): Scope {
     profile: ctx?.profile || DEFAULT_PROFILE,
     project: ctx?.project || DEFAULT_PROJECT,
     session: ctx?.session,
-  }
+  };
 }
 
 /**
@@ -57,14 +57,14 @@ export function resolveScope(
       profile: explicit.profile,
       project: explicit.project,
       session: explicit.session ?? context?.session,
-    }
+    };
   }
-  const derived = deriveScopeTagsFromContext(context)
+  const derived = deriveScopeTagsFromContext(context);
   return {
     profile: explicit?.profile || derived.profile,
     project: explicit?.project || derived.project,
     session: explicit?.session ?? derived.session,
-  }
+  };
 }
 
 /**
@@ -78,17 +78,15 @@ export function scopeMatches(
   filterScope: Scope,
   mode: ScopeMode = "strict",
 ): boolean {
-  if (mode === "broad") return true
+  if (mode === "broad") return true;
 
   // If memory has no scope tags, include it (legacy data)
-  if (!memoryScope.profile && !memoryScope.project) return true
+  if (!memoryScope.profile && !memoryScope.project) return true;
 
   const profileMatch =
-    !memoryScope.profile ||
-    memoryScope.profile === filterScope.profile
+    !memoryScope.profile || memoryScope.profile === filterScope.profile;
   const projectMatch =
-    !memoryScope.project ||
-    memoryScope.project === filterScope.project
+    !memoryScope.project || memoryScope.project === filterScope.project;
 
-  return profileMatch && projectMatch
+  return profileMatch && projectMatch;
 }

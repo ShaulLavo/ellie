@@ -1,17 +1,17 @@
-import { ulid } from "@ellie/utils"
-import { eq, and, inArray } from "drizzle-orm"
-import { anthropicText } from "@tanstack/ai-anthropic"
-import type { AnyTextAdapter } from "@tanstack/ai"
-import { chat, streamToText } from "@ellie/ai"
-import { createHindsightDB, type HindsightDatabase } from "./db"
-import { resolveModelRuntime } from "./default-models"
-import { EmbeddingStore } from "./embedding"
-import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain"
-import { recall as recallImpl } from "./recall"
-import { WorkingMemoryStore } from "./working-memory"
-import { clamp } from "./util"
-import { reflect as reflectImpl } from "./reflect"
-import { consolidate as consolidateImpl } from "./consolidation"
+import { ulid } from "@ellie/utils";
+import { eq, and, inArray } from "drizzle-orm";
+import { anthropicText } from "@tanstack/ai-anthropic";
+import type { AnyTextAdapter } from "@tanstack/ai";
+import { chat, streamToText } from "@ellie/ai";
+import { createHindsightDB, type HindsightDatabase } from "./db";
+import { resolveModelRuntime } from "./default-models";
+import { EmbeddingStore } from "./embedding";
+import { retain as retainImpl, retainBatch as retainBatchImpl } from "./retain";
+import { recall as recallImpl } from "./recall";
+import { WorkingMemoryStore } from "./working-memory";
+import { clamp } from "./util";
+import { reflect as reflectImpl } from "./reflect";
+import { consolidate as consolidateImpl } from "./consolidation";
 import {
   createMentalModel as createMentalModelImpl,
   getMentalModel as getMentalModelImpl,
@@ -19,18 +19,18 @@ import {
   updateMentalModel as updateMentalModelImpl,
   deleteMentalModel as deleteMentalModelImpl,
   refreshMentalModel as refreshMentalModelImpl,
-} from "./mental-models"
+} from "./mental-models";
 import {
   createDirective as createDirectiveImpl,
   getDirective as getDirectiveImpl,
   listDirectives as listDirectivesImpl,
   updateDirective as updateDirectiveImpl,
   deleteDirective as deleteDirectiveImpl,
-} from "./directives"
+} from "./directives";
 import {
   listEpisodes as listEpisodesImpl,
   narrative as narrativeImpl,
-} from "./episodes"
+} from "./episodes";
 import {
   locationRecord as locationRecordImpl,
   locationFind as locationFindImpl,
@@ -38,8 +38,8 @@ import {
   type LocationContext,
   type LocationHit,
   type LocationStats,
-} from "./location"
-import { resolveScope } from "./scope"
+} from "./location";
+import { resolveScope } from "./scope";
 import type {
   HindsightConfig,
   BankConfig,
@@ -102,7 +102,7 @@ import type {
   ListEpisodesResult,
   NarrativeInput,
   NarrativeResult,
-} from "./types"
+} from "./types";
 
 // ── Default config values ───────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ const HARDCODED_DEFAULTS: Required<BankConfig> = {
   enableConsolidation: true,
   reflectBudget: "mid",
   dedupThreshold: 0.92,
-}
+};
 
 /**
  * Hindsight — biomimetic agent memory built on SQLite.
@@ -127,29 +127,29 @@ const HARDCODED_DEFAULTS: Required<BankConfig> = {
  * - Mental models — user-curated summaries with freshness tracking
  */
 export class Hindsight {
-  private readonly hdb: HindsightDatabase
-  private readonly memoryVec: EmbeddingStore
-  private readonly entityVec: EmbeddingStore
-  private readonly modelVec: EmbeddingStore
-  private readonly adapter: AnyTextAdapter
-  private readonly rerank: RerankFunction | undefined
-  private readonly instanceDefaults: BankConfig | undefined
-  private readonly onTrace: TraceCallback | undefined
-  private readonly extensions: HindsightExtensions | undefined
-  private readonly workingMemory = new WorkingMemoryStore()
-  private readonly activeOperationTasks = new Map<string, Promise<void>>()
-  private readonly cancelledOperations = new Set<string>()
+  private readonly hdb: HindsightDatabase;
+  private readonly memoryVec: EmbeddingStore;
+  private readonly entityVec: EmbeddingStore;
+  private readonly modelVec: EmbeddingStore;
+  private readonly adapter: AnyTextAdapter;
+  private readonly rerank: RerankFunction | undefined;
+  private readonly instanceDefaults: BankConfig | undefined;
+  private readonly onTrace: TraceCallback | undefined;
+  private readonly extensions: HindsightExtensions | undefined;
+  private readonly workingMemory = new WorkingMemoryStore();
+  private readonly activeOperationTasks = new Map<string, Promise<void>>();
+  private readonly cancelledOperations = new Set<string>();
 
   constructor(config: HindsightConfig) {
-    const runtime = resolveModelRuntime(config)
-    const dims = runtime.embeddingDimensions
+    const runtime = resolveModelRuntime(config);
+    const dims = runtime.embeddingDimensions;
 
-    this.hdb = createHindsightDB(config.dbPath, dims)
-    this.adapter = config.adapter ?? anthropicText("claude-haiku-4-5")
-    this.rerank = runtime.rerank
-    this.instanceDefaults = config.defaults
-    this.onTrace = config.onTrace
-    this.extensions = config.extensions
+    this.hdb = createHindsightDB(config.dbPath, dims);
+    this.adapter = config.adapter ?? anthropicText("claude-haiku-4-5");
+    this.rerank = runtime.rerank;
+    this.instanceDefaults = config.defaults;
+    this.onTrace = config.onTrace;
+    this.extensions = config.extensions;
 
     this.memoryVec = new EmbeddingStore(
       this.hdb.sqlite,
@@ -157,21 +157,21 @@ export class Hindsight {
       runtime.embedBatch,
       dims,
       "hs_memory_vec",
-    )
+    );
     this.entityVec = new EmbeddingStore(
       this.hdb.sqlite,
       runtime.embed,
       runtime.embedBatch,
       dims,
       "hs_entity_vec",
-    )
+    );
     this.modelVec = new EmbeddingStore(
       this.hdb.sqlite,
       runtime.embed,
       runtime.embedBatch,
       dims,
       "hs_mental_model_vec",
-    )
+    );
   }
 
   // ── Config resolution ─────────────────────────────────────────────────
@@ -180,12 +180,12 @@ export class Hindsight {
    * Resolve effective config: call-site > bank config > instance defaults > hardcoded defaults
    */
   private resolveConfig(bankId: string): Required<BankConfig> {
-    const bankConfig = this.getBankConfigRaw(bankId)
+    const bankConfig = this.getBankConfigRaw(bankId);
     return {
       ...HARDCODED_DEFAULTS,
       ...stripUndefined(this.instanceDefaults ?? {}),
       ...stripUndefined(bankConfig),
-    }
+    };
   }
 
   private getBankConfigRaw(bankId: string): BankConfig {
@@ -193,12 +193,12 @@ export class Hindsight {
       .select({ config: this.hdb.schema.banks.config })
       .from(this.hdb.schema.banks)
       .where(eq(this.hdb.schema.banks.id, bankId))
-      .get()
-    if (!row?.config) return {}
+      .get();
+    if (!row?.config) return {};
     try {
-      return JSON.parse(row.config) as BankConfig
+      return JSON.parse(row.config) as BankConfig;
     } catch {
-      return {}
+      return {};
     }
   }
 
@@ -212,11 +212,15 @@ export class Hindsight {
     fn: () => Promise<T>,
     extractMetadata: (result: T) => Record<string, unknown>,
   ): Promise<T> {
-    const hookContext = this.buildOperationContext(hookOperation, bankId, input)
-    await this.runBeforeOperationHooks(hookContext)
-    const startedAt = Date.now()
+    const hookContext = this.buildOperationContext(
+      hookOperation,
+      bankId,
+      input,
+    );
+    await this.runBeforeOperationHooks(hookContext);
+    const startedAt = Date.now();
     try {
-      const result = await fn()
+      const result = await fn();
       if (this.onTrace) {
         this.onTrace({
           operation,
@@ -224,23 +228,22 @@ export class Hindsight {
           startedAt,
           duration: Date.now() - startedAt,
           metadata: extractMetadata(result),
-        })
+        });
       }
       await this.runAfterOperationHooks({
         ...hookContext,
         success: true,
         result,
-      })
-      return result
+      });
+      return result;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error);
       await this.runAfterOperationHooks({
         ...hookContext,
         success: false,
         error: message,
-      })
-      throw error
+      });
+      throw error;
     }
   }
 
@@ -249,19 +252,19 @@ export class Hindsight {
   createBank(
     name: string,
     options?: {
-      description?: string
-      config?: BankConfig
-      disposition?: Partial<DispositionTraits>
-      mission?: string
+      description?: string;
+      config?: BankConfig;
+      disposition?: Partial<DispositionTraits>;
+      mission?: string;
     },
   ): Bank {
-    const id = ulid()
-    const now = Date.now()
+    const id = ulid();
+    const now = Date.now();
     const disposition: DispositionTraits = {
       ...DEFAULT_DISPOSITION,
       ...stripUndefined(options?.disposition ?? {}),
-    }
-    const mission = options?.mission ?? ""
+    };
+    const mission = options?.mission ?? "";
 
     this.hdb.db
       .insert(this.hdb.schema.banks)
@@ -275,7 +278,7 @@ export class Hindsight {
         createdAt: now,
         updatedAt: now,
       })
-      .run()
+      .run();
     return {
       id,
       name,
@@ -285,7 +288,7 @@ export class Hindsight {
       mission,
       createdAt: now,
       updatedAt: now,
-    }
+    };
   }
 
   getBank(name: string): Bank | undefined {
@@ -293,8 +296,8 @@ export class Hindsight {
       .select()
       .from(this.hdb.schema.banks)
       .where(eq(this.hdb.schema.banks.name, name))
-      .get()
-    return row ? toBank(row) : undefined
+      .get();
+    return row ? toBank(row) : undefined;
   }
 
   getBankById(id: string): Bank | undefined {
@@ -302,16 +305,12 @@ export class Hindsight {
       .select()
       .from(this.hdb.schema.banks)
       .where(eq(this.hdb.schema.banks.id, id))
-      .get()
-    return row ? toBank(row) : undefined
+      .get();
+    return row ? toBank(row) : undefined;
   }
 
   listBanks(): Bank[] {
-    return this.hdb.db
-      .select()
-      .from(this.hdb.schema.banks)
-      .all()
-      .map(toBank)
+    return this.hdb.db.select().from(this.hdb.schema.banks).all().map(toBank);
   }
 
   deleteBank(id: string): void {
@@ -320,117 +319,117 @@ export class Hindsight {
       .select({ id: this.hdb.schema.memoryUnits.id })
       .from(this.hdb.schema.memoryUnits)
       .where(eq(this.hdb.schema.memoryUnits.bankId, id))
-      .all()
+      .all();
     for (const m of memoryIds) {
-      this.memoryVec.delete(m.id)
+      this.memoryVec.delete(m.id);
     }
 
     const entityIds = this.hdb.db
       .select({ id: this.hdb.schema.entities.id })
       .from(this.hdb.schema.entities)
       .where(eq(this.hdb.schema.entities.bankId, id))
-      .all()
+      .all();
     for (const e of entityIds) {
-      this.entityVec.delete(e.id)
+      this.entityVec.delete(e.id);
     }
 
     const modelIds = this.hdb.db
       .select({ id: this.hdb.schema.mentalModels.id })
       .from(this.hdb.schema.mentalModels)
       .where(eq(this.hdb.schema.mentalModels.bankId, id))
-      .all()
+      .all();
     for (const m of modelIds) {
-      this.modelVec.delete(m.id)
+      this.modelVec.delete(m.id);
     }
 
     // Clean FTS entries
-    this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE bank_id = ?", [id])
+    this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE bank_id = ?", [id]);
 
     // Delete the bank row (cascades to SQL tables)
     this.hdb.db
       .delete(this.hdb.schema.banks)
       .where(eq(this.hdb.schema.banks.id, id))
-      .run()
+      .run();
   }
 
   updateBankConfig(bankId: string, config: BankConfig): Bank {
-    const bank = this.getBankById(bankId)
-    if (!bank) throw new Error(`Bank ${bankId} not found`)
+    const bank = this.getBankById(bankId);
+    if (!bank) throw new Error(`Bank ${bankId} not found`);
 
-    const existing = this.getBankConfigRaw(bankId)
-    const merged = { ...existing, ...stripUndefined(config) }
-    const now = Date.now()
+    const existing = this.getBankConfigRaw(bankId);
+    const merged = { ...existing, ...stripUndefined(config) };
+    const now = Date.now();
     this.hdb.db
       .update(this.hdb.schema.banks)
       .set({ config: JSON.stringify(merged), updatedAt: now })
       .where(eq(this.hdb.schema.banks.id, bankId))
-      .run()
-    return this.getBankById(bankId)!
+      .run();
+    return this.getBankById(bankId)!;
   }
 
   setDisposition(bankId: string, traits: Partial<DispositionTraits>): Bank {
-    const bank = this.getBankById(bankId)
-    if (!bank) throw new Error(`Bank ${bankId} not found`)
+    const bank = this.getBankById(bankId);
+    if (!bank) throw new Error(`Bank ${bankId} not found`);
 
     const merged: DispositionTraits = {
       ...bank.disposition,
       ...stripUndefined(traits),
-    }
+    };
 
     // Clamp values to 1-5
-    merged.skepticism = clamp(merged.skepticism, 1, 5)
-    merged.literalism = clamp(merged.literalism, 1, 5)
-    merged.empathy = clamp(merged.empathy, 1, 5)
+    merged.skepticism = clamp(merged.skepticism, 1, 5);
+    merged.literalism = clamp(merged.literalism, 1, 5);
+    merged.empathy = clamp(merged.empathy, 1, 5);
 
-    const now = Date.now()
+    const now = Date.now();
     this.hdb.db
       .update(this.hdb.schema.banks)
       .set({ disposition: JSON.stringify(merged), updatedAt: now })
       .where(eq(this.hdb.schema.banks.id, bankId))
-      .run()
-    return this.getBankById(bankId)!
+      .run();
+    return this.getBankById(bankId)!;
   }
 
   setMission(bankId: string, mission: string): Bank {
-    const bank = this.getBankById(bankId)
-    if (!bank) throw new Error(`Bank ${bankId} not found`)
+    const bank = this.getBankById(bankId);
+    if (!bank) throw new Error(`Bank ${bankId} not found`);
 
-    const now = Date.now()
+    const now = Date.now();
     this.hdb.db
       .update(this.hdb.schema.banks)
       .set({ mission, updatedAt: now })
       .where(eq(this.hdb.schema.banks.id, bankId))
-      .run()
-    return this.getBankById(bankId)!
+      .run();
+    return this.getBankById(bankId)!;
   }
 
   updateBank(
     bankId: string,
     updates: { name?: string; mission?: string },
   ): Bank {
-    const bank = this.getBankById(bankId)
-    if (!bank) throw new Error(`Bank ${bankId} not found`)
+    const bank = this.getBankById(bankId);
+    if (!bank) throw new Error(`Bank ${bankId} not found`);
 
     const patch: Partial<typeof this.hdb.schema.banks.$inferInsert> = {
       updatedAt: Date.now(),
-    }
-    if (updates.name != null) patch.name = updates.name
-    if (updates.mission != null) patch.mission = updates.mission
+    };
+    if (updates.name != null) patch.name = updates.name;
+    if (updates.mission != null) patch.mission = updates.mission;
 
     this.hdb.db
       .update(this.hdb.schema.banks)
       .set(patch)
       .where(eq(this.hdb.schema.banks.id, bankId))
-      .run()
-    return this.getBankById(bankId)!
+      .run();
+    return this.getBankById(bankId)!;
   }
 
   async mergeBankMission(
     bankId: string,
     newInfo: string,
   ): Promise<{ mission: string }> {
-    const bank = this.getBankById(bankId)
-    if (!bank) throw new Error(`Bank ${bankId} not found`)
+    const bank = this.getBankById(bankId);
+    if (!bank) throw new Error(`Bank ${bankId} not found`);
 
     const prompt = `You are helping maintain an agent mission statement.
 
@@ -444,29 +443,29 @@ Instructions:
 3. Keep additions that don't conflict.
 4. Output in FIRST PERSON ("I") perspective.
 5. Be concise and keep it under 500 characters.
-6. Return ONLY the merged mission text.`
+6. Return ONLY the merged mission text.`;
 
-    let mergedMission: string
+    let mergedMission: string;
     try {
       const response = await streamToText(
         chat({
           adapter: this.adapter,
           messages: [{ role: "user", content: prompt }],
         }),
-      )
-      mergedMission = response.trim()
+      );
+      mergedMission = response.trim();
     } catch {
       mergedMission = bank.mission
         ? `${bank.mission} ${newInfo}`.trim()
-        : newInfo
+        : newInfo;
     }
 
     if (!mergedMission) {
-      mergedMission = newInfo
+      mergedMission = newInfo;
     }
 
-    this.setMission(bankId, mergedMission)
-    return { mission: mergedMission }
+    this.setMission(bankId, mergedMission);
+    return { mission: mergedMission };
   }
 
   // ── Core operations ─────────────────────────────────────────────────
@@ -477,19 +476,23 @@ Instructions:
     options?: RetainOptions,
   ): Promise<RetainResult> {
     const normalizedContent =
-      typeof content === "string" ? content : JSON.stringify(content)
-    const cfg = this.resolveConfig(bankId)
+      typeof content === "string" ? content : JSON.stringify(content);
+    const cfg = this.resolveConfig(bankId);
     const resolvedOptions: RetainOptions = {
       mode: cfg.extractionMode,
       customGuidelines: cfg.customGuidelines ?? undefined,
       dedupThreshold: cfg.dedupThreshold,
       consolidate: cfg.enableConsolidation,
       ...stripUndefined(options ?? {}),
-    }
-    const bank = this.getBankById(bankId)
+    };
+    const bank = this.getBankById(bankId);
     const retainProfile = bank
-      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
-      : undefined
+      ? {
+          name: bank.name,
+          mission: bank.mission,
+          disposition: bank.disposition,
+        }
+      : undefined;
 
     return this.trace(
       "retain",
@@ -514,32 +517,32 @@ Instructions:
         entitiesResolved: r.entities.length,
         linksCreated: r.links.length,
       }),
-    )
+    );
   }
 
   async retainBatch(
     bankId: string,
     contents: string[],
     options?: RetainBatchOptions,
-  ): Promise<RetainBatchResult>
+  ): Promise<RetainBatchResult>;
   async retainBatch(
     bankId: string,
     contents: RetainBatchItem[],
     options?: RetainBatchOptions,
-  ): Promise<RetainBatchResult>
+  ): Promise<RetainBatchResult>;
   async retainBatch(
     bankId: string,
     contents: string[] | RetainBatchItem[],
     options?: RetainBatchOptions,
   ): Promise<RetainBatchResult> {
-    const cfg = this.resolveConfig(bankId)
+    const cfg = this.resolveConfig(bankId);
     const resolvedOptions: RetainBatchOptions = {
       mode: cfg.extractionMode,
       customGuidelines: cfg.customGuidelines ?? undefined,
       dedupThreshold: cfg.dedupThreshold,
       consolidate: cfg.enableConsolidation,
       ...stripUndefined(options ?? {}),
-    }
+    };
     return this.trace(
       "retain",
       "retain_batch",
@@ -567,9 +570,12 @@ Instructions:
           (sum, result) => sum + result.entities.length,
           0,
         ),
-        linksCreated: results.reduce((sum, result) => sum + result.links.length, 0),
+        linksCreated: results.reduce(
+          (sum, result) => sum + result.links.length,
+          0,
+        ),
       }),
-    )
+    );
   }
 
   async recall(
@@ -586,12 +592,21 @@ Instructions:
         hasOptions: Boolean(options),
         maxTokens: options?.maxTokens ?? null,
       },
-      () => recallImpl(this.hdb, this.memoryVec, bankId, query, options, this.rerank, this.workingMemory),
+      () =>
+        recallImpl(
+          this.hdb,
+          this.memoryVec,
+          bankId,
+          query,
+          options,
+          this.rerank,
+          this.workingMemory,
+        ),
       (r) => ({
         memoriesReturned: r.memories.length,
         limit: options?.limit ?? 10,
       }),
-    )
+    );
   }
 
   async reflect(
@@ -599,15 +614,19 @@ Instructions:
     query: string,
     options?: ReflectOptions,
   ): Promise<ReflectResult> {
-    const cfg = this.resolveConfig(bankId)
+    const cfg = this.resolveConfig(bankId);
     const resolvedOptions: ReflectOptions = {
       budget: cfg.reflectBudget,
       ...stripUndefined(options ?? {}),
-    }
-    const bank = this.getBankById(bankId)
+    };
+    const bank = this.getBankById(bankId);
     const bankProfile = bank
-      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
-      : undefined
+      ? {
+          name: bank.name,
+          mission: bank.mission,
+          disposition: bank.disposition,
+        }
+      : undefined;
 
     return this.trace(
       "reflect",
@@ -635,7 +654,7 @@ Instructions:
         answerLength: r.answer.length,
         budget: resolvedOptions.budget,
       }),
-    )
+    );
   }
 
   // ── Consolidation ───────────────────────────────────────────────────
@@ -644,10 +663,14 @@ Instructions:
     bankId: string,
     options?: ConsolidateOptions,
   ): Promise<ConsolidateResult> {
-    const bank = this.getBankById(bankId)
+    const bank = this.getBankById(bankId);
     const consProfile = bank
-      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
-      : undefined
+      ? {
+          name: bank.name,
+          mission: bank.mission,
+          disposition: bank.disposition,
+        }
+      : undefined;
 
     return this.trace(
       "consolidate",
@@ -675,7 +698,7 @@ Instructions:
         observationsMerged: r.observationsMerged,
         skipped: r.skipped,
       }),
-    )
+    );
   }
 
   // ── Async Operations ───────────────────────────────────────────────
@@ -687,13 +710,13 @@ Instructions:
   ): Promise<SubmitAsyncRetainResult> {
     const retainTask = async () => {
       if (contents.length === 0) {
-        return this.retainBatch(bankId, [] as string[], options)
+        return this.retainBatch(bankId, [] as string[], options);
       }
       if (typeof contents[0] === "string") {
-        return this.retainBatch(bankId, contents as string[], options)
+        return this.retainBatch(bankId, contents as string[], options);
       }
-      return this.retainBatch(bankId, contents as RetainBatchItem[], options)
-    }
+      return this.retainBatch(bankId, contents as RetainBatchItem[], options);
+    };
 
     const result = await this.submitAsyncOperation(
       bankId,
@@ -702,11 +725,11 @@ Instructions:
       retainTask,
       { itemsCount: contents.length },
       false,
-    )
+    );
     return {
       ...result,
       itemsCount: contents.length,
-    }
+    };
   }
 
   async submitAsyncConsolidation(
@@ -720,7 +743,7 @@ Instructions:
       () => this.consolidate(bankId, options),
       null,
       true,
-    )
+    );
   }
 
   async submitAsyncRefreshMentalModel(
@@ -732,34 +755,34 @@ Instructions:
       "refresh_mental_model",
       "submit_async_refresh_mental_model",
       () => this.refreshMentalModel(bankId, mentalModelId),
-    )
+    );
   }
 
   listOperations(
     bankId: string,
     options?: ListOperationsOptions,
   ): ListOperationsResult {
-    const limit = options?.limit ?? 20
-    const offset = options?.offset ?? 0
+    const limit = options?.limit ?? 20;
+    const offset = options?.offset ?? 0;
     const rows = this.hdb.db
       .select()
       .from(this.hdb.schema.asyncOperations)
       .where(eq(this.hdb.schema.asyncOperations.bankId, bankId))
       .all()
       .filter((row) => {
-        if (!options?.status) return true
+        if (!options?.status) return true;
         if (options.status === "pending") {
-          return row.status === "pending" || row.status === "processing"
+          return row.status === "pending" || row.status === "processing";
         }
-        return row.status === options.status
+        return row.status === options.status;
       })
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .sort((a, b) => b.createdAt - a.createdAt);
 
-    const paged = rows.slice(offset, offset + limit)
+    const paged = rows.slice(offset, offset + limit);
     const operations: AsyncOperationSummary[] = paged.map((row) => {
       const metadata = row.resultMetadata
         ? safeJson<Record<string, unknown>>(row.resultMetadata, {})
-        : {}
+        : {};
       return {
         id: row.operationId,
         taskType: row.operationType as AsyncOperationType,
@@ -770,16 +793,19 @@ Instructions:
         createdAt: row.createdAt,
         status: this.toOperationApiStatus(row.status as AsyncOperationStatus),
         errorMessage: row.errorMessage,
-      }
-    })
+      };
+    });
 
     return {
       total: rows.length,
       operations,
-    }
+    };
   }
 
-  getOperationStatus(bankId: string, operationId: string): OperationStatusResult {
+  getOperationStatus(
+    bankId: string,
+    operationId: string,
+  ): OperationStatusResult {
     const row = this.hdb.db
       .select()
       .from(this.hdb.schema.asyncOperations)
@@ -789,7 +815,7 @@ Instructions:
           eq(this.hdb.schema.asyncOperations.bankId, bankId),
         ),
       )
-      .get()
+      .get();
 
     if (!row) {
       return {
@@ -801,7 +827,7 @@ Instructions:
         completedAt: null,
         errorMessage: null,
         resultMetadata: null,
-      }
+      };
     }
 
     return {
@@ -815,7 +841,7 @@ Instructions:
       resultMetadata: row.resultMetadata
         ? safeJson<Record<string, unknown>>(row.resultMetadata, {})
         : null,
-    }
+    };
   }
 
   cancelOperation(bankId: string, operationId: string): CancelOperationResult {
@@ -828,7 +854,7 @@ Instructions:
           eq(this.hdb.schema.asyncOperations.bankId, bankId),
         ),
       )
-      .get()
+      .get();
 
     if (!existing) {
       return {
@@ -836,21 +862,21 @@ Instructions:
         message: `Operation ${operationId} not found`,
         operationId,
         bankId,
-      }
+      };
     }
 
     this.hdb.db
       .delete(this.hdb.schema.asyncOperations)
       .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-      .run()
-    this.cancelledOperations.add(operationId)
+      .run();
+    this.cancelledOperations.add(operationId);
 
     return {
       success: true,
       message: `Operation ${operationId} cancelled`,
       operationId,
       bankId,
-    }
+    };
   }
 
   private async executeAsyncOperation(
@@ -858,14 +884,14 @@ Instructions:
     task: () => Promise<unknown>,
   ): Promise<void> {
     try {
-      if (this.cancelledOperations.has(operationId)) return
+      if (this.cancelledOperations.has(operationId)) return;
 
       const pendingRow = this.hdb.db
         .select({ operationId: this.hdb.schema.asyncOperations.operationId })
         .from(this.hdb.schema.asyncOperations)
         .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-        .get()
-      if (!pendingRow) return
+        .get();
+      if (!pendingRow) return;
 
       this.hdb.db
         .update(this.hdb.schema.asyncOperations)
@@ -874,13 +900,13 @@ Instructions:
           updatedAt: Date.now(),
         })
         .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-        .run()
+        .run();
 
-      await task()
+      await task();
 
-      if (this.cancelledOperations.has(operationId)) return
+      if (this.cancelledOperations.has(operationId)) return;
 
-      const completedAt = Date.now()
+      const completedAt = Date.now();
       this.hdb.db
         .update(this.hdb.schema.asyncOperations)
         .set({
@@ -890,12 +916,12 @@ Instructions:
           errorMessage: null,
         })
         .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-        .run()
+        .run();
     } catch (error) {
-      if (this.cancelledOperations.has(operationId)) return
-      const message =
-        error instanceof Error ? error.message : String(error)
-      const truncated = message.length > 5000 ? message.slice(0, 5000) : message
+      if (this.cancelledOperations.has(operationId)) return;
+      const message = error instanceof Error ? error.message : String(error);
+      const truncated =
+        message.length > 5000 ? message.slice(0, 5000) : message;
       this.hdb.db
         .update(this.hdb.schema.asyncOperations)
         .set({
@@ -904,18 +930,18 @@ Instructions:
           errorMessage: truncated,
         })
         .where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
-        .run()
+        .run();
     } finally {
-      this.activeOperationTasks.delete(operationId)
-      this.cancelledOperations.delete(operationId)
+      this.activeOperationTasks.delete(operationId);
+      this.cancelledOperations.delete(operationId);
     }
   }
 
   private toOperationApiStatus(
     status: AsyncOperationStatus,
   ): Exclude<AsyncOperationApiStatus, "not_found"> {
-    if (status === "processing") return "pending"
-    return status
+    if (status === "processing") return "pending";
+    return status;
   }
 
   private async submitAsyncOperation(
@@ -930,9 +956,9 @@ Instructions:
       operationType,
       dedupeByBank,
       resultMetadata: resultMetadata ?? null,
-    })
+    });
     try {
-      await this.runBeforeOperationHooks(hookContext)
+      await this.runBeforeOperationHooks(hookContext);
 
       if (dedupeByBank) {
         const existing = this.hdb.db
@@ -945,20 +971,23 @@ Instructions:
               eq(this.hdb.schema.asyncOperations.status, "pending"),
             ),
           )
-          .get()
+          .get();
         if (existing) {
-          const dedupResult = { operationId: existing.operationId, deduplicated: true }
+          const dedupResult = {
+            operationId: existing.operationId,
+            deduplicated: true,
+          };
           await this.runAfterOperationHooks({
             ...hookContext,
             success: true,
             result: dedupResult,
-          })
-          return dedupResult
+          });
+          return dedupResult;
         }
       }
 
-      const operationId = ulid()
-      const now = Date.now()
+      const operationId = ulid();
+      const now = Date.now();
       this.hdb.db
         .insert(this.hdb.schema.asyncOperations)
         .values({
@@ -966,40 +995,40 @@ Instructions:
           bankId,
           operationType,
           status: "pending",
-          resultMetadata: resultMetadata ? JSON.stringify(resultMetadata) : null,
+          resultMetadata: resultMetadata
+            ? JSON.stringify(resultMetadata)
+            : null,
           errorMessage: null,
           createdAt: now,
           updatedAt: now,
           completedAt: null,
         })
-        .run()
+        .run();
 
-      const run = () =>
-        this.executeAsyncOperation(operationId, task)
+      const run = () => this.executeAsyncOperation(operationId, task);
 
       const taskPromise = new Promise<void>((resolve) => {
         setTimeout(() => {
-          void run().finally(resolve)
-        }, 0)
-      })
-      this.activeOperationTasks.set(operationId, taskPromise)
+          void run().finally(resolve);
+        }, 0);
+      });
+      this.activeOperationTasks.set(operationId, taskPromise);
 
-      const result = { operationId }
+      const result = { operationId };
       await this.runAfterOperationHooks({
         ...hookContext,
         success: true,
         result,
-      })
-      return result
+      });
+      return result;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error);
       await this.runAfterOperationHooks({
         ...hookContext,
         success: false,
         error: message,
-      })
-      throw error
+      });
+      throw error;
     }
   }
 
@@ -1009,15 +1038,18 @@ Instructions:
     bankId: string,
     options: CreateMentalModelOptions,
   ): Promise<MentalModel> {
-    return createMentalModelImpl(this.hdb, this.modelVec, bankId, options)
+    return createMentalModelImpl(this.hdb, this.modelVec, bankId, options);
   }
 
   getMentalModel(bankId: string, id: string): MentalModel | undefined {
-    return getMentalModelImpl(this.hdb, bankId, id)
+    return getMentalModelImpl(this.hdb, bankId, id);
   }
 
-  listMentalModels(bankId: string, options?: ListMentalModelsOptions): MentalModel[] {
-    return listMentalModelsImpl(this.hdb, bankId, options)
+  listMentalModels(
+    bankId: string,
+    options?: ListMentalModelsOptions,
+  ): MentalModel[] {
+    return listMentalModelsImpl(this.hdb, bankId, options);
   }
 
   async updateMentalModel(
@@ -1025,21 +1057,25 @@ Instructions:
     id: string,
     options: UpdateMentalModelOptions,
   ): Promise<MentalModel> {
-    return updateMentalModelImpl(this.hdb, this.modelVec, bankId, id, options)
+    return updateMentalModelImpl(this.hdb, this.modelVec, bankId, id, options);
   }
 
   deleteMentalModel(bankId: string, id: string): void {
-    deleteMentalModelImpl(this.hdb, this.modelVec, bankId, id)
+    deleteMentalModelImpl(this.hdb, this.modelVec, bankId, id);
   }
 
   async refreshMentalModel(
     bankId: string,
     id: string,
   ): Promise<RefreshMentalModelResult> {
-    const bank = this.getBankById(bankId)
+    const bank = this.getBankById(bankId);
     const profile = bank
-      ? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
-      : undefined
+      ? {
+          name: bank.name,
+          mission: bank.mission,
+          disposition: bank.disposition,
+        }
+      : undefined;
 
     return refreshMentalModelImpl(
       this.hdb,
@@ -1050,24 +1086,21 @@ Instructions:
       id,
       this.rerank,
       profile,
-    )
+    );
   }
 
   // ── Directives ──────────────────────────────────────────────────────
 
-  createDirective(
-    bankId: string,
-    options: CreateDirectiveOptions,
-  ): Directive {
-    return createDirectiveImpl(this.hdb, bankId, options)
+  createDirective(bankId: string, options: CreateDirectiveOptions): Directive {
+    return createDirectiveImpl(this.hdb, bankId, options);
   }
 
   getDirective(bankId: string, id: string): Directive | undefined {
-    return getDirectiveImpl(this.hdb, bankId, id)
+    return getDirectiveImpl(this.hdb, bankId, id);
   }
 
   listDirectives(bankId: string, activeOnly?: boolean): Directive[] {
-    return listDirectivesImpl(this.hdb, bankId, activeOnly)
+    return listDirectivesImpl(this.hdb, bankId, activeOnly);
   }
 
   updateDirective(
@@ -1075,11 +1108,11 @@ Instructions:
     id: string,
     options: UpdateDirectiveOptions,
   ): Directive {
-    return updateDirectiveImpl(this.hdb, bankId, id, options)
+    return updateDirectiveImpl(this.hdb, bankId, id, options);
   }
 
   deleteDirective(bankId: string, id: string): void {
-    deleteDirectiveImpl(this.hdb, bankId, id)
+    deleteDirectiveImpl(this.hdb, bankId, id);
   }
 
   // ── API Parity Utilities ─────────────────────────────────────────────
@@ -1088,9 +1121,9 @@ Instructions:
     bankId: string,
     options?: ListMemoryUnitsOptions,
   ): ListMemoryUnitsResult {
-    const limit = options?.limit ?? 100
-    const offset = options?.offset ?? 0
-    const searchQuery = options?.searchQuery?.toLowerCase().trim()
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const searchQuery = options?.searchQuery?.toLowerCase().trim();
 
     const rows = this.hdb.db
       .select()
@@ -1098,23 +1131,24 @@ Instructions:
       .where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
       .all()
       .filter((row) => {
-        if (options?.factType && row.factType !== options.factType) return false
-        if (!searchQuery) return true
-        const text = row.content.toLowerCase()
-        const context = (row.sourceText ?? "").toLowerCase()
-        return text.includes(searchQuery) || context.includes(searchQuery)
+        if (options?.factType && row.factType !== options.factType)
+          return false;
+        if (!searchQuery) return true;
+        const text = row.content.toLowerCase();
+        const context = (row.sourceText ?? "").toLowerCase();
+        return text.includes(searchQuery) || context.includes(searchQuery);
       })
       .sort((a, b) => {
-        const aPrimary = a.mentionedAt ?? -1
-        const bPrimary = b.mentionedAt ?? -1
-        if (aPrimary !== bPrimary) return bPrimary - aPrimary
-        return b.createdAt - a.createdAt
-      })
+        const aPrimary = a.mentionedAt ?? -1;
+        const bPrimary = b.mentionedAt ?? -1;
+        if (aPrimary !== bPrimary) return bPrimary - aPrimary;
+        return b.createdAt - a.createdAt;
+      });
 
-    const paged = rows.slice(offset, offset + limit)
+    const paged = rows.slice(offset, offset + limit);
     const entityByMemory = this.loadEntityNamesByMemoryIds(
       paged.map((row) => row.id),
-    )
+    );
 
     const items = paged.map((row) => ({
       // Python parity: date prefers eventDate, with occurred/mentioned fallbacks.
@@ -1129,23 +1163,27 @@ Instructions:
           row.mentionedAt ??
           row.createdAt,
       ),
-      factType: row.factType as ListMemoryUnitsResult["items"][number]["factType"],
+      factType:
+        row.factType as ListMemoryUnitsResult["items"][number]["factType"],
       mentionedAt: toIsoOrNull(row.mentionedAt),
       occurredStart: toIsoOrNull(row.occurredStart ?? row.occurredStart),
       occurredEnd: toIsoOrNull(row.occurredEnd ?? row.occurredEnd),
       entities: (entityByMemory.get(row.id) ?? []).join(", "),
       chunkId: row.chunkId,
-    }))
+    }));
 
     return {
       items,
       total: rows.length,
       limit,
       offset,
-    }
+    };
   }
 
-  getMemoryUnit(bankId: string, memoryId: string): MemoryUnitDetail | undefined {
+  getMemoryUnit(
+    bankId: string,
+    memoryId: string,
+  ): MemoryUnitDetail | undefined {
     const row = this.hdb.db
       .select()
       .from(this.hdb.schema.memoryUnits)
@@ -1155,10 +1193,11 @@ Instructions:
           eq(this.hdb.schema.memoryUnits.bankId, bankId),
         ),
       )
-      .get()
-    if (!row) return undefined
+      .get();
+    if (!row) return undefined;
 
-    const entityNames = this.loadEntityNamesByMemoryIds([row.id]).get(row.id) ?? []
+    const entityNames =
+      this.loadEntityNamesByMemoryIds([row.id]).get(row.id) ?? [];
     const result: MemoryUnitDetail = {
       id: row.id,
       text: row.content,
@@ -1178,35 +1217,37 @@ Instructions:
       documentId: row.documentId,
       chunkId: row.chunkId,
       tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
-    }
+    };
 
     const sourceMemoryIds = row.sourceMemoryIds
       ? safeJson<string[]>(row.sourceMemoryIds, [])
-      : []
+      : [];
     if (row.factType === "observation" && sourceMemoryIds.length > 0) {
-      result.sourceMemoryIds = sourceMemoryIds
+      result.sourceMemoryIds = sourceMemoryIds;
       const sourceRows = this.hdb.db
         .select()
         .from(this.hdb.schema.memoryUnits)
         .where(inArray(this.hdb.schema.memoryUnits.id, sourceMemoryIds))
         .all()
         .sort((a, b) => {
-          const aPrimary = a.mentionedAt ?? -1
-          const bPrimary = b.mentionedAt ?? -1
-          return bPrimary - aPrimary
-        })
+          const aPrimary = a.mentionedAt ?? -1;
+          const bPrimary = b.mentionedAt ?? -1;
+          return bPrimary - aPrimary;
+        });
 
       result.sourceMemories = sourceRows.map((sourceRow) => ({
         id: sourceRow.id,
         text: sourceRow.content,
         type: sourceRow.factType as MemoryUnitDetail["type"],
         context: sourceRow.sourceText,
-        occurredStart: toIsoOrNull(sourceRow.occurredStart ?? sourceRow.occurredStart),
+        occurredStart: toIsoOrNull(
+          sourceRow.occurredStart ?? sourceRow.occurredStart,
+        ),
         mentionedAt: toIsoOrNull(sourceRow.mentionedAt),
-      }))
+      }));
     }
 
-    return result
+    return result;
   }
 
   deleteMemoryUnit(memoryId: string): DeleteMemoryUnitResult {
@@ -1217,28 +1258,28 @@ Instructions:
       })
       .from(this.hdb.schema.memoryUnits)
       .where(eq(this.hdb.schema.memoryUnits.id, memoryId))
-      .get()
+      .get();
     if (!row) {
       return {
         success: false,
         unitId: null,
         message: "Memory unit not found",
-      }
+      };
     }
 
-    this.memoryVec.delete(memoryId)
-    this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE id = ?", [memoryId])
+    this.memoryVec.delete(memoryId);
+    this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE id = ?", [memoryId]);
     this.hdb.db
       .delete(this.hdb.schema.memoryUnits)
       .where(eq(this.hdb.schema.memoryUnits.id, memoryId))
-      .run()
-    this.removeMemoryIdFromMentalModels(row.bankId, memoryId)
+      .run();
+    this.removeMemoryIdFromMentalModels(row.bankId, memoryId);
 
     return {
       success: true,
       unitId: row.id,
       message: "Memory unit and all its links deleted successfully",
-    }
+    };
   }
 
   clearObservations(bankId: string): ClearObservationsResult {
@@ -1252,26 +1293,28 @@ Instructions:
         ),
       )
       .all()
-      .map((row) => row.id)
+      .map((row) => row.id);
 
     for (const observationId of observationIds) {
-      this.memoryVec.delete(observationId)
-      this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE id = ?", [observationId])
+      this.memoryVec.delete(observationId);
+      this.hdb.sqlite.run("DELETE FROM hs_memory_fts WHERE id = ?", [
+        observationId,
+      ]);
       this.hdb.db
         .delete(this.hdb.schema.memoryUnits)
         .where(eq(this.hdb.schema.memoryUnits.id, observationId))
-        .run()
+        .run();
     }
 
-    return { deletedCount: observationIds.length }
+    return { deletedCount: observationIds.length };
   }
 
   listEntities(
     bankId: string,
     options?: { limit?: number; offset?: number },
   ): ListEntitiesResult {
-    const limit = options?.limit ?? 100
-    const offset = options?.offset ?? 0
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
     const rows = this.hdb.db
       .select()
       .from(this.hdb.schema.entities)
@@ -1279,15 +1322,15 @@ Instructions:
       .all()
       .sort((a, b) => {
         if (a.mentionCount !== b.mentionCount) {
-          return b.mentionCount - a.mentionCount
+          return b.mentionCount - a.mentionCount;
         }
         if (a.lastUpdated !== b.lastUpdated) {
-          return b.lastUpdated - a.lastUpdated
+          return b.lastUpdated - a.lastUpdated;
         }
-        return a.id.localeCompare(b.id)
-      })
+        return a.id.localeCompare(b.id);
+      });
 
-    const paged = rows.slice(offset, offset + limit)
+    const paged = rows.slice(offset, offset + limit);
     return {
       items: paged.map((row) => ({
         id: row.id,
@@ -1302,7 +1345,7 @@ Instructions:
       total: rows.length,
       limit,
       offset,
-    }
+    };
   }
 
   getEntityState(
@@ -1315,7 +1358,7 @@ Instructions:
       entityId,
       canonicalName: entityName,
       observations: [],
-    }
+    };
   }
 
   getEntity(bankId: string, entityId: string): EntityDetail | undefined {
@@ -1328,8 +1371,8 @@ Instructions:
           eq(this.hdb.schema.entities.bankId, bankId),
         ),
       )
-      .get()
-    if (!row) return undefined
+      .get();
+    if (!row) return undefined;
 
     return {
       id: row.id,
@@ -1342,7 +1385,7 @@ Instructions:
         ? safeJson<Record<string, unknown>>(row.metadata, {})
         : {},
       observations: [],
-    }
+    };
   }
 
   updateEntity(
@@ -1359,21 +1402,21 @@ Instructions:
           eq(this.hdb.schema.entities.bankId, bankId),
         ),
       )
-      .get()
-    if (!row) return undefined
+      .get();
+    if (!row) return undefined;
 
     const canonicalName =
       options.canonicalName?.trim() && options.canonicalName.trim().length > 0
         ? options.canonicalName.trim()
-        : row.name
+        : row.name;
     const description =
-      options.description !== undefined ? options.description : row.description
+      options.description !== undefined ? options.description : row.description;
     const metadata =
       options.metadata !== undefined
         ? options.metadata
           ? JSON.stringify(options.metadata)
           : null
-        : row.metadata
+        : row.metadata;
 
     this.hdb.db
       .update(this.hdb.schema.entities)
@@ -1389,15 +1432,17 @@ Instructions:
           eq(this.hdb.schema.entities.bankId, bankId),
         ),
       )
-      .run()
+      .run();
 
-    return this.getEntity(bankId, entityId)
+    return this.getEntity(bankId, entityId);
   }
 
   listTags(bankId: string, options?: ListTagsOptions): ListTagsResult {
-    const limit = options?.limit ?? 100
-    const offset = options?.offset ?? 0
-    const pattern = options?.pattern ? options.pattern.replace(/\*/g, "%").toLowerCase() : null
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const pattern = options?.pattern
+      ? options.pattern.replace(/\*/g, "%").toLowerCase()
+      : null;
 
     const totalRow = this.hdb.sqlite
       .prepare(
@@ -1411,7 +1456,7 @@ Instructions:
           AND (? IS NULL OR lower(jt.value) LIKE ?)
       `,
       )
-      .get(bankId, pattern, pattern) as { total: number } | undefined
+      .get(bankId, pattern, pattern) as { total: number } | undefined;
 
     const rows = this.hdb.sqlite
       .prepare(
@@ -1429,9 +1474,9 @@ Instructions:
       `,
       )
       .all(bankId, pattern, pattern, limit, offset) as Array<{
-      tag: string
-      count: number
-    }>
+      tag: string;
+      count: number;
+    }>;
 
     return {
       items: rows.map((row) => ({
@@ -1441,7 +1486,7 @@ Instructions:
       total: totalRow?.total ?? 0,
       limit,
       offset,
-    }
+    };
   }
 
   getBankStats(bankId: string): BankStats {
@@ -1454,7 +1499,7 @@ Instructions:
         GROUP BY fact_type
       `,
       )
-      .all(bankId) as Array<{ factType: string; count: number }>
+      .all(bankId) as Array<{ factType: string; count: number }>;
 
     const linkStats = this.hdb.sqlite
       .prepare(
@@ -1466,7 +1511,7 @@ Instructions:
         GROUP BY ml.link_type
       `,
       )
-      .all(bankId) as Array<{ linkType: string; count: number }>
+      .all(bankId) as Array<{ linkType: string; count: number }>;
 
     const linkByFactTypeStats = this.hdb.sqlite
       .prepare(
@@ -1478,7 +1523,7 @@ Instructions:
         GROUP BY mu.fact_type
       `,
       )
-      .all(bankId) as Array<{ factType: string; count: number }>
+      .all(bankId) as Array<{ factType: string; count: number }>;
 
     const linkBreakdownRows = this.hdb.sqlite
       .prepare(
@@ -1490,7 +1535,11 @@ Instructions:
         GROUP BY mu.fact_type, ml.link_type
       `,
       )
-      .all(bankId) as Array<{ factType: string; linkType: string; count: number }>
+      .all(bankId) as Array<{
+      factType: string;
+      linkType: string;
+      count: number;
+    }>;
 
     const operationRows = this.hdb.sqlite
       .prepare(
@@ -1501,12 +1550,16 @@ Instructions:
         GROUP BY status
       `,
       )
-      .all(bankId) as Array<{ status: string; count: number }>
+      .all(bankId) as Array<{ status: string; count: number }>;
 
     return {
       bankId,
-      nodeCounts: Object.fromEntries(nodeStats.map((row) => [row.factType, row.count])),
-      linkCounts: Object.fromEntries(linkStats.map((row) => [row.linkType, row.count])),
+      nodeCounts: Object.fromEntries(
+        nodeStats.map((row) => [row.factType, row.count]),
+      ),
+      linkCounts: Object.fromEntries(
+        linkStats.map((row) => [row.linkType, row.count]),
+      ),
       linkCountsByFactType: Object.fromEntries(
         linkByFactTypeStats.map((row) => [row.factType, row.count]),
       ),
@@ -1515,12 +1568,16 @@ Instructions:
         linkType: row.linkType,
         count: row.count,
       })),
-      operations: Object.fromEntries(operationRows.map((row) => [row.status, row.count])),
-    }
+      operations: Object.fromEntries(
+        operationRows.map((row) => [row.status, row.count]),
+      ),
+    };
   }
 
-  private loadEntityNamesByMemoryIds(memoryIds: string[]): Map<string, string[]> {
-    if (memoryIds.length === 0) return new Map()
+  private loadEntityNamesByMemoryIds(
+    memoryIds: string[],
+  ): Map<string, string[]> {
+    if (memoryIds.length === 0) return new Map();
 
     const relations = this.hdb.db
       .select({
@@ -1529,10 +1586,10 @@ Instructions:
       })
       .from(this.hdb.schema.memoryEntities)
       .where(inArray(this.hdb.schema.memoryEntities.memoryId, memoryIds))
-      .all()
-    if (relations.length === 0) return new Map()
+      .all();
+    if (relations.length === 0) return new Map();
 
-    const entityIds = [...new Set(relations.map((row) => row.entityId))]
+    const entityIds = [...new Set(relations.map((row) => row.entityId))];
     const entities = this.hdb.db
       .select({
         id: this.hdb.schema.entities.id,
@@ -1540,22 +1597,27 @@ Instructions:
       })
       .from(this.hdb.schema.entities)
       .where(inArray(this.hdb.schema.entities.id, entityIds))
-      .all()
-    const entityNameById = new Map(entities.map((entity) => [entity.id, entity.name]))
+      .all();
+    const entityNameById = new Map(
+      entities.map((entity) => [entity.id, entity.name]),
+    );
 
-    const byMemory = new Map<string, string[]>()
+    const byMemory = new Map<string, string[]>();
     for (const relation of relations) {
-      const entityName = entityNameById.get(relation.entityId)
-      if (!entityName) continue
-      const list = byMemory.get(relation.memoryId) ?? []
-      list.push(entityName)
-      byMemory.set(relation.memoryId, list)
+      const entityName = entityNameById.get(relation.entityId);
+      if (!entityName) continue;
+      const list = byMemory.get(relation.memoryId) ?? [];
+      list.push(entityName);
+      byMemory.set(relation.memoryId, list);
     }
 
-    return byMemory
+    return byMemory;
   }
 
-  private removeMemoryIdFromMentalModels(bankId: string, memoryId: string): void {
+  private removeMemoryIdFromMentalModels(
+    bankId: string,
+    memoryId: string,
+  ): void {
     const models = this.hdb.db
       .select({
         id: this.hdb.schema.mentalModels.id,
@@ -1563,15 +1625,15 @@ Instructions:
       })
       .from(this.hdb.schema.mentalModels)
       .where(eq(this.hdb.schema.mentalModels.bankId, bankId))
-      .all()
+      .all();
 
     for (const model of models) {
       const ids = model.sourceMemoryIds
         ? safeJson<string[]>(model.sourceMemoryIds, [])
-        : []
-      if (!ids.includes(memoryId)) continue
+        : [];
+      if (!ids.includes(memoryId)) continue;
 
-      const filtered = ids.filter((id) => id !== memoryId)
+      const filtered = ids.filter((id) => id !== memoryId);
       this.hdb.db
         .update(this.hdb.schema.mentalModels)
         .set({
@@ -1579,7 +1641,7 @@ Instructions:
           updatedAt: Date.now(),
         })
         .where(eq(this.hdb.schema.mentalModels.id, model.id))
-        .run()
+        .run();
     }
   }
 
@@ -1589,9 +1651,9 @@ Instructions:
     bankId: string,
     options?: { search?: string; limit?: number; offset?: number },
   ): { items: DocumentRecord[]; total: number; limit: number; offset: number } {
-    const limit = options?.limit ?? 100
-    const offset = options?.offset ?? 0
-    const search = options?.search?.toLowerCase().trim()
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const search = options?.search?.toLowerCase().trim();
 
     const allRows = this.hdb.db
       .select()
@@ -1599,27 +1661,31 @@ Instructions:
       .where(eq(this.hdb.schema.documents.bankId, bankId))
       .all()
       .filter((row) => (search ? row.id.toLowerCase().includes(search) : true))
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .sort((a, b) => b.createdAt - a.createdAt);
 
-    const paged = allRows.slice(offset, offset + limit)
+    const paged = allRows.slice(offset, offset + limit);
     const items: DocumentRecord[] = paged.map((row) => ({
       id: row.id,
       bankId: row.bankId,
       contentHash: row.contentHash,
       textLength: row.originalText?.length ?? 0,
-      metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : null,
-      retainParams: row.retainParams ? safeJson<Record<string, unknown>>(row.retainParams, {}) : null,
+      metadata: row.metadata
+        ? safeJson<Record<string, unknown>>(row.metadata, {})
+        : null,
+      retainParams: row.retainParams
+        ? safeJson<Record<string, unknown>>(row.retainParams, {})
+        : null,
       tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-    }))
+    }));
 
     return {
       items,
       total: allRows.length,
       limit,
       offset,
-    }
+    };
   }
 
   getDocument(bankId: string, documentId: string): DocumentRecord | undefined {
@@ -1632,20 +1698,24 @@ Instructions:
           eq(this.hdb.schema.documents.bankId, bankId),
         ),
       )
-      .get()
-    if (!row) return undefined
+      .get();
+    if (!row) return undefined;
 
     return {
       id: row.id,
       bankId: row.bankId,
       contentHash: row.contentHash,
       textLength: row.originalText?.length ?? 0,
-      metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : null,
-      retainParams: row.retainParams ? safeJson<Record<string, unknown>>(row.retainParams, {}) : null,
+      metadata: row.metadata
+        ? safeJson<Record<string, unknown>>(row.metadata, {})
+        : null,
+      retainParams: row.retainParams
+        ? safeJson<Record<string, unknown>>(row.retainParams, {})
+        : null,
       tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-    }
+    };
   }
 
   deleteDocument(bankId: string, documentId: string): boolean {
@@ -1658,7 +1728,7 @@ Instructions:
           eq(this.hdb.schema.memoryUnits.documentId, documentId),
         ),
       )
-      .run()
+      .run();
 
     this.hdb.db
       .delete(this.hdb.schema.documents)
@@ -1668,9 +1738,9 @@ Instructions:
           eq(this.hdb.schema.documents.bankId, bankId),
         ),
       )
-      .run()
+      .run();
 
-    return true
+    return true;
   }
 
   getChunk(bankId: string, chunkId: string): ChunkRecord | undefined {
@@ -1683,8 +1753,8 @@ Instructions:
           eq(this.hdb.schema.chunks.bankId, bankId),
         ),
       )
-      .get()
-    if (!row) return undefined
+      .get();
+    if (!row) return undefined;
 
     return {
       id: row.id,
@@ -1693,19 +1763,19 @@ Instructions:
       index: row.chunkIndex,
       text: row.content,
       createdAt: row.createdAt,
-    }
+    };
   }
 
   getGraphData(
     bankId: string,
     options?: { factType?: string; limit?: number },
   ): {
-    nodes: GraphNode[]
-    edges: GraphEdge[]
-    totalUnits: number
-    limit: number
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+    totalUnits: number;
+    limit: number;
   } {
-    const limit = options?.limit ?? 1000
+    const limit = options?.limit ?? 1000;
     const rows = options?.factType
       ? this.hdb.db
           .select()
@@ -1721,14 +1791,14 @@ Instructions:
           .select()
           .from(this.hdb.schema.memoryUnits)
           .where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
-          .all()
+          .all();
 
     const orderedRows = rows
       .sort(
         (a, b) =>
           (b.mentionedAt ?? b.createdAt) - (a.mentionedAt ?? a.createdAt),
       )
-      .slice(0, limit)
+      .slice(0, limit);
 
     const nodes: GraphNode[] = orderedRows.map((row) => ({
       id: row.id,
@@ -1740,14 +1810,14 @@ Instructions:
       sourceMemoryIds: row.sourceMemoryIds
         ? safeJson<string[]>(row.sourceMemoryIds, [])
         : [],
-    }))
+    }));
 
-    const visibleNodeIds = new Set(nodes.map((node) => node.id))
+    const visibleNodeIds = new Set(nodes.map((node) => node.id));
     if (visibleNodeIds.size === 0) {
-      return { nodes, edges: [], totalUnits: rows.length, limit }
+      return { nodes, edges: [], totalUnits: rows.length, limit };
     }
 
-    const visibleIds = [...visibleNodeIds]
+    const visibleIds = [...visibleNodeIds];
     const directLinks = this.hdb.db
       .select({
         sourceId: this.hdb.schema.memoryLinks.sourceId,
@@ -1763,39 +1833,39 @@ Instructions:
           inArray(this.hdb.schema.memoryLinks.targetId, visibleIds),
         ),
       )
-      .all()
+      .all();
 
-    const sourceToObservations = new Map<string, string[]>()
+    const sourceToObservations = new Map<string, string[]>();
     for (const node of nodes) {
       for (const sourceId of node.sourceMemoryIds) {
-        const existing = sourceToObservations.get(sourceId) ?? []
-        existing.push(node.id)
-        sourceToObservations.set(sourceId, existing)
+        const existing = sourceToObservations.get(sourceId) ?? [];
+        existing.push(node.id);
+        sourceToObservations.set(sourceId, existing);
       }
     }
 
-    const copiedLinks: GraphEdge[] = []
+    const copiedLinks: GraphEdge[] = [];
     for (const link of directLinks) {
-      const fromObs = sourceToObservations.get(link.sourceId) ?? []
-      const toObs = sourceToObservations.get(link.targetId) ?? []
+      const fromObs = sourceToObservations.get(link.sourceId) ?? [];
+      const toObs = sourceToObservations.get(link.targetId) ?? [];
 
       for (const obsId of fromObs) {
-        if (!visibleNodeIds.has(link.targetId)) continue
+        if (!visibleNodeIds.has(link.targetId)) continue;
         copiedLinks.push({
           sourceId: obsId,
           targetId: link.targetId,
           linkType: link.linkType as GraphEdge["linkType"],
           weight: link.weight,
-        })
+        });
       }
       for (const obsId of toObs) {
-        if (!visibleNodeIds.has(link.sourceId)) continue
+        if (!visibleNodeIds.has(link.sourceId)) continue;
         copiedLinks.push({
           sourceId: link.sourceId,
           targetId: obsId,
           linkType: link.linkType as GraphEdge["linkType"],
           weight: link.weight,
-        })
+        });
       }
     }
 
@@ -1807,18 +1877,18 @@ Instructions:
         weight: link.weight,
       })),
       ...copiedLinks,
-    ])
+    ]);
 
     return {
       nodes,
       edges,
       totalUnits: rows.length,
       limit,
-    }
+    };
   }
 
   private resolveTenantId(bankId: string): string {
-    return this.extensions?.resolveTenantId?.(bankId) ?? bankId
+    return this.extensions?.resolveTenantId?.(bankId) ?? bankId;
   }
 
   private buildOperationContext(
@@ -1831,26 +1901,26 @@ Instructions:
       bankId,
       tenantId: this.resolveTenantId(bankId),
       input,
-    }
+    };
   }
 
   private async runBeforeOperationHooks(
     context: HindsightOperationContext,
   ): Promise<void> {
-    if (!this.extensions) return
+    if (!this.extensions) return;
     if (this.extensions.authorize) {
-      await this.extensions.authorize(context)
+      await this.extensions.authorize(context);
     }
     if (this.extensions.validate) {
-      await this.extensions.validate(context)
+      await this.extensions.validate(context);
     }
   }
 
   private async runAfterOperationHooks(
     context: HindsightOperationResultContext,
   ): Promise<void> {
-    if (!this.extensions?.onComplete) return
-    await this.extensions.onComplete(context)
+    if (!this.extensions?.onComplete) return;
+    await this.extensions.onComplete(context);
   }
 
   // ── Location APIs (Phase 3) ──────────────────────────────────────────
@@ -1867,7 +1937,7 @@ Instructions:
     context: LocationContext,
     scope?: { profile?: string; project?: string },
   ): void {
-    const resolved = resolveScope(scope)
+    const resolved = resolveScope(scope);
     locationRecordImpl(
       this.hdb,
       bankId,
@@ -1875,7 +1945,7 @@ Instructions:
       context,
       resolved.profile,
       resolved.project,
-    )
+    );
   }
 
   /**
@@ -1884,13 +1954,17 @@ Instructions:
   locationFind(
     bankId: string,
     input: {
-      query?: string
-      path?: string
-      limit?: number
-      scope?: { profile?: string; project?: string }
+      query?: string;
+      path?: string;
+      limit?: number;
+      scope?: { profile?: string; project?: string };
     },
   ): LocationHit[] {
-    return locationFindImpl(this.hdb, bankId, input)
+    const resolvedScope = input.scope ? resolveScope(input.scope) : undefined;
+    return locationFindImpl(this.hdb, bankId, {
+      ...input,
+      scope: resolvedScope,
+    });
   }
 
   /**
@@ -1901,7 +1975,8 @@ Instructions:
     path: string,
     scope?: { profile?: string; project?: string },
   ): LocationStats | null {
-    return locationStatsImpl(this.hdb, bankId, path, scope)
+    const resolvedScope = scope ? resolveScope(scope) : undefined;
+    return locationStatsImpl(this.hdb, bankId, path, resolvedScope);
   }
 
   // ── Episodes ────────────────────────────────────────────────────────
@@ -1917,7 +1992,7 @@ Instructions:
       options ?? {},
       async () => listEpisodesImpl(this.hdb, bankId, options),
       (result) => ({ total: result.total, count: result.items.length }),
-    )
+    );
   }
 
   async narrative(
@@ -1931,13 +2006,13 @@ Instructions:
       { anchorMemoryId: options.anchorMemoryId },
       async () => narrativeImpl(this.hdb, bankId, options),
       (result) => ({ eventCount: result.events.length }),
-    )
+    );
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────
 
   close(): void {
-    this.hdb.sqlite.close()
+    this.hdb.sqlite.close();
   }
 }
 
@@ -1947,22 +2022,22 @@ const DEFAULT_DISPOSITION: DispositionTraits = {
   skepticism: 3,
   literalism: 3,
   empathy: 3,
-}
+};
 
 function toBank(row: typeof import("./schema").banks.$inferSelect): Bank {
-  let config: BankConfig = {}
+  let config: BankConfig = {};
   if (row.config) {
     try {
-      config = JSON.parse(row.config) as BankConfig
+      config = JSON.parse(row.config) as BankConfig;
     } catch {
       // malformed JSON → empty config
     }
   }
 
-  let disposition: DispositionTraits = { ...DEFAULT_DISPOSITION }
+  let disposition: DispositionTraits = { ...DEFAULT_DISPOSITION };
   if (row.disposition) {
     try {
-      disposition = { ...DEFAULT_DISPOSITION, ...JSON.parse(row.disposition) }
+      disposition = { ...DEFAULT_DISPOSITION, ...JSON.parse(row.disposition) };
     } catch {
       // malformed JSON → default disposition
     }
@@ -1977,47 +2052,49 @@ function toBank(row: typeof import("./schema").banks.$inferSelect): Bank {
     mission: row.mission ?? "",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-  }
+  };
 }
 
 function safeJson<T>(value: string, fallback: T): T {
   try {
-    return JSON.parse(value) as T
+    return JSON.parse(value) as T;
   } catch {
-    return fallback
+    return fallback;
   }
 }
 
 function toIsoOrNull(value: number | null | undefined): string | null {
-  if (value == null) return null
-  return new Date(value).toISOString()
+  if (value == null) return null;
+  return new Date(value).toISOString();
 }
 
 function toIsoOrEmpty(value: number | null | undefined): string {
-  return toIsoOrNull(value) ?? ""
+  return toIsoOrNull(value) ?? "";
 }
 
 function dedupeGraphEdges(edges: GraphEdge[]): GraphEdge[] {
-  const seen = new Map<string, GraphEdge>()
+  const seen = new Map<string, GraphEdge>();
   for (const edge of edges) {
-    const source = edge.sourceId < edge.targetId ? edge.sourceId : edge.targetId
-    const target = edge.sourceId < edge.targetId ? edge.targetId : edge.sourceId
-    const key = `${source}:${target}:${edge.linkType}`
-    const existing = seen.get(key)
+    const source =
+      edge.sourceId < edge.targetId ? edge.sourceId : edge.targetId;
+    const target =
+      edge.sourceId < edge.targetId ? edge.targetId : edge.sourceId;
+    const key = `${source}:${target}:${edge.linkType}`;
+    const existing = seen.get(key);
     if (!existing || edge.weight > existing.weight) {
-      seen.set(key, edge)
+      seen.set(key, edge);
     }
   }
-  return [...seen.values()]
+  return [...seen.values()];
 }
 
 /** Strip undefined keys so they don't overwrite spread defaults */
 function stripUndefined<T extends object>(obj: T): Partial<T> {
-  const result: Partial<T> = {}
+  const result: Partial<T> = {};
   for (const key of Object.keys(obj) as Array<keyof T>) {
     if (obj[key] !== undefined) {
-      result[key] = obj[key]
+      result[key] = obj[key];
     }
   }
-  return result
+  return result;
 }

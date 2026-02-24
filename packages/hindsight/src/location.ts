@@ -5,9 +5,9 @@
  * path association strength, and query-signal detection.
  */
 
-import { ulid } from "@ellie/utils"
-import { and, or, eq, desc, sql, inArray } from "drizzle-orm"
-import type { HindsightDatabase } from "./db"
+import { ulid } from "@ellie/utils";
+import { and, or, eq, desc, sql, inArray } from "drizzle-orm";
+import type { HindsightDatabase } from "./db";
 
 // ── Path normalization ──────────────────────────────────────────────────────
 
@@ -21,13 +21,13 @@ import type { HindsightDatabase } from "./db"
  * - lowercase for case-insensitive matching
  */
 export function normalizePath(raw: string): string {
-  let p = raw.trim()
-  p = p.replace(/\\/g, "/")
-  p = p.replace(/\/{2,}/g, "/")
+  let p = raw.trim();
+  p = p.replace(/\\/g, "/");
+  p = p.replace(/\/{2,}/g, "/");
   if (p.length > 1 && p.endsWith("/")) {
-    p = p.slice(0, -1)
+    p = p.slice(0, -1);
   }
-  return p.toLowerCase()
+  return p.toLowerCase();
 }
 
 // ── Query signal detection ──────────────────────────────────────────────────
@@ -41,73 +41,74 @@ export function normalizePath(raw: string): string {
  * - module-like tokens: foo/bar, utils.logger
  */
 export function detectLocationSignals(query: string): string[] {
-  const signals: string[] = []
+  const signals: string[] = [];
 
   // Match file path patterns (absolute or relative)
-  const pathRegex = /(?:^|\s)((?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+(?:\.\w+)?)/g
-  let match: RegExpExecArray | null
+  const pathRegex =
+    /(?:^|\s)((?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+(?:\.\w+)?)/g;
+  let match: RegExpExecArray | null;
   while ((match = pathRegex.exec(query)) !== null) {
-    const token = match[1]!.trim()
+    const token = match[1]!.trim();
     if (token.length > 2) {
-      signals.push(token)
+      signals.push(token);
     }
   }
 
   // Match module-like dot-separated tokens (e.g., utils.logger, foo.bar.baz)
   // but exclude common sentence patterns (e.g., "something. Something")
-  const moduleRegex = /(?:^|\s)([\w-]+(?:\.[\w-]+){1,})/g
+  const moduleRegex = /(?:^|\s)([\w-]+(?:\.[\w-]+){1,})/g;
   while ((match = moduleRegex.exec(query)) !== null) {
-    const token = match[1]!.trim()
+    const token = match[1]!.trim();
     // Skip if it looks like a sentence boundary
-    if (/\.[A-Z]/.test(token)) continue
+    if (/\.[A-Z]/.test(token)) continue;
     // Skip common non-module patterns
-    if (/\d+\.\d+/.test(token)) continue // version numbers
+    if (/\d+\.\d+/.test(token)) continue; // version numbers
     if (token.length > 2 && !signals.includes(token)) {
-      signals.push(token)
+      signals.push(token);
     }
   }
 
-  return signals
+  return signals;
 }
 
 /**
  * Returns true if the query contains location signals.
  */
 export function hasLocationSignals(query: string): boolean {
-  return detectLocationSignals(query).length > 0
+  return detectLocationSignals(query).length > 0;
 }
 
 // ── Location record/find/stats ──────────────────────────────────────────────
 
 export interface LocationContext {
-  memoryId: string
-  session?: string
-  activityType?: "access" | "retain" | "recall"
+  memoryId: string;
+  session?: string;
+  activityType?: "access" | "retain" | "recall";
 }
 
 export interface LocationHit {
-  pathId: string
-  rawPath: string
-  normalizedPath: string
-  profile: string
-  project: string
-  accessCount: number
-  lastAccessedAt: number
+  pathId: string;
+  rawPath: string;
+  normalizedPath: string;
+  profile: string;
+  project: string;
+  accessCount: number;
+  lastAccessedAt: number;
 }
 
 export interface LocationStats {
-  pathId: string
-  rawPath: string
-  normalizedPath: string
-  accessCount: number
-  lastAccessedAt: number | null
-  associatedMemoryCount: number
+  pathId: string;
+  rawPath: string;
+  normalizedPath: string;
+  accessCount: number;
+  lastAccessedAt: number | null;
+  associatedMemoryCount: number;
   topAssociations: Array<{
-    relatedPathId: string
-    relatedNormalizedPath: string
-    coAccessCount: number
-    strength: number
-  }>
+    relatedPathId: string;
+    relatedNormalizedPath: string;
+    coAccessCount: number;
+    strength: number;
+  }>;
 }
 
 /**
@@ -121,8 +122,8 @@ export function locationRecord(
   profile = "default",
   project = "default",
 ): void {
-  const normalized = normalizePath(rawPath)
-  const now = Date.now()
+  const normalized = normalizePath(rawPath);
+  const now = Date.now();
 
   // Upsert path
   const existingPath = hdb.db
@@ -136,18 +137,18 @@ export function locationRecord(
         eq(hdb.schema.locationPaths.project, project),
       ),
     )
-    .get()
+    .get();
 
-  let pathId: string
+  let pathId: string;
   if (existingPath) {
-    pathId = existingPath.id
+    pathId = existingPath.id;
     hdb.db
       .update(hdb.schema.locationPaths)
       .set({ updatedAt: now })
       .where(eq(hdb.schema.locationPaths.id, pathId))
-      .run()
+      .run();
   } else {
-    pathId = ulid()
+    pathId = ulid();
     hdb.db
       .insert(hdb.schema.locationPaths)
       .values({
@@ -160,7 +161,7 @@ export function locationRecord(
         createdAt: now,
         updatedAt: now,
       })
-      .run()
+      .run();
   }
 
   // Create access context
@@ -175,11 +176,11 @@ export function locationRecord(
       activityType: context.activityType ?? "access",
       accessedAt: now,
     })
-    .run()
+    .run();
 
   // Update co-access associations with other recently accessed paths in this session
   if (context.session) {
-    updateCoAccessAssociations(hdb, bankId, pathId, context.session, now)
+    updateCoAccessAssociations(hdb, bankId, pathId, context.session, now);
   }
 }
 
@@ -190,25 +191,25 @@ export function locationFind(
   hdb: HindsightDatabase,
   bankId: string,
   input: {
-    query?: string
-    path?: string
-    limit?: number
-    scope?: { profile?: string; project?: string }
+    query?: string;
+    path?: string;
+    limit?: number;
+    scope?: { profile?: string; project?: string };
   },
 ): LocationHit[] {
-  const limit = input.limit ?? 20
-  const conditions = [eq(hdb.schema.locationPaths.bankId, bankId)]
+  const limit = input.limit ?? 20;
+  const conditions = [eq(hdb.schema.locationPaths.bankId, bankId)];
 
   if (input.scope?.profile) {
-    conditions.push(eq(hdb.schema.locationPaths.profile, input.scope.profile))
+    conditions.push(eq(hdb.schema.locationPaths.profile, input.scope.profile));
   }
   if (input.scope?.project) {
-    conditions.push(eq(hdb.schema.locationPaths.project, input.scope.project))
+    conditions.push(eq(hdb.schema.locationPaths.project, input.scope.project));
   }
 
   if (input.path) {
-    const normalized = normalizePath(input.path)
-    conditions.push(eq(hdb.schema.locationPaths.normalizedPath, normalized))
+    const normalized = normalizePath(input.path);
+    conditions.push(eq(hdb.schema.locationPaths.normalizedPath, normalized));
   }
 
   const pathRows = hdb.db
@@ -216,22 +217,26 @@ export function locationFind(
     .from(hdb.schema.locationPaths)
     .where(and(...conditions))
     .limit(limit)
-    .all()
+    .all();
 
   if (pathRows.length === 0 && input.query) {
     // Fall back to signal detection from query
-    const signals = detectLocationSignals(input.query)
+    const signals = detectLocationSignals(input.query);
     if (signals.length > 0) {
-      const normalizedSignals = signals.map(normalizePath)
-      const signalConditions = [eq(hdb.schema.locationPaths.bankId, bankId)]
+      const normalizedSignals = signals.map(normalizePath);
+      const signalConditions = [eq(hdb.schema.locationPaths.bankId, bankId)];
       if (input.scope?.profile) {
-        signalConditions.push(eq(hdb.schema.locationPaths.profile, input.scope.profile))
+        signalConditions.push(
+          eq(hdb.schema.locationPaths.profile, input.scope.profile),
+        );
       }
       if (input.scope?.project) {
-        signalConditions.push(eq(hdb.schema.locationPaths.project, input.scope.project))
+        signalConditions.push(
+          eq(hdb.schema.locationPaths.project, input.scope.project),
+        );
       }
 
-      const allMatches: LocationHit[] = []
+      const allMatches: LocationHit[] = [];
       for (const norm of normalizedSignals) {
         const matches = hdb.db
           .select()
@@ -239,21 +244,21 @@ export function locationFind(
           .where(
             and(
               ...signalConditions,
-              sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%' + norm + '%'}`,
+              sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${"%" + norm + "%"}`,
             ),
           )
           .limit(limit)
-          .all()
+          .all();
         for (const row of matches) {
-          allMatches.push(pathRowToHit(hdb, bankId, row))
+          allMatches.push(pathRowToHit(hdb, bankId, row));
         }
       }
-      return allMatches.slice(0, limit)
+      return allMatches.slice(0, limit);
     }
-    return []
+    return [];
   }
 
-  return pathRows.map((row) => pathRowToHit(hdb, bankId, row))
+  return pathRows.map((row) => pathRowToHit(hdb, bankId, row));
 }
 
 /**
@@ -265,25 +270,25 @@ export function locationStats(
   rawPath: string,
   scope?: { profile?: string; project?: string },
 ): LocationStats | null {
-  const normalized = normalizePath(rawPath)
+  const normalized = normalizePath(rawPath);
   const conditions = [
     eq(hdb.schema.locationPaths.bankId, bankId),
     eq(hdb.schema.locationPaths.normalizedPath, normalized),
-  ]
+  ];
   if (scope?.profile) {
-    conditions.push(eq(hdb.schema.locationPaths.profile, scope.profile))
+    conditions.push(eq(hdb.schema.locationPaths.profile, scope.profile));
   }
   if (scope?.project) {
-    conditions.push(eq(hdb.schema.locationPaths.project, scope.project))
+    conditions.push(eq(hdb.schema.locationPaths.project, scope.project));
   }
 
   const pathRow = hdb.db
     .select()
     .from(hdb.schema.locationPaths)
     .where(and(...conditions))
-    .get()
+    .get();
 
-  if (!pathRow) return null
+  if (!pathRow) return null;
 
   const accessRows = hdb.db
     .select()
@@ -294,9 +299,9 @@ export function locationStats(
         eq(hdb.schema.locationAccessContexts.pathId, pathRow.id),
       ),
     )
-    .all()
+    .all();
 
-  const distinctMemoryIds = new Set(accessRows.map((r) => r.memoryId))
+  const distinctMemoryIds = new Set(accessRows.map((r) => r.memoryId));
 
   // Get top associations (check both directions since canonical ordering may put this path as either source or related)
   const associations = hdb.db
@@ -313,12 +318,12 @@ export function locationStats(
     )
     .orderBy(desc(hdb.schema.locationAssociations.strength))
     .limit(5)
-    .all()
+    .all();
 
   // For each association, the "related" path is whichever one isn't us
   const relatedPathIds = associations.map((a) =>
     a.sourcePathId === pathRow.id ? a.relatedPathId : a.sourcePathId,
-  )
+  );
   const relatedPaths =
     relatedPathIds.length > 0
       ? hdb.db
@@ -326,29 +331,31 @@ export function locationStats(
           .from(hdb.schema.locationPaths)
           .where(inArray(hdb.schema.locationPaths.id, relatedPathIds))
           .all()
-      : []
-  const relatedPathById = new Map(relatedPaths.map((p) => [p.id, p]))
+      : [];
+  const relatedPathById = new Map(relatedPaths.map((p) => [p.id, p]));
 
   return {
     pathId: pathRow.id,
     rawPath: pathRow.rawPath,
     normalizedPath: pathRow.normalizedPath,
     accessCount: accessRows.length,
-    lastAccessedAt: accessRows.length > 0
-      ? Math.max(...accessRows.map((r) => r.accessedAt))
-      : null,
+    lastAccessedAt:
+      accessRows.length > 0
+        ? Math.max(...accessRows.map((r) => r.accessedAt))
+        : null,
     associatedMemoryCount: distinctMemoryIds.size,
     topAssociations: associations.map((a) => {
-      const relatedId = a.sourcePathId === pathRow.id ? a.relatedPathId : a.sourcePathId
+      const relatedId =
+        a.sourcePathId === pathRow.id ? a.relatedPathId : a.sourcePathId;
       return {
         relatedPathId: relatedId,
         relatedNormalizedPath:
           relatedPathById.get(relatedId)?.normalizedPath ?? "",
         coAccessCount: a.coAccessCount,
         strength: a.strength,
-      }
+      };
     }),
-  }
+  };
 }
 
 // ── Resolve query signals to path IDs ───────────────────────────────────────
@@ -362,19 +369,17 @@ export function resolveSignalsToPaths(
   signals: string[],
   scope?: { profile?: string; project?: string },
 ): Map<string, string[]> {
-  const result = new Map<string, string[]>()
-  if (signals.length === 0) return result
+  const result = new Map<string, string[]>();
+  if (signals.length === 0) return result;
 
   for (const signal of signals) {
-    const normalized = normalizePath(signal)
-    const conditions = [
-      eq(hdb.schema.locationPaths.bankId, bankId),
-    ]
+    const normalized = normalizePath(signal);
+    const conditions = [eq(hdb.schema.locationPaths.bankId, bankId)];
     if (scope?.profile) {
-      conditions.push(eq(hdb.schema.locationPaths.profile, scope.profile))
+      conditions.push(eq(hdb.schema.locationPaths.profile, scope.profile));
     }
     if (scope?.project) {
-      conditions.push(eq(hdb.schema.locationPaths.project, scope.project))
+      conditions.push(eq(hdb.schema.locationPaths.project, scope.project));
     }
 
     // Try exact match first
@@ -387,11 +392,14 @@ export function resolveSignalsToPaths(
           eq(hdb.schema.locationPaths.normalizedPath, normalized),
         ),
       )
-      .all()
+      .all();
 
     if (exact.length > 0) {
-      result.set(signal, exact.map((r) => r.id))
-      continue
+      result.set(
+        signal,
+        exact.map((r) => r.id),
+      );
+      continue;
     }
 
     // Suffix match (e.g., "foo.ts" matches "/src/foo.ts")
@@ -401,26 +409,29 @@ export function resolveSignalsToPaths(
       .where(
         and(
           ...conditions,
-          sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%/' + normalized}`,
+          sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${"%/" + normalized}`,
         ),
       )
       .limit(5)
-      .all()
+      .all();
 
     if (suffix.length > 0) {
-      result.set(signal, suffix.map((r) => r.id))
+      result.set(
+        signal,
+        suffix.map((r) => r.id),
+      );
     }
   }
 
-  return result
+  return result;
 }
 
 // ── Retrieval boost computation ─────────────────────────────────────────────
 
 export interface LocationBoostInput {
-  memoryId: string
-  queryPathIds: Set<string>
-  maxStrengthForQueryPaths: number
+  memoryId: string;
+  queryPathIds: Set<string>;
+  maxStrengthForQueryPaths: number;
 }
 
 /**
@@ -438,7 +449,7 @@ export function computeLocationBoost(
   maxStrengthForQueryPaths: number,
   now: number,
 ): number {
-  if (queryPathIds.size === 0) return 0
+  if (queryPathIds.size === 0) return 0;
 
   // Find all paths associated with this memory via access contexts
   const memoryAccessRows = hdb.db
@@ -453,69 +464,93 @@ export function computeLocationBoost(
         eq(hdb.schema.locationAccessContexts.memoryId, memoryId),
       ),
     )
-    .all()
+    .all();
 
-  if (memoryAccessRows.length === 0) return 0
+  if (memoryAccessRows.length === 0) return 0;
 
-  const candidatePathIds = new Set(memoryAccessRows.map((r) => r.pathId))
+  const candidatePathIds = new Set(memoryAccessRows.map((r) => r.pathId));
 
   // 1. directPathBoost: +0.12 if any candidate path exactly matches a query path
-  let directPathBoost = 0
+  let directPathBoost = 0;
   for (const pathId of candidatePathIds) {
     if (queryPathIds.has(pathId)) {
-      directPathBoost = 0.12
-      break
+      directPathBoost = 0.12;
+      break;
     }
   }
 
   // 2. familiarityBoost: based on access count and recency
-  const accessCountByPath = new Map<string, number>()
-  const lastAccessByPath = new Map<string, number>()
+  const accessCountByPath = new Map<string, number>();
+  const lastAccessByPath = new Map<string, number>();
   for (const row of memoryAccessRows) {
-    accessCountByPath.set(row.pathId, (accessCountByPath.get(row.pathId) ?? 0) + 1)
-    const prev = lastAccessByPath.get(row.pathId) ?? 0
-    if (row.accessedAt > prev) lastAccessByPath.set(row.pathId, row.accessedAt)
+    accessCountByPath.set(
+      row.pathId,
+      (accessCountByPath.get(row.pathId) ?? 0) + 1,
+    );
+    const prev = lastAccessByPath.get(row.pathId) ?? 0;
+    if (row.accessedAt > prev) lastAccessByPath.set(row.pathId, row.accessedAt);
   }
 
-  let maxFamiliarityNorm = 0
-  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000
+  let maxFamiliarityNorm = 0;
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   for (const pathId of candidatePathIds) {
-    const count = accessCountByPath.get(pathId) ?? 0
-    const lastAccess = lastAccessByPath.get(pathId) ?? 0
-    const timeDelta = now - lastAccess
-    const f = Math.log1p(count) * Math.exp(-timeDelta / thirtyDaysMs)
-    const fNorm = f / (1 + f)
-    if (fNorm > maxFamiliarityNorm) maxFamiliarityNorm = fNorm
+    const count = accessCountByPath.get(pathId) ?? 0;
+    const lastAccess = lastAccessByPath.get(pathId) ?? 0;
+    const timeDelta = now - lastAccess;
+    const f = Math.log1p(count) * Math.exp(-timeDelta / thirtyDaysMs);
+    const fNorm = f / (1 + f);
+    if (fNorm > maxFamiliarityNorm) maxFamiliarityNorm = fNorm;
   }
-  const familiarityBoost = 0.10 * maxFamiliarityNorm
+  const familiarityBoost = 0.1 * maxFamiliarityNorm;
 
   // 3. coAccessBoost: from hs_location_associations
-  let maxCoNorm = 0
+  let maxCoNorm = 0;
   if (maxStrengthForQueryPaths > 0) {
-    const candidatePathArray = [...candidatePathIds]
+    const candidatePathArray = [...candidatePathIds];
     if (candidatePathArray.length > 0) {
-      const queryPathArray = [...queryPathIds]
+      const queryPathArray = [...queryPathIds];
+      // Check both directions since canonical ordering may put query path as either source or related
       const assocs = hdb.db
         .select()
         .from(hdb.schema.locationAssociations)
         .where(
           and(
             eq(hdb.schema.locationAssociations.bankId, bankId),
-            inArray(hdb.schema.locationAssociations.sourcePathId, queryPathArray),
-            inArray(hdb.schema.locationAssociations.relatedPathId, candidatePathArray),
+            or(
+              and(
+                inArray(
+                  hdb.schema.locationAssociations.sourcePathId,
+                  queryPathArray,
+                ),
+                inArray(
+                  hdb.schema.locationAssociations.relatedPathId,
+                  candidatePathArray,
+                ),
+              ),
+              and(
+                inArray(
+                  hdb.schema.locationAssociations.sourcePathId,
+                  candidatePathArray,
+                ),
+                inArray(
+                  hdb.schema.locationAssociations.relatedPathId,
+                  queryPathArray,
+                ),
+              ),
+            ),
           ),
         )
-        .all()
+        .all();
 
       for (const assoc of assocs) {
-        const coNorm = assoc.strength / maxStrengthForQueryPaths
-        if (coNorm > maxCoNorm) maxCoNorm = coNorm
+        const coNorm = assoc.strength / maxStrengthForQueryPaths;
+        if (coNorm > maxCoNorm) maxCoNorm = coNorm;
       }
     }
   }
-  const coAccessBoost = 0.08 * maxCoNorm
+  const coAccessBoost = 0.08 * maxCoNorm;
 
-  return directPathBoost + familiarityBoost + coAccessBoost
+  return directPathBoost + familiarityBoost + coAccessBoost;
 }
 
 /**
@@ -527,21 +562,27 @@ export function getMaxStrengthForPaths(
   bankId: string,
   pathIds: Set<string>,
 ): number {
-  if (pathIds.size === 0) return 0
-  const pathArray = [...pathIds]
+  if (pathIds.size === 0) return 0;
+  const pathArray = [...pathIds];
 
+  // Check both directions since canonical ordering may put path as either source or related
   const result = hdb.db
-    .select({ maxStr: sql<number>`MAX(${hdb.schema.locationAssociations.strength})` })
+    .select({
+      maxStr: sql<number>`MAX(${hdb.schema.locationAssociations.strength})`,
+    })
     .from(hdb.schema.locationAssociations)
     .where(
       and(
         eq(hdb.schema.locationAssociations.bankId, bankId),
-        inArray(hdb.schema.locationAssociations.sourcePathId, pathArray),
+        or(
+          inArray(hdb.schema.locationAssociations.sourcePathId, pathArray),
+          inArray(hdb.schema.locationAssociations.relatedPathId, pathArray),
+        ),
       ),
     )
-    .get()
+    .get();
 
-  return result?.maxStr ?? 0
+  return result?.maxStr ?? 0;
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────────
@@ -560,7 +601,7 @@ function pathRowToHit(
         eq(hdb.schema.locationAccessContexts.pathId, row.id),
       ),
     )
-    .all()
+    .all();
 
   return {
     pathId: row.id,
@@ -569,10 +610,11 @@ function pathRowToHit(
     profile: row.profile,
     project: row.project,
     accessCount: accessRows.length,
-    lastAccessedAt: accessRows.length > 0
-      ? Math.max(...accessRows.map((r) => r.accessedAt))
-      : row.createdAt,
-  }
+    lastAccessedAt:
+      accessRows.length > 0
+        ? Math.max(...accessRows.map((r) => r.accessedAt))
+        : row.createdAt,
+  };
 }
 
 /**
@@ -587,8 +629,8 @@ function updateCoAccessAssociations(
   session: string,
   now: number,
 ): void {
-  const windowMs = 30 * 60 * 1000 // 30 minute window
-  const cutoff = now - windowMs
+  const windowMs = 30 * 60 * 1000; // 30 minute window
+  const cutoff = now - windowMs;
 
   // Find other paths accessed in this session within the window
   const recentAccesses = hdb.db
@@ -602,16 +644,16 @@ function updateCoAccessAssociations(
         sql`${hdb.schema.locationAccessContexts.pathId} != ${currentPathId}`,
       ),
     )
-    .all()
+    .all();
 
-  const distinctPathIds = [...new Set(recentAccesses.map((r) => r.pathId))]
+  const distinctPathIds = [...new Set(recentAccesses.map((r) => r.pathId))];
 
   for (const otherPathId of distinctPathIds) {
     // Canonical ordering: smaller ID first
     const [sourceId, relatedId] =
       currentPathId < otherPathId
         ? [currentPathId, otherPathId]
-        : [otherPathId, currentPathId]
+        : [otherPathId, currentPathId];
 
     const existing = hdb.db
       .select()
@@ -623,11 +665,11 @@ function updateCoAccessAssociations(
           eq(hdb.schema.locationAssociations.relatedPathId, relatedId),
         ),
       )
-      .get()
+      .get();
 
     if (existing) {
-      const newCount = existing.coAccessCount + 1
-      const newStrength = Math.log1p(newCount) / (1 + Math.log1p(newCount))
+      const newCount = existing.coAccessCount + 1;
+      const newStrength = Math.log1p(newCount) / (1 + Math.log1p(newCount));
       hdb.db
         .update(hdb.schema.locationAssociations)
         .set({
@@ -636,9 +678,9 @@ function updateCoAccessAssociations(
           updatedAt: now,
         })
         .where(eq(hdb.schema.locationAssociations.id, existing.id))
-        .run()
+        .run();
     } else {
-      const newStrength = Math.log1p(1) / (1 + Math.log1p(1))
+      const newStrength = Math.log1p(1) / (1 + Math.log1p(1));
       hdb.db
         .insert(hdb.schema.locationAssociations)
         .values({
@@ -650,7 +692,7 @@ function updateCoAccessAssociations(
           strength: newStrength,
           updatedAt: now,
         })
-        .run()
+        .run();
     }
   }
 }
