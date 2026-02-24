@@ -1,9 +1,8 @@
 // ── Fact Extraction (Python parity) ────────────────────────────────────────
 
-export const EXTRACTION_CANONICAL_TIMEZONE = "Asia/Jerusalem"
+export const EXTRACTION_CANONICAL_TIMEZONE = 'Asia/Jerusalem'
 
-const FACT_TYPES_INSTRUCTION =
-  `Extract ONLY "world" and "assistant" type facts.`
+const FACT_TYPES_INSTRUCTION = `Extract ONLY "world" and "assistant" type facts.`
 
 const EXTRACTION_RESPONSE_FORMAT = `RESPONSE FORMAT: Return ONLY valid JSON:
 {
@@ -117,60 +116,57 @@ const VERBOSE_GUIDELINES = `Extract facts with maximum detail and preserve all s
 Still apply temporal handling, coreference resolution, and classification rules exactly.`
 
 export const EXTRACT_FACTS_SYSTEM = BASE_FACT_EXTRACTION_PROMPT.replace(
-  "{extraction_guidelines}",
-  CONCISE_GUIDELINES,
+	'{extraction_guidelines}',
+	CONCISE_GUIDELINES
 )
 
 export const EXTRACT_FACTS_VERBOSE_SYSTEM = BASE_FACT_EXTRACTION_PROMPT.replace(
-  "{extraction_guidelines}",
-  VERBOSE_GUIDELINES,
+	'{extraction_guidelines}',
+	VERBOSE_GUIDELINES
 )
 
 // ── Extraction mode selector ───────────────────────────────────────────────
 
 export function getExtractionPrompt(
-  mode: "concise" | "verbose" | "custom",
-  customGuidelines?: string,
+	mode: 'concise' | 'verbose' | 'custom',
+	customGuidelines?: string
 ): string {
-  if (mode === "verbose") return EXTRACT_FACTS_VERBOSE_SYSTEM
-  if (mode === "custom" && customGuidelines) {
-    return BASE_FACT_EXTRACTION_PROMPT.replace(
-      "{extraction_guidelines}",
-      customGuidelines,
-    )
-  }
-  return EXTRACT_FACTS_SYSTEM
+	if (mode === 'verbose') return EXTRACT_FACTS_VERBOSE_SYSTEM
+	if (mode === 'custom' && customGuidelines) {
+		return BASE_FACT_EXTRACTION_PROMPT.replace('{extraction_guidelines}', customGuidelines)
+	}
+	return EXTRACT_FACTS_SYSTEM
 }
 
 // ── User message ───────────────────────────────────────────────────────────
 
 export interface ExtractFactsUserPromptInput {
-  text: string
-  chunkIndex: number
-  totalChunks: number
-  eventDateMs: number
-  context?: string | null
+	text: string
+	chunkIndex: number
+	totalChunks: number
+	eventDateMs: number
+	context?: string | null
 }
 
 function formatEventDate(eventDateMs: number): string {
-  const date = new Date(eventDateMs)
-  if (Number.isNaN(date.getTime())) return "Unknown date (invalid)"
-  const readable = new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "2-digit",
-    year: "numeric",
-    timeZone: EXTRACTION_CANONICAL_TIMEZONE,
-  }).format(date)
-  return `${readable} (${date.toISOString()})`
+	const date = new Date(eventDateMs)
+	if (Number.isNaN(date.getTime())) return 'Unknown date (invalid)'
+	const readable = new Intl.DateTimeFormat('en-US', {
+		weekday: 'long',
+		month: 'long',
+		day: '2-digit',
+		year: 'numeric',
+		timeZone: EXTRACTION_CANONICAL_TIMEZONE
+	}).format(date)
+	return `${readable} (${date.toISOString()})`
 }
 
 export const EXTRACT_FACTS_USER = (input: ExtractFactsUserPromptInput) =>
-  `Extract facts from the following text chunk.
+	`Extract facts from the following text chunk.
 
 Chunk: ${input.chunkIndex + 1}/${input.totalChunks}
 Event Date: ${formatEventDate(input.eventDateMs)}
-Context: ${input.context?.trim() || "none"}
+Context: ${input.context?.trim() || 'none'}
 
 Text:
 ${input.text}`
@@ -214,69 +210,68 @@ RESPONSE FORMAT: Return ONLY valid JSON — an array of actions:
 You may also return [] if no action is needed.`
 
 export interface ConsolidationPromptFact {
-  id: string
-  content: string
-  occurredStart: number | null
-  occurredEnd: number | null
-  mentionedAt: number | null
-  tags: string[]
+	id: string
+	content: string
+	occurredStart: number | null
+	occurredEnd: number | null
+	mentionedAt: number | null
+	tags: string[]
 }
 
 export interface ConsolidationPromptObservation {
-  id: string
-  content: string
-  proofCount: number
-  sourceCount: number
-  occurredStart: number | null
-  occurredEnd: number | null
-  mentionedAt: number | null
+	id: string
+	content: string
+	proofCount: number
+	sourceCount: number
+	occurredStart: number | null
+	occurredEnd: number | null
+	mentionedAt: number | null
 }
 
 function formatEpochMs(value: number | null): string {
-  if (value == null) return "null"
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? "null" : date.toISOString()
+	if (value == null) return 'null'
+	const date = new Date(value)
+	return Number.isNaN(date.getTime()) ? 'null' : date.toISOString()
 }
 
 export function getConsolidationUserPrompt(
-  newFact: ConsolidationPromptFact,
-  relatedObservations: ConsolidationPromptObservation[],
+	newFact: ConsolidationPromptFact,
+	relatedObservations: ConsolidationPromptObservation[]
 ): string {
-  let prompt = `NEW FACT [ID: ${newFact.id}]:\n${newFact.content}\n`
-  prompt += `Temporal:\n`
-  prompt += `- occurredStart: ${formatEpochMs(newFact.occurredStart)}\n`
-  prompt += `- occurredEnd: ${formatEpochMs(newFact.occurredEnd)}\n`
-  prompt += `- mentionedAt: ${formatEpochMs(newFact.mentionedAt)}\n`
-  prompt += `- tags: ${newFact.tags.join(", ") || "none"}\n`
+	let prompt = `NEW FACT [ID: ${newFact.id}]:\n${newFact.content}\n`
+	prompt += `Temporal:\n`
+	prompt += `- occurredStart: ${formatEpochMs(newFact.occurredStart)}\n`
+	prompt += `- occurredEnd: ${formatEpochMs(newFact.occurredEnd)}\n`
+	prompt += `- mentionedAt: ${formatEpochMs(newFact.mentionedAt)}\n`
+	prompt += `- tags: ${newFact.tags.join(', ') || 'none'}\n`
 
-  if (relatedObservations.length > 0) {
-    prompt += "\nEXISTING RELATED OBSERVATIONS:\n"
-    for (const obs of relatedObservations) {
-      prompt += `\n[ID: ${obs.id}] (backed by ${obs.proofCount} facts, ${obs.sourceCount} sources)\n`
-      prompt += `Temporal: occurredStart=${formatEpochMs(obs.occurredStart)}, occurredEnd=${formatEpochMs(obs.occurredEnd)}, mentionedAt=${formatEpochMs(obs.mentionedAt)}\n`
-      prompt += `${obs.content}\n`
-    }
-  } else {
-    prompt += "\nNo existing related observations found.\n"
-  }
+	if (relatedObservations.length > 0) {
+		prompt += '\nEXISTING RELATED OBSERVATIONS:\n'
+		for (const obs of relatedObservations) {
+			prompt += `\n[ID: ${obs.id}] (backed by ${obs.proofCount} facts, ${obs.sourceCount} sources)\n`
+			prompt += `Temporal: occurredStart=${formatEpochMs(obs.occurredStart)}, occurredEnd=${formatEpochMs(obs.occurredEnd)}, mentionedAt=${formatEpochMs(obs.mentionedAt)}\n`
+			prompt += `${obs.content}\n`
+		}
+	} else {
+		prompt += '\nNo existing related observations found.\n'
+	}
 
-  prompt +=
-    "\nDecide: create, update, merge observations when needed, or skip."
-  return prompt
+	prompt += '\nDecide: create, update, merge observations when needed, or skip.'
+	return prompt
 }
 
 // ── Reflect Agent (3-tier) ─────────────────────────────────────────────────
 
-import type { ReflectBudget } from "./types"
+import type { ReflectBudget } from './types'
 
 const BUDGET_GUIDANCE: Record<ReflectBudget, string> = {
-  low: "You have a LOW budget. Be efficient — check mental models first. If one matches and is fresh, answer directly. Only drill down if stale or absent.",
-  mid: "You have a MEDIUM budget. Check mental models, then observations. Drill into raw facts if staleness signals suggest it or you need more detail.",
-  high: "You have a HIGH budget. Be thorough — search all tiers. Cross-reference observations with raw facts. Use get_entity to explore connections. Build the most complete answer possible.",
+	low: 'You have a LOW budget. Be efficient — check mental models first. If one matches and is fresh, answer directly. Only drill down if stale or absent.',
+	mid: 'You have a MEDIUM budget. Check mental models, then observations. Drill into raw facts if staleness signals suggest it or you need more detail.',
+	high: 'You have a HIGH budget. Be thorough — search all tiers. Cross-reference observations with raw facts. Use get_entity to explore connections. Build the most complete answer possible.'
 }
 
 export function getReflectSystemPrompt(budget: ReflectBudget): string {
-  return `You are a reflection agent that answers questions by reasoning over a 3-tier memory hierarchy.
+	return `You are a reflection agent that answers questions by reasoning over a 3-tier memory hierarchy.
 
 MEMORY HIERARCHY (search in this order):
 
@@ -334,20 +329,18 @@ FORMATTING:
 
 // ── Directive Injection ──────────────────────────────────────────────────
 
-import type { Directive } from "./types"
+import type { Directive } from './types'
 
 /**
  * Build the directives section for the TOP of the reflect system prompt.
  * Returns empty string when no directives are provided.
  */
 export function buildDirectivesSection(directives: Directive[]): string {
-  if (directives.length === 0) return ""
+	if (directives.length === 0) return ''
 
-  const items = directives
-    .map((d) => `- **${d.name}**: ${d.content}`)
-    .join("\n")
+	const items = directives.map((d) => `- **${d.name}**: ${d.content}`).join('\n')
 
-  return `## DIRECTIVES (MANDATORY)
+	return `## DIRECTIVES (MANDATORY)
 These are hard rules you MUST follow in ALL responses:
 
 ${items}
@@ -364,13 +357,11 @@ Do NOT explain or justify how you handled directives in your answer. Just follow
  * Returns empty string when no directives are provided.
  */
 export function buildDirectivesReminder(directives: Directive[]): string {
-  if (directives.length === 0) return ""
+	if (directives.length === 0) return ''
 
-  const items = directives
-    .map((d, i) => `${i + 1}. **${d.name}**: ${d.content}`)
-    .join("\n")
+	const items = directives.map((d, i) => `${i + 1}. **${d.name}**: ${d.content}`).join('\n')
 
-  return `
+	return `
 
 ## REMINDER: MANDATORY DIRECTIVES
 Before responding, ensure your answer complies with ALL directives:

@@ -8,19 +8,20 @@ Tailwind v4 requires a specific architecture for CSS variable-based theming. Thi
 
 ```css
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(222.2 84% 4.9%);
-  /* ... more colors */
+	--background: hsl(0 0% 100%);
+	--foreground: hsl(222.2 84% 4.9%);
+	/* ... more colors */
 }
 
 .dark {
-  --background: hsl(222.2 84% 4.9%);
-  --foreground: hsl(210 40% 98%);
-  /* ... dark mode colors */
+	--background: hsl(222.2 84% 4.9%);
+	--foreground: hsl(210 40% 98%);
+	/* ... dark mode colors */
 }
 ```
 
 **Critical Rules:**
+
 - ✅ Define at root level (NOT inside `@layer base`)
 - ✅ Use `hsl()` wrapper on all color values
 - ✅ Use `.dark` for dark mode overrides (NOT `.dark { @theme { } }`)
@@ -30,13 +31,14 @@ Tailwind v4 requires a specific architecture for CSS variable-based theming. Thi
 
 ```css
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  /* ... map all CSS variables */
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	/* ... map all CSS variables */
 }
 ```
 
 **Why This Is Required:**
+
 - Tailwind v4 doesn't read `tailwind.config.ts` for colors
 - `@theme inline` generates utility classes (`bg-background`, `text-foreground`)
 - Without this, utilities like `bg-primary` won't exist
@@ -45,20 +47,22 @@ Tailwind v4 requires a specific architecture for CSS variable-based theming. Thi
 
 ```css
 @layer base {
-  body {
-    background-color: var(--background);  /* NO hsl() wrapper here */
-    color: var(--foreground);
-  }
+	body {
+		background-color: var(--background); /* NO hsl() wrapper here */
+		color: var(--foreground);
+	}
 }
 ```
 
 **Critical Rules:**
+
 - ✅ Reference variables directly: `var(--background)`
 - ❌ Never double-wrap: `hsl(var(--background))` (already has hsl)
 
 ### Step 4: Result - Automatic Dark Mode
 
 With this architecture:
+
 - `<div className="bg-background text-foreground">` works automatically
 - No `dark:` variants needed in components
 - Theme switches via `.dark` class on `<html>`
@@ -97,9 +101,9 @@ UI updates without re-render
 ```css
 /* WRONG */
 @layer base {
-  :root {
-    --background: hsl(0 0% 100%);
-  }
+	:root {
+		--background: hsl(0 0% 100%);
+	}
 }
 ```
 
@@ -110,13 +114,13 @@ UI updates without re-render
 ```css
 /* WRONG */
 @theme {
-  --color-primary: hsl(0 0% 0%);
+	--color-primary: hsl(0 0% 0%);
 }
 
 .dark {
-  @theme {
-    --color-primary: hsl(0 0% 100%);
-  }
+	@theme {
+		--color-primary: hsl(0 0% 100%);
+	}
 }
 ```
 
@@ -127,9 +131,9 @@ UI updates without re-render
 ```css
 /* WRONG */
 @layer base {
-  body {
-    background-color: hsl(var(--background));
-  }
+	body {
+		background-color: hsl(var(--background));
+	}
 }
 ```
 
@@ -140,13 +144,13 @@ UI updates without re-render
 ```typescript
 // WRONG (tailwind.config.ts)
 export default {
-  theme: {
-    extend: {
-      colors: {
-        primary: 'hsl(var(--primary))'
-      }
-    }
-  }
+	theme: {
+		extend: {
+			colors: {
+				primary: 'hsl(var(--primary))'
+			}
+		}
+	}
 }
 ```
 
@@ -159,6 +163,7 @@ export default {
 ### 1. Semantic Color Names
 
 Use semantic names, not color values:
+
 ```css
 --primary      /* ✅ Semantic */
 --blue-500     /* ❌ Not semantic */
@@ -167,6 +172,7 @@ Use semantic names, not color values:
 ### 2. Foreground Pairing
 
 Every background color needs a foreground:
+
 ```css
 --primary: hsl(...);
 --primary-foreground: hsl(...);
@@ -175,6 +181,7 @@ Every background color needs a foreground:
 ### 3. WCAG Contrast Ratios
 
 Ensure proper contrast:
+
 - Normal text: 4.5:1 minimum
 - Large text: 3:1 minimum
 - UI components: 3:1 minimum
@@ -182,17 +189,19 @@ Ensure proper contrast:
 ### 4. Chart Colors
 
 Charts need separate variables (don't use hsl wrapper in components):
+
 ```css
 :root {
-  --chart-1: hsl(12 76% 61%);
+	--chart-1: hsl(12 76% 61%);
 }
 
 @theme inline {
-  --color-chart-1: var(--chart-1);
+	--color-chart-1: var(--chart-1);
 }
 ```
 
 Use in components:
+
 ```tsx
 <div style={{ backgroundColor: 'var(--chart-1)' }} />
 ```

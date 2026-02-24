@@ -1,32 +1,37 @@
 # Eden Treaty
+
 e2e type safe RPC client for share type from backend to frontend.
 
 ## What It Is
+
 Type-safe object representation for Elysia server. Auto-completion + error handling.
 
 ## Installation
+
 ```bash
 bun add @elysiajs/eden
 bun add -d elysia
 ```
 
 Export Elysia server type:
+
 ```typescript
 const app = new Elysia()
-    .get('/', () => 'Hi Elysia')
-    .get('/id/:id', ({ params: { id } }) => id)
-    .post('/mirror', ({ body }) => body, {
-        body: t.Object({
-            id: t.Number(),
-            name: t.String()
-        })
-    })
-    .listen(3000)
+	.get('/', () => 'Hi Elysia')
+	.get('/id/:id', ({ params: { id } }) => id)
+	.post('/mirror', ({ body }) => body, {
+		body: t.Object({
+			id: t.Number(),
+			name: t.String()
+		})
+	})
+	.listen(3000)
 
 export type App = typeof app
 ```
 
 Consume on client side:
+
 ```typescript
 import { treaty } from '@elysiajs/eden'
 import type { App } from './server'
@@ -41,12 +46,13 @@ const { data: id } = await client.id({ id: 1895 }).get()
 
 // response: { id: 1895, name: 'Skadi' }
 const { data: nendoroid } = await client.mirror.post({
-    id: 1895,
-    name: 'Skadi'
+	id: 1895,
+	name: 'Skadi'
 })
 ```
 
 ## Common Errors & Fixes
+
 - **Strict mode**: Enable in tsconfig
 - **Version mismatch**: `npm why elysia` - must match server/client
 - **TypeScript**: Min 5.0
@@ -55,32 +61,35 @@ const { data: nendoroid } = await client.mirror.post({
 - **Path alias**: Must resolve same on frontend/backend
 
 ### Monorepo Path Alias
+
 Must resolve to same file on frontend/backend
 
 ```json
 // tsconfig.json at root
 {
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@frontend/*": ["./apps/frontend/src/*"],
-      "@backend/*": ["./apps/backend/src/*"]
-    }
-  }
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"@frontend/*": ["./apps/frontend/src/*"],
+			"@backend/*": ["./apps/backend/src/*"]
+		}
+	}
 }
 ```
 
 ## Syntax Mapping
-| Path           | Method | Treaty                        |
-|----------------|--------|-------------------------------|
-| /              | GET    | `.get()`                      |
-| /hi            | GET    | `.hi.get()`                   |
-| /deep/nested   | POST   | `.deep.nested.post()`         |
-| /item/:name    | GET    | `.item({ name: 'x' }).get()`  |
+
+| Path         | Method | Treaty                       |
+| ------------ | ------ | ---------------------------- |
+| /            | GET    | `.get()`                     |
+| /hi          | GET    | `.hi.get()`                  |
+| /deep/nested | POST   | `.deep.nested.post()`        |
+| /item/:name  | GET    | `.item({ name: 'x' }).get()` |
 
 ## Parameters
 
 ### With body (POST/PUT/PATCH/DELETE):
+
 ```typescript
 .user.post(
   { name: 'Elysia' },              // body
@@ -89,21 +98,25 @@ Must resolve to same file on frontend/backend
 ```
 
 ### No body (GET/HEAD):
+
 ```typescript
 .hello.get({ headers: {}, query: {}, fetch: {} })
 ```
 
 ### Empty body with query/headers:
+
 ```typescript
 .user.post(null, { query: { name: 'Ely' } })
 ```
 
 ### Fetch options:
+
 ```typescript
 .hello.get({ fetch: { signal: controller.signal } })
 ```
 
 ### File upload:
+
 ```typescript
 // Accepts: File | File[] | FileList | Blob
 .image.post({
@@ -113,14 +126,17 @@ Must resolve to same file on frontend/backend
 ```
 
 ## Response
+
 ```typescript
 const { data, error, response, status, headers } = await api.user.post({ name: 'x' })
 
 if (error) {
-  switch (error.status) {
-    case 400: throw error.value
-    default: throw error.value
-  }
+	switch (error.status) {
+		case 400:
+			throw error.value
+		default:
+			throw error.value
+	}
 }
 // data unwrapped after error handling
 return data
@@ -129,7 +145,9 @@ return data
 status >= 300 → `data = null`, `error` has value
 
 ## Stream/SSE
+
 Interpreted as `AsyncGenerator`:
+
 ```typescript
 const { data, error } = await treaty(app).ok.get()
 if (error) throw error
@@ -138,6 +156,7 @@ for await (const chunk of data) console.log(chunk)
 ```
 
 ## Utility Types
+
 ```typescript
 import { Treaty } from '@elysiajs/eden'
 
@@ -146,6 +165,7 @@ type UserError = Treaty.Error<typeof api.user.post>
 ```
 
 ## WebSocket
+
 ```typescript
 const chat = api.chat.subscribe()
 

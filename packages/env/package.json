@@ -1,20 +1,20 @@
 {
-  "name": "@ellie/env",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "exports": {
-    "./server": "./src/server.ts",
-    "./client": "./src/client.ts"
-  },
-  "scripts": {
-    "check-types": "tsgo --noEmit"
-  },
-  "dependencies": {
-    "valibot": "^1.2.0"
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "bun-types": "latest"
-  }
+	"name": "@ellie/env",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./server": "./src/server.ts",
+		"./client": "./src/client.ts"
+	},
+	"scripts": {
+		"check-types": "tsgo --noEmit"
+	},
+	"dependencies": {
+		"valibot": "^1.2.0"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "workspace:*",
+		"bun-types": "latest"
+	}
 }

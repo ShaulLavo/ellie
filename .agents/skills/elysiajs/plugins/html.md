@@ -9,6 +9,7 @@ bun add @elysiajs/html
 ```
 
 ## Basic Usage
+
 ```tsx twoslash
 import React from 'react'
 import { Elysia } from 'elysia'
@@ -44,13 +45,16 @@ new Elysia()
 This plugin will automatically add `Content-Type: text/html; charset=utf8` header to the response, add `<!doctype html>`, and convert it into a Response object.
 
 ## JSX
-Elysia can use JSX 
+
+Elysia can use JSX
 
 1. Replace your file that needs to use JSX to end with affix **"x"**:
+
 - .js -> .jsx
 - .ts -> .tsx
 
 2. Register the TypeScript type by append the following to **tsconfig.json**:
+
 ```jsonc
 // tsconfig.json
 {
@@ -63,6 +67,7 @@ Elysia can use JSX
 ```
 
 3. Starts using JSX in your file
+
 ```tsx twoslash
 import React from 'react'
 import { Elysia } from 'elysia'
@@ -145,6 +150,7 @@ Then appends the following **tsconfig.json**
 ```
 
 ## Config
+
 Below is a config which is accepted by the plugin
 
 ### contentType

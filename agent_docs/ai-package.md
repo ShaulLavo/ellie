@@ -4,19 +4,19 @@ Thin wrapper around TanStack AI with a model registry, cost calculation, thinkin
 
 ## Subpath Exports
 
-| Import | What it provides |
-|--------|-----------------|
-| `@ellie/ai` | Everything below + TanStack AI re-exports (`chat`, `summarize`, stream utils, tool defs, message converters) |
-| `@ellie/ai/models` | Model registry: `getModel()`, `getModels()`, `getProviders()`, `findModel()`, `modelsAreEqual()`, `MODELS` |
-| `@ellie/ai/usage` | Cost calculation: `calculateCost()`, `createUsage()`, `mapTanStackUsage()` |
-| `@ellie/ai/overflow` | Context overflow detection: `isContextOverflow()`, `getOverflowPatterns()` |
-| `@ellie/ai/env` | API key resolution: `getEnvApiKey()`, `hasEnvApiKey()` |
-| `@ellie/ai/thinking` | Thinking support: `toThinkingModelOptions()`, `supportsThinking()` |
+| Import               | What it provides                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `@ellie/ai`          | Everything below + TanStack AI re-exports (`chat`, `summarize`, stream utils, tool defs, message converters) |
+| `@ellie/ai/models`   | Model registry: `getModel()`, `getModels()`, `getProviders()`, `findModel()`, `modelsAreEqual()`, `MODELS`   |
+| `@ellie/ai/usage`    | Cost calculation: `calculateCost()`, `createUsage()`, `mapTanStackUsage()`                                   |
+| `@ellie/ai/overflow` | Context overflow detection: `isContextOverflow()`, `getOverflowPatterns()`                                   |
+| `@ellie/ai/env`      | API key resolution: `getEnvApiKey()`, `hasEnvApiKey()`                                                       |
+| `@ellie/ai/thinking` | Thinking support: `toThinkingModelOptions()`, `supportsThinking()`                                           |
 
 ## Providers
 
 ```ts
-type ProviderName = "anthropic" | "openai" | "ollama" | "openrouter"
+type ProviderName = 'anthropic' | 'openai' | 'ollama' | 'openrouter'
 ```
 
 ## Model Registry
@@ -31,14 +31,14 @@ type ProviderName = "anthropic" | "openai" | "ollama" | "openrouter"
 
 ```ts
 interface Model {
-  id: string                   // e.g., "claude-opus-4-6"
-  name: string                 // e.g., "Claude Opus 4.6"
-  provider: ProviderName
-  reasoning: boolean           // supports extended thinking
-  input: ("text" | "image")[]
-  cost: { input, output, cacheRead, cacheWrite }  // $/million tokens
-  contextWindow: number        // max input tokens
-  maxTokens: number            // max output tokens
+	id: string // e.g., "claude-opus-4-6"
+	name: string // e.g., "Claude Opus 4.6"
+	provider: ProviderName
+	reasoning: boolean // supports extended thinking
+	input: ('text' | 'image')[]
+	cost: { input; output; cacheRead; cacheWrite } // $/million tokens
+	contextWindow: number // max input tokens
+	maxTokens: number // max output tokens
 }
 ```
 
@@ -70,22 +70,23 @@ All costs are in **$/million tokens**.
 Unified thinking levels across providers:
 
 ```ts
-type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh"
+type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 ```
 
-| Provider | How it maps |
-|----------|-------------|
-| Anthropic | `thinking.budget_tokens` (1024 → 16384) |
-| OpenAI | `reasoning.effort` ("minimal" → "high", xhigh caps at "high") |
-| OpenRouter | Same as OpenAI (passthrough) |
-| Ollama | No-op (empty object) |
+| Provider   | How it maps                                                   |
+| ---------- | ------------------------------------------------------------- |
+| Anthropic  | `thinking.budget_tokens` (1024 → 16384)                       |
+| OpenAI     | `reasoning.effort` ("minimal" → "high", xhigh caps at "high") |
+| OpenRouter | Same as OpenAI (passthrough)                                  |
+| Ollama     | No-op (empty object)                                          |
 
 **Usage**: spread into TanStack AI's `chat()` modelOptions:
+
 ```ts
 chat({
-  adapter,
-  messages,
-  modelOptions: { ...toThinkingModelOptions("anthropic", "high") },
+	adapter,
+	messages,
+	modelOptions: { ...toThinkingModelOptions('anthropic', 'high') }
 })
 ```
 
@@ -106,12 +107,12 @@ isContextOverflow(errorMessage, inputTokens?, contextWindow?) → boolean
 
 Maps providers to env vars via `@ellie/env/server`:
 
-| Provider | Env var |
-|----------|---------|
-| anthropic | `ANTHROPIC_API_KEY` |
-| openai | `OPENAI_API_KEY` |
+| Provider   | Env var              |
+| ---------- | -------------------- |
+| anthropic  | `ANTHROPIC_API_KEY`  |
+| openai     | `OPENAI_API_KEY`     |
 | openrouter | `OPENROUTER_API_KEY` |
-| ollama | none (no key needed) |
+| ollama     | none (no key needed) |
 
 - `getEnvApiKey(provider)` → key string or undefined
 - `hasEnvApiKey(provider)` → boolean (always true for ollama)
@@ -130,14 +131,14 @@ The main `@ellie/ai` entry re-exports 20+ functions from TanStack AI:
 
 ## Key Files
 
-| What | Where |
-|------|-------|
-| Types | `packages/ai/src/types.ts` |
-| Model registry | `packages/ai/src/models/index.ts` |
-| Generated models | `packages/ai/src/models.generated.ts` |
-| Cost calculation | `packages/ai/src/usage.ts` |
-| Thinking support | `packages/ai/src/thinking.ts` |
-| Overflow detection | `packages/ai/src/overflow.ts` |
-| Env key resolution | `packages/ai/src/env.ts` |
-| Generator script | `packages/ai/scripts/generate-models.ts` |
-| Main exports | `packages/ai/src/index.ts` |
+| What               | Where                                    |
+| ------------------ | ---------------------------------------- |
+| Types              | `packages/ai/src/types.ts`               |
+| Model registry     | `packages/ai/src/models/index.ts`        |
+| Generated models   | `packages/ai/src/models.generated.ts`    |
+| Cost calculation   | `packages/ai/src/usage.ts`               |
+| Thinking support   | `packages/ai/src/thinking.ts`            |
+| Overflow detection | `packages/ai/src/overflow.ts`            |
+| Env key resolution | `packages/ai/src/env.ts`                 |
+| Generator script   | `packages/ai/scripts/generate-models.ts` |
+| Main exports       | `packages/ai/src/index.ts`               |

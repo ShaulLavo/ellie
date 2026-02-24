@@ -2,8 +2,8 @@
  * Hindsight HTTP routes — native Elysia endpoints with Valibot schemas.
  */
 
-import { Elysia } from "elysia"
-import * as v from "valibot"
+import { Elysia } from 'elysia'
+import * as v from 'valibot'
 import {
 	createBankInputSchema,
 	factTypeSchema,
@@ -12,9 +12,9 @@ import {
 	reflectInputSchema,
 	retainBatchInputSchema,
 	retainInputSchema,
-	updateBankInputSchema,
-} from "@ellie/schemas/hindsight"
-import type { Hindsight } from "../hindsight"
+	updateBankInputSchema
+} from '@ellie/schemas/hindsight'
+import type { Hindsight } from '../hindsight'
 import type {
 	BankConfig,
 	DispositionTraits,
@@ -22,13 +22,13 @@ import type {
 	RecallOptions,
 	ReflectOptions,
 	RetainBatchOptions,
-	RetainOptions,
-} from "../types"
+	RetainOptions
+} from '../types'
 
 type RpcInput = Record<string, unknown> | undefined | null
 type ProcedureHandler = (
 	input: unknown,
-	params: Record<string, string>,
+	params: Record<string, string>
 ) => Promise<unknown> | unknown
 type ProcedureHandlers = Record<string, ProcedureHandler>
 
@@ -40,12 +40,12 @@ const listMemoryUnitsQuerySchema = v.object({
 	limit: v.optional(v.string()),
 	offset: v.optional(v.string()),
 	factType: v.optional(factTypeSchema),
-	searchQuery: v.optional(v.string()),
+	searchQuery: v.optional(v.string())
 })
 
 const listEntitiesQuerySchema = v.object({
 	limit: v.optional(v.string()),
-	offset: v.optional(v.string()),
+	offset: v.optional(v.string())
 })
 
 const listEpisodesQuerySchema = v.object({
@@ -53,29 +53,25 @@ const listEpisodesQuerySchema = v.object({
 	project: v.optional(v.string()),
 	session: v.optional(v.string()),
 	limit: v.optional(v.string()),
-	cursor: v.optional(v.string()),
+	cursor: v.optional(v.string())
 })
 
 /**
  * Create procedure handlers for all hindsight procedures.
  * Each handler receives (input, params) and returns the result.
  */
-export function createHindsightHandlers(
-	hs: Hindsight,
-): ProcedureHandlers {
+export function createHindsightHandlers(hs: Hindsight): ProcedureHandlers {
 	return {
 		createBank: async (raw: unknown) => {
 			const input = raw as RpcInput
-			if (!input?.name || typeof input.name !== "string") {
+			if (!input?.name || typeof input.name !== 'string') {
 				throw new Error("Missing 'name' field")
 			}
 			return hs.createBank(input.name, {
 				description: input.description as string | undefined,
 				config: input.config as BankConfig | undefined,
-				disposition: input.disposition as
-					| Partial<DispositionTraits>
-					| undefined,
-				mission: input.mission as string | undefined,
+				disposition: input.disposition as Partial<DispositionTraits> | undefined,
+				mission: input.mission as string | undefined
 			})
 		},
 
@@ -83,7 +79,7 @@ export function createHindsightHandlers(
 
 		getBank: async (_input: unknown, params) => {
 			const bank = hs.getBankById(params.bankId)
-			if (!bank) throw new Error("Bank not found")
+			if (!bank) throw new Error('Bank not found')
 			return bank
 		},
 
@@ -99,14 +95,10 @@ export function createHindsightHandlers(
 
 		retain: async (raw: unknown, params) => {
 			const input = raw as RpcInput
-			if (!input?.content || typeof input.content !== "string") {
+			if (!input?.content || typeof input.content !== 'string') {
 				throw new Error("Missing 'content' field")
 			}
-			return hs.retain(
-				params.bankId,
-				input.content,
-				input.options as RetainOptions | undefined,
-			)
+			return hs.retain(params.bankId, input.content, input.options as RetainOptions | undefined)
 		},
 
 		retainBatch: async (raw: unknown, params) => {
@@ -117,32 +109,24 @@ export function createHindsightHandlers(
 			return hs.retainBatch(
 				params.bankId,
 				input.contents as string[],
-				input.options as RetainBatchOptions | undefined,
+				input.options as RetainBatchOptions | undefined
 			)
 		},
 
 		recall: async (raw: unknown, params) => {
 			const input = raw as RpcInput
-			if (!input?.query || typeof input.query !== "string") {
+			if (!input?.query || typeof input.query !== 'string') {
 				throw new Error("Missing 'query' field")
 			}
-			return hs.recall(
-				params.bankId,
-				input.query,
-				input.options as RecallOptions | undefined,
-			)
+			return hs.recall(params.bankId, input.query, input.options as RecallOptions | undefined)
 		},
 
 		reflect: async (raw: unknown, params) => {
 			const input = raw as RpcInput
-			if (!input?.query || typeof input.query !== "string") {
+			if (!input?.query || typeof input.query !== 'string') {
 				throw new Error("Missing 'query' field")
 			}
-			return hs.reflect(
-				params.bankId,
-				input.query,
-				input.options as ReflectOptions | undefined,
-			)
+			return hs.reflect(params.bankId, input.query, input.options as ReflectOptions | undefined)
 		},
 
 		getBankStats: async (_input: unknown, params) => hs.getBankStats(params.bankId),
@@ -153,8 +137,7 @@ export function createHindsightHandlers(
 			if (input?.limit) options.limit = Number(input.limit)
 			if (input?.offset) options.offset = Number(input.offset)
 			if (input?.factType) {
-				options.factType =
-					input.factType as ListMemoryUnitsOptions["factType"]
+				options.factType = input.factType as ListMemoryUnitsOptions['factType']
 			}
 			if (input?.searchQuery) options.searchQuery = input.searchQuery as string
 			return hs.listMemoryUnits(params.bankId, options)
@@ -162,12 +145,11 @@ export function createHindsightHandlers(
 
 		getMemoryUnit: async (_input: unknown, params) => {
 			const detail = hs.getMemoryUnit(params.bankId, params.memoryId)
-			if (!detail) throw new Error("Memory unit not found")
+			if (!detail) throw new Error('Memory unit not found')
 			return detail
 		},
 
-		deleteMemoryUnit: async (_input: unknown, params) =>
-			hs.deleteMemoryUnit(params.memoryId),
+		deleteMemoryUnit: async (_input: unknown, params) => hs.deleteMemoryUnit(params.memoryId),
 
 		listEntities: async (raw: unknown, params) => {
 			const input = raw as RpcInput
@@ -179,7 +161,7 @@ export function createHindsightHandlers(
 
 		getEntity: async (_input: unknown, params) => {
 			const detail = hs.getEntity(params.bankId, params.entityId)
-			if (!detail) throw new Error("Entity not found")
+			if (!detail) throw new Error('Entity not found')
 			return detail
 		},
 
@@ -190,40 +172,35 @@ export function createHindsightHandlers(
 				project: input?.project as string | undefined,
 				session: input?.session as string | undefined,
 				limit: input?.limit ? Number(input.limit) : undefined,
-				cursor: input?.cursor as string | undefined,
+				cursor: input?.cursor as string | undefined
 			})
 		},
 
 		narrative: async (raw: unknown, params) => {
 			const input = raw as RpcInput
-			if (!input?.anchorMemoryId || typeof input.anchorMemoryId !== "string") {
+			if (!input?.anchorMemoryId || typeof input.anchorMemoryId !== 'string') {
 				throw new Error("Missing 'anchorMemoryId' field")
 			}
 
-			const validDirections = ["before", "after", "both"] as const
-			const direction = input.direction != null
-				? validDirections.find((d) => d === input.direction)
-				: undefined
+			const validDirections = ['before', 'after', 'both'] as const
+			const direction =
+				input.direction != null ? validDirections.find((d) => d === input.direction) : undefined
 			if (input.direction != null && direction === undefined) {
-				throw new Error(
-					`Invalid 'direction': must be one of ${validDirections.join(", ")}`,
-				)
+				throw new Error(`Invalid 'direction': must be one of ${validDirections.join(', ')}`)
 			}
 
 			return hs.narrative(params.bankId, {
 				anchorMemoryId: input.anchorMemoryId,
 				direction,
-				steps: input.steps ? Number(input.steps) : undefined,
+				steps: input.steps ? Number(input.steps) : undefined
 			})
-		},
+		}
 	}
 }
 
 function errorStatus(error: unknown): number {
 	if (error instanceof SyntaxError) return 400
-	const message = error instanceof Error
-		? error.message.toLowerCase()
-		: String(error).toLowerCase()
+	const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
 	if (message.includes(`not found`)) return 404
 	if (message.includes(`missing`) || message.includes(`empty`) || message.includes(`invalid`)) {
 		return 400
@@ -237,7 +214,7 @@ function createHindsightApp(hs: Hindsight) {
 	const invoke = (
 		name: string,
 		input: unknown,
-		params: Record<string, string>,
+		params: Record<string, string>
 	): Promise<unknown> | unknown => {
 		const handler = handlers[name]
 		if (!handler) throw new Error(`Handler '${name}' not found`)
@@ -246,7 +223,7 @@ function createHindsightApp(hs: Hindsight) {
 
 	return new Elysia()
 		.onError(({ code, error, set }) => {
-			if (code === "VALIDATION") {
+			if (code === 'VALIDATION') {
 				set.status = 400
 				return { error: error.message }
 			}
@@ -255,84 +232,88 @@ function createHindsightApp(hs: Hindsight) {
 			set.status = errorStatus(error)
 			return { error: message }
 		})
-		.post("/banks", ({ body }) => invoke("createBank", body, {}), {
-			body: createBankInputSchema,
+		.post('/banks', ({ body }) => invoke('createBank', body, {}), {
+			body: createBankInputSchema
 		})
-		.get("/banks", () => invoke("listBanks", undefined, {}))
-		.get("/banks/:bankId", ({ params }) => invoke("getBank", undefined, params), {
-			params: bankParamsSchema,
+		.get('/banks', () => invoke('listBanks', undefined, {}))
+		.get('/banks/:bankId', ({ params }) => invoke('getBank', undefined, params), {
+			params: bankParamsSchema
 		})
-		.patch("/banks/:bankId", ({ body, params }) => invoke("updateBank", body, params), {
+		.patch('/banks/:bankId', ({ body, params }) => invoke('updateBank', body, params), {
 			params: bankParamsSchema,
-			body: updateBankInputSchema,
+			body: updateBankInputSchema
 		})
-		.delete("/banks/:bankId", ({ params }) => invoke("deleteBank", undefined, params), {
-			params: bankParamsSchema,
+		.delete('/banks/:bankId', ({ params }) => invoke('deleteBank', undefined, params), {
+			params: bankParamsSchema
 		})
-		.post("/banks/:bankId/retain", ({ body, params }) => invoke("retain", body, params), {
+		.post('/banks/:bankId/retain', ({ body, params }) => invoke('retain', body, params), {
 			params: bankParamsSchema,
-			body: retainInputSchema,
+			body: retainInputSchema
 		})
 		.post(
-			"/banks/:bankId/retain-batch",
-			({ body, params }) => invoke("retainBatch", body, params),
+			'/banks/:bankId/retain-batch',
+			({ body, params }) => invoke('retainBatch', body, params),
 			{
 				params: bankParamsSchema,
-				body: retainBatchInputSchema,
-			},
+				body: retainBatchInputSchema
+			}
 		)
-		.post("/banks/:bankId/recall", ({ body, params }) => invoke("recall", body, params), {
+		.post('/banks/:bankId/recall', ({ body, params }) => invoke('recall', body, params), {
 			params: bankParamsSchema,
-			body: recallInputSchema,
+			body: recallInputSchema
 		})
-		.post("/banks/:bankId/reflect", ({ body, params }) => invoke("reflect", body, params), {
+		.post('/banks/:bankId/reflect', ({ body, params }) => invoke('reflect', body, params), {
 			params: bankParamsSchema,
-			body: reflectInputSchema,
+			body: reflectInputSchema
 		})
-		.get("/banks/:bankId/stats", ({ params }) => invoke("getBankStats", undefined, params), {
-			params: bankParamsSchema,
+		.get('/banks/:bankId/stats', ({ params }) => invoke('getBankStats', undefined, params), {
+			params: bankParamsSchema
 		})
 		.get(
-			"/banks/:bankId/memories",
-			({ params, query }) => invoke("listMemoryUnits", query, params),
+			'/banks/:bankId/memories',
+			({ params, query }) => invoke('listMemoryUnits', query, params),
 			{
 				params: bankParamsSchema,
-				query: listMemoryUnitsQuerySchema,
-			},
+				query: listMemoryUnitsQuerySchema
+			}
 		)
 		.get(
-			"/banks/:bankId/memories/:memoryId",
-			({ params }) => invoke("getMemoryUnit", undefined, params),
+			'/banks/:bankId/memories/:memoryId',
+			({ params }) => invoke('getMemoryUnit', undefined, params),
 			{
-				params: memoryParamsSchema,
-			},
+				params: memoryParamsSchema
+			}
 		)
 		.delete(
-			"/banks/:bankId/memories/:memoryId",
-			({ params }) => invoke("deleteMemoryUnit", undefined, params),
+			'/banks/:bankId/memories/:memoryId',
+			({ params }) => invoke('deleteMemoryUnit', undefined, params),
 			{
-				params: memoryParamsSchema,
-			},
+				params: memoryParamsSchema
+			}
 		)
-		.get("/banks/:bankId/entities", ({ params, query }) => invoke("listEntities", query, params), {
+		.get('/banks/:bankId/entities', ({ params, query }) => invoke('listEntities', query, params), {
 			params: bankParamsSchema,
-			query: listEntitiesQuerySchema,
+			query: listEntitiesQuerySchema
 		})
-		.get("/banks/:bankId/entities/:entityId", ({ params }) => invoke("getEntity", undefined, params), {
-			params: entityParamsSchema,
-		})
-		.get("/banks/:bankId/episodes", ({ params, query }) => invoke("listEpisodes", query, params), {
+		.get(
+			'/banks/:bankId/entities/:entityId',
+			({ params }) => invoke('getEntity', undefined, params),
+			{
+				params: entityParamsSchema
+			}
+		)
+		.get('/banks/:bankId/episodes', ({ params, query }) => invoke('listEpisodes', query, params), {
 			params: bankParamsSchema,
-			query: listEpisodesQuerySchema,
+			query: listEpisodesQuerySchema
 		})
-		.post("/banks/:bankId/narrative", ({ body, params }) => invoke("narrative", body, params), {
+		.post('/banks/:bankId/narrative', ({ body, params }) => invoke('narrative', body, params), {
 			params: bankParamsSchema,
-			body: narrativeInputSchema,
+			body: narrativeInputSchema
 		})
 }
 
 function isHindsightPath(pathname: string): boolean {
-	return pathname === "/banks" || pathname.startsWith("/banks/")
+	return pathname === '/banks' || pathname.startsWith('/banks/')
 }
 
 const appCache = new WeakMap<Hindsight, ReturnType<typeof createHindsightApp>>()
@@ -344,7 +325,7 @@ const appCache = new WeakMap<Hindsight, ReturnType<typeof createHindsightApp>>()
 export function handleHindsightRequest(
 	hs: Hindsight,
 	req: Request,
-	pathname: string,
+	pathname: string
 ): Promise<Response> | null {
 	if (!isHindsightPath(pathname)) return null
 

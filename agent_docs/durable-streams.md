@@ -6,17 +6,18 @@ REST-based append-only log with real-time subscriptions, idempotent producers, a
 
 All operations are on a stream path (e.g., `/chat/abc`):
 
-| Method | Operation | Key behavior |
-|--------|-----------|--------------|
-| `PUT` | Create | Idempotent. 201 new / 200 exists / 409 config mismatch |
-| `HEAD` | Check existence | Returns metadata headers only |
-| `GET` | Read | Snapshot, long-poll, or SSE depending on `?live=` param |
-| `POST` | Append (+ optional close) | Supports producer idempotency headers |
-| `DELETE` | Delete | Soft-delete. Notifies all subscribers with `deleted` event |
+| Method   | Operation                 | Key behavior                                               |
+| -------- | ------------------------- | ---------------------------------------------------------- |
+| `PUT`    | Create                    | Idempotent. 201 new / 200 exists / 409 config mismatch     |
+| `HEAD`   | Check existence           | Returns metadata headers only                              |
+| `GET`    | Read                      | Snapshot, long-poll, or SSE depending on `?live=` param    |
+| `POST`   | Append (+ optional close) | Supports producer idempotency headers                      |
+| `DELETE` | Delete                    | Soft-delete. Notifies all subscribers with `deleted` event |
 
 ## Headers
 
 **Request/Response:**
+
 - `Stream-Next-Offset` — next offset to read from
 - `Stream-Cursor` — CDN collapsing cursor (echo in subsequent long-polls)
 - `Stream-Up-To-Date` — presence = response reaches current tail
@@ -24,6 +25,7 @@ All operations are on a stream path (e.g., `/chat/abc`):
 - `Stream-TTL` / `Stream-Expires-At` — TTL or absolute expiry on create
 
 **Producer headers (for idempotent appends):**
+
 - `Producer-Id`, `Producer-Epoch`, `Producer-Seq` — identify + sequence the producer
 - `Producer-Expected-Seq` / `Producer-Received-Seq` — returned on 409 sequence conflict
 
@@ -42,6 +44,7 @@ See `packages/db/src/jsonl-store.ts:formatOffset()`.
 **Long-poll:** `?live=long-poll` — blocks up to 30s if caught up, returns 204 on timeout.
 
 **SSE:** `?live=sse` — keeps connection open. Two event types:
+
 - `event: data` — message payload
 - `event: control` — JSON metadata (`streamNextOffset`, `upToDate`, `streamClosed`)
 
@@ -51,14 +54,14 @@ See `packages/streams/stream-server/src/server/routes/read.ts`.
 
 Producers identify via `(Producer-Id, Producer-Epoch, Producer-Seq)`. Server validates:
 
-| Scenario | Server response |
-|----------|----------------|
-| New producer, seq=0 | 200 — accepted |
-| Same epoch, seq = lastSeq + 1 | 200 — appended |
-| Same epoch, seq <= lastSeq | 204 — duplicate, no-op |
-| Stale epoch (< stored) | 403 — zombie fenced |
-| New epoch, seq=0 | 200 — epoch reset accepted |
-| Sequence gap | 409 — expected/received seq in headers |
+| Scenario                      | Server response                        |
+| ----------------------------- | -------------------------------------- |
+| New producer, seq=0           | 200 — accepted                         |
+| Same epoch, seq = lastSeq + 1 | 200 — appended                         |
+| Same epoch, seq <= lastSeq    | 204 — duplicate, no-op                 |
+| Stale epoch (< stored)        | 403 — zombie fenced                    |
+| New epoch, seq=0              | 200 — epoch reset accepted             |
+| Sequence gap                  | 409 — expected/received seq in headers |
 
 See `packages/streams/stream-server/src/store.ts:validateProducer()`.
 
@@ -82,6 +85,7 @@ See `packages/streams/stream-server/src/store.ts:processJsonAppend()`.
 ## Multi-Client Sync
 
 Each client tracks its own offset. The `subscribe()` method on DurableStore:
+
 - If messages exist past offset: callback immediately
 - If caught up and closed: callback with `closed` event
 - Otherwise: register callback, fire on new appends
@@ -92,9 +96,9 @@ See `packages/streams/stream-server/src/durable-store.ts`.
 
 ## Two Store Implementations
 
-| Class | Location | Purpose |
-|-------|----------|---------|
-| `StreamStore` | `packages/streams/stream-server/src/store.ts` | In-memory, used in tests |
+| Class          | Location                                              | Purpose                                         |
+| -------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| `StreamStore`  | `packages/streams/stream-server/src/store.ts`         | In-memory, used in tests                        |
 | `DurableStore` | `packages/streams/stream-server/src/durable-store.ts` | Disk-backed via JsonlEngine, no in-memory cache |
 
 Both implement `IStreamStore` from `packages/streams/stream-server/src/server/lib/context.ts`.

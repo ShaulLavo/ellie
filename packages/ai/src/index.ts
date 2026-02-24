@@ -12,12 +12,12 @@ export type {
 	ModelCost,
 	Usage,
 	CostBreakdown,
-	ThinkingLevel,
-} from "./types";
+	ThinkingLevel
+} from './types'
 
 // Provider constants
-export { PROVIDERS } from "./providers";
-export type { ProviderInfo } from "./providers";
+export { PROVIDERS } from './providers'
+export type { ProviderInfo } from './providers'
 
 // Model registry
 export {
@@ -26,26 +26,26 @@ export {
 	getProviders,
 	findModel,
 	modelsAreEqual,
-	MODELS,
-} from "./models/index";
+	MODELS
+} from './models/index'
 
 // Usage & cost calculation
-export { calculateCost, createUsage, mapTanStackUsage } from "./usage";
+export { calculateCost, createUsage, mapTanStackUsage } from './usage'
 
 // Context overflow detection
-export { isContextOverflow, getOverflowPatterns } from "./overflow";
+export { isContextOverflow, getOverflowPatterns } from './overflow'
 
 // Environment API key resolution
-export { getEnvApiKey, hasEnvApiKey } from "./env";
+export { getEnvApiKey, hasEnvApiKey } from './env'
 
 // Thinking level abstraction
-export { toThinkingModelOptions, supportsThinking } from "./thinking";
+export { toThinkingModelOptions, supportsThinking } from './thinking'
 
 // --- TanStack AI re-exports (convenience) ---
 
 // Core activity functions
-export { chat, summarize } from "@tanstack/ai";
-export { createChatOptions } from "@tanstack/ai";
+export { chat, summarize } from '@tanstack/ai'
+export { createChatOptions } from '@tanstack/ai'
 
 // Stream utilities
 export {
@@ -53,22 +53,18 @@ export {
 	toServerSentEventsStream,
 	toServerSentEventsResponse,
 	toHttpStream,
-	toHttpResponse,
-} from "@tanstack/ai";
+	toHttpResponse
+} from '@tanstack/ai'
 
 // Tool definition
-export { toolDefinition } from "@tanstack/ai";
-export { ToolCallManager } from "@tanstack/ai";
+export { toolDefinition } from '@tanstack/ai'
+export { ToolCallManager } from '@tanstack/ai'
 
 // Agent loop strategies
-export {
-	maxIterations,
-	untilFinishReason,
-	combineStrategies,
-} from "@tanstack/ai";
+export { maxIterations, untilFinishReason, combineStrategies } from '@tanstack/ai'
 
 // Adapter extension
-export { createModel, extendAdapter } from "@tanstack/ai";
+export { createModel, extendAdapter } from '@tanstack/ai'
 
 // Message utilities
 export {
@@ -77,14 +73,14 @@ export {
 	uiMessageToModelMessages,
 	modelMessageToUIMessage,
 	modelMessagesToUIMessages,
-	normalizeToUIMessage,
-} from "@tanstack/ai";
+	normalizeToUIMessage
+} from '@tanstack/ai'
 
 // Stream processing
-export { StreamProcessor, createReplayStream } from "@tanstack/ai";
+export { StreamProcessor, createReplayStream } from '@tanstack/ai'
 
 // Utility
-export { detectImageMimeType } from "@tanstack/ai";
+export { detectImageMimeType } from '@tanstack/ai'
 
 // --- TanStack AI type re-exports ---
 export type {
@@ -114,8 +110,7 @@ export type {
 	StreamProcessorOptions,
 	StreamProcessorEvents,
 	ProcessorResult,
-	ProcessorState,
-} from "@tanstack/ai";
+	ProcessorState
+} from '@tanstack/ai'
 
-
-export * from '@tanstack/ai';
+export * from '@tanstack/ai'

@@ -6,11 +6,11 @@
  * The user provides their own reranking function (Cohere, Jina, local model, etc).
  */
 
-import type { RerankFunction } from "./types"
+import type { RerankFunction } from './types'
 
 /** Sigmoid normalization: cross-encoders return logits which can be negative */
 function sigmoid(x: number): number {
-  return 1 / (1 + Math.exp(-x))
+	return 1 / (1 + Math.exp(-x))
 }
 
 /**
@@ -24,31 +24,31 @@ function sigmoid(x: number): number {
  * Candidates without content in the map are dropped (deleted memories).
  */
 export async function rerankCandidates(
-  rerank: RerankFunction,
-  query: string,
-  candidates: Array<{ id: string; score: number; sources: string[] }>,
-  contentMap: Map<string, string>,
+	rerank: RerankFunction,
+	query: string,
+	candidates: Array<{ id: string; score: number; sources: string[] }>,
+	contentMap: Map<string, string>
 ): Promise<Array<{ id: string; score: number; sources: string[] }>> {
-  // Filter to candidates with content available
-  const withContent = candidates.filter((c) => contentMap.has(c.id))
-  if (withContent.length === 0) return []
+	// Filter to candidates with content available
+	const withContent = candidates.filter((c) => contentMap.has(c.id))
+	if (withContent.length === 0) return []
 
-  const documents = withContent.map((c) => contentMap.get(c.id)!)
+	const documents = withContent.map((c) => contentMap.get(c.id)!)
 
-  // Call user-provided reranker
-  const scores = await rerank(query, documents)
+	// Call user-provided reranker
+	const scores = await rerank(query, documents)
 
-  if (scores.length !== withContent.length) {
-    throw new Error(
-      `Rerank score count mismatch: expected ${withContent.length}, got ${scores.length}`,
-    )
-  }
+	if (scores.length !== withContent.length) {
+		throw new Error(
+			`Rerank score count mismatch: expected ${withContent.length}, got ${scores.length}`
+		)
+	}
 
-  // Sigmoid-normalize and re-sort
-  return withContent
-    .map((candidate, i) => ({
-      ...candidate,
-      score: sigmoid(scores[i]!),
-    }))
-    .sort((a, b) => b.score - a.score)
+	// Sigmoid-normalize and re-sort
+	return withContent
+		.map((candidate, i) => ({
+			...candidate,
+			score: sigmoid(scores[i]!)
+		}))
+		.sort((a, b) => b.score - a.score)
 }

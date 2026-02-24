@@ -19,14 +19,14 @@ There is **no in-memory message cache**. Every read hits disk. This is intention
 
 Low-level append-only file handle.
 
-| Method | What it does |
-|--------|--------------|
+| Method                     | What it does                                     |
+| -------------------------- | ------------------------------------------------ |
 | `append(data: Uint8Array)` | Write data + newline, return `{bytePos, length}` |
-| `readAt(bytePos, length)` | Positioned read (no seeking) |
-| `readRange(entries[])` | Batch positioned reads |
-| `readFrom(bytePos)` | Read from position to EOF |
-| `close()` | Close file descriptor (idempotent) |
-| `get size` | Current file size in bytes |
+| `readAt(bytePos, length)`  | Positioned read (no seeking)                     |
+| `readRange(entries[])`     | Batch positioned reads                           |
+| `readFrom(bytePos)`        | Read from position to EOF                        |
+| `close()`                  | Close file descriptor (idempotent)               |
+| `get size`                 | Current file size in bytes                       |
 
 Opens with `O_RDWR | O_CREAT | O_APPEND`. Tracks `currentSize` in memory for append position. Two `writeSync` calls per append (data + newline) are atomic in single-threaded Bun.
 
@@ -46,6 +46,7 @@ Security: rejects null bytes, `..`, `:`, `\`, `<`, `>`, `|`, `"`, `?`, control c
 See `streamPathToFilename()` in `packages/db/src/log.ts`.
 
 **On-disk layout:**
+
 ```
 DATA_DIR/
 ├── streams.db          # SQLite metadata
@@ -80,6 +81,7 @@ If the transaction fails, the JSONL data is orphaned but the database stays cons
 ### Stream Resurrection
 
 When a soft-deleted stream is recreated:
+
 - Bumps `currentReadSeq` (invalidates all old offsets)
 - Resets `currentByteOffset` to 0
 - Deletes old message and producer rows
@@ -105,13 +107,13 @@ typedLog(engine, streamPath, valibotSchema) → { append, read, count, streamPat
 
 The `messages` table stores pointers only, not data:
 
-| Column | Purpose |
-|--------|---------|
-| `streamPath` | FK to streams table |
-| `bytePos` | Position in JSONL file |
-| `length` | Bytes to read |
-| `offset` | Formatted offset string |
-| `timestamp` | Unix millis |
+| Column       | Purpose                 |
+| ------------ | ----------------------- |
+| `streamPath` | FK to streams table     |
+| `bytePos`    | Position in JSONL file  |
+| `length`     | Bytes to read           |
+| `offset`     | Formatted offset string |
+| `timestamp`  | Unix millis             |
 
 Index on `(streamPath, offset)` for efficient range queries.
 

@@ -14,26 +14,31 @@ Limit all code to a maximum nesting depth of 3. Every open brace/block adds one 
 Flip conditions and return early instead of nesting the happy path deeper.
 
 **Before (depth 4):**
+
 ```ts
 function process(user) {
-  if (user) {                          // depth 2
-    if (user.isActive) {               // depth 3
-      if (user.hasPermission) {        // depth 4 — too deep
-        return doWork(user)
-      }
-    }
-  }
-  return null
+	if (user) {
+		// depth 2
+		if (user.isActive) {
+			// depth 3
+			if (user.hasPermission) {
+				// depth 4 — too deep
+				return doWork(user)
+			}
+		}
+	}
+	return null
 }
 ```
 
 **After (depth 2):**
+
 ```ts
 function process(user) {
-  if (!user) return null                // guard
-  if (!user.isActive) return null       // guard
-  if (!user.hasPermission) return null  // guard
-  return doWork(user)                   // happy path at depth 1
+	if (!user) return null // guard
+	if (!user.isActive) return null // guard
+	if (!user.hasPermission) return null // guard
+	return doWork(user) // happy path at depth 1
 }
 ```
 
@@ -44,31 +49,36 @@ Pattern: unhappy paths return early at the top, happy path flows down at the sha
 Extract inner blocks into their own named functions.
 
 **Before (depth 4):**
+
 ```ts
 function processAll(items) {
-  for (const item of items) {           // depth 2
-    if (item.isValid) {                 // depth 3
-      for (const sub of item.parts) {   // depth 4 — too deep
-        handle(sub)
-      }
-    }
-  }
+	for (const item of items) {
+		// depth 2
+		if (item.isValid) {
+			// depth 3
+			for (const sub of item.parts) {
+				// depth 4 — too deep
+				handle(sub)
+			}
+		}
+	}
 }
 ```
 
 **After (depth 2 each):**
+
 ```ts
 function processAll(items) {
-  for (const item of items) {
-    processItem(item)
-  }
+	for (const item of items) {
+		processItem(item)
+	}
 }
 
 function processItem(item) {
-  if (!item.isValid) return
-  for (const sub of item.parts) {
-    handle(sub)
-  }
+	if (!item.isValid) return
+	for (const sub of item.parts) {
+		handle(sub)
+	}
 }
 ```
 
@@ -85,22 +95,24 @@ function processItem(item) {
 ## Loop Inversion Example
 
 **Before:**
+
 ```ts
 for (const item of items) {
-  if (item.isActive) {
-    if (item.value > threshold) {
-      results.push(transform(item))
-    }
-  }
+	if (item.isActive) {
+		if (item.value > threshold) {
+			results.push(transform(item))
+		}
+	}
 }
 ```
 
 **After:**
+
 ```ts
 for (const item of items) {
-  if (!item.isActive) continue
-  if (item.value <= threshold) continue
-  results.push(transform(item))
+	if (!item.isActive) continue
+	if (item.value <= threshold) continue
+	results.push(transform(item))
 }
 ```
 
@@ -109,14 +121,16 @@ for (const item of items) {
 Never nest a ternary expression inside another ternary. If you need conditional logic that would result in a nested ternary, extract each ternary into its own named variable first.
 
 **Bad — nested ternary:**
+
 ```ts
-const label = isAdmin ? "Admin" : isEditor ? "Editor" : "Viewer"
+const label = isAdmin ? 'Admin' : isEditor ? 'Editor' : 'Viewer'
 ```
 
 **Good — separate variables:**
+
 ```ts
-const editorOrViewer = isEditor ? "Editor" : "Viewer"
-const label = isAdmin ? "Admin" : editorOrViewer
+const editorOrViewer = isEditor ? 'Editor' : 'Viewer'
+const label = isAdmin ? 'Admin' : editorOrViewer
 ```
 
 This keeps each conditional self-contained and readable. Apply the same principle for JSX — extract conditional expressions into variables above the return.

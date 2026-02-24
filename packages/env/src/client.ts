@@ -11,10 +11,10 @@
 // ============================================================================
 
 export interface ClientEnv {
-  /** API base URL — always the current origin (same-origin setup). */
-  readonly API_BASE_URL: string
+	/** API base URL — always the current origin (same-origin setup). */
+	readonly API_BASE_URL: string
 }
 
 export const env: ClientEnv = {
-  API_BASE_URL: window.location.origin,
+	API_BASE_URL: window.location.origin
 }

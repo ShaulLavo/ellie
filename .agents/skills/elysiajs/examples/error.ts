@@ -13,11 +13,11 @@ new Elysia()
 	// global handler
 	.onError(({ code, error, status }) => {
 		switch (code) {
-			case "CUSTOM_ERROR":
+			case 'CUSTOM_ERROR':
 				return status(401, { message: error.message })
 
-			case "NOT_FOUND":
-				return "Not found :("
+			case 'NOT_FOUND':
+				return 'Not found :('
 		}
 	})
 	.post('/', ({ body }) => body, {

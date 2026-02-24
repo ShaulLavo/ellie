@@ -14,8 +14,7 @@ const app = new Elysia()
 		}
 	})
 	.onError(({ code }) => {
-		if (code === 'NOT_FOUND')
-			return 'Not Found :('
+		if (code === 'NOT_FOUND') return 'Not Found :('
 	})
 	.use(loggerPlugin)
 	.state('build', Date.now())

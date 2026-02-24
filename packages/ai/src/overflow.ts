@@ -15,8 +15,8 @@ const OVERFLOW_PATTERNS: RegExp[] = [
 	/context length exceeded/i,
 	/token limit exceeded/i,
 	/reduce the length of the messages/i,
-	/input is too long/i,
-];
+	/input is too long/i
+]
 
 /**
  * Detect whether an error indicates a context overflow.
@@ -33,23 +33,19 @@ export function isContextOverflow(
 ): boolean {
 	for (const pattern of OVERFLOW_PATTERNS) {
 		if (pattern.test(message)) {
-			return true;
+			return true
 		}
 	}
 
 	// Silent overflow detection
-	if (
-		inputTokens !== undefined &&
-		contextWindow !== undefined &&
-		inputTokens > contextWindow
-	) {
-		return true;
+	if (inputTokens !== undefined && contextWindow !== undefined && inputTokens > contextWindow) {
+		return true
 	}
 
-	return false;
+	return false
 }
 
 /** Returns the overflow detection patterns (for testing/extension). */
 export function getOverflowPatterns(): RegExp[] {
-	return [...OVERFLOW_PATTERNS];
+	return [...OVERFLOW_PATTERNS]
 }

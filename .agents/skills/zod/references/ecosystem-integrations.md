@@ -15,26 +15,29 @@ Complete guide for integrating Zod with popular frameworks, libraries, and tools
 Enforces Zod best practices and coding standards.
 
 **Rules**:
+
 - `zod-x/no-missing-error-messages` - Ensure custom error messages for better UX
 - `zod-x/prefer-enum` - Prefer `z.enum()` over `z.union()` of literals (better performance)
 - `zod-x/require-strict` - Enforce strict object schemas (prevent extra properties)
 
 **Installation**:
+
 ```bash
 bun add -D eslint-plugin-zod-x
 ```
 
 **Configuration**:
+
 ```javascript
 // .eslintrc.js
 module.exports = {
-  plugins: ['zod-x'],
-  rules: {
-    'zod-x/no-missing-error-messages': 'warn',
-    'zod-x/prefer-enum': 'error',
-    'zod-x/require-strict': 'warn',
-  },
-};
+	plugins: ['zod-x'],
+	rules: {
+		'zod-x/no-missing-error-messages': 'warn',
+		'zod-x/prefer-enum': 'error',
+		'zod-x/require-strict': 'warn'
+	}
+}
 ```
 
 ---
@@ -46,28 +49,31 @@ module.exports = {
 Enforces consistent Zod import style.
 
 **Enforced Style**:
+
 ```typescript
 // ✓ Correct
-import { z } from "zod";
+import { z } from 'zod'
 
 // ✗ Disallowed
-import * as z from "zod";
+import * as z from 'zod'
 ```
 
 **Installation**:
+
 ```bash
 bun add -D eslint-plugin-import-zod
 ```
 
 **Configuration**:
+
 ```javascript
 // .eslintrc.js
 module.exports = {
-  plugins: ['import-zod'],
-  rules: {
-    'import-zod/require-z-import': 'error',
-  },
-};
+	plugins: ['import-zod'],
+	rules: {
+		'import-zod/require-z-import': 'error'
+	}
+}
 ```
 
 ---
@@ -81,31 +87,33 @@ module.exports = {
 End-to-end typesafe APIs with automatic client generation.
 
 **Example**:
-```typescript
-import { z } from "zod";
-import { initTRPC } from "@trpc/server";
 
-const t = initTRPC.create();
+```typescript
+import { z } from 'zod'
+import { initTRPC } from '@trpc/server'
+
+const t = initTRPC.create()
 
 export const appRouter = t.router({
-  getUser: t.procedure
-    .input(z.object({ id: z.string() }))
-    .query(({ input }) => {
-      return db.user.findUnique({ where: { id: input.id } });
-    }),
+	getUser: t.procedure.input(z.object({ id: z.string() })).query(({ input }) => {
+		return db.user.findUnique({ where: { id: input.id } })
+	}),
 
-  createUser: t.procedure
-    .input(z.object({
-      email: z.string().email(),
-      name: z.string(),
-    }))
-    .mutation(async ({ input }) => {
-      return db.user.create({ data: input });
-    }),
-});
+	createUser: t.procedure
+		.input(
+			z.object({
+				email: z.string().email(),
+				name: z.string()
+			})
+		)
+		.mutation(async ({ input }) => {
+			return db.user.create({ data: input })
+		})
+})
 ```
 
 **Benefits**:
+
 - Full type safety from server to client
 - No code generation needed
 - Automatic input validation
@@ -122,11 +130,13 @@ export const appRouter = t.router({
 High-performance form validation for React.
 
 **Installation**:
+
 ```bash
 bun add react-hook-form @hookform/resolvers zod
 ```
 
 **Example**:
+
 ```typescript
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -177,11 +187,13 @@ function MyForm() {
 Generate Zod schemas from Prisma models.
 
 **Installation**:
+
 ```bash
 bun add -D zod-prisma-types
 ```
 
 **Prisma Schema**:
+
 ```prisma
 // prisma/schema.prisma
 generator zod {
@@ -198,22 +210,24 @@ model User {
 ```
 
 **Generated Zod Schema**:
+
 ```typescript
 // src/zod/user.ts (auto-generated)
 export const UserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.string().email(),
-  name: z.string(),
-  createdAt: z.date(),
-});
+	id: z.string().uuid(),
+	email: z.string().email(),
+	name: z.string(),
+	createdAt: z.date()
+})
 ```
 
 **Usage**:
+
 ```typescript
-import { UserSchema } from "@/zod/user";
+import { UserSchema } from '@/zod/user'
 
 // Validate user data
-const result = UserSchema.safeParse(userData);
+const result = UserSchema.safeParse(userData)
 ```
 
 ---
@@ -225,36 +239,39 @@ const result = UserSchema.safeParse(userData);
 Integration via **nestjs-zod** package.
 
 **Features**:
+
 - Automatic DTO generation
 - OpenAPI documentation
 - Validation pipes
 - Exception filters
 
 **Installation**:
+
 ```bash
 bun add nestjs-zod zod
 ```
 
 **Example**:
+
 ```typescript
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import { createZodDto } from 'nestjs-zod'
+import { z } from 'zod'
 
 const CreateUserSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1),
-  age: z.number().int().positive().optional(),
-});
+	email: z.string().email(),
+	name: z.string().min(1),
+	age: z.number().int().positive().optional()
+})
 
 class CreateUserDto extends createZodDto(CreateUserSchema) {}
 
 @Controller('users')
 export class UsersController {
-  @Post()
-  create(@Body() dto: CreateUserDto) {
-    // dto is validated automatically
-    return this.usersService.create(dto);
-  }
+	@Post()
+	create(@Body() dto: CreateUserDto) {
+		// dto is validated automatically
+		return this.usersService.create(dto)
+	}
 }
 ```
 
@@ -271,33 +288,36 @@ export class UsersController {
 Generate Zod schemas and API clients from OpenAPI specifications.
 
 **Installation**:
+
 ```bash
 bun add -D orval
 ```
 
 **Configuration**:
+
 ```javascript
 // orval.config.js
 module.exports = {
-  petstore: {
-    input: './openapi.yaml',
-    output: {
-      mode: 'split',
-      target: './src/api',
-      schemas: './src/schemas',
-      client: 'fetch',
-      override: {
-        mutator: {
-          path: './src/mutator/custom-fetch.ts',
-          name: 'customFetch',
-        },
-      },
-    },
-  },
-};
+	petstore: {
+		input: './openapi.yaml',
+		output: {
+			mode: 'split',
+			target: './src/api',
+			schemas: './src/schemas',
+			client: 'fetch',
+			override: {
+				mutator: {
+					path: './src/mutator/custom-fetch.ts',
+					name: 'customFetch'
+				}
+			}
+		}
+	}
+}
 ```
 
 **Generate**:
+
 ```bash
 bunx orval
 ```
@@ -313,11 +333,13 @@ bunx orval
 OpenAPI to TypeScript with Zod support.
 
 **Installation**:
+
 ```bash
 bun add -D @hey-api/openapi-ts
 ```
 
 **Generate**:
+
 ```bash
 npx @hey-api/openapi-ts -i ./openapi.json -o ./src/api -c fetch
 ```
@@ -333,22 +355,27 @@ npx @hey-api/openapi-ts -i ./openapi.json -o ./src/api -c fetch
 Modern API toolkit with Zod code generation.
 
 **Installation**:
+
 ```bash
 bun add -D @kubb/core @kubb/plugin-zod
 ```
 
 **Configuration**:
+
 ```typescript
 // kubb.config.ts
 export default {
-  input: './openapi.yaml',
-  output: './src/gen',
-  plugins: [
-    ['@kubb/plugin-zod', {
-      output: './schemas',
-    }],
-  ],
-};
+	input: './openapi.yaml',
+	output: './src/gen',
+	plugins: [
+		[
+			'@kubb/plugin-zod',
+			{
+				output: './schemas'
+			}
+		]
+	]
+}
 ```
 
 **Learn more**: https://kubb.dev
@@ -362,36 +389,36 @@ export default {
 Zod works seamlessly with Vitest for schema testing:
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { z } from 'zod';
+import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
 
 describe('UserSchema', () => {
-  const UserSchema = z.object({
-    email: z.string().email(),
-    age: z.number().int().positive(),
-  });
+	const UserSchema = z.object({
+		email: z.string().email(),
+		age: z.number().int().positive()
+	})
 
-  it('validates valid user', () => {
-    const result = UserSchema.safeParse({
-      email: 'user@example.com',
-      age: 25,
-    });
+	it('validates valid user', () => {
+		const result = UserSchema.safeParse({
+			email: 'user@example.com',
+			age: 25
+		})
 
-    expect(result.success).toBe(true);
-  });
+		expect(result.success).toBe(true)
+	})
 
-  it('rejects invalid email', () => {
-    const result = UserSchema.safeParse({
-      email: 'invalid',
-      age: 25,
-    });
+	it('rejects invalid email', () => {
+		const result = UserSchema.safeParse({
+			email: 'invalid',
+			age: 25
+		})
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain('email');
-    }
-  });
-});
+		expect(result.success).toBe(false)
+		if (!result.success) {
+			expect(result.error.issues[0].message).toContain('email')
+		}
+	})
+})
 ```
 
 ---
@@ -405,25 +432,26 @@ describe('UserSchema', () => {
 Type-safe SQL ORM with Zod integration.
 
 **Example**:
+
 ```typescript
-import { z } from 'zod';
-import { pgTable, text, integer } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { z } from 'zod'
+import { pgTable, text, integer } from 'drizzle-orm/pg-core'
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 
 const users = pgTable('users', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull(),
-  age: integer('age'),
-});
+	id: text('id').primaryKey(),
+	email: text('email').notNull(),
+	age: integer('age')
+})
 
 // Generate Zod schemas from table
-const insertUserSchema = createInsertSchema(users);
-const selectUserSchema = createSelectSchema(users);
+const insertUserSchema = createInsertSchema(users)
+const selectUserSchema = createSelectSchema(users)
 
 // Validate before insert
-const result = insertUserSchema.safeParse(userData);
+const result = insertUserSchema.safeParse(userData)
 if (result.success) {
-  await db.insert(users).values(result.data);
+	await db.insert(users).values(result.data)
 }
 ```
 
@@ -438,23 +466,24 @@ if (result.success) {
 Ultrafast web framework with Zod validation middleware.
 
 **Example**:
-```typescript
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
 
-const app = new Hono();
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+
+const app = new Hono()
 
 const CreateUserSchema = z.object({
-  email: z.string().email(),
-  name: z.string(),
-});
+	email: z.string().email(),
+	name: z.string()
+})
 
 app.post('/users', zValidator('json', CreateUserSchema), (c) => {
-  const user = c.req.valid('json');
-  // user is typed and validated
-  return c.json({ id: 123, ...user });
-});
+	const user = c.req.valid('json')
+	// user is typed and validated
+	return c.json({ id: 123, ...user })
+})
 ```
 
 ---
@@ -471,5 +500,6 @@ app.post('/users', zValidator('json', CreateUserSchema), (c) => {
 ---
 
 **See also:**
+
 - `type-inference.md` for generating types from schemas
 - `error-handling.md` for framework-specific error handling

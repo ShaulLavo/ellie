@@ -14,18 +14,14 @@
  * ```
  */
 
-import * as React from "react";
-import { cn } from "@/lib/utils";
-import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import * as React from 'react'
+import { cn } from '@/lib/utils'
+import { Avatar as AvatarPrimitive } from '@base-ui/react/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 
-export interface ChatHeaderProps extends React.ComponentProps<"div"> {
-  children?: React.ReactNode;
+export interface ChatHeaderProps extends React.ComponentProps<'div'> {
+	children?: React.ReactNode
 }
 
 /**
@@ -49,21 +45,18 @@ export interface ChatHeaderProps extends React.ComponentProps<"div"> {
  * ```
  */
 export function ChatHeader({ children, className, ...props }: ChatHeaderProps) {
-  return (
-    <div
-      className={cn(
-        "sticky top-0 z-10 p-2 bg-background flex items-center gap-2",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </div>
-  );
+	return (
+		<div
+			className={cn('sticky top-0 z-10 p-2 bg-background flex items-center gap-2', className)}
+			{...props}
+		>
+			{children}
+		</div>
+	)
 }
 
-export interface ChatHeaderMainProps extends React.ComponentProps<"div"> {
-  children?: React.ReactNode;
+export interface ChatHeaderMainProps extends React.ComponentProps<'div'> {
+	children?: React.ReactNode
 }
 
 /**
@@ -80,20 +73,16 @@ export interface ChatHeaderMainProps extends React.ComponentProps<"div"> {
  * </ChatHeaderMain>
  * ```
  */
-export function ChatHeaderMain({
-  children,
-  className,
-  ...props
-}: ChatHeaderMainProps) {
-  return (
-    <div className={cn("flex-1 flex items-center gap-2", className)} {...props}>
-      {children}
-    </div>
-  );
+export function ChatHeaderMain({ children, className, ...props }: ChatHeaderMainProps) {
+	return (
+		<div className={cn('flex-1 flex items-center gap-2', className)} {...props}>
+			{children}
+		</div>
+	)
 }
 
-export interface ChatHeaderAddonProps extends React.ComponentProps<"div"> {
-  children?: React.ReactNode;
+export interface ChatHeaderAddonProps extends React.ComponentProps<'div'> {
+	children?: React.ReactNode
 }
 
 /**
@@ -115,30 +104,26 @@ export interface ChatHeaderAddonProps extends React.ComponentProps<"div"> {
  * </ChatHeaderAddon>
  * ```
  */
-export function ChatHeaderAddon({
-  children,
-  className,
-  ...props
-}: ChatHeaderAddonProps) {
-  return (
-    <div className={cn("flex items-center gap-2", className)} {...props}>
-      {children}
-    </div>
-  );
+export function ChatHeaderAddon({ children, className, ...props }: ChatHeaderAddonProps) {
+	return (
+		<div className={cn('flex items-center gap-2', className)} {...props}>
+			{children}
+		</div>
+	)
 }
 
 export interface ChatHeaderAvatarProps extends AvatarPrimitive.Root.Props {
-  className?: string;
-  /** Image URL for the avatar. */
-  src?: AvatarPrimitive.Image.Props["src"];
-  /** Alt text for the avatar image. */
-  alt?: string;
-  /** Fallback content shown while the image loads or if it fails (e.g. initials). */
-  fallback?: React.ReactNode;
-  /** Additional props forwarded to the inner `AvatarImage`. */
-  imageProps?: AvatarPrimitive.Image.Props;
-  /** Additional props forwarded to the inner `AvatarFallback`. */
-  fallbackProps?: AvatarPrimitive.Fallback.Props;
+	className?: string
+	/** Image URL for the avatar. */
+	src?: AvatarPrimitive.Image.Props['src']
+	/** Alt text for the avatar image. */
+	alt?: string
+	/** Fallback content shown while the image loads or if it fails (e.g. initials). */
+	fallback?: React.ReactNode
+	/** Additional props forwarded to the inner `AvatarImage`. */
+	imageProps?: AvatarPrimitive.Image.Props
+	/** Additional props forwarded to the inner `AvatarFallback`. */
+	fallbackProps?: AvatarPrimitive.Fallback.Props
 }
 
 /**
@@ -155,28 +140,24 @@ export interface ChatHeaderAvatarProps extends AvatarPrimitive.Root.Props {
  * ```
  */
 export function ChatHeaderAvatar({
-  className,
-  src,
-  alt,
-  fallback,
-  imageProps,
-  fallbackProps,
-  ...props
+	className,
+	src,
+	alt,
+	fallback,
+	imageProps,
+	fallbackProps,
+	...props
 }: ChatHeaderAvatarProps) {
-  return (
-    <Avatar className={cn("rounded-full", className)} {...props}>
-      <AvatarImage src={src} alt={alt} {...imageProps} />
-      {fallback && (
-        <AvatarFallback {...fallbackProps}>{fallback}</AvatarFallback>
-      )}
-    </Avatar>
-  );
+	return (
+		<Avatar className={cn('rounded-full', className)} {...props}>
+			<AvatarImage src={src} alt={alt} {...imageProps} />
+			{fallback && <AvatarFallback {...fallbackProps}>{fallback}</AvatarFallback>}
+		</Avatar>
+	)
 }
 
-export interface ChatHeaderButtonProps extends React.ComponentProps<
-  typeof Button
-> {
-  children?: React.ReactNode;
+export interface ChatHeaderButtonProps extends React.ComponentProps<typeof Button> {
+	children?: React.ReactNode
 }
 
 /**
@@ -190,14 +171,10 @@ export interface ChatHeaderButtonProps extends React.ComponentProps<
  * </ChatHeaderButton>
  * ```
  */
-export function ChatHeaderButton({
-  children,
-  className,
-  ...props
-}: ChatHeaderButtonProps) {
-  return (
-    <Button variant="ghost" size="icon-sm" className={cn(className)} {...props}>
-      {children}
-    </Button>
-  );
+export function ChatHeaderButton({ children, className, ...props }: ChatHeaderButtonProps) {
+	return (
+		<Button variant="ghost" size="icon-sm" className={cn(className)} {...props}>
+			{children}
+		</Button>
+	)
 }

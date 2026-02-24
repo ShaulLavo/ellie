@@ -1,27 +1,27 @@
 {
-  "version": "7",
-  "dialect": "sqlite",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "6",
-      "when": 1771655648971,
-      "tag": "0000_orange_quicksilver",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1771742048971,
-      "tag": "0001_cognitive_access_metadata",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1771742148971,
-      "tag": "0002_bright_machine_man",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "sqlite",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "6",
+			"when": 1771655648971,
+			"tag": "0000_orange_quicksilver",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1771742048971,
+			"tag": "0001_cognitive_access_metadata",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "6",
+			"when": 1771742148971,
+			"tag": "0002_bright_machine_man",
+			"breakpoints": true
+		}
+	]
 }

@@ -11,6 +11,7 @@ Follow these steps to configure Tailwind v4 and shadcn/ui.
 ### 1. Check Prerequisites
 
 Verify the project has:
+
 - Vite + React configured
 - TypeScript (recommended)
 
@@ -27,13 +28,13 @@ npm install tailwindcss @tailwindcss/vite
 Update `vite.config.ts`:
 
 ```typescript
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-});
+	plugins: [react(), tailwindcss()]
+})
 ```
 
 **Important**: Use `@tailwindcss/vite` plugin, NOT PostCSS.
@@ -43,7 +44,7 @@ export default defineConfig({
 Create or update `src/index.css`:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 ```
 
 ### 5. Initialize shadcn/ui
@@ -53,6 +54,7 @@ npx shadcn@latest init
 ```
 
 When prompted:
+
 - Style: Default
 - Base color: Neutral (or user preference)
 - CSS variables: Yes
@@ -66,9 +68,9 @@ Ensure `components.json` has:
 
 ```json
 {
-  "tailwind": {
-    "config": ""
-  }
+	"tailwind": {
+		"config": ""
+	}
 }
 ```
 
@@ -193,8 +195,8 @@ npx shadcn@latest add card
 
 ## Tailwind v4 Key Differences
 
-| v3 Pattern | v4 Pattern |
-|------------|------------|
-| `tailwind.config.js` | CSS-based config in `@theme` |
-| PostCSS plugin | Vite plugin (`@tailwindcss/vite`) |
-| `@apply` everywhere | Prefer utility classes |
+| v3 Pattern           | v4 Pattern                        |
+| -------------------- | --------------------------------- |
+| `tailwind.config.js` | CSS-based config in `@theme`      |
+| PostCSS plugin       | Vite plugin (`@tailwindcss/vite`) |
+| `@apply` everywhere  | Prefer utility classes            |

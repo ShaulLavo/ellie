@@ -1,117 +1,124 @@
-import { resolve } from "node:path";
-import { staticPlugin } from "@elysiajs/static";
-import { EventStore } from "@ellie/db";
-import { env } from "@ellie/env/server";
-import { anthropicText, type AnthropicChatModel } from "@tanstack/ai-anthropic";
-import { Elysia } from "elysia";
-import { AgentManager } from "./agent/manager";
-import { RealtimeStore } from "./lib/realtime-store";
-import { errorSchema, type SseState } from "./routes/common";
-import { createAgentRoutes } from "./routes/agent";
-import { createChatRoutes } from "./routes/chat";
-import { createStatusRoutes } from "./routes/status";
+import { resolve } from 'node:path'
+import { staticPlugin } from '@elysiajs/static'
+import { EventStore } from '@ellie/db'
+import { env } from '@ellie/env/server'
+import { anthropicText, type AnthropicChatModel } from '@tanstack/ai-anthropic'
+import { Elysia } from 'elysia'
+import { AgentManager } from './agent/manager'
+import { RealtimeStore } from './lib/realtime-store'
+import { errorSchema, type SseState } from './routes/common'
+import { createAgentRoutes } from './routes/agent'
+import { createChatRoutes } from './routes/chat'
+import { createStatusRoutes } from './routes/status'
 
-const parsedUrl = new URL(env.API_BASE_URL);
-const port = parsedUrl.port !== "" ? Number(parsedUrl.port) : parsedUrl.protocol === "https:" ? 443 : 80;
-const { DATA_DIR } = env;
+const parsedUrl = new URL(env.API_BASE_URL)
+const port =
+	parsedUrl.port !== '' ? Number(parsedUrl.port) : parsedUrl.protocol === 'https:' ? 443 : 80
+const { DATA_DIR } = env
 
-console.log(`[server] DATA_DIR=${DATA_DIR}`);
+console.log(`[server] DATA_DIR=${DATA_DIR}`)
 
-const eventStore = new EventStore(
-  `${DATA_DIR}/events.db`,
-  `${DATA_DIR}/audit`,
-);
-const store = new RealtimeStore(eventStore);
+const eventStore = new EventStore(`${DATA_DIR}/events.db`, `${DATA_DIR}/audit`)
+const store = new RealtimeStore(eventStore)
 
 // Startup recovery: find stale runs and close them via RealtimeStore
 // so in-memory #closedRuns set is updated for SSE endpoints
-const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000); // 5 min
+const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000) // 5 min
 for (const { sessionId, runId } of staleRuns) {
-  console.log(`[server] recovering stale run: session=${sessionId} run=${runId}`);
-  try {
-    store.appendEvent(
-      sessionId,
-      "run_closed",
-      { reason: "recovered_after_crash" },
-      runId,
-    );
-  } catch {
-    // Non-fatal
-  }
+	console.log(`[server] recovering stale run: session=${sessionId} run=${runId}`)
+	try {
+		store.appendEvent(sessionId, 'run_closed', { reason: 'recovered_after_crash' }, runId)
+	} catch {
+		// Non-fatal
+	}
 }
 if (staleRuns.length > 0) {
-  console.log(`[server] recovered ${staleRuns.length} stale run(s)`);
+	console.log(`[server] recovered ${staleRuns.length} stale run(s)`)
 }
 
 const agentManager: AgentManager | null = env.ANTHROPIC_API_KEY
-  ? new AgentManager(store, {
-      adapter: anthropicText(env.ANTHROPIC_MODEL as AnthropicChatModel),
-      systemPrompt: "You are a helpful assistant.",
-    })
-  : null;
+	? new AgentManager(store, {
+			adapter: anthropicText(env.ANTHROPIC_MODEL as AnthropicChatModel),
+			systemPrompt: 'You are a helpful assistant.'
+		})
+	: null
 
-const STUDIO_PUBLIC = resolve(import.meta.dir, "../../react/public");
+const STUDIO_PUBLIC = resolve(import.meta.dir, '../../react/public')
 
 const sseState: SseState = {
-  activeClients: 0,
-};
+	activeClients: 0
+}
 
 export const app = new Elysia()
-  .use(createStatusRoutes(() => sseState.activeClients))
-  .use(createChatRoutes(store, sseState))
-  .use(createAgentRoutes(store, agentManager, sseState))
-  .all(`/api/*`, ({ set }) => {
-    set.status = 404;
-    return { error: `Not Found` };
-  }, {
-    response: {
-      404: errorSchema,
-    },
-  })
-  .all(`/chat/*`, ({ set }) => {
-    set.status = 404;
-    return { error: `Not Found` };
-  }, {
-    response: {
-      404: errorSchema,
-    },
-  })
-  .all(`/agent/*`, ({ set }) => {
-    set.status = 404;
-    return { error: `Not Found` };
-  }, {
-    response: {
-      404: errorSchema,
-    },
-  })
-  .use(await staticPlugin({
-    assets: STUDIO_PUBLIC,
-    prefix: `/`,
-    indexHTML: true,
-  }))
-  .onError(({ code, error, set }) => {
-    if (code === `VALIDATION`) {
-      set.status = 400;
-      return {
-        error: error.message,
-      };
-    }
+	.use(createStatusRoutes(() => sseState.activeClients))
+	.use(createChatRoutes(store, sseState))
+	.use(createAgentRoutes(store, agentManager, sseState))
+	.all(
+		`/api/*`,
+		({ set }) => {
+			set.status = 404
+			return { error: `Not Found` }
+		},
+		{
+			response: {
+				404: errorSchema
+			}
+		}
+	)
+	.all(
+		`/chat/*`,
+		({ set }) => {
+			set.status = 404
+			return { error: `Not Found` }
+		},
+		{
+			response: {
+				404: errorSchema
+			}
+		}
+	)
+	.all(
+		`/agent/*`,
+		({ set }) => {
+			set.status = 404
+			return { error: `Not Found` }
+		},
+		{
+			response: {
+				404: errorSchema
+			}
+		}
+	)
+	.use(
+		await staticPlugin({
+			assets: STUDIO_PUBLIC,
+			prefix: `/`,
+			indexHTML: true
+		})
+	)
+	.onError(({ code, error, set }) => {
+		if (code === `VALIDATION`) {
+			set.status = 400
+			return {
+				error: error.message
+			}
+		}
 
-    const message = error instanceof Error ? error.message : String(error);
-    const lower = message.toLowerCase();
-    if (lower.includes(`not found`)) set.status = 404;
-    if (lower.includes(`missing`) || lower.includes(`empty`) || lower.includes(`invalid`)) {
-      set.status = 400;
-    }
-    if (set.status === 200) set.status = 500;
+		const message = error instanceof Error ? error.message : String(error)
+		const lower = message.toLowerCase()
+		if (lower.includes(`not found`)) set.status = 404
+		if (lower.includes(`missing`) || lower.includes(`empty`) || lower.includes(`invalid`)) {
+			set.status = 400
+		}
+		if (set.status === 200) set.status = 500
 
-    return {
-      error: message,
-    };
-  });
+		return {
+			error: message
+		}
+	})
 
-export type App = typeof app;
+export type App = typeof app
 
-app.listen(port);
+app.listen(port)
 
-console.log(`[server] listening on http://localhost:${port}`);
+console.log(`[server] listening on http://localhost:${port}`)

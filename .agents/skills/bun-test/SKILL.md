@@ -113,7 +113,7 @@ afterEach(() => {
 
 // Global test utilities
 globalThis.testHelpers = {
-	wait: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+	wait: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 }
 ```
 
@@ -133,7 +133,7 @@ test('addition works', () => {
 describe('Array utilities', () => {
 	it('should filter even numbers', () => {
 		const numbers = [1, 2, 3, 4, 5, 6]
-		const evens = numbers.filter(n => n % 2 === 0)
+		const evens = numbers.filter((n) => n % 2 === 0)
 
 		expect(evens).toEqual([2, 4, 6])
 		expect(evens).toHaveLength(3)
@@ -348,14 +348,7 @@ expect(mockFn).toHaveBeenCalledWith(arg1, arg2)
 ### Setup and Teardown
 
 ```typescript
-import {
-	beforeAll,
-	afterAll,
-	beforeEach,
-	afterEach,
-	describe,
-	it
-} from 'bun:test'
+import { beforeAll, afterAll, beforeEach, afterEach, describe, it } from 'bun:test'
 
 describe('User service', () => {
 	let db: Database
