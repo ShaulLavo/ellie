@@ -33,6 +33,7 @@ import {
 } from "./phase2-report"
 import type {
   GateResult,
+  Phase2ComparisonReport,
   Phase2VerificationRun,
   RollingIngestEvent,
 } from "./phase2-types"

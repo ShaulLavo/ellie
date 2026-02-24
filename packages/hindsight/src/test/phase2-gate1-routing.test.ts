@@ -15,6 +15,7 @@ import {
   REINFORCE_THRESHOLD,
   RECONSOLIDATE_THRESHOLD,
 } from "../routing"
+import type { ReconRoute } from "../types"
 
 describe("Gate 1: Routing Decision Correctness", () => {
   // ── Threshold constants verification ────────────────────────────────────
@@ -90,7 +91,7 @@ describe("Gate 1: Routing Decision Correctness", () => {
   // ── Boundary sweep ─────────────────────────────────────────────────────
 
   describe("boundary sweep across all zones", () => {
-    const noConflictCases: Array<[number, string]> = [
+    const noConflictCases: Array<[number, ReconRoute]> = [
       [1.0, "reinforce"],
       [0.99, "reinforce"],
       [0.95, "reinforce"],

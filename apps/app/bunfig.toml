@@ -1,2 +1,2 @@
 [serve.static]
-plugins = ["./src/react-compiler-plugin.ts"]
+plugins = ["./src/plugins/react-compiler-plugin.ts"]
