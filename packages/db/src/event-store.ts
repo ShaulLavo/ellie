@@ -8,6 +8,9 @@ import { openDatabase } from "./init"
 import { AuditLogger } from "./audit-log"
 import * as schema from "./schema"
 import { sessions, events, type SessionRow, type EventRow } from "./schema"
+import type { AgentMessage } from "@ellie/schemas"
+
+export type { AgentMessage }
 
 // ── Event types ─────────────────────────────────────────────────────────────
 
@@ -134,13 +137,6 @@ export interface QueryInput {
   limit?: number
 }
 
-// ── AgentMessage (minimal type alias to avoid heavy agent dep) ──────────────
-
-export interface AgentMessage {
-  role: string
-  [key: string]: unknown
-}
-
 // ── Resolved path ───────────────────────────────────────────────────────────
 
 const MIGRATIONS_DIR = join(import.meta.dir, "..", "drizzle")
@@ -174,6 +170,12 @@ export class EventStore {
   createSession(id?: string): SessionRow {
     const now = Date.now()
     const sessionId = id ?? crypto.randomUUID()
+
+    if (id) {
+      const existing = this.getSession(id)
+      if (existing) throw new Error(`Session already exists: ${id}`)
+    }
+
     const row: typeof sessions.$inferInsert = {
       id: sessionId,
       createdAt: now,
@@ -213,11 +215,11 @@ export class EventStore {
     const payloadJson = JSON.stringify(input.payload)
     const now = Date.now()
 
-    // Run in a transaction: load session, bump seq, insert event
-    const result = this.sqlite.transaction(() => {
+    // Run in a Drizzle transaction: load session, bump seq, insert event
+    const result = this.db.transaction((tx) => {
       // Dedupe check
       if (input.dedupeKey) {
-        const existing = this.db
+        const existing = tx
           .select()
           .from(events)
           .where(
@@ -231,7 +233,7 @@ export class EventStore {
       }
 
       // Load and bump session seq
-      const session = this.db
+      const session = tx
         .select()
         .from(sessions)
         .where(eq(sessions.id, input.sessionId))
@@ -242,14 +244,14 @@ export class EventStore {
 
       const nextSeq = session.currentSeq + 1
 
-      this.db
+      tx
         .update(sessions)
         .set({ currentSeq: nextSeq, updatedAt: now })
         .where(eq(sessions.id, input.sessionId))
         .run()
 
-      // Insert event
-      this.db
+      // Insert event and return the inserted row
+      const inserted = tx
         .insert(events)
         .values({
           sessionId: input.sessionId,
@@ -260,21 +262,11 @@ export class EventStore {
           dedupeKey: input.dedupeKey ?? null,
           createdAt: now,
         })
-        .run()
+        .returning()
+        .get()
 
-      return {
-        id: Number(
-          (this.sqlite.query<{ id: number }, []>("SELECT last_insert_rowid() as id").get()!).id
-        ),
-        sessionId: input.sessionId,
-        seq: nextSeq,
-        runId: input.runId ?? null,
-        type: input.type,
-        payload: payloadJson,
-        dedupeKey: input.dedupeKey ?? null,
-        createdAt: now,
-      } satisfies EventRow
-    })()
+      return inserted
+    })
 
     // Best-effort audit
     if (this.#audit) {
@@ -337,7 +329,10 @@ export class EventStore {
   ): Array<{ sessionId: string; runId: string }> {
     const cutoff = Date.now() - maxAgeMs
 
-    // Find runs that have an agent_start but no run_closed
+    // Find runs that have an agent_start but no run_closed.
+    // Raw SQL used for NOT EXISTS which Drizzle doesn't support.
+    // Column mapping: events.sessionId → session_id, events.runId → run_id,
+    //   events.type → type, events.createdAt → created_at (see schema.ts)
     const stale = this.sqlite
       .query<{ session_id: string; run_id: string }, [number]>(
         `

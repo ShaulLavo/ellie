@@ -109,7 +109,7 @@ export class AgentManager {
 	 */
 	steer(sessionId: string, text: string): void {
 		const agent = this.agents.get(sessionId);
-		if (!agent) throw new Error(`No agent found for session ${sessionId}`);
+		if (!agent) throw new Error(`Agent not found for session ${sessionId}`);
 
 		agent.steer({
 			role: "user",
@@ -123,22 +123,28 @@ export class AgentManager {
 	 */
 	abort(sessionId: string): void {
 		const agent = this.agents.get(sessionId);
-		if (!agent) throw new Error(`No agent found for session ${sessionId}`);
+		if (!agent) throw new Error(`Agent not found for session ${sessionId}`);
 		agent.abort();
 	}
 
 	/**
 	 * Load conversation history from persisted events.
+	 *
+	 * The DB store returns `AgentMessage` from `@ellie/schemas` (where
+	 * `provider` is `string`), but the Agent runtime expects `@ellie/agent`'s
+	 * `AgentMessage` (where `provider` is `ProviderName`).  The data is
+	 * structurally compatible — the DB just stores wider types — so a cast
+	 * at this boundary is safe.
 	 */
 	loadHistory(sessionId: string): AgentMessage[] {
-		return this.store.listAgentMessages(sessionId);
+		return this.store.listAgentMessages(sessionId) as AgentMessage[];
 	}
 
 	/**
 	 * Check if a session exists.
 	 */
 	hasSession(sessionId: string): boolean {
-		return this.store.eventStore.getSession(sessionId) !== undefined;
+		return this.store.hasSession(sessionId);
 	}
 
 	/**

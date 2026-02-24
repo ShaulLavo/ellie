@@ -23,17 +23,18 @@ const eventStore = new EventStore(
 );
 const store = new RealtimeStore(eventStore);
 
-// Startup recovery: find stale runs and close them
+// Startup recovery: find stale runs and close them via RealtimeStore
+// so in-memory #closedRuns set is updated for SSE endpoints
 const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000); // 5 min
 for (const { sessionId, runId } of staleRuns) {
   console.log(`[server] recovering stale run: session=${sessionId} run=${runId}`);
   try {
-    eventStore.append({
+    store.appendEvent(
       sessionId,
-      type: "run_closed",
-      payload: { reason: "recovered_after_crash" },
+      "run_closed",
+      { reason: "recovered_after_crash" },
       runId,
-    });
+    );
   } catch {
     // Non-fatal
   }

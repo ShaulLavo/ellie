@@ -139,8 +139,9 @@ describe("EventStore", () => {
       expect(r3.seq).toBe(3)
     })
 
-    it("updates updatedAt on append", () => {
+    it("updates updatedAt on append", async () => {
       const before = store.getSession("s1")!.updatedAt
+      await Bun.sleep(1) // Ensure timestamp advances past same-millisecond edge case
       store.append({
         sessionId: "s1",
         type: "user_message",

@@ -39,12 +39,7 @@ export function createAgentRoutes(
         request,
         sseState,
         (listener) => store.subscribeToSession(params.sessionId, listener),
-        (event) => {
-          if (event.type === "append") {
-            return { event: `append`, data: event.event };
-          }
-          return { event: `run_closed`, data: event.runId };
-        },
+        (event) => ({ event: `append`, data: event.event }),
         { event: `snapshot`, data: existingEvents },
       );
 

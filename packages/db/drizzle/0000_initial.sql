@@ -24,3 +24,7 @@ CREATE INDEX `idx_events_session_type`
 --> statement-breakpoint
 CREATE INDEX `idx_events_session_run_seq`
   ON `events`(`session_id`, `run_id`, `seq`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_events_session_dedupe`
+  ON `events`(`session_id`, `dedupe_key`)
+  WHERE `dedupe_key` IS NOT NULL;

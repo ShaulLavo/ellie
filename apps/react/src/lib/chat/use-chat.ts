@@ -13,6 +13,7 @@ export interface Message {
   [key: string]: unknown
 }
 
+/** Mirrors packages/db/src/schema.ts → EventRow (keep in sync) */
 interface EventRow {
   id: number
   sessionId: string
@@ -68,6 +69,9 @@ export function useChat(sessionId: string) {
     const url = new URL(
       `${baseUrl}/chat/${encodeURIComponent(sessionId)}/events/sse`
     )
+    if (lastSeqRef.current > 0) {
+      url.searchParams.set("afterSeq", String(lastSeqRef.current))
+    }
 
     const source = new EventSource(url.toString())
 

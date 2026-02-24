@@ -34,7 +34,7 @@ export class AuditLogger {
         this.#logFile = new LogFile(`${this.#logDir}/audit-${day}.jsonl`)
         this.#currentDay = day
       }
-      const bytes = new TextEncoder().encode(JSON.stringify(entry))
+      const bytes = new TextEncoder().encode(`${JSON.stringify(entry)}\n`)
       this.#logFile!.append(bytes)
     } catch (err) {
       console.error("[audit-log] write failed:", err)

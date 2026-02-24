@@ -148,13 +148,13 @@ describe("AgentManager", () => {
 
 	test("steer throws for non-existent agent", () => {
 		expect(() => manager.steer("nonexistent", "Hey")).toThrow(
-			"No agent found for session nonexistent",
+			"Agent not found for session nonexistent",
 		);
 	});
 
 	test("abort throws for non-existent agent", () => {
 		expect(() => manager.abort("nonexistent")).toThrow(
-			"No agent found for session nonexistent",
+			"Agent not found for session nonexistent",
 		);
 	});
 

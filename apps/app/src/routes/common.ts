@@ -10,7 +10,18 @@ export type MessageInput = v.InferOutput<typeof messageInputSchema>;
 
 export const sessionParamsSchema = v.object({ sessionId: v.string() });
 export const sessionRunParamsSchema = v.object({ sessionId: v.string(), runId: v.string() });
-export const afterSeqQuerySchema = v.object({ afterSeq: v.optional(v.pipe(v.string(), v.transform(Number))) });
+export const afterSeqQuerySchema = v.object({
+  afterSeq: v.optional(
+    v.pipe(
+      v.string(),
+      v.transform(Number),
+      v.number(),
+      v.finite(),
+      v.integer(),
+      v.minValue(0),
+    ),
+  ),
+});
 export const statusSchema = v.object({ connectedClients: v.number() });
 export const errorSchema = v.object({ error: v.string() });
 

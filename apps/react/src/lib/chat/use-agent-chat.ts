@@ -9,6 +9,7 @@ import type { Message } from "./use-chat"
 
 type AgentMessage = Message
 
+/** Mirrors packages/db/src/schema.ts → EventRow (keep in sync) */
 interface EventRow {
   id: number
   sessionId: string
@@ -69,6 +70,9 @@ export function useAgentChat(sessionId: string) {
     const url = new URL(
       `${baseUrl}/agent/${encodeURIComponent(sessionId)}/events/sse`
     )
+    if (lastSeqRef.current > 0) {
+      url.searchParams.set("afterSeq", String(lastSeqRef.current))
+    }
 
     const source = new EventSource(url.toString())
 

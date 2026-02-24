@@ -1,5 +1,5 @@
-import type { AgentEvent, AgentMessage } from "@ellie/agent"
-import type { EventStore, EventRow, EventType } from "@ellie/db"
+import type { AgentEvent } from "@ellie/agent"
+import type { EventStore, EventRow, EventType, AgentMessage } from "@ellie/db"
 
 export type AgentRunEvent =
   | { type: "event"; event: AgentEvent }
@@ -7,7 +7,6 @@ export type AgentRunEvent =
 
 export type SessionEvent =
   | { type: "append"; event: EventRow }
-  | { type: "run_closed"; runId: string }
 
 type Listener<T> = (event: T) => void
 
@@ -27,9 +26,18 @@ export class RealtimeStore {
   // ── Session CRUD ──────────────────────────────────────────────────────
 
   ensureSession(sessionId: string): void {
-    if (!this.#store.getSession(sessionId)) {
-      this.#store.createSession(sessionId)
+    try {
+      if (!this.#store.getSession(sessionId)) {
+        this.#store.createSession(sessionId)
+      }
+    } catch {
+      // Session may have been created concurrently — verify it exists
+      if (!this.#store.getSession(sessionId)) throw new Error(`Failed to ensure session: ${sessionId}`)
     }
+  }
+
+  hasSession(sessionId: string): boolean {
+    return this.#store.getSession(sessionId) !== undefined
   }
 
   // ── Event append (with live notification) ─────────────────────────────
@@ -70,12 +78,8 @@ export class RealtimeStore {
     // Map agent events to persisted event types
     const mapping = this.#mapAgentEvent(event)
     if (mapping) {
-      this.#store.append({
-        sessionId,
-        type: mapping.type,
-        payload: mapping.payload,
-        runId,
-      })
+      // Route through appendEvent so session-level subscribers (SSE) are notified
+      this.appendEvent(sessionId, mapping.type, mapping.payload, runId)
     }
 
     // Always publish live to run subscribers (even for non-persisted events like deltas)
@@ -90,13 +94,26 @@ export class RealtimeStore {
   }
 
   isAgentRunClosed(sessionId: string, runId: string): boolean {
-    return this.#closedRuns.has(this.#runKey(sessionId, runId))
+    // Check in-memory cache first, then fall back to DB for runs closed before this process started
+    if (this.#closedRuns.has(this.#runKey(sessionId, runId))) return true
+
+    const closedEvents = this.#store.query({
+      sessionId,
+      runId,
+      types: ["run_closed"],
+      limit: 1,
+    })
+    if (closedEvents.length > 0) {
+      this.#closedRuns.add(this.#runKey(sessionId, runId))
+      return true
+    }
+    return false
   }
 
   // ── Query wrappers ────────────────────────────────────────────────────
 
   listAgentMessages(sessionId: string): AgentMessage[] {
-    return this.#store.getConversationHistory(sessionId) as unknown as AgentMessage[]
+    return this.#store.getConversationHistory(sessionId)
   }
 
   queryEvents(sessionId: string, afterSeq?: number, types?: EventType[]) {
