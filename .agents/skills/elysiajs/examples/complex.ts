@@ -5,7 +5,7 @@ const loggerPlugin = new Elysia()
 	.decorate('log', () => 'A')
 	.decorate('date', () => new Date())
 	.state('fromPlugin', 'From Logger')
-	.use((app) => app.state('abc', 'abc'))
+	.use(app => app.state('abc', 'abc'))
 
 const app = new Elysia()
 	.onRequest(({ set }) => {
@@ -46,7 +46,7 @@ const app = new Elysia()
 		})
 	})
 	.post('/transform-body', async ({ body }) => body, {
-		beforeHandle: (ctx) => {
+		beforeHandle: ctx => {
 			ctx.body = {
 				...ctx.body,
 				additional: 'Elysia'
@@ -74,7 +74,7 @@ const app = new Elysia()
 		})
 	})
 	.get('/trailing-slash', () => 'A')
-	.group('/group', (app) =>
+	.group('/group', app =>
 		app
 			.onBeforeHandle(({ query }) => {
 				if (query?.name === 'aom') return 'Hi saltyaom'
@@ -101,7 +101,7 @@ const app = new Elysia()
 		return 'Status should be 401'
 	})
 	.get('/timeout', async () => {
-		await new Promise((resolve) => setTimeout(resolve, 2000))
+		await new Promise(resolve => setTimeout(resolve, 2000))
 
 		return 'A'
 	})

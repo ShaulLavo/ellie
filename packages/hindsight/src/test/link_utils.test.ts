@@ -141,8 +141,8 @@ describe('compute_temporal_links parity', () => {
 			],
 			24
 		)
-		const closeWeight = links.find((link) => link[1] === 'close')![3]
-		const farWeight = links.find((link) => link[1] === 'far')![3]
+		const closeWeight = links.find(link => link[1] === 'close')![3]
+		const farWeight = links.find(link => link[1] === 'far')![3]
 		expect(closeWeight).toBeGreaterThan(farWeight)
 	})
 
@@ -179,8 +179,8 @@ describe('compute_temporal_links parity', () => {
 			24
 		)
 
-		const unit1Links = links.filter((link) => link[0] === 'unit-1')
-		const unit2Links = links.filter((link) => link[0] === 'unit-2')
+		const unit1Links = links.filter(link => link[0] === 'unit-1')
+		const unit2Links = links.filter(link => link[0] === 'unit-2')
 		expect(unit1Links).toHaveLength(1)
 		expect(unit1Links[0]![1]).toBe('c1')
 		expect(unit2Links).toHaveLength(1)
@@ -221,8 +221,8 @@ describe('compute_temporal_links parity', () => {
 		}))
 		const links = computeTemporalLinks({ 'unit-1': utcMs(2024, 5, 15, 12, 0) }, candidates, 24)
 		expect(links).toHaveLength(10)
-		expect(links.map((link) => link[1])).toEqual(
-			candidates.slice(0, 10).map((candidate) => candidate.id)
+		expect(links.map(link => link[1])).toEqual(
+			candidates.slice(0, 10).map(candidate => candidate.id)
 		)
 	})
 })

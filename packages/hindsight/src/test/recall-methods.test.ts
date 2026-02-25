@@ -106,8 +106,8 @@ describe('Retrieval methods', () => {
 				consolidate: false
 			})
 
-			const acmeFact = retained.memories.find((m) => m.content.includes('Acme Corp'))!
-			const hikingFact = retained.memories.find((m) => m.content.includes('hiking'))!
+			const acmeFact = retained.memories.find(m => m.content.includes('Acme Corp'))!
+			const hikingFact = retained.memories.find(m => m.content.includes('hiking'))!
 
 			// Seed from "Peter works at Acme Corp" → entity "Peter" links to "Peter loves hiking"
 			const { hdb, memoryVec } = getInternals(t.hs)
@@ -116,7 +116,7 @@ describe('Retrieval methods', () => {
 			})
 
 			expect(graphResults.length).toBeGreaterThan(0)
-			expect(graphResults.some((r) => r.id === hikingFact.id)).toBe(true)
+			expect(graphResults.some(r => r.id === hikingFact.id)).toBe(true)
 		})
 
 		it('expands directional causal links from seed memories', async () => {
@@ -151,8 +151,8 @@ describe('Retrieval methods', () => {
 				consolidate: false
 			})
 
-			const cause = retained.memories.find((m) => m.content.includes('Heavy rain'))
-			const effect = retained.memories.find((m) => m.content.includes('muddy'))
+			const cause = retained.memories.find(m => m.content.includes('Heavy rain'))
+			const effect = retained.memories.find(m => m.content.includes('muddy'))
 
 			expect(cause).toBeDefined()
 			expect(effect).toBeDefined()
@@ -163,7 +163,7 @@ describe('Retrieval methods', () => {
 				seedMemoryIds: [effect!.id]
 			})
 
-			expect(graphResults.some((r) => r.id === cause!.id)).toBe(true)
+			expect(graphResults.some(r => r.id === cause!.id)).toBe(true)
 		})
 
 		it('applies entity frequency filtering', async () => {
@@ -188,7 +188,7 @@ describe('Retrieval methods', () => {
 				consolidate: false
 			})
 
-			const alice = retained.memories.find((m) => m.content.includes('Alice'))
+			const alice = retained.memories.find(m => m.content.includes('Alice'))
 			expect(alice).toBeDefined()
 
 			const { hdb, memoryVec } = getInternals(t.hs)
@@ -294,8 +294,8 @@ describe('Retrieval methods', () => {
 				consolidate: false
 			})
 
-			const aliceFact = retained.memories.find((memory) => memory.content.includes('TechCorp'))
-			const bobFact = retained.memories.find((memory) => memory.content.includes('manager'))
+			const aliceFact = retained.memories.find(memory => memory.content.includes('TechCorp'))
+			const bobFact = retained.memories.find(memory => memory.content.includes('manager'))
 			expect(aliceFact).toBeDefined()
 			expect(bobFact).toBeDefined()
 
@@ -305,7 +305,7 @@ describe('Retrieval methods', () => {
 				seedMemoryIds: [aliceFact!.id]
 			})
 
-			expect(results.some((hit) => hit.id === bobFact!.id)).toBe(true)
+			expect(results.some(hit => hit.id === bobFact!.id)).toBe(true)
 		})
 
 		it('loads edges lazily — only fetches edges for frontier nodes actually reached', async () => {
@@ -591,8 +591,8 @@ describe('Retrieval methods', () => {
 
 			expect(observations.length).toBeGreaterThanOrEqual(2)
 
-			const aliceObs = observations.find((obs) => obs.content.includes('Alice'))
-			const bobObs = observations.find((obs) => obs.content.includes('Bob'))
+			const aliceObs = observations.find(obs => obs.content.includes('Alice'))
+			const bobObs = observations.find(obs => obs.content.includes('Bob'))
 			expect(aliceObs).toBeDefined()
 			expect(bobObs).toBeDefined()
 
@@ -601,7 +601,7 @@ describe('Retrieval methods', () => {
 				seedMemoryIds: [aliceObs!.id]
 			})
 
-			expect(graphResults.some((r) => r.id === bobObs!.id)).toBe(true)
+			expect(graphResults.some(r => r.id === bobObs!.id)).toBe(true)
 		})
 
 		it('uses fallback memory_links (semantic/temporal/entity) when primary expansion has no hits', async () => {
@@ -637,7 +637,7 @@ describe('Retrieval methods', () => {
 				seedMemoryIds: [source.id]
 			})
 
-			expect(graphResults.some((hit) => hit.id === target.id)).toBe(true)
+			expect(graphResults.some(hit => hit.id === target.id)).toBe(true)
 		})
 
 		it('merges temporal seeds with semantic seeds', async () => {
@@ -650,8 +650,8 @@ describe('Retrieval methods', () => {
 				dedupThreshold: 0
 			})
 
-			const first = retained.memories.find((memory) => memory.content.includes('backend'))
-			const second = retained.memories.find((memory) => memory.content.includes('deployment'))
+			const first = retained.memories.find(memory => memory.content.includes('backend'))
+			const second = retained.memories.find(memory => memory.content.includes('deployment'))
 			expect(first).toBeDefined()
 			expect(second).toBeDefined()
 
@@ -669,7 +669,7 @@ describe('Retrieval methods', () => {
 				}
 			)
 
-			expect(graphResults.some((hit) => hit.id === second!.id)).toBe(true)
+			expect(graphResults.some(hit => hit.id === second!.id)).toBe(true)
 		})
 	})
 

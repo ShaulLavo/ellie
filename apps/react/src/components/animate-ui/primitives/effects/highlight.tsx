@@ -166,7 +166,7 @@ function Highlight<T extends React.ElementType = 'div'>({ ref, ...props }: Highl
 	const [activeClassNameState, setActiveClassNameState] = React.useState<string>('')
 
 	const safeSetActiveValue = (id: string | null) => {
-		setActiveValue((prev) => {
+		setActiveValue(prev => {
 			if (prev !== id) {
 				onValueChange?.(id)
 				return id
@@ -190,7 +190,7 @@ function Highlight<T extends React.ElementType = 'div'>({ ref, ...props }: Highl
 				height: bounds.height + offset.height
 			}
 
-			setBoundsState((prev) => {
+			setBoundsState(prev => {
 				if (
 					prev &&
 					prev.top === newBounds.top &&
@@ -210,7 +210,7 @@ function Highlight<T extends React.ElementType = 'div'>({ ref, ...props }: Highl
 	}
 
 	const clearBounds = React.useCallback(() => {
-		setBoundsState((prev) => (prev === null ? prev : null))
+		setBoundsState(prev => (prev === null ? prev : null))
 	}, [])
 
 	React.useEffect(() => {

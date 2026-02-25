@@ -304,11 +304,11 @@ function normalizeExtractedFacts(parsed: unknown, eventDateMs: number): Extracte
 		const confidence =
 			typeof fact.confidence === 'number' && Number.isFinite(fact.confidence) ? fact.confidence : 1
 		const tags = Array.isArray(fact.tags)
-			? fact.tags.map((tag) => readString(tag)).filter((tag): tag is string => Boolean(tag))
+			? fact.tags.map(tag => readString(tag)).filter((tag): tag is string => Boolean(tag))
 			: []
 		const entities = Array.isArray(fact.entities)
 			? fact.entities
-					.map((entity) => parseEntity(entity))
+					.map(entity => parseEntity(entity))
 					.filter((entity): entity is ExtractedEntity => Boolean(entity))
 			: []
 		const causalSource = Array.isArray(fact.causalRelations)
@@ -317,7 +317,7 @@ function normalizeExtractedFacts(parsed: unknown, eventDateMs: number): Extracte
 				? fact.causal_relations
 				: []
 		const causalRelations = causalSource
-			.map((relation) => parseCausalRelation(relation))
+			.map(relation => parseCausalRelation(relation))
 			.filter((relation): relation is ExtractedCausalRelation => Boolean(relation))
 
 		normalized.push({
@@ -365,7 +365,7 @@ function isTranscriptTurnArray(value: unknown): value is TranscriptTurn[] {
 	return (
 		Array.isArray(value) &&
 		value.every(
-			(turn) =>
+			turn =>
 				turn &&
 				typeof turn === 'object' &&
 				typeof (turn as { role?: unknown }).role === 'string' &&
@@ -376,7 +376,7 @@ function isTranscriptTurnArray(value: unknown): value is TranscriptTurn[] {
 
 function normalizeContentInput(content: string | TranscriptTurn[]): string {
 	if (typeof content === 'string') return sanitizeText(content)
-	const normalizedTurns = content.map((turn) => ({
+	const normalizedTurns = content.map(turn => ({
 		role: turn.role,
 		content: sanitizeText(turn.content)
 	}))
@@ -422,7 +422,7 @@ async function extractFactsFromContent(
 	totalChunks = 1
 ): Promise<ExtractedFact[]> {
 	if ('facts' in options && options.facts) {
-		return options.facts.map((f) => ({
+		return options.facts.map(f => ({
 			content: sanitizeText(f.content),
 			factType: (f.factType ?? 'world') as ExtractedFact['factType'],
 			confidence: f.confidence ?? 1.0,
@@ -430,14 +430,14 @@ async function extractFactsFromContent(
 			occurredStart: f.occurredStart != null ? new Date(f.occurredStart).toISOString() : null,
 			occurredEnd: f.occurredEnd != null ? new Date(f.occurredEnd).toISOString() : null,
 			mentionedAt: null,
-			entities: (f.entities ?? []).map((name) => ({
+			entities: (f.entities ?? []).map(name => ({
 				name,
 				entityType: 'concept' as const
 			})),
 			tags: f.tags ?? [],
 			causalRelations: Array.isArray(f.causalRelations)
 				? f.causalRelations
-						.map((rel) => parseCausalRelation(rel))
+						.map(rel => parseCausalRelation(rel))
 						.filter((rel): rel is ExtractedCausalRelation => Boolean(rel))
 				: []
 		}))
@@ -528,8 +528,8 @@ async function chunkWithChonkie(content: string): Promise<string[]> {
 	})
 	const chunks = await chunker.chunk(content)
 	const texts = chunks
-		.map((chunk) => sanitizeText(chunk.text).trim())
-		.filter((chunkText) => chunkText.length > 0)
+		.map(chunk => sanitizeText(chunk.text).trim())
+		.filter(chunkText => chunkText.length > 0)
 	return texts.length > 0 ? texts : [content]
 }
 
@@ -639,7 +639,7 @@ function planEntities(
 	const newEntityById = new Map<string, EntityPlan['newEntities'][number]>()
 
 	for (const item of extracted) {
-		const nearbyNames = item.fact.entities.map((entity) => entity.name)
+		const nearbyNames = item.fact.entities.map(entity => entity.name)
 		for (const ent of item.fact.entities) {
 			const key = `${ent.name.toLowerCase()}:${ent.entityType}`
 			const seen = entityMap.get(key)
@@ -658,18 +658,18 @@ function planEntities(
 				ent.entityType,
 				existingEntities,
 				cooccurrences,
-				nearbyNames.filter((name) => name !== ent.name),
+				nearbyNames.filter(name => name !== ent.name),
 				now
 			)
 			const exactMatch = existingEntities.find(
-				(row) =>
+				row =>
 					row.name.toLowerCase() === ent.name.toLowerCase() && row.entityType === ent.entityType
 			)
 
 			if (resolved || exactMatch) {
 				const row =
 					(resolved
-						? existingEntities.find((entity) => entity.id === resolved.entityId)
+						? existingEntities.find(entity => entity.id === resolved.entityId)
 						: exactMatch) ?? null
 				if (!row) continue
 
@@ -798,19 +798,19 @@ async function resolveOrCreateEntity(
 		ent.entityType,
 		existingEntities,
 		cooccurrences,
-		nearbyNames.filter((n) => n !== ent.name),
+		nearbyNames.filter(n => n !== ent.name),
 		now
 	)
 
 	if (resolved) {
-		const matchedEntity = existingEntities.find((e) => e.id === resolved.entityId)!
+		const matchedEntity = existingEntities.find(e => e.id === resolved.entityId)!
 		mentionDeltas.set(matchedEntity.id, (mentionDeltas.get(matchedEntity.id) ?? 0) + 1)
 		entityMap.set(key, rowToEntity({ ...matchedEntity, lastUpdated: now }))
 		return
 	}
 
 	const exactMatch = existingEntities.find(
-		(e) => e.name.toLowerCase() === ent.name.toLowerCase() && e.entityType === ent.entityType
+		e => e.name.toLowerCase() === ent.name.toLowerCase() && e.entityType === ent.entityType
 	)
 
 	if (exactMatch) {
@@ -989,11 +989,11 @@ export async function retain(
 	for (const fact of extracted) {
 		if (!fact.causalRelations) continue
 		fact.causalRelations = fact.causalRelations
-			.map((rel) => ({
+			.map(rel => ({
 				...rel,
 				targetIndex: newTraceIndexRemap.get(rel.targetIndex) ?? -1
 			}))
-			.filter((rel) => rel.targetIndex >= 0)
+			.filter(rel => rel.targetIndex >= 0)
 	}
 
 	if (extracted.length === 0 && appliedMemoryIds.length === 0) {
@@ -1047,7 +1047,7 @@ export async function retain(
 	const mentionDeltas = new Map<string, number>()
 
 	for (const fact of extracted) {
-		const nearbyNames = fact.entities.map((e) => e.name)
+		const nearbyNames = fact.entities.map(e => e.name)
 		for (const ent of fact.entities) {
 			await resolveOrCreateEntity(
 				hdb,
@@ -1067,7 +1067,7 @@ export async function retain(
 
 	// Flush accumulated mention deltas to DB
 	for (const [entityId, delta] of mentionDeltas) {
-		const entity = existingEntities.find((e) => e.id === entityId)
+		const entity = existingEntities.find(e => e.id === entityId)
 		if (!entity) continue
 		hdb.db
 			.update(schema.entities)
@@ -1173,9 +1173,9 @@ export async function retain(
 
 	for (let i = 0; i < memories.length; i++) {
 		for (let j = i + 1; j < memories.length; j++) {
-			const entitiesI = new Set(extracted[i]!.entities.map((e) => e.name.toLowerCase()))
-			const entitiesJ = new Set(extracted[j]!.entities.map((e) => e.name.toLowerCase()))
-			const shared = [...entitiesI].filter((e) => entitiesJ.has(e))
+			const entitiesI = new Set(extracted[i]!.entities.map(e => e.name.toLowerCase()))
+			const entitiesJ = new Set(extracted[j]!.entities.map(e => e.name.toLowerCase()))
+			const shared = [...entitiesI].filter(e => entitiesJ.has(e))
 			if (shared.length === 0) continue
 
 			const linkId = ulid()
@@ -1243,7 +1243,7 @@ export async function retain(
 		hdb,
 		memoryVec,
 		bankId,
-		memories.map((m) => m.id)
+		memories.map(m => m.id)
 	)
 	links.push(...semanticLinks)
 
@@ -1413,7 +1413,7 @@ async function processNewTraceMemories(ctx: {
 		entityById.set(entityId, entity)
 	}
 	const entityVectors = await entityVec.createVectors(
-		entityPlan.newEntities.map((entity) => entity.name)
+		entityPlan.newEntities.map(entity => entity.name)
 	)
 
 	const memoryRows: Array<typeof hdb.schema.memoryUnits.$inferInsert> = []
@@ -1515,7 +1515,7 @@ async function processNewTraceMemories(ctx: {
 			.from(hdb.schema.entities)
 			.where(eq(hdb.schema.entities.bankId, bankId))
 			.all()
-			.map((row) => [row.id, row])
+			.map(row => [row.id, row])
 	)
 
 	const createdLinks: RetainResult['links'] = []
@@ -1555,7 +1555,7 @@ async function processNewTraceMemories(ctx: {
 		}
 
 		memoryVec.upsertVectors(
-			memoryRecords.map((item) => ({
+			memoryRecords.map(item => ({
 				id: item.memory.id,
 				vector: item.vector
 			}))
@@ -1575,7 +1575,7 @@ async function processNewTraceMemories(ctx: {
 		createEntityLinksFromMemories(
 			hdb,
 			bankId,
-			memoryRecords.map((record) => record.memory.id),
+			memoryRecords.map(record => record.memory.id),
 			memoryEntityNames,
 			now,
 			createdLinks
@@ -1586,7 +1586,7 @@ async function processNewTraceMemories(ctx: {
 		createTemporalLinksFromMemories(
 			hdb,
 			bankId,
-			memoryRecords.map((record) => record.memory),
+			memoryRecords.map(record => record.memory),
 			now,
 			createdLinks
 		)
@@ -1595,7 +1595,7 @@ async function processNewTraceMemories(ctx: {
 			hdb,
 			memoryVec,
 			bankId,
-			memoryRecords.map((record) => ({
+			memoryRecords.map(record => ({
 				id: record.memory.id,
 				vector: record.vector
 			})),
@@ -1661,7 +1661,7 @@ export async function retainBatch(
 	const now = Date.now()
 	const dedupThreshold = options.dedupThreshold ?? 0
 	const documentRows: Array<typeof hdb.schema.documents.$inferInsert> = normalizedItems.map(
-		(item) => ({
+		item => ({
 			id: item.documentId,
 			bankId,
 			originalText: item.content,
@@ -1676,7 +1676,7 @@ export async function retainBatch(
 			updatedAt: now
 		})
 	)
-	const chunkRows: Array<typeof hdb.schema.chunks.$inferInsert> = expandedContents.map((item) => ({
+	const chunkRows: Array<typeof hdb.schema.chunks.$inferInsert> = expandedContents.map(item => ({
 		id: item.chunkId,
 		documentId: item.documentId,
 		bankId,
@@ -1730,7 +1730,7 @@ export async function retainBatch(
 
 		if (flattened.length === 0) continue
 
-		const allVectors = await memoryVec.createVectors(flattened.map((item) => item.fact.content))
+		const allVectors = await memoryVec.createVectors(flattened.map(item => item.fact.content))
 
 		// ── Route each fact via reconsolidation engine ──
 		const batchDecisions: RouteDecision[] = []
@@ -1919,7 +1919,7 @@ export async function retainBatch(
 
 	for (let i = 0; i < aggregate.length; i++) {
 		aggregate[i]!.entities = [...entityIdsByResult[i]!]
-			.map((entityId) => entityById.get(entityId))
+			.map(entityId => entityById.get(entityId))
 			.filter((entity): entity is Entity => Boolean(entity))
 	}
 
@@ -1951,7 +1951,7 @@ function createEntityLinksFromMemories(
 		for (let j = i + 1; j < memoryIds.length; j++) {
 			const targetId = memoryIds[j]!
 			const targetEntities = memoryEntityNames.get(targetId) ?? new Set<string>()
-			const shared = [...sourceEntities].filter((name) => targetEntities.has(name))
+			const shared = [...sourceEntities].filter(name => targetEntities.has(name))
 			if (shared.length === 0) continue
 
 			const weight = shared.length / Math.max(sourceEntities.size, targetEntities.size, 1)
@@ -1985,7 +1985,7 @@ function createTemporalLinksFromMemories(
 	if (newMemories.length === 0) return
 
 	const windowMs = TEMPORAL_LINK_WINDOW_HOURS * 60 * 60 * 1000
-	const newMemoryIds = new Set(newMemories.map((memory) => memory.id))
+	const newMemoryIds = new Set(newMemories.map(memory => memory.id))
 	const candidateRows = hdb.db
 		.select({
 			id: hdb.schema.memoryUnits.id,
@@ -2001,8 +2001,8 @@ function createTemporalLinksFromMemories(
 		.all()
 
 	const candidateAnchors = candidateRows
-		.filter((row) => row.bankId === bankId && !newMemoryIds.has(row.id))
-		.map((row) => ({
+		.filter(row => row.bankId === bankId && !newMemoryIds.has(row.id))
+		.map(row => ({
 			id: row.id,
 			anchor: getTemporalAnchor(
 				row.eventDate,
@@ -2032,9 +2032,9 @@ function createTemporalLinksFromMemories(
 		minDate == null || maxDate == null
 			? []
 			: candidateAnchors
-					.filter((candidate) => candidate.anchor >= minDate && candidate.anchor <= maxDate)
+					.filter(candidate => candidate.anchor >= minDate && candidate.anchor <= maxDate)
 					.sort((a, b) => b.anchor - a.anchor)
-					.map((candidate) => ({
+					.map(candidate => ({
 						id: candidate.id,
 						eventDate: candidate.anchor
 					}))
@@ -2209,7 +2209,7 @@ function createSemanticLinksFromVectors(
 	createdAt: number,
 	output: RetainResult['links']
 ): void {
-	const newMemoryIds = new Set(newMemories.map((memory) => memory.id))
+	const newMemoryIds = new Set(newMemories.map(memory => memory.id))
 
 	for (const memory of newMemories) {
 		const hits = memoryVec.searchByVector(memory.vector, SEMANTIC_LINK_TOP_K + 1)

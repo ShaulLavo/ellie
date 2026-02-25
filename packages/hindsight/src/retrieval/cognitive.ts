@@ -146,7 +146,7 @@ export function scoreCognitive(
 	}
 
 	// Step 2: Load 1-hop links between candidates
-	const candidateIds = candidates.map((c) => c.id)
+	const candidateIds = candidates.map(c => c.id)
 	const links = loadNeighborLinks(hdb, candidateIds)
 
 	// Step 3: Build per-candidate link index and compute spread
@@ -162,7 +162,7 @@ export function scoreCognitive(
 	}
 
 	// Step 4: Combine scores
-	const results: CognitiveScored[] = candidates.map((c) => {
+	const results: CognitiveScored[] = candidates.map(c => {
 		const probe = probeMap.get(c.id)!
 		const base = baseMap.get(c.id)!
 		const candidateLinks = linksByCandidate.get(c.id) ?? []
@@ -207,7 +207,7 @@ function loadNeighborLinks(hdb: HindsightDatabase, candidateIds: string[]): Link
 		.from(hdb.schema.memoryLinks)
 		.where(inArray(hdb.schema.memoryLinks.sourceId, candidateIds))
 		.all()
-		.filter((link) => idSet.has(link.targetId))
+		.filter(link => idSet.has(link.targetId))
 
 	// Query links where target is in candidate set (captures reverse edges)
 	const byTarget = hdb.db
@@ -219,7 +219,7 @@ function loadNeighborLinks(hdb: HindsightDatabase, candidateIds: string[]): Link
 		.from(hdb.schema.memoryLinks)
 		.where(inArray(hdb.schema.memoryLinks.targetId, candidateIds))
 		.all()
-		.filter((link) => idSet.has(link.sourceId))
+		.filter(link => idSet.has(link.sourceId))
 
 	// Deduplicate (a link found by both queries should appear once)
 	const seen = new Set<string>()

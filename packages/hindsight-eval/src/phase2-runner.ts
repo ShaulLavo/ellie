@@ -49,7 +49,7 @@ function deterministicEmbed(text: string): Promise<number[]> {
 		vec[i % EVAL_EMBED_DIMS]! += (text.charCodeAt(i) * (i + 1)) / 1000
 	}
 	const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
-	return Promise.resolve(norm > 0 ? vec.map((v) => v / norm) : vec)
+	return Promise.resolve(norm > 0 ? vec.map(v => v / norm) : vec)
 }
 
 function createNoopAdapter(): HindsightConfig['adapter'] {
@@ -266,7 +266,7 @@ export async function runPhase2Verification(
 		gitSha,
 		runId,
 		gates,
-		passed: gates.every((g) => g.status !== 'fail'),
+		passed: gates.every(g => g.status !== 'fail'),
 		metrics: {
 			duplicateRatio: drMetrics,
 			narrativeAccuracy: narrativeMetrics
@@ -303,7 +303,7 @@ export function compareRuns(
 
 	const gateResults: GateResult[] = [
 		...candidate.gates.filter(
-			(g) =>
+			g =>
 				!g.gate.startsWith('Gate 6') && !g.gate.startsWith('Gate 7') && !g.gate.startsWith('Gate 8')
 		),
 		{

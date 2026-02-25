@@ -114,8 +114,8 @@ type EmitFn = (event: AgentEvent) => void
 
 function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 	return new EventStream<AgentEvent, AgentMessage[]>(
-		(event) => event.type === 'agent_end',
-		(event) => (event.type === 'agent_end' ? event.messages : [])
+		event => event.type === 'agent_end',
+		event => (event.type === 'agent_end' ? event.messages : [])
 	)
 }
 
@@ -202,7 +202,7 @@ function wrapToolsForTanStack(
 	emit: EmitFn,
 	toolResultCollector: ToolResultMessage[]
 ) {
-	return tools.map((tool) => ({
+	return tools.map(tool => ({
 		name: tool.name,
 		description: tool.description,
 		inputSchema: tool.parameters,
@@ -221,7 +221,7 @@ function wrapToolsForTanStack(
 
 			try {
 				const validatedArgs = v.parse(tool.parameters, args)
-				result = await tool.execute(toolCallId, validatedArgs, signal, (partialResult) => {
+				result = await tool.execute(toolCallId, validatedArgs, signal, partialResult => {
 					emit({
 						type: 'tool_execution_update',
 						toolCallId,
@@ -266,7 +266,7 @@ function wrapToolsForTanStack(
 			emit({ type: 'message_end', message: toolResultMessage })
 
 			// Return text for TanStack's conversation history
-			return result.content.map((c) => (c.type === 'text' ? c.text : '')).join('')
+			return result.content.map(c => (c.type === 'text' ? c.text : '')).join('')
 		}
 	}))
 }
@@ -442,7 +442,7 @@ async function executeToolCall(
 	signal: AbortSignal | undefined,
 	emit: EmitFn
 ): Promise<ToolResultMessage[]> {
-	const tool = tools.find((t) => t.name === toolCall.name)
+	const tool = tools.find(t => t.name === toolCall.name)
 
 	emit({
 		type: 'tool_execution_start',
@@ -463,7 +463,7 @@ async function executeToolCall(
 	} else {
 		try {
 			const validatedArgs = v.parse(tool.parameters, toolCall.arguments)
-			result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
+			result = await tool.execute(toolCall.id, validatedArgs, signal, partialResult => {
 				emit({
 					type: 'tool_execution_update',
 					toolCallId: toolCall.id,
@@ -738,7 +738,7 @@ function processChunk(
 		}
 
 		case 'TEXT_MESSAGE_CONTENT': {
-			const lastText = partial.content.findLast((c) => c.type === 'text')
+			const lastText = partial.content.findLast(c => c.type === 'text')
 			if (lastText && lastText.type === 'text') {
 				lastText.text += chunk.delta
 				const idx = partial.content.lastIndexOf(lastText)
@@ -752,7 +752,7 @@ function processChunk(
 		}
 
 		case 'TEXT_MESSAGE_END': {
-			const endText = partial.content.findLast((c) => c.type === 'text')
+			const endText = partial.content.findLast(c => c.type === 'text')
 			if (endText) {
 				const idx = partial.content.lastIndexOf(endText)
 				emitUpdate(emit, partial, { type: 'text_end', contentIndex: idx })
@@ -771,7 +771,7 @@ function processChunk(
 		}
 
 		case 'STEP_FINISHED': {
-			const lastThinking = partial.content.findLast((c) => c.type === 'thinking')
+			const lastThinking = partial.content.findLast(c => c.type === 'thinking')
 			if (lastThinking && lastThinking.type === 'thinking') {
 				lastThinking.thinking += chunk.delta
 				const idx = partial.content.lastIndexOf(lastThinking)

@@ -110,7 +110,7 @@ export function computeNarrativeAccuracy(
 	results: Array<{ correct: boolean }>
 ): NarrativeAccuracyMetrics {
 	const totalQuestions = results.length
-	const correctQuestions = results.filter((r) => r.correct).length
+	const correctQuestions = results.filter(r => r.correct).length
 
 	return {
 		totalQuestions,

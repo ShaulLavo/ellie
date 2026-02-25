@@ -163,19 +163,19 @@ export type Notification = z.infer<typeof NotificationSchema>
 export const StrongPasswordSchema = z
 	.string()
 	.min(8, 'Password must be at least 8 characters')
-	.refine((val) => /[A-Z]/.test(val), 'Must contain at least one uppercase letter')
-	.refine((val) => /[a-z]/.test(val), 'Must contain at least one lowercase letter')
-	.refine((val) => /[0-9]/.test(val), 'Must contain at least one number')
-	.refine((val) => /[^A-Za-z0-9]/.test(val), 'Must contain at least one special character')
+	.refine(val => /[A-Z]/.test(val), 'Must contain at least one uppercase letter')
+	.refine(val => /[a-z]/.test(val), 'Must contain at least one lowercase letter')
+	.refine(val => /[0-9]/.test(val), 'Must contain at least one number')
+	.refine(val => /[^A-Za-z0-9]/.test(val), 'Must contain at least one special character')
 
 // URL slug validation and transformation
 export const SlugSchema = z
 	.string()
 	.min(1)
 	.max(100)
-	.transform((val) => val.toLowerCase().replace(/\s+/g, '-'))
+	.transform(val => val.toLowerCase().replace(/\s+/g, '-'))
 	.refine(
-		(val) => /^[a-z0-9-]+$/.test(val),
+		val => /^[a-z0-9-]+$/.test(val),
 		'Slug can only contain lowercase letters, numbers, and hyphens'
 	)
 
@@ -185,7 +185,7 @@ export const UsernameSchema = z
 	.min(3)
 	.max(20)
 	.refine(
-		async (username) => {
+		async username => {
 			// Simulated database check
 			// const exists = await db.user.findUnique({ where: { username } });
 			// return !exists;
@@ -203,16 +203,16 @@ export const DateCodec = z.codec(
 	z.iso.datetime(), // Input: ISO string
 	z.date(), // Output: Date object
 	{
-		decode: (str) => new Date(str),
-		encode: (date) => date.toISOString()
+		decode: str => new Date(str),
+		encode: date => date.toISOString()
 	}
 )
 
 // JSON codec: string <-> object
 export const JSONCodec = <T extends z.ZodTypeAny>(schema: T) =>
 	z.codec(z.string(), schema, {
-		decode: (str) => JSON.parse(str),
-		encode: (obj) => JSON.stringify(obj)
+		decode: str => JSON.parse(str),
+		encode: obj => JSON.stringify(obj)
 	})
 
 // Usage: const UserJSONCodec = JSONCodec(UserResponse);
@@ -273,9 +273,9 @@ export const CategorySchema: z.ZodType<Category> = z.lazy(() =>
 export const ImageUploadSchema = z.object({
 	file: z
 		.instanceof(File)
-		.refine((file) => file.size <= 5 * 1024 * 1024, 'File must be less than 5MB')
+		.refine(file => file.size <= 5 * 1024 * 1024, 'File must be less than 5MB')
 		.refine(
-			(file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type),
+			file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type),
 			'Only JPEG, PNG, and WebP images are allowed'
 		),
 	alt: z.string().max(200).optional()
@@ -301,7 +301,7 @@ export const SearchQuerySchema = PaginationQuerySchema.extend({
 	filters: z
 		.string()
 		.optional()
-		.transform((val) => (val ? JSON.parse(val) : {}))
+		.transform(val => (val ? JSON.parse(val) : {}))
 })
 
 export type SearchQuery = z.infer<typeof SearchQuerySchema>

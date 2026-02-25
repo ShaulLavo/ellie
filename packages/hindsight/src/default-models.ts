@@ -115,8 +115,8 @@ function assertEmbeddingVectors(payload: unknown, expectedCount: number): number
 		if (!Array.isArray(vector)) {
 			throw new Error(`embedding vector ${index} is not an array`)
 		}
-		const numeric = vector.map((value) => Number(value))
-		if (numeric.some((value) => !Number.isFinite(value))) {
+		const numeric = vector.map(value => Number(value))
+		if (numeric.some(value => !Number.isFinite(value))) {
 			throw new Error(`embedding vector ${index} contains non-numeric values`)
 		}
 		return numeric
@@ -183,7 +183,7 @@ async function runWithConcurrency<T, R>(
 	return results
 }
 
-export const defaultTeiEmbed: EmbedFunction = async (text) => {
+export const defaultTeiEmbed: EmbedFunction = async text => {
 	const config = resolveDefaultModelConfig()
 	const endpoint = `${config.embedUrl}/embed`
 	const response = await fetch(endpoint, {
@@ -204,7 +204,7 @@ export const defaultTeiEmbed: EmbedFunction = async (text) => {
 	return vectors[0]!
 }
 
-export const defaultTeiEmbedBatch: EmbedBatchFunction = async (texts) => {
+export const defaultTeiEmbedBatch: EmbedBatchFunction = async texts => {
 	if (texts.length === 0) return []
 	const config = resolveDefaultModelConfig()
 	const endpoint = `${config.embedUrl}/embed`
@@ -236,13 +236,13 @@ export const defaultTeiRerank: RerankFunction = async (query, documents) => {
 	)
 	const scores = Array.from({ length: documents.length }, () => 0)
 
-	await runWithConcurrency(grouped, config.rerankMaxConcurrent, async (items) => {
+	await runWithConcurrency(grouped, config.rerankMaxConcurrent, async items => {
 		const response = await fetch(endpoint, {
 			method: 'POST',
 			headers: buildHeaders(config.apiKey),
 			body: JSON.stringify({
 				query,
-				texts: items.map((item) => item.text),
+				texts: items.map(item => item.text),
 				return_text: false
 			})
 		})

@@ -71,8 +71,8 @@ export class EdgeCache {
 
 			for (const [sourceId, targets] of Object.entries(bySource)) {
 				const normalized = (targets ?? [])
-					.filter((target) => Number.isFinite(target.weight) && target.weight > 0)
-					.map((target) => ({ nodeId: target.nodeId, weight: target.weight }))
+					.filter(target => Number.isFinite(target.weight) && target.weight > 0)
+					.map(target => ({ nodeId: target.nodeId, weight: target.weight }))
 					.sort((a, b) => b.weight - a.weight)
 				typeMap.set(sourceId, normalized)
 			}
@@ -88,7 +88,7 @@ export class EdgeCache {
 	}
 
 	getUncached(nodeIds: string[]): string[] {
-		return [...new Set(nodeIds)].filter((nodeId) => !this.isFullyLoaded(nodeId))
+		return [...new Set(nodeIds)].filter(nodeId => !this.isFullyLoaded(nodeId))
 	}
 
 	getNeighbors(edgeType: MpfpEdgeType, nodeId: string): EdgeTarget[] {
@@ -98,13 +98,13 @@ export class EdgeCache {
 	getNormalizedNeighbors(edgeType: MpfpEdgeType, nodeId: string, topK: number): EdgeTarget[] {
 		const neighbors = this.getNeighbors(edgeType, nodeId)
 			.slice(0, Math.max(0, topK))
-			.filter((target) => target.weight > 0)
+			.filter(target => target.weight > 0)
 		if (neighbors.length === 0) return []
 
 		const total = neighbors.reduce((sum, target) => sum + target.weight, 0)
 		if (total <= 0) return []
 
-		return neighbors.map((target) => ({
+		return neighbors.map(target => ({
 			nodeId: target.nodeId,
 			weight: target.weight / total
 		}))

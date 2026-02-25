@@ -29,7 +29,7 @@ export default function AITextLoading({
 
 	useEffect(() => {
 		const timer = setInterval(() => {
-			setCurrentTextIndex((prevIndex) => (prevIndex + 1) % texts.length)
+			setCurrentTextIndex(prevIndex => (prevIndex + 1) % texts.length)
 		}, interval)
 
 		return () => clearInterval(timer)

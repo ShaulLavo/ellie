@@ -103,7 +103,7 @@ export const MicSelectorTrigger = ({ children, ...props }: MicSelectorTriggerPro
 
 	useEffect(() => {
 		// Create a ResizeObserver to detect width changes
-		const resizeObserver = new ResizeObserver((entries) => {
+		const resizeObserver = new ResizeObserver(entries => {
 			for (const entry of entries) {
 				const newWidth = (entry.target as HTMLElement).offsetWidth
 				if (newWidth) {
@@ -223,7 +223,7 @@ export type MicSelectorValueProps = ComponentProps<'span'>
 
 export const MicSelectorValue = ({ className, ...props }: MicSelectorValueProps) => {
 	const { data, value } = useContext(MicSelectorContext)
-	const currentDevice = data.find((d) => d.deviceId === value)
+	const currentDevice = data.find(d => d.deviceId === value)
 
 	if (!currentDevice) {
 		return (
@@ -254,7 +254,7 @@ export const useAudioDevices = () => {
 			setError(null)
 
 			const deviceList = await navigator.mediaDevices.enumerateDevices()
-			const audioInputs = deviceList.filter((device) => device.kind === 'audioinput')
+			const audioInputs = deviceList.filter(device => device.kind === 'audioinput')
 
 			setDevices(audioInputs)
 		} catch (error) {
@@ -285,7 +285,7 @@ export const useAudioDevices = () => {
 			}
 
 			const deviceList = await navigator.mediaDevices.enumerateDevices()
-			const audioInputs = deviceList.filter((device) => device.kind === 'audioinput')
+			const audioInputs = deviceList.filter(device => device.kind === 'audioinput')
 
 			setDevices(audioInputs)
 			setHasPermission(true)

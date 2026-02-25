@@ -190,7 +190,7 @@ describe('WorkingMemoryStore', () => {
 		const entries = wm.getEntries('bank1', 'session1', now)
 		expect(entries.length).toBe(40)
 		// Oldest 5 (mem0–mem4) should be evicted, mem5–mem44 should remain
-		const survivingIds = new Set(entries.map((e) => e.memoryId))
+		const survivingIds = new Set(entries.map(e => e.memoryId))
 		for (let i = 0; i < 5; i++) {
 			expect(survivingIds.has(`mem${i}`)).toBe(false)
 		}

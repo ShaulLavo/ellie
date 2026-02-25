@@ -51,7 +51,7 @@ export function computeTemporalQueryBounds(
 	timeWindowHours: number = TEMPORAL_LINK_WINDOW_HOURS
 ): { minDate: number | null; maxDate: number | null } {
 	const normalizedDates = Object.values(newUnits)
-		.map((date) => normalizeTemporalDate(date))
+		.map(date => normalizeTemporalDate(date))
 		.filter((date): date is number => date != null)
 
 	if (normalizedDates.length === 0) {

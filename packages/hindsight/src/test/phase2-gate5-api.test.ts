@@ -79,7 +79,7 @@ describe('Gate 5: API Contract Verification', () => {
 			expect(page2.items).toHaveLength(2)
 
 			// Verify no overlap
-			const page1Ids = new Set(page1.items.map((e) => e.episodeId))
+			const page1Ids = new Set(page1.items.map(e => e.episodeId))
 			for (const item of page2.items) {
 				expect(page1Ids.has(item.episodeId)).toBe(false)
 			}
@@ -241,7 +241,7 @@ describe('Gate 5: API Contract Verification', () => {
 			expect(narr.anchorMemoryId).toBe(anchorId)
 			expect(narr.events.length).toBeGreaterThanOrEqual(1)
 
-			const anchorEvent = narr.events.find((e) => e.memoryId === anchorId)
+			const anchorEvent = narr.events.find(e => e.memoryId === anchorId)
 			expect(anchorEvent).toBeDefined()
 		})
 
@@ -264,7 +264,7 @@ describe('Gate 5: API Contract Verification', () => {
 
 			expect(narr.events.length).toBeGreaterThanOrEqual(1)
 			// Should include anchor
-			const anchorEvent = narr.events.find((e) => e.memoryId === anchorId)
+			const anchorEvent = narr.events.find(e => e.memoryId === anchorId)
 			expect(anchorEvent).toBeDefined()
 		})
 
@@ -367,7 +367,7 @@ describe('Gate 5: API Contract Verification', () => {
 			})
 
 			// Should include events from both episodes
-			const episodeIds = new Set(narr.events.map((e) => e.episodeId))
+			const episodeIds = new Set(narr.events.map(e => e.episodeId))
 			expect(episodeIds.size).toBeGreaterThanOrEqual(2)
 		})
 
@@ -418,7 +418,7 @@ describe('Gate 5: API Contract Verification', () => {
 			})
 
 			// With steps=1, should only traverse 1 episode back
-			const episodeIds = new Set(narr.events.map((e) => e.episodeId))
+			const episodeIds = new Set(narr.events.map(e => e.episodeId))
 			expect(episodeIds.size).toBeLessThanOrEqual(2) // anchor episode + 1 step back
 		})
 	})

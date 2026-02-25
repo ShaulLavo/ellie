@@ -27,7 +27,7 @@ export class EmbeddingStore {
 
 		const rawVectors = this.embedBatch
 			? await this.embedBatch(texts)
-			: await Promise.all(texts.map((text) => this.embed(text)))
+			: await Promise.all(texts.map(text => this.embed(text)))
 
 		if (rawVectors.length !== texts.length) {
 			throw new Error(
@@ -35,7 +35,7 @@ export class EmbeddingStore {
 			)
 		}
 
-		return rawVectors.map((vector) => {
+		return rawVectors.map(vector => {
 			if (vector.length !== this.dims) {
 				throw new Error(`Embedding dimension mismatch: expected ${this.dims}, got ${vector.length}`)
 			}
@@ -79,7 +79,7 @@ export class EmbeddingStore {
 	async upsertMany(items: Array<{ id: string; text: string }>): Promise<void> {
 		if (items.length === 0) return
 
-		const vectors = await this.createVectors(items.map((item) => item.text))
+		const vectors = await this.createVectors(items.map(item => item.text))
 		this.upsertVectors(
 			items.map((item, index) => ({
 				id: item.id,

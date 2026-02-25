@@ -158,7 +158,7 @@ After searching for weeks, I finally found a cheaper apartment in Brooklyn.`,
 		// Python: assert len(facts) >= 3
 		expect(result.memories.length).toBeGreaterThanOrEqual(3)
 
-		const causalLinks = result.links.filter((l) => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l => isCausal(l.linkType))
 
 		// Python: assert len(all_causal_relations) >= 2
 		expect(causalLinks.length).toBeGreaterThanOrEqual(2)
@@ -185,7 +185,7 @@ Lower leads resulted in decreased sales.`
 		expect(result.memories.length).toBeGreaterThan(0)
 
 		const outputTokens = result.memories
-			.map((m) => m.content)
+			.map(m => m.content)
 			.join(' ')
 			.split(/\s+/).length
 		const inputTokens = input.split(/\s+/).length
@@ -211,7 +211,7 @@ The renovation took three months and cost $15,000.`,
 		expect(result.memories.length).toBeGreaterThanOrEqual(4)
 
 		// Validate all causal links connect distinct memories
-		const causalLinks = result.links.filter((l) => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l => isCausal(l.linkType))
 		if (causalLinks.length > 0) {
 			for (const link of causalLinks) {
 				expect(link.sourceId).not.toBe(link.targetId)
@@ -264,7 +264,7 @@ Her data science skills enabled her to lead the analytics team.`,
 		expect(result.memories.length).toBeGreaterThan(0)
 
 		// If causal links were extracted, verify valid chain + types
-		const causalLinks = result.links.filter((l) => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l => isCausal(l.linkType))
 		const validTypes = new Set(CAUSAL_TYPES)
 		for (const link of causalLinks) {
 			expect(link.sourceId).not.toBe(link.targetId)
@@ -283,7 +283,7 @@ Machine learning fascinated me so much that I changed my career to data science.
 		)
 
 		// No causal link should be a self-reference
-		const causalLinks = result.links.filter((l) => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l => isCausal(l.linkType))
 		for (const link of causalLinks) {
 			expect(link.sourceId).not.toBe(link.targetId)
 		}
@@ -301,7 +301,7 @@ The new role enabled me to lead a team of engineers.`,
 		)
 
 		// All causal links must connect distinct memories (backward-looking enforced by pipeline)
-		const causalLinks = result.links.filter((l) => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l => isCausal(l.linkType))
 		for (const link of causalLinks) {
 			expect(link.sourceId).not.toBe(link.targetId)
 		}

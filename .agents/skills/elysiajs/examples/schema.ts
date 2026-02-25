@@ -43,7 +43,7 @@ const app = new Elysia()
 		{
 			headers: 'authorization'
 		},
-		(app) =>
+		app =>
 			app
 				.derive(({ headers }) => ({
 					userId: headers.authorization

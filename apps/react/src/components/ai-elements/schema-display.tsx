@@ -208,7 +208,7 @@ export const SchemaDisplayParameters = ({
 			<CollapsibleContent>
 				<div className="divide-y border-t">
 					{children ??
-						parameters?.map((param) => <SchemaDisplayParameter key={param.name} {...param} />)}
+						parameters?.map(param => <SchemaDisplayParameter key={param.name} {...param} />)}
 				</div>
 			</CollapsibleContent>
 		</Collapsible>
@@ -268,9 +268,7 @@ export const SchemaDisplayRequest = ({
 			<CollapsibleContent>
 				<div className="border-t">
 					{children ??
-						requestBody?.map((prop) => (
-							<SchemaDisplayProperty key={prop.name} {...prop} depth={0} />
-						))}
+						requestBody?.map(prop => <SchemaDisplayProperty key={prop.name} {...prop} depth={0} />)}
 				</div>
 			</CollapsibleContent>
 		</Collapsible>
@@ -295,7 +293,7 @@ export const SchemaDisplayResponse = ({
 			<CollapsibleContent>
 				<div className="border-t">
 					{children ??
-						responseBody?.map((prop) => (
+						responseBody?.map(prop => (
 							<SchemaDisplayProperty key={prop.name} {...prop} depth={0} />
 						))}
 				</div>
@@ -365,7 +363,7 @@ export const SchemaDisplayProperty = ({
 				)}
 				<CollapsibleContent>
 					<div className="divide-y border-t">
-						{properties?.map((prop) => (
+						{properties?.map(prop => (
 							<SchemaDisplayProperty key={prop.name} {...prop} depth={depth + 1} />
 						))}
 						{items && <SchemaDisplayProperty {...items} depth={depth + 1} name={`${name}[]`} />}

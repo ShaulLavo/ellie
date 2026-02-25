@@ -40,7 +40,7 @@ export const documents = sqliteTable(
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_doc_bank').on(table.bankId),
 		index('idx_hs_doc_hash').on(table.contentHash)
 	]
@@ -62,7 +62,7 @@ export const chunks = sqliteTable(
 		chunkIndex: integer('chunk_index').notNull(),
 		createdAt: integer('created_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_chunk_bank').on(table.bankId),
 		index('idx_hs_chunk_doc').on(table.documentId)
 	]
@@ -99,7 +99,7 @@ export const memoryUnits = sqliteTable(
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_mu_bank').on(table.bankId),
 		index('idx_hs_mu_fact_type').on(table.bankId, table.factType),
 		index('idx_hs_mu_document').on(table.bankId, table.documentId),
@@ -131,7 +131,7 @@ export const entities = sqliteTable(
 		firstSeen: integer('first_seen').notNull(),
 		lastUpdated: integer('last_updated').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_ent_bank_name').on(table.bankId, table.name),
 		index('idx_hs_ent_type').on(table.bankId, table.entityType)
 	]
@@ -149,7 +149,7 @@ export const memoryEntities = sqliteTable(
 			.notNull()
 			.references(() => entities.id, { onDelete: 'cascade' })
 	},
-	(table) => [
+	table => [
 		primaryKey({ columns: [table.memoryId, table.entityId] }),
 		index('idx_hs_me_entity').on(table.entityId)
 	]
@@ -175,7 +175,7 @@ export const memoryLinks = sqliteTable(
 		metadata: text('metadata'), // JSON blob
 		createdAt: integer('created_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_link_source').on(table.sourceId),
 		index('idx_hs_link_target').on(table.targetId),
 		index('idx_hs_link_bank_type').on(table.bankId, table.linkType),
@@ -199,7 +199,7 @@ export const entityCooccurrences = sqliteTable(
 			.references(() => entities.id, { onDelete: 'cascade' }),
 		count: integer('count').notNull().default(1)
 	},
-	(table) => [
+	table => [
 		primaryKey({ columns: [table.bankId, table.entityA, table.entityB] }),
 		index('idx_hs_cooc_bank').on(table.bankId),
 		check('hs_cooc_canonical_order', sql`entity_a <= entity_b`)
@@ -225,7 +225,7 @@ export const mentalModels = sqliteTable(
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_mm_bank').on(table.bankId),
 		uniqueIndex('idx_hs_mm_bank_name').on(table.bankId, table.name)
 	]
@@ -248,7 +248,7 @@ export const directives = sqliteTable(
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_dir_bank').on(table.bankId),
 		index('idx_hs_dir_bank_active').on(table.bankId, table.isActive)
 	]
@@ -271,7 +271,7 @@ export const asyncOperations = sqliteTable(
 		updatedAt: integer('updated_at').notNull(),
 		completedAt: integer('completed_at')
 	},
-	(table) => [
+	table => [
 		index('idx_hs_ops_bank').on(table.bankId),
 		index('idx_hs_ops_status').on(table.status),
 		index('idx_hs_ops_bank_status').on(table.bankId, table.status)
@@ -297,7 +297,7 @@ export const memoryVersions = sqliteTable(
 		reason: text('reason').notNull(),
 		createdAt: integer('created_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_mv_memory').on(table.memoryId),
 		index('idx_hs_mv_bank').on(table.bankId),
 		uniqueIndex('idx_hs_mv_memory_version').on(table.memoryId, table.versionNo)
@@ -329,7 +329,7 @@ export const reconsolidationDecisions = sqliteTable(
 		policyVersion: text('policy_version').notNull().default('v1'),
 		createdAt: integer('created_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_rd_bank_created').on(table.bankId, desc(table.createdAt)),
 		index('idx_hs_rd_applied').on(table.appliedMemoryId)
 	]
@@ -353,7 +353,7 @@ export const episodes = sqliteTable(
 		eventCount: integer('event_count').notNull().default(0),
 		boundaryReason: text('boundary_reason') // time_gap | scope_change | phrase_boundary | initial
 	},
-	(table) => [
+	table => [
 		index('idx_hs_ep_bank_last_event').on(table.bankId, desc(table.lastEventAt)),
 		index('idx_hs_ep_scope').on(table.bankId, table.profile, table.project, table.session)
 	]
@@ -380,7 +380,7 @@ export const episodeEvents = sqliteTable(
 		project: text('project'),
 		session: text('session')
 	},
-	(table) => [
+	table => [
 		index('idx_hs_ee_episode_time').on(table.episodeId, table.eventTime),
 		index('idx_hs_ee_bank_memory').on(table.bankId, table.memoryId, desc(table.eventTime))
 	]
@@ -402,7 +402,7 @@ export const episodeTemporalLinks = sqliteTable(
 		gapMs: integer('gap_ms').notNull(),
 		createdAt: integer('created_at').notNull()
 	},
-	(table) => [
+	table => [
 		index('idx_hs_etl_from').on(table.fromEpisodeId),
 		index('idx_hs_etl_to').on(table.toEpisodeId),
 		uniqueIndex('idx_hs_etl_edge').on(table.fromEpisodeId, table.toEpisodeId)

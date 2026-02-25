@@ -110,7 +110,7 @@ const parseStackFrame = (line: string): StackFrame => {
 }
 
 const parseStackTrace = (trace: string): ParsedStackTrace => {
-	const lines = trace.split('\n').filter((line) => line.trim())
+	const lines = trace.split('\n').filter(line => line.trim())
 
 	if (lines.length === 0) {
 		return {
@@ -136,7 +136,7 @@ const parseStackTrace = (trace: string): ParsedStackTrace => {
 	// Parse stack frames (lines starting with "at")
 	const frames = lines
 		.slice(1)
-		.filter((line) => line.trim().startsWith('at '))
+		.filter(line => line.trim().startsWith('at '))
 		.map(parseStackFrame)
 
 	return {
@@ -430,9 +430,7 @@ export const StackTraceFrames = memo(
 	({ className, showInternalFrames = true, ...props }: StackTraceFramesProps) => {
 		const { trace, onFilePathClick } = useStackTrace()
 
-		const framesToShow = showInternalFrames
-			? trace.frames
-			: trace.frames.filter((f) => !f.isInternal)
+		const framesToShow = showInternalFrames ? trace.frames : trace.frames.filter(f => !f.isInternal)
 
 		return (
 			<div className={cn('space-y-1 p-3', className)} {...props}>

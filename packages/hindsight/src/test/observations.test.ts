@@ -39,7 +39,7 @@ describe('Entity extraction on retain', () => {
 		})
 
 		expect(result.entities.length).toBeGreaterThanOrEqual(1)
-		const names = result.entities.map((e) => e.name)
+		const names = result.entities.map(e => e.name)
 		expect(names).toContain('Peter')
 	})
 
@@ -64,7 +64,7 @@ describe('Entity extraction on retain', () => {
 			.from(hdb.schema.entities)
 			.where(eq(hdb.schema.entities.bankId, bankId))
 			.all()
-			.find((e) => e.name === 'Peter')
+			.find(e => e.name === 'Peter')
 
 		expect(peter).toBeDefined()
 		expect(peter!.mentionCount).toBeGreaterThanOrEqual(2)
@@ -83,7 +83,7 @@ describe('Entity extraction on retain', () => {
 
 		// Entity type should default to something reasonable
 		expect(result.entities.length).toBeGreaterThan(0)
-		const google = result.entities.find((e) => e.name === 'Google')
+		const google = result.entities.find(e => e.name === 'Google')
 		expect(google).toBeDefined()
 		expect(['person', 'organization', 'place', 'concept', 'other']).toContain(google!.entityType)
 	})
@@ -369,7 +369,7 @@ describe('Entity state tracking (TDD targets)', () => {
 			.get()
 
 		// Wait a tiny bit so timestamps differ
-		await new Promise((r) => setTimeout(r, 10))
+		await new Promise(r => setTimeout(r, 10))
 
 		await t.hs.retain(bankId, 'test', {
 			facts: [{ content: 'Alice finished the project', entities: ['Alice'] }],
@@ -393,7 +393,7 @@ describe('Entity state tracking (TDD targets)', () => {
 		})
 
 		const entities = t.hs.listEntities(bankId)
-		const alice = entities.items.find((entity) => entity.canonicalName === 'Alice')
+		const alice = entities.items.find(entity => entity.canonicalName === 'Alice')
 		expect(alice).toBeDefined()
 
 		const updated = t.hs.updateEntity(bankId, alice!.id, {
@@ -452,7 +452,7 @@ describe('clearObservations (TDD targets)', () => {
 		})
 
 		const rawBefore = t.hs.listMemoryUnits(bankId)
-		const rawIds = rawBefore.items.map((item) => item.id)
+		const rawIds = rawBefore.items.map(item => item.id)
 		expect(rawIds.length).toBeGreaterThanOrEqual(2)
 
 		await t.hs.reflect(bankId, 'Summarize the known facts', {
@@ -463,7 +463,7 @@ describe('clearObservations (TDD targets)', () => {
 		expect(clearResult.deletedCount).toBeGreaterThanOrEqual(0)
 
 		const rawAfter = t.hs.listMemoryUnits(bankId)
-		const rawAfterSet = new Set(rawAfter.items.map((item) => item.id))
+		const rawAfterSet = new Set(rawAfter.items.map(item => item.id))
 		for (const id of rawIds) {
 			expect(rawAfterSet.has(id)).toBe(true)
 		}
@@ -495,7 +495,7 @@ describe('Operation lifecycle (TDD targets)', () => {
 			if (Date.now() - started > timeoutMs) {
 				throw new Error(`Timed out waiting for operation ${operationId}`)
 			}
-			await new Promise((resolve) => setTimeout(resolve, 20))
+			await new Promise(resolve => setTimeout(resolve, 20))
 		}
 	}
 
@@ -514,7 +514,7 @@ describe('Operation lifecycle (TDD targets)', () => {
 		const status = t.hs.getOperationStatus(bankId, submitted.operationId)
 		expect(status.status).toBe('pending')
 		t.hs.cancelOperation(bankId, submitted.operationId)
-		await new Promise((resolve) => setTimeout(resolve, 20))
+		await new Promise(resolve => setTimeout(resolve, 20))
 	})
 
 	it('completed operation is removed from the pending operations list', async () => {

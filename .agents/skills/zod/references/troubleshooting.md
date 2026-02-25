@@ -45,7 +45,7 @@ Type 'string | undefined' is not assignable to type 'string'
 import { HeavySchema } from './schemas/heavy'
 
 // Lazy load when needed
-const HeavySchema = z.lazy(() => import('./schemas/heavy').then((m) => m.HeavySchema))
+const HeavySchema = z.lazy(() => import('./schemas/heavy').then(m => m.HeavySchema))
 ```
 
 **Solution 2**: Code splitting by route/page:
@@ -90,7 +90,7 @@ const CommentSchema = z
 const usernameCache = new Map()
 
 const UsernameSchema = z.string().refine(
-	async (username) => {
+	async username => {
 		if (usernameCache.has(username)) {
 			return usernameCache.get(username)
 		}
@@ -108,12 +108,12 @@ const UsernameSchema = z.string().refine(
 ```typescript
 import { debounce } from 'lodash'
 
-const checkUsername = debounce(async (username) => {
+const checkUsername = debounce(async username => {
 	return await checkUsernameExists(username)
 }, 500)
 
 const UsernameSchema = z.string().refine(
-	async (username) => {
+	async username => {
 		const exists = await checkUsername(username)
 		return !exists
 	},
@@ -170,7 +170,7 @@ const result = schema.parse(data, {
 import { t } from 'i18next'
 
 z.config({
-	customError: (issue) => ({
+	customError: issue => ({
 		message: t(`validation.${issue.code}`, issue)
 	})
 })
@@ -296,24 +296,24 @@ schema.parse(123) // "fallback" ✓
 
 ```typescript
 // ✓ For validation - returns boolean
-z.string().refine((val) => val.length >= 8, 'Too short')
+z.string().refine(val => val.length >= 8, 'Too short')
 ```
 
 **Transform** (data modification):
 
 ```typescript
 // ✓ For transformation - returns new value
-z.string().transform((val) => val.trim())
+z.string().transform(val => val.trim())
 ```
 
 **Common Mistake**:
 
 ```typescript
 // ✗ Wrong - refine doesn't modify data
-z.string().refine((val) => val.trim())
+z.string().refine(val => val.trim())
 
 // ✓ Correct - use transform to modify
-z.string().transform((val) => val.trim())
+z.string().transform(val => val.trim())
 ```
 
 **When to use what**:
@@ -620,8 +620,8 @@ describe('UserSchema', () => {
 ```typescript
 // ✓ Bidirectional date conversion
 const DateCodec = z.codec(z.iso.datetime(), z.date(), {
-	decode: (str) => new Date(str),
-	encode: (date) => date.toISOString()
+	decode: str => new Date(str),
+	encode: date => date.toISOString()
 })
 
 // API request: Date → String

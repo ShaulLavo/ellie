@@ -132,7 +132,7 @@ describe('access write-through on recall', () => {
 		// Perform a recall
 		const result = await t.hs.recall(bankId, 'hiking')
 		expect(result.memories.length).toBeGreaterThan(0)
-		const returnedIds = result.memories.map((m) => m.memory.id)
+		const returnedIds = result.memories.map(m => m.memory.id)
 
 		// Check that returned memories had access_count incremented
 		const after = hdb.db.select().from(hdb.schema.memoryUnits).all()
@@ -149,7 +149,7 @@ describe('access write-through on recall', () => {
 		const after = Date.now()
 
 		expect(result.memories.length).toBeGreaterThan(0)
-		const returnedIds = new Set(result.memories.map((m) => m.memory.id))
+		const returnedIds = new Set(result.memories.map(m => m.memory.id))
 
 		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 		const rows = hdb.db.select().from(hdb.schema.memoryUnits).all()
@@ -164,14 +164,14 @@ describe('access write-through on recall', () => {
 	test('recall bumps encoding_strength by 0.02 per recall', async () => {
 		// First recall — capture returned IDs
 		const result1 = await t.hs.recall(bankId, 'hiking')
-		const ids1 = new Set(result1.memories.map((m) => m.memory.id))
+		const ids1 = new Set(result1.memories.map(m => m.memory.id))
 
 		// Second recall — capture returned IDs
 		const result2 = await t.hs.recall(bankId, 'hiking')
-		const ids2 = new Set(result2.memories.map((m) => m.memory.id))
+		const ids2 = new Set(result2.memories.map(m => m.memory.id))
 
 		// Only assert 1.04 for memories returned in BOTH recalls
-		const intersection = new Set([...ids1].filter((id) => ids2.has(id)))
+		const intersection = new Set([...ids1].filter(id => ids2.has(id)))
 		expect(intersection.size).toBeGreaterThan(0)
 
 		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
@@ -217,7 +217,7 @@ describe('access write-through on recall', () => {
 
 		const afterCognitive = hdb.db.select().from(hdb.schema.memoryUnits).all()
 
-		const returnedInCognitive = new Set(r2.memories.map((m) => m.memory.id))
+		const returnedInCognitive = new Set(r2.memories.map(m => m.memory.id))
 		for (const row of afterCognitive) {
 			if (returnedInCognitive.has(row.id)) {
 				// Should have been incremented again
@@ -255,7 +255,7 @@ describe('working memory integration', () => {
 			mode: 'cognitive'
 		})
 		expect(baseline.memories.length).toBeGreaterThan(0)
-		const baselineScores = new Map(baseline.memories.map((m) => [m.memory.id, m.score]))
+		const baselineScores = new Map(baseline.memories.map(m => [m.memory.id, m.score]))
 
 		// Recall with sessionId — touches WM for returned memories
 		const result = await t.hs.recall(bankId, 'hiking', {
@@ -341,7 +341,7 @@ describe('cognitive recall trace', () => {
 			enableTrace: true
 		})
 		expect(result.trace).toBeDefined()
-		const scoringPhase = result.trace!.phaseMetrics.find((p) => p.phaseName === 'combined_scoring')
+		const scoringPhase = result.trace!.phaseMetrics.find(p => p.phaseName === 'combined_scoring')
 		expect(scoringPhase).toBeDefined()
 		expect(scoringPhase!.details!.mode).toBe('cognitive')
 	})
@@ -352,7 +352,7 @@ describe('cognitive recall trace', () => {
 			enableTrace: true
 		})
 		expect(result.trace).toBeDefined()
-		const scoringPhase = result.trace!.phaseMetrics.find((p) => p.phaseName === 'combined_scoring')
+		const scoringPhase = result.trace!.phaseMetrics.find(p => p.phaseName === 'combined_scoring')
 		expect(scoringPhase).toBeDefined()
 		expect(scoringPhase!.details!.mode).toBe('hybrid')
 	})

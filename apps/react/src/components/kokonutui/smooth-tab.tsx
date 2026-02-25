@@ -329,8 +329,8 @@ export default function SmoothTab({
 	}, [selected])
 
 	const handleTabClick = (tabId: string) => {
-		const currentIndex = items.findIndex((item) => item.id === selected)
-		const newIndex = items.findIndex((item) => item.id === tabId)
+		const currentIndex = items.findIndex(item => item.id === selected)
+		const newIndex = items.findIndex(item => item.id === tabId)
 		setDirection(newIndex > currentIndex ? 1 : -1)
 		setSelected(tabId)
 		onChange?.(tabId)
@@ -343,7 +343,7 @@ export default function SmoothTab({
 		}
 	}
 
-	const selectedItem = items.find((item) => item.id === selected)
+	const selectedItem = items.find(item => item.id === selected)
 
 	return (
 		<div className="flex h-full flex-col">
@@ -404,7 +404,7 @@ export default function SmoothTab({
 				/>
 
 				<div className="relative z-2 grid w-full grid-cols-4 gap-1">
-					{items.map((item) => {
+					{items.map(item => {
 						const isSelected = selected === item.id
 						return (
 							<motion.button
@@ -422,8 +422,8 @@ export default function SmoothTab({
 								id={`tab-${item.id}`}
 								key={item.id}
 								onClick={() => handleTabClick(item.id)}
-								onKeyDown={(e) => handleKeyDown(e, item.id)}
-								ref={(el) => {
+								onKeyDown={e => handleKeyDown(e, item.id)}
+								ref={el => {
 									if (el) buttonRefs.current.set(item.id, el)
 									else buttonRefs.current.delete(item.id)
 								}}

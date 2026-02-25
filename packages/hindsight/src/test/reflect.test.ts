@@ -286,7 +286,7 @@ describe('reflect', () => {
 			})
 
 			expect(recalled.memories.length).toBeGreaterThanOrEqual(1)
-			const obs = recalled.memories.find((m) => m.memory.factType === 'observation')
+			const obs = recalled.memories.find(m => m.memory.factType === 'observation')
 			expect(obs).toBeDefined()
 		})
 
@@ -326,7 +326,7 @@ describe('reflect', () => {
 				factTypes: ['experience', 'world']
 			})
 
-			const obsInRaw = rawRecall.memories.filter((m) => m.memory.factType === 'observation')
+			const obsInRaw = rawRecall.memories.filter(m => m.memory.factType === 'observation')
 			expect(obsInRaw).toHaveLength(0)
 		})
 
@@ -425,7 +425,7 @@ describeWithLLM('reflect with real LLM', () => {
 		// The model should have found memories (via FTS at minimum) and mentioned them.
 		// We also accept if the model found memories but summarized differently.
 		// Trace shows what tools were called.
-		const toolsCalled = result.trace?.toolCalls.map((tc) => tc.tool) ?? []
+		const toolsCalled = result.trace?.toolCalls.map(tc => tc.tool) ?? []
 		const calledRecall = toolsCalled.includes('recall') || toolsCalled.includes('search_memories')
 		expect(mentionsPeter || result.memories.length > 0 || calledRecall).toBe(true)
 		expect(mentionsSomeFact || result.memories.length > 0 || calledRecall).toBe(true)

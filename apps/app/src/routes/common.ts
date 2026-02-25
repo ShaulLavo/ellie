@@ -70,7 +70,7 @@ export function toStreamGenerator<TEvent extends { type: string }>(
 		}
 
 		request.signal.addEventListener('abort', onAbort, { once: true })
-		const unsubscribe = subscribe((event) => {
+		const unsubscribe = subscribe(event => {
 			queue.push(event)
 			wake()
 		})
@@ -80,7 +80,7 @@ export function toStreamGenerator<TEvent extends { type: string }>(
 
 			while (!aborted) {
 				if (queue.length === 0) {
-					await new Promise<void>((resolve) => {
+					await new Promise<void>(resolve => {
 						resolver = resolve
 					})
 					continue

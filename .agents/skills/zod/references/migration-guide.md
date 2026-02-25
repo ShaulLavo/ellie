@@ -24,7 +24,7 @@ z.string({
 	required_error: 'Field is required'
 })
 
-z.string().email({ errorMap: (issue) => ({ message: 'Invalid email' }) })
+z.string().email({ errorMap: issue => ({ message: 'Invalid email' }) })
 
 // ✅ Zod v4 (Use unified 'error' parameter)
 z.string({
@@ -32,7 +32,7 @@ z.string({
 })
 
 z.string().email({
-	error: (issue) => ({ message: 'Invalid email' })
+	error: issue => ({ message: 'Invalid email' })
 })
 ```
 
@@ -54,7 +54,7 @@ z.number().parse(-Infinity) // ✗ Error: infinite values rejected
 z.number().int().parse(9007199254740992) // ✗ Error: outside safe integer range
 
 // If you need to allow infinite values, use a refinement:
-z.number().refine((n) => Number.isFinite(n) || !Number.isNaN(n))
+z.number().refine(n => Number.isFinite(n) || !Number.isNaN(n))
 
 // .int() now enforces Number.MIN_SAFE_INTEGER to Number.MAX_SAFE_INTEGER
 // .safe() no longer permits floats (integers only)
@@ -145,7 +145,7 @@ const myFunc = z
 	.function()
 	.args(z.string())
 	.returns(z.number())
-	.implement((str) => {
+	.implement(str => {
 		return parseInt(str) // Type-checked!
 	})
 
@@ -155,7 +155,7 @@ const myFunc = z
 		input: [z.string()],
 		output: z.number()
 	})
-	.implement((str) => parseInt(str))
+	.implement(str => parseInt(str))
 ```
 
 ---

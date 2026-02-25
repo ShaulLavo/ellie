@@ -207,7 +207,7 @@ export function Toolbar({
 							variants={notificationVariants as Variants}
 						>
 							<div className="rounded-full bg-primary px-3 py-1 text-primary-foreground text-xs">
-								{toolbarItems.find((item) => item.id === activeNotification)?.title} clicked!
+								{toolbarItems.find(item => item.id === activeNotification)?.title} clicked!
 							</div>
 							<motion.div
 								animate="animate"
@@ -221,7 +221,7 @@ export function Toolbar({
 				</AnimatePresence>
 
 				<div className="flex items-center gap-2">
-					{toolbarItems.map((item) => (
+					{toolbarItems.map(item => (
 						<motion.button
 							animate="animate"
 							className={cn(

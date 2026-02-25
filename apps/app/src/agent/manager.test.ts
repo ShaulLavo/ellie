@@ -119,12 +119,12 @@ describe('AgentManager', () => {
 		expect(history.length).toBeGreaterThanOrEqual(2) // user + assistant
 
 		// First message should be the user message
-		const userMsg = history.find((m) => m.role === 'user')
+		const userMsg = history.find(m => m.role === 'user')
 		expect(userMsg).toBeDefined()
 		expect((userMsg as unknown as { content: { text: string }[] })?.content[0]?.text).toBe('Hello')
 
 		// Should have an assistant response
-		const assistantMsg = history.find((m) => m.role === 'assistant')
+		const assistantMsg = history.find(m => m.role === 'assistant')
 		expect(assistantMsg).toBeDefined()
 	})
 
@@ -178,8 +178,8 @@ describe('AgentManager', () => {
 		const history = manager.loadHistory('session-1')
 
 		// Should have at least 4 messages: user1, assistant1, user2, assistant2
-		const userMsgs = history.filter((m) => m.role === 'user')
-		const assistantMsgs = history.filter((m) => m.role === 'assistant')
+		const userMsgs = history.filter(m => m.role === 'user')
+		const assistantMsgs = history.filter(m => m.role === 'assistant')
 
 		expect(userMsgs.length).toBe(2)
 		expect(assistantMsgs.length).toBe(2)

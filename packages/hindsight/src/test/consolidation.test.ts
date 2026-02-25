@@ -184,7 +184,7 @@ describe('Consolidation', () => {
 
 			const initialObservations = listObservations()
 			expect(initialObservations).toHaveLength(2)
-			const observationIds = initialObservations.map((obs) => obs.id)
+			const observationIds = initialObservations.map(obs => obs.id)
 
 			await t.hs.retain(bankId, 'source 3', {
 				facts: [{ content: 'Alice often chooses sushi restaurants.' }],
@@ -355,7 +355,7 @@ describe('Consolidation', () => {
 				factTypes: ['observation']
 			})
 			expect(result.memories.length).toBeGreaterThanOrEqual(1)
-			const obsMemory = result.memories.find((m) => m.memory.factType === 'observation')
+			const obsMemory = result.memories.find(m => m.memory.factType === 'observation')
 			expect(obsMemory).toBeDefined()
 		})
 
@@ -1117,7 +1117,7 @@ describe('Consolidation', () => {
 			await t.hs.consolidate(bankId)
 			const twoObs = listObservations()
 			expect(twoObs).toHaveLength(2)
-			const obsIds = twoObs.map((o) => o.id)
+			const obsIds = twoObs.map(o => o.id)
 
 			// New fact triggers a merge
 			await t.hs.retain(bankId, 'source 3', {
@@ -1166,8 +1166,8 @@ describe('Consolidation', () => {
 			const obs = listObservations()
 			expect(obs).toHaveLength(2)
 
-			const fredObs = obs.find((o) => o.content.includes('Fred'))
-			const ginaObs = obs.find((o) => o.content.includes('Gina'))
+			const fredObs = obs.find(o => o.content.includes('Fred'))
+			const ginaObs = obs.find(o => o.content.includes('Gina'))
 			expect(fredObs).toBeDefined()
 			expect(ginaObs).toBeDefined()
 			expect(fredObs!.id).not.toBe(ginaObs!.id)
@@ -1490,7 +1490,7 @@ describe('Consolidation', () => {
 				limit: 5
 			})
 			expect(observations.memories.length).toBeGreaterThan(0)
-			const text = observations.memories.map((m) => m.memory.content.toLowerCase()).join(' ')
+			const text = observations.memories.map(m => m.memory.content.toLowerCase()).join(' ')
 			expect(text.includes('sarah') || text.includes('google')).toBe(true)
 		})
 
@@ -1510,7 +1510,7 @@ describe('Consolidation', () => {
 			})
 
 			expect(raw.memories.length).toBeGreaterThan(0)
-			const text = raw.memories.map((m) => m.memory.content).join(' ')
+			const text = raw.memories.map(m => m.memory.content).join(' ')
 			const hasQ3 = text.includes('$1.5M') || text.includes('$1.5 million')
 			const hasQ4 = text.includes('$2.1M') || text.includes('$2.1 million')
 			expect(hasQ3 || hasQ4).toBe(true)

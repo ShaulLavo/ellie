@@ -20,6 +20,6 @@ const app = new Elysia()
 
 		return text
 	})
-	.listen(3000, (server) => {
+	.listen(3000, server => {
 		console.log(`http://${server.hostname}:${server.port}`)
 	})

@@ -252,7 +252,7 @@ function TooltipOverlay() {
 		if (currentTooltip) {
 			setRendered({ data: currentTooltip, open: true })
 		} else {
-			setRendered((p) => (p.data ? { ...p, open: false } : p))
+			setRendered(p => (p.data ? { ...p, open: false } : p))
 		}
 	}, [currentTooltip])
 
@@ -380,8 +380,8 @@ type TooltipContentProps = WithAsChild<HTMLMotionProps<'div'>>
 function shallowEqualWithoutChildren(a?: HTMLMotionProps<'div'>, b?: HTMLMotionProps<'div'>) {
 	if (a === b) return true
 	if (!a || !b) return false
-	const keysA = Object.keys(a).filter((k) => k !== 'children')
-	const keysB = Object.keys(b).filter((k) => k !== 'children')
+	const keysA = Object.keys(a).filter(k => k !== 'children')
+	const keysB = Object.keys(b).filter(k => k !== 'children')
 	if (keysA.length !== keysB.length) return false
 	for (const k of keysA) {
 		// @ts-expect-error index

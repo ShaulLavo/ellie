@@ -181,7 +181,7 @@ export const TweetMedia = ({ tweet }: { tweet: EnrichedTweet }) => {
 			{tweet.photos && (
 				<div className="relative flex transform-gpu snap-x snap-mandatory gap-4 overflow-x-auto">
 					<div className="shrink-0 snap-center sm:w-2" />
-					{tweet.photos.map((photo) => (
+					{tweet.photos.map(photo => (
 						<img
 							key={photo.url}
 							src={photo.url}
@@ -249,7 +249,7 @@ export const TweetCard = async ({
 	className?: string
 }) => {
 	const tweet = id
-		? await getTweet(id).catch((err) => {
+		? await getTweet(id).catch(err => {
 				if (onError) {
 					onError(err)
 				} else {

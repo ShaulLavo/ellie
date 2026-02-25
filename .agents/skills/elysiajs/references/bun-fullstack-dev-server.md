@@ -44,7 +44,7 @@ import { createRoot } from 'react-dom/client'
 
 function App() {
 	const [count, setCount] = useState(0)
-	const increase = () => setCount((c) => c + 1)
+	const increase = () => setCount(c => c + 1)
 
 	return (
 		<main>

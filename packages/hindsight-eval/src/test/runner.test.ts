@@ -25,7 +25,7 @@ describe('runner', () => {
 
 		it('includes all 5 scenario families', () => {
 			const cases = loadFixture(FIXTURE_PATH)
-			const scenarios = new Set(cases.map((c) => c.scenario))
+			const scenarios = new Set(cases.map(c => c.scenario))
 			expect(scenarios.has('follow_up_recall')).toBe(true)
 			expect(scenarios.has('temporal_narrative')).toBe(true)
 			expect(scenarios.has('dedup_conflict')).toBe(true)

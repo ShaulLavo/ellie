@@ -158,7 +158,7 @@ export const HAS_ANTHROPIC = HAS_ANTHROPIC_KEY || HAS_CREDENTIALS
 // Groq credential detection (matches Python conftest.py — uses openai/gpt-oss-120b via Groq)
 export const HAS_GROQ_KEY = !!process.env.GROQ_API_KEY
 const _hasGroqCredentials = CREDENTIALS_PATH
-	? await loadProviderCredential(CREDENTIALS_PATH, 'groq').then((c) => !!c)
+	? await loadProviderCredential(CREDENTIALS_PATH, 'groq').then(c => !!c)
 	: false
 export const HAS_GROQ = HAS_GROQ_KEY || _hasGroqCredentials
 

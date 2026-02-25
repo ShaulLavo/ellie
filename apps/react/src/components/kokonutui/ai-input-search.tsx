@@ -60,7 +60,7 @@ export default function AI_Input_Search() {
 						isFocused && 'ring-black/20 dark:ring-white/20'
 					)}
 					onClick={handleContainerClick}
-					onKeyDown={(e) => {
+					onKeyDown={e => {
 						if (e.key === 'Enter' || e.key === ' ') {
 							handleContainerClick()
 						}
@@ -75,13 +75,13 @@ export default function AI_Input_Search() {
 							ref={textareaRef}
 							onFocus={handleFocus}
 							onBlur={handleBlur}
-							onKeyDown={(e) => {
+							onKeyDown={e => {
 								if (e.key === 'Enter' && !e.shiftKey) {
 									e.preventDefault()
 									handleSubmit()
 								}
 							}}
-							onChange={(e) => {
+							onChange={e => {
 								setValue(e.target.value)
 								adjustHeight()
 							}}

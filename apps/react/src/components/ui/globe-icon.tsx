@@ -8,7 +8,7 @@ const GlobeIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		const animationControls = useRef<Array<ReturnType<typeof animate>>>([])
 
 		const start = async () => {
-			animationControls.current.forEach((control) => control.stop())
+			animationControls.current.forEach(control => control.stop())
 			animationControls.current = []
 
 			animationControls.current.push(
@@ -17,7 +17,7 @@ const GlobeIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		}
 
 		const stop = () => {
-			animationControls.current.forEach((control) => control.stop())
+			animationControls.current.forEach(control => control.stop())
 			animationControls.current = []
 
 			animate('.globe-circle', { rotate: 0 }, { duration: 0.5 })

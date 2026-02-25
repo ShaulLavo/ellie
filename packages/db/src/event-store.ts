@@ -212,7 +212,7 @@ export class EventStore {
 		const now = Date.now()
 
 		// Run in a Drizzle transaction: load session, bump seq, insert event
-		const result = this.db.transaction((tx) => {
+		const result = this.db.transaction(tx => {
 			// Dedupe check
 			if (input.dedupeKey) {
 				const existing = tx
@@ -350,7 +350,7 @@ export class EventStore {
 			)
 			.all(cutoff)
 
-		return stale.map((r) => ({
+		return stale.map(r => ({
 			sessionId: r.session_id,
 			runId: r.run_id
 		}))

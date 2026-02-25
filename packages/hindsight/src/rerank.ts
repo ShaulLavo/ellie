@@ -30,10 +30,10 @@ export async function rerankCandidates(
 	contentMap: Map<string, string>
 ): Promise<Array<{ id: string; score: number; sources: string[] }>> {
 	// Filter to candidates with content available
-	const withContent = candidates.filter((c) => contentMap.has(c.id))
+	const withContent = candidates.filter(c => contentMap.has(c.id))
 	if (withContent.length === 0) return []
 
-	const documents = withContent.map((c) => contentMap.get(c.id)!)
+	const documents = withContent.map(c => contentMap.get(c.id)!)
 
 	// Call user-provided reranker
 	const scores = await rerank(query, documents)

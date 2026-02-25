@@ -102,8 +102,8 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
 	}
 
 	// Flag partial-scenario runs
-	const presentScenarios = new Set(scenarios.map((s) => s.scenario))
-	const missingScenarios = scenarioOrder.filter((s) => !presentScenarios.has(s))
+	const presentScenarios = new Set(scenarios.map(s => s.scenario))
+	const missingScenarios = scenarioOrder.filter(s => !presentScenarios.has(s))
 	const warnings: string[] = []
 	if (missingScenarios.length > 0) {
 		warnings.push(
@@ -113,16 +113,16 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
 	}
 
 	// Round all numeric metrics/scores to avoid IEEE 754 artifacts in JSON output
-	const roundedCases = cases.map((c) => ({
+	const roundedCases = cases.map(c => ({
 		...c,
 		metrics: roundMetrics(c.metrics),
-		candidates: c.candidates.map((cand) => ({
+		candidates: c.candidates.map(cand => ({
 			...cand,
 			score: roundMetric(cand.score)
 		}))
 	}))
 
-	const roundedScenarios = scenarios.map((s) => ({
+	const roundedScenarios = scenarios.map(s => ({
 		...s,
 		metrics: roundMetrics(s.metrics)
 	}))
@@ -162,7 +162,7 @@ function averageMetrics(cases: EvalCaseResult[]): Record<string, number> {
 
 	const avg: Record<string, number> = {}
 	for (const key of allKeys) {
-		const values = cases.map((c) => c.metrics[key]).filter((v): v is number => v != null)
+		const values = cases.map(c => c.metrics[key]).filter((v): v is number => v != null)
 		avg[key] = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0
 	}
 	return avg

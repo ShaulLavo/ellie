@@ -112,7 +112,7 @@ describe('retain', () => {
 			})
 
 			expect(result.entities.length).toBeGreaterThanOrEqual(1)
-			const names = result.entities.map((e) => e.name)
+			const names = result.entities.map(e => e.name)
 			expect(names).toContain('Peter')
 		})
 
@@ -126,7 +126,7 @@ describe('retain', () => {
 			})
 
 			// Both memories share "Peter" → should create entity links
-			const entityLinks = result.links.filter((l) => l.linkType === 'entity')
+			const entityLinks = result.links.filter(l => l.linkType === 'entity')
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 		})
 	})
@@ -213,7 +213,7 @@ describe('retain', () => {
 				dedupThreshold: 0 // disable dedup so it gets stored
 			})
 
-			const semanticLinks = result.links.filter((l) => l.linkType === 'semantic')
+			const semanticLinks = result.links.filter(l => l.linkType === 'semantic')
 			// Semantic links may or may not be created depending on embedding similarity
 			// The test verifies the mechanism runs without error and returns an array
 			expect(Array.isArray(semanticLinks)).toBe(true)
@@ -294,7 +294,7 @@ describe('retain', () => {
 				dedupThreshold: 0
 			})
 
-			const memoryIds = new Set(result.memories.map((memory) => memory.id))
+			const memoryIds = new Set(result.memories.map(memory => memory.id))
 			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
 			const temporalLinks = hdb.db
 				.select({
@@ -471,8 +471,8 @@ describe('retain', () => {
 			expect(second.metadata).toEqual({ source: 'meeting-b' })
 
 			const docs = t.hs.listDocuments(bankId)
-			const docA = docs.items.find((doc) => doc.id === 'doc-rich-a')
-			const docB = docs.items.find((doc) => doc.id === 'doc-rich-b')
+			const docA = docs.items.find(doc => doc.id === 'doc-rich-a')
+			const docB = docs.items.find(doc => doc.id === 'doc-rich-b')
 			expect(docA).toBeDefined()
 			expect(docB).toBeDefined()
 			expect(docA!.tags).toContain('team:alpha')
@@ -504,8 +504,8 @@ describe('retain', () => {
 				{ consolidate: false, dedupThreshold: 0 }
 			)
 
-			const links = result.flatMap((item) => item.links)
-			const temporal = links.filter((link) => link.linkType === 'temporal')
+			const links = result.flatMap(item => item.links)
+			const temporal = links.filter(link => link.linkType === 'temporal')
 			expect(temporal.length).toBeGreaterThan(0)
 		})
 
@@ -556,13 +556,13 @@ describe('retain', () => {
 			const existingSet = new Set(existingIds)
 
 			const newToExistingTemporal = newResult.links.filter(
-				(link) =>
+				link =>
 					link.linkType === 'temporal' && link.sourceId === newId && existingSet.has(link.targetId)
 			)
 
 			expect(newToExistingTemporal).toHaveLength(10)
 			// Python parity: ordered by candidate recency (event_date DESC), not nearest distance sort.
-			expect(newToExistingTemporal.map((link) => link.targetId)).toEqual(existingIds.slice(0, 10))
+			expect(newToExistingTemporal.map(link => link.targetId)).toEqual(existingIds.slice(0, 10))
 		})
 
 		it('persists temporal link weights using linear decay with 0.3 floor', async () => {
@@ -664,15 +664,15 @@ describe('retain', () => {
 			expect(result.links.length).toBeGreaterThanOrEqual(1)
 
 			// Verify entity links exist (all facts share "Alice")
-			const entityLinks = result.links.filter((l) => l.linkType === 'entity')
+			const entityLinks = result.links.filter(l => l.linkType === 'entity')
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 
 			// Semantic and temporal links may or may not be created depending on
 			// embedding similarity and temporal link implementation status
-			const semanticLinks = result.links.filter((l) => l.linkType === 'semantic')
+			const semanticLinks = result.links.filter(l => l.linkType === 'semantic')
 			expect(Array.isArray(semanticLinks)).toBe(true)
 
-			const temporalLinks = result.links.filter((l) => l.linkType === 'temporal')
+			const temporalLinks = result.links.filter(l => l.linkType === 'temporal')
 			expect(Array.isArray(temporalLinks)).toBe(true)
 		})
 	})
@@ -698,8 +698,8 @@ describe('retain', () => {
 			)
 			expect(results).toHaveLength(3)
 
-			const allLinks = results.flatMap((item) => item.links)
-			const semanticLinks = allLinks.filter((link) => link.linkType === 'semantic')
+			const allLinks = results.flatMap(item => item.links)
+			const semanticLinks = allLinks.filter(link => link.linkType === 'semantic')
 			expect(Array.isArray(semanticLinks)).toBe(true)
 		})
 
@@ -715,8 +715,8 @@ describe('retain', () => {
 				{ consolidate: false, dedupThreshold: 0 }
 			)
 
-			const temporalLinks = result.flatMap((item) =>
-				item.links.filter((link) => link.linkType === 'temporal')
+			const temporalLinks = result.flatMap(item =>
+				item.links.filter(link => link.linkType === 'temporal')
 			)
 			expect(temporalLinks.length).toBeGreaterThan(0)
 		})
@@ -745,13 +745,13 @@ describe('retain', () => {
 			expect(result.memories).toHaveLength(2)
 			expect(result.entities.length).toBeGreaterThanOrEqual(1)
 
-			const entityNames = result.entities.map((e) => e.name)
+			const entityNames = result.entities.map(e => e.name)
 			expect(entityNames).toContain('Alice')
 			expect(entityNames).toContain('ProjectX')
 			expect(entityNames).toContain('ACME Corp')
 
 			// Entity links should exist since both facts share Alice and ProjectX
-			const entityLinks = result.links.filter((l) => l.linkType === 'entity')
+			const entityLinks = result.links.filter(l => l.linkType === 'entity')
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 		})
 	})
@@ -858,7 +858,7 @@ describe('retain', () => {
 			// Graph-only retrieval can be sparse depending on seed resolution;
 			// use entity index for deterministic mention-count existence checks.
 			const entities = t.hs.listEntities(bankId)
-			const aliceEntity = entities.items.find((item) => item.canonicalName === 'Alice')
+			const aliceEntity = entities.items.find(item => item.canonicalName === 'Alice')
 			expect(aliceEntity).toBeDefined()
 			expect(aliceEntity!.mentionCount).toBeGreaterThanOrEqual(5)
 
@@ -871,7 +871,7 @@ describe('retain', () => {
 
 			// Alice should be a resolved entity (existing, not newly created)
 			expect(lastRetain.entities.length).toBeGreaterThanOrEqual(1)
-			const alice = lastRetain.entities.find((e) => e.name === 'Alice')
+			const alice = lastRetain.entities.find(e => e.name === 'Alice')
 			expect(alice).toBeDefined()
 		})
 
@@ -889,7 +889,7 @@ describe('retain', () => {
 			]
 
 			t.adapter.setResponses(
-				batchTexts.map((text) =>
+				batchTexts.map(text =>
 					JSON.stringify({
 						facts: [
 							{
@@ -920,7 +920,7 @@ describe('retain', () => {
 			const moreBatchTexts = ['Bob 777 *** ppp ggg', 'Bob 888 ### rrr hhh']
 
 			t.adapter.setResponses(
-				moreBatchTexts.map((text) =>
+				moreBatchTexts.map(text =>
 					JSON.stringify({
 						facts: [
 							{
@@ -948,7 +948,7 @@ describe('retain', () => {
 			expect(moreMemories).toBeGreaterThanOrEqual(2)
 
 			// Bob entity should be resolved (not duplicated) across batches
-			const bobEntities = moreResults.flatMap((r) => r.entities).filter((e) => e.name === 'Bob')
+			const bobEntities = moreResults.flatMap(r => r.entities).filter(e => e.name === 'Bob')
 			expect(bobEntities.length).toBeGreaterThanOrEqual(1)
 		})
 	})
@@ -1032,7 +1032,7 @@ describe('retain', () => {
 			expect(result.memories.length).toBeGreaterThan(0)
 
 			// At least one result should mention Alice
-			const aliceMemories = result.memories.filter((m) =>
+			const aliceMemories = result.memories.filter(m =>
 				m.memory.content.toLowerCase().includes('alice')
 			)
 			expect(aliceMemories.length).toBeGreaterThan(0)
@@ -1403,7 +1403,7 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const links = t.hs.getGraphData(bankId).edges.filter((e) => e.linkType === 'temporal')
+		const links = t.hs.getGraphData(bankId).edges.filter(e => e.linkType === 'temporal')
 		expect(links.length).toBeGreaterThanOrEqual(1)
 		expect(links[0]!.weight).toBeGreaterThan(0)
 		expect(links[0]!.weight).toBeLessThanOrEqual(1)
@@ -1459,7 +1459,7 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const entityLinks = result.links.filter((l) => l.linkType === 'entity')
+		const entityLinks = result.links.filter(l => l.linkType === 'entity')
 		expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -1475,7 +1475,7 @@ describe('Core parity: test_retain.py', () => {
 			],
 			consolidate: false
 		})
-		const entityNames = result.entities.map((e) => e.name.toLowerCase())
+		const entityNames = result.entities.map(e => e.name.toLowerCase())
 		expect(entityNames).toContain('alice')
 		expect(entityNames).toContain('bob')
 	})
@@ -1501,7 +1501,7 @@ describe('Core parity: test_retain.py', () => {
 			.from(hdb.schema.entities)
 			.where(eq(hdb.schema.entities.bankId, bankId))
 			.all()
-		const alice = allEntities.find((e) => e.name.toLowerCase().includes('alice'))
+		const alice = allEntities.find(e => e.name.toLowerCase().includes('alice'))
 		expect(alice).toBeDefined()
 		expect(alice!.mentionCount).toBeGreaterThanOrEqual(3)
 	})
@@ -1528,7 +1528,7 @@ describe('Core parity: test_retain.py', () => {
 			.from(hdb.schema.entities)
 			.where(eq(hdb.schema.entities.bankId, bankId))
 			.all()
-		const bob = allEntities.find((e) => e.name.toLowerCase().includes('bob'))
+		const bob = allEntities.find(e => e.name.toLowerCase().includes('bob'))
 		expect(bob).toBeDefined()
 		expect(bob!.mentionCount).toBeGreaterThanOrEqual(3)
 	})
@@ -1557,7 +1557,7 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const causalLinks = result.links.filter((l) => l.linkType === 'caused_by')
+		const causalLinks = result.links.filter(l => l.linkType === 'caused_by')
 		expect(causalLinks.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -1583,7 +1583,7 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const linkTypes = new Set(result.links.map((l) => l.linkType))
+		const linkTypes = new Set(result.links.map(l => l.linkType))
 		// Entity links created for shared entity "Alice"
 		expect(linkTypes.has('entity')).toBe(true)
 		// Temporal links created for nearby mentionedAt times
@@ -1636,7 +1636,7 @@ describe('Core parity: test_retain.py', () => {
 			dedupThreshold: 0
 		})
 		expect(result.memories).toHaveLength(2)
-		const temporalLinks = result.links.filter((l) => l.linkType === 'temporal')
+		const temporalLinks = result.links.filter(l => l.linkType === 'temporal')
 		expect(temporalLinks.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -1652,7 +1652,7 @@ describe('Core parity: test_retain.py', () => {
 			],
 			consolidate: false
 		})
-		const entityNames = result.entities.map((e) => e.name.toLowerCase())
+		const entityNames = result.entities.map(e => e.name.toLowerCase())
 		expect(entityNames).toContain('projectx')
 		expect(entityNames).toContain('acme corp')
 	})

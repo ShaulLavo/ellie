@@ -173,7 +173,7 @@ export function generateRollingIngestDataset(
 		const isConflict = random() > 0.5
 		const valueOptions = VALUES[cluster.attribute]!
 		const value = isConflict
-			? (valueOptions.filter((v) => v !== cluster.baseValue)[
+			? (valueOptions.filter(v => v !== cluster.baseValue)[
 					Math.floor(random() * (valueOptions.length - 1))
 				] ?? cluster.baseValue)
 			: cluster.baseValue
@@ -260,7 +260,7 @@ export function generateTemporalNarrativeDataset(
 			question: `What events occurred ${direction === 'before' ? 'before' : direction === 'after' ? 'after' : 'around'} event ${anchorIdx}?`,
 			anchorMemoryId: `mem-${anchorIdx.toString().padStart(5, '0')}`,
 			expectedOrderedMemoryIds: expectedIndices.map(
-				(idx) => `mem-${idx.toString().padStart(5, '0')}`
+				idx => `mem-${idx.toString().padStart(5, '0')}`
 			),
 			direction
 		})
@@ -276,5 +276,5 @@ export function generateTemporalNarrativeDataset(
  */
 /** Convert an array of items to newline-delimited JSON (JSONL) format. */
 export function toJsonl<T>(items: T[]): string {
-	return items.map((item) => JSON.stringify(item)).join('\n') + '\n'
+	return items.map(item => JSON.stringify(item)).join('\n') + '\n'
 }

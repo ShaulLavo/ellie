@@ -34,7 +34,7 @@ describe('Fact ordering', () => {
 			})
 
 			expect(result.memories).toHaveLength(3)
-			const mentionedAts = result.memories.map((memory) => memory.mentionedAt)
+			const mentionedAts = result.memories.map(memory => memory.mentionedAt)
 			expect(mentionedAts[0]).toBe(eventDate)
 			expect(mentionedAts[1]).toBe(eventDate + 1)
 			expect(mentionedAts[2]).toBe(eventDate + 2)
@@ -58,7 +58,7 @@ describe('Fact ordering', () => {
 				methods: ['semantic', 'fulltext']
 			})
 			const mentionedAts = recalled.memories
-				.map((memory) => memory.memory.mentionedAt)
+				.map(memory => memory.memory.mentionedAt)
 				.filter((value): value is number => value != null)
 
 			expect(mentionedAts.length).toBeGreaterThan(0)
@@ -90,10 +90,10 @@ describe('Fact ordering', () => {
 			)
 
 			const docA = result[0]!.memories
-				.map((memory) => memory.mentionedAt)
+				.map(memory => memory.mentionedAt)
 				.filter((value): value is number => value != null)
 			const docB = result[1]!.memories
-				.map((memory) => memory.mentionedAt)
+				.map(memory => memory.mentionedAt)
 				.filter((value): value is number => value != null)
 			expect(docA.length).toBeGreaterThan(0)
 			expect(docB.length).toBeGreaterThan(0)

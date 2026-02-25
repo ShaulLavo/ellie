@@ -479,7 +479,7 @@ const CreateUserSchema = z.object({
 	name: z.string()
 })
 
-app.post('/users', zValidator('json', CreateUserSchema), (c) => {
+app.post('/users', zValidator('json', CreateUserSchema), c => {
 	const user = c.req.valid('json')
 	// user is typed and validated
 	return c.json({ id: 123, ...user })

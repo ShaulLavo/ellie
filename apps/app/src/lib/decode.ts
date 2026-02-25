@@ -40,7 +40,7 @@ export function decodeAndValidate<T extends GenericSchema>(
 	const result = v.safeParse(schema, parsed)
 	if (!result.success) {
 		const detail = result.issues
-			.map((e) => `${e.path?.map((p) => p.key).join('.') ?? '/'}: ${e.message}`)
+			.map(e => `${e.path?.map(p => p.key).join('.') ?? '/'}: ${e.message}`)
 			.join(`, `)
 		throw new Error(`Stream message failed schema validation: ${detail}`)
 	}

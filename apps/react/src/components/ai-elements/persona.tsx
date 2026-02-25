@@ -142,14 +142,14 @@ export const Persona: FC<PersonaProps> = memo(
 
 		const stableCallbacks = useMemo(
 			() => ({
-				onLoad: ((loadedRive) =>
+				onLoad: (loadedRive =>
 					callbacksRef.current.onLoad?.(loadedRive)) as RiveParameters['onLoad'],
-				onLoadError: ((err) =>
+				onLoadError: (err =>
 					callbacksRef.current.onLoadError?.(err)) as RiveParameters['onLoadError'],
-				onPause: ((event) => callbacksRef.current.onPause?.(event)) as RiveParameters['onPause'],
-				onPlay: ((event) => callbacksRef.current.onPlay?.(event)) as RiveParameters['onPlay'],
+				onPause: (event => callbacksRef.current.onPause?.(event)) as RiveParameters['onPause'],
+				onPlay: (event => callbacksRef.current.onPlay?.(event)) as RiveParameters['onPlay'],
 				onReady: () => callbacksRef.current.onReady?.(),
-				onStop: ((event) => callbacksRef.current.onStop?.(event)) as RiveParameters['onStop']
+				onStop: (event => callbacksRef.current.onStop?.(event)) as RiveParameters['onStop']
 			}),
 			[]
 		)

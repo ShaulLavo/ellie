@@ -27,7 +27,7 @@ function SearchResults() {
 
 	return (
 		<>
-			<input onChange={(e) => handleSearch(e.target.value)} />
+			<input onChange={e => handleSearch(e.target.value)} />
 			{isLoading && <Spinner />}
 			<ResultsList results={results} />
 		</>
@@ -57,7 +57,7 @@ function SearchResults() {
 
 	return (
 		<>
-			<input onChange={(e) => handleSearch(e.target.value)} />
+			<input onChange={e => handleSearch(e.target.value)} />
 			{isPending && <Spinner />}
 			<ResultsList results={results} />
 		</>

@@ -29,7 +29,7 @@ export default function AI_Voice() {
 
 		if (submitted) {
 			intervalId = setInterval(() => {
-				setTime((t) => t + 1)
+				setTime(t => t + 1)
 			}, 1000)
 		} else {
 			setTime(0)
@@ -71,7 +71,7 @@ export default function AI_Voice() {
 			setIsDemo(false)
 			setSubmitted(false)
 		} else {
-			setSubmitted((prev) => !prev)
+			setSubmitted(prev => !prev)
 		}
 	}
 

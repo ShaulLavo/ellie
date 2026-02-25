@@ -117,7 +117,7 @@ export function searchTemporal(
 
 	if (rows.length === 0) return []
 
-	const anchors = rows.map((row) => {
+	const anchors = rows.map(row => {
 		if (row.occurred_start != null && row.occurred_end != null) {
 			return Math.round((row.occurred_start + row.occurred_end) / 2)
 		}

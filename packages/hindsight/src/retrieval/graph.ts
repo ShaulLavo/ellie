@@ -89,14 +89,14 @@ async function resolveSeedIds(
 	const hits = await memoryVec.search(query, searchLimit)
 
 	// Filter hits above threshold (preserving order)
-	const candidateHits = hits.filter((hit) => {
+	const candidateHits = hits.filter(hit => {
 		const similarity = 1 - hit.distance
 		return similarity >= seedThreshold
 	})
 
 	// Collect all IDs we need to look up (semantic hits + temporal seeds)
 	const temporalSeedIds = unique(options.temporalSeedMemoryIds ?? [])
-	const allCandidateIds = unique([...candidateHits.map((h) => h.id), ...temporalSeedIds])
+	const allCandidateIds = unique([...candidateHits.map(h => h.id), ...temporalSeedIds])
 
 	// Batch-load all candidate memory rows in one query
 	const candidateRows =
@@ -112,7 +112,7 @@ async function resolveSeedIds(
 					.where(inArray(hdb.schema.memoryUnits.id, allCandidateIds))
 					.all()
 			: []
-	const rowById = new Map(candidateRows.map((r) => [r.id, r]))
+	const rowById = new Map(candidateRows.map(r => [r.id, r]))
 
 	// Select seeds from semantic hits (order matters — best similarity first)
 	const seeds: string[] = []
@@ -192,9 +192,7 @@ function getRelevantEntityIds(
 		.where(inArray(hdb.schema.entities.id, allEntityIds))
 		.all()
 
-	return rows
-		.filter((r) => r.bankId === bankId && r.mentionCount < maxEntityFrequency)
-		.map((r) => r.id)
+	return rows.filter(r => r.bankId === bankId && r.mentionCount < maxEntityFrequency).map(r => r.id)
 }
 
 function getEntityIdsForMemoryIds(hdb: HindsightDatabase, memoryIds: string[]): string[] {
@@ -208,7 +206,7 @@ function getEntityIdsForMemoryIds(hdb: HindsightDatabase, memoryIds: string[]): 
 		.where(inArray(hdb.schema.memoryEntities.memoryId, memoryIds))
 		.all()
 
-	return unique(rows.map((r) => r.entityId))
+	return unique(rows.map(r => r.entityId))
 }
 
 function scoreDirectEntityExpansion(
@@ -317,7 +315,7 @@ function getObservationSourceIds(
 		)
 		.all()
 
-	const sourceIds = rows.flatMap((row) => parseStringArray(row.sourceMemoryIds))
+	const sourceIds = rows.flatMap(row => parseStringArray(row.sourceMemoryIds))
 	return unique(sourceIds)
 }
 
@@ -336,7 +334,7 @@ function getConnectedSourceIds(
 		.where(inArray(hdb.schema.memoryEntities.entityId, entityIds))
 		.all()
 
-	const candidateIds = unique(sourceRelations.map((r) => r.memoryId))
+	const candidateIds = unique(sourceRelations.map(r => r.memoryId))
 	if (candidateIds.length === 0) return []
 
 	const rows = hdb.db
@@ -348,7 +346,7 @@ function getConnectedSourceIds(
 		.where(inArray(hdb.schema.memoryUnits.id, candidateIds))
 		.all()
 
-	return rows.filter((row) => row.bankId === bankId).map((row) => row.id)
+	return rows.filter(row => row.bankId === bankId).map(row => row.id)
 }
 
 function expandViaCausalLinks(
@@ -505,7 +503,7 @@ function shouldSearchObservationFactType(factTypes?: FactType[]): boolean {
 
 function shouldSearchDirectFactTypes(factTypes?: FactType[]): boolean {
 	if (!factTypes || factTypes.length === 0) return true
-	return factTypes.some((factType) => factType !== 'observation')
+	return factTypes.some(factType => factType !== 'observation')
 }
 
 function countOverlap(values: string[], lookup: Set<string>): number {

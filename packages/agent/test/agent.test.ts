@@ -79,7 +79,7 @@ describe('Agent', () => {
 
 	test('prompt throws when already streaming', async () => {
 		let resolve: () => void
-		const blocker = new Promise<void>((r) => {
+		const blocker = new Promise<void>(r => {
 			resolve = r
 		})
 
@@ -145,12 +145,12 @@ describe('Agent', () => {
 		const agent = new Agent({ adapter: mockAdapter, streamFn })
 
 		const events: AgentEvent[] = []
-		const unsub = agent.subscribe((e) => events.push(e))
+		const unsub = agent.subscribe(e => events.push(e))
 
 		await agent.prompt('Hello')
 		unsub()
 
-		const types = events.map((e) => e.type)
+		const types = events.map(e => e.type)
 		expect(types).toContain('agent_start')
 		expect(types).toContain('message_start')
 		expect(types).toContain('message_end')
@@ -162,7 +162,7 @@ describe('Agent', () => {
 		const agent = new Agent({ adapter: mockAdapter, streamFn })
 
 		const events: AgentEvent[] = []
-		const unsub = agent.subscribe((e) => events.push(e))
+		const unsub = agent.subscribe(e => events.push(e))
 		unsub()
 
 		await agent.prompt('Hello')
@@ -288,7 +288,7 @@ describe('Agent', () => {
 
 	test('abort sets error state', async () => {
 		let resolve: () => void
-		const blocker = new Promise<void>((r) => {
+		const blocker = new Promise<void>(r => {
 			resolve = r
 		})
 
@@ -367,7 +367,7 @@ describe('Agent', () => {
 
 		const agent = new Agent({ adapter: mockAdapter, streamFn })
 
-		agent.subscribe((e) => {
+		agent.subscribe(e => {
 			if (e.type === 'message_update') {
 				seenStreaming = agent.state.isStreaming
 			}

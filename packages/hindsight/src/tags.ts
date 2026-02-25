@@ -18,13 +18,13 @@ export function matchesTags(memoryTags: string[], filterTags: string[], mode: Ta
 
 	switch (mode) {
 		case 'any':
-			return isUntagged || memoryTags.some((t) => filterTags.includes(t))
+			return isUntagged || memoryTags.some(t => filterTags.includes(t))
 		case 'all':
-			return isUntagged || filterTags.every((t) => memoryTags.includes(t))
+			return isUntagged || filterTags.every(t => memoryTags.includes(t))
 		case 'any_strict':
-			return !isUntagged && memoryTags.some((t) => filterTags.includes(t))
+			return !isUntagged && memoryTags.some(t => filterTags.includes(t))
 		case 'all_strict':
-			return !isUntagged && filterTags.every((t) => memoryTags.includes(t))
+			return !isUntagged && filterTags.every(t => memoryTags.includes(t))
 	}
 }
 

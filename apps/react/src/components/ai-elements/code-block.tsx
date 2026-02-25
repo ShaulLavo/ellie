@@ -151,7 +151,7 @@ const getHighlighter = (
 const createRawTokens = (code: string): TokenizedCode => ({
 	bg: 'transparent',
 	fg: 'inherit',
-	tokens: code.split('\n').map((line) =>
+	tokens: code.split('\n').map(line =>
 		line === ''
 			? []
 			: [
@@ -189,7 +189,7 @@ export const highlightCode = (
 	// Start highlighting in background - fire-and-forget async pattern
 	getHighlighter(language)
 		// oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-then)
-		.then((highlighter) => {
+		.then(highlighter => {
 			const availableLangs = highlighter.getLoadedLanguages()
 			const langToUse = availableLangs.includes(language) ? language : 'text'
 
@@ -220,7 +220,7 @@ export const highlightCode = (
 			}
 		})
 		// oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-then), eslint-plugin-promise(prefer-await-to-callbacks)
-		.catch((error) => {
+		.catch(error => {
 			console.error('Failed to highlight code:', error)
 			subscribers.delete(tokensCacheKey)
 		})
@@ -276,7 +276,7 @@ const CodeBlockBody = memo(
 						showLineNumbers && '[counter-increment:line_0] [counter-reset:line]'
 					)}
 				>
-					{keyedLines.map((keyedLine) => (
+					{keyedLines.map(keyedLine => (
 						<LineSpan key={keyedLine.key} keyedLine={keyedLine} showLineNumbers={showLineNumbers} />
 					))}
 				</code>
@@ -382,7 +382,7 @@ export const CodeBlockContent = ({
 		setAsyncTokenized(null) // eslint-disable-line react-hooks/set-state-in-effect -- intentional: reset before async highlight
 
 		// Subscribe to async highlighting result
-		highlightCode(code, language, (result) => {
+		highlightCode(code, language, result => {
 			if (!cancelled) {
 				setAsyncTokenized(result)
 			}

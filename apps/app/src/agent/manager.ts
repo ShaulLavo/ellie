@@ -46,7 +46,7 @@ export class AgentManager {
 				...this.options.agentOptions?.initialState,
 				systemPrompt: this.options.systemPrompt ?? ''
 			},
-			onEvent: (event) => this.handleEvent(sessionId, event)
+			onEvent: event => this.handleEvent(sessionId, event)
 		})
 
 		this.agents.set(sessionId, agent)
@@ -95,7 +95,7 @@ export class AgentManager {
 		agent.runId = runId
 
 		// Start the prompt (non-blocking — events flow via onEvent)
-		agent.prompt(text).catch((err) => {
+		agent.prompt(text).catch(err => {
 			console.error(`[agent-manager] prompt failed for ${sessionId}:`, err)
 			// Write a terminal event so the client doesn't hang
 			this.writeErrorEvent(sessionId, runId)
@@ -154,7 +154,7 @@ export class AgentManager {
 	evict(sessionId: string): void {
 		const agent = this.agents.get(sessionId)
 		if (agent?.state.isStreaming) {
-			const unsub = agent.subscribe((e) => {
+			const unsub = agent.subscribe(e => {
 				if (e.type === 'agent_end') {
 					unsub()
 					this.agents.delete(sessionId)

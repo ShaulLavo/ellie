@@ -41,7 +41,7 @@ describe('report', () => {
 				totalDurationMs: 100
 			})
 
-			const scenario = report.scenarios.find((s) => s.scenario === 'follow_up_recall')
+			const scenario = report.scenarios.find(s => s.scenario === 'follow_up_recall')
 			expect(scenario).toBeDefined()
 			expect(scenario!.metrics.mrr).toBeCloseTo(0.7, 3)
 			expect(scenario!.metrics['recall@1']).toBeCloseTo(0.5, 3)
@@ -157,7 +157,7 @@ describe('report', () => {
 				totalDurationMs: 100
 			})
 
-			const scenarioOrder = report.scenarios.map((s) => s.scenario)
+			const scenarioOrder = report.scenarios.map(s => s.scenario)
 			expect(scenarioOrder).toEqual(['follow_up_recall', 'dedup_conflict', 'token_budget_packing'])
 		})
 	})

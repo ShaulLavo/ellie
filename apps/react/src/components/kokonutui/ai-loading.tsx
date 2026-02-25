@@ -145,13 +145,13 @@ export default function AILoadingState() {
 
 			// If we're about to wrap around, move to next sequence
 			if (nextLineIndex < firstVisibleLineIndex && nextLineIndex !== 0) {
-				setSequenceIndex((prevIndex) => (prevIndex + 1) % TASK_SEQUENCES.length)
+				setSequenceIndex(prevIndex => (prevIndex + 1) % TASK_SEQUENCES.length)
 				return
 			}
 
 			// Add the next line if needed
 			if (nextLineIndex >= visibleLines.length && nextLineIndex < totalLines) {
-				setVisibleLines((prevLines) => [
+				setVisibleLines(prevLines => [
 					...prevLines,
 					{
 						text: currentSequence.lines[nextLineIndex],
@@ -161,7 +161,7 @@ export default function AILoadingState() {
 			}
 
 			// Scroll to the next line
-			setScrollPosition((prevPosition) => prevPosition + lineHeight)
+			setScrollPosition(prevPosition => prevPosition + lineHeight)
 		}, 2000) // Slightly slower than the example for better readability
 
 		return () => clearInterval(advanceTimer)

@@ -256,7 +256,7 @@ export default function FileUpload({
 			if (!acceptedFileTypes?.length) return null
 
 			const fileType = file.type.toLowerCase()
-			if (!acceptedFileTypes.some((type) => fileType.match(type.toLowerCase()))) {
+			if (!acceptedFileTypes.some(type => fileType.match(type.toLowerCase()))) {
 				return {
 					message: `File type must be ${acceptedFileTypes.join(', ')}`,
 					code: 'INVALID_FILE_TYPE'
@@ -301,7 +301,7 @@ export default function FileUpload({
 						setFile(null)
 						onUploadSuccess?.(uploadingFile)
 					} else {
-						setStatus((prevStatus) => {
+						setStatus(prevStatus => {
 							if (prevStatus === 'uploading') {
 								setProgress(currentProgress)
 								return 'uploading'
@@ -356,13 +356,13 @@ export default function FileUpload({
 	const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
-		setStatus((prev) => (prev !== 'uploading' ? 'dragging' : prev))
+		setStatus(prev => (prev !== 'uploading' ? 'dragging' : prev))
 	}, [])
 
 	const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
-		setStatus((prev) => (prev === 'dragging' ? 'idle' : prev))
+		setStatus(prev => (prev === 'dragging' ? 'idle' : prev))
 	}, [])
 
 	const handleDrop = useCallback(
@@ -458,7 +458,7 @@ export default function FileUpload({
 											<p className="text-gray-500 text-xs dark:text-gray-400">
 												{acceptedFileTypes?.length
 													? `${acceptedFileTypes
-															.map((t) => t.split('/')[1])
+															.map(t => t.split('/')[1])
 															.join(', ')
 															.toUpperCase()}`
 													: 'SVG, PNG, JPG or GIF'}{' '}

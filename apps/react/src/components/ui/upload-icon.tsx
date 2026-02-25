@@ -26,7 +26,7 @@ const UploadIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 				if (!isAnimatingRef.current) break
 
 				// Small pause at center for "intention"
-				await new Promise((resolve) => setTimeout(resolve, 200))
+				await new Promise(resolve => setTimeout(resolve, 200))
 			}
 		}, [animate])
 

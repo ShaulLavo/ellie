@@ -62,8 +62,8 @@ export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
 				const stream = toStreamGenerator<SessionEvent>(
 					request,
 					sseState,
-					(listener) => store.subscribeToSession(params.sessionId, listener),
-					(event) => ({ event: `append`, data: event.event }),
+					listener => store.subscribeToSession(params.sessionId, listener),
+					event => ({ event: `append`, data: event.event }),
 					{ event: `snapshot`, data: existingEvents }
 				)
 

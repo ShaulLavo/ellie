@@ -44,8 +44,8 @@ export function createAgentRoutes(
 				const stream = toStreamGenerator<SessionEvent>(
 					request,
 					sseState,
-					(listener) => store.subscribeToSession(params.sessionId, listener),
-					(event) => ({ event: `append`, data: event.event }),
+					listener => store.subscribeToSession(params.sessionId, listener),
+					event => ({ event: `append`, data: event.event }),
 					{ event: `snapshot`, data: existingEvents }
 				)
 
@@ -78,8 +78,8 @@ export function createAgentRoutes(
 				const stream = toStreamGenerator<AgentRunEvent>(
 					request,
 					sseState,
-					(listener) => store.subscribeToAgentRun(params.sessionId, params.runId, listener),
-					(event) => {
+					listener => store.subscribeToAgentRun(params.sessionId, params.runId, listener),
+					event => {
 						if (event.type === `event`) {
 							return { event: `event`, data: event.event }
 						}

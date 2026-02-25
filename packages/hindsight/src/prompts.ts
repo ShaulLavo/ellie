@@ -338,7 +338,7 @@ import type { Directive } from './types'
 export function buildDirectivesSection(directives: Directive[]): string {
 	if (directives.length === 0) return ''
 
-	const items = directives.map((d) => `- **${d.name}**: ${d.content}`).join('\n')
+	const items = directives.map(d => `- **${d.name}**: ${d.content}`).join('\n')
 
 	return `## DIRECTIVES (MANDATORY)
 These are hard rules you MUST follow in ALL responses:

@@ -81,7 +81,7 @@ const mergeAdjacentSpans = (spans: TimeSpan[]): TimeSpan[] => {
 
 	// Group by day
 	const byDay = new Map<number, TimeSpan[]>()
-	spans.forEach((span) => {
+	spans.forEach(span => {
 		const daySpans = byDay.get(span.week_day) || []
 		daySpans.push(span)
 		byDay.set(span.week_day, daySpans)
@@ -90,7 +90,7 @@ const mergeAdjacentSpans = (spans: TimeSpan[]): TimeSpan[] => {
 	const merged: TimeSpan[] = []
 
 	// Process each day
-	byDay.forEach((daySpans) => {
+	byDay.forEach(daySpans => {
 		// Sort by start time
 		const sorted = [...daySpans].sort(
 			(a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time)
@@ -185,7 +185,7 @@ function useCalendarCreation({
 		const startMins = getMinutesFromY(e.clientY)
 
 		// Check strict overlap at start point (cannot start creation inside an event or disabled region)
-		const isOverlapping = sortedConstraints.some((ev) => {
+		const isOverlapping = sortedConstraints.some(ev => {
 			const s = timeToMinutes(ev.start_time)
 			const e = timeToMinutes(ev.end_time)
 			return startMins >= s && startMins < e
@@ -193,10 +193,8 @@ function useCalendarCreation({
 		if (isOverlapping) return
 
 		// Find constraints
-		const prevEvent = sortedConstraints
-			.filter((ev) => timeToMinutes(ev.end_time) <= startMins)
-			.pop()
-		const nextEvent = sortedConstraints.find((ev) => timeToMinutes(ev.start_time) >= startMins)
+		const prevEvent = sortedConstraints.filter(ev => timeToMinutes(ev.end_time) <= startMins).pop()
+		const nextEvent = sortedConstraints.find(ev => timeToMinutes(ev.start_time) >= startMins)
 
 		const minStartMins = prevEvent ? timeToMinutes(prevEvent.end_time) : startOffset
 		const maxEndMins = nextEvent ? timeToMinutes(nextEvent.start_time) : endTime * 60
@@ -321,7 +319,7 @@ export function Availability({
 	}
 
 	const handleResize = (id: string, newStart: string, newEnd: string, isComplete = false) => {
-		const newValue = internalValue.map((span) => {
+		const newValue = internalValue.map(span => {
 			if (span.id === id) {
 				return { ...span, start_time: newStart, end_time: newEnd }
 			}
@@ -343,13 +341,13 @@ export function Availability({
 
 	const handleDelete = (id: string) => {
 		updateValue(
-			internalValue.filter((s) => s.id !== id),
+			internalValue.filter(s => s.id !== id),
 			true
 		)
 	}
 
 	const handleMove = (id: string, newStart: string, newEnd: string, newDayIndex: number) => {
-		const newValue = internalValue.map((span) => {
+		const newValue = internalValue.map(span => {
 			if (span.id === id) {
 				return { ...span, start_time: newStart, end_time: newEnd, week_day: newDayIndex }
 			}
@@ -390,8 +388,8 @@ export function Availability({
 		}
 
 		// Check collisions with active events
-		const dayEvents = internalValue.filter((e) => e.week_day === targetDayIndex && e.id !== span.id)
-		const hasEventOverlap = dayEvents.some((e) => {
+		const dayEvents = internalValue.filter(e => e.week_day === targetDayIndex && e.id !== span.id)
+		const hasEventOverlap = dayEvents.some(e => {
 			const eStart = timeToMinutes(e.start_time)
 			const eEnd = timeToMinutes(e.end_time)
 			return newStart < eEnd && newEnd > eStart
@@ -402,8 +400,8 @@ export function Availability({
 		}
 
 		// Check collisions with disabled regions
-		const dayDisabled = disabled.filter((e) => e.week_day === targetDayIndex)
-		const hasDisabledOverlap = dayDisabled.some((e) => {
+		const dayDisabled = disabled.filter(e => e.week_day === targetDayIndex)
+		const hasDisabledOverlap = dayDisabled.some(e => {
 			const eStart = timeToMinutes(e.start_time)
 			const eEnd = timeToMinutes(e.end_time)
 			return newStart < eEnd && newEnd > eStart
@@ -459,7 +457,7 @@ export function Availability({
 			return
 		}
 
-		const span = internalValue.find((s) => s.id === activeId)
+		const span = internalValue.find(s => s.id === activeId)
 		if (!span) return
 
 		const targetDayIndex = parseInt(overId.toString().replace('day-', ''), 10)
@@ -491,7 +489,7 @@ export function Availability({
 		setDeltaY(0)
 		setIsDropValid(true)
 
-		const span = internalValue.find((s) => s.id === active.id)
+		const span = internalValue.find(s => s.id === active.id)
 		if (!span || !mainContainerRef.current || !over) return
 
 		const targetDayIndex = parseInt(over.id.toString().replace('day-', ''), 10)
@@ -515,7 +513,7 @@ export function Availability({
 	}
 
 	const activeSpan = React.useMemo(
-		() => internalValue.find((s) => s.id === activeId) || null,
+		() => internalValue.find(s => s.id === activeId) || null,
 		[activeId, internalValue]
 	)
 
@@ -550,7 +548,7 @@ export function Availability({
 					<div className="flex w-full border-b bg-muted/40">
 						<div className="w-16 shrink-0 border-r p-2 text-xs font-medium text-muted-foreground" />
 						<div className="flex flex-1">
-							{renderedDays.map((dayIndex) => {
+							{renderedDays.map(dayIndex => {
 								const isActive = days.includes(dayIndex)
 								return (
 									<div
@@ -609,8 +607,8 @@ export function Availability({
 										startTime={startTime}
 										endTime={endTime}
 										timeIncrements={timeIncrements}
-										events={internalValue.filter((e) => e.week_day === dayIndex)}
-										disabledEvents={disabled.filter((e) => e.week_day === dayIndex)}
+										events={internalValue.filter(e => e.week_day === dayIndex)}
+										disabledEvents={disabled.filter(e => e.week_day === dayIndex)}
 										onCreate={handleCreate}
 										onResize={handleResize}
 										onDelete={handleDelete}
@@ -797,20 +795,18 @@ function DayColumn({
 				/>
 			)}
 
-			{events.map((event) => {
+			{events.map(event => {
 				// Calculate neighbors considering BOTH events and disabled regions for resizing constraints
 				// sortedConstraints contains both. We just need to find neighbors relative to THIS event in that list.
 
 				// We need a clean list of constraints excluding the event itself
-				const otherConstraints = sortedConstraints.filter((e) => e.id !== event.id)
+				const otherConstraints = sortedConstraints.filter(e => e.id !== event.id)
 
 				const eventStart = timeToMinutes(event.start_time)
 				const eventEnd = timeToMinutes(event.end_time)
 
-				const prevItem = otherConstraints
-					.filter((e) => timeToMinutes(e.end_time) <= eventStart)
-					.pop()
-				const nextItem = otherConstraints.find((e) => timeToMinutes(e.start_time) >= eventEnd)
+				const prevItem = otherConstraints.filter(e => timeToMinutes(e.end_time) <= eventStart).pop()
+				const nextItem = otherConstraints.find(e => timeToMinutes(e.start_time) >= eventEnd)
 
 				const minStart = prevItem ? timeToMinutes(prevItem.end_time) : startOffset
 				const maxEnd = nextItem ? timeToMinutes(nextItem.start_time) : endTime * 60
@@ -988,7 +984,7 @@ function DraggableTimeSpan({
 			{canResize && (
 				<div
 					className="absolute top-0 left-0 right-0 h-4 -mt-2 cursor-row-resize z-10"
-					onPointerDown={(e) => handleResizeStart(e, 'top')}
+					onPointerDown={e => handleResizeStart(e, 'top')}
 				/>
 			)}
 			{/* Visual Top Handle */}
@@ -1015,7 +1011,7 @@ function DraggableTimeSpan({
 			{canResize && (
 				<div
 					className="absolute bottom-0 left-0 right-0 h-4 -mb-2 cursor-row-resize z-10"
-					onPointerDown={(e) => handleResizeStart(e, 'bottom')}
+					onPointerDown={e => handleResizeStart(e, 'bottom')}
 				/>
 			)}
 			{/* Visual Bottom Handle */}
@@ -1095,10 +1091,10 @@ function TimeSpanCard({
 					variant="ghost"
 					size="icon"
 					className="h-5 w-5 hover:bg-foreground/5 dark:hover:bg-foreground/10 -mt-1 -mr-1 absolute top-0 right-0 z-20 pointer-events-auto"
-					onPointerDown={(e) => {
+					onPointerDown={e => {
 						e.stopPropagation() // Prevent drag/resize from card
 					}}
-					onClick={(e) => {
+					onClick={e => {
 						e.stopPropagation()
 						onDelete()
 					}}

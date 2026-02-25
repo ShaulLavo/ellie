@@ -184,7 +184,7 @@ export function createHindsightHandlers(hs: Hindsight): ProcedureHandlers {
 
 			const validDirections = ['before', 'after', 'both'] as const
 			const direction =
-				input.direction != null ? validDirections.find((d) => d === input.direction) : undefined
+				input.direction != null ? validDirections.find(d => d === input.direction) : undefined
 			if (input.direction != null && direction === undefined) {
 				throw new Error(`Invalid 'direction': must be one of ${validDirections.join(', ')}`)
 			}

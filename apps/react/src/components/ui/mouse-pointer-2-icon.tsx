@@ -8,7 +8,7 @@ const MousePointer2Icon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		const animationControls = useRef<Array<ReturnType<typeof animate>>>([])
 
 		const start = async () => {
-			animationControls.current.forEach((control) => control.stop())
+			animationControls.current.forEach(control => control.stop())
 			animationControls.current = []
 
 			animationControls.current.push(
@@ -28,7 +28,7 @@ const MousePointer2Icon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		}
 
 		const stop = () => {
-			animationControls.current.forEach((control) => control.stop())
+			animationControls.current.forEach(control => control.stop())
 			animationControls.current = []
 
 			animate('.pointer', { x: 0, y: 0 }, { duration: 0.3 })

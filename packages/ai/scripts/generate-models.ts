@@ -146,7 +146,7 @@ async function generateModels() {
 	const allModels = [...modelsDevModels, ...openRouterModels]
 
 	// Fix incorrect cache pricing for Claude Opus 4.5 from models.dev
-	const opus45 = allModels.find((m) => m.provider === 'anthropic' && m.id === 'claude-opus-4-5')
+	const opus45 = allModels.find(m => m.provider === 'anthropic' && m.id === 'claude-opus-4-5')
 	if (opus45) {
 		opus45.cost.cacheRead = 0.5
 		opus45.cost.cacheWrite = 6.25
@@ -163,7 +163,7 @@ async function generateModels() {
 	}
 
 	// Add missing Claude Opus 4.6 if not present
-	if (!allModels.some((m) => m.provider === 'anthropic' && m.id === 'claude-opus-4-6')) {
+	if (!allModels.some(m => m.provider === 'anthropic' && m.id === 'claude-opus-4-6')) {
 		allModels.push({
 			id: 'claude-opus-4-6',
 			name: 'Claude Opus 4.6',
@@ -182,7 +182,7 @@ async function generateModels() {
 	}
 
 	// Add "auto" alias for openrouter
-	if (!allModels.some((m) => m.provider === 'openrouter' && m.id === 'auto')) {
+	if (!allModels.some(m => m.provider === 'openrouter' && m.id === 'auto')) {
 		allModels.push({
 			id: 'auto',
 			name: 'Auto',
@@ -197,7 +197,7 @@ async function generateModels() {
 
 	// Filter to only our 4 supported providers
 	const supportedProviders = new Set(['anthropic', 'openai', 'ollama', 'openrouter'])
-	const filteredModels = allModels.filter((m) => supportedProviders.has(m.provider))
+	const filteredModels = allModels.filter(m => supportedProviders.has(m.provider))
 
 	// Group by provider and deduplicate by model ID
 	const providers: Record<string, Record<string, Model>> = {}
@@ -240,7 +240,7 @@ export const MODELS: Record<ProviderName, Record<string, Model>> = {
 			output += `\t\t\tname: ${JSON.stringify(model.name)},\n`
 			output += `\t\t\tprovider: ${JSON.stringify(model.provider)},\n`
 			output += `\t\t\treasoning: ${model.reasoning},\n`
-			output += `\t\t\tinput: [${model.input.map((i) => `"${i}"`).join(', ')}],\n`
+			output += `\t\t\tinput: [${model.input.map(i => `"${i}"`).join(', ')}],\n`
 			output += `\t\t\tcost: {\n`
 			output += `\t\t\t\tinput: ${model.cost.input},\n`
 			output += `\t\t\t\toutput: ${model.cost.output},\n`
@@ -262,7 +262,7 @@ export const MODELS: Record<ProviderName, Record<string, Model>> = {
 
 	// Print statistics
 	const totalModels = filteredModels.length
-	const reasoningModels = filteredModels.filter((m) => m.reasoning).length
+	const reasoningModels = filteredModels.filter(m => m.reasoning).length
 
 	console.log(`\nModel Statistics:`)
 	console.log(`  Total tool-capable models: ${totalModels}`)

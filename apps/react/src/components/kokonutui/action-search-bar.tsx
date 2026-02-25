@@ -129,7 +129,7 @@ function ActionSearchBar({
 		if (!debouncedQuery) return actions
 
 		const normalizedQuery = debouncedQuery.toLowerCase().trim()
-		return actions.filter((action) => {
+		return actions.filter(action => {
 			const searchableText = `${action.label} ${action.description || ''}`.toLowerCase()
 			return searchableText.includes(normalizedQuery)
 		})
@@ -159,11 +159,11 @@ function ActionSearchBar({
 			switch (e.key) {
 				case 'ArrowDown':
 					e.preventDefault()
-					setActiveIndex((prev) => (prev < result.actions.length - 1 ? prev + 1 : 0))
+					setActiveIndex(prev => (prev < result.actions.length - 1 ? prev + 1 : 0))
 					break
 				case 'ArrowUp':
 					e.preventDefault()
-					setActiveIndex((prev) => (prev > 0 ? prev - 1 : result.actions.length - 1))
+					setActiveIndex(prev => (prev > 0 ? prev - 1 : result.actions.length - 1))
 					break
 				case 'Enter':
 					e.preventDefault()
@@ -267,7 +267,7 @@ function ActionSearchBar({
 								exit="exit"
 							>
 								<motion.ul role="none">
-									{result.actions.map((action) => (
+									{result.actions.map(action => (
 										<motion.li
 											key={action.id}
 											id={`action-${action.id}`}

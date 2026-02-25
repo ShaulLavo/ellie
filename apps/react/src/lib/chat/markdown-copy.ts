@@ -39,7 +39,7 @@ function getSelectedMessageIds(container: HTMLElement, selection: Selection): st
 	const ranges = getSelectionRanges(selection)
 	if (ranges.length === 0) return []
 
-	const intersectsContainer = ranges.some((range) => rangeIntersectsNode(range, container))
+	const intersectsContainer = ranges.some(range => rangeIntersectsNode(range, container))
 	if (!intersectsContainer) return []
 
 	const selected = new Set<string>()
@@ -49,7 +49,7 @@ function getSelectedMessageIds(container: HTMLElement, selection: Selection): st
 		const messageId = node.dataset.chatMessageId
 		if (!messageId) continue
 
-		const intersectsAnyRange = ranges.some((range) => rangeIntersectsNode(range, node))
+		const intersectsAnyRange = ranges.some(range => rangeIntersectsNode(range, node))
 		if (!intersectsAnyRange) continue
 
 		selected.add(messageId)
@@ -71,8 +71,8 @@ export function resolveSelectedMarkdown({
 
 	const selectedSet = new Set(selectedIds)
 	const orderedMarkdown = messageOrder
-		.filter((id) => selectedSet.has(id))
-		.map((id) => markdownById.get(id)?.trim())
+		.filter(id => selectedSet.has(id))
+		.map(id => markdownById.get(id)?.trim())
 		.filter((value): value is string => typeof value === 'string' && value.length > 0)
 
 	if (orderedMarkdown.length === 0) return null

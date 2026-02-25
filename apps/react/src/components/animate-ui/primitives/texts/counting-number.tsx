@@ -57,7 +57,7 @@ function CountingNumber({
 	}, [isInView, number, motionVal, delay])
 
 	React.useEffect(() => {
-		const unsubscribe = springVal.on('change', (latest) => {
+		const unsubscribe = springVal.on('change', latest => {
 			if (localRef.current) {
 				let formatted = decimals > 0 ? latest.toFixed(decimals) : Math.round(latest).toString()
 

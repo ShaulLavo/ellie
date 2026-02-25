@@ -94,7 +94,7 @@ export async function recall(
 					factTypes: options.factTypes,
 					tags: options.tags,
 					tagsMatch: options.tagsMatch,
-					temporalSeedMemoryIds: temporalTimed.hits.map((hit) => hit.id)
+					temporalSeedMemoryIds: temporalTimed.hits.map(hit => hit.id)
 				})
 			)
 		: { hits: [], durationMs: 0 }
@@ -152,13 +152,13 @@ export async function recall(
 	}
 
 	// Batch-load memory rows for all fused candidates (avoids N+1)
-	const fusedIds = fused.map((candidate) => candidate.id)
+	const fusedIds = fused.map(candidate => candidate.id)
 	const memoryRows = hdb.db
 		.select()
 		.from(hdb.schema.memoryUnits)
 		.where(inArray(hdb.schema.memoryUnits.id, fusedIds))
 		.all()
-	const memoryRowById = new Map(memoryRows.map((row) => [row.id, row]))
+	const memoryRowById = new Map(memoryRows.map(row => [row.id, row]))
 
 	const rerankStart = Date.now()
 	const mode = options.mode ?? 'hybrid'
@@ -176,7 +176,7 @@ export async function recall(
 
 		// Build cognitive candidates with access metadata from loaded rows
 		const cogCandidates: CognitiveCandidate[] = fused
-			.map((candidate) => {
+			.map(candidate => {
 				const row = memoryRowById.get(candidate.id)
 				if (!row) return null
 				return {
@@ -194,7 +194,7 @@ export async function recall(
 		// Apply working memory boost if sessionId is provided
 		const sessionId = options.sessionId
 		const hasWm = workingMemory != null && sessionId != null
-		const fusedById = new Map(fused.map((f) => [f.id, f]))
+		const fusedById = new Map(fused.map(f => [f.id, f]))
 
 		rankedCandidates = cogScored.map((scored, index) => {
 			const wmBoost = hasWm ? workingMemory.getBoost(bankId, sessionId, scored.id, now) : 0
@@ -241,22 +241,22 @@ export async function recall(
 		})
 	} else {
 		// ── Hybrid scoring path (unchanged) ─────────────────────────────────
-		const rrfMin = Math.min(...fused.map((candidate) => candidate.score))
-		const rrfMax = Math.max(...fused.map((candidate) => candidate.score))
+		const rrfMin = Math.min(...fused.map(candidate => candidate.score))
+		const rrfMax = Math.max(...fused.map(candidate => candidate.score))
 		const rrfRange = rrfMax - rrfMin
 
-		let crossEncoderRawScores = fused.map((candidate) => candidate.score)
-		let crossEncoderNormalizedScores = fused.map((candidate) =>
+		let crossEncoderRawScores = fused.map(candidate => candidate.score)
+		let crossEncoderNormalizedScores = fused.map(candidate =>
 			normalizeRrf(candidate.score, rrfMin, rrfRange)
 		)
 		if (rerank) {
-			const candidatesWithContent = fused.filter((candidate) => {
+			const candidatesWithContent = fused.filter(candidate => {
 				const row = memoryRowById.get(candidate.id)
 				return typeof row?.content === 'string' && row.content.length > 0
 			})
 			if (candidatesWithContent.length > 0) {
 				const docs = candidatesWithContent.map(
-					(candidate) => memoryRowById.get(candidate.id)!.content
+					candidate => memoryRowById.get(candidate.id)!.content
 				)
 				const scores = await rerank(query, docs)
 				if (scores.length !== candidatesWithContent.length) {
@@ -268,12 +268,12 @@ export async function recall(
 				for (let i = 0; i < candidatesWithContent.length; i++) {
 					scoreById.set(candidatesWithContent[i]!.id, scores[i]!)
 				}
-				crossEncoderRawScores = fused.map((candidate) => scoreById.get(candidate.id) ?? 0)
+				crossEncoderRawScores = fused.map(candidate => scoreById.get(candidate.id) ?? 0)
 				crossEncoderNormalizedScores = crossEncoderRawScores.map(sigmoid)
 			}
 		}
 
-		const temporalById = new Map(temporalTimed.hits.map((hit) => [hit.id, hit.score]))
+		const temporalById = new Map(temporalTimed.hits.map(hit => [hit.id, hit.score]))
 		rankedCandidates = fused
 			.map((candidate, index) => {
 				const row = memoryRowById.get(candidate.id)
@@ -325,7 +325,7 @@ export async function recall(
 	const hydrationStart = Date.now()
 
 	// Batch-load all junctions + entities for ranked candidates (avoids N+1)
-	const rankedIds = rankedCandidates.map((c) => c.id)
+	const rankedIds = rankedCandidates.map(c => c.id)
 	const allJunctions =
 		rankedIds.length > 0
 			? hdb.db
@@ -344,7 +344,7 @@ export async function recall(
 	}
 
 	// Batch-load all referenced entities
-	const allEntityIds = [...new Set(allJunctions.map((j) => j.entityId))]
+	const allEntityIds = [...new Set(allJunctions.map(j => j.entityId))]
 	const allEntityRows =
 		allEntityIds.length > 0
 			? hdb.db
@@ -353,7 +353,7 @@ export async function recall(
 					.where(inArray(hdb.schema.entities.id, allEntityIds))
 					.all()
 			: []
-	const entityById = new Map(allEntityRows.map((e) => [e.id, e]))
+	const entityById = new Map(allEntityRows.map(e => [e.id, e]))
 
 	// Hydrate full memory objects with entities, apply filters
 	const memories: ScoredMemory[] = []
@@ -392,11 +392,11 @@ export async function recall(
 
 		// Look up pre-loaded entities for this memory (avoids N+1)
 		const junctions = junctionsByMemoryId.get(candidate.id) ?? []
-		const entityRows = junctions.map((j) => entityById.get(j.entityId)).filter(Boolean)
+		const entityRows = junctions.map(j => entityById.get(j.entityId)).filter(Boolean)
 
 		if (options.entities && options.entities.length > 0) {
-			const entityNames = new Set(entityRows.map((entityRow) => entityRow!.name.toLowerCase()))
-			const hasMatch = options.entities.some((name) => entityNames.has(name.toLowerCase()))
+			const entityNames = new Set(entityRows.map(entityRow => entityRow!.name.toLowerCase()))
+			const hasMatch = options.entities.some(name => entityNames.has(name.toLowerCase()))
 			if (!hasMatch) continue
 		}
 
@@ -407,7 +407,7 @@ export async function recall(
 		}
 
 		// Validate sources at runtime — filter to known retrieval methods
-		const validatedSources = candidate.sources.filter((s) =>
+		const validatedSources = candidate.sources.filter(s =>
 			VALID_SOURCES.has(s)
 		) as ScoredMemory['sources']
 
@@ -415,7 +415,7 @@ export async function recall(
 			memory: rowToMemoryUnit(row),
 			score: candidate.combinedScore,
 			sources: validatedSources,
-			entities: entityRows.map((entityRow) => rowToEntity(entityRow!))
+			entities: entityRows.map(entityRow => rowToEntity(entityRow!))
 		})
 
 		if (options.includeEntities) {
@@ -450,7 +450,7 @@ export async function recall(
 	// ── Access write-through (both modes) ────────────────────────────────────
 	// For returned memories only: increment access_count, update last_accessed,
 	// bump encoding_strength (capped at 3.0). Executed synchronously before return.
-	const returnedIds = memories.map((m) => m.memory.id)
+	const returnedIds = memories.map(m => m.memory.id)
 	if (returnedIds.length > 0) {
 		updateAccessMetadata(hdb, returnedIds, now)
 	}
@@ -486,7 +486,7 @@ export async function recall(
 				]),
 				phaseMetrics,
 				candidates: rankedCandidates,
-				selectedMemoryIds: memories.map((memory) => memory.memory.id),
+				selectedMemoryIds: memories.map(memory => memory.memory.id),
 				totalDurationMs: Date.now() - startedAt
 			}
 		: undefined
@@ -618,7 +618,7 @@ function buildChunkPayload(
 					.where(inArray(hdb.schema.chunks.id, chunkIdsOrdered))
 					.all()
 			: []
-	const chunkById = new Map(chunkRows.map((row) => [row.id, row]))
+	const chunkById = new Map(chunkRows.map(row => [row.id, row]))
 
 	let usedTokens = 0
 

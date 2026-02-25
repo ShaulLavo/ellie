@@ -14,7 +14,7 @@ new Elysia()
 				name: t.String()
 			})
 		},
-		(app) =>
+		app =>
 			app
 				// Query type is inherited from guard
 				.get('/profile', ({ query }) => `Hi`)

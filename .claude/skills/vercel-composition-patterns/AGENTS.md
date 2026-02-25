@@ -198,7 +198,7 @@ function ComposerInput() {
 		<TextInput
 			ref={inputRef}
 			value={state.input}
-			onChangeText={(text) => update((s) => ({ ...s, input: text }))}
+			onChangeText={text => update(s => ({ ...s, input: text }))}
 		/>
 	)
 }
@@ -270,7 +270,7 @@ function ChannelComposer({ channelId }: { channelId: string }) {
 
 	return (
 		<Composer.Frame>
-			<Composer.Input value={state.input} onChange={(text) => sync.updateInput(text)} />
+			<Composer.Input value={state.input} onChange={text => sync.updateInput(text)} />
 			<Composer.Submit onPress={() => sync.submit()} />
 		</Composer.Frame>
 	)
@@ -421,7 +421,7 @@ function ComposerInput() {
 		<TextInput
 			ref={meta.inputRef}
 			value={state.input}
-			onChangeText={(text) => update((s) => ({ ...s, input: text }))}
+			onChangeText={text => update(s => ({ ...s, input: text }))}
 		/>
 	)
 }

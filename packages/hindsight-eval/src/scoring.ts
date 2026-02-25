@@ -26,7 +26,7 @@ function contentContains(candidate: RecallCandidate, substring: string): boolean
 function recallAtK(candidates: RecallCandidate[], mustInclude: string[], k: number): number {
 	if (mustInclude.length === 0) return 1.0
 	const topK = candidates.slice(0, k)
-	const found = mustInclude.filter((expected) => topK.some((c) => contentContains(c, expected)))
+	const found = mustInclude.filter(expected => topK.some(c => contentContains(c, expected)))
 	return found.length / mustInclude.length
 }
 
@@ -37,7 +37,7 @@ function meanReciprocalRank(candidates: RecallCandidate[], mustInclude: string[]
 	if (mustInclude.length === 0) return 1.0
 	let rrSum = 0
 	for (const expected of mustInclude) {
-		const idx = candidates.findIndex((c) => contentContains(c, expected))
+		const idx = candidates.findIndex(c => contentContains(c, expected))
 		if (idx >= 0) {
 			rrSum += 1 / (idx + 1)
 		}
@@ -73,8 +73,8 @@ function scoreTemporalNarrative(
 	for (let i = 0; i < orderedHints.length; i++) {
 		for (let j = i + 1; j < orderedHints.length; j++) {
 			totalPairs++
-			const idxI = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
-			const idxJ = candidates.findIndex((c) => contentContains(c, orderedHints[j]!))
+			const idxI = candidates.findIndex(c => contentContains(c, orderedHints[i]!))
+			const idxJ = candidates.findIndex(c => contentContains(c, orderedHints[j]!))
 			if (idxI >= 0 && idxJ >= 0 && idxI < idxJ) {
 				correctPairs++
 			}
@@ -87,8 +87,8 @@ function scoreTemporalNarrative(
 	let predecessorHits = 0
 	let predecessorTotal = 0
 	for (let i = 1; i < orderedHints.length; i++) {
-		const currentIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
-		const prevIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i - 1]!))
+		const currentIdx = candidates.findIndex(c => contentContains(c, orderedHints[i]!))
+		const prevIdx = candidates.findIndex(c => contentContains(c, orderedHints[i - 1]!))
 		if (currentIdx >= 0 && prevIdx >= 0) {
 			predecessorTotal++
 			if (prevIdx < currentIdx) predecessorHits++
@@ -101,8 +101,8 @@ function scoreTemporalNarrative(
 	let successorHits = 0
 	let successorTotal = 0
 	for (let i = 0; i < orderedHints.length - 1; i++) {
-		const currentIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i]!))
-		const nextIdx = candidates.findIndex((c) => contentContains(c, orderedHints[i + 1]!))
+		const currentIdx = candidates.findIndex(c => contentContains(c, orderedHints[i]!))
+		const nextIdx = candidates.findIndex(c => contentContains(c, orderedHints[i + 1]!))
 		if (currentIdx >= 0 && nextIdx >= 0) {
 			successorTotal++
 			if (nextIdx > currentIdx) successorHits++
@@ -126,8 +126,8 @@ function scoreDedupConflict(
 	const mustExclude = evalCase.expected.mustExclude ?? []
 
 	// Duplicate hit ratio: fraction of excluded (duplicate) items that still appear
-	const duplicateHits = mustExclude.filter((excluded) =>
-		candidates.some((c) => contentContains(c, excluded))
+	const duplicateHits = mustExclude.filter(excluded =>
+		candidates.some(c => contentContains(c, excluded))
 	).length
 	const duplicateLeakRate = mustExclude.length > 0 ? duplicateHits / mustExclude.length : 0
 
@@ -152,8 +152,8 @@ function scoreCodeLocationRecall(
 
 	// Exact path precision: fraction of top-k candidates that match an expected path
 	const topK = candidates.slice(0, evalCase.constraints?.topK ?? 10)
-	const exactMatches = topK.filter((c) =>
-		mustInclude.some((expected) => contentContains(c, expected))
+	const exactMatches = topK.filter(c =>
+		mustInclude.some(expected => contentContains(c, expected))
 	).length
 	const exactPathPrecision = topK.length > 0 ? exactMatches / topK.length : 0
 

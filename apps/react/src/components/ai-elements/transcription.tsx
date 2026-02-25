@@ -61,7 +61,7 @@ export const Transcription = ({
 				{...props}
 			>
 				{segments
-					.filter((segment) => segment.text.trim())
+					.filter(segment => segment.text.trim())
 					.map((segment, index) => children(segment, index))}
 			</div>
 		</TranscriptionContext.Provider>

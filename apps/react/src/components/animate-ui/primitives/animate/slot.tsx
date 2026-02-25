@@ -21,8 +21,8 @@ type SlotProps<T extends HTMLElement = HTMLElement> = {
 } & DOMMotionProps<T>
 
 function mergeRefs<T>(...refs: (React.Ref<T> | undefined)[]): React.RefCallback<T> {
-	return (node) => {
-		refs.forEach((ref) => {
+	return node => {
+		refs.forEach(ref => {
 			if (!ref) return
 			if (typeof ref === 'function') {
 				ref(node)

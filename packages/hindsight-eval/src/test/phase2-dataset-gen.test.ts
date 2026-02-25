@@ -66,7 +66,7 @@ describe('generateRollingIngestDataset', () => {
 		for (const event of events) {
 			clusterCounts.set(event.clusterId, (clusterCounts.get(event.clusterId) ?? 0) + 1)
 		}
-		const hasDuplicates = [...clusterCounts.values()].some((c) => c > 1)
+		const hasDuplicates = [...clusterCounts.values()].some(c => c > 1)
 		expect(hasDuplicates).toBe(true)
 	})
 

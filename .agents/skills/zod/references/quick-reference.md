@@ -194,7 +194,7 @@ z.string().min(5, 'Too short!')
 
 // Error map
 z.string({
-	error: (issue) => {
+	error: issue => {
 		if (issue.code === 'too_small') {
 			return { message: `Min: ${issue.minimum}` }
 		}
@@ -203,7 +203,7 @@ z.string({
 
 // Per-parse override
 schema.parse(data, {
-	error: (issue) => 'Custom error'
+	error: issue => 'Custom error'
 })
 ```
 
@@ -221,8 +221,8 @@ z.coerce.date() // Convert to Date
 
 ```typescript
 const DateCodec = z.codec(z.iso.datetime(), z.date(), {
-	decode: (str) => new Date(str),
-	encode: (date) => date.toISOString()
+	decode: str => new Date(str),
+	encode: date => date.toISOString()
 })
 
 DateCodec.decode('2024-01-01T00:00:00Z') // Date

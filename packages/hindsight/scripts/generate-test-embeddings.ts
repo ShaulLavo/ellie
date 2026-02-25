@@ -224,7 +224,7 @@ async function main() {
 	console.log(`Written to: ${fixturePath}`)
 }
 
-main().catch((err) => {
+main().catch(err => {
 	console.error('Failed:', err)
 	process.exit(1)
 })

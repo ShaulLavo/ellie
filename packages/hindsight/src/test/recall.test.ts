@@ -203,7 +203,7 @@ describe('recall', () => {
 			})
 
 			for (const m of result.memories) {
-				const entityNames = m.entities.map((e) => e.name.toLowerCase())
+				const entityNames = m.entities.map(e => e.name.toLowerCase())
 				expect(entityNames).toContain('bob')
 			}
 		})
@@ -275,7 +275,7 @@ describe('recall', () => {
 				}
 			} else {
 				expect(trace.retrieval.length).toBeGreaterThan(0)
-				const semantic = trace.retrieval.find((m) => m.methodName === 'semantic')
+				const semantic = trace.retrieval.find(m => m.methodName === 'semantic')
 				expect(semantic).toBeDefined()
 				if (semantic && semantic.results.length > 0) {
 					expect(semantic.results[0]!.id).toBeDefined()
@@ -318,7 +318,7 @@ describe('recall', () => {
 				visits?: Array<{ parentNodeId?: string; linkType?: string }>
 			}
 			if (Array.isArray(traceAny.visits)) {
-				const roots = traceAny.visits.filter((visit) => visit.parentNodeId == null)
+				const roots = traceAny.visits.filter(visit => visit.parentNodeId == null)
 				for (const root of roots) {
 					expect(root.parentNodeId).toBeUndefined()
 					expect(root.linkType).toBeUndefined()
@@ -387,7 +387,7 @@ describe('recall', () => {
 
 		it('trace.summary.phaseMetrics includes generateQueryEmbedding, parallelRetrieval, rrfMerge, reranking phases', async () => {
 			const result = await recallWithTrace()
-			const names = new Set(result.trace!.phaseMetrics.map((m) => m.phaseName))
+			const names = new Set(result.trace!.phaseMetrics.map(m => m.phaseName))
 
 			// Current TS names use snake_case and combined scoring terminology.
 			const hasParallelRetrieval = names.has('parallel_retrieval') || names.has('parallelRetrieval')

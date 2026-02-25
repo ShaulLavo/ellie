@@ -74,14 +74,14 @@ export function generateComparisonReport(
 	lines.push('')
 
 	// Overall
-	const allPassed = gateResults.every((g) => g.status !== 'fail')
+	const allPassed = gateResults.every(g => g.status !== 'fail')
 	lines.push('## Final Acceptance')
 	lines.push('')
 	lines.push(`**Overall: ${allPassed ? 'PASS' : 'FAIL'}**`)
 	lines.push('')
 
 	if (!allPassed) {
-		const failures = gateResults.filter((g) => g.status === 'fail')
+		const failures = gateResults.filter(g => g.status === 'fail')
 		lines.push('### Failed Gates')
 		lines.push('')
 		for (const failure of failures) {
@@ -106,7 +106,7 @@ export function generateDbInvariantsReport(gateResults: GateResult[]): string {
 	lines.push('Route side-effect verification results from transactional integration tests.')
 	lines.push('')
 
-	const gate3 = gateResults.find((g) => g.gate === 'Gate 3')
+	const gate3 = gateResults.find(g => g.gate === 'Gate 3')
 	if (gate3) {
 		lines.push('## Gate 3: Route Side-Effect Invariants')
 		lines.push('')

@@ -5,8 +5,8 @@ type TestEvent = { type: 'data'; value: string } | { type: 'end'; result: string
 
 function createTestStream() {
 	return new EventStream<TestEvent, string>(
-		(e) => e.type === 'end',
-		(e) => (e.type === 'end' ? e.result : '')
+		e => e.type === 'end',
+		e => (e.type === 'end' ? e.result : '')
 	)
 }
 

@@ -98,7 +98,7 @@ _Like `derive` but runs **after validation** along "Before Handle" (so you can r
 - Usually placed inside a `guard` because it isn't available as a local hook.
 
 ```ts
-new Elysia().guard({ headers: t.Object({ authorization: t.String() }) }, (app) =>
+new Elysia().guard({ headers: t.Object({ authorization: t.String() }) }, app =>
 	app
 		.resolve(({ headers }) => ({
 			bearer: headers.authorization.split(' ')[1]

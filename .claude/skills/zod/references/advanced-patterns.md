@@ -15,7 +15,7 @@ Refinements allow you to add custom validation logic beyond Zod's built-in valid
 ```typescript
 const PasswordSchema = z
 	.string()
-	.refine((val) => val.length >= 8, { message: 'Password must be at least 8 characters' })
+	.refine(val => val.length >= 8, { message: 'Password must be at least 8 characters' })
 ```
 
 ### Multiple Refinements
@@ -23,9 +23,9 @@ const PasswordSchema = z
 ```typescript
 const SafePasswordSchema = z
 	.string()
-	.refine((val) => val.length >= 8, 'Too short')
-	.refine((val) => /[A-Z]/.test(val), 'Must contain uppercase')
-	.refine((val) => /[0-9]/.test(val), 'Must contain number')
+	.refine(val => val.length >= 8, 'Too short')
+	.refine(val => /[A-Z]/.test(val), 'Must contain uppercase')
+	.refine(val => /[0-9]/.test(val), 'Must contain number')
 ```
 
 ### SuperRefine (Multiple Issues at Once)
@@ -51,7 +51,7 @@ const UserSchema = z
 
 ```typescript
 const UsernameSchema = z.string().refine(
-	async (username) => {
+	async username => {
 		const exists = await checkUsernameExists(username)
 		return !exists
 	},
@@ -69,7 +69,7 @@ Transformations allow you to modify data during parsing.
 
 ```typescript
 // Transform data during parsing
-const StringToNumberSchema = z.string().transform((val) => parseInt(val))
+const StringToNumberSchema = z.string().transform(val => parseInt(val))
 const result = StringToNumberSchema.parse('123') // 123 (number)
 ```
 
@@ -78,8 +78,8 @@ const result = StringToNumberSchema.parse('123') // 123 (number)
 ```typescript
 const TrimAndLowercaseSchema = z
 	.string()
-	.transform((val) => val.trim())
-	.transform((val) => val.toLowerCase())
+	.transform(val => val.trim())
+	.transform(val => val.toLowerCase())
 ```
 
 ### Pipe (Combine Schemas with Transformation)
@@ -111,8 +111,8 @@ const DateCodec = z.codec(
 	z.iso.datetime(), // Input schema (ISO string)
 	z.date(), // Output schema (Date object)
 	{
-		decode: (str) => new Date(str), // String → Date
-		encode: (date) => date.toISOString() // Date → String
+		decode: str => new Date(str), // String → Date
+		encode: date => date.toISOString() // Date → String
 	}
 )
 
@@ -131,8 +131,8 @@ Unlike `.parse()` which accepts `unknown`, codec methods require strongly-typed 
 
 ```typescript
 const DateCodec = z.codec(z.iso.datetime(), z.date(), {
-	decode: (str) => new Date(str),
-	encode: (date) => date.toISOString()
+	decode: str => new Date(str),
+	encode: date => date.toISOString()
 })
 
 // ✓ Type-safe decode (expects string)
@@ -218,8 +218,8 @@ console.log(typeof payload.createdAt) // "string"
 // 1. JSON String Codec
 const JSONCodec = <T extends z.ZodTypeAny>(schema: T) =>
 	z.codec(z.string(), schema, {
-		decode: (str) => JSON.parse(str),
-		encode: (obj) => JSON.stringify(obj)
+		decode: str => JSON.parse(str),
+		encode: obj => JSON.stringify(obj)
 	})
 
 const UserJSONCodec = JSONCodec(
@@ -231,18 +231,18 @@ const UserJSONCodec = JSONCodec(
 
 // 2. Base64 Codec
 const Base64Codec = z.codec(z.string(), z.instanceof(Uint8Array), {
-	decode: (base64) => Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)),
-	encode: (bytes) => btoa(String.fromCharCode(...bytes))
+	decode: base64 => Uint8Array.from(atob(base64), c => c.charCodeAt(0)),
+	encode: bytes => btoa(String.fromCharCode(...bytes))
 })
 
 // 3. URL Search Params Codec
 const QueryParamsCodec = <T extends z.ZodTypeAny>(schema: T) =>
 	z.codec(z.string(), schema, {
-		decode: (queryString) => {
+		decode: queryString => {
 			const params = new URLSearchParams(queryString)
 			return Object.fromEntries(params.entries())
 		},
-		encode: (obj) => new URLSearchParams(obj).toString()
+		encode: obj => new URLSearchParams(obj).toString()
 	})
 
 // 4. Milliseconds <-> Seconds Codec
@@ -250,8 +250,8 @@ const SecondsCodec = z.codec(
 	z.number().int().nonnegative(), // Input: seconds
 	z.number().int().nonnegative(), // Output: milliseconds
 	{
-		decode: (seconds) => seconds * 1000,
-		encode: (ms) => Math.floor(ms / 1000)
+		decode: seconds => seconds * 1000,
+		encode: ms => Math.floor(ms / 1000)
 	}
 )
 ```
@@ -280,13 +280,13 @@ const UserAPISchema = z.object({
 	id: z.string().uuid(),
 	email: z.string().email(),
 	createdAt: z.codec(z.iso.datetime(), z.date(), {
-		decode: (str) => new Date(str),
-		encode: (date) => date.toISOString()
+		decode: str => new Date(str),
+		encode: date => date.toISOString()
 	}),
 	lastLogin: z
 		.codec(z.iso.datetime(), z.date(), {
-			decode: (str) => new Date(str),
-			encode: (date) => date.toISOString()
+			decode: str => new Date(str),
+			encode: date => date.toISOString()
 		})
 		.nullable()
 })
@@ -511,7 +511,7 @@ const ConditionalSchema = z
 
 ```typescript
 // Don't load schema until needed
-const HeavySchema = z.lazy(() => import('./schemas/heavy').then((m) => m.schema))
+const HeavySchema = z.lazy(() => import('./schemas/heavy').then(m => m.schema))
 ```
 
 ### Discriminated Unions for Performance

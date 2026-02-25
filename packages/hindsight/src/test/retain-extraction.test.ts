@@ -16,11 +16,11 @@ import {
 const CANONICAL_EVENT_DATE = '2024-11-13T12:00:00+02:00'
 
 function lowerJoined(memories: Array<{ content: string }>): string {
-	return memories.map((m) => m.content.toLowerCase()).join(' ')
+	return memories.map(m => m.content.toLowerCase()).join(' ')
 }
 
 function countMatches(text: string, terms: string[]): number {
-	return terms.filter((term) => text.includes(term)).length
+	return terms.filter(term => text.includes(term)).length
 }
 
 function approximateDate(iso: string | null, expectedIso: string): boolean {
@@ -74,7 +74,7 @@ Marcus felt anxious about the upcoming interview.`,
 
 			const text = lowerJoined(memories)
 			const emotionalIndicators = ['thrilled', 'disappointed', 'anxious', 'positive feedback']
-			const found = emotionalIndicators.filter((term) => text.includes(term))
+			const found = emotionalIndicators.filter(term => text.includes(term))
 
 			expect(found.length).toBeGreaterThanOrEqual(2)
 		}, 60_000)
@@ -95,7 +95,7 @@ Marcus felt anxious about the upcoming interview.`,
 					'shipped',
 					'successfully',
 					'perfectly'
-				].some((term) => text.includes(term))
+				].some(term => text.includes(term))
 			).toBe(true)
 		}, 60_000)
 
@@ -105,7 +105,7 @@ Marcus felt anxious about the upcoming interview.`,
 			)
 			const text = lowerJoined(memories)
 			expect(memories.length).toBeGreaterThan(0)
-			expect(['excited', 'anxious', 'excited', 'anxiety'].some((term) => text.includes(term))).toBe(
+			expect(['excited', 'anxious', 'excited', 'anxiety'].some(term => text.includes(term))).toBe(
 				true
 			)
 			expect(countMatches(text, ['excited', 'anxious', 'anxiety'])).toBeGreaterThanOrEqual(2)
@@ -126,7 +126,7 @@ The music was so loud I could barely hear myself think.`,
 
 			const text = lowerJoined(memories)
 			const sensoryIndicators = ['bitter', 'burnt', 'bright orange', 'loud', 'stunning']
-			const found = sensoryIndicators.filter((term) => text.includes(term))
+			const found = sensoryIndicators.filter(term => text.includes(term))
 
 			expect(found.length).toBeGreaterThanOrEqual(2)
 		}, 60_000)
@@ -137,7 +137,7 @@ The music was so loud I could barely hear myself think.`,
 			const memories = await extract('Yesterday I went hiking in Yosemite.')
 			expect(memories.length).toBeGreaterThan(0)
 			expect(
-				memories.some((memory) =>
+				memories.some(memory =>
 					approximateDate(
 						memory.occurredStart ? new Date(memory.occurredStart).toISOString() : null,
 						'2024-11-12T00:00:00.000Z'
@@ -150,20 +150,20 @@ The music was so loud I could barely hear myself think.`,
 			const memories = await extract('Last Saturday I met Emily for lunch.')
 			expect(memories.length).toBeGreaterThan(0)
 			const text = lowerJoined(memories)
-			expect(text.includes('saturday') || memories.some((m) => m.occurredStart != null)).toBe(true)
+			expect(text.includes('saturday') || memories.some(m => m.occurredStart != null)).toBe(true)
 		}, 60_000)
 
 		it("converts 'two weeks ago' to approximate date", async () => {
 			const memories = await extract('Two weeks ago I submitted the application.')
 			expect(memories.length).toBeGreaterThan(0)
-			expect(memories.some((memory) => memory.occurredStart != null)).toBe(true)
+			expect(memories.some(memory => memory.occurredStart != null)).toBe(true)
 		}, 60_000)
 
 		it('preserves absolute dates as-is', async () => {
 			const memories = await extract('On March 15, 2024, Alice joined Google.')
 			expect(memories.length).toBeGreaterThan(0)
 			expect(
-				memories.some((memory) => {
+				memories.some(memory => {
 					if (!memory.occurredStart) return false
 					const date = new Date(memory.occurredStart)
 					return date.getUTCFullYear() === 2024 && date.getUTCMonth() === 2
@@ -179,7 +179,7 @@ The music was so loud I could barely hear myself think.`,
 			)
 			expect(memories.length).toBeGreaterThan(0)
 			expect(
-				memories.some((memory) => memory.factType === 'experience' || memory.factType === 'world')
+				memories.some(memory => memory.factType === 'experience' || memory.factType === 'world')
 			).toBe(true)
 		}, 60_000)
 
@@ -188,7 +188,7 @@ The music was so loud I could barely hear myself think.`,
 				'Python is a programming language created by Guido van Rossum. It was first released in 1991 and is known for its readability.'
 			)
 			expect(memories.length).toBeGreaterThan(0)
-			expect(memories.some((memory) => memory.factType === 'world')).toBe(true)
+			expect(memories.some(memory => memory.factType === 'world')).toBe(true)
 		}, 60_000)
 
 		it('classifies opinion with context', async () => {
@@ -198,7 +198,7 @@ The music was so loud I could barely hear myself think.`,
 			expect(memories.length).toBeGreaterThan(0)
 			expect(
 				memories.some(
-					(memory) =>
+					memory =>
 						memory.factType === 'opinion' ||
 						memory.factType === 'world' ||
 						memory.factType === 'experience'
@@ -213,7 +213,7 @@ The music was so loud I could barely hear myself think.`,
 			expect(memories.length).toBeGreaterThan(0)
 			expect(
 				memories.some(
-					(memory) =>
+					memory =>
 						memory.factType === 'observation' ||
 						memory.factType === 'world' ||
 						memory.factType === 'experience'
@@ -259,7 +259,7 @@ The music was so loud I could barely hear myself think.`,
 			})
 			expect(memories.length).toBeGreaterThan(0)
 			const text = lowerJoined(memories)
-			expect(['startup', 'invested', 'launched'].some((term) => text.includes(term))).toBe(true)
+			expect(['startup', 'invested', 'launched'].some(term => text.includes(term))).toBe(true)
 		}, 60_000)
 	})
 
@@ -336,7 +336,7 @@ The music was so loud I could barely hear myself think.`,
 			const text = lowerJoined(memories)
 			expect(memories.length).toBeGreaterThan(0)
 			expect(
-				['thrilled', 'anxious', 'bright red', 'yesterday'].some((term) => text.includes(term))
+				['thrilled', 'anxious', 'bright red', 'yesterday'].some(term => text.includes(term))
 			).toBe(true)
 		}, 60_000)
 

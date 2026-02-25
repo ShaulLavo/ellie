@@ -74,12 +74,12 @@ function cooccurrenceScore(
 
 	const candidateCoocs = cooccurrences.get(candidateId) ?? new Set()
 	const nearbyIds = nearbyEntityNames
-		.map((n) => existingEntities.find((e) => e.name.toLowerCase() === n.toLowerCase())?.id)
+		.map(n => existingEntities.find(e => e.name.toLowerCase() === n.toLowerCase())?.id)
 		.filter(Boolean) as string[]
 
 	if (nearbyIds.length === 0) return 0
 
-	const overlap = nearbyIds.filter((id) => candidateCoocs.has(id)).length
+	const overlap = nearbyIds.filter(id => candidateCoocs.has(id)).length
 	return overlap / nearbyEntityNames.length
 }
 

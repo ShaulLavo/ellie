@@ -27,7 +27,7 @@ describe('ulid', () => {
 
 	it('is time-sortable: later IDs sort after earlier ones', async () => {
 		const id1 = ulid()
-		await new Promise((r) => setTimeout(r, 2))
+		await new Promise(r => setTimeout(r, 2))
 		const id2 = ulid()
 		expect(id2 > id1).toBe(true)
 	})
@@ -60,13 +60,13 @@ describe('ulid', () => {
 		}
 
 		// Tight loop — at least one prefix group should have multiple IDs
-		const hasCollision = [...byPrefix.values()].some((g) => g.length > 1)
+		const hasCollision = [...byPrefix.values()].some(g => g.length > 1)
 		expect(hasCollision).toBe(true)
 
 		// Within same-timestamp groups, random suffixes must differ
 		for (const group of byPrefix.values()) {
 			if (group.length > 1) {
-				const suffixes = group.map((id) => id.slice(10))
+				const suffixes = group.map(id => id.slice(10))
 				const uniqueSuffixes = new Set(suffixes)
 				expect(uniqueSuffixes.size).toBe(suffixes.length)
 			}

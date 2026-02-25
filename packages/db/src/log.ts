@@ -60,7 +60,7 @@ export class LogFile {
 	 * Convenience wrapper — calls readAt for each entry.
 	 */
 	readRange(entries: Array<{ bytePos: number; length: number }>): Uint8Array[] {
-		return entries.map((e) => this.readAt(e.bytePos, e.length))
+		return entries.map(e => this.readAt(e.bytePos, e.length))
 	}
 
 	/**

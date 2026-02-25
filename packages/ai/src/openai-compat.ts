@@ -365,7 +365,7 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 						result.push({
 							role: 'assistant',
 							content: (m.content as string | null) ?? null,
-							tool_calls: tcArray.map((tc) => {
+							tool_calls: tcArray.map(tc => {
 								const fn = tc.function as Record<string, unknown> | undefined
 								return {
 									id: (tc.id as string) ?? '',
@@ -383,12 +383,12 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 					} else {
 						// Check for tool calls in parts (UIMessage format)
 						const parts = m.parts as Array<Record<string, unknown>> | undefined
-						const toolCallParts = parts?.filter((p) => p.type === 'tool-call')
+						const toolCallParts = parts?.filter(p => p.type === 'tool-call')
 						if (toolCallParts && toolCallParts.length > 0) {
 							result.push({
 								role: 'assistant',
 								content: null,
-								tool_calls: toolCallParts.map((tc) => ({
+								tool_calls: toolCallParts.map(tc => ({
 									id: tc.toolCallId as string,
 									type: 'function' as const,
 									function: {
@@ -418,15 +418,15 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 		if (typeof msg.content === 'string') return msg.content
 		if (Array.isArray(msg.content)) {
 			return (msg.content as Array<Record<string, unknown>>)
-				.filter((p) => p.type === 'text')
-				.map((p) => p.text as string)
+				.filter(p => p.type === 'text')
+				.map(p => p.text as string)
 				.join('')
 		}
 		// UIMessage format uses `parts` instead of `content`
 		if (Array.isArray(msg.parts)) {
 			return (msg.parts as Array<Record<string, unknown>>)
-				.filter((p) => p.type === 'text')
-				.map((p) => p.text as string)
+				.filter(p => p.type === 'text')
+				.map(p => p.text as string)
 				.join('')
 		}
 		return ''

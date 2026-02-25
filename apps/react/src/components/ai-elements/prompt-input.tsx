@@ -76,7 +76,7 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
 		const blob = await response.blob()
 		// FileReader uses callback-based API, wrapping in Promise is necessary
 		// oxlint-disable-next-line eslint-plugin-promise(avoid-new)
-		return new Promise((resolve) => {
+		return new Promise(resolve => {
 			const reader = new FileReader()
 			// oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
 			reader.onloadend = () => resolve(reader.result as string)
@@ -171,9 +171,9 @@ export const PromptInputProvider = ({
 			return
 		}
 
-		setAttachmentFiles((prev) => [
+		setAttachmentFiles(prev => [
 			...prev,
-			...incoming.map((file) => ({
+			...incoming.map(file => ({
 				filename: file.name,
 				id: nanoid(),
 				mediaType: file.type,
@@ -184,17 +184,17 @@ export const PromptInputProvider = ({
 	}, [])
 
 	const remove = useCallback((id: string) => {
-		setAttachmentFiles((prev) => {
-			const found = prev.find((f) => f.id === id)
+		setAttachmentFiles(prev => {
+			const found = prev.find(f => f.id === id)
 			if (found?.url) {
 				URL.revokeObjectURL(found.url)
 			}
-			return prev.filter((f) => f.id !== id)
+			return prev.filter(f => f.id !== id)
 		})
 	}, [])
 
 	const clear = useCallback(() => {
-		setAttachmentFiles((prev) => {
+		setAttachmentFiles(prev => {
 			for (const f of prev) {
 				if (f.url) {
 					URL.revokeObjectURL(f.url)
@@ -406,10 +406,10 @@ export const PromptInput = ({
 
 			const patterns = accept
 				.split(',')
-				.map((s) => s.trim())
+				.map(s => s.trim())
 				.filter(Boolean)
 
-			return patterns.some((pattern) => {
+			return patterns.some(pattern => {
 				if (pattern.endsWith('/*')) {
 					// e.g: image/* -> image/
 					const prefix = pattern.slice(0, -1)
@@ -424,7 +424,7 @@ export const PromptInput = ({
 	const addLocal = useCallback(
 		(fileList: File[] | FileList) => {
 			const incoming = [...fileList]
-			const accepted = incoming.filter((f) => matchesAccept(f))
+			const accepted = incoming.filter(f => matchesAccept(f))
 			if (incoming.length && accepted.length === 0) {
 				onError?.({
 					code: 'accept',
@@ -442,7 +442,7 @@ export const PromptInput = ({
 				return
 			}
 
-			setItems((prev) => {
+			setItems(prev => {
 				const capacity =
 					typeof maxFiles === 'number' ? Math.max(0, maxFiles - prev.length) : undefined
 				const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized
@@ -470,12 +470,12 @@ export const PromptInput = ({
 
 	const removeLocal = useCallback(
 		(id: string) =>
-			setItems((prev) => {
-				const found = prev.find((file) => file.id === id)
+			setItems(prev => {
+				const found = prev.find(file => file.id === id)
 				if (found?.url) {
 					URL.revokeObjectURL(found.url)
 				}
-				return prev.filter((file) => file.id !== id)
+				return prev.filter(file => file.id !== id)
 			}),
 		[]
 	)
@@ -484,7 +484,7 @@ export const PromptInput = ({
 	const addWithProviderValidation = useCallback(
 		(fileList: File[] | FileList) => {
 			const incoming = [...fileList]
-			const accepted = incoming.filter((f) => matchesAccept(f))
+			const accepted = incoming.filter(f => matchesAccept(f))
 			if (incoming.length && accepted.length === 0) {
 				onError?.({
 					code: 'accept',
@@ -524,7 +524,7 @@ export const PromptInput = ({
 		() =>
 			usingProvider
 				? controller?.attachments.clear()
-				: setItems((prev) => {
+				: setItems(prev => {
 						for (const file of prev) {
 							if (file.url) {
 								URL.revokeObjectURL(file.url)
@@ -634,7 +634,7 @@ export const PromptInput = ({
 	)
 
 	const handleChange: ChangeEventHandler<HTMLInputElement> = useCallback(
-		(event) => {
+		event => {
 			if (event.currentTarget.files) {
 				add(event.currentTarget.files)
 			}
@@ -649,7 +649,7 @@ export const PromptInput = ({
 			add,
 			clear: clearAttachments,
 			fileInputRef: inputRef,
-			files: files.map((item) => ({ ...item, id: item.id })),
+			files: files.map(item => ({ ...item, id: item.id })),
 			openFileDialog,
 			remove
 		}),
@@ -660,11 +660,11 @@ export const PromptInput = ({
 		() => ({
 			add: (incoming: SourceDocumentUIPart[] | SourceDocumentUIPart) => {
 				const array = Array.isArray(incoming) ? incoming : [incoming]
-				setReferencedSources((prev) => [...prev, ...array.map((s) => ({ ...s, id: nanoid() }))])
+				setReferencedSources(prev => [...prev, ...array.map(s => ({ ...s, id: nanoid() }))])
 			},
 			clear: clearReferencedSources,
 			remove: (id: string) => {
-				setReferencedSources((prev) => prev.filter((s) => s.id !== id))
+				setReferencedSources(prev => prev.filter(s => s.id !== id))
 			},
 			sources: referencedSources
 		}),
@@ -672,7 +672,7 @@ export const PromptInput = ({
 	)
 
 	const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
-		async (event) => {
+		async event => {
 			event.preventDefault()
 
 			const form = event.currentTarget
@@ -785,7 +785,7 @@ export const PromptInputTextarea = ({
 	const [isComposing, setIsComposing] = useState(false)
 
 	const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = useCallback(
-		(e) => {
+		e => {
 			// Call the external onKeyDown handler first
 			onKeyDown?.(e)
 
@@ -828,7 +828,7 @@ export const PromptInputTextarea = ({
 	)
 
 	const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = useCallback(
-		(event) => {
+		event => {
 			const items = event.clipboardData?.items
 
 			if (!items) {
@@ -1024,7 +1024,7 @@ export const PromptInputSubmit = ({
 	}
 
 	const handleClick: typeof onClick = useCallback(
-		(e) => {
+		e => {
 			if (isGenerating && onStop) {
 				e.preventDefault()
 				onStop()

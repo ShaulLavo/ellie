@@ -15,7 +15,7 @@ const result = schema.safeParse(data)
 
 if (!result.success) {
 	// ZodError structure
-	result.error.issues.forEach((issue) => {
+	result.error.issues.forEach(issue => {
 		console.log(issue.code) // Error type
 		console.log(issue.path) // Field path
 		console.log(issue.message) // Error message
@@ -237,7 +237,7 @@ const NameSchema = z.string({
 })
 
 const EmailSchema = z.string().email({
-	error: (issue) => {
+	error: issue => {
 		if (issue.code === 'invalid_string') {
 			return { message: 'Please provide a valid email address' }
 		}
@@ -251,7 +251,7 @@ const AgeSchema = z.number().min(18, {
 // 2. PER-PARSE LEVEL (Medium Priority)
 // Override errors for a specific parse call
 const result = UserSchema.parse(data, {
-	error: (issue) => {
+	error: issue => {
 		// Custom error logic for this specific parse
 		return { message: `Validation failed at ${issue.path.join('.')}` }
 	}
@@ -260,7 +260,7 @@ const result = UserSchema.parse(data, {
 // 3. GLOBAL LEVEL (Lowest Priority)
 // Set application-wide error defaults
 z.config({
-	customError: (issue) => {
+	customError: issue => {
 		// Global error handler - applies when schema/parse don't specify
 		return { message: `Global error: ${issue.code}` }
 	}
@@ -275,7 +275,7 @@ Error customization functions receive an issue context object with detailed info
 
 ```typescript
 z.string().min(5, {
-	error: (issue) => {
+	error: issue => {
 		// Available properties:
 		console.log(issue.code) // Error type (e.g., "too_small")
 		console.log(issue.input) // The data being validated
@@ -305,7 +305,7 @@ z.string('Invalid string!')
 
 // Conditional error messages
 z.string({
-	error: (issue) => {
+	error: issue => {
 		if (issue.code === 'too_small') {
 			return { message: `Minimum length: ${issue.minimum}` }
 		}
@@ -319,7 +319,7 @@ z.string({
 // Include input data in errors (disabled by default for security)
 schema.parse(data, {
 	reportInput: true, // Now error.issues will include input data
-	error: (issue) => ({
+	error: issue => ({
 		message: `Invalid value: ${JSON.stringify(issue.input)}`
 	})
 })
@@ -350,7 +350,7 @@ const result = schema.parse(data, {
 
 // Custom i18n integration
 z.config({
-	customError: (issue) => ({
+	customError: issue => ({
 		message: t(`validation.${issue.code}`, issue)
 	})
 })

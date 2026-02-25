@@ -68,7 +68,7 @@ function getTextContent(msg: Message): string {
 	if (!msg.content || !Array.isArray(msg.content)) return ''
 	return (msg.content as Array<Record<string, unknown>>)
 		.filter((c): c is Record<string, unknown> & { type: 'text'; text: string } => c.type === 'text')
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join('')
 }
 
@@ -334,7 +334,7 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 				</ChatToolbarAddon>
 				<ChatToolbarTextarea
 					value={input}
-					onChange={(e) => setInput(e.target.value)}
+					onChange={e => setInput(e.target.value)}
 					onSubmit={handleSubmit}
 					placeholder="Message…"
 					disabled={isLoading}

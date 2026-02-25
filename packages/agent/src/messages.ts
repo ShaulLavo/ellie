@@ -57,11 +57,11 @@ function assistantToModelMessage(msg: AssistantMessage): ModelMessage {
 	const toolCalls = msg.content.filter((c): c is ToolCall => c.type === 'toolCall')
 	// Thinking content is stripped — providers handle it via modelOptions
 
-	const textContent = textParts.map((c) => c.text).join('')
+	const textContent = textParts.map(c => c.text).join('')
 
 	const tanStackToolCalls =
 		toolCalls.length > 0
-			? toolCalls.map((tc) => ({
+			? toolCalls.map(tc => ({
 					id: tc.id,
 					type: 'function' as const,
 					function: {
@@ -81,7 +81,7 @@ function assistantToModelMessage(msg: AssistantMessage): ModelMessage {
 function toolResultToModelMessage(msg: ToolResultMessage): ModelMessage {
 	const textContent = msg.content
 		.filter((c): c is TextContent => c.type === 'text')
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join('')
 
 	return {

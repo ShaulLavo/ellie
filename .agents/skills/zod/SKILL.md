@@ -385,7 +385,7 @@ z.set(z.string()) // Set<string>
 **Refinements** (custom validation):
 
 ```typescript
-z.string().refine((val) => val.length >= 8, 'Too short')
+z.string().refine(val => val.length >= 8, 'Too short')
 z.object({ password, confirmPassword }).superRefine((data, ctx) => {
 	/* ... */
 })
@@ -394,7 +394,7 @@ z.object({ password, confirmPassword }).superRefine((data, ctx) => {
 **Transformations** (modify data):
 
 ```typescript
-z.string().transform((val) => val.trim())
+z.string().transform(val => val.trim())
 z.string().pipe(z.coerce.number())
 ```
 
@@ -402,8 +402,8 @@ z.string().pipe(z.coerce.number())
 
 ```typescript
 const DateCodec = z.codec(z.iso.datetime(), z.date(), {
-	decode: (str) => new Date(str),
-	encode: (date) => date.toISOString()
+	decode: str => new Date(str),
+	encode: date => date.toISOString()
 })
 ```
 
@@ -460,10 +460,10 @@ z.string({ error: 'Custom message' })
 z.string().min(5, 'Too short')
 
 // 2. Per-parse level
-schema.parse(data, { error: (issue) => ({ message: '...' }) })
+schema.parse(data, { error: issue => ({ message: '...' }) })
 
 // 3. Global level
-z.config({ customError: (issue) => ({ message: '...' }) })
+z.config({ customError: issue => ({ message: '...' }) })
 ```
 
 **Localization** (40+ languages):
@@ -491,7 +491,7 @@ type User = z.infer<typeof UserSchema> // { name: string }
 **Input vs Output** (for transforms):
 
 ```typescript
-const TransformSchema = z.string().transform((s) => s.length)
+const TransformSchema = z.string().transform(s => s.length)
 type Input = z.input<typeof TransformSchema> // string
 type Output = z.output<typeof TransformSchema> // number
 ```
@@ -540,7 +540,7 @@ const FetchFunction = z
 	.function()
 	.args(z.string())
 	.returns(z.promise(z.object({ data: z.any() })))
-	.implementAsync(async (url) => {
+	.implementAsync(async url => {
 		const response = await fetch(url)
 		return response.json()
 	})

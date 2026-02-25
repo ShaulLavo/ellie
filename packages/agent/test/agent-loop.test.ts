@@ -146,7 +146,7 @@ describe('agentLoop', () => {
 		const stream = agentLoop(prompts, context, config, undefined, streamFn)
 		const events = await collectEvents(stream)
 
-		const types = events.map((e) => e.type)
+		const types = events.map(e => e.type)
 
 		expect(types).toContain('agent_start')
 		expect(types).toContain('turn_start')
@@ -157,11 +157,11 @@ describe('agentLoop', () => {
 		expect(types).toContain('agent_end')
 
 		// First message events should be for the user prompt
-		const firstMsgStart = events.find((e) => e.type === 'message_start')
+		const firstMsgStart = events.find(e => e.type === 'message_start')
 		expect(firstMsgStart?.type === 'message_start' && firstMsgStart.message.role).toBe('user')
 
 		// Should have an assistant message
-		const msgEnd = events.filter((e) => e.type === 'message_end' && e.message.role === 'assistant')
+		const msgEnd = events.filter(e => e.type === 'message_end' && e.message.role === 'assistant')
 		expect(msgEnd.length).toBe(1)
 
 		const assistantMsg = (msgEnd[0] as { type: 'message_end'; message: AssistantMessage }).message
@@ -220,18 +220,18 @@ describe('agentLoop', () => {
 
 		const stream = agentLoop(prompts, context, config, undefined, streamFn)
 		const events = await collectEvents(stream)
-		const types = events.map((e) => e.type)
+		const types = events.map(e => e.type)
 
 		// Should have tool execution events
 		expect(types).toContain('tool_execution_start')
 		expect(types).toContain('tool_execution_end')
 
 		// Tool loop is internal to one turn when using streamFn
-		const turnStarts = events.filter((e) => e.type === 'turn_start')
+		const turnStarts = events.filter(e => e.type === 'turn_start')
 		expect(turnStarts.length).toBeGreaterThanOrEqual(1)
 
 		// Tool result should be in events
-		const toolEnd = events.find((e) => e.type === 'tool_execution_end')
+		const toolEnd = events.find(e => e.type === 'tool_execution_end')
 		expect(toolEnd?.type === 'tool_execution_end' && toolEnd.isError).toBe(false)
 	})
 
@@ -269,7 +269,7 @@ describe('agentLoop', () => {
 		const stream = agentLoop(prompts, context, config, undefined, dynamicStreamFn)
 		const events = await collectEvents(stream)
 
-		const toolEnd = events.find((e) => e.type === 'tool_execution_end')
+		const toolEnd = events.find(e => e.type === 'tool_execution_end')
 		expect(toolEnd?.type === 'tool_execution_end' && toolEnd.isError).toBe(true)
 	})
 
@@ -395,7 +395,7 @@ describe('agentLoop', () => {
 		expect(toolExecutionCount).toBe(1)
 
 		// Second tool should be skipped
-		const toolEnds = events.filter((e) => e.type === 'tool_execution_end')
+		const toolEnds = events.filter(e => e.type === 'tool_execution_end')
 		expect(toolEnds.length).toBe(2)
 		const skipped = toolEnds[1]
 		expect(skipped.type === 'tool_execution_end' && skipped.isError).toBe(true)
@@ -445,7 +445,7 @@ describe('agentLoop', () => {
 
 		// Should have two assistant responses (original + follow-up)
 		const assistantMsgEnds = events.filter(
-			(e) => e.type === 'message_end' && e.message.role === 'assistant'
+			e => e.type === 'message_end' && e.message.role === 'assistant'
 		)
 		expect(assistantMsgEnds.length).toBe(2)
 		expect(callCount).toBe(2)
@@ -486,11 +486,11 @@ describe('agentLoop', () => {
 		const stream = agentLoop(prompts, context, config, undefined, streamFn)
 		const events = await collectEvents(stream)
 
-		const agentEnd = events.find((e) => e.type === 'agent_end')
+		const agentEnd = events.find(e => e.type === 'agent_end')
 		expect(agentEnd).toBeDefined()
 
 		const assistantMsgs = events.filter(
-			(e) => e.type === 'message_end' && e.message.role === 'assistant'
+			e => e.type === 'message_end' && e.message.role === 'assistant'
 		)
 		expect(assistantMsgs.length).toBe(1)
 		const msg = (assistantMsgs[0] as { type: 'message_end'; message: AssistantMessage }).message
@@ -575,12 +575,12 @@ describe('agentLoopContinue', () => {
 		const stream = agentLoopContinue(context, config, undefined, streamFn)
 		const events = await collectEvents(stream)
 
-		const types = events.map((e) => e.type)
+		const types = events.map(e => e.type)
 		expect(types).toContain('agent_start')
 		expect(types).toContain('agent_end')
 
 		const assistantMsgs = events.filter(
-			(e) => e.type === 'message_end' && e.message.role === 'assistant'
+			e => e.type === 'message_end' && e.message.role === 'assistant'
 		)
 		expect(assistantMsgs.length).toBe(1)
 	})

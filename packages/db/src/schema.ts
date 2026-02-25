@@ -28,7 +28,7 @@ export const events = sqliteTable(
 		dedupeKey: text('dedupe_key'),
 		createdAt: integer('created_at').notNull()
 	},
-	(table) => [
+	table => [
 		uniqueIndex('idx_events_session_seq').on(table.sessionId, table.seq),
 		index('idx_events_session_type').on(table.sessionId, table.type),
 		index('idx_events_session_run_seq').on(table.sessionId, table.runId, table.seq)

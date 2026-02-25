@@ -19,8 +19,8 @@ import { runPhase2Verification } from '../src/phase2-runner'
 // ── Parse args ──────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2)
-const outputDirArg = args.find((a) => a.startsWith('--output-dir='))
-const runIdArg = args.find((a) => a.startsWith('--run-id='))
+const outputDirArg = args.find(a => a.startsWith('--output-dir='))
+const runIdArg = args.find(a => a.startsWith('--run-id='))
 
 const defaultOutputDir = resolve(import.meta.dir, '..', 'artifacts', 'phase2')
 const outputDirVal = outputDirArg?.split('=')[1]?.trim()
@@ -102,7 +102,7 @@ async function main() {
 	console.log(`Artifacts written to: ${outputDir}`)
 }
 
-main().catch((error) => {
+main().catch(error => {
 	console.error('Fatal error:', error)
 	process.exit(1)
 })

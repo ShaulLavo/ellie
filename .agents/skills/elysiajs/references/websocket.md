@@ -156,11 +156,11 @@ ws.onopen = () => {
 	ws.send('Hello Server!')
 }
 
-ws.onmessage = (event) => {
+ws.onmessage = event => {
 	console.log('Received:', event.data)
 }
 
-ws.onerror = (error) => {
+ws.onerror = error => {
 	console.error('Error:', error)
 }
 
@@ -188,7 +188,7 @@ import type { App } from './server'
 const api = treaty<App>('localhost:3000')
 const chat = api.chat.subscribe()
 
-chat.subscribe((message) => {
+chat.subscribe(message => {
 	console.log('Received:', message)
 })
 

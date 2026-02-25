@@ -113,7 +113,7 @@ export function useAgentChat(sessionId: string) {
 				const msg = eventToMessage(row)
 				if (msg) {
 					// Events arrive in monotonic seq order over SSE — just append
-					setMessages((current) => [...current, msg])
+					setMessages(current => [...current, msg])
 				}
 			} catch (err) {
 				console.warn('[useAgentChat] failed to parse event:', err)

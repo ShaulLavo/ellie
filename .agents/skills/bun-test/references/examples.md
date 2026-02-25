@@ -85,7 +85,7 @@ it('should handle errors', async () => {
 ```typescript
 describe('Async operations', () => {
 	it('should wait for async function', async () => {
-		const result = await new Promise((resolve) => {
+		const result = await new Promise(resolve => {
 			setTimeout(() => resolve('done'), 100)
 		})
 
@@ -403,6 +403,6 @@ it('should handle multiple concurrent requests', async () => {
 
 	const responses = await Promise.all(requests)
 
-	expect(responses.every((r) => r.ok)).toBe(true)
+	expect(responses.every(r => r.ok)).toBe(true)
 })
 ```

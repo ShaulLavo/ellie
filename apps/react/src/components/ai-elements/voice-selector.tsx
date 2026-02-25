@@ -85,7 +85,7 @@ export const VoiceSelector = ({
 
 	return (
 		<VoiceSelectorContext.Provider value={voiceSelectorContext}>
-			<Dialog onOpenChange={(value) => setOpen(value)} open={open} {...props}>
+			<Dialog onOpenChange={value => setOpen(value)} open={open} {...props}>
 				{children}
 			</Dialog>
 		</VoiceSelectorContext.Provider>

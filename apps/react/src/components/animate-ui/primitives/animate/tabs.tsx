@@ -270,7 +270,7 @@ function TabsContents({
 				{childrenArray.map((child, index) => (
 					<div
 						key={index}
-						ref={(el) => {
+						ref={el => {
 							itemRefs.current[index] = el
 						}}
 						className="w-full shrink-0 px-2 h-full"

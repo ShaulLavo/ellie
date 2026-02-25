@@ -480,7 +480,7 @@ Instructions:
 					this.rerank,
 					retainProfile
 				),
-			(r) => ({
+			r => ({
 				memoriesExtracted: r.memories.length,
 				entitiesResolved: r.entities.length,
 				linksCreated: r.links.length
@@ -528,7 +528,7 @@ Instructions:
 					resolvedOptions,
 					this.rerank
 				),
-			(results) => ({
+			results => ({
 				items: contents.length,
 				memoriesExtracted: results.reduce((sum, result) => sum + result.memories.length, 0),
 				entitiesResolved: results.reduce((sum, result) => sum + result.entities.length, 0),
@@ -557,7 +557,7 @@ Instructions:
 					this.rerank,
 					this.workingMemory
 				),
-			(r) => ({
+			r => ({
 				memoriesReturned: r.memories.length,
 				limit: options?.limit ?? 10
 			})
@@ -595,7 +595,7 @@ Instructions:
 					this.rerank,
 					bankProfile
 				),
-			(r) => ({
+			r => ({
 				memoriesAccessed: r.memories.length,
 				observationsSaved: r.observations.length,
 				answerLength: r.answer.length,
@@ -631,7 +631,7 @@ Instructions:
 					this.rerank,
 					consProfile
 				),
-			(r) => ({
+			r => ({
 				memoriesProcessed: r.memoriesProcessed,
 				observationsCreated: r.observationsCreated,
 				observationsUpdated: r.observationsUpdated,
@@ -706,7 +706,7 @@ Instructions:
 			.from(this.hdb.schema.asyncOperations)
 			.where(eq(this.hdb.schema.asyncOperations.bankId, bankId))
 			.all()
-			.filter((row) => {
+			.filter(row => {
 				if (!options?.status) return true
 				if (options.status === 'pending') {
 					return row.status === 'pending' || row.status === 'processing'
@@ -716,7 +716,7 @@ Instructions:
 			.sort((a, b) => b.createdAt - a.createdAt)
 
 		const paged = rows.slice(offset, offset + limit)
-		const operations: AsyncOperationSummary[] = paged.map((row) => {
+		const operations: AsyncOperationSummary[] = paged.map(row => {
 			const metadata = row.resultMetadata
 				? safeJson<Record<string, unknown>>(row.resultMetadata, {})
 				: {}
@@ -933,7 +933,7 @@ Instructions:
 
 			const run = () => this.executeAsyncOperation(operationId, task)
 
-			const taskPromise = new Promise<void>((resolve) => {
+			const taskPromise = new Promise<void>(resolve => {
 				setTimeout(() => {
 					void run().finally(resolve)
 				}, 0)
@@ -1036,7 +1036,7 @@ Instructions:
 			.from(this.hdb.schema.memoryUnits)
 			.where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
 			.all()
-			.filter((row) => {
+			.filter(row => {
 				if (options?.factType && row.factType !== options.factType) return false
 				if (!searchQuery) return true
 				const text = row.content.toLowerCase()
@@ -1051,9 +1051,9 @@ Instructions:
 			})
 
 		const paged = rows.slice(offset, offset + limit)
-		const entityByMemory = this.loadEntityNamesByMemoryIds(paged.map((row) => row.id))
+		const entityByMemory = this.loadEntityNamesByMemoryIds(paged.map(row => row.id))
 
-		const items = paged.map((row) => ({
+		const items = paged.map(row => ({
 			// Python parity: date prefers eventDate, with occurred/mentioned fallbacks.
 			// Keep API shape stable while backing with canonical temporal fields.
 			id: row.id,
@@ -1123,7 +1123,7 @@ Instructions:
 					return bPrimary - aPrimary
 				})
 
-			result.sourceMemories = sourceRows.map((sourceRow) => ({
+			result.sourceMemories = sourceRows.map(sourceRow => ({
 				id: sourceRow.id,
 				text: sourceRow.content,
 				type: sourceRow.factType as MemoryUnitDetail['type'],
@@ -1179,7 +1179,7 @@ Instructions:
 				)
 			)
 			.all()
-			.map((row) => row.id)
+			.map(row => row.id)
 
 		for (const observationId of observationIds) {
 			this.memoryVec.delete(observationId)
@@ -1213,7 +1213,7 @@ Instructions:
 
 		const paged = rows.slice(offset, offset + limit)
 		return {
-			items: paged.map((row) => ({
+			items: paged.map(row => ({
 				id: row.id,
 				canonicalName: row.name,
 				mentionCount: row.mentionCount,
@@ -1344,7 +1344,7 @@ Instructions:
 		}>
 
 		return {
-			items: rows.map((row) => ({
+			items: rows.map(row => ({
 				tag: row.tag,
 				count: row.count
 			})),
@@ -1415,17 +1415,17 @@ Instructions:
 
 		return {
 			bankId,
-			nodeCounts: Object.fromEntries(nodeStats.map((row) => [row.factType, row.count])),
-			linkCounts: Object.fromEntries(linkStats.map((row) => [row.linkType, row.count])),
+			nodeCounts: Object.fromEntries(nodeStats.map(row => [row.factType, row.count])),
+			linkCounts: Object.fromEntries(linkStats.map(row => [row.linkType, row.count])),
 			linkCountsByFactType: Object.fromEntries(
-				linkByFactTypeStats.map((row) => [row.factType, row.count])
+				linkByFactTypeStats.map(row => [row.factType, row.count])
 			),
-			linkBreakdown: linkBreakdownRows.map((row) => ({
+			linkBreakdown: linkBreakdownRows.map(row => ({
 				factType: row.factType,
 				linkType: row.linkType,
 				count: row.count
 			})),
-			operations: Object.fromEntries(operationRows.map((row) => [row.status, row.count]))
+			operations: Object.fromEntries(operationRows.map(row => [row.status, row.count]))
 		}
 	}
 
@@ -1442,7 +1442,7 @@ Instructions:
 			.all()
 		if (relations.length === 0) return new Map()
 
-		const entityIds = [...new Set(relations.map((row) => row.entityId))]
+		const entityIds = [...new Set(relations.map(row => row.entityId))]
 		const entities = this.hdb.db
 			.select({
 				id: this.hdb.schema.entities.id,
@@ -1451,7 +1451,7 @@ Instructions:
 			.from(this.hdb.schema.entities)
 			.where(inArray(this.hdb.schema.entities.id, entityIds))
 			.all()
-		const entityNameById = new Map(entities.map((entity) => [entity.id, entity.name]))
+		const entityNameById = new Map(entities.map(entity => [entity.id, entity.name]))
 
 		const byMemory = new Map<string, string[]>()
 		for (const relation of relations) {
@@ -1479,7 +1479,7 @@ Instructions:
 			const ids = model.sourceMemoryIds ? safeJson<string[]>(model.sourceMemoryIds, []) : []
 			if (!ids.includes(memoryId)) continue
 
-			const filtered = ids.filter((id) => id !== memoryId)
+			const filtered = ids.filter(id => id !== memoryId)
 			this.hdb.db
 				.update(this.hdb.schema.mentalModels)
 				.set({
@@ -1506,11 +1506,11 @@ Instructions:
 			.from(this.hdb.schema.documents)
 			.where(eq(this.hdb.schema.documents.bankId, bankId))
 			.all()
-			.filter((row) => (search ? row.id.toLowerCase().includes(search) : true))
+			.filter(row => (search ? row.id.toLowerCase().includes(search) : true))
 			.sort((a, b) => b.createdAt - a.createdAt)
 
 		const paged = allRows.slice(offset, offset + limit)
-		const items: DocumentRecord[] = paged.map((row) => ({
+		const items: DocumentRecord[] = paged.map(row => ({
 			id: row.id,
 			bankId: row.bankId,
 			contentHash: row.contentHash,
@@ -1634,7 +1634,7 @@ Instructions:
 			.sort((a, b) => (b.mentionedAt ?? b.createdAt) - (a.mentionedAt ?? a.createdAt))
 			.slice(0, limit)
 
-		const nodes: GraphNode[] = orderedRows.map((row) => ({
+		const nodes: GraphNode[] = orderedRows.map(row => ({
 			id: row.id,
 			content: row.content,
 			factType: row.factType as GraphNode['factType'],
@@ -1644,7 +1644,7 @@ Instructions:
 			sourceMemoryIds: row.sourceMemoryIds ? safeJson<string[]>(row.sourceMemoryIds, []) : []
 		}))
 
-		const visibleNodeIds = new Set(nodes.map((node) => node.id))
+		const visibleNodeIds = new Set(nodes.map(node => node.id))
 		if (visibleNodeIds.size === 0) {
 			return { nodes, edges: [], totalUnits: rows.length, limit }
 		}
@@ -1702,7 +1702,7 @@ Instructions:
 		}
 
 		const edges: GraphEdge[] = dedupeGraphEdges([
-			...directLinks.map((link) => ({
+			...directLinks.map(link => ({
 				sourceId: link.sourceId,
 				targetId: link.targetId,
 				linkType: link.linkType as GraphEdge['linkType'],
@@ -1763,7 +1763,7 @@ Instructions:
 			bankId,
 			options ?? {},
 			async () => listEpisodesImpl(this.hdb, bankId, options),
-			(result) => ({ total: result.total, count: result.items.length })
+			result => ({ total: result.total, count: result.items.length })
 		)
 	}
 
@@ -1777,7 +1777,7 @@ Instructions:
 			bankId,
 			{ anchorMemoryId: options.anchorMemoryId },
 			async () => narrativeImpl(this.hdb, bankId, options),
-			(result) => ({ eventCount: result.events.length })
+			result => ({ eventCount: result.events.length })
 		)
 	}
 

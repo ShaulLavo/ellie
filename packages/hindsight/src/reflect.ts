@@ -120,7 +120,7 @@ export async function reflect(
 		})
 	})
 
-	const searchMentalModels = searchMentalModelsDef.server(async (_args) => {
+	const searchMentalModels = searchMentalModelsDef.server(async _args => {
 		const args = _args as { query: string }
 		return trackedToolCall('search_mental_models', args, async () => {
 			if (!modelVec) return []
@@ -149,7 +149,7 @@ export async function reflect(
 		})
 	})
 
-	const searchObservations = searchObservationsDef.server(async (_args) => {
+	const searchObservations = searchObservationsDef.server(async _args => {
 		const args = _args as { query: string; limit?: number; tags?: string[] }
 		return trackedToolCall('search_observations', args, async () => {
 			const mergedTags = mergeTags(options.tags, args.tags)
@@ -169,7 +169,7 @@ export async function reflect(
 
 			allMemories.push(...result.memories)
 
-			return result.memories.map((memory) => {
+			return result.memories.map(memory => {
 				const staleness = computeObservationStaleness(hdb, bankId, memory.memory.updatedAt)
 				return {
 					id: memory.memory.id,
@@ -230,11 +230,11 @@ export async function reflect(
 
 			allMemories.push(...result.memories)
 
-			return result.memories.map((memory) => ({
+			return result.memories.map(memory => ({
 				id: memory.memory.id,
 				content: memory.memory.content,
 				factType: memory.memory.factType,
-				entities: memory.entities.map((entity) => entity.name),
+				entities: memory.entities.map(entity => entity.name),
 				score: memory.score,
 				occurredAt:
 					memory.memory.occurredStart ??
@@ -251,7 +251,7 @@ export async function reflect(
 			'Use when no mental models or observations exist, they are stale, or you need specific details and supporting evidence.',
 		inputSchema: recallInputSchema
 	})
-	const recallTool = recallDef.server(async (_args) =>
+	const recallTool = recallDef.server(async _args =>
 		runRecallTool(
 			_args as {
 				query: string
@@ -269,7 +269,7 @@ export async function reflect(
 		description: 'Alias for recall. Same behavior, retained for compatibility.',
 		inputSchema: recallInputSchema
 	})
-	const searchMemories = searchMemoriesDef.server(async (_args) =>
+	const searchMemories = searchMemoriesDef.server(async _args =>
 		runRecallTool(
 			_args as {
 				query: string
@@ -299,7 +299,7 @@ export async function reflect(
 		})
 	})
 
-	const getEntity = getEntityDef.server(async (_args) => {
+	const getEntity = getEntityDef.server(async _args => {
 		const args = _args as { name: string }
 		return trackedToolCall('get_entity', args, async () => {
 			const entity = hdb.db
@@ -317,7 +317,7 @@ export async function reflect(
 				.all()
 
 			const memoryRows = junctions
-				.map((junction) =>
+				.map(junction =>
 					hdb.db
 						.select()
 						.from(schema.memoryUnits)
@@ -335,7 +335,7 @@ export async function reflect(
 					lastUpdated: entity.lastUpdated
 				},
 				memoryCount: memoryRows.length,
-				memories: memoryRows.slice(0, 10).map((memory) => ({
+				memories: memoryRows.slice(0, 10).map(memory => ({
 					content: memory!.content,
 					factType: memory!.factType
 				}))
@@ -363,7 +363,7 @@ export async function reflect(
 		})
 	})
 
-	const expand = expandDef.server(async (_args) => {
+	const expand = expandDef.server(async _args => {
 		const rawArgs = _args as {
 			memoryIds?: string[]
 			memory_ids?: string[]
@@ -393,7 +393,7 @@ export async function reflect(
 			const chunkIds = [
 				...new Set(
 					memoryRows
-						.map((row) => row.chunkId)
+						.map(row => row.chunkId)
 						.filter((id): id is string => typeof id === 'string' && id.length > 0)
 				)
 			]
@@ -410,7 +410,7 @@ export async function reflect(
 							.where(inArray(schema.chunks.id, chunkIds))
 							.all()
 					: []
-			const chunkMap = new Map(chunkRows.map((row) => [row.id, row]))
+			const chunkMap = new Map(chunkRows.map(row => [row.id, row]))
 
 			const documentIds = new Set<string>()
 			if (depth === 'document') {
@@ -432,11 +432,11 @@ export async function reflect(
 							.where(inArray(schema.documents.id, [...documentIds]))
 							.all()
 					: []
-			const documentMap = new Map(documentRows.map((row) => [row.id, row]))
-			const memoryMap = new Map(memoryRows.map((row) => [row.id, row]))
+			const documentMap = new Map(documentRows.map(row => [row.id, row]))
+			const memoryMap = new Map(memoryRows.map(row => [row.id, row]))
 
 			const results: Array<Record<string, unknown>> = memoryIds
-				.map((id) => buildExpandItem(memoryMap.get(id), chunkMap, documentMap, depth))
+				.map(id => buildExpandItem(memoryMap.get(id), chunkMap, documentMap, depth))
 				.filter(Boolean) as Array<Record<string, unknown>>
 
 			return { results }
@@ -517,7 +517,7 @@ export async function reflect(
 	if (options.saveObservations !== false && answer.trim()) {
 		const observationId = ulid()
 		const now = Date.now()
-		const sourceIds = [...new Set(allMemories.map((memory) => memory.memory.id))]
+		const sourceIds = [...new Set(allMemories.map(memory => memory.memory.id))]
 
 		hdb.db
 			.insert(schema.memoryUnits)
@@ -733,7 +733,7 @@ IMPORTANT: Output ONLY the final answer. Do NOT include meta-commentary like "I'
 
 function buildToolContextSummary(memories: ScoredMemory[]): string {
 	if (memories.length === 0) return 'No data was retrieved.'
-	const items = memories.map((m) => `- [${m.memory.factType}] ${m.memory.content}`)
+	const items = memories.map(m => `- [${m.memory.factType}] ${m.memory.content}`)
 	return items.join('\n')
 }
 

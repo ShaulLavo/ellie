@@ -45,12 +45,12 @@ describe('reciprocalRankFusion', () => {
 		// "a" appears in both: rank 0 in semantic (1/61) + rank 2 in fulltext (1/63)
 		// "b" appears in both: rank 1 in semantic (1/62) + rank 0 in fulltext (1/61)
 		// "b" should score higher: 1/62 + 1/61 > 1/61 + 1/63
-		const scoreA = fused.find((f) => f.id === 'a')!.score
-		const scoreB = fused.find((f) => f.id === 'b')!.score
+		const scoreA = fused.find(f => f.id === 'a')!.score
+		const scoreB = fused.find(f => f.id === 'b')!.score
 		expect(scoreB).toBeGreaterThan(scoreA)
 
 		// Both should score higher than single-list items
-		const scoreC = fused.find((f) => f.id === 'c')!.score
+		const scoreC = fused.find(f => f.id === 'c')!.score
 		expect(scoreA).toBeGreaterThan(scoreC)
 		expect(scoreB).toBeGreaterThan(scoreC)
 	})
@@ -61,15 +61,15 @@ describe('reciprocalRankFusion', () => {
 
 		const fused = reciprocalRankFusion([semantic, fulltext], 10)
 
-		const a = fused.find((f) => f.id === 'a')!
+		const a = fused.find(f => f.id === 'a')!
 		expect(a.sources).toEqual(['semantic'])
 
-		const b = fused.find((f) => f.id === 'b')!
+		const b = fused.find(f => f.id === 'b')!
 		expect(b.sources).toContain('semantic')
 		expect(b.sources).toContain('fulltext')
 		expect(b.sources).toHaveLength(2)
 
-		const c = fused.find((f) => f.id === 'c')!
+		const c = fused.find(f => f.id === 'c')!
 		expect(c.sources).toEqual(['fulltext'])
 	})
 
@@ -122,7 +122,7 @@ describe('reciprocalRankFusion', () => {
 		const fused = reciprocalRankFusion([semantic, fulltext, graph, temporal], 10)
 
 		// All 5 unique IDs should be present
-		const ids = fused.map((f) => f.id)
+		const ids = fused.map(f => f.id)
 		expect(ids).toContain('a')
 		expect(ids).toContain('b')
 		expect(ids).toContain('c')
@@ -163,8 +163,8 @@ describe('reciprocalRankFusion', () => {
 		// a: rank 0 in list1 (1/61) + rank 1 in list2 (1/62)
 		// b: rank 1 in list1 (1/62) + rank 0 in list2 (1/61)
 		// Both should have equal scores: 1/61 + 1/62
-		const scoreA = fused.find((f) => f.id === 'a')!.score
-		const scoreB = fused.find((f) => f.id === 'b')!.score
+		const scoreA = fused.find(f => f.id === 'a')!.score
+		const scoreB = fused.find(f => f.id === 'b')!.score
 		expect(scoreA).toBeCloseTo(scoreB, 6)
 	})
 })

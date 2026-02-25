@@ -119,14 +119,14 @@ export function listMentalModels(
 		.where(eq(hdb.schema.mentalModels.bankId, bankId))
 		.all()
 
-	const tagsFilter = options?.tags?.filter((tag) => tag.length > 0) ?? []
+	const tagsFilter = options?.tags?.filter(tag => tag.length > 0) ?? []
 	if (tagsFilter.length === 0) return rows.map(rowToMentalModel)
 
 	const tagsFilterSet = new Set(tagsFilter)
 	return rows
-		.filter((row) => {
+		.filter(row => {
 			const modelTags = safeJsonParse<string[]>(row.tags, [])
-			return modelTags.some((tag) => tagsFilterSet.has(tag))
+			return modelTags.some(tag => tagsFilterSet.has(tag))
 		})
 		.map(rowToMentalModel)
 }
@@ -230,7 +230,7 @@ export async function refreshMentalModel(
 	)
 
 	const now = Date.now()
-	const sourceMemoryIds = reflectResult.memories.map((m) => m.memory.id)
+	const sourceMemoryIds = reflectResult.memories.map(m => m.memory.id)
 
 	hdb.db
 		.update(hdb.schema.mentalModels)

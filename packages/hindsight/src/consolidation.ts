@@ -413,7 +413,7 @@ function asString(value: unknown): string | undefined {
 
 function asStringArray(value: unknown): string[] {
 	if (!Array.isArray(value)) return []
-	return value.map((item) => asString(item)).filter((item): item is string => Boolean(item))
+	return value.map(item => asString(item)).filter((item): item is string => Boolean(item))
 }
 
 // ── Execute create action ───────────────────────────────────────────────
@@ -574,15 +574,15 @@ async function executeMergeAction(
 		.all()
 	if (observations.length < 2) return 'skipped'
 
-	const targetId = observationIds.find((id) =>
-		observations.some((observation) => observation.id === id)
+	const targetId = observationIds.find(id =>
+		observations.some(observation => observation.id === id)
 	)
 	if (!targetId) return 'skipped'
 
-	const target = observations.find((observation) => observation.id === targetId)
+	const target = observations.find(observation => observation.id === targetId)
 	if (!target) return 'skipped'
 
-	const mergedAway = observations.filter((observation) => observation.id !== targetId)
+	const mergedAway = observations.filter(observation => observation.id !== targetId)
 	if (mergedAway.length === 0) return 'skipped'
 
 	const sourceMemoryIds = new Set<string>([sourceMemory.id])
@@ -666,7 +666,7 @@ function shouldRefreshModel(
 	if (!modelIsTagged) return true
 
 	// Tagged memories consolidated + tagged model → only if tags overlap
-	return modelTags.some((t) => consolidatedTags.has(t))
+	return modelTags.some(t => consolidatedTags.has(t))
 }
 
 // ── Mental model refresh trigger ────────────────────────────────────────

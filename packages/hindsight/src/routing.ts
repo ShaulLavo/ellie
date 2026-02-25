@@ -382,7 +382,7 @@ export async function applyReconsolidate(
 				versionNo: nextVersion,
 				content: current.content,
 				entitiesJson: JSON.stringify(
-					currentEntities.map((e) => ({ name: e.name, entityType: e.entityType }))
+					currentEntities.map(e => ({ name: e.name, entityType: e.entityType }))
 				),
 				attributesJson: JSON.stringify({
 					factType: current.factType,

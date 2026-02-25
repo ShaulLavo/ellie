@@ -169,7 +169,7 @@ type UserError = Treaty.Error<typeof api.user.post>
 ```typescript
 const chat = api.chat.subscribe()
 
-chat.subscribe((message) => console.log('got', message))
+chat.subscribe(message => console.log('got', message))
 chat.on('open', () => chat.send('hello'))
 
 // Native access: chat.raw

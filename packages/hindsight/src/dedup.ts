@@ -36,7 +36,7 @@ export async function findDuplicates(
 ): Promise<boolean[]> {
 	const windowMs = Math.max(0, timeWindowHours) * 60 * 60 * 1000
 	// Run all vector searches in parallel — they are independent
-	const allHits = await Promise.all(facts.map((fact) => memoryVec.search(fact.content, SEARCH_K)))
+	const allHits = await Promise.all(facts.map(fact => memoryVec.search(fact.content, SEARCH_K)))
 
 	return allHits.map((hits, factIndex) => {
 		const anchor = facts[factIndex]?.temporalAnchor ?? null

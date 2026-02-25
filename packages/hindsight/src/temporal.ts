@@ -106,7 +106,7 @@ function extractMonthYearRange(query: string): { from: number; to: number } | un
 	const year = Number.parseInt(match[2]!, 10)
 	if (!Number.isFinite(year)) return undefined
 
-	const monthPattern = MONTH_PATTERNS.find((entry) => entry.pattern.test(monthName))
+	const monthPattern = MONTH_PATTERNS.find(entry => entry.pattern.test(monthName))
 	if (!monthPattern) return undefined
 
 	return monthRange(year, monthPattern.month)
@@ -182,11 +182,11 @@ function extractPeriod(
 		{ regex: /\b(a\s+)?few\s+months?\s+ago\b/i, range: () => dayRange(referenceDate, -150, -60) },
 		{
 			regex: /\blast\s+(\d+)\s+days?\b/i,
-			range: (match) => dayRange(referenceDate, -Number.parseInt(match[1]!, 10), -1)
+			range: match => dayRange(referenceDate, -Number.parseInt(match[1]!, 10), -1)
 		},
 		{
 			regex: /\bin\s+the\s+last\s+(\d+)\s+days?\b/i,
-			range: (match) => dayRange(referenceDate, -Number.parseInt(match[1]!, 10), -1)
+			range: match => dayRange(referenceDate, -Number.parseInt(match[1]!, 10), -1)
 		}
 	]
 

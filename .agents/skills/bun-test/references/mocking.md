@@ -56,8 +56,8 @@ it('should implement mock implementations', () => {
 
 it('should implement mock implementation once', () => {
 	const mockFn = mock()
-	mockFn.mockImplementationOnce((x) => x * 2)
-	mockFn.mockImplementation((x) => x * 3)
+	mockFn.mockImplementationOnce(x => x * 2)
+	mockFn.mockImplementation(x => x * 3)
 
 	expect(mockFn(5)).toBe(10)
 	expect(mockFn(5)).toBe(15)
@@ -82,7 +82,7 @@ it('should track mock calls', () => {
 })
 
 it('should track return values', () => {
-	const mockFn = mock((x) => x * 2)
+	const mockFn = mock(x => x * 2)
 
 	mockFn(5)
 	mockFn(10)
@@ -124,7 +124,7 @@ it('should override spy implementation', () => {
 		method: (x: number) => x * 2
 	}
 
-	const spy = spyOn(obj, 'method').mockImplementation((x) => x * 3)
+	const spy = spyOn(obj, 'method').mockImplementation(x => x * 3)
 
 	expect(obj.method(5)).toBe(15)
 	expect(spy).toHaveBeenCalled()
@@ -139,7 +139,7 @@ it('should restore original implementation', () => {
 		method: (x: number) => x * 2
 	}
 
-	const spy = spyOn(obj, 'method').mockImplementation((x) => x * 3)
+	const spy = spyOn(obj, 'method').mockImplementation(x => x * 3)
 
 	expect(obj.method(5)).toBe(15)
 
@@ -225,7 +225,7 @@ it('should mock rejected promises', async () => {
 ```typescript
 it('should mock async functions', async () => {
 	const mockFn = mock(async (x: number) => {
-		await new Promise((resolve) => setTimeout(resolve, 10))
+		await new Promise(resolve => setTimeout(resolve, 10))
 		return x * 2
 	})
 
@@ -289,8 +289,8 @@ afterEach(() => {
 
 ```typescript
 const obj = {
-	method1: (x) => x * 2,
-	method2: (x) => x * 3
+	method1: x => x * 2,
+	method2: x => x * 3
 }
 
 const spy1 = spyOn(obj, 'method1')
@@ -361,7 +361,7 @@ it('should test delayed operations', async () => {
 	setTimeout(callback, 1000)
 
 	// Wait for timer
-	await new Promise((resolve) => setTimeout(resolve, 1100))
+	await new Promise(resolve => setTimeout(resolve, 1100))
 
 	expect(callback).toHaveBeenCalled()
 })

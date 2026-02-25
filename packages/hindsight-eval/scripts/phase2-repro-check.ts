@@ -16,7 +16,7 @@ import { generateReproducibilityReport } from '../src/phase2-report'
 import { execSync } from 'child_process'
 
 const args = process.argv.slice(2)
-const outputDirArg = args.find((a) => a.startsWith('--output-dir='))
+const outputDirArg = args.find(a => a.startsWith('--output-dir='))
 
 const defaultOutputDir = resolve(import.meta.dir, '..', 'artifacts', 'phase2')
 const outputDirVal = outputDirArg?.split('=')[1]?.trim()
@@ -78,7 +78,7 @@ async function main() {
 	process.exit(pass ? 0 : 1)
 }
 
-main().catch((error) => {
+main().catch(error => {
 	console.error('Fatal error:', error)
 	process.exit(1)
 })

@@ -130,7 +130,7 @@ const app = new Elysia().get('/', ({ stuff }) => {
 
 describe('Controller', () => {
 	it('should work', async () => {
-		const response = await app.handle(new Request('http://localhost/')).then((x) => x.text())
+		const response = await app.handle(new Request('http://localhost/')).then(x => x.text())
 
 		expect(response).toBe('ok')
 	})

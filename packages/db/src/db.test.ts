@@ -705,7 +705,7 @@ describe('EventStore', () => {
 			expect(existsSync(auditDir)).toBe(true)
 
 			// Verify audit file contains the expected entry
-			const files = readdirSync(auditDir).filter((f) => f.endsWith('.jsonl'))
+			const files = readdirSync(auditDir).filter(f => f.endsWith('.jsonl'))
 			expect(files.length).toBeGreaterThan(0)
 			const content = readFileSync(join(auditDir, files[0]!), 'utf-8').trim()
 			const entry = JSON.parse(content)

@@ -311,7 +311,7 @@ it('should validate request body', async () => {
 ## Testing WebSocket
 
 ```typescript
-it('should handle websocket connection', (done) => {
+it('should handle websocket connection', done => {
 	const app = new Elysia().ws('/chat', {
 		message(ws, message) {
 			ws.send('Echo: ' + message)
@@ -324,7 +324,7 @@ it('should handle websocket connection', (done) => {
 		ws.send('Hello')
 	}
 
-	ws.onmessage = (event) => {
+	ws.onmessage = event => {
 		expect(event.data).toBe('Echo: Hello')
 		ws.close()
 		done()

@@ -32,7 +32,7 @@ function deterministicEmbed(text: string): Promise<number[]> {
 		vec[i % EVAL_EMBED_DIMS]! += text.charCodeAt(i) / 1000
 	}
 	const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
-	return Promise.resolve(norm > 0 ? vec.map((v) => v / norm) : vec)
+	return Promise.resolve(norm > 0 ? vec.map(v => v / norm) : vec)
 }
 
 // ── Mock adapter ──────────────────────────────────────────────────────────
@@ -90,8 +90,8 @@ export function loadFixture(path: string): EvalCase[] {
 	const lines = raw
 		.trim()
 		.split('\n')
-		.filter((line) => line.trim().length > 0)
-	return lines.map((line) => JSON.parse(line) as EvalCase)
+		.filter(line => line.trim().length > 0)
+	return lines.map(line => JSON.parse(line) as EvalCase)
 }
 
 // ── Core runner ───────────────────────────────────────────────────────────
@@ -182,7 +182,7 @@ async function runSingleCase(
 
 		// Collect candidates with stable tie-breaking: (score DESC, id ASC)
 		const candidates: RecallCandidate[] = recallResult.memories
-			.map((scored) => ({
+			.map(scored => ({
 				memoryId: scored.memory.id,
 				content: scored.memory.content,
 				score: scored.score,

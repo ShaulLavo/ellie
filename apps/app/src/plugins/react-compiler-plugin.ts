@@ -3,7 +3,7 @@ import type { BunPlugin } from 'bun'
 const reactCompilerPlugin: BunPlugin = {
 	name: 'react-compiler',
 	setup(build) {
-		build.onLoad({ filter: /\.[jt]sx$/ }, async (args) => {
+		build.onLoad({ filter: /\.[jt]sx$/ }, async args => {
 			const { transformSync } = await import('@babel/core')
 			const code = await Bun.file(args.path).text()
 

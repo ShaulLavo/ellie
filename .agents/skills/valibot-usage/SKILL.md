@@ -213,8 +213,8 @@ const AgeSchema = v.pipe(
 const PasswordSchema = v.pipe(
 	v.string(),
 	v.minLength(8),
-	v.check((input) => /[A-Z]/.test(input), 'Password must contain an uppercase letter'),
-	v.check((input) => /[0-9]/.test(input), 'Password must contain a number')
+	v.check(input => /[A-Z]/.test(input), 'Password must contain an uppercase letter'),
+	v.check(input => /[0-9]/.test(input), 'Password must contain a number')
 )
 ```
 
@@ -271,7 +271,7 @@ For custom transformations, use `v.transform()`:
 const DateStringSchema = v.pipe(
 	v.string(),
 	v.isoDate(),
-	v.transform((input) => new Date(input))
+	v.transform(input => new Date(input))
 )
 
 // Custom object transformation
@@ -280,7 +280,7 @@ const UserSchema = v.pipe(
 		firstName: v.string(),
 		lastName: v.string()
 	}),
-	v.transform((input) => ({
+	v.transform(input => ({
 		...input,
 		fullName: `${input.firstName} ${input.lastName}`
 	}))
@@ -385,7 +385,7 @@ const RegistrationSchema = v.pipe(
 	v.forward(
 		v.partialCheck(
 			[['password'], ['confirmPassword']],
-			(input) => input.password === input.confirmPassword,
+			input => input.password === input.confirmPassword,
 			'Passwords do not match'
 		),
 		['confirmPassword']
@@ -727,7 +727,7 @@ const env = v.parse(EnvSchema, process.env)
 const DateFromStringSchema = v.pipe(
 	v.string(),
 	v.isoDate(),
-	v.transform((input) => new Date(input))
+	v.transform(input => new Date(input))
 )
 
 // Date validation

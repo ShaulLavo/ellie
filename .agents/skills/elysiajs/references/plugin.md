@@ -169,7 +169,7 @@ const plugin = new Elysia()
 // plugin.ts
 export const loadStatic = async (app: Elysia) => {
 	const files = await loadAllFiles()
-	files.forEach((asset) => app.get(asset, file(asset)))
+	files.forEach(asset => app.get(asset, file(asset)))
 	return app
 }
 

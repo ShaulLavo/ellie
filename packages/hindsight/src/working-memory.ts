@@ -40,10 +40,10 @@ export class WorkingMemoryStore {
 		let entries = sessions.get(sessionId) ?? []
 
 		// Remove expired entries lazily
-		entries = entries.filter((e) => now - e.touchedAt < WM_DECAY_MS)
+		entries = entries.filter(e => now - e.touchedAt < WM_DECAY_MS)
 
 		// Update existing or add new
-		const existingIds = new Map(entries.map((e) => [e.memoryId, e]))
+		const existingIds = new Map(entries.map(e => [e.memoryId, e]))
 		for (const memoryId of memoryIds) {
 			existingIds.set(memoryId, { memoryId, touchedAt: now })
 		}
@@ -78,7 +78,7 @@ export class WorkingMemoryStore {
 		const entries = this.store.get(bankId)?.get(sessionId)
 		if (!entries) return 0
 
-		const entry = entries.find((e) => e.memoryId === memoryId)
+		const entry = entries.find(e => e.memoryId === memoryId)
 		if (!entry) return 0
 
 		const ageMs = now - entry.touchedAt
@@ -96,7 +96,7 @@ export class WorkingMemoryStore {
 		const entries = sessions.get(sessionId)
 		if (!entries) return []
 
-		const active = entries.filter((e) => now - e.touchedAt < WM_DECAY_MS)
+		const active = entries.filter(e => now - e.touchedAt < WM_DECAY_MS)
 
 		// Lazy cleanup: update store if we filtered out expired entries
 		if (active.length !== entries.length) {

@@ -323,7 +323,7 @@ export class Agent {
 			throw new Error('No adapter configured.')
 		}
 
-		this.runningPrompt = new Promise<void>((resolve) => {
+		this.runningPrompt = new Promise<void>(resolve => {
 			this.resolveRunningPrompt = resolve
 		})
 
@@ -408,7 +408,7 @@ export class Agent {
 			) {
 				const assistantPartial = partial as AssistantMessage
 				const hasMeaningfulContent = assistantPartial.content.some(
-					(c) =>
+					c =>
 						(c.type === 'thinking' && c.thinking.trim().length > 0) ||
 						(c.type === 'text' && c.text.trim().length > 0) ||
 						(c.type === 'toolCall' && c.name.trim().length > 0)

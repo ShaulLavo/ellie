@@ -23,7 +23,7 @@ type User = z.infer<typeof UserSchema> // { name: string }
 For schemas with transformations, Zod distinguishes between input and output types:
 
 ```typescript
-const TransformSchema = z.string().transform((s) => s.length)
+const TransformSchema = z.string().transform(s => s.length)
 
 type Input = z.input<typeof TransformSchema> // string
 type Output = z.output<typeof TransformSchema> // number
@@ -266,7 +266,7 @@ const UserSchema = z.object({
 Reference schema types within metadata using `z.$input` and `z.$output`:
 
 ```typescript
-const TransformSchema = z.string().transform((s) => s.length)
+const TransformSchema = z.string().transform(s => s.length)
 
 const registry = z.registry<{
 	description: string
@@ -397,7 +397,7 @@ const ConditionalSchema = z
 		value: z.string()
 	})
 	.refine(
-		(data) => {
+		data => {
 			if (data.type === 'email') {
 				return z.string().email().safeParse(data.value).success
 			}

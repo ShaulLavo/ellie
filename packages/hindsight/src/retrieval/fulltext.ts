@@ -11,8 +11,8 @@ function escapeFts5Query(query: string): string {
 	// Split on whitespace, wrap each token in quotes for literal matching
 	return query
 		.split(/\s+/)
-		.filter((t) => t.length > 0)
-		.map((t) => `"${t.replace(/"/g, '""')}"`)
+		.filter(t => t.length > 0)
+		.map(t => `"${t.replace(/"/g, '""')}"`)
 		.join(' OR ')
 }
 
@@ -101,10 +101,10 @@ function normalizeRanks(results: Array<{ id: string; rank: number }>): Retrieval
 	if (results.length === 0) return []
 
 	// BM25 returns negative scores (more negative = more relevant)
-	const minRank = Math.min(...results.map((r) => r.rank))
+	const minRank = Math.min(...results.map(r => r.rank))
 	const normalizer = minRank < 0 ? -minRank : 1
 
-	return results.map((r) => ({
+	return results.map(r => ({
 		id: r.id,
 		score: -r.rank / normalizer, // normalize to [0, 1]
 		source: 'fulltext'
