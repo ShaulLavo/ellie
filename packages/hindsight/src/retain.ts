@@ -56,6 +56,47 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 	}
 }
 
+/** Max concurrent LLM gist generation requests. */
+const GIST_CONCURRENCY = 3
+
+/**
+ * Fire-and-forget LLM gist upgrade with bounded concurrency.
+ * Runs at most GIST_CONCURRENCY requests in parallel and logs per-item errors
+ * without aborting the queue.
+ */
+function scheduleGistUpgrades(
+	adapter: AnyTextAdapter,
+	hdb: HindsightDatabase,
+	schema: typeof import('./schema'),
+	memories: { id: string; content: string }[]
+): void {
+	const queue = memories
+	if (queue.length === 0) return
+
+	let cursor = 0
+
+	async function runLane(): Promise<void> {
+		while (cursor < queue.length) {
+			const mem = queue[cursor++]!
+			try {
+				const gist = await generateGistWithLLM(adapter, mem.content)
+				hdb.db
+					.update(schema.memoryUnits)
+					.set({ gist })
+					.where(eq(schema.memoryUnits.id, mem.id))
+					.run()
+			} catch (err) {
+				console.debug?.('[gist] async LLM gist failed:', err)
+			}
+		}
+	}
+
+	const laneCount = Math.min(GIST_CONCURRENCY, queue.length)
+	for (let i = 0; i < laneCount; i++) {
+		runLane()
+	}
+}
+
 // ── Extraction response normalization (Python + TS parity) ────────────────
 
 // Python parity: only "caused_by" is a valid causal relation type.
@@ -1351,19 +1392,7 @@ export async function retain(
 
 	// ── Step 8b: Fire-and-forget LLM gist generation ──
 	// Upgrade the deterministic fallback gist with LLM-generated gists asynchronously.
-	for (const mem of memories) {
-		generateGistWithLLM(adapter, mem.content)
-			.then((gist) => {
-				hdb.db
-					.update(schema.memoryUnits)
-					.set({ gist })
-					.where(eq(schema.memoryUnits.id, mem.id))
-					.run()
-			})
-			.catch((err) => {
-				console.debug?.('[gist] async LLM gist failed:', err)
-			})
-	}
+	scheduleGistUpgrades(adapter, hdb, schema, memories)
 
 	return {
 		memories: allMemories,
@@ -1956,21 +1985,8 @@ export async function retainBatch(
 	}
 
 	// Fire-and-forget LLM gist generation for batch memories
-	for (const result of aggregate) {
-		for (const mem of result.memories) {
-			generateGistWithLLM(adapter, mem.content)
-				.then((gist) => {
-					hdb.db
-						.update(hdb.schema.memoryUnits)
-						.set({ gist })
-						.where(eq(hdb.schema.memoryUnits.id, mem.id))
-						.run()
-				})
-				.catch((err) => {
-					console.debug?.('[gist] async LLM gist failed:', err)
-				})
-		}
-	}
+	const allBatchMemories = aggregate.flatMap((r) => r.memories)
+	scheduleGistUpgrades(adapter, hdb, hdb.schema, allBatchMemories)
 
 	return aggregate
 }
