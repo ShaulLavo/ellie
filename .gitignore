@@ -52,5 +52,6 @@ data/
 # Tailwind CLI output
 apps/react/src/output.css
 
-# Claude worktrees
+# Claude
 .claude/worktrees/
+.claude/settings.local.json

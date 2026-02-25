@@ -2,8 +2,6 @@ import {
 	agentAbortInputSchema,
 	agentAbortOutputSchema,
 	agentHistoryOutputSchema,
-	agentPromptInputSchema,
-	agentPromptOutputSchema,
 	agentSteerInputSchema,
 	agentSteerOutputSchema
 } from '@ellie/schemas/agent'
@@ -123,37 +121,6 @@ export function createAgentRoutes(
 			},
 			{
 				params: sessionRunParamsSchema
-			}
-		)
-		.post(
-			'/:sessionId/prompt',
-			async ({ params, body, set }) => {
-				if (!agentManager) {
-					set.status = 503
-					return {
-						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
-					}
-				}
-
-				const message = parseAgentActionBody(body)
-				const { runId } = await agentManager.prompt(
-					params.sessionId,
-					message
-				)
-				return {
-					runId,
-					sessionId: params.sessionId,
-					status: `started` as const
-				}
-			},
-			{
-				params: sessionParamsSchema,
-				body: agentPromptInputSchema,
-				response: {
-					200: agentPromptOutputSchema,
-					400: errorSchema,
-					503: errorSchema
-				}
 			}
 		)
 		.post(

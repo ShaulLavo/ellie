@@ -8,6 +8,7 @@ import {
 } from '@tanstack/ai-anthropic'
 import { Elysia } from 'elysia'
 import { AgentManager } from './agent/manager'
+import { AgentWatcher } from './agent/watcher'
 import { RealtimeStore } from './lib/realtime-store'
 import { errorSchema, type SseState } from './routes/common'
 import { createAgentRoutes } from './routes/agent'
@@ -70,6 +71,10 @@ const agentManager: AgentManager | null =
 			})
 		: null
 
+const agentWatcher = agentManager
+	? new AgentWatcher(store, agentManager)
+	: null
+
 const STUDIO_PUBLIC = resolve(
 	import.meta.dir,
 	'../../react/public'
@@ -81,7 +86,7 @@ const sseState: SseState = {
 
 export const app = new Elysia()
 	.use(createStatusRoutes(() => sseState.activeClients))
-	.use(createChatRoutes(store, sseState))
+	.use(createChatRoutes(store, sseState, agentWatcher))
 	.use(createAgentRoutes(store, agentManager, sseState))
 	.all(
 		`/api/*`,

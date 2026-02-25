@@ -120,8 +120,7 @@ function buildToolResultMap(
 	for (const msg of messages) {
 		if (msg.role === 'toolResult') {
 			const toolCallId = msg.toolCallId as string
-			const toolName =
-				(msg.toolName as string) ?? 'unknown'
+			const toolName = (msg.toolName as string) ?? 'unknown'
 			const content = msg.content as Array<{
 				type: string
 				text?: string
@@ -272,13 +271,16 @@ interface AIChatPanelProps {
 	sessionId: string
 }
 
-export function AIChatPanel({ sessionId }: AIChatPanelProps) {
+export function AIChatPanel({
+	sessionId
+}: AIChatPanelProps) {
 	const {
 		messages,
 		isLoading,
-		isSending,
+		isAgentRunning,
 		error,
 		sendMessage,
+		steer,
 		abort
 	} = useAgentChat(sessionId)
 	const [input, setInput] = useState('')
@@ -299,43 +301,36 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 		[messages]
 	)
 
-	const isAgentWorking = useMemo(() => {
-		if (isSending) return true
-		if (messages.length === 0) return false
-		const last = messages[messages.length - 1]
-		if (last.role === 'user') return true
-		if (last.role === 'toolResult') return true
-		if (
-			last.role === 'assistant' &&
-			last.stopReason === 'toolUse'
-		)
-			return true
-		return false
-	}, [messages, isSending])
+	const isAgentWorking = isAgentRunning
 
 	const handleSubmit = useCallback(() => {
-		if (isAgentWorking) return
 		const text = input.trim()
 		if (!text) return
 		setInput('')
-		sendMessage(text).catch(err => {
-			console.error(
-				'[AIChatPanel] Failed to send:',
-				err instanceof Error
-					? err.message
-					: JSON.stringify(err)
-			)
-		})
-	}, [input, sendMessage, isAgentWorking])
+
+		const send = () =>
+			sendMessage(text).catch(err => {
+				console.error(
+					'[AIChatPanel] Failed to send:',
+					err instanceof Error
+						? err.message
+						: JSON.stringify(err)
+				)
+			})
+
+		if (isAgentWorking) {
+			// Agent is running — try steering it with this
+			// message. If steer fails, fall back to persisting
+			// as a normal message.
+			steer(text).catch(() => send())
+		} else {
+			send()
+		}
+	}, [input, sendMessage, steer, isAgentWorking])
 
 	const handleAbort = useCallback(() => {
-		abort().catch(err => {
-			console.error(
-				'[AIChatPanel] Failed to abort:',
-				err instanceof Error
-					? err.message
-					: JSON.stringify(err)
-			)
+		abort().catch(() => {
+			// Silently ignore — agent may not be running
 		})
 	}, [abort])
 
@@ -385,7 +380,8 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 		grouped.length > 0
 			? grouped[grouped.length - 1].msg.role
 			: null
-	const thinkingNeedsAvatar = lastGroupedRole !== 'assistant'
+	const thinkingNeedsAvatar =
+		lastGroupedRole !== 'assistant'
 
 	return (
 		<Chat className="flex-1 min-w-0">
@@ -394,10 +390,7 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 				<ChatHeaderAddon data-chat-meta>
 					<ChatHeaderAvatar
 						fallback={
-							<Robot
-								weight="fill"
-								className="size-3.5"
-							/>
+							<Robot weight="fill" className="size-3.5" />
 						}
 						className="bg-primary text-primary-foreground"
 					/>
@@ -446,8 +439,7 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 				<div className="flex flex-col py-2">
 					{grouped.map(({ msg, isFirst }, idx) => {
 						const isUser = msg.role === 'user'
-						const isAssistant =
-							msg.role === 'assistant'
+						const isAssistant = msg.role === 'assistant'
 						const msgKey = getMsgKey(msg, idx)
 						const timestamp = new Date(
 							msg.timestamp
@@ -456,12 +448,8 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 						const prev = grouped[idx - 1]?.msg
 						const showDateSep =
 							prev &&
-							new Date(
-								msg.timestamp
-							).toDateString() !==
-								new Date(
-									prev.timestamp
-								).toDateString()
+							new Date(msg.timestamp).toDateString() !==
+								new Date(prev.timestamp).toDateString()
 
 						return (
 							<div
@@ -475,9 +463,7 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 									>
 										<Separator className="flex-1" />
 										<ChatEventTime
-											timestamp={
-												timestamp
-											}
+											timestamp={timestamp}
 											format="longDate"
 											className="text-xs text-muted-foreground font-semibold min-w-max"
 											data-chat-meta
@@ -497,9 +483,7 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 								>
 									<ChatEventAddon
 										className={
-											isFirst
-												? ''
-												: 'pt-0 items-center'
+											isFirst ? '' : 'pt-0 items-center'
 										}
 										data-chat-meta
 									>
@@ -527,9 +511,7 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 											/>
 										) : (
 											<ChatEventTime
-												timestamp={
-													timestamp
-												}
+												timestamp={timestamp}
 												format="time"
 												className="text-right text-[10px] leading-tight opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-full text-muted-foreground/50"
 												data-chat-meta
@@ -539,18 +521,12 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 
 									<ChatEventBody>
 										{isFirst && (
-											<ChatEventTitle
-												data-chat-meta
-											>
+											<ChatEventTitle data-chat-meta>
 												<span className="font-medium">
-													{isAssistant
-														? 'Agent'
-														: 'You'}
+													{isAssistant ? 'Agent' : 'You'}
 												</span>
 												<ChatEventTime
-													timestamp={
-														timestamp
-													}
+													timestamp={timestamp}
 													className="text-[10px] text-muted-foreground/50"
 													data-chat-meta
 												/>
@@ -560,14 +536,10 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 											{isAssistant ? (
 												<AssistantMessageContent
 													msg={msg}
-													toolResultMap={
-														toolResultMap
-													}
+													toolResultMap={toolResultMap}
 												/>
 											) : (
-												<UserMessageContent
-													msg={msg}
-												/>
+												<UserMessageContent msg={msg} />
 											)}
 										</ChatEventContent>
 									</ChatEventBody>
@@ -603,9 +575,7 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 							</ChatEventAddon>
 							<ChatEventBody>
 								{thinkingNeedsAvatar && (
-									<ChatEventTitle
-										data-chat-meta
-									>
+									<ChatEventTitle data-chat-meta>
 										<span className="font-medium">
 											Agent
 										</span>
@@ -641,32 +611,23 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 					disabled={isLoading}
 				/>
 				<ChatToolbarAddon align="inline-end">
-					{isAgentWorking ? (
+					{isAgentWorking && (
 						<ChatToolbarButton
 							onClick={handleAbort}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90 size-7 rounded-full"
 							title="Stop"
 						>
-							<Stop
-								weight="fill"
-								className="size-3.5"
-							/>
-						</ChatToolbarButton>
-					) : (
-						<ChatToolbarButton
-							onClick={handleSubmit}
-							disabled={
-								isLoading || !input.trim()
-							}
-							className="bg-primary text-primary-foreground hover:bg-primary/90 size-7 rounded-full"
-							title="Send"
-						>
-							<ArrowUp
-								weight="bold"
-								className="size-3.5"
-							/>
+							<Stop weight="fill" className="size-3.5" />
 						</ChatToolbarButton>
 					)}
+					<ChatToolbarButton
+						onClick={handleSubmit}
+						disabled={isLoading || !input.trim()}
+						className="bg-primary text-primary-foreground hover:bg-primary/90 size-7 rounded-full"
+						title="Send"
+					>
+						<ArrowUp weight="bold" className="size-3.5" />
+					</ChatToolbarButton>
 				</ChatToolbarAddon>
 			</ChatToolbar>
 		</Chat>

@@ -64,9 +64,30 @@ export class AgentManager {
 	/**
 	 * Send a text prompt to an agent.
 	 * Creates the agent if it doesn't exist. Loads history on first use.
+	 * Persists the user message and starts the agent run.
 	 * Returns the runId for event stream subscription.
 	 */
 	async prompt(
+		sessionId: string,
+		text: string
+	): Promise<{ runId: string }> {
+		// Persist the user message as an event
+		this.store.ensureSession(sessionId)
+		this.store.appendEvent(sessionId, 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text }],
+			timestamp: Date.now()
+		})
+
+		return this.runAgent(sessionId, text)
+	}
+
+	/**
+	 * Start an agent run for a message that is already persisted.
+	 * Creates the agent if needed, loads history, and kicks off
+	 * the prompt. Returns the runId for event stream subscription.
+	 */
+	async runAgent(
 		sessionId: string,
 		text: string
 	): Promise<{ runId: string }> {
@@ -91,18 +112,6 @@ export class AgentManager {
 		}
 
 		const runId = ulid()
-
-		// Persist the user message as an event
-		this.store.appendEvent(
-			sessionId,
-			'user_message',
-			{
-				role: 'user',
-				content: [{ type: 'text', text }],
-				timestamp: Date.now()
-			},
-			runId
-		)
 
 		// Store the runId so the event handler knows where to write
 		agent.runId = runId

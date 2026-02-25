@@ -73,6 +73,24 @@ function sortMessages(
 	)
 }
 
+/** Agent lifecycle event types */
+const AGENT_START_TYPES = new Set(['agent_start'])
+const AGENT_END_TYPES = new Set(['agent_end', 'run_closed'])
+
+/**
+ * Scan a snapshot of event rows to determine if an agent
+ * run is currently active (has agent_start without a
+ * subsequent agent_end / run_closed).
+ */
+function isAgentRunOpen(rows: EventRow[]): boolean {
+	let open = false
+	for (const row of rows) {
+		if (AGENT_START_TYPES.has(row.type)) open = true
+		if (AGENT_END_TYPES.has(row.type)) open = false
+	}
+	return open
+}
+
 // ============================================================================
 // Hook
 // ============================================================================
@@ -80,15 +98,17 @@ function sortMessages(
 /**
  * Hook for an agent chat session backed by HTTP + SSE.
  *
- * Events are persisted server-side in SQLite. The agent runs
- * server-side — this hook sends prompts via REST and subscribes to
- * live updates over SSE.
+ * Messages are persisted via the chat route. The server-side
+ * AgentWatcher auto-routes new user messages to the agent
+ * when one is available.
  */
 export function useAgentChat(sessionId: string) {
 	const [messages, setMessages] = useState<AgentMessage[]>(
 		[]
 	)
 	const [isLoading, setIsLoading] = useState(true)
+	const [isAgentRunning, setIsAgentRunning] =
+		useState(false)
 	const [error, setError] = useState<Error | null>(null)
 	const baseUrl = useMemo(
 		() => env.API_BASE_URL.replace(/\/$/, ``),
@@ -102,7 +122,7 @@ export function useAgentChat(sessionId: string) {
 		lastSeqRef.current = 0 // Reset cursor on session change
 		let hasSnapshot = false
 		const url = new URL(
-			`${baseUrl}/agent/${encodeURIComponent(sessionId)}/events/sse`
+			`${baseUrl}/chat/${encodeURIComponent(sessionId)}/events/sse`
 		)
 		if (lastSeqRef.current > 0) {
 			url.searchParams.set(
@@ -115,6 +135,7 @@ export function useAgentChat(sessionId: string) {
 
 		setMessages([])
 		setIsLoading(true)
+		setIsAgentRunning(false)
 		setError(null)
 
 		const onSnapshot = (event: MessageEvent) => {
@@ -133,6 +154,7 @@ export function useAgentChat(sessionId: string) {
 					if (msg) msgs.push(msg)
 				}
 				setMessages(sortMessages(msgs))
+				setIsAgentRunning(isAgentRunOpen(rows))
 				setIsLoading(false)
 				setError(null)
 			} catch (err) {
@@ -148,6 +170,13 @@ export function useAgentChat(sessionId: string) {
 				const row = JSON.parse(event.data) as EventRow
 				if (row.seq > lastSeqRef.current)
 					lastSeqRef.current = row.seq
+
+				// Track agent run lifecycle
+				if (AGENT_START_TYPES.has(row.type)) {
+					setIsAgentRunning(true)
+				} else if (AGENT_END_TYPES.has(row.type)) {
+					setIsAgentRunning(false)
+				}
 
 				const msg = eventToMessage(row)
 				if (msg) {
@@ -166,7 +195,7 @@ export function useAgentChat(sessionId: string) {
 			if (hasSnapshot) return
 			setIsLoading(false)
 			setError(
-				new Error(`Failed to connect to agent stream`)
+				new Error(`Failed to connect to chat stream`)
 			)
 		}
 
@@ -188,15 +217,19 @@ export function useAgentChat(sessionId: string) {
 			if (!trimmed) return
 			setIsSending(true)
 			try {
-				const { error } = await eden
-					.agent({ sessionId })
-					.prompt.post({
-						message: trimmed
+				const { error: chatError } = await eden
+					.chat({ sessionId })
+					.messages.post({
+						role: 'user',
+						content: trimmed
 					})
-				if (!error) return
-				throw new Error(
-					`POST /agent/${sessionId}/prompt failed`
-				)
+				if (chatError) {
+					throw new Error(
+						`POST /chat/${sessionId}/messages failed`
+					)
+				}
+				// The server-side AgentWatcher auto-routes
+				// this message to the agent if available.
 			} catch (err) {
 				console.error(
 					`[useAgentChat] Failed to send message:`,
@@ -263,6 +296,7 @@ export function useAgentChat(sessionId: string) {
 		messages,
 		isLoading,
 		isSending,
+		isAgentRunning,
 		error,
 		sendMessage,
 		steer,

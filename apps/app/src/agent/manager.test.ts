@@ -165,10 +165,7 @@ describe('AgentManager', () => {
 	})
 
 	test('prompt persists user_message event in event store', async () => {
-		const { runId } = await manager.prompt(
-			'session-1',
-			'Test'
-		)
+		await manager.prompt('session-1', 'Test')
 
 		// User message event should exist
 		const userEvents = eventStore.query({
@@ -182,7 +179,9 @@ describe('AgentManager', () => {
 				content: [{ type: 'text', text: 'Test' }]
 			}
 		)
-		expect(userEvents[0].runId).toBe(runId)
+		// User messages are persisted without a runId —
+		// the runId is only on agent-generated events.
+		expect(userEvents[0].runId).toBeNull()
 
 		// Wait for agent to finish
 		const agent = manager.getOrCreate('session-1')

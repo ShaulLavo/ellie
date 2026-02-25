@@ -3,6 +3,7 @@ import type {
 	RealtimeStore,
 	SessionEvent
 } from '../lib/realtime-store'
+import type { AgentWatcher } from '../agent/watcher'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
@@ -15,7 +16,8 @@ import {
 
 export function createChatRoutes(
 	store: RealtimeStore,
-	sseState: SseState
+	sseState: SseState,
+	agentWatcher?: AgentWatcher | null
 ) {
 	return new Elysia({ prefix: '/chat' })
 		.get(
@@ -32,6 +34,9 @@ export function createChatRoutes(
 			({ params, body }) => {
 				const input = normalizeMessageInput(body)
 				store.ensureSession(params.sessionId)
+				// Subscribe the watcher BEFORE appending so it
+				// picks up the event via the synchronous publish.
+				agentWatcher?.watch(params.sessionId)
 				const row = store.appendEvent(
 					params.sessionId,
 					'user_message',
