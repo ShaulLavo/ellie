@@ -7,6 +7,8 @@ export type SessionEvent = { type: 'append'; event: EventRow }
 
 type Listener<T> = (event: T) => void
 
+const MAX_CLOSED_RUNS = 10_000
+
 export class RealtimeStore {
 	readonly #store: EventStore
 	readonly #listeners = new Map<string, Set<Listener<unknown>>>()
@@ -38,6 +40,26 @@ export class RealtimeStore {
 		return this.#store.getSession(sessionId) !== undefined
 	}
 
+	deleteSession(sessionId: string): void {
+		// Delete from persistent store (cascades to events)
+		this.#store.deleteSession(sessionId)
+
+		// Clean up in-memory session listeners
+		this.#listeners.delete(`session:${sessionId}`)
+
+		// Clean up closed runs and run-level listeners for this session
+		for (const key of this.#closedRuns) {
+			if (key.startsWith(`${sessionId}:`)) {
+				this.#closedRuns.delete(key)
+			}
+		}
+		for (const channel of this.#listeners.keys()) {
+			if (channel.startsWith(`run:${sessionId}:`)) {
+				this.#listeners.delete(channel)
+			}
+		}
+	}
+
 	// ── Event append (with live notification) ─────────────────────────────
 
 	appendEvent(
@@ -58,6 +80,10 @@ export class RealtimeStore {
 		// If this is a run_closed, also notify run-specific subscribers
 		if (type === 'run_closed' && runId) {
 			this.#closedRuns.add(this.#runKey(sessionId, runId))
+			// Evict all entries when cache exceeds bound — DB fallback guarantees correctness
+			if (this.#closedRuns.size > MAX_CLOSED_RUNS) {
+				this.#closedRuns.clear()
+			}
 			this.#publish(this.#runChannel(sessionId, runId), {
 				type: 'closed'
 			} satisfies AgentRunEvent)

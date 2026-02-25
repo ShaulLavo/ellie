@@ -44,7 +44,7 @@ export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
 		.delete(
 			'/:sessionId/messages',
 			({ params }) => {
-				store.eventStore.deleteSession(params.sessionId)
+				store.deleteSession(params.sessionId)
 				return new Response(null, { status: 204 })
 			},
 			{
@@ -54,7 +54,7 @@ export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
 		.get(
 			'/:sessionId/events/sse',
 			({ params, query, request }) => {
-				const afterSeq = query.afterSeq ? Number(query.afterSeq) : undefined
+				const afterSeq = query.afterSeq
 
 				// Snapshot: fetch existing events
 				const existingEvents = store.queryEvents(params.sessionId, afterSeq)

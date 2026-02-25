@@ -146,12 +146,12 @@ export class EventStore {
 	readonly sqlite: Database
 	readonly #audit: AuditLogger | null
 
-	constructor(dbPath: string, auditLogDir?: string) {
+	constructor(dbPath: string, auditLogDir?: string, migrationsFolder?: string) {
 		this.sqlite = openDatabase(dbPath)
 		this.db = drizzle(this.sqlite, { schema })
 
 		// Run Drizzle migrations
-		migrate(this.db, { migrationsFolder: MIGRATIONS_DIR })
+		migrate(this.db, { migrationsFolder: migrationsFolder ?? MIGRATIONS_DIR })
 
 		// Create partial unique index not representable in Drizzle
 		this.sqlite.run(`
@@ -174,14 +174,16 @@ export class EventStore {
 			if (existing) throw new Error(`Session already exists: ${id}`)
 		}
 
-		const row: typeof sessions.$inferInsert = {
-			id: sessionId,
-			createdAt: now,
-			updatedAt: now,
-			currentSeq: 0
-		}
-		this.db.insert(sessions).values(row).run()
-		return { ...row, currentSeq: 0 }
+		return this.db
+			.insert(sessions)
+			.values({
+				id: sessionId,
+				createdAt: now,
+				updatedAt: now,
+				currentSeq: 0
+			})
+			.returning()
+			.get()
 	}
 
 	getSession(id: string): SessionRow | undefined {
@@ -303,11 +305,26 @@ export class EventStore {
 			types: ['user_message', 'assistant_final', 'tool_result']
 		})
 
-		return rows.map((row) => JSON.parse(row.payload) as AgentMessage)
+		const messages: AgentMessage[] = []
+		for (const row of rows) {
+			try {
+				messages.push(JSON.parse(row.payload) as AgentMessage)
+			} catch (err) {
+				console.warn(`[EventStore] malformed payload in event ${row.id} (seq=${row.seq}):`, err)
+			}
+		}
+		return messages
 	}
 
 	// ── Stale run recovery ────────────────────────────────────────────────
 
+	/**
+	 * Find runs that started but never closed within the given time window.
+	 *
+	 * Note: For large tables, consider adding a composite index:
+	 *   CREATE INDEX idx_events_stale_runs ON events(type, run_id, created_at)
+	 *     WHERE run_id IS NOT NULL;
+	 */
 	findStaleRuns(maxAgeMs: number): Array<{ sessionId: string; runId: string }> {
 		const cutoff = Date.now() - maxAgeMs
 
