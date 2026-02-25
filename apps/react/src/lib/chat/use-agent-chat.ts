@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { env } from '@ellie/env/client'
 import { eden } from '../eden'
-import type { Message } from './use-chat'
+import { isMessagePayload, type Message } from './use-chat'
 
 // ============================================================================
 // Types
@@ -36,8 +36,8 @@ function parsePayload(row: EventRow): Record<string, unknown> {
 function eventToMessage(row: EventRow): AgentMessage | null {
 	const payload = parsePayload(row)
 	if (row.type === 'user_message' || row.type === 'assistant_final' || row.type === 'tool_result') {
-		if (typeof payload.role === 'string' && Array.isArray(payload.content)) {
-			return payload as unknown as AgentMessage
+		if (isMessagePayload(payload)) {
+			return payload
 		}
 		console.warn(`[eventToMessage] malformed payload for event ${row.id}:`, payload)
 		return null

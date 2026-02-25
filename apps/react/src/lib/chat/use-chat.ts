@@ -37,11 +37,15 @@ function parsePayload(row: EventRow): Record<string, unknown> {
 	}
 }
 
+export function isMessagePayload(payload: Record<string, unknown>): payload is Message {
+	return typeof payload.role === 'string' && Array.isArray(payload.content)
+}
+
 function eventToMessage(row: EventRow): Message | null {
 	const payload = parsePayload(row)
 	if (row.type === 'user_message' || row.type === 'assistant_final' || row.type === 'tool_result') {
-		if (typeof payload.role === 'string' && Array.isArray(payload.content)) {
-			return payload as unknown as Message
+		if (isMessagePayload(payload)) {
+			return payload
 		}
 		console.warn(`[eventToMessage] malformed payload for event ${row.id}:`, payload)
 		return null
