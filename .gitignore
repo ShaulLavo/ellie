@@ -45,6 +45,9 @@ data/
 # Credentials
 .credentials.json
 
+# Go binaries
+apps/cli/cli
+
 # Misc
 .DS_Store
 *.pem

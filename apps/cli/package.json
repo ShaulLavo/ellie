@@ -1,0 +1,11 @@
+{
+	"name": "cli",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"dev": "go run ./cmd/cli",
+		"build": "go build ./...",
+		"test": "go test ./...",
+		"check-types": "go test ./..."
+	}
+}

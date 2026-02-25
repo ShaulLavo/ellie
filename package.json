@@ -7,7 +7,8 @@
 	],
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "turbo run dev",
+		"dev": "turbo run dev --filter='!cli'",
+		"dev:cli": "turbo run dev --filter=cli",
 		"lint": "oxlint --ignore-path .gitignore apps packages",
 		"lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
 		"format": "oxfmt --write .",

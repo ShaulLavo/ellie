@@ -4,8 +4,12 @@ import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
 import {
 	anthropicText,
+	createAnthropicChat,
 	type AnthropicChatModel
 } from '@tanstack/ai-anthropic'
+import type { AnyTextAdapter } from '@tanstack/ai'
+import { loadAnthropicCredential } from '@ellie/ai/credentials'
+import { anthropicOAuth } from '@ellie/ai/anthropic-oauth'
 import { Elysia } from 'elysia'
 import { AgentManager } from './agent/manager'
 import { AgentWatcher } from './agent/watcher'
@@ -14,6 +18,7 @@ import { errorSchema, type SseState } from './routes/common'
 import { createAgentRoutes } from './routes/agent'
 import { createChatRoutes } from './routes/chat'
 import { createStatusRoutes } from './routes/status'
+import { createAuthRoutes } from './routes/auth'
 
 const parsedUrl = new URL(env.API_BASE_URL)
 const port =
@@ -61,24 +66,57 @@ if (staleRuns.length > 0) {
 	)
 }
 
-const agentManager: AgentManager | null =
-	env.ANTHROPIC_API_KEY
-		? new AgentManager(store, {
-				adapter: anthropicText(
-					env.ANTHROPIC_MODEL as AnthropicChatModel
-				),
-				systemPrompt: 'You are a helpful assistant.'
-			})
-		: null
-
-const agentWatcher = agentManager
-	? new AgentWatcher(store, agentManager)
-	: null
-
 const STUDIO_PUBLIC = resolve(
 	import.meta.dir,
 	'../../react/public'
 )
+
+const CREDENTIALS_PATH = resolve(
+	import.meta.dir,
+	'../../../.credentials.json'
+)
+
+// ── Auth resolution: ANTHROPIC_OAUTH_TOKEN > BEARER_TOKEN > API_KEY > file ──
+async function resolveAdapter(): Promise<AnyTextAdapter | null> {
+	const model = env.ANTHROPIC_MODEL as AnthropicChatModel
+
+	const oauthToken = process.env.ANTHROPIC_OAUTH_TOKEN
+	if (oauthToken) return anthropicOAuth(model, oauthToken)
+
+	const bearerToken = process.env.ANTHROPIC_BEARER_TOKEN
+	if (bearerToken)
+		return createAnthropicChat(model, bearerToken)
+
+	if (env.ANTHROPIC_API_KEY) return anthropicText(model)
+
+	// File fallback
+	const cred = await loadAnthropicCredential(
+		CREDENTIALS_PATH
+	)
+	if (!cred) return null
+
+	switch (cred.type) {
+		case 'api_key':
+			return createAnthropicChat(model, cred.key)
+		case 'oauth':
+			return anthropicOAuth(model, cred.access)
+		case 'token':
+			return createAnthropicChat(model, cred.token)
+	}
+}
+
+const resolvedAdapter = await resolveAdapter()
+
+const agentManager: AgentManager | null = resolvedAdapter
+	? new AgentManager(store, {
+			adapter: resolvedAdapter,
+			systemPrompt: 'You are a helpful assistant.'
+		})
+	: null
+
+const agentWatcher = agentManager
+	? new AgentWatcher(store, agentManager)
+	: null
 
 const sseState: SseState = {
 	activeClients: 0
@@ -88,6 +126,7 @@ export const app = new Elysia()
 	.use(createStatusRoutes(() => sseState.activeClients))
 	.use(createChatRoutes(store, sseState, agentWatcher))
 	.use(createAgentRoutes(store, agentManager, sseState))
+	.use(createAuthRoutes(CREDENTIALS_PATH))
 	.all(
 		`/api/*`,
 		({ set }) => {

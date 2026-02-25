@@ -14,7 +14,8 @@
 		"./thinking": "./src/thinking.ts",
 		"./ollama": "./src/ollama.ts",
 		"./openai-compat": "./src/openai-compat.ts",
-		"./credentials": "./src/credentials.ts"
+		"./credentials": "./src/credentials.ts",
+		"./anthropic-oauth": "./src/anthropic-oauth.ts"
 	},
 	"scripts": {
 		"check-types": "tsgo --noEmit",
