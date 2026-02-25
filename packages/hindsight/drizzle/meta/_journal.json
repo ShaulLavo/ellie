@@ -29,6 +29,13 @@
 			"when": 1771955427127,
 			"tag": "0003_heavy_warbird",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "6",
+			"when": 1771998662583,
+			"tag": "0004_regular_trauma",
+			"breakpoints": true
 		}
 	]
 }

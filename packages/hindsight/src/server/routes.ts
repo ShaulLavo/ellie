@@ -339,6 +339,54 @@ export function createHindsightHandlers(
 			)
 			if (!stats) throw new Error('Path not found')
 			return stats
+		},
+
+		// Phase 4: Visual APIs
+		retainVisual: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			if (
+				!input?.description ||
+				typeof input.description !== 'string'
+			) {
+				throw new Error("Missing 'description' field")
+			}
+			return hs.retainVisual({
+				bankId: params.bankId,
+				sourceId:
+					typeof input.sourceId === 'string'
+						? input.sourceId
+						: undefined,
+				description: input.description,
+				ts:
+					typeof input.ts === 'number'
+						? input.ts
+						: undefined,
+				scope: input.scope as
+					| {
+							profile?: string
+							project?: string
+							session?: string
+					  }
+					| undefined
+			})
+		},
+
+		visualStats: async (_input: unknown, params) =>
+			hs.visualStats(params.bankId),
+
+		visualFind: async (raw: unknown, params) => {
+			const input = raw as RpcInput
+			if (
+				!input?.query ||
+				typeof input.query !== 'string'
+			) {
+				throw new Error("Missing 'query' field")
+			}
+			return hs.visualFind(
+				params.bankId,
+				input.query,
+				input.limit ? Number(input.limit) : undefined
+			)
 		}
 	}
 }
@@ -545,6 +593,25 @@ function createHindsightApp(hs: Hindsight) {
 				'/banks/:bankId/location/stats',
 				({ body, params }) =>
 					invoke('locationStats', body, params),
+				{ params: bankParamsSchema }
+			)
+			// Phase 4: Visual APIs
+			.post(
+				'/banks/:bankId/visual/retain',
+				({ body, params }) =>
+					invoke('retainVisual', body, params),
+				{ params: bankParamsSchema }
+			)
+			.get(
+				'/banks/:bankId/visual/stats',
+				({ params }) =>
+					invoke('visualStats', undefined, params),
+				{ params: bankParamsSchema }
+			)
+			.post(
+				'/banks/:bankId/visual/find',
+				({ body, params }) =>
+					invoke('visualFind', body, params),
 				{ params: bankParamsSchema }
 			)
 	)

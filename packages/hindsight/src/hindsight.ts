@@ -45,6 +45,12 @@ import {
 	type LocationHit,
 	type LocationStats
 } from './location'
+import {
+	retainVisual as retainVisualImpl,
+	getVisualStats as getVisualStatsImpl,
+	visualFind as visualFindImpl,
+	deleteVisualMemoriesForBank
+} from './visual'
 import { resolveScope } from './scope'
 import type {
 	HindsightConfig,
@@ -107,7 +113,11 @@ import type {
 	ListEpisodesOptions,
 	ListEpisodesResult,
 	NarrativeInput,
-	NarrativeResult
+	NarrativeResult,
+	VisualRetainInput,
+	VisualRetainResult,
+	VisualStats,
+	VisualFindHit
 } from './types'
 
 // ── Default config values ───────────────────────────────────────────────
@@ -137,6 +147,7 @@ export class Hindsight {
 	private readonly memoryVec: EmbeddingStore
 	private readonly entityVec: EmbeddingStore
 	private readonly modelVec: EmbeddingStore
+	private readonly visualVec: EmbeddingStore
 	private readonly adapter: AnyTextAdapter
 	private readonly rerank: RerankFunction | undefined
 	private readonly instanceDefaults: BankConfig | undefined
@@ -183,6 +194,13 @@ export class Hindsight {
 			runtime.embedBatch,
 			dims,
 			'hs_mental_model_vec'
+		)
+		this.visualVec = new EmbeddingStore(
+			this.hdb.sqlite,
+			runtime.embed,
+			runtime.embedBatch,
+			dims,
+			'hs_visual_vec'
 		)
 	}
 
@@ -364,6 +382,13 @@ export class Hindsight {
 		for (const m of modelIds) {
 			this.modelVec.delete(m.id)
 		}
+
+		// Clean visual vec entries (Phase 4)
+		deleteVisualMemoriesForBank(
+			this.hdb,
+			this.visualVec,
+			id
+		)
 
 		// Clean FTS entries
 		this.hdb.sqlite.run(
@@ -652,10 +677,15 @@ Instructions:
 					query,
 					options,
 					this.rerank,
-					this.workingMemory
+					this.workingMemory,
+					options?.includeVisual
+						? this.visualVec
+						: undefined
 				),
 			r => ({
 				memoriesReturned: r.memories.length,
+				visualMemoriesReturned:
+					r.visualMemories?.length ?? 0,
 				limit: options?.limit ?? 10
 			})
 		)
@@ -2357,6 +2387,32 @@ Instructions:
 		scope?: { profile?: string; project?: string }
 	): Promise<LocationStats | null> {
 		return locationStatsImpl(this.hdb, bankId, path, scope)
+	}
+
+	// ── Visual APIs (Phase 4) ────────────────────────────────────────────
+
+	async retainVisual(
+		input: VisualRetainInput
+	): Promise<VisualRetainResult> {
+		return retainVisualImpl(this.hdb, this.visualVec, input)
+	}
+
+	visualStats(bankId: string): VisualStats {
+		return getVisualStatsImpl(this.hdb, bankId)
+	}
+
+	async visualFind(
+		bankId: string,
+		query: string,
+		limit?: number
+	): Promise<VisualFindHit[]> {
+		return visualFindImpl(
+			this.hdb,
+			this.visualVec,
+			bankId,
+			query,
+			limit
+		)
 	}
 
 	// ── Lifecycle ───────────────────────────────────────────────────────

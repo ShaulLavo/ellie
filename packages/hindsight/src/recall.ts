@@ -5,6 +5,7 @@ import type {
 	RecallOptions,
 	RecallResult,
 	ScoredMemory,
+	ScoredVisualMemory,
 	FactType,
 	RerankFunction,
 	RecallEntityState,
@@ -44,6 +45,7 @@ import {
 	resolveScope,
 	type ScopeMode
 } from './scope'
+import { searchVisual, recordVisualAccess } from './visual'
 
 /** Extended recall options with Phase 3 scope + tokenBudget support */
 interface RecallOptionsWithScope extends RecallOptions {
@@ -81,7 +83,8 @@ export async function recall(
 	query: string,
 	options: RecallOptions = {},
 	rerank?: RerankFunction,
-	workingMemory?: WorkingMemoryStore
+	workingMemory?: WorkingMemoryStore,
+	visualVec?: EmbeddingStore
 ): Promise<RecallResult> {
 	const startedAt = Date.now()
 	const phaseMetrics: RecallTraceMetric[] = []
@@ -787,6 +790,43 @@ export async function recall(
 		})
 	}
 
+	// ── Phase 4: Visual fusion ──────────────────────────────────────────────
+	// When includeVisual=true and visualVec is available, search visual
+	// embeddings and inject up to 20% of the final result set.
+	const VISUAL_MAX_SHARE_CAP = 0.2
+	let visualResults: ScoredVisualMemory[] = []
+
+	const includeVisual =
+		options.includeVisual === true && visualVec != null
+	if (includeVisual) {
+		const visualFusionStart = Date.now()
+		const visualMaxShare = Math.min(
+			options.visualMaxShare ?? VISUAL_MAX_SHARE_CAP,
+			VISUAL_MAX_SHARE_CAP
+		)
+		const visualLimit = Math.floor(limit * visualMaxShare)
+
+		if (visualLimit > 0) {
+			visualResults = await searchVisual(
+				hdb,
+				visualVec,
+				bankId,
+				query,
+				visualLimit
+			)
+		}
+
+		phaseMetrics.push({
+			phaseName: 'visual_fusion',
+			durationMs: Date.now() - visualFusionStart,
+			details: {
+				visualLimit,
+				visualMaxShare,
+				visualCandidates: visualResults.length
+			}
+		})
+	}
+
 	// ── Access write-through (both modes) ────────────────────────────────────
 	// For returned memories only: increment access_count, update last_accessed,
 	// bump encoding_strength (capped at 3.0). Executed synchronously before return.
@@ -807,6 +847,16 @@ export async function recall(
 			options.sessionId,
 			returnedIds,
 			now
+		)
+	}
+
+	// ── Phase 4: Visual access history write-through ──────────────────────
+	if (visualResults.length > 0) {
+		recordVisualAccess(
+			hdb,
+			bankId,
+			visualResults.map(v => v.id),
+			options.sessionId
 		)
 	}
 
@@ -845,7 +895,15 @@ export async function recall(
 			}
 		: undefined
 
-	return { memories, query, entities, chunks, trace }
+	return {
+		memories,
+		query,
+		entities,
+		chunks,
+		trace,
+		visualMemories:
+			visualResults.length > 0 ? visualResults : undefined
+	}
 }
 
 // Re-export matchesTags for downstream consumers
