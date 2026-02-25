@@ -1,9 +1,9 @@
-import { ChatPanel } from './ChatPanel'
+import { AIChatPanel } from './AIChatPanel'
 
 function App() {
 	return (
 		<div className="h-screen flex overflow-hidden">
-			<ChatPanel sessionId="session-1" />
+			<AIChatPanel sessionId="session-1" />
 		</div>
 	)
 }
