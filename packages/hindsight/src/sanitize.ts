@@ -9,8 +9,8 @@
  * - Lone surrogates (U+D800-U+DFFF) are invalid in UTF-8
  */
 export function sanitizeText(text: string): string {
-  // eslint-disable-next-line no-control-regex -- intentionally stripping null bytes
-  return text.replace(/\0/g, "").replace(/[\uD800-\uDFFF]/gu, "")
+	// eslint-disable-next-line no-control-regex -- intentionally stripping null bytes
+	return text.replace(/\0/g, '').replace(/[\uD800-\uDFFF]/gu, '')
 }
 
 /**
@@ -21,15 +21,15 @@ export function sanitizeText(text: string): string {
  * if parsing fails entirely.
  */
 export function parseLLMJson<T>(text: string, fallback: T): T {
-  // Strip markdown code fences if present
-  const cleaned = text
-    .replace(/^```(?:json)?\s*\n?/m, "")
-    .replace(/\n?```\s*$/m, "")
-    .trim()
+	// Strip markdown code fences if present
+	const cleaned = text
+		.replace(/^```(?:json)?\s*\n?/m, '')
+		.replace(/\n?```\s*$/m, '')
+		.trim()
 
-  try {
-    return JSON.parse(cleaned) as T
-  } catch {
-    return fallback
-  }
+	try {
+		return JSON.parse(cleaned) as T
+	} catch {
+		return fallback
+	}
 }

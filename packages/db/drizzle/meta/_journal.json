@@ -1,20 +1,13 @@
 {
-  "version": "7",
-  "dialect": "sqlite",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "6",
-      "when": 1771579194801,
-      "tag": "0000_sleepy_mac_gargan",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1771711077613,
-      "tag": "0001_brainy_quasimodo",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "sqlite",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "6",
+			"when": 1771959443774,
+			"tag": "0000_initial",
+			"breakpoints": true
+		}
+	]
 }

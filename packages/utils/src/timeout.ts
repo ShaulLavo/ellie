@@ -1,8 +1,8 @@
 export class TimeoutError extends Error {
-  constructor(ms: number) {
-    super(`Timed out after ${ms}ms`)
-    this.name = "TimeoutError"
-  }
+	constructor(ms: number) {
+		super(`Timed out after ${ms}ms`)
+		this.name = 'TimeoutError'
+	}
 }
 
 /**
@@ -23,25 +23,25 @@ export class TimeoutError extends Error {
  * ```
  */
 export async function withTimeout<T>(
-  input: Promise<T> | ((signal: AbortSignal) => Promise<T>),
-  ms: number,
+	input: Promise<T> | ((signal: AbortSignal) => Promise<T>),
+	ms: number
 ): Promise<T> {
-  const controller = new AbortController()
+	const controller = new AbortController()
 
-  const promise = typeof input === "function" ? input(controller.signal) : input
+	const promise = typeof input === 'function' ? input(controller.signal) : input
 
-  let timer: ReturnType<typeof setTimeout> | undefined
+	let timer: ReturnType<typeof setTimeout> | undefined
 
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort()
-      reject(new TimeoutError(ms))
-    }, ms)
-  })
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => {
+			controller.abort()
+			reject(new TimeoutError(ms))
+		}, ms)
+	})
 
-  try {
-    return await Promise.race([promise, timeout])
-  } finally {
-    clearTimeout(timer)
-  }
+	try {
+		return await Promise.race([promise, timeout])
+	} finally {
+		clearTimeout(timer)
+	}
 }

@@ -23,8 +23,8 @@ These affect ALL tasks in the repo:
 
 ```json
 {
-  "globalDependencies": [".env", "tsconfig.base.json"],
-  "globalEnv": ["CI", "NODE_ENV"]
+	"globalDependencies": [".env", "tsconfig.base.json"],
+	"globalEnv": ["CI", "NODE_ENV"]
 }
 ```
 
@@ -40,13 +40,13 @@ These affect specific tasks:
 
 ```json
 {
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["src/**", "package.json", "tsconfig.json"],
-      "env": ["API_URL"]
-    }
-  }
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "package.json", "tsconfig.json"],
+			"env": ["API_URL"]
+		}
+	}
 }
 ```
 
@@ -57,11 +57,11 @@ These affect specific tasks:
 
 ```json
 {
-  "tasks": {
-    "build": {
-      "outputs": ["dist/**", ".next/**"]
-    }
-  }
+	"tasks": {
+		"build": {
+			"outputs": ["dist/**", ".next/**"]
+		}
+	}
 }
 ```
 

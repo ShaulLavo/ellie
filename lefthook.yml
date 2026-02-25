@@ -1,6 +1,8 @@
 pre-commit:
   parallel: false
   commands:
+    format:
+      run: bunx oxfmt --check .
     typecheck:
       run: bun run check-types
     lint:

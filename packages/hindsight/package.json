@@ -1,41 +1,41 @@
 {
-  "name": "@ellie/hindsight",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema.ts",
-    "./schemas": "./src/schemas.ts",
-    "./server": "./src/server/index.ts"
-  },
-  "scripts": {
-    "check-types": "tsgo --noEmit",
-    "test": "bun test",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "generate-embeddings": "bun run scripts/generate-test-embeddings.ts"
-  },
-  "dependencies": {
-    "@chonkiejs/core": "^0.0.7",
-    "@ellie/ai": "workspace:*",
-    "@ellie/db": "workspace:*",
-    "@ellie/schemas": "workspace:*",
-    "@ellie/utils": "workspace:*",
-    "@tanstack/ai-anthropic": "^0.5.0",
-    "chrono-node": "^2.9.0",
-    "drizzle-orm": "^0.45.1",
-    "elysia": "^1.4.25",
-    "valibot": "^1.2.0"
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "@tanstack/ai": "^0.5.1",
-    "@tanstack/ai-ollama": "^0.5.0",
-    "bun-types": "latest",
-    "drizzle-kit": "^0.31.8",
-    "typescript": "^5.0.0"
-  }
+	"name": "@ellie/hindsight",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/schema.ts",
+		"./schemas": "./src/schemas.ts",
+		"./server": "./src/server/index.ts"
+	},
+	"scripts": {
+		"check-types": "tsgo --noEmit",
+		"test": "bun test",
+		"db:generate": "drizzle-kit generate",
+		"db:push": "drizzle-kit push",
+		"generate-embeddings": "bun run scripts/generate-test-embeddings.ts"
+	},
+	"dependencies": {
+		"@chonkiejs/core": "^0.0.7",
+		"@ellie/ai": "workspace:*",
+		"@ellie/db": "workspace:*",
+		"@ellie/schemas": "workspace:*",
+		"@ellie/utils": "workspace:*",
+		"@tanstack/ai-anthropic": "^0.5.0",
+		"chrono-node": "^2.9.0",
+		"drizzle-orm": "^0.45.1",
+		"elysia": "^1.4.25",
+		"valibot": "^1.2.0"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "workspace:*",
+		"@tanstack/ai": "^0.5.1",
+		"@tanstack/ai-ollama": "^0.5.0",
+		"bun-types": "latest",
+		"drizzle-kit": "^0.31.8",
+		"typescript": "^5.0.0"
+	}
 }

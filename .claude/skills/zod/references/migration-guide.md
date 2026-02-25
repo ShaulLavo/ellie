@@ -19,21 +19,21 @@ Zod v4 introduces several breaking changes that improve performance and API cons
 ```typescript
 // ❌ Zod v3 (No longer works)
 z.string({
-  message: "Custom message",
-  invalid_type_error: "Must be a string",
-  required_error: "Field is required"
-});
+	message: 'Custom message',
+	invalid_type_error: 'Must be a string',
+	required_error: 'Field is required'
+})
 
-z.string().email({ errorMap: (issue) => ({ message: "Invalid email" }) });
+z.string().email({ errorMap: (issue) => ({ message: 'Invalid email' }) })
 
 // ✅ Zod v4 (Use unified 'error' parameter)
 z.string({
-  error: "Custom message"
-});
+	error: 'Custom message'
+})
 
 z.string().email({
-  error: (issue) => ({ message: "Invalid email" })
-});
+	error: (issue) => ({ message: 'Invalid email' })
+})
 ```
 
 ---
@@ -44,17 +44,17 @@ z.string().email({
 
 ```typescript
 // ❌ Zod v3 (Accepted these values)
-z.number().parse(Infinity);           // OK in v3
-z.number().parse(-Infinity);          // OK in v3
-z.number().int().parse(9007199254740992); // OK in v3 (unsafe integer)
+z.number().parse(Infinity) // OK in v3
+z.number().parse(-Infinity) // OK in v3
+z.number().int().parse(9007199254740992) // OK in v3 (unsafe integer)
 
 // ✅ Zod v4 (Rejects invalid numbers)
-z.number().parse(Infinity);           // ✗ Error: infinite values rejected
-z.number().parse(-Infinity);          // ✗ Error: infinite values rejected
-z.number().int().parse(9007199254740992); // ✗ Error: outside safe integer range
+z.number().parse(Infinity) // ✗ Error: infinite values rejected
+z.number().parse(-Infinity) // ✗ Error: infinite values rejected
+z.number().int().parse(9007199254740992) // ✗ Error: outside safe integer range
 
 // If you need to allow infinite values, use a refinement:
-z.number().refine((n) => Number.isFinite(n) || !Number.isNaN(n));
+z.number().refine((n) => Number.isFinite(n) || !Number.isNaN(n))
 
 // .int() now enforces Number.MIN_SAFE_INTEGER to Number.MAX_SAFE_INTEGER
 // .safe() no longer permits floats (integers only)
@@ -68,22 +68,22 @@ z.number().refine((n) => Number.isFinite(n) || !Number.isNaN(n));
 
 ```typescript
 // ❌ Zod v3 (Methods on z.string())
-z.string().email();
-z.string().uuid();
-z.string().url();
-z.string().ipv4();
-z.string().ipv6();
+z.string().email()
+z.string().uuid()
+z.string().url()
+z.string().ipv4()
+z.string().ipv6()
 
 // ✅ Zod v4 (Top-level functions)
-z.email();        // Shorthand for validated email
-z.uuid();         // Stricter UUID validation (RFC 9562/4122)
-z.url();
-z.ipv4();
-z.ipv6();
+z.email() // Shorthand for validated email
+z.uuid() // Stricter UUID validation (RFC 9562/4122)
+z.url()
+z.ipv4()
+z.ipv6()
 
 // Both still work for now, but top-level is preferred
-z.string().email();  // Still works in v4
-z.email();          // Preferred in v4
+z.string().email() // Still works in v4
+z.email() // Preferred in v4
 ```
 
 ---
@@ -94,16 +94,16 @@ z.email();          // Preferred in v4
 
 ```typescript
 const schema = z.object({
-  name: z.string().default("Anonymous"),
-  age: z.number().optional().default(18),
-});
+	name: z.string().default('Anonymous'),
+	age: z.number().optional().default(18)
+})
 
 // ❌ Zod v3 behavior
-schema.parse({ age: undefined });
+schema.parse({ age: undefined })
 // Result: { name: "Anonymous", age: undefined }
 
 // ✅ Zod v4 behavior
-schema.parse({ age: undefined });
+schema.parse({ age: undefined })
 // Result: { name: "Anonymous", age: 18 }
 // Default is applied even though field was optional
 ```
@@ -116,17 +116,17 @@ schema.parse({ age: undefined });
 
 ```typescript
 // ❌ Zod v3 APIs (Deprecated in v4)
-schema1.merge(schema2);           // Use .extend() instead
-error.format();                   // Use z.treeifyError(error)
-error.flatten();                  // Use z.flattenError(error)
-z.nativeEnum(MyEnum);             // Use z.enum() (now handles both)
-z.promise(schema);                // Deprecated
+schema1.merge(schema2) // Use .extend() instead
+error.format() // Use z.treeifyError(error)
+error.flatten() // Use z.flattenError(error)
+z.nativeEnum(MyEnum) // Use z.enum() (now handles both)
+z.promise(schema) // Deprecated
 
 // ✅ Zod v4 Replacements
-schema1.extend(schema2);          // Preferred way to merge
-z.treeifyError(error);           // New error formatting
-z.flattenError(error);           // New flat error format
-z.enum(MyEnum);                  // Unified enum handling
+schema1.extend(schema2) // Preferred way to merge
+z.treeifyError(error) // New error formatting
+z.flattenError(error) // New flat error format
+z.enum(MyEnum) // Unified enum handling
 // No direct replacement for z.promise() - use async refinements
 ```
 
@@ -138,24 +138,24 @@ z.enum(MyEnum);                  // Unified enum handling
 
 ```typescript
 // ❌ Zod v3
-const myFunc = z.function()
-  .args(z.string())
-  .returns(z.number())
-  .parse(someFunction);
+const myFunc = z.function().args(z.string()).returns(z.number()).parse(someFunction)
 
 // ✅ Zod v4
-const myFunc = z.function()
-  .args(z.string())
-  .returns(z.number())
-  .implement((str) => {
-    return parseInt(str); // Type-checked!
-  });
+const myFunc = z
+	.function()
+	.args(z.string())
+	.returns(z.number())
+	.implement((str) => {
+		return parseInt(str) // Type-checked!
+	})
 
 // Or with new syntax:
-const myFunc = z.function({
-  input: [z.string()],
-  output: z.number()
-}).implement((str) => parseInt(str));
+const myFunc = z
+	.function({
+		input: [z.string()],
+		output: z.number()
+	})
+	.implement((str) => parseInt(str))
 ```
 
 ---
@@ -167,7 +167,7 @@ const myFunc = z.function({
 ```typescript
 // Some previously valid UUIDs may now fail validation
 // Ensure UUIDs conform to RFC 9562/4122 format
-const uuid = z.uuid().parse("550e8400-e29b-41d4-a716-446655440000"); // ✓
+const uuid = z.uuid().parse('550e8400-e29b-41d4-a716-446655440000') // ✓
 ```
 
 ---
@@ -262,37 +262,41 @@ Verify all tests pass with Zod v4.
 ```typescript
 // ❌ Zod v3
 const FormSchema = z.object({
-  email: z.string({
-    required_error: "Email required",
-    invalid_type_error: "Email must be string"
-  }).email({ message: "Invalid email" })
-});
+	email: z
+		.string({
+			required_error: 'Email required',
+			invalid_type_error: 'Email must be string'
+		})
+		.email({ message: 'Invalid email' })
+})
 
 // ✅ Zod v4
 const FormSchema = z.object({
-  email: z.string({
-    error: "Email required"
-  }).email({
-    error: "Invalid email"
-  })
-});
+	email: z
+		.string({
+			error: 'Email required'
+		})
+		.email({
+			error: 'Invalid email'
+		})
+})
 ```
 
 ### Pattern 2: API Validation Migration
 
 ```typescript
 // ❌ Zod v3
-const result = schema.safeParse(data);
+const result = schema.safeParse(data)
 if (!result.success) {
-  const errors = result.error.flatten();
-  return { errors: errors.fieldErrors };
+	const errors = result.error.flatten()
+	return { errors: errors.fieldErrors }
 }
 
 // ✅ Zod v4
-const result = schema.safeParse(data);
+const result = schema.safeParse(data)
 if (!result.success) {
-  const errors = z.flattenError(result.error);
-  return { errors: errors.fieldErrors };
+	const errors = z.flattenError(result.error)
+	return { errors: errors.fieldErrors }
 }
 ```
 
@@ -300,15 +304,15 @@ if (!result.success) {
 
 ```typescript
 // ❌ Zod v3 (Allowed unsafe integers)
-const IdSchema = z.number().int();
+const IdSchema = z.number().int()
 
 // ✅ Zod v4 (Explicitly handle large numbers)
-const IdSchema = z.number().int(); // Now enforces safe integers
+const IdSchema = z.number().int() // Now enforces safe integers
 
 // If you need large integers, use bigint or refine
-const IdSchema = z.bigint();
+const IdSchema = z.bigint()
 // or
-const IdSchema = z.number().refine(Number.isInteger);
+const IdSchema = z.number().refine(Number.isInteger)
 ```
 
 ---
@@ -318,13 +322,13 @@ const IdSchema = z.number().refine(Number.isInteger);
 To check which version of Zod you're using:
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod'
 
 // Check for v4 features
 if (typeof z.codec === 'function') {
-  console.log("Zod v4 detected");
+	console.log('Zod v4 detected')
 } else {
-  console.log("Zod v3 or earlier");
+	console.log('Zod v3 or earlier')
 }
 ```
 
@@ -344,5 +348,6 @@ Then revert code changes using version control.
 ---
 
 **See also:**
+
 - `error-handling.md` for new error formatting methods
 - `advanced-patterns.md` for new codec and transform features

@@ -7,11 +7,11 @@
  * 3. Temporal proximity — weight 0.2
  */
 
-import type { EntityRow } from "./schema"
+import type { EntityRow } from './schema'
 
 export interface ResolvedEntity {
-  entityId: string
-  isNew: boolean
+	entityId: string
+	isNew: boolean
 }
 
 const MATCH_THRESHOLD = 0.6
@@ -22,72 +22,65 @@ const MATCH_THRESHOLD = 0.6
  * Returns null if no candidate exceeds the threshold — caller should create a new entity.
  */
 export function resolveEntity(
-  name: string,
-  _entityType: string,
-  existingEntities: EntityRow[],
-  cooccurrences: Map<string, Set<string>>,
-  nearbyEntityNames: string[],
-  now: number,
+	name: string,
+	_entityType: string,
+	existingEntities: EntityRow[],
+	cooccurrences: Map<string, Set<string>>,
+	nearbyEntityNames: string[],
+	now: number
 ): ResolvedEntity | null {
-  let bestScore = 0
-  let bestEntity: EntityRow | null = null
+	let bestScore = 0
+	let bestEntity: EntityRow | null = null
 
-  for (const candidate of existingEntities) {
-    let score = 0
+	for (const candidate of existingEntities) {
+		let score = 0
 
-    // Factor 1: Name similarity (weight 0.5)
-    const nameSim = stringSimilarity(
-      name.toLowerCase(),
-      candidate.name.toLowerCase(),
-    )
-    score += nameSim * 0.5
+		// Factor 1: Name similarity (weight 0.5)
+		const nameSim = stringSimilarity(name.toLowerCase(), candidate.name.toLowerCase())
+		score += nameSim * 0.5
 
-    // Factor 2: Co-occurring entities (weight 0.3)
-    score += cooccurrenceScore(candidate.id, existingEntities, cooccurrences, nearbyEntityNames) * 0.3
+		// Factor 2: Co-occurring entities (weight 0.3)
+		score +=
+			cooccurrenceScore(candidate.id, existingEntities, cooccurrences, nearbyEntityNames) * 0.3
 
-    // Factor 3: Temporal proximity (weight 0.2) — decay over 7 days
-    const daysDiff = Math.abs(now - candidate.lastUpdated) / 86_400_000
-    if (daysDiff < 7) {
-      score += Math.max(0, 1 - daysDiff / 7) * 0.2
-    }
+		// Factor 3: Temporal proximity (weight 0.2) — decay over 7 days
+		const daysDiff = Math.abs(now - candidate.lastUpdated) / 86_400_000
+		if (daysDiff < 7) {
+			score += Math.max(0, 1 - daysDiff / 7) * 0.2
+		}
 
-    if (score > bestScore) {
-      bestScore = score
-      bestEntity = candidate
-    }
-  }
+		if (score > bestScore) {
+			bestScore = score
+			bestEntity = candidate
+		}
+	}
 
-  if (bestScore >= MATCH_THRESHOLD && bestEntity) {
-    return { entityId: bestEntity.id, isNew: false }
-  }
-  return null
+	if (bestScore >= MATCH_THRESHOLD && bestEntity) {
+		return { entityId: bestEntity.id, isNew: false }
+	}
+	return null
 }
 
 /**
  * Score based on co-occurring entity overlap (0–1).
  */
 function cooccurrenceScore(
-  candidateId: string,
-  existingEntities: EntityRow[],
-  cooccurrences: Map<string, Set<string>>,
-  nearbyEntityNames: string[],
+	candidateId: string,
+	existingEntities: EntityRow[],
+	cooccurrences: Map<string, Set<string>>,
+	nearbyEntityNames: string[]
 ): number {
-  if (nearbyEntityNames.length === 0) return 0
+	if (nearbyEntityNames.length === 0) return 0
 
-  const candidateCoocs = cooccurrences.get(candidateId) ?? new Set()
-  const nearbyIds = nearbyEntityNames
-    .map(
-      (n) =>
-        existingEntities.find(
-          (e) => e.name.toLowerCase() === n.toLowerCase(),
-        )?.id,
-    )
-    .filter(Boolean) as string[]
+	const candidateCoocs = cooccurrences.get(candidateId) ?? new Set()
+	const nearbyIds = nearbyEntityNames
+		.map((n) => existingEntities.find((e) => e.name.toLowerCase() === n.toLowerCase())?.id)
+		.filter(Boolean) as string[]
 
-  if (nearbyIds.length === 0) return 0
+	if (nearbyIds.length === 0) return 0
 
-  const overlap = nearbyIds.filter((id) => candidateCoocs.has(id)).length
-  return overlap / nearbyEntityNames.length
+	const overlap = nearbyIds.filter((id) => candidateCoocs.has(id)).length
+	return overlap / nearbyEntityNames.length
 }
 
 /**
@@ -96,24 +89,24 @@ function cooccurrenceScore(
  * Returns value in [0, 1] where 1 = identical strings.
  */
 export function stringSimilarity(a: string, b: string): number {
-  if (a === b) return 1
-  if (a.length < 2 || b.length < 2) return 0
+	if (a === b) return 1
+	if (a.length < 2 || b.length < 2) return 0
 
-  const bigrams = new Map<string, number>()
-  for (let i = 0; i < a.length - 1; i++) {
-    const bigram = a.substring(i, i + 2)
-    bigrams.set(bigram, (bigrams.get(bigram) ?? 0) + 1)
-  }
+	const bigrams = new Map<string, number>()
+	for (let i = 0; i < a.length - 1; i++) {
+		const bigram = a.substring(i, i + 2)
+		bigrams.set(bigram, (bigrams.get(bigram) ?? 0) + 1)
+	}
 
-  let matches = 0
-  for (let i = 0; i < b.length - 1; i++) {
-    const bigram = b.substring(i, i + 2)
-    const count = bigrams.get(bigram) ?? 0
-    if (count > 0) {
-      bigrams.set(bigram, count - 1)
-      matches++
-    }
-  }
+	let matches = 0
+	for (let i = 0; i < b.length - 1; i++) {
+		const bigram = b.substring(i, i + 2)
+		const count = bigrams.get(bigram) ?? 0
+		if (count > 0) {
+			bigrams.set(bigram, count - 1)
+			matches++
+		}
+	}
 
-  return (2 * matches) / (a.length + b.length - 2)
+	return (2 * matches) / (a.length + b.length - 2)
 }

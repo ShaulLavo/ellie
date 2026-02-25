@@ -1,9 +1,9 @@
 {
-  "extends": "@repo/typescript-config/base.json",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "types": ["bun-types"]
-  },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+	"extends": "@repo/typescript-config/base.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"types": ["bun-types"]
+	},
+	"include": ["src/**/*.ts", "scripts/**/*.ts"]
 }

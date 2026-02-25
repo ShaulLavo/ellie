@@ -1,1745 +1,1405 @@
 {
-  "version": "1.0.0",
-  "datasetVersion": "assistant-baseline.v1",
-  "runConfig": {
-    "datasetPath": "fixtures/assistant-baseline.v1.jsonl",
-    "mode": "hybrid",
-    "seed": 42,
-    "topK": 10,
-    "outputDir": "artifacts/eval/baseline"
-  },
-  "runMetadata": {
-    "gitSha": "388628fa000ff9dec92ffeeb4539aebb9b8cd752",
-    "bunVersion": "1.3.10",
-    "timestamp": "2026-02-21T22:19:32.273Z",
-    "seed": 42,
-    "topK": 10
-  },
-  "scenarios": [
-    {
-      "scenario": "follow_up_recall",
-      "caseCount": 5,
-      "metrics": {
-        "recall@1": 0.433333,
-        "recall@3": 0.833333,
-        "recall@5": 1,
-        "mrr": 0.644444
-      }
-    },
-    {
-      "scenario": "temporal_narrative",
-      "caseCount": 5,
-      "metrics": {
-        "orderingAccuracy": 0.7,
-        "predecessorHitRate": 0.65,
-        "successorHitRate": 0.65,
-        "recall@5": 1
-      }
-    },
-    {
-      "scenario": "dedup_conflict",
-      "caseCount": 5,
-      "metrics": {
-        "duplicateLeakRate": 1,
-        "contradictionRetrievalRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "scenario": "code_location_recall",
-      "caseCount": 5,
-      "metrics": {
-        "pathRecall@k": 1,
-        "exactPathPrecision": 0.36,
-        "mrr": 0.508333
-      }
-    },
-    {
-      "scenario": "token_budget_packing",
-      "caseCount": 5,
-      "metrics": {
-        "factRetentionRate": 0.866667,
-        "truncationLossRate": 0.133333,
-        "budgetUtilization": 0.671667
-      }
-    }
-  ],
-  "globalScore": 0.813333,
-  "globalWeights": {
-    "follow_up_recall": 0.3,
-    "temporal_narrative": 0.2,
-    "dedup_conflict": 0.15,
-    "code_location_recall": 0.2,
-    "token_budget_packing": 0.15
-  },
-  "cases": [
-    {
-      "caseId": "fur-001",
-      "scenario": "follow_up_recall",
-      "query": "What are the user's preferences?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ4DTMSGB0WJWT1TFQ7C",
-          "content": "User prefers dark mode in all applications",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ4JPD2D87DGJ2MGYABF",
-          "content": "User's project uses Bun as the runtime",
-          "score": 0.836913,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ4GABW9RA6MT4PPE54J",
-          "content": "User's favorite editor is VS Code with Vim keybindings",
-          "score": 0.835373,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ4E1FR8R59E216A881H",
-          "content": "User works primarily with TypeScript and React",
-          "score": 0.09696,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ4HVE4K2R5BS7D5DD84",
-          "content": "User dislikes auto-formatting on save",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "opinion"
-        }
-      ],
-      "durationMs": 33,
-      "metrics": {
-        "recall@1": 0.5,
-        "recall@3": 0.5,
-        "recall@5": 1,
-        "mrr": 0.6
-      }
-    },
-    {
-      "caseId": "fur-002",
-      "scenario": "follow_up_recall",
-      "query": "Why did we switch from Zod to Valibot?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ5B0RP96RW5ASEJTRG4",
-          "content": "The migration from Zod to Valibot reduced bundle size by 40%",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ5A6VW6PN8PT5KDXMN6",
-          "content": "Team decided to use Valibot instead of Zod for schema validation",
-          "score": 0.548812,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ5C7RK8K1CS5QQVBTWE",
-          "content": "Valibot supports Standard Schema v1 spec natively",
-          "score": 0.548812,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ5BAVXQGJA30Z2VJ936",
-          "content": "All new schemas must use Valibot going forward",
-          "score": 0.250625,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ5CPKT6KZS71V4Q9AEV",
-          "content": "Legacy Zod schemas remain in the auth module until Q2 refactor",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 13,
-      "metrics": {
-        "recall@1": 0.5,
-        "recall@3": 1,
-        "recall@5": 1,
-        "mrr": 0.75
-      }
-    },
-    {
-      "caseId": "fur-003",
-      "scenario": "follow_up_recall",
-      "query": "What was the WebSocket issue and how did we fix it?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ5VD3REAVVCV15CPH4H",
-          "content": "Increasing the proxy keep-alive to 120s fixed the WebSocket drops",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ5TWWVC6JNPNY6A75YK",
-          "content": "The WebSocket connection drops every 30 seconds due to a proxy timeout",
-          "score": 0.859577,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ5WHD0ZA3TWC6JNKKP6",
-          "content": "The server runs behind an nginx reverse proxy",
-          "score": 0.82127,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ5W64CHBNGJKSS9A5WC",
-          "content": "Server-sent events work fine because they reconnect automatically",
-          "score": 0.06,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 8,
-      "metrics": {
-        "recall@1": 0.5,
-        "recall@3": 1,
-        "recall@5": 1,
-        "mrr": 0.75
-      }
-    },
-    {
-      "caseId": "fur-004",
-      "scenario": "follow_up_recall",
-      "query": "How did we debug and fix the memory leak?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ674N2YVX9YMKCSDKFJ",
-          "content": "The memory leak was traced to unclosed database connections in the connection pool",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ67A2ZGRXV9CQRSAQEC",
-          "content": "Running the app with --inspect flag and taking heap snapshots revealed the leak",
-          "score": 0.506722,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ684CQ7JZV7HADF2HSS",
-          "content": "The fix was adding a finally block to close connections after each query",
-          "score": 0.506722,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ6822TGNZ0NN9YP03XA",
-          "content": "The leak only manifested after 1000+ requests in production",
-          "score": 0.06,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ69ZZ04JS410P2170QD",
-          "content": "We added a connection pool monitor that logs active connections every 60 seconds",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 9,
-      "metrics": {
-        "recall@1": 0.333333,
-        "recall@3": 1,
-        "recall@5": 1,
-        "mrr": 0.611111
-      }
-    },
-    {
-      "caseId": "fur-005",
-      "scenario": "follow_up_recall",
-      "query": "What are our deployment practices?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ6MYG7DXVRG499DG0JT",
-          "content": "Blue-green deployments are used to minimize downtime",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ6NTPDKD2FYW87QWFEQ",
-          "content": "Deployment windows are Tuesday through Thursday, 10am-2pm EST",
-          "score": 0.800648,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ6K5GN2313JC5CPXQ50",
-          "content": "We always deploy to staging first before production",
-          "score": 0.083495,
-          "rank": 3,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ6P2G059ZWCC4EHXDTH",
-          "content": "Hotfixes can be deployed anytime with two approvers",
-          "score": 0.071561,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ6N5VRWQVVM50X331R1",
-          "content": "Rollbacks should be triggered if error rate exceeds 1% within 5 minutes",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 8,
-      "metrics": {
-        "recall@1": 0.333333,
-        "recall@3": 0.666667,
-        "recall@5": 1,
-        "mrr": 0.511111
-      }
-    },
-    {
-      "caseId": "tn-001",
-      "scenario": "temporal_narrative",
-      "query": "What is the project timeline?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ72AMWQRZA9GVSX6K0N",
-          "content": "Project kickoff meeting held on January 5th",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ74FH9P0WXJSY2MX48A",
-          "content": "Initial architecture review completed January 12th",
-          "score": 0.107092,
-          "rank": 2,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ750XRB1QCM0EMXMSKS",
-          "content": "First prototype deployed to staging January 19th",
-          "score": 0.082799,
-          "rank": 3,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ779F0613GR3104G10Y",
-          "content": "Production release scheduled for February 2nd",
-          "score": 0.071221,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ764W9Y90TRG5KSRM0N",
-          "content": "User testing began January 26th with 5 beta testers",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        }
-      ],
-      "durationMs": 10,
-      "metrics": {
-        "orderingAccuracy": 0.9,
-        "predecessorHitRate": 0.75,
-        "successorHitRate": 0.75,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "tn-002",
-      "scenario": "temporal_narrative",
-      "query": "How did our database choice evolve?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ7JHSZV10JAMKM0G2DR",
-          "content": "Discovered SQLite with WAL mode handles our write patterns better",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7HBCXCX84WSW00QAKW",
-          "content": "Initially chose PostgreSQL for the database layer",
-          "score": 0.86,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7MQEBS0J16MF4XP7K6",
-          "content": "Current database stack is SQLite with FTS5 and sqlite-vec",
-          "score": 0.823755,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ7KBMDNYJJ0GCV6XP8K",
-          "content": "Added sqlite-vec extension for vector similarity search",
-          "score": 0.071221,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7JYX5K97D883RZMPHS",
-          "content": "Migrated from PostgreSQL to SQLite in week 3",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        }
-      ],
-      "durationMs": 9,
-      "metrics": {
-        "orderingAccuracy": 0.6,
-        "predecessorHitRate": 0.25,
-        "successorHitRate": 0.25,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "tn-003",
-      "scenario": "temporal_narrative",
-      "query": "How did the dark mode feature flag roll out?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ7XCQQSDFBP2SRKFSDV",
-          "content": "First flag dark-mode-v2 was created on March 5th for internal testing",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7XZTQ9QZM5AW49B7GZ",
-          "content": "Feature flag system was introduced on March 1st using LaunchDarkly",
-          "score": 0.853394,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7Y2ZS4FSGJ0CVAFPRD",
-          "content": "Rolled out dark-mode-v2 to 10% of users on March 10th",
-          "score": 0.475606,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7YYHZYR97P2PKS6GJ7",
-          "content": "Increased dark-mode-v2 to 50% on March 15th after positive feedback",
-          "score": 0.066006,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ7Z6ZE4G4TVYBQ7ZHHN",
-          "content": "Full rollout of dark-mode-v2 to 100% on March 20th",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        }
-      ],
-      "durationMs": 7,
-      "metrics": {
-        "orderingAccuracy": 1,
-        "predecessorHitRate": 1,
-        "successorHitRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "tn-004",
-      "scenario": "temporal_narrative",
-      "query": "What happened during the March 4th incident?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ899KCC9M1XSTCE27KC",
-          "content": "Rollback of the migration was completed at 3:10 AM",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ8AJXV3HYQQJFQMMGFN",
-          "content": "Post-incident review was held on March 5th at 10 AM",
-          "score": 0.848247,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ88EF9JPYQCWZFRDN7D",
-          "content": "On-call engineer acknowledged the alert at 2:22 AM",
-          "score": 0.84747,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ892B1W6WJVCAFC0QNX",
-          "content": "Root cause identified as a bad database migration at 2:45 AM",
-          "score": 0.095277,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ87EB5SYKRJXK2NF8BG",
-          "content": "Alert fired at 2:15 AM for elevated 500 error rates",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        }
-      ],
-      "durationMs": 9,
-      "metrics": {
-        "orderingAccuracy": 0.3,
-        "predecessorHitRate": 0.5,
-        "successorHitRate": 0.5,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "tn-005",
-      "scenario": "temporal_narrative",
-      "query": "How has our sprint process changed over time?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ8PWQ2Q5F1978M1RPBB",
-          "content": "Sprint 7 added retrospective action items tracking in Linear",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ8MJ6VH8961N4GSVBA6",
-          "content": "Sprint 1 used two-week cycles with daily standups",
-          "score": 0.278685,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ8N5769VJFNK4KP345Y",
-          "content": "Sprint 3 switched to one-week cycles after feedback about context switching",
-          "score": 0.072207,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ8P96ZADZ6FQGAAM8BS",
-          "content": "Sprint 5 introduced async standups via Slack bot instead of meetings",
-          "score": 0.06,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQ8Q97TY2214STQCTGG8",
-          "content": "Sprint 9 adopted shape-up style cool-down weeks between cycles",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        }
-      ],
-      "durationMs": 6,
-      "metrics": {
-        "orderingAccuracy": 0.7,
-        "predecessorHitRate": 0.75,
-        "successorHitRate": 0.75,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "dc-001",
-      "scenario": "dedup_conflict",
-      "query": "What is the current API rate limit?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ93AA0A2ER73BRS9FE2",
-          "content": "The API rate limit is 100 requests per minute",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ96MCYWVTHB7JMES5DE",
-          "content": "The API rate limit is 100 requests per minute",
-          "score": 0.842761,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ977YVTGTGW7E7XDD95",
-          "content": "Premium tier users have a rate limit of 1000 requests per minute",
-          "score": 0.607233,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ942BHGAXGYXCB1FGKK",
-          "content": "The API rate limit was increased to 500 requests per minute after the infrastructure upgrade",
-          "score": 0.58197,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ95XBFGDQPEZK9KGEZZ",
-          "content": "Rate limiting is enforced at the nginx level using the limit_req module",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 18,
-      "metrics": {
-        "duplicateLeakRate": 1,
-        "contradictionRetrievalRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "dc-002",
-      "scenario": "dedup_conflict",
-      "query": "How does our deployment pipeline work?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQ9TJA4MR3ZFZAJ1GWXD",
-          "content": "Deployments are triggered automatically on merge to main",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ9SD8X1TMXT3EKHP0X9",
-          "content": "The CI/CD pipeline runs on GitHub Actions",
-          "score": 0.848247,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ9QECQ6F92W7M206VVZ",
-          "content": "The deployment uses Docker containers on AWS ECS",
-          "score": 0.84747,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ9TN4464X8G9R7AEEYV",
-          "content": "Docker images are built and pushed by GitHub Actions CI/CD",
-          "score": 0.095277,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQ9RP1N07QHC1J5DG75N",
-          "content": "We deploy using Docker containers on Amazon ECS",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 12,
-      "metrics": {
-        "duplicateLeakRate": 1,
-        "contradictionRetrievalRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "dc-003",
-      "scenario": "dedup_conflict",
-      "query": "Where is our application deployed?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQA775X596065JB235VK",
-          "content": "The application is deployed in us-east-1 region",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQA9MDSMCDV90ZN51BFY",
-          "content": "A CDN edge layer is deployed globally via CloudFront",
-          "score": 0.859212,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQA94AXYKZ6ATQMK7KX1",
-          "content": "The application is deployed in us-east-1 region",
-          "score": 0.859212,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQA8VN38P6HWNZ9H1873",
-          "content": "We migrated the primary deployment to eu-west-1 for GDPR compliance",
-          "score": 0.108519,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQAA69TFBYM07JWHCAPJ",
-          "content": "Disaster recovery replica runs in ap-southeast-1",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 11,
-      "metrics": {
-        "duplicateLeakRate": 1,
-        "contradictionRetrievalRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "dc-004",
-      "scenario": "dedup_conflict",
-      "query": "When is the team standup?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQAN6X1DJXT77KV3TFN4",
-          "content": "Team standup is at 9:00 AM every weekday",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQAPK6EH927WX982CM5Z",
-          "content": "Team standup was moved to 9:30 AM starting February",
-          "score": 0.86,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQAPSRY0Z4HV5EQAPHX9",
-          "content": "Team standup is at 9:00 AM every weekday",
-          "score": 0.859596,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQAQ3GZ4N9MCXZP9Z21S",
-          "content": "Sprint planning is every other Monday at 10:00 AM",
-          "score": 0.79958,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQAQWW6PCJEFPA5JSM2J",
-          "content": "Design review happens every Wednesday at 2:00 PM",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 8,
-      "metrics": {
-        "duplicateLeakRate": 1,
-        "contradictionRetrievalRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "dc-005",
-      "scenario": "dedup_conflict",
-      "query": "What is the max file upload size?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQB39N5JXNM14D8TH1G7",
-          "content": "Max upload size was increased to 25MB after adding S3 direct upload",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQB2PT2FB3CZBZG92FAE",
-          "content": "The max upload file size is 5MB",
-          "score": 0.504483,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQB4AV9P5M3K1RVAEG56",
-          "content": "Uploads are virus-scanned by ClamAV before storage",
-          "score": 0.504483,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQB3X5241X5KKNZYTQG1",
-          "content": "The max upload file size is 5MB",
-          "score": 0.466349,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQB4Y4HP9E523YG77JJD",
-          "content": "Images are automatically resized to 1200px max width on upload",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 10,
-      "metrics": {
-        "duplicateLeakRate": 1,
-        "contradictionRetrievalRate": 1,
-        "recall@5": 1
-      }
-    },
-    {
-      "caseId": "clr-001",
-      "scenario": "code_location_recall",
-      "query": "Where is the authentication code?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQBKFHV4S98H1NZ7DZD0",
-          "content": "The main server entry point is apps/app/src/server.ts",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQBGC0CBS60AGBPYF5R3",
-          "content": "Authentication middleware is defined in packages/auth/src/middleware.ts",
-          "score": 0.824231,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQBJ9BKQX7HTVPQTA7X8",
-          "content": "Rate limiting is implemented in packages/api/src/rate-limiter.ts",
-          "score": 0.823077,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQBHSRB96E9EM589YMJY",
-          "content": "The JWT token validation logic lives in packages/auth/src/jwt.ts",
-          "score": 0.810775,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQBK6DV4B9FYVAZRCWS7",
-          "content": "Database migrations are stored in packages/db/drizzle/",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 13,
-      "metrics": {
-        "pathRecall@k": 1,
-        "exactPathPrecision": 0.4,
-        "mrr": 0.375
-      }
-    },
-    {
-      "caseId": "clr-002",
-      "scenario": "code_location_recall",
-      "query": "What does the @ellie/agent package do?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQC3MNDBJYFKSKX3ECNZ",
-          "content": "The @ellie/hindsight package implements biomimetic agent memory with hybrid retrieval",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQC12Z8W096ESKT5EP1X",
-          "content": "The @ellie/durable-streams package provides the streaming backend with DurableStore",
-          "score": 0.854657,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQC2XB1KP51MG48T3SGB",
-          "content": "The @ellie/agent package contains the stateful AI agent loop and tool execution",
-          "score": 0.549126,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQC00FZHHJQ7DB78GDNB",
-          "content": "The @ellie/rpc package handles type-safe RPC with createRouter and createRpcClient",
-          "score": 0.370874,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQC2WWTPCCH0BVZG3MQR",
-          "content": "The @ellie/db package wraps Drizzle ORM with Bun SQLite and JsonlEngine",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 11,
-      "metrics": {
-        "pathRecall@k": 1,
-        "exactPathPrecision": 0.2,
-        "mrr": 0.333333
-      }
-    },
-    {
-      "caseId": "clr-003",
-      "scenario": "code_location_recall",
-      "query": "Where are the tests for the RPC and streaming packages?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQCJ241PVZ2G37EFWHPC",
-          "content": "Agent conversation loop tests are in packages/agent/src/test/loop.test.ts",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCGTT8GMBK9XWXBVQ6D",
-          "content": "Unit tests for the RPC layer are in packages/rpc/src/test/router.test.ts",
-          "score": 0.72748,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCHM55XZBCVK03QP74N",
-          "content": "Integration tests for streams are in packages/durable-streams/src/test/integration.test.ts",
-          "score": 0.71872,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCJ6TQCGEE8CJ7EWAHS",
-          "content": "Database schema tests live in packages/db/src/test/schema.test.ts",
-          "score": 0.5862,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCK52E93N8Z247EMZ0K",
-          "content": "End-to-end tests are in apps/app/src/test/e2e/",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 11,
-      "metrics": {
-        "pathRecall@k": 1,
-        "exactPathPrecision": 0.4,
-        "mrr": 0.416667
-      }
-    },
-    {
-      "caseId": "clr-004",
-      "scenario": "code_location_recall",
-      "query": "Where are the TypeScript and build configuration files?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQCZGM6AFZ0T0F594VAN",
-          "content": "Turbo pipeline config is at turbo.json in the repo root",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCY9XDZ1Z84FRP3K3FX",
-          "content": "TypeScript base config is at packages/typescript-config/base.json",
-          "score": 0.86,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCZ11DZM3VFQBJ1N3XD",
-          "content": "Environment validation schemas are in packages/env/src/schemas.ts",
-          "score": 0.82381,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQD0B7YWYKTW0F64K7Z9",
-          "content": "Drizzle ORM config is at packages/db/drizzle.config.ts",
-          "score": 0.08423,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQCYFWY8Q3KW9CD71XXP",
-          "content": "Tailwind config is at apps/studio/tailwind.config.ts",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 10,
-      "metrics": {
-        "pathRecall@k": 1,
-        "exactPathPrecision": 0.4,
-        "mrr": 0.75
-      }
-    },
-    {
-      "caseId": "clr-005",
-      "scenario": "code_location_recall",
-      "query": "Where is the CORS and error handling middleware?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQDDD8FTTJ6S0WBGF9QB",
-          "content": "Error handling middleware lives in packages/api/src/middleware/error-handler.ts",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQDEHET42B0J9MT0JMEC",
-          "content": "The middleware composition utility is in packages/api/src/middleware/compose.ts",
-          "score": 0.86,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQDCNAMXCV4Z0XDZTG08",
-          "content": "CORS middleware is defined in packages/api/src/middleware/cors.ts",
-          "score": 0.533833,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQDEEZYFW2RXK2C6YGTV",
-          "content": "Health check endpoint is at packages/api/src/routes/health.ts",
-          "score": 0.380824,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQDC05JWW35G0YV291P0",
-          "content": "Request logging middleware is in packages/api/src/middleware/logger.ts",
-          "score": 0.06,
-          "rank": 5,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 10,
-      "metrics": {
-        "pathRecall@k": 1,
-        "exactPathPrecision": 0.4,
-        "mrr": 0.666667
-      }
-    },
-    {
-      "caseId": "tbp-001",
-      "scenario": "token_budget_packing",
-      "query": "What is the tech stack?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQE4WFYNV49VB7HNK2EZ",
-          "content": "Formatting is handled by Prettier with default config",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQE2BKA0Q42TMNB4SBZG",
-          "content": "The frontend is React 19 with TanStack Router for navigation",
-          "score": 0.848407,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQE3J28CCR9JBS2WBQF9",
-          "content": "The test runner is Bun's built-in test framework",
-          "score": 0.803345,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQE0NYYAHSZM7M3NWKYC",
-          "content": "The server uses Bun HTTP with a custom router",
-          "score": 0.801252,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQE4K2W0PFFHYB7HK661",
-          "content": "Linting uses oxlint for fast TypeScript linting",
-          "score": 0.105692,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQE3MVTM78Q9748RRBP7",
-          "content": "State management uses TanStack DB for reactive collections",
-          "score": 0.093725,
-          "rank": 6,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQE1W7WN8T8A3SP06ZHS",
-          "content": "WebSocket connections are managed via Durable Streams protocol",
-          "score": 0.06,
-          "rank": 7,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 19,
-      "metrics": {
-        "factRetentionRate": 1,
-        "truncationLossRate": 0,
-        "budgetUtilization": 0.48
-      }
-    },
-    {
-      "caseId": "tbp-002",
-      "scenario": "token_budget_packing",
-      "query": "Tell me about Alice's engineering background",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQET7HVMRXV2PY1QQ14Q",
-          "content": "Alice's team meets every Tuesday for sprint planning",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQEPY910SSBH8AFEXB0V",
-          "content": "User's name is Alice and she is a senior engineer",
-          "score": 0.825495,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQEQRVFJCB7S0XV4GZE9",
-          "content": "Alice prefers functional programming patterns over OOP",
-          "score": 0.135775,
-          "rank": 3,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "opinion"
-        },
-        {
-          "memoryId": "01KJ14JQESWZGS0Y9101ZA1BD9",
-          "content": "Alice is currently leading the migration to TypeScript 5.9",
-          "score": 0.112407,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "experience"
-        },
-        {
-          "memoryId": "01KJ14JQERA05M62V21ZS367G8",
-          "content": "Alice has 8 years of experience with JavaScript",
-          "score": 0.090476,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 27,
-      "metrics": {
-        "factRetentionRate": 1,
-        "truncationLossRate": 0,
-        "budgetUtilization": 0.67
-      }
-    },
-    {
-      "caseId": "tbp-003",
-      "scenario": "token_budget_packing",
-      "query": "What are the user's coding style preferences?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQFNB7JFTH91DR7208GJ",
-          "content": "User prefers named exports over default exports",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "opinion"
-        },
-        {
-          "memoryId": "01KJ14JQFMNPV5V80PW1QQSYKN",
-          "content": "User prefers tabs over spaces with width of 2",
-          "score": 0.824397,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "opinion"
-        },
-        {
-          "memoryId": "01KJ14JQFMC34MQMT33TZED56N",
-          "content": "User wants all imports sorted alphabetically",
-          "score": 0.104343,
-          "rank": 3,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "opinion"
-        },
-        {
-          "memoryId": "01KJ14JQFP5HYKD28785J046TP",
-          "content": "User avoids classes in favor of plain functions",
-          "score": 0.081479,
-          "rank": 4,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "opinion"
-        },
-        {
-          "memoryId": "01KJ14JQFNQ0C64B23Q2YM97W1",
-          "content": "User always uses const instead of let when possible",
-          "score": 0.070574,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "opinion"
-        }
-      ],
-      "durationMs": 13,
-      "metrics": {
-        "factRetentionRate": 0.666667,
-        "truncationLossRate": 0.333333,
-        "budgetUtilization": 0.75
-      }
-    },
-    {
-      "caseId": "tbp-004",
-      "scenario": "token_budget_packing",
-      "query": "How is the project CI/CD set up?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQG6DMFRYRG58ZR0XN3J",
-          "content": "The project uses pnpm workspaces for package management",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQG82FKD5FMEX4EB9VA5",
-          "content": "The office coffee machine was recently upgraded",
-          "score": 0.859222,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQG7QQE53G6V9G23KRFR",
-          "content": "The team celebrates birthdays with cake on Fridays",
-          "score": 0.859222,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQG72YYA83GEVZ0XD5M6",
-          "content": "Docker images are based on the official Node 20 alpine image",
-          "score": 0.812151,
-          "rank": 4,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQG8HBGYFMZ7FQDPN5Z4",
-          "content": "Pre-commit hooks run lint and type-check via husky",
-          "score": 0.118905,
-          "rank": 5,
-          "sources": [
-            "semantic"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 13,
-      "metrics": {
-        "factRetentionRate": 0.666667,
-        "truncationLossRate": 0.333333,
-        "budgetUtilization": 0.558333
-      }
-    },
-    {
-      "caseId": "tbp-005",
-      "scenario": "token_budget_packing",
-      "query": "How is the production database configured?",
-      "candidates": [
-        {
-          "memoryId": "01KJ14JQGTYWV4881PST4ZKNGD",
-          "content": "Database schema migrations are managed by Drizzle Kit",
-          "score": 0.86,
-          "rank": 1,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQGPCWZ4J2P79TBKX7HK",
-          "content": "The production database connection string uses SSL mode require",
-          "score": 0.847897,
-          "rank": 2,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        },
-        {
-          "memoryId": "01KJ14JQGRERZ29XFWYWJVG4BD",
-          "content": "The database uses connection pooling with max 20 connections",
-          "score": 0.846687,
-          "rank": 3,
-          "sources": [
-            "semantic",
-            "fulltext"
-          ],
-          "factType": "world"
-        }
-      ],
-      "durationMs": 12,
-      "metrics": {
-        "factRetentionRate": 1,
-        "truncationLossRate": 0,
-        "budgetUtilization": 0.9
-      }
-    }
-  ],
-  "totalDurationMs": 426
+	"version": "1.0.0",
+	"datasetVersion": "assistant-baseline.v1",
+	"runConfig": {
+		"datasetPath": "fixtures/assistant-baseline.v1.jsonl",
+		"mode": "hybrid",
+		"seed": 42,
+		"topK": 10,
+		"outputDir": "artifacts/eval/baseline"
+	},
+	"runMetadata": {
+		"gitSha": "388628fa000ff9dec92ffeeb4539aebb9b8cd752",
+		"bunVersion": "1.3.10",
+		"timestamp": "2026-02-21T22:19:32.273Z",
+		"seed": 42,
+		"topK": 10
+	},
+	"scenarios": [
+		{
+			"scenario": "follow_up_recall",
+			"caseCount": 5,
+			"metrics": {
+				"recall@1": 0.433333,
+				"recall@3": 0.833333,
+				"recall@5": 1,
+				"mrr": 0.644444
+			}
+		},
+		{
+			"scenario": "temporal_narrative",
+			"caseCount": 5,
+			"metrics": {
+				"orderingAccuracy": 0.7,
+				"predecessorHitRate": 0.65,
+				"successorHitRate": 0.65,
+				"recall@5": 1
+			}
+		},
+		{
+			"scenario": "dedup_conflict",
+			"caseCount": 5,
+			"metrics": {
+				"duplicateLeakRate": 1,
+				"contradictionRetrievalRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"scenario": "code_location_recall",
+			"caseCount": 5,
+			"metrics": {
+				"pathRecall@k": 1,
+				"exactPathPrecision": 0.36,
+				"mrr": 0.508333
+			}
+		},
+		{
+			"scenario": "token_budget_packing",
+			"caseCount": 5,
+			"metrics": {
+				"factRetentionRate": 0.866667,
+				"truncationLossRate": 0.133333,
+				"budgetUtilization": 0.671667
+			}
+		}
+	],
+	"globalScore": 0.813333,
+	"globalWeights": {
+		"follow_up_recall": 0.3,
+		"temporal_narrative": 0.2,
+		"dedup_conflict": 0.15,
+		"code_location_recall": 0.2,
+		"token_budget_packing": 0.15
+	},
+	"cases": [
+		{
+			"caseId": "fur-001",
+			"scenario": "follow_up_recall",
+			"query": "What are the user's preferences?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ4DTMSGB0WJWT1TFQ7C",
+					"content": "User prefers dark mode in all applications",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ4JPD2D87DGJ2MGYABF",
+					"content": "User's project uses Bun as the runtime",
+					"score": 0.836913,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ4GABW9RA6MT4PPE54J",
+					"content": "User's favorite editor is VS Code with Vim keybindings",
+					"score": 0.835373,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ4E1FR8R59E216A881H",
+					"content": "User works primarily with TypeScript and React",
+					"score": 0.09696,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ4HVE4K2R5BS7D5DD84",
+					"content": "User dislikes auto-formatting on save",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "opinion"
+				}
+			],
+			"durationMs": 33,
+			"metrics": {
+				"recall@1": 0.5,
+				"recall@3": 0.5,
+				"recall@5": 1,
+				"mrr": 0.6
+			}
+		},
+		{
+			"caseId": "fur-002",
+			"scenario": "follow_up_recall",
+			"query": "Why did we switch from Zod to Valibot?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ5B0RP96RW5ASEJTRG4",
+					"content": "The migration from Zod to Valibot reduced bundle size by 40%",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ5A6VW6PN8PT5KDXMN6",
+					"content": "Team decided to use Valibot instead of Zod for schema validation",
+					"score": 0.548812,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ5C7RK8K1CS5QQVBTWE",
+					"content": "Valibot supports Standard Schema v1 spec natively",
+					"score": 0.548812,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ5BAVXQGJA30Z2VJ936",
+					"content": "All new schemas must use Valibot going forward",
+					"score": 0.250625,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ5CPKT6KZS71V4Q9AEV",
+					"content": "Legacy Zod schemas remain in the auth module until Q2 refactor",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 13,
+			"metrics": {
+				"recall@1": 0.5,
+				"recall@3": 1,
+				"recall@5": 1,
+				"mrr": 0.75
+			}
+		},
+		{
+			"caseId": "fur-003",
+			"scenario": "follow_up_recall",
+			"query": "What was the WebSocket issue and how did we fix it?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ5VD3REAVVCV15CPH4H",
+					"content": "Increasing the proxy keep-alive to 120s fixed the WebSocket drops",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ5TWWVC6JNPNY6A75YK",
+					"content": "The WebSocket connection drops every 30 seconds due to a proxy timeout",
+					"score": 0.859577,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ5WHD0ZA3TWC6JNKKP6",
+					"content": "The server runs behind an nginx reverse proxy",
+					"score": 0.82127,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ5W64CHBNGJKSS9A5WC",
+					"content": "Server-sent events work fine because they reconnect automatically",
+					"score": 0.06,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 8,
+			"metrics": {
+				"recall@1": 0.5,
+				"recall@3": 1,
+				"recall@5": 1,
+				"mrr": 0.75
+			}
+		},
+		{
+			"caseId": "fur-004",
+			"scenario": "follow_up_recall",
+			"query": "How did we debug and fix the memory leak?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ674N2YVX9YMKCSDKFJ",
+					"content": "The memory leak was traced to unclosed database connections in the connection pool",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ67A2ZGRXV9CQRSAQEC",
+					"content": "Running the app with --inspect flag and taking heap snapshots revealed the leak",
+					"score": 0.506722,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ684CQ7JZV7HADF2HSS",
+					"content": "The fix was adding a finally block to close connections after each query",
+					"score": 0.506722,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ6822TGNZ0NN9YP03XA",
+					"content": "The leak only manifested after 1000+ requests in production",
+					"score": 0.06,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ69ZZ04JS410P2170QD",
+					"content": "We added a connection pool monitor that logs active connections every 60 seconds",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 9,
+			"metrics": {
+				"recall@1": 0.333333,
+				"recall@3": 1,
+				"recall@5": 1,
+				"mrr": 0.611111
+			}
+		},
+		{
+			"caseId": "fur-005",
+			"scenario": "follow_up_recall",
+			"query": "What are our deployment practices?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ6MYG7DXVRG499DG0JT",
+					"content": "Blue-green deployments are used to minimize downtime",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ6NTPDKD2FYW87QWFEQ",
+					"content": "Deployment windows are Tuesday through Thursday, 10am-2pm EST",
+					"score": 0.800648,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ6K5GN2313JC5CPXQ50",
+					"content": "We always deploy to staging first before production",
+					"score": 0.083495,
+					"rank": 3,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ6P2G059ZWCC4EHXDTH",
+					"content": "Hotfixes can be deployed anytime with two approvers",
+					"score": 0.071561,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ6N5VRWQVVM50X331R1",
+					"content": "Rollbacks should be triggered if error rate exceeds 1% within 5 minutes",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 8,
+			"metrics": {
+				"recall@1": 0.333333,
+				"recall@3": 0.666667,
+				"recall@5": 1,
+				"mrr": 0.511111
+			}
+		},
+		{
+			"caseId": "tn-001",
+			"scenario": "temporal_narrative",
+			"query": "What is the project timeline?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ72AMWQRZA9GVSX6K0N",
+					"content": "Project kickoff meeting held on January 5th",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ74FH9P0WXJSY2MX48A",
+					"content": "Initial architecture review completed January 12th",
+					"score": 0.107092,
+					"rank": 2,
+					"sources": ["semantic"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ750XRB1QCM0EMXMSKS",
+					"content": "First prototype deployed to staging January 19th",
+					"score": 0.082799,
+					"rank": 3,
+					"sources": ["semantic"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ779F0613GR3104G10Y",
+					"content": "Production release scheduled for February 2nd",
+					"score": 0.071221,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ764W9Y90TRG5KSRM0N",
+					"content": "User testing began January 26th with 5 beta testers",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "experience"
+				}
+			],
+			"durationMs": 10,
+			"metrics": {
+				"orderingAccuracy": 0.9,
+				"predecessorHitRate": 0.75,
+				"successorHitRate": 0.75,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "tn-002",
+			"scenario": "temporal_narrative",
+			"query": "How did our database choice evolve?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ7JHSZV10JAMKM0G2DR",
+					"content": "Discovered SQLite with WAL mode handles our write patterns better",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7HBCXCX84WSW00QAKW",
+					"content": "Initially chose PostgreSQL for the database layer",
+					"score": 0.86,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7MQEBS0J16MF4XP7K6",
+					"content": "Current database stack is SQLite with FTS5 and sqlite-vec",
+					"score": 0.823755,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ7KBMDNYJJ0GCV6XP8K",
+					"content": "Added sqlite-vec extension for vector similarity search",
+					"score": 0.071221,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7JYX5K97D883RZMPHS",
+					"content": "Migrated from PostgreSQL to SQLite in week 3",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "experience"
+				}
+			],
+			"durationMs": 9,
+			"metrics": {
+				"orderingAccuracy": 0.6,
+				"predecessorHitRate": 0.25,
+				"successorHitRate": 0.25,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "tn-003",
+			"scenario": "temporal_narrative",
+			"query": "How did the dark mode feature flag roll out?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ7XCQQSDFBP2SRKFSDV",
+					"content": "First flag dark-mode-v2 was created on March 5th for internal testing",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7XZTQ9QZM5AW49B7GZ",
+					"content": "Feature flag system was introduced on March 1st using LaunchDarkly",
+					"score": 0.853394,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7Y2ZS4FSGJ0CVAFPRD",
+					"content": "Rolled out dark-mode-v2 to 10% of users on March 10th",
+					"score": 0.475606,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7YYHZYR97P2PKS6GJ7",
+					"content": "Increased dark-mode-v2 to 50% on March 15th after positive feedback",
+					"score": 0.066006,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ7Z6ZE4G4TVYBQ7ZHHN",
+					"content": "Full rollout of dark-mode-v2 to 100% on March 20th",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				}
+			],
+			"durationMs": 7,
+			"metrics": {
+				"orderingAccuracy": 1,
+				"predecessorHitRate": 1,
+				"successorHitRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "tn-004",
+			"scenario": "temporal_narrative",
+			"query": "What happened during the March 4th incident?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ899KCC9M1XSTCE27KC",
+					"content": "Rollback of the migration was completed at 3:10 AM",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ8AJXV3HYQQJFQMMGFN",
+					"content": "Post-incident review was held on March 5th at 10 AM",
+					"score": 0.848247,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ88EF9JPYQCWZFRDN7D",
+					"content": "On-call engineer acknowledged the alert at 2:22 AM",
+					"score": 0.84747,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ892B1W6WJVCAFC0QNX",
+					"content": "Root cause identified as a bad database migration at 2:45 AM",
+					"score": 0.095277,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ87EB5SYKRJXK2NF8BG",
+					"content": "Alert fired at 2:15 AM for elevated 500 error rates",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "experience"
+				}
+			],
+			"durationMs": 9,
+			"metrics": {
+				"orderingAccuracy": 0.3,
+				"predecessorHitRate": 0.5,
+				"successorHitRate": 0.5,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "tn-005",
+			"scenario": "temporal_narrative",
+			"query": "How has our sprint process changed over time?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ8PWQ2Q5F1978M1RPBB",
+					"content": "Sprint 7 added retrospective action items tracking in Linear",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ8MJ6VH8961N4GSVBA6",
+					"content": "Sprint 1 used two-week cycles with daily standups",
+					"score": 0.278685,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ8N5769VJFNK4KP345Y",
+					"content": "Sprint 3 switched to one-week cycles after feedback about context switching",
+					"score": 0.072207,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ8P96ZADZ6FQGAAM8BS",
+					"content": "Sprint 5 introduced async standups via Slack bot instead of meetings",
+					"score": 0.06,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQ8Q97TY2214STQCTGG8",
+					"content": "Sprint 9 adopted shape-up style cool-down weeks between cycles",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				}
+			],
+			"durationMs": 6,
+			"metrics": {
+				"orderingAccuracy": 0.7,
+				"predecessorHitRate": 0.75,
+				"successorHitRate": 0.75,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "dc-001",
+			"scenario": "dedup_conflict",
+			"query": "What is the current API rate limit?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ93AA0A2ER73BRS9FE2",
+					"content": "The API rate limit is 100 requests per minute",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ96MCYWVTHB7JMES5DE",
+					"content": "The API rate limit is 100 requests per minute",
+					"score": 0.842761,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ977YVTGTGW7E7XDD95",
+					"content": "Premium tier users have a rate limit of 1000 requests per minute",
+					"score": 0.607233,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ942BHGAXGYXCB1FGKK",
+					"content": "The API rate limit was increased to 500 requests per minute after the infrastructure upgrade",
+					"score": 0.58197,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ95XBFGDQPEZK9KGEZZ",
+					"content": "Rate limiting is enforced at the nginx level using the limit_req module",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 18,
+			"metrics": {
+				"duplicateLeakRate": 1,
+				"contradictionRetrievalRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "dc-002",
+			"scenario": "dedup_conflict",
+			"query": "How does our deployment pipeline work?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQ9TJA4MR3ZFZAJ1GWXD",
+					"content": "Deployments are triggered automatically on merge to main",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ9SD8X1TMXT3EKHP0X9",
+					"content": "The CI/CD pipeline runs on GitHub Actions",
+					"score": 0.848247,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ9QECQ6F92W7M206VVZ",
+					"content": "The deployment uses Docker containers on AWS ECS",
+					"score": 0.84747,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ9TN4464X8G9R7AEEYV",
+					"content": "Docker images are built and pushed by GitHub Actions CI/CD",
+					"score": 0.095277,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQ9RP1N07QHC1J5DG75N",
+					"content": "We deploy using Docker containers on Amazon ECS",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 12,
+			"metrics": {
+				"duplicateLeakRate": 1,
+				"contradictionRetrievalRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "dc-003",
+			"scenario": "dedup_conflict",
+			"query": "Where is our application deployed?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQA775X596065JB235VK",
+					"content": "The application is deployed in us-east-1 region",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQA9MDSMCDV90ZN51BFY",
+					"content": "A CDN edge layer is deployed globally via CloudFront",
+					"score": 0.859212,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQA94AXYKZ6ATQMK7KX1",
+					"content": "The application is deployed in us-east-1 region",
+					"score": 0.859212,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQA8VN38P6HWNZ9H1873",
+					"content": "We migrated the primary deployment to eu-west-1 for GDPR compliance",
+					"score": 0.108519,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQAA69TFBYM07JWHCAPJ",
+					"content": "Disaster recovery replica runs in ap-southeast-1",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 11,
+			"metrics": {
+				"duplicateLeakRate": 1,
+				"contradictionRetrievalRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "dc-004",
+			"scenario": "dedup_conflict",
+			"query": "When is the team standup?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQAN6X1DJXT77KV3TFN4",
+					"content": "Team standup is at 9:00 AM every weekday",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQAPK6EH927WX982CM5Z",
+					"content": "Team standup was moved to 9:30 AM starting February",
+					"score": 0.86,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQAPSRY0Z4HV5EQAPHX9",
+					"content": "Team standup is at 9:00 AM every weekday",
+					"score": 0.859596,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQAQ3GZ4N9MCXZP9Z21S",
+					"content": "Sprint planning is every other Monday at 10:00 AM",
+					"score": 0.79958,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQAQWW6PCJEFPA5JSM2J",
+					"content": "Design review happens every Wednesday at 2:00 PM",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 8,
+			"metrics": {
+				"duplicateLeakRate": 1,
+				"contradictionRetrievalRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "dc-005",
+			"scenario": "dedup_conflict",
+			"query": "What is the max file upload size?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQB39N5JXNM14D8TH1G7",
+					"content": "Max upload size was increased to 25MB after adding S3 direct upload",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQB2PT2FB3CZBZG92FAE",
+					"content": "The max upload file size is 5MB",
+					"score": 0.504483,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQB4AV9P5M3K1RVAEG56",
+					"content": "Uploads are virus-scanned by ClamAV before storage",
+					"score": 0.504483,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQB3X5241X5KKNZYTQG1",
+					"content": "The max upload file size is 5MB",
+					"score": 0.466349,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQB4Y4HP9E523YG77JJD",
+					"content": "Images are automatically resized to 1200px max width on upload",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 10,
+			"metrics": {
+				"duplicateLeakRate": 1,
+				"contradictionRetrievalRate": 1,
+				"recall@5": 1
+			}
+		},
+		{
+			"caseId": "clr-001",
+			"scenario": "code_location_recall",
+			"query": "Where is the authentication code?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQBKFHV4S98H1NZ7DZD0",
+					"content": "The main server entry point is apps/app/src/server.ts",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQBGC0CBS60AGBPYF5R3",
+					"content": "Authentication middleware is defined in packages/auth/src/middleware.ts",
+					"score": 0.824231,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQBJ9BKQX7HTVPQTA7X8",
+					"content": "Rate limiting is implemented in packages/api/src/rate-limiter.ts",
+					"score": 0.823077,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQBHSRB96E9EM589YMJY",
+					"content": "The JWT token validation logic lives in packages/auth/src/jwt.ts",
+					"score": 0.810775,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQBK6DV4B9FYVAZRCWS7",
+					"content": "Database migrations are stored in packages/db/drizzle/",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 13,
+			"metrics": {
+				"pathRecall@k": 1,
+				"exactPathPrecision": 0.4,
+				"mrr": 0.375
+			}
+		},
+		{
+			"caseId": "clr-002",
+			"scenario": "code_location_recall",
+			"query": "What does the @ellie/agent package do?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQC3MNDBJYFKSKX3ECNZ",
+					"content": "The @ellie/hindsight package implements biomimetic agent memory with hybrid retrieval",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQC12Z8W096ESKT5EP1X",
+					"content": "The @ellie/durable-streams package provides the streaming backend with DurableStore",
+					"score": 0.854657,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQC2XB1KP51MG48T3SGB",
+					"content": "The @ellie/agent package contains the stateful AI agent loop and tool execution",
+					"score": 0.549126,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQC00FZHHJQ7DB78GDNB",
+					"content": "The @ellie/rpc package handles type-safe RPC with createRouter and createRpcClient",
+					"score": 0.370874,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQC2WWTPCCH0BVZG3MQR",
+					"content": "The @ellie/db package wraps Drizzle ORM with Bun SQLite and JsonlEngine",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 11,
+			"metrics": {
+				"pathRecall@k": 1,
+				"exactPathPrecision": 0.2,
+				"mrr": 0.333333
+			}
+		},
+		{
+			"caseId": "clr-003",
+			"scenario": "code_location_recall",
+			"query": "Where are the tests for the RPC and streaming packages?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQCJ241PVZ2G37EFWHPC",
+					"content": "Agent conversation loop tests are in packages/agent/src/test/loop.test.ts",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCGTT8GMBK9XWXBVQ6D",
+					"content": "Unit tests for the RPC layer are in packages/rpc/src/test/router.test.ts",
+					"score": 0.72748,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCHM55XZBCVK03QP74N",
+					"content": "Integration tests for streams are in packages/durable-streams/src/test/integration.test.ts",
+					"score": 0.71872,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCJ6TQCGEE8CJ7EWAHS",
+					"content": "Database schema tests live in packages/db/src/test/schema.test.ts",
+					"score": 0.5862,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCK52E93N8Z247EMZ0K",
+					"content": "End-to-end tests are in apps/app/src/test/e2e/",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 11,
+			"metrics": {
+				"pathRecall@k": 1,
+				"exactPathPrecision": 0.4,
+				"mrr": 0.416667
+			}
+		},
+		{
+			"caseId": "clr-004",
+			"scenario": "code_location_recall",
+			"query": "Where are the TypeScript and build configuration files?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQCZGM6AFZ0T0F594VAN",
+					"content": "Turbo pipeline config is at turbo.json in the repo root",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCY9XDZ1Z84FRP3K3FX",
+					"content": "TypeScript base config is at packages/typescript-config/base.json",
+					"score": 0.86,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCZ11DZM3VFQBJ1N3XD",
+					"content": "Environment validation schemas are in packages/env/src/schemas.ts",
+					"score": 0.82381,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQD0B7YWYKTW0F64K7Z9",
+					"content": "Drizzle ORM config is at packages/db/drizzle.config.ts",
+					"score": 0.08423,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQCYFWY8Q3KW9CD71XXP",
+					"content": "Tailwind config is at apps/studio/tailwind.config.ts",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 10,
+			"metrics": {
+				"pathRecall@k": 1,
+				"exactPathPrecision": 0.4,
+				"mrr": 0.75
+			}
+		},
+		{
+			"caseId": "clr-005",
+			"scenario": "code_location_recall",
+			"query": "Where is the CORS and error handling middleware?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQDDD8FTTJ6S0WBGF9QB",
+					"content": "Error handling middleware lives in packages/api/src/middleware/error-handler.ts",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQDEHET42B0J9MT0JMEC",
+					"content": "The middleware composition utility is in packages/api/src/middleware/compose.ts",
+					"score": 0.86,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQDCNAMXCV4Z0XDZTG08",
+					"content": "CORS middleware is defined in packages/api/src/middleware/cors.ts",
+					"score": 0.533833,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQDEEZYFW2RXK2C6YGTV",
+					"content": "Health check endpoint is at packages/api/src/routes/health.ts",
+					"score": 0.380824,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQDC05JWW35G0YV291P0",
+					"content": "Request logging middleware is in packages/api/src/middleware/logger.ts",
+					"score": 0.06,
+					"rank": 5,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 10,
+			"metrics": {
+				"pathRecall@k": 1,
+				"exactPathPrecision": 0.4,
+				"mrr": 0.666667
+			}
+		},
+		{
+			"caseId": "tbp-001",
+			"scenario": "token_budget_packing",
+			"query": "What is the tech stack?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQE4WFYNV49VB7HNK2EZ",
+					"content": "Formatting is handled by Prettier with default config",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQE2BKA0Q42TMNB4SBZG",
+					"content": "The frontend is React 19 with TanStack Router for navigation",
+					"score": 0.848407,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQE3J28CCR9JBS2WBQF9",
+					"content": "The test runner is Bun's built-in test framework",
+					"score": 0.803345,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQE0NYYAHSZM7M3NWKYC",
+					"content": "The server uses Bun HTTP with a custom router",
+					"score": 0.801252,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQE4K2W0PFFHYB7HK661",
+					"content": "Linting uses oxlint for fast TypeScript linting",
+					"score": 0.105692,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQE3MVTM78Q9748RRBP7",
+					"content": "State management uses TanStack DB for reactive collections",
+					"score": 0.093725,
+					"rank": 6,
+					"sources": ["semantic"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQE1W7WN8T8A3SP06ZHS",
+					"content": "WebSocket connections are managed via Durable Streams protocol",
+					"score": 0.06,
+					"rank": 7,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 19,
+			"metrics": {
+				"factRetentionRate": 1,
+				"truncationLossRate": 0,
+				"budgetUtilization": 0.48
+			}
+		},
+		{
+			"caseId": "tbp-002",
+			"scenario": "token_budget_packing",
+			"query": "Tell me about Alice's engineering background",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQET7HVMRXV2PY1QQ14Q",
+					"content": "Alice's team meets every Tuesday for sprint planning",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQEPY910SSBH8AFEXB0V",
+					"content": "User's name is Alice and she is a senior engineer",
+					"score": 0.825495,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQEQRVFJCB7S0XV4GZE9",
+					"content": "Alice prefers functional programming patterns over OOP",
+					"score": 0.135775,
+					"rank": 3,
+					"sources": ["semantic"],
+					"factType": "opinion"
+				},
+				{
+					"memoryId": "01KJ14JQESWZGS0Y9101ZA1BD9",
+					"content": "Alice is currently leading the migration to TypeScript 5.9",
+					"score": 0.112407,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "experience"
+				},
+				{
+					"memoryId": "01KJ14JQERA05M62V21ZS367G8",
+					"content": "Alice has 8 years of experience with JavaScript",
+					"score": 0.090476,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 27,
+			"metrics": {
+				"factRetentionRate": 1,
+				"truncationLossRate": 0,
+				"budgetUtilization": 0.67
+			}
+		},
+		{
+			"caseId": "tbp-003",
+			"scenario": "token_budget_packing",
+			"query": "What are the user's coding style preferences?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQFNB7JFTH91DR7208GJ",
+					"content": "User prefers named exports over default exports",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "opinion"
+				},
+				{
+					"memoryId": "01KJ14JQFMNPV5V80PW1QQSYKN",
+					"content": "User prefers tabs over spaces with width of 2",
+					"score": 0.824397,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "opinion"
+				},
+				{
+					"memoryId": "01KJ14JQFMC34MQMT33TZED56N",
+					"content": "User wants all imports sorted alphabetically",
+					"score": 0.104343,
+					"rank": 3,
+					"sources": ["semantic"],
+					"factType": "opinion"
+				},
+				{
+					"memoryId": "01KJ14JQFP5HYKD28785J046TP",
+					"content": "User avoids classes in favor of plain functions",
+					"score": 0.081479,
+					"rank": 4,
+					"sources": ["semantic"],
+					"factType": "opinion"
+				},
+				{
+					"memoryId": "01KJ14JQFNQ0C64B23Q2YM97W1",
+					"content": "User always uses const instead of let when possible",
+					"score": 0.070574,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "opinion"
+				}
+			],
+			"durationMs": 13,
+			"metrics": {
+				"factRetentionRate": 0.666667,
+				"truncationLossRate": 0.333333,
+				"budgetUtilization": 0.75
+			}
+		},
+		{
+			"caseId": "tbp-004",
+			"scenario": "token_budget_packing",
+			"query": "How is the project CI/CD set up?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQG6DMFRYRG58ZR0XN3J",
+					"content": "The project uses pnpm workspaces for package management",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQG82FKD5FMEX4EB9VA5",
+					"content": "The office coffee machine was recently upgraded",
+					"score": 0.859222,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQG7QQE53G6V9G23KRFR",
+					"content": "The team celebrates birthdays with cake on Fridays",
+					"score": 0.859222,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQG72YYA83GEVZ0XD5M6",
+					"content": "Docker images are based on the official Node 20 alpine image",
+					"score": 0.812151,
+					"rank": 4,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQG8HBGYFMZ7FQDPN5Z4",
+					"content": "Pre-commit hooks run lint and type-check via husky",
+					"score": 0.118905,
+					"rank": 5,
+					"sources": ["semantic"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 13,
+			"metrics": {
+				"factRetentionRate": 0.666667,
+				"truncationLossRate": 0.333333,
+				"budgetUtilization": 0.558333
+			}
+		},
+		{
+			"caseId": "tbp-005",
+			"scenario": "token_budget_packing",
+			"query": "How is the production database configured?",
+			"candidates": [
+				{
+					"memoryId": "01KJ14JQGTYWV4881PST4ZKNGD",
+					"content": "Database schema migrations are managed by Drizzle Kit",
+					"score": 0.86,
+					"rank": 1,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQGPCWZ4J2P79TBKX7HK",
+					"content": "The production database connection string uses SSL mode require",
+					"score": 0.847897,
+					"rank": 2,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				},
+				{
+					"memoryId": "01KJ14JQGRERZ29XFWYWJVG4BD",
+					"content": "The database uses connection pooling with max 20 connections",
+					"score": 0.846687,
+					"rank": 3,
+					"sources": ["semantic", "fulltext"],
+					"factType": "world"
+				}
+			],
+			"durationMs": 12,
+			"metrics": {
+				"factRetentionRate": 1,
+				"truncationLossRate": 0,
+				"budgetUtilization": 0.9
+			}
+		}
+	],
+	"totalDurationMs": 426
 }

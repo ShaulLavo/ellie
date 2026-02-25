@@ -5,234 +5,232 @@
  * Light integration tests — needs DB, no LLM.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { createTestHindsight, type TestHindsight } from "./setup"
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { createTestHindsight, type TestHindsight } from './setup'
 
-describe("Bank management", () => {
-  let t: TestHindsight
+describe('Bank management', () => {
+	let t: TestHindsight
 
-  beforeEach(() => {
-    t = createTestHindsight()
-  })
+	beforeEach(() => {
+		t = createTestHindsight()
+	})
 
-  afterEach(() => {
-    t.cleanup()
-  })
+	afterEach(() => {
+		t.cleanup()
+	})
 
-  // ── Create ──────────────────────────────────────────────────────────────
+	// ── Create ──────────────────────────────────────────────────────────────
 
-  describe("createBank", () => {
-    it("creates a bank with name", () => {
-      const bank = t.hs.createBank("test-bank")
-      expect(bank.name).toBe("test-bank")
-      expect(bank.id).toBeDefined()
-      expect(bank.id.length).toBeGreaterThan(0)
-    })
+	describe('createBank', () => {
+		it('creates a bank with name', () => {
+			const bank = t.hs.createBank('test-bank')
+			expect(bank.name).toBe('test-bank')
+			expect(bank.id).toBeDefined()
+			expect(bank.id.length).toBeGreaterThan(0)
+		})
 
-    it("creates a bank with description", () => {
-      const bank = t.hs.createBank("named", { description: "A test bank" })
-      expect(bank.description).toBe("A test bank")
-    })
+		it('creates a bank with description', () => {
+			const bank = t.hs.createBank('named', { description: 'A test bank' })
+			expect(bank.description).toBe('A test bank')
+		})
 
-    it("creates a bank with config", () => {
-      const bank = t.hs.createBank("configured", {
-        config: {
-          extractionMode: "verbose",
-          dedupThreshold: 0.8,
-        },
-      })
-      expect(bank.config.extractionMode).toBe("verbose")
-      expect(bank.config.dedupThreshold).toBe(0.8)
-    })
+		it('creates a bank with config', () => {
+			const bank = t.hs.createBank('configured', {
+				config: {
+					extractionMode: 'verbose',
+					dedupThreshold: 0.8
+				}
+			})
+			expect(bank.config.extractionMode).toBe('verbose')
+			expect(bank.config.dedupThreshold).toBe(0.8)
+		})
 
-    it("sets timestamps", () => {
-      const before = Date.now()
-      const bank = t.hs.createBank("timestamped")
-      const after = Date.now()
+		it('sets timestamps', () => {
+			const before = Date.now()
+			const bank = t.hs.createBank('timestamped')
+			const after = Date.now()
 
-      expect(bank.createdAt).toBeGreaterThanOrEqual(before)
-      expect(bank.createdAt).toBeLessThanOrEqual(after)
-      expect(bank.updatedAt).toBe(bank.createdAt)
-    })
+			expect(bank.createdAt).toBeGreaterThanOrEqual(before)
+			expect(bank.createdAt).toBeLessThanOrEqual(after)
+			expect(bank.updatedAt).toBe(bank.createdAt)
+		})
 
-    it("generates unique IDs", () => {
-      const bank1 = t.hs.createBank("bank-1")
-      const bank2 = t.hs.createBank("bank-2")
-      expect(bank1.id).not.toBe(bank2.id)
-    })
+		it('generates unique IDs', () => {
+			const bank1 = t.hs.createBank('bank-1')
+			const bank2 = t.hs.createBank('bank-2')
+			expect(bank1.id).not.toBe(bank2.id)
+		})
 
-    it("defaults to empty config", () => {
-      const bank = t.hs.createBank("no-config")
-      expect(bank.config).toEqual({})
-    })
+		it('defaults to empty config', () => {
+			const bank = t.hs.createBank('no-config')
+			expect(bank.config).toEqual({})
+		})
 
-    it("defaults description to null", () => {
-      const bank = t.hs.createBank("no-desc")
-      expect(bank.description).toBeNull()
-    })
-  })
+		it('defaults description to null', () => {
+			const bank = t.hs.createBank('no-desc')
+			expect(bank.description).toBeNull()
+		})
+	})
 
-  // ── Get ─────────────────────────────────────────────────────────────────
+	// ── Get ─────────────────────────────────────────────────────────────────
 
-  describe("getBank", () => {
-    it("retrieves a bank by name", () => {
-      const created = t.hs.createBank("findme")
-      const found = t.hs.getBank("findme")
-      expect(found).toBeDefined()
-      expect(found!.id).toBe(created.id)
-      expect(found!.name).toBe("findme")
-    })
+	describe('getBank', () => {
+		it('retrieves a bank by name', () => {
+			const created = t.hs.createBank('findme')
+			const found = t.hs.getBank('findme')
+			expect(found).toBeDefined()
+			expect(found!.id).toBe(created.id)
+			expect(found!.name).toBe('findme')
+		})
 
-    it("returns undefined for non-existent bank", () => {
-      expect(t.hs.getBank("nonexistent")).toBeUndefined()
-    })
-  })
+		it('returns undefined for non-existent bank', () => {
+			expect(t.hs.getBank('nonexistent')).toBeUndefined()
+		})
+	})
 
-  describe("getBankById", () => {
-    it("retrieves a bank by ID", () => {
-      const created = t.hs.createBank("by-id")
-      const found = t.hs.getBankById(created.id)
-      expect(found).toBeDefined()
-      expect(found!.name).toBe("by-id")
-    })
+	describe('getBankById', () => {
+		it('retrieves a bank by ID', () => {
+			const created = t.hs.createBank('by-id')
+			const found = t.hs.getBankById(created.id)
+			expect(found).toBeDefined()
+			expect(found!.name).toBe('by-id')
+		})
 
-    it("returns undefined for non-existent ID", () => {
-      expect(t.hs.getBankById("nope")).toBeUndefined()
-    })
-  })
+		it('returns undefined for non-existent ID', () => {
+			expect(t.hs.getBankById('nope')).toBeUndefined()
+		})
+	})
 
-  // ── List ────────────────────────────────────────────────────────────────
+	// ── List ────────────────────────────────────────────────────────────────
 
-  describe("listBanks", () => {
-    it("returns empty array when no banks", () => {
-      expect(t.hs.listBanks()).toHaveLength(0)
-    })
+	describe('listBanks', () => {
+		it('returns empty array when no banks', () => {
+			expect(t.hs.listBanks()).toHaveLength(0)
+		})
 
-    it("returns all banks", () => {
-      t.hs.createBank("bank-a")
-      t.hs.createBank("bank-b")
-      t.hs.createBank("bank-c")
-      expect(t.hs.listBanks()).toHaveLength(3)
-    })
-  })
+		it('returns all banks', () => {
+			t.hs.createBank('bank-a')
+			t.hs.createBank('bank-b')
+			t.hs.createBank('bank-c')
+			expect(t.hs.listBanks()).toHaveLength(3)
+		})
+	})
 
-  // ── Delete ──────────────────────────────────────────────────────────────
+	// ── Delete ──────────────────────────────────────────────────────────────
 
-  describe("deleteBank", () => {
-    it("deletes a bank", () => {
-      const bank = t.hs.createBank("deleteme")
-      t.hs.deleteBank(bank.id)
-      expect(t.hs.getBankById(bank.id)).toBeUndefined()
-    })
+	describe('deleteBank', () => {
+		it('deletes a bank', () => {
+			const bank = t.hs.createBank('deleteme')
+			t.hs.deleteBank(bank.id)
+			expect(t.hs.getBankById(bank.id)).toBeUndefined()
+		})
 
-    it("does not affect other banks", () => {
-      const bank1 = t.hs.createBank("keep")
-      const bank2 = t.hs.createBank("delete")
-      t.hs.deleteBank(bank2.id)
-      expect(t.hs.getBankById(bank1.id)).toBeDefined()
-    })
-  })
+		it('does not affect other banks', () => {
+			const bank1 = t.hs.createBank('keep')
+			const bank2 = t.hs.createBank('delete')
+			t.hs.deleteBank(bank2.id)
+			expect(t.hs.getBankById(bank1.id)).toBeDefined()
+		})
+	})
 
-  // ── Update name/description ──────────────────────────────────────────
+	// ── Update name/description ──────────────────────────────────────────
 
-  describe("updateBank name/description", () => {
-    it.todo(
-      "updates bank name and is reflected in getBank",
-    )
+	describe('updateBank name/description', () => {
+		it.todo('updates bank name and is reflected in getBank')
 
-    it("updates bank description/mission field", () => {
-      const bank = t.hs.createBank("mission-test")
-      const updated = t.hs.setMission(bank.id, "I am a helpful assistant.")
-      expect(updated.mission).toBe("I am a helpful assistant.")
-      const retrieved = t.hs.getBankById(bank.id)
-      expect(retrieved).toBeDefined()
-      expect(retrieved!.mission).toBe("I am a helpful assistant.")
-    })
+		it('updates bank description/mission field', () => {
+			const bank = t.hs.createBank('mission-test')
+			const updated = t.hs.setMission(bank.id, 'I am a helpful assistant.')
+			expect(updated.mission).toBe('I am a helpful assistant.')
+			const retrieved = t.hs.getBankById(bank.id)
+			expect(retrieved).toBeDefined()
+			expect(retrieved!.mission).toBe('I am a helpful assistant.')
+		})
 
-    it("sets and retrieves bank mission field", () => {
-      const bank = t.hs.createBank("mission-roundtrip")
-      t.hs.setMission(bank.id, "I specialize in cooking advice.")
-      const found = t.hs.getBankById(bank.id)
-      expect(found).toBeDefined()
-      expect(found!.mission).toBe("I specialize in cooking advice.")
-    })
-  })
+		it('sets and retrieves bank mission field', () => {
+			const bank = t.hs.createBank('mission-roundtrip')
+			t.hs.setMission(bank.id, 'I specialize in cooking advice.')
+			const found = t.hs.getBankById(bank.id)
+			expect(found).toBeDefined()
+			expect(found!.mission).toBe('I specialize in cooking advice.')
+		})
+	})
 
-  // ── Update config ────────────────────────────────────────────────────
+	// ── Update config ────────────────────────────────────────────────────
 
-  describe("updateBankConfig", () => {
-    it("updates extraction mode", () => {
-      const bank = t.hs.createBank("update-cfg")
-      const updated = t.hs.updateBankConfig(bank.id, {
-        extractionMode: "verbose",
-      })
-      expect(updated.config.extractionMode).toBe("verbose")
-    })
+	describe('updateBankConfig', () => {
+		it('updates extraction mode', () => {
+			const bank = t.hs.createBank('update-cfg')
+			const updated = t.hs.updateBankConfig(bank.id, {
+				extractionMode: 'verbose'
+			})
+			expect(updated.config.extractionMode).toBe('verbose')
+		})
 
-    it("merges with existing config", () => {
-      const bank = t.hs.createBank("merge-cfg", {
-        config: {
-          extractionMode: "concise",
-          dedupThreshold: 0.9,
-        },
-      })
-      const updated = t.hs.updateBankConfig(bank.id, {
-        dedupThreshold: 0.8,
-      })
-      expect(updated.config.extractionMode).toBe("concise") // preserved
-      expect(updated.config.dedupThreshold).toBe(0.8) // updated
-    })
+		it('merges with existing config', () => {
+			const bank = t.hs.createBank('merge-cfg', {
+				config: {
+					extractionMode: 'concise',
+					dedupThreshold: 0.9
+				}
+			})
+			const updated = t.hs.updateBankConfig(bank.id, {
+				dedupThreshold: 0.8
+			})
+			expect(updated.config.extractionMode).toBe('concise') // preserved
+			expect(updated.config.dedupThreshold).toBe(0.8) // updated
+		})
 
-    it("updates the updatedAt timestamp", async () => {
-      const bank = t.hs.createBank("ts-update")
-      // Wait across a millisecond boundary so timestamps differ
-      await new Promise((resolve) => setTimeout(resolve, 5))
-      const updated = t.hs.updateBankConfig(bank.id, { reflectBudget: "high" })
-      expect(updated.updatedAt).toBeGreaterThan(bank.createdAt)
-    })
-  })
+		it('updates the updatedAt timestamp', async () => {
+			const bank = t.hs.createBank('ts-update')
+			// Wait across a millisecond boundary so timestamps differ
+			await new Promise((resolve) => setTimeout(resolve, 5))
+			const updated = t.hs.updateBankConfig(bank.id, { reflectBudget: 'high' })
+			expect(updated.updatedAt).toBeGreaterThan(bank.createdAt)
+		})
+	})
 })
 
 // ════════════════════════════════════════════════════════════════════════════
 // Config resolution hierarchy
 // ════════════════════════════════════════════════════════════════════════════
 
-describe("Config resolution hierarchy", () => {
-  it("uses hardcoded defaults when no overrides", () => {
-    const t = createTestHindsight()
-    try {
-      const bank = t.hs.createBank("defaults")
-      // No config provided → config should be empty (defaults applied at runtime)
-      expect(bank.config).toEqual({})
-    } finally {
-      t.cleanup()
-    }
-  })
+describe('Config resolution hierarchy', () => {
+	it('uses hardcoded defaults when no overrides', () => {
+		const t = createTestHindsight()
+		try {
+			const bank = t.hs.createBank('defaults')
+			// No config provided → config should be empty (defaults applied at runtime)
+			expect(bank.config).toEqual({})
+		} finally {
+			t.cleanup()
+		}
+	})
 
-  it("instance defaults override hardcoded defaults", () => {
-    const t = createTestHindsight({
-      defaults: { extractionMode: "verbose", dedupThreshold: 0.5 },
-    })
-    try {
-      const bank = t.hs.createBank("instance-defaults")
-      // Bank has no per-bank config — instance defaults are resolved at runtime
-      expect(bank.config).toEqual({})
-    } finally {
-      t.cleanup()
-    }
-  })
+	it('instance defaults override hardcoded defaults', () => {
+		const t = createTestHindsight({
+			defaults: { extractionMode: 'verbose', dedupThreshold: 0.5 }
+		})
+		try {
+			const bank = t.hs.createBank('instance-defaults')
+			// Bank has no per-bank config — instance defaults are resolved at runtime
+			expect(bank.config).toEqual({})
+		} finally {
+			t.cleanup()
+		}
+	})
 
-  it("bank config overrides instance defaults", () => {
-    const t = createTestHindsight({
-      defaults: { extractionMode: "verbose" },
-    })
-    try {
-      const bank = t.hs.createBank("bank-override", {
-        config: { extractionMode: "concise" },
-      })
-      expect(bank.config.extractionMode).toBe("concise")
-    } finally {
-      t.cleanup()
-    }
-  })
+	it('bank config overrides instance defaults', () => {
+		const t = createTestHindsight({
+			defaults: { extractionMode: 'verbose' }
+		})
+		try {
+			const bank = t.hs.createBank('bank-override', {
+				config: { extractionMode: 'concise' }
+			})
+			expect(bank.config.extractionMode).toBe('concise')
+		} finally {
+			t.cleanup()
+		}
+	})
 })

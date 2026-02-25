@@ -1,18 +1,15 @@
 // Core Agent
-export { Agent } from "./agent";
-export type { AgentOptions } from "./agent";
+export { Agent } from './agent'
+export type { AgentOptions } from './agent'
 
 // Loop functions
-export { agentLoop, agentLoopContinue } from "./agent-loop";
+export { agentLoop, agentLoopContinue } from './agent-loop'
 
 // Event stream
-export { EventStream } from "./event-stream";
+export { EventStream } from './event-stream'
 
 // Message conversion
-export {
-	toModelMessage,
-	toModelMessages,
-} from "./messages";
+export { toModelMessage, toModelMessages } from './messages'
 
 // Schemas (for JSONL persistence)
 export {
@@ -24,8 +21,8 @@ export {
 	textContentSchema,
 	thinkingContentSchema,
 	imageContentSchema,
-	toolCallSchema,
-} from "./schemas";
+	toolCallSchema
+} from './schemas'
 
 // Types
 export type {
@@ -59,5 +56,5 @@ export type {
 	// Loop config
 	StreamCallOptions,
 	StreamFn,
-	AgentLoopConfig,
-} from "./types";
+	AgentLoopConfig
+} from './types'

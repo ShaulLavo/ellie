@@ -23,15 +23,15 @@
  * - `"block-end"` → full-width row below the textarea
  */
 
-"use client";
+'use client'
 
-import * as React from "react";
-import { cn } from "@/lib/utils";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import * as React from 'react'
+import { cn } from '@/lib/utils'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
 
-export interface ChatToolbarProps extends React.ComponentProps<"div"> {
-  children?: React.ReactNode;
+export interface ChatToolbarProps extends React.ComponentProps<'div'> {
+	children?: React.ReactNode
 }
 
 /**
@@ -58,36 +58,22 @@ export interface ChatToolbarProps extends React.ComponentProps<"div"> {
  * </ChatToolbar>
  * ```
  */
-export function ChatToolbar({
-  children,
-  className,
-  ...props
-}: ChatToolbarProps) {
-  return (
-    <div
-      className={cn("sticky bottom-0 p-2 pt-0 bg-background", className)}
-      {...props}
-    >
-      <div
-        className={cn(
-          "border rounded-xl py-1 px-1.5",
-          "flex flex-wrap items-end gap-x-0.5",
-        )}
-      >
-        {children}
-      </div>
-    </div>
-  );
+export function ChatToolbar({ children, className, ...props }: ChatToolbarProps) {
+	return (
+		<div className={cn('sticky bottom-0 p-2 pt-0 bg-background', className)} {...props}>
+			<div className={cn('border rounded-xl py-1 px-1.5', 'flex flex-wrap items-end gap-x-0.5')}>
+				{children}
+			</div>
+		</div>
+	)
 }
 
 /** Modifier key that allows inserting a new line instead of submitting */
-const NEWLINE_MODIFIER_KEY = "shiftKey" as const;
+const NEWLINE_MODIFIER_KEY = 'shiftKey' as const
 
-export interface ChatToolbarTextareaProps extends React.ComponentProps<
-  typeof Textarea
-> {
-  /** Called when the user presses Enter (without Shift). Use this to trigger message sending. */
-  onSubmit?: () => void;
+export interface ChatToolbarTextareaProps extends React.ComponentProps<typeof Textarea> {
+	/** Called when the user presses Enter (without Shift). Use this to trigger message sending. */
+	onSubmit?: () => void
 }
 
 /**
@@ -114,54 +100,54 @@ export interface ChatToolbarTextareaProps extends React.ComponentProps<
  * ```
  */
 export function ChatToolbarTextarea({
-  className,
-  onSubmit,
-  onKeyDown,
-  ...props
+	className,
+	onSubmit,
+	onKeyDown,
+	...props
 }: ChatToolbarTextareaProps) {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e[NEWLINE_MODIFIER_KEY]) {
-      e.preventDefault();
-      onSubmit?.();
-    }
-    onKeyDown?.(e);
-  };
+	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.key === 'Enter' && !e[NEWLINE_MODIFIER_KEY]) {
+			e.preventDefault()
+			onSubmit?.()
+		}
+		onKeyDown?.(e)
+	}
 
-  return (
-    <div className="flex-1 min-w-0 order-2 grid self-center">
-      <Textarea
-        id="toolbar-input"
-        placeholder="Type your message..."
-        className={cn(
-          "h-fit min-h-9 max-h-30 px-1.5 py-1.5 text-sm @md/chat:text-[15px]",
-          "border-none shadow-none focus-visible:border-none focus-visible:ring-0 placeholder:whitespace-nowrap resize-none",
-          className,
-        )}
-        rows={1}
-        onKeyDown={handleKeyDown}
-        {...props}
-      />
-    </div>
-  );
+	return (
+		<div className="flex-1 min-w-0 order-2 grid self-center">
+			<Textarea
+				id="toolbar-input"
+				placeholder="Type your message..."
+				className={cn(
+					'h-fit min-h-9 max-h-30 px-1.5 py-1.5 text-sm @md/chat:text-[15px]',
+					'border-none shadow-none focus-visible:border-none focus-visible:ring-0 placeholder:whitespace-nowrap resize-none',
+					className
+				)}
+				rows={1}
+				onKeyDown={handleKeyDown}
+				{...props}
+			/>
+		</div>
+	)
 }
 
 const chatToolbarAddonAlignStyles = {
-  "inline-start": "order-1",
-  "inline-end": "order-3",
-  "block-start": "order-0 w-full",
-  "block-end": "order-4 w-full",
-};
+	'inline-start': 'order-1',
+	'inline-end': 'order-3',
+	'block-start': 'order-0 w-full',
+	'block-end': 'order-4 w-full'
+}
 
-export interface ChatToolbarAddonProps extends React.ComponentProps<"div"> {
-  children?: React.ReactNode;
-  /**
-   * Position of this addon relative to the textarea.
-   * - `"inline-start"` — left of the textarea (default)
-   * - `"inline-end"` — right of the textarea
-   * - `"block-start"` — full-width row above the textarea
-   * - `"block-end"` — full-width row below the textarea
-   */
-  align?: "inline-start" | "inline-end" | "block-start" | "block-end";
+export interface ChatToolbarAddonProps extends React.ComponentProps<'div'> {
+	children?: React.ReactNode
+	/**
+	 * Position of this addon relative to the textarea.
+	 * - `"inline-start"` — left of the textarea (default)
+	 * - `"inline-end"` — right of the textarea
+	 * - `"block-start"` — full-width row above the textarea
+	 * - `"block-end"` — full-width row below the textarea
+	 */
+	align?: 'inline-start' | 'inline-end' | 'block-start' | 'block-end'
 }
 
 /**
@@ -187,29 +173,23 @@ export interface ChatToolbarAddonProps extends React.ComponentProps<"div"> {
  * ```
  */
 export function ChatToolbarAddon({
-  children,
-  className,
-  align = "inline-start",
-  ...props
+	children,
+	className,
+	align = 'inline-start',
+	...props
 }: ChatToolbarAddonProps) {
-  return (
-    <div
-      className={cn(
-        "h-9 flex items-center gap-1",
-        chatToolbarAddonAlignStyles[align],
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </div>
-  );
+	return (
+		<div
+			className={cn('h-9 flex items-center gap-1', chatToolbarAddonAlignStyles[align], className)}
+			{...props}
+		>
+			{children}
+		</div>
+	)
 }
 
-export interface ChatToolbarButtonProps extends React.ComponentProps<
-  typeof Button
-> {
-  children?: React.ReactNode;
+export interface ChatToolbarButtonProps extends React.ComponentProps<typeof Button> {
+	children?: React.ReactNode
 }
 
 /**
@@ -223,21 +203,17 @@ export interface ChatToolbarButtonProps extends React.ComponentProps<
  * </ChatToolbarButton>
  * ```
  */
-export function ChatToolbarButton({
-  children,
-  className,
-  ...props
-}: ChatToolbarButtonProps) {
-  return (
-    <Button
-      variant="ghost"
-      className={cn(
-        "size-8 @md/chat:size-9 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='size-'])]:@md/chat:size-5 [&_svg]:stroke-[1.7px]",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </Button>
-  );
+export function ChatToolbarButton({ children, className, ...props }: ChatToolbarButtonProps) {
+	return (
+		<Button
+			variant="ghost"
+			className={cn(
+				"size-8 @md/chat:size-9 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='size-'])]:@md/chat:size-5 [&_svg]:stroke-[1.7px]",
+				className
+			)}
+			{...props}
+		>
+			{children}
+		</Button>
+	)
 }

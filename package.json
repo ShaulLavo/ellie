@@ -1,43 +1,43 @@
 {
-  "name": "ellie",
-  "private": true,
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "oxlint --ignore-path .gitignore apps packages",
-    "lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types",
-    "test": "turbo run test"
-  },
-  "devDependencies": {
-    "@tailwindcss/typography": "^0.5.19",
-    "@types/babel__core": "^7.20.5",
-    "@typescript/native-preview": "latest",
-    "app": "workspace:*",
-    "lefthook": "^2.1.1",
-    "oxlint": "^1.48.0",
-    "prettier": "^3.7.4",
-    "turbo": "^2.8.10",
-    "typescript": "5.9.2"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "packageManager": "bun@1.3.10",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "overrides": {
-    "typescript": "5.9.2",
-    "@tanstack/db": "0.5.27"
-  },
-  "dependencies": {
-    "@fontsource-variable/geist": "^5.2.8",
-    "@fontsource-variable/jetbrains-mono": "^5.2.8",
-    "@fontsource/geist-mono": "^5.2.7",
-    "@fontsource/google-sans-flex": "^5.2.2",
-    "@tanstack/ai-ollama": "^0.5.0"
-  }
+	"name": "ellie",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"lint": "oxlint --ignore-path .gitignore apps packages",
+		"lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
+		"format": "oxfmt --write \"**/*.{ts,tsx,md}\"",
+		"check-types": "turbo run check-types",
+		"test": "turbo run test"
+	},
+	"dependencies": {
+		"@fontsource-variable/geist": "^5.2.8",
+		"@fontsource-variable/jetbrains-mono": "^5.2.8",
+		"@fontsource/geist-mono": "^5.2.7",
+		"@fontsource/google-sans-flex": "^5.2.2",
+		"@tanstack/ai-ollama": "^0.5.0"
+	},
+	"devDependencies": {
+		"@tailwindcss/typography": "^0.5.19",
+		"@types/babel__core": "^7.20.5",
+		"@typescript/native-preview": "latest",
+		"app": "workspace:*",
+		"lefthook": "^2.1.1",
+		"oxfmt": "^0.35.0",
+		"oxlint": "^1.48.0",
+		"turbo": "^2.8.10",
+		"typescript": "5.9.2"
+	},
+	"overrides": {
+		"@tanstack/db": "0.5.27",
+		"typescript": "5.9.2"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"packageManager": "bun@1.3.10"
 }

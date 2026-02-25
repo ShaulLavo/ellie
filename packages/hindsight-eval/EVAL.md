@@ -24,24 +24,24 @@ bun test --cwd packages/hindsight-eval
 
 ### Reproducibility Knobs
 
-| Knob | Value | Purpose |
-|------|-------|---------|
-| Seed | 42 | Report metadata only (not used as PRNG seed) |
-| TopK | 10 | Default result limit |
-| Embeddings | Hash-based (16 dims) | NOT semantically meaningful — ensures deterministic vectors |
-| Tie-breaking | (score DESC, content ASC) | Stable candidate ordering |
-| Timestamps | UTC | Consistent across timezones |
-| LLM | No-op mock | Seeds use pre-extracted facts, no LLM calls |
+| Knob         | Value                     | Purpose                                                     |
+| ------------ | ------------------------- | ----------------------------------------------------------- |
+| Seed         | 42                        | Report metadata only (not used as PRNG seed)                |
+| TopK         | 10                        | Default result limit                                        |
+| Embeddings   | Hash-based (16 dims)      | NOT semantically meaningful — ensures deterministic vectors |
+| Tie-breaking | (score DESC, content ASC) | Stable candidate ordering                                   |
+| Timestamps   | UTC                       | Consistent across timezones                                 |
+| LLM          | No-op mock                | Seeds use pre-extracted facts, no LLM calls                 |
 
 ## Scenario Families
 
-| Scenario | Cases | Primary Metric | Description |
-|----------|-------|----------------|-------------|
-| `follow_up_recall` | 5 | MRR | Recall user preferences and prior decisions |
-| `temporal_narrative` | 5 | Ordering accuracy | Reconstruct timelines from memory |
-| `dedup_conflict` | 5 | Contradiction retrieval rate | Handle conflicting/duplicate facts |
-| `code_location_recall` | 5 | Path recall@k | Find where code lives in the repo |
-| `token_budget_packing` | 5 | Fact retention rate | Pack maximum facts under token budget |
+| Scenario               | Cases | Primary Metric               | Description                                 |
+| ---------------------- | ----- | ---------------------------- | ------------------------------------------- |
+| `follow_up_recall`     | 5     | MRR                          | Recall user preferences and prior decisions |
+| `temporal_narrative`   | 5     | Ordering accuracy            | Reconstruct timelines from memory           |
+| `dedup_conflict`       | 5     | Contradiction retrieval rate | Handle conflicting/duplicate facts          |
+| `code_location_recall` | 5     | Path recall@k                | Find where code lives in the repo           |
+| `token_budget_packing` | 5     | Fact retention rate          | Pack maximum facts under token budget       |
 
 ### Scenario Weights (Global Score)
 
@@ -58,7 +58,27 @@ token_budget_packing:  15%
 1. Append a new JSON line to `fixtures/assistant-baseline.v1.jsonl`:
 
 ```jsonl
-{"id":"unique-id","scenario":"follow_up_recall","description":"What this tests","seedFacts":[{"content":"...","factType":"world","confidence":1.0}],"query":"...","expected":{"mustInclude":["substring"]},"constraints":{"topK":10}}
+{
+	"id": "unique-id",
+	"scenario": "follow_up_recall",
+	"description": "What this tests",
+	"seedFacts": [
+		{
+			"content": "...",
+			"factType": "world",
+			"confidence": 1
+		}
+	],
+	"query": "...",
+	"expected": {
+		"mustInclude": [
+			"substring"
+		]
+	},
+	"constraints": {
+		"topK": 10
+	}
+}
 ```
 
 2. Run the baseline: `bun run --cwd packages/hindsight-eval eval:baseline`
@@ -69,20 +89,20 @@ token_budget_packing:  15%
 
 ```ts
 interface EvalCase {
-  id: string              // Unique case identifier
-  scenario: Scenario      // One of the 5 scenario families
-  description: string     // Human-readable description
-  seedFacts: SeedFact[]   // Pre-extracted facts to seed into memory
-  query: string           // The recall query to execute
-  expected: {
-    mustInclude?: string[]   // Substrings that MUST appear in results
-    mustExclude?: string[]   // Substrings that must NOT appear
-    orderedHints?: string[]  // Expected ordering (temporal scenarios)
-  }
-  constraints?: {
-    tokenBudget?: number  // Max tokens for recall
-    topK?: number         // Override default top-K
-  }
+	id: string // Unique case identifier
+	scenario: Scenario // One of the 5 scenario families
+	description: string // Human-readable description
+	seedFacts: SeedFact[] // Pre-extracted facts to seed into memory
+	query: string // The recall query to execute
+	expected: {
+		mustInclude?: string[] // Substrings that MUST appear in results
+		mustExclude?: string[] // Substrings that must NOT appear
+		orderedHints?: string[] // Expected ordering (temporal scenarios)
+	}
+	constraints?: {
+		tokenBudget?: number // Max tokens for recall
+		topK?: number // Override default top-K
+	}
 }
 ```
 

@@ -4,4 +4,4 @@
  * The canonical definitions live in `@ellie/schemas` to avoid circular
  * package dependencies.
  */
-export * from "@ellie/schemas/agent"
+export * from '@ellie/schemas/agent'
