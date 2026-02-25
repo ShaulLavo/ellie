@@ -34,19 +34,12 @@ import {
 
 // ── Localhost guard ──────────────────────────────────────────────────────────
 
-const LOOPBACK_HOSTS = new Set([
+/** Real client IP addresses considered loopback (IPv4, IPv6, IPv4-mapped IPv6). */
+const LOOPBACK_ADDRS = new Set([
 	'127.0.0.1',
 	'::1',
-	'localhost'
+	'::ffff:127.0.0.1'
 ])
-
-function isLoopback(request: Request): boolean {
-	const host = request.headers.get('host')
-	if (!host) return false
-	// Strip port if present
-	const hostname = host.replace(/:\d+$/, '')
-	return LOOPBACK_HOSTS.has(hostname)
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,9 +52,14 @@ function keyPreview(key: string): string {
 
 export function createAuthRoutes(credentialsPath: string) {
 	return (
-		new Elysia({ prefix: '/api/auth/anthropic' })
-			.onBeforeHandle(({ request, set }) => {
-				if (!isLoopback(request)) {
+		new Elysia({
+			prefix: '/api/auth/anthropic',
+			tags: ['Auth']
+		})
+			.onBeforeHandle(({ request, server, set }) => {
+				const ip = server?.requestIP(request)
+				const addr = ip?.address
+				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
 					set.status = 403
 					return {
 						error:
@@ -171,32 +169,18 @@ export function createAuthRoutes(credentialsPath: string) {
 				async ({ body, set }) => {
 					const { key, validate = true } = body
 
-					if (!key.trim()) {
-						set.status = 400
-						return { error: 'API key is required' }
-					}
-
 					if (validate) {
 						try {
+							// Use GET /v1/models — free endpoint that returns 401
+							// for invalid keys without consuming billing tokens.
 							const res = await fetch(
-								'https://api.anthropic.com/v1/messages',
+								'https://api.anthropic.com/v1/models',
 								{
-									method: 'POST',
+									method: 'GET',
 									headers: {
-										'Content-Type': 'application/json',
 										'x-api-key': key.trim(),
 										'anthropic-version': '2023-06-01'
-									},
-									body: JSON.stringify({
-										model: 'claude-haiku-4-5',
-										max_tokens: 1,
-										messages: [
-											{
-												role: 'user',
-												content: 'hi'
-											}
-										]
-									})
+									}
 								}
 							)
 							if (res.status === 401) {
@@ -251,13 +235,6 @@ export function createAuthRoutes(credentialsPath: string) {
 				'/token',
 				async ({ body, set }) => {
 					const { token, expires } = body
-
-					if (!token.trim()) {
-						set.status = 400
-						return {
-							error: 'Token is required'
-						}
-					}
 
 					const cred: AnthropicCredential = {
 						type: 'token',

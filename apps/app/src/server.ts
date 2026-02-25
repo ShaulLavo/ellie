@@ -1,4 +1,6 @@
 import { resolve } from 'node:path'
+import { openapi } from '@elysiajs/openapi'
+import { toJsonSchema } from '@valibot/to-json-schema'
 import { staticPlugin } from '@elysiajs/static'
 import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
@@ -80,6 +82,10 @@ const CREDENTIALS_PATH = resolve(
 async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 	const model = env.ANTHROPIC_MODEL as AnthropicChatModel
 
+	// ANTHROPIC_OAUTH_TOKEN and ANTHROPIC_BEARER_TOKEN are intentionally read
+	// from process.env rather than the validated env schema — they are rarely
+	// used override tokens (e.g. for Max plan OAuth) that don't belong in the
+	// standard server config schema.
 	const oauthToken = process.env.ANTHROPIC_OAUTH_TOKEN
 	if (oauthToken) return anthropicOAuth(model, oauthToken)
 
@@ -102,6 +108,9 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 			return anthropicOAuth(model, cred.access)
 		case 'token':
 			return createAnthropicChat(model, cred.token)
+		default:
+			cred satisfies never
+			return null
 	}
 }
 
@@ -123,6 +132,32 @@ const sseState: SseState = {
 }
 
 export const app = new Elysia()
+	.use(
+		openapi({
+			documentation: {
+				info: {
+					title: 'Ellie API',
+					version: '1.0.0'
+				},
+				tags: [
+					{ name: 'Status', description: 'Server status' },
+					{
+						name: 'Chat',
+						description: 'Chat sessions and messages'
+					},
+					{
+						name: 'Agent',
+						description: 'Agent management'
+					},
+					{
+						name: 'Auth',
+						description: 'Anthropic credential management'
+					}
+				]
+			},
+			mapJsonSchema: { valibot: toJsonSchema }
+		})
+	)
 	.use(createStatusRoutes(() => sseState.activeClients))
 	.use(createChatRoutes(store, sseState, agentWatcher))
 	.use(createAgentRoutes(store, agentManager, sseState))

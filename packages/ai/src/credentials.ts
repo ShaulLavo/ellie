@@ -16,6 +16,11 @@
 
 import { chmod } from 'node:fs/promises'
 
+/**
+ * Legacy OAuth credential shape used by the old bot-repo provider format.
+ * New code should prefer NormalizedOAuthCredential (short field names:
+ * access, refresh, expires) which is what auth routes write to disk.
+ */
 export interface OAuthCredential {
 	type: 'oauth'
 	access_token: string
@@ -169,6 +174,10 @@ export async function loadAnthropicCredential(
  * Preserves all other provider entries.
  * Creates the file if it doesn't exist.
  * Returns an error message if the file contains invalid JSON.
+ *
+ * Note: the read-modify-write is not atomic. This is intentional —
+ * this is a single-user local config file and concurrent writers
+ * are not a realistic concern.
  */
 export async function setAnthropicCredential(
 	path: string,

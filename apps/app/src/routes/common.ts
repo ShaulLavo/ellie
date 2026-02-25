@@ -60,7 +60,7 @@ export const authClearResponseSchema = v.object({
 })
 
 export const authApiKeyBodySchema = v.object({
-	key: v.string(),
+	key: v.pipe(v.string(), v.nonEmpty()),
 	validate: v.optional(v.boolean())
 })
 
@@ -70,7 +70,7 @@ export const authApiKeyResponseSchema = v.object({
 })
 
 export const authTokenBodySchema = v.object({
-	token: v.string(),
+	token: v.pipe(v.string(), v.nonEmpty()),
 	expires: v.optional(v.number())
 })
 
@@ -90,8 +90,8 @@ export const authOAuthAuthorizeResponseSchema = v.object({
 })
 
 export const authOAuthExchangeBodySchema = v.object({
-	callback_code: v.string(),
-	verifier: v.string(),
+	callback_code: v.pipe(v.string(), v.nonEmpty()),
+	verifier: v.pipe(v.string(), v.nonEmpty()),
 	mode: v.picklist(['max', 'console'])
 })
 

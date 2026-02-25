@@ -19,10 +19,11 @@ import (
 const defaultBaseURL = "http://localhost:3000"
 
 var (
-	styleBold = lipgloss.NewStyle().Bold(true)
-	styleOk   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00A66D"))
-	styleErr  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EF4444"))
-	styleDim  = lipgloss.NewStyle().Foreground(lipgloss.Color("#A1A1AA"))
+	styleBold  = lipgloss.NewStyle().Bold(true)
+	styleOk    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00A66D"))
+	styleErr   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EF4444"))
+	styleDim   = lipgloss.NewStyle().Foreground(lipgloss.Color("#A1A1AA"))
+	httpClient = &http.Client{Timeout: 10 * time.Second}
 )
 
 func baseURL() string {
@@ -73,7 +74,7 @@ func printUsage() {
 
 func cmdAuthStatus() {
 	url := baseURL() + "/api/auth/anthropic/status"
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server at", baseURL())
 		fmt.Fprintln(os.Stderr, styleDim.Render("  Make sure the server is running."))
@@ -133,7 +134,7 @@ func cmdAuthStatus() {
 
 func cmdAuthClear() {
 	url := baseURL() + "/api/auth/anthropic/clear"
-	resp, err := http.Post(url, "application/json", nil)
+	resp, err := httpClient.Post(url, "application/json", nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server at", baseURL())
 		os.Exit(1)
@@ -143,7 +144,10 @@ func cmdAuthClear() {
 	var result struct {
 		Cleared bool `json:"cleared"`
 	}
-	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Invalid response:", err)
+		os.Exit(1)
+	}
 
 	if result.Cleared {
 		fmt.Println(styleOk.Render("Stored credentials removed."))
@@ -187,6 +191,7 @@ func authApiKey() {
 	err := huh.NewInput().
 		Title("Enter your Anthropic API key").
 		Placeholder("sk-ant-...").
+		EchoMode(huh.EchoModePassword).
 		Value(&key).
 		Run()
 	if err != nil || strings.TrimSpace(key) == "" {
@@ -201,7 +206,7 @@ func authApiKey() {
 		"validate": true,
 	})
 
-	resp, err := http.Post(baseURL()+"/api/auth/anthropic/api-key", "application/json", bytes.NewReader(body))
+	resp, err := httpClient.Post(baseURL()+"/api/auth/anthropic/api-key", "application/json", bytes.NewReader(body))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server:", err)
 		os.Exit(1)
@@ -227,6 +232,7 @@ func authToken() {
 	err := huh.NewInput().
 		Title("Enter your Anthropic bearer token").
 		Placeholder("sk-ant-oat01-...").
+		EchoMode(huh.EchoModePassword).
 		Value(&token).
 		Run()
 	if err != nil || strings.TrimSpace(token) == "" {
@@ -238,7 +244,7 @@ func authToken() {
 		"token": strings.TrimSpace(token),
 	})
 
-	resp, err := http.Post(baseURL()+"/api/auth/anthropic/token", "application/json", bytes.NewReader(body))
+	resp, err := httpClient.Post(baseURL()+"/api/auth/anthropic/token", "application/json", bytes.NewReader(body))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server:", err)
 		os.Exit(1)
@@ -257,7 +263,7 @@ func authToken() {
 func authOAuth(mode string) {
 	// Step 1: Get authorize URL
 	body, _ := json.Marshal(map[string]string{"mode": mode})
-	resp, err := http.Post(baseURL()+"/api/auth/anthropic/oauth/authorize", "application/json", bytes.NewReader(body))
+	resp, err := httpClient.Post(baseURL()+"/api/auth/anthropic/oauth/authorize", "application/json", bytes.NewReader(body))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server:", err)
 		os.Exit(1)
@@ -305,7 +311,7 @@ func authOAuth(mode string) {
 		"verifier":      authResp.Verifier,
 		"mode":          mode,
 	})
-	resp2, err := http.Post(baseURL()+"/api/auth/anthropic/oauth/exchange", "application/json", bytes.NewReader(exchangeBody))
+	resp2, err := httpClient.Post(baseURL()+"/api/auth/anthropic/oauth/exchange", "application/json", bytes.NewReader(exchangeBody))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server:", err)
 		os.Exit(1)
@@ -323,7 +329,10 @@ func authOAuth(mode string) {
 		Mode    string `json:"mode"`
 		Message string `json:"message"`
 	}
-	_ = json.NewDecoder(resp2.Body).Decode(&exchangeResp)
+	if err := json.NewDecoder(resp2.Body).Decode(&exchangeResp); err != nil {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Invalid response:", err)
+		os.Exit(1)
+	}
 
 	fmt.Println(styleOk.Render("Authentication successful!"))
 	fmt.Println(styleDim.Render(exchangeResp.Message))
@@ -335,7 +344,7 @@ func openBrowser(url string) error {
 	case "darwin":
 		cmd = exec.Command("open", url)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
+		cmd = exec.Command("cmd", "/c", "start", "", url)
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
