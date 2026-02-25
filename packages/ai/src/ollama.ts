@@ -6,7 +6,10 @@
  * Adds timeout + retry with exponential backoff for robustness.
  */
 
-import { createOllamaChat, type OllamaTextAdapter } from '@tanstack/ai-ollama'
+import {
+	createOllamaChat,
+	type OllamaTextAdapter
+} from '@tanstack/ai-ollama'
 
 const DEFAULT_BASE_URL = 'http://localhost:11434'
 
@@ -18,7 +21,11 @@ const EMBED_TIMEOUT_MS = 60_000 // 60s — Ollama is local but can be slow on co
 const STRUCTURED_TIMEOUT_MS = 120_000 // 120s — LLM inference can be slow
 
 /** Race a promise against a timeout. */
-async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+async function withTimeout<T>(
+	promise: Promise<T>,
+	ms: number,
+	message: string
+): Promise<T> {
 	if (!Number.isFinite(ms) || ms <= 0) return promise
 	let timer: ReturnType<typeof setTimeout> | null = null
 	const timeout = new Promise<never>((_, reject) => {
@@ -31,7 +38,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, message: string):
 	}
 }
 
-async function withRetry<T>(fn: () => Promise<T>, caller: string): Promise<T> {
+async function withRetry<T>(
+	fn: () => Promise<T>,
+	caller: string
+): Promise<T> {
 	let lastError: Error | null = null
 	for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 		try {
@@ -41,17 +51,24 @@ async function withRetry<T>(fn: () => Promise<T>, caller: string): Promise<T> {
 				`Ollama ${caller} timed out after ${EMBED_TIMEOUT_MS / 1000}s`
 			)
 		} catch (err) {
-			lastError = err instanceof Error ? err : new Error(String(err))
+			lastError =
+				err instanceof Error ? err : new Error(String(err))
 		}
 		if (attempt < MAX_RETRIES) {
-			const delay = Math.round(BASE_DELAY_MS * Math.pow(2, attempt - 1) * (1 + Math.random() * 0.2))
+			const delay = Math.round(
+				BASE_DELAY_MS *
+					Math.pow(2, attempt - 1) *
+					(1 + Math.random() * 0.2)
+			)
 			console.warn(
 				`[ollama] ${caller} attempt ${attempt}/${MAX_RETRIES} failed, retrying in ${delay}ms: ${lastError?.message}`
 			)
 			await Bun.sleep(delay)
 		}
 	}
-	console.error(`[ollama] ${caller}: all ${MAX_RETRIES} attempts failed: ${lastError?.message}`)
+	console.error(
+		`[ollama] ${caller}: all ${MAX_RETRIES} attempts failed: ${lastError?.message}`
+	)
 	throw lastError!
 }
 
@@ -75,9 +92,12 @@ export function ollamaAdapter(
 	baseUrl: string = DEFAULT_BASE_URL
 ): OllamaTextAdapter<string> {
 	const adapter = createOllamaChat(model, baseUrl)
-	const origStructuredOutput = adapter.structuredOutput.bind(adapter)
+	const origStructuredOutput =
+		adapter.structuredOutput.bind(adapter)
 
-	adapter.structuredOutput = async (options: Parameters<typeof adapter.structuredOutput>[0]) => {
+	adapter.structuredOutput = async (
+		options: Parameters<typeof adapter.structuredOutput>[0]
+	) => {
 		return withTimeout(
 			origStructuredOutput(options),
 			STRUCTURED_TIMEOUT_MS,
@@ -120,10 +140,13 @@ export function ollamaEmbed(
 
 			if (!response.ok) {
 				const body = await response.text()
-				throw new Error(`Ollama embed failed (${response.status}): ${body}`)
+				throw new Error(
+					`Ollama embed failed (${response.status}): ${body}`
+				)
 			}
 
-			const data = (await response.json()) as OllamaEmbedResponse
+			const data =
+				(await response.json()) as OllamaEmbedResponse
 			if (!data.embeddings?.[0]) {
 				throw new Error('Ollama returned no embeddings')
 			}
@@ -159,10 +182,13 @@ export function ollamaEmbedBatch(
 
 			if (!response.ok) {
 				const body = await response.text()
-				throw new Error(`Ollama embed batch failed (${response.status}): ${body}`)
+				throw new Error(
+					`Ollama embed batch failed (${response.status}): ${body}`
+				)
 			}
 
-			const data = (await response.json()) as OllamaEmbedResponse
+			const data =
+				(await response.json()) as OllamaEmbedResponse
 			if (data.embeddings.length !== texts.length) {
 				throw new Error(
 					`Embedding count mismatch: expected ${texts.length}, got ${data.embeddings.length}`

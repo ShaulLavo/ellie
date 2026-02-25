@@ -3,7 +3,9 @@
 ## Plugin = Decoupled Elysia Instance
 
 ```ts
-const plugin = new Elysia().decorate('plugin', 'hi').get('/plugin', ({ plugin }) => plugin)
+const plugin = new Elysia()
+	.decorate('plugin', 'hi')
+	.get('/plugin', ({ plugin }) => plugin)
 
 const app = new Elysia()
 	.use(plugin) // inherit properties
@@ -21,7 +23,9 @@ Each instance runs independently like microservice. **Must explicitly declare de
 const auth = new Elysia().decorate('Auth', Auth)
 
 // ❌ Missing dependency
-const main = new Elysia().get('/', ({ Auth }) => Auth.getProfile())
+const main = new Elysia().get('/', ({ Auth }) =>
+	Auth.getProfile()
+)
 
 // ✅ Declare dependency
 const main = new Elysia()
@@ -69,11 +73,15 @@ const profile = new Elysia()
 	.onBeforeHandle(({ cookie }) => throwIfNotSignIn(cookie))
 	.get('/profile', () => 'Hi')
 
-const app = new Elysia().use(profile).patch('/rename', ({ body }) => updateProfile(body)) // No sign-in check
+const app = new Elysia()
+	.use(profile)
+	.patch('/rename', ({ body }) => updateProfile(body)) // No sign-in check
 
 // ✅ Exported to app
 const profile = new Elysia()
-	.onBeforeHandle({ as: 'global' }, ({ cookie }) => throwIfNotSignIn(cookie))
+	.onBeforeHandle({ as: 'global' }, ({ cookie }) =>
+		throwIfNotSignIn(cookie)
+	)
 	.get('/profile', () => 'Hi')
 ```
 
@@ -104,7 +112,8 @@ const app = new Elysia().use(version(1))
 
 ```ts
 // Harder to handle scope/encapsulation
-const plugin = (app: Elysia) => app.state('counter', 0).get('/plugin', () => 'Hi')
+const plugin = (app: Elysia) =>
+	app.state('counter', 0).get('/plugin', () => 'Hi')
 
 // Prefer new instance (better type inference, no perf diff)
 ```

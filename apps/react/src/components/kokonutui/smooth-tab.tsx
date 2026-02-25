@@ -10,14 +10,22 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { AnimatePresence, motion, type Variants, type Transition } from 'motion/react'
+import {
+	AnimatePresence,
+	motion,
+	type Variants,
+	type Transition
+} from 'motion/react'
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 interface TabItem {
 	id: string
 	title: string
-	icon?: React.ComponentType<{ size?: number; className?: string }>
+	icon?: React.ComponentType<{
+		size?: number
+		className?: string
+	}>
 	content?: React.ReactNode
 	cardContent?: React.ReactNode
 	color: string
@@ -293,23 +301,31 @@ export default function SmoothTab({
 	activeColor = 'bg-[#1F9CFE]',
 	onChange
 }: SmoothTabProps) {
-	const [selected, setSelected] = React.useState<string>(defaultTabId)
+	const [selected, setSelected] =
+		React.useState<string>(defaultTabId)
 	const [direction, setDirection] = React.useState(0)
-	const [dimensions, setDimensions] = React.useState({ width: 0, left: 0 })
+	const [dimensions, setDimensions] = React.useState({
+		width: 0,
+		left: 0
+	})
 
 	// Reference for the selected button
-	const buttonRefs = React.useRef<Map<string, HTMLButtonElement>>(new Map())
+	const buttonRefs = React.useRef<
+		Map<string, HTMLButtonElement>
+	>(new Map())
 	const containerRef = React.useRef<HTMLDivElement>(null)
 
 	// Update dimensions whenever selected tab changes or on mount
 	React.useLayoutEffect(() => {
 		const updateDimensions = () => {
-			const selectedButton = buttonRefs.current.get(selected)
+			const selectedButton =
+				buttonRefs.current.get(selected)
 			const container = containerRef.current
 
 			if (selectedButton && container) {
 				const rect = selectedButton.getBoundingClientRect()
-				const containerRect = container.getBoundingClientRect()
+				const containerRect =
+					container.getBoundingClientRect()
 
 				setDimensions({
 					width: rect.width,
@@ -325,25 +341,35 @@ export default function SmoothTab({
 
 		// Update on resize
 		window.addEventListener('resize', updateDimensions)
-		return () => window.removeEventListener('resize', updateDimensions)
+		return () =>
+			window.removeEventListener('resize', updateDimensions)
 	}, [selected])
 
 	const handleTabClick = (tabId: string) => {
-		const currentIndex = items.findIndex(item => item.id === selected)
-		const newIndex = items.findIndex(item => item.id === tabId)
+		const currentIndex = items.findIndex(
+			item => item.id === selected
+		)
+		const newIndex = items.findIndex(
+			item => item.id === tabId
+		)
 		setDirection(newIndex > currentIndex ? 1 : -1)
 		setSelected(tabId)
 		onChange?.(tabId)
 	}
 
-	const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, tabId: string) => {
+	const handleKeyDown = (
+		e: React.KeyboardEvent<HTMLButtonElement>,
+		tabId: string
+	) => {
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault()
 			handleTabClick(tabId)
 		}
 	}
 
-	const selectedItem = items.find(item => item.id === selected)
+	const selectedItem = items.find(
+		item => item.id === selected
+	)
 
 	return (
 		<div className="flex h-full flex-col">
@@ -351,7 +377,11 @@ export default function SmoothTab({
 			<div className="relative mb-4 flex-1">
 				<div className="relative h-[200px] w-full rounded-lg border bg-card">
 					<div className="absolute inset-0 overflow-hidden rounded-lg">
-						<AnimatePresence custom={direction} initial={false} mode="popLayout">
+						<AnimatePresence
+							custom={direction}
+							initial={false}
+							mode="popLayout"
+						>
 							<motion.div
 								animate="center"
 								className="absolute inset-0 h-full w-full bg-card will-change-transform"
@@ -363,8 +393,12 @@ export default function SmoothTab({
 									backfaceVisibility: 'hidden',
 									WebkitBackfaceVisibility: 'hidden'
 								}}
-								transition={transition as unknown as Transition}
-								variants={slideVariants as unknown as Variants}
+								transition={
+									transition as unknown as Transition
+								}
+								variants={
+									slideVariants as unknown as Variants
+								}
 							>
 								{selectedItem?.cardContent}
 							</motion.div>
@@ -393,7 +427,10 @@ export default function SmoothTab({
 						x: dimensions.left + 4,
 						opacity: 1
 					}}
-					className={cn('absolute z-1 rounded-lg', selectedItem?.color || activeColor)}
+					className={cn(
+						'absolute z-1 rounded-lg',
+						selectedItem?.color || activeColor
+					)}
 					initial={false}
 					style={{ height: 'calc(100% - 8px)', top: '4px' }}
 					transition={{
@@ -424,14 +461,17 @@ export default function SmoothTab({
 								onClick={() => handleTabClick(item.id)}
 								onKeyDown={e => handleKeyDown(e, item.id)}
 								ref={el => {
-									if (el) buttonRefs.current.set(item.id, el)
+									if (el)
+										buttonRefs.current.set(item.id, el)
 									else buttonRefs.current.delete(item.id)
 								}}
 								role="tab"
 								tabIndex={isSelected ? 0 : -1}
 								type="button"
 							>
-								<span className="truncate">{item.title}</span>
+								<span className="truncate">
+									{item.title}
+								</span>
 							</motion.button>
 						)
 					})}

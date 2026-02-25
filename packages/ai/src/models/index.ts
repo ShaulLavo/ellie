@@ -13,7 +13,10 @@ for (const [provider, models] of Object.entries(MODELS)) {
 }
 
 /** Get a specific model by provider and model ID. */
-export function getModel(provider: ProviderName, modelId: string): Model | undefined {
+export function getModel(
+	provider: ProviderName,
+	modelId: string
+): Model | undefined {
 	return registry.get(provider)?.get(modelId)
 }
 
@@ -29,7 +32,9 @@ export function getProviders(): ProviderName[] {
 }
 
 /** Find a model by ID across all providers. */
-export function findModel(modelId: string): Model | undefined {
+export function findModel(
+	modelId: string
+): Model | undefined {
 	for (const models of registry.values()) {
 		const model = models.get(modelId)
 		if (model) return model
@@ -38,7 +43,10 @@ export function findModel(modelId: string): Model | undefined {
 }
 
 /** Check if two models are the same (matching id and provider). */
-export function modelsAreEqual(a: Model | null | undefined, b: Model | null | undefined): boolean {
+export function modelsAreEqual(
+	a: Model | null | undefined,
+	b: Model | null | undefined
+): boolean {
 	if (!a || !b) return false
 	return a.id === b.id && a.provider === b.provider
 }

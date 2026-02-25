@@ -72,12 +72,19 @@ export interface MetaPath {
 // ── Configuration ──────────────────────────────────────────────────────────
 
 /** User-provided embedding function: text → float array */
-export type EmbedFunction = (text: string) => Promise<number[]>
+export type EmbedFunction = (
+	text: string
+) => Promise<number[]>
 /** Optional user-provided embedding batch function: texts → float arrays */
-export type EmbedBatchFunction = (texts: string[]) => Promise<number[][]>
+export type EmbedBatchFunction = (
+	texts: string[]
+) => Promise<number[][]>
 
 /** User-provided reranking function: (query, documents) → relevance scores (higher = more relevant) */
-export type RerankFunction = (query: string, documents: string[]) => Promise<number[]>
+export type RerankFunction = (
+	query: string,
+	documents: string[]
+) => Promise<number[]>
 
 /** Configuration for creating a Hindsight instance */
 export interface HindsightConfig {
@@ -124,7 +131,13 @@ export interface HindsightConfig {
 
 /** Trace emitted after each core operation completes */
 export interface HindsightTrace {
-	operation: 'retain' | 'recall' | 'reflect' | 'consolidate' | 'list_episodes' | 'narrative'
+	operation:
+		| 'retain'
+		| 'recall'
+		| 'reflect'
+		| 'consolidate'
+		| 'list_episodes'
+		| 'narrative'
 	bankId: string
 	startedAt: number
 	duration: number
@@ -163,11 +176,17 @@ export interface HindsightExtensions {
 	/** Optional tenant resolver. Defaults to the bankId when not provided. */
 	resolveTenantId?: (bankId: string) => string | undefined
 	/** Optional auth hook called before operations run. */
-	authorize?: (context: HindsightOperationContext) => void | Promise<void>
+	authorize?: (
+		context: HindsightOperationContext
+	) => void | Promise<void>
 	/** Optional validator hook called before operations run. */
-	validate?: (context: HindsightOperationContext) => void | Promise<void>
+	validate?: (
+		context: HindsightOperationContext
+	) => void | Promise<void>
 	/** Optional completion hook called after operation success/failure. */
-	onComplete?: (context: HindsightOperationResultContext) => void | Promise<void>
+	onComplete?: (
+		context: HindsightOperationResultContext
+	) => void | Promise<void>
 }
 
 // ── Operation options ──────────────────────────────────────────────────────
@@ -217,7 +236,10 @@ export interface RetainOptions {
 }
 
 /** Options for retainBatch() */
-export interface RetainBatchOptions extends Omit<RetainOptions, 'facts'> {}
+export interface RetainBatchOptions extends Omit<
+	RetainOptions,
+	'facts'
+> {}
 
 /** Rich retain-batch item. */
 export interface RetainBatchItem {
@@ -254,7 +276,9 @@ export interface RecallOptions {
 	/** Time range filter (epoch ms) */
 	timeRange?: { from?: number; to?: number }
 	/** Which retrieval methods to use. Default: all */
-	methods?: Array<'semantic' | 'fulltext' | 'graph' | 'temporal'>
+	methods?: Array<
+		'semantic' | 'fulltext' | 'graph' | 'temporal'
+	>
 	/** Filter by tags */
 	tags?: string[]
 	/** Tag matching mode. Default: "any" */
@@ -281,7 +305,11 @@ export interface RecallOptions {
 	 */
 	tokenBudget?: number
 	/** Phase 3: Scope filter for preventing cross-project memory bleed. */
-	scope?: { profile?: string; project?: string; session?: string }
+	scope?: {
+		profile?: string
+		project?: string
+		session?: string
+	}
 	/** Phase 3: Scope matching mode. "strict" = same profile+project (default). "broad" = no scope filter. */
 	scopeMode?: 'strict' | 'broad'
 }
@@ -307,7 +335,8 @@ export interface ReflectOptions {
 // ── Results ────────────────────────────────────────────────────────────────
 
 /** Result from retainBatch(): one RetainResult per input content item */
-export type RetainBatchResult = import('./schemas').RetainResult[]
+export type RetainBatchResult =
+	import('./schemas').RetainResult[]
 
 /** Result from recall() */
 export interface RecallResult {
@@ -357,7 +386,9 @@ export interface RecallTraceMethodResult {
 export interface RecallTraceCandidate {
 	id: string
 	rank: number
-	sources: Array<'semantic' | 'fulltext' | 'graph' | 'temporal'>
+	sources: Array<
+		'semantic' | 'fulltext' | 'graph' | 'temporal'
+	>
 	rrfScore: number
 	crossEncoderScoreNormalized: number
 	rrfNormalized: number
@@ -475,11 +506,22 @@ export interface ListTagsResult {
 
 // ── Async Operations ─────────────────────────────────────────────────────
 
-export type AsyncOperationType = 'retain' | 'consolidation' | 'refresh_mental_model'
+export type AsyncOperationType =
+	| 'retain'
+	| 'consolidation'
+	| 'refresh_mental_model'
 
-export type AsyncOperationStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type AsyncOperationStatus =
+	| 'pending'
+	| 'processing'
+	| 'completed'
+	| 'failed'
 
-export type AsyncOperationApiStatus = 'pending' | 'completed' | 'failed' | 'not_found'
+export type AsyncOperationApiStatus =
+	| 'pending'
+	| 'completed'
+	| 'failed'
+	| 'not_found'
 
 export interface AsyncOperationSummary {
 	id: string
@@ -560,7 +602,12 @@ export interface ConsolidateResult {
 /** A single LLM-decided consolidation action */
 export type ConsolidationAction =
 	| { action: 'create'; text: string; reason: string }
-	| { action: 'update'; observationId: string; text: string; reason: string }
+	| {
+			action: 'update'
+			observationId: string
+			text: string
+			reason: string
+	  }
 	| {
 			action: 'merge'
 			observationIds: string[]
@@ -697,7 +744,10 @@ export interface RawFactSearchResult {
 // ── Reconsolidation Routing ─────────────────────────────────────────────
 
 /** Route decision for ingest-time reconsolidation. */
-export type ReconRoute = 'reinforce' | 'reconsolidate' | 'new_trace'
+export type ReconRoute =
+	| 'reinforce'
+	| 'reconsolidate'
+	| 'new_trace'
 /** Alias for ReconRoute; prefer ReconRoute in new code. */
 export type RetainRoute = ReconRoute
 
@@ -716,7 +766,11 @@ export interface RouteDecision {
 
 // ── Episodes ────────────────────────────────────────────────────────────
 
-export type EpisodeBoundaryReason = 'time_gap' | 'scope_change' | 'phrase_boundary' | 'initial'
+export type EpisodeBoundaryReason =
+	| 'time_gap'
+	| 'scope_change'
+	| 'phrase_boundary'
+	| 'initial'
 
 export interface EpisodeSummary {
 	episodeId: string

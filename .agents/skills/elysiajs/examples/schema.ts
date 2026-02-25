@@ -25,20 +25,24 @@ const app = new Elysia()
 		})
 	})
 	// Strictly validate query, params, and body
-	.get('/query/:id', ({ query: { name }, params }) => name, {
-		query: t.Object({
-			name: t.String()
-		}),
-		params: t.Object({
-			id: t.String()
-		}),
-		response: {
-			200: t.String(),
-			300: t.Object({
-				error: t.String()
-			})
+	.get(
+		'/query/:id',
+		({ query: { name }, params }) => name,
+		{
+			query: t.Object({
+				name: t.String()
+			}),
+			params: t.Object({
+				id: t.String()
+			}),
+			response: {
+				200: t.String(),
+				300: t.Object({
+					error: t.String()
+				})
+			}
 		}
-	})
+	)
 	.guard(
 		{
 			headers: 'authorization'
@@ -49,13 +53,17 @@ const app = new Elysia()
 					userId: headers.authorization
 				}))
 				.get('/', ({ userId }) => 'A')
-				.post('/id/:id', ({ query, body, params, userId }) => body, {
-					params: t.Object({
-						id: t.Number()
-					}),
-					transform({ params }) {
-						params.id = +params.id
+				.post(
+					'/id/:id',
+					({ query, body, params, userId }) => body,
+					{
+						params: t.Object({
+							id: t.Number()
+						}),
+						transform({ params }) {
+							params.id = +params.id
+						}
 					}
-				})
+				)
 	)
 	.listen(3000)

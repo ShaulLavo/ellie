@@ -60,17 +60,34 @@ const usageSchema = v.object({
 
 export const userMessageSchema = v.object({
 	role: v.literal('user'),
-	content: v.array(v.variant('type', [textContentSchema, imageContentSchema])),
+	content: v.array(
+		v.variant('type', [
+			textContentSchema,
+			imageContentSchema
+		])
+	),
 	timestamp: v.number()
 })
 
 export const assistantMessageSchema = v.object({
 	role: v.literal('assistant'),
-	content: v.array(v.variant('type', [textContentSchema, thinkingContentSchema, toolCallSchema])),
+	content: v.array(
+		v.variant('type', [
+			textContentSchema,
+			thinkingContentSchema,
+			toolCallSchema
+		])
+	),
 	provider: v.string(),
 	model: v.string(),
 	usage: usageSchema,
-	stopReason: v.picklist(['stop', 'length', 'toolUse', 'error', 'aborted']),
+	stopReason: v.picklist([
+		'stop',
+		'length',
+		'toolUse',
+		'error',
+		'aborted'
+	]),
 	errorMessage: v.optional(v.string()),
 	timestamp: v.number()
 })
@@ -79,7 +96,12 @@ export const toolResultMessageSchema = v.object({
 	role: v.literal('toolResult'),
 	toolCallId: v.string(),
 	toolName: v.string(),
-	content: v.array(v.variant('type', [textContentSchema, imageContentSchema])),
+	content: v.array(
+		v.variant('type', [
+			textContentSchema,
+			imageContentSchema
+		])
+	),
 	details: v.optional(v.unknown()),
 	isError: v.boolean(),
 	timestamp: v.number()
@@ -97,10 +119,18 @@ export const agentMessageSchema = v.variant('role', [
 
 // ── Inferred types (canonical message types for cross-package use) ──────────
 
-export type UserMessage = v.InferOutput<typeof userMessageSchema>
-export type AssistantMessage = v.InferOutput<typeof assistantMessageSchema>
-export type ToolResultMessage = v.InferOutput<typeof toolResultMessageSchema>
-export type AgentMessage = v.InferOutput<typeof agentMessageSchema>
+export type UserMessage = v.InferOutput<
+	typeof userMessageSchema
+>
+export type AssistantMessage = v.InferOutput<
+	typeof assistantMessageSchema
+>
+export type ToolResultMessage = v.InferOutput<
+	typeof toolResultMessageSchema
+>
+export type AgentMessage = v.InferOutput<
+	typeof agentMessageSchema
+>
 
 // ============================================================================
 // Agent action procedure schemas
@@ -109,53 +139,73 @@ export type AgentMessage = v.InferOutput<typeof agentMessageSchema>
 export const agentPromptInputSchema = v.object({
 	message: v.string()
 })
-export type AgentPromptInput = v.InferOutput<typeof agentPromptInputSchema>
+export type AgentPromptInput = v.InferOutput<
+	typeof agentPromptInputSchema
+>
 
 export const agentPromptOutputSchema = v.object({
 	runId: v.string(),
 	sessionId: v.string(),
 	status: v.literal('started')
 })
-export type AgentPromptOutput = v.InferOutput<typeof agentPromptOutputSchema>
+export type AgentPromptOutput = v.InferOutput<
+	typeof agentPromptOutputSchema
+>
 
 export const agentSteerInputSchema = v.object({
 	message: v.string()
 })
-export type AgentSteerInput = v.InferOutput<typeof agentSteerInputSchema>
+export type AgentSteerInput = v.InferOutput<
+	typeof agentSteerInputSchema
+>
 
 export const agentSteerOutputSchema = v.object({
 	status: v.literal('queued')
 })
-export type AgentSteerOutput = v.InferOutput<typeof agentSteerOutputSchema>
+export type AgentSteerOutput = v.InferOutput<
+	typeof agentSteerOutputSchema
+>
 
 export const agentAbortInputSchema = v.undefined_()
-export type AgentAbortInput = v.InferOutput<typeof agentAbortInputSchema>
+export type AgentAbortInput = v.InferOutput<
+	typeof agentAbortInputSchema
+>
 
 export const agentAbortOutputSchema = v.object({
 	status: v.literal('aborted')
 })
-export type AgentAbortOutput = v.InferOutput<typeof agentAbortOutputSchema>
+export type AgentAbortOutput = v.InferOutput<
+	typeof agentAbortOutputSchema
+>
 
 export const agentHistoryInputSchema = v.undefined_()
-export type AgentHistoryInput = v.InferOutput<typeof agentHistoryInputSchema>
+export type AgentHistoryInput = v.InferOutput<
+	typeof agentHistoryInputSchema
+>
 
 export const agentHistoryOutputSchema = v.object({
 	messages: v.array(agentMessageSchema)
 })
-export type AgentHistoryOutput = v.InferOutput<typeof agentHistoryOutputSchema>
+export type AgentHistoryOutput = v.InferOutput<
+	typeof agentHistoryOutputSchema
+>
 
 // ============================================================================
 // Agent event schemas
 // ============================================================================
 
-const agentStartEventSchema = v.object({ type: v.literal('agent_start') })
+const agentStartEventSchema = v.object({
+	type: v.literal('agent_start')
+})
 
 const agentEndEventSchema = v.object({
 	type: v.literal('agent_end'),
 	messages: v.array(agentMessageSchema)
 })
 
-const turnStartEventSchema = v.object({ type: v.literal('turn_start') })
+const turnStartEventSchema = v.object({
+	type: v.literal('turn_start')
+})
 
 const turnEndEventSchema = v.object({
 	type: v.literal('turn_end'),
@@ -170,21 +220,36 @@ const messageStartEventSchema = v.object({
 
 // Stream event sub-schemas for message_update
 const assistantStreamEventSchema = v.variant('type', [
-	v.object({ type: v.literal('text_start'), contentIndex: v.number() }),
+	v.object({
+		type: v.literal('text_start'),
+		contentIndex: v.number()
+	}),
 	v.object({
 		type: v.literal('text_delta'),
 		contentIndex: v.number(),
 		delta: v.string()
 	}),
-	v.object({ type: v.literal('text_end'), contentIndex: v.number() }),
-	v.object({ type: v.literal('thinking_start'), contentIndex: v.number() }),
+	v.object({
+		type: v.literal('text_end'),
+		contentIndex: v.number()
+	}),
+	v.object({
+		type: v.literal('thinking_start'),
+		contentIndex: v.number()
+	}),
 	v.object({
 		type: v.literal('thinking_delta'),
 		contentIndex: v.number(),
 		delta: v.string()
 	}),
-	v.object({ type: v.literal('thinking_end'), contentIndex: v.number() }),
-	v.object({ type: v.literal('toolcall_start'), contentIndex: v.number() }),
+	v.object({
+		type: v.literal('thinking_end'),
+		contentIndex: v.number()
+	}),
+	v.object({
+		type: v.literal('toolcall_start'),
+		contentIndex: v.number()
+	}),
 	v.object({
 		type: v.literal('toolcall_delta'),
 		contentIndex: v.number(),
@@ -209,7 +274,12 @@ const messageEndEventSchema = v.object({
 })
 
 const toolExecutionResultSchema = v.object({
-	content: v.array(v.variant('type', [textContentSchema, imageContentSchema])),
+	content: v.array(
+		v.variant('type', [
+			textContentSchema,
+			imageContentSchema
+		])
+	),
 	details: v.unknown()
 })
 

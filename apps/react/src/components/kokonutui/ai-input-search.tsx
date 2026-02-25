@@ -21,10 +21,11 @@ import { useAutoResizeTextarea } from '@/hooks/use-auto-resize-textarea'
 
 export default function AI_Input_Search() {
 	const [value, setValue] = useState('')
-	const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-		minHeight: 52,
-		maxHeight: 200
-	})
+	const { textareaRef, adjustHeight } =
+		useAutoResizeTextarea({
+			minHeight: 52,
+			maxHeight: 200
+		})
 	const [showSearch, setShowSearch] = useState(true)
 	const [isFocused, setIsFocused] = useState(false)
 
@@ -132,7 +133,11 @@ export default function AI_Input_Search() {
 									>
 										<GlobeIcon
 											size={16}
-											className={cn(showSearch ? 'text-sky-500' : 'text-inherit')}
+											className={cn(
+												showSearch
+													? 'text-sky-500'
+													: 'text-inherit'
+											)}
 										/>
 									</motion.div>
 								</div>

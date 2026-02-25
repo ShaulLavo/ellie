@@ -158,7 +158,10 @@ Auto-handles secret rotation. Old signature verification + new signature signing
 ```typescript
 new Elysia({
 	cookie: {
-		secrets: ['Vengeance will be mine', 'Fischl von Luftschloss Narfidort']
+		secrets: [
+			'Vengeance will be mine',
+			'Fischl von Luftschloss Narfidort'
+		]
 	}
 })
 ```

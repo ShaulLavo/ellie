@@ -48,7 +48,10 @@ function StaticContent() {
 import { useSWRMutation } from 'swr/mutation'
 
 function UpdateButton() {
-	const { trigger } = useSWRMutation('/api/user', updateUser)
+	const { trigger } = useSWRMutation(
+		'/api/user',
+		updateUser
+	)
 	return <button onClick={() => trigger()}>Update</button>
 }
 ```

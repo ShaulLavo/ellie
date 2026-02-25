@@ -3,7 +3,11 @@
 import * as React from 'react'
 import { RadioGroup as RadioGroupPrimitive } from '@base-ui-components/react/radio-group'
 import { Radio as RadioPrimitive } from '@base-ui-components/react/radio'
-import { AnimatePresence, motion, type HTMLMotionProps } from 'motion/react'
+import {
+	AnimatePresence,
+	motion,
+	type HTMLMotionProps
+} from 'motion/react'
 
 import { getStrictContext } from '@/lib/get-strict-context'
 import { useControlledState } from '@/hooks/use-controlled-state'
@@ -19,11 +23,16 @@ type RadioContextType = {
 }
 
 const [RadioGroupProvider, useRadioGroup] =
-	getStrictContext<RadioGroupContextType>('RadioGroupContext')
+	getStrictContext<RadioGroupContextType>(
+		'RadioGroupContext'
+	)
 
-const [RadioProvider, useRadio] = getStrictContext<RadioContextType>('RadioContext')
+const [RadioProvider, useRadio] =
+	getStrictContext<RadioContextType>('RadioContext')
 
-type RadioGroupProps = React.ComponentProps<typeof RadioGroupPrimitive>
+type RadioGroupProps = React.ComponentProps<
+	typeof RadioGroupPrimitive
+>
 
 function RadioGroup(props: RadioGroupProps) {
 	const [value, setValue] = useControlledState({
@@ -34,7 +43,11 @@ function RadioGroup(props: RadioGroupProps) {
 
 	return (
 		<RadioGroupProvider value={{ value, setValue }}>
-			<RadioGroupPrimitive data-slot="radio-group" {...props} onValueChange={setValue} />
+			<RadioGroupPrimitive
+				data-slot="radio-group"
+				{...props}
+				onValueChange={setValue}
+			/>
 		</RadioGroupProvider>
 	)
 }
@@ -46,7 +59,11 @@ type RadioIndicatorProps = Omit<
 	HTMLMotionProps<'div'>
 
 function RadioIndicator({
-	transition = { type: 'spring', stiffness: 200, damping: 16 },
+	transition = {
+		type: 'spring',
+		stiffness: 200,
+		damping: 16
+	},
 	...props
 }: RadioIndicatorProps) {
 	const { isChecked } = useRadio()
@@ -74,12 +91,22 @@ function RadioIndicator({
 	)
 }
 
-type RadioProps = Omit<React.ComponentProps<typeof RadioPrimitive.Root>, 'asChild'> &
+type RadioProps = Omit<
+	React.ComponentProps<typeof RadioPrimitive.Root>,
+	'asChild'
+> &
 	HTMLMotionProps<'button'>
 
-function Radio({ value: valueProps, disabled, required, ...props }: RadioProps) {
+function Radio({
+	value: valueProps,
+	disabled,
+	required,
+	...props
+}: RadioProps) {
 	const { value } = useRadioGroup()
-	const [isChecked, setIsChecked] = React.useState(value === valueProps)
+	const [isChecked, setIsChecked] = React.useState(
+		value === valueProps
+	)
 
 	React.useEffect(() => {
 		setIsChecked(value === valueProps)

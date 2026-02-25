@@ -12,7 +12,10 @@ Move `await` operations into the branches where they're actually used to avoid b
 **Incorrect (blocks both branches):**
 
 ```typescript
-async function handleRequest(userId: string, skipProcessing: boolean) {
+async function handleRequest(
+	userId: string,
+	skipProcessing: boolean
+) {
 	const userData = await fetchUserData(userId)
 
 	if (skipProcessing) {
@@ -28,7 +31,10 @@ async function handleRequest(userId: string, skipProcessing: boolean) {
 **Correct (only blocks when needed):**
 
 ```typescript
-async function handleRequest(userId: string, skipProcessing: boolean) {
+async function handleRequest(
+	userId: string,
+	skipProcessing: boolean
+) {
 	if (skipProcessing) {
 		// Returns immediately without waiting
 		return { skipped: true }
@@ -44,7 +50,10 @@ async function handleRequest(userId: string, skipProcessing: boolean) {
 
 ```typescript
 // Incorrect: always fetches permissions
-async function updateResource(resourceId: string, userId: string) {
+async function updateResource(
+	resourceId: string,
+	userId: string
+) {
 	const permissions = await fetchPermissions(userId)
 	const resource = await getResource(resourceId)
 
@@ -60,7 +69,10 @@ async function updateResource(resourceId: string, userId: string) {
 }
 
 // Correct: fetches only when needed
-async function updateResource(resourceId: string, userId: string) {
+async function updateResource(
+	resourceId: string,
+	userId: string
+) {
 	const resource = await getResource(resourceId)
 
 	if (!resource) {

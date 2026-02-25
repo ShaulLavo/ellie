@@ -76,12 +76,20 @@ function Page() {
 	)
 }
 
-function DataDisplay({ dataPromise }: { dataPromise: Promise<Data> }) {
+function DataDisplay({
+	dataPromise
+}: {
+	dataPromise: Promise<Data>
+}) {
 	const data = use(dataPromise) // Unwraps the promise
 	return <div>{data.content}</div>
 }
 
-function DataSummary({ dataPromise }: { dataPromise: Promise<Data> }) {
+function DataSummary({
+	dataPromise
+}: {
+	dataPromise: Promise<Data>
+}) {
 	const data = use(dataPromise) // Reuses the same promise
 	return <div>{data.summary}</div>
 }

@@ -36,7 +36,10 @@ Variables available at runtime but NOT included in hash. **Use with caution** - 
 {
 	"tasks": {
 		"deploy": {
-			"passThroughEnv": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+			"passThroughEnv": [
+				"AWS_ACCESS_KEY_ID",
+				"AWS_SECRET_ACCESS_KEY"
+			]
 		}
 	}
 }

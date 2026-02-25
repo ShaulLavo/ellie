@@ -5,11 +5,26 @@
  * Integration tests.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 import { searchGraph } from '../retrieval/graph'
-import { EdgeCache, mpfpTraverseAsync, rrfFusion, type EdgesByType } from '../retrieval/mpfp'
+import {
+	EdgeCache,
+	mpfpTraverseAsync,
+	rrfFusion,
+	type EdgesByType
+} from '../retrieval/mpfp'
 import type { HindsightDatabase } from '../db'
 import type { EmbeddingStore } from '../embedding'
 
@@ -48,12 +63,18 @@ describe('Retrieval methods', () => {
 				consolidate: false
 			})
 
-			const result = await t.hs.recall(bankId, 'outdoor activities', {
-				methods: ['semantic']
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'outdoor activities',
+				{
+					methods: ['semantic']
+				}
+			)
 
 			expect(result.memories.length).toBeGreaterThan(0)
-			expect(result.memories[0]!.sources).toContain('semantic')
+			expect(result.memories[0]!.sources).toContain(
+				'semantic'
+			)
 		})
 	})
 
@@ -63,24 +84,37 @@ describe('Retrieval methods', () => {
 		it('finds memories by keyword match', async () => {
 			await t.hs.retain(bankId, 'test', {
 				facts: [
-					{ content: 'Python is a versatile programming language' },
+					{
+						content:
+							'Python is a versatile programming language'
+					},
 					{ content: 'The weather is nice today' }
 				],
 				consolidate: false
 			})
 
-			const result = await t.hs.recall(bankId, 'Python programming', {
-				methods: ['fulltext']
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'Python programming',
+				{
+					methods: ['fulltext']
+				}
+			)
 
 			expect(result.memories.length).toBeGreaterThan(0)
-			expect(result.memories[0]!.memory.content).toContain('Python')
-			expect(result.memories[0]!.sources).toContain('fulltext')
+			expect(result.memories[0]!.memory.content).toContain(
+				'Python'
+			)
+			expect(result.memories[0]!.sources).toContain(
+				'fulltext'
+			)
 		})
 
 		it('handles porter stemming (run/running/runs)', async () => {
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Peter was running through the park' }],
+				facts: [
+					{ content: 'Peter was running through the park' }
+				],
 				consolidate: false
 			})
 
@@ -90,7 +124,9 @@ describe('Retrieval methods', () => {
 
 			// FTS5 with porter tokenizer should match "running" with "run"
 			expect(result.memories.length).toBeGreaterThan(0)
-			expect(result.memories[0]!.memory.content).toContain('running')
+			expect(result.memories[0]!.memory.content).toContain(
+				'running'
+			)
 		})
 	})
 
@@ -100,23 +136,42 @@ describe('Retrieval methods', () => {
 		it('finds memories via shared entities', async () => {
 			const retained = await t.hs.retain(bankId, 'test', {
 				facts: [
-					{ content: 'Peter works at Acme Corp', entities: ['Peter', 'Acme Corp'] },
-					{ content: 'Peter loves hiking', entities: ['Peter'] }
+					{
+						content: 'Peter works at Acme Corp',
+						entities: ['Peter', 'Acme Corp']
+					},
+					{
+						content: 'Peter loves hiking',
+						entities: ['Peter']
+					}
 				],
 				consolidate: false
 			})
 
-			const acmeFact = retained.memories.find(m => m.content.includes('Acme Corp'))!
-			const hikingFact = retained.memories.find(m => m.content.includes('hiking'))!
+			const acmeFact = retained.memories.find(m =>
+				m.content.includes('Acme Corp')
+			)!
+			const hikingFact = retained.memories.find(m =>
+				m.content.includes('hiking')
+			)!
 
 			// Seed from "Peter works at Acme Corp" → entity "Peter" links to "Peter loves hiking"
 			const { hdb, memoryVec } = getInternals(t.hs)
-			const graphResults = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				seedMemoryIds: [acmeFact.id]
-			})
+			const graphResults = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					seedMemoryIds: [acmeFact.id]
+				}
+			)
 
 			expect(graphResults.length).toBeGreaterThan(0)
-			expect(graphResults.some(r => r.id === hikingFact.id)).toBe(true)
+			expect(
+				graphResults.some(r => r.id === hikingFact.id)
+			).toBe(true)
 		})
 
 		it('expands directional causal links from seed memories', async () => {
@@ -124,7 +179,8 @@ describe('Retrieval methods', () => {
 				JSON.stringify({
 					facts: [
 						{
-							content: 'Heavy rain started in the afternoon',
+							content:
+								'Heavy rain started in the afternoon',
 							factType: 'world',
 							confidence: 1,
 							occurredStart: null,
@@ -141,29 +197,52 @@ describe('Retrieval methods', () => {
 							occurredEnd: null,
 							entities: [],
 							tags: [],
-							causalRelations: [{ targetIndex: 0, relationType: 'causes', strength: 0.9 }]
+							causalRelations: [
+								{
+									targetIndex: 0,
+									relationType: 'causes',
+									strength: 0.9
+								}
+							]
 						}
 					]
 				})
 			)
 
-			const retained = await t.hs.retain(bankId, 'storm report', {
-				consolidate: false
-			})
+			const retained = await t.hs.retain(
+				bankId,
+				'storm report',
+				{
+					consolidate: false
+				}
+			)
 
-			const cause = retained.memories.find(m => m.content.includes('Heavy rain'))
-			const effect = retained.memories.find(m => m.content.includes('muddy'))
+			const cause = retained.memories.find(m =>
+				m.content.includes('Heavy rain')
+			)
+			const effect = retained.memories.find(m =>
+				m.content.includes('muddy')
+			)
 
 			expect(cause).toBeDefined()
 			expect(effect).toBeDefined()
 
 			const { hdb, memoryVec } = getInternals(t.hs)
-			const graphResults = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				factTypes: ['world'],
-				seedMemoryIds: [effect!.id]
-			})
+			const graphResults = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					factTypes: ['world'],
+					seedMemoryIds: [effect!.id]
+				}
+			)
 
-			expect(graphResults.some(r => r.id === cause!.id)).toBe(true)
+			expect(
+				graphResults.some(r => r.id === cause!.id)
+			).toBe(true)
 		})
 
 		it('applies entity frequency filtering', async () => {
@@ -188,22 +267,38 @@ describe('Retrieval methods', () => {
 				consolidate: false
 			})
 
-			const alice = retained.memories.find(m => m.content.includes('Alice'))
+			const alice = retained.memories.find(m =>
+				m.content.includes('Alice')
+			)
 			expect(alice).toBeDefined()
 
 			const { hdb, memoryVec } = getInternals(t.hs)
-			const strictResults = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				factTypes: ['world'],
-				seedMemoryIds: [alice!.id],
-				maxEntityFrequency: 1,
-				causalWeightThreshold: 1.1
-			})
-			const relaxedResults = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				factTypes: ['world'],
-				seedMemoryIds: [alice!.id],
-				maxEntityFrequency: 100,
-				causalWeightThreshold: 1.1
-			})
+			const strictResults = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					factTypes: ['world'],
+					seedMemoryIds: [alice!.id],
+					maxEntityFrequency: 1,
+					causalWeightThreshold: 1.1
+				}
+			)
+			const relaxedResults = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					factTypes: ['world'],
+					seedMemoryIds: [alice!.id],
+					maxEntityFrequency: 100,
+					causalWeightThreshold: 1.1
+				}
+			)
 
 			expect(strictResults).toHaveLength(0)
 			expect(relaxedResults.length).toBeGreaterThan(0)
@@ -211,7 +306,12 @@ describe('Retrieval methods', () => {
 
 		it('returns empty for unrelated entities', async () => {
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice enjoys reading', entities: ['Alice'] }],
+				facts: [
+					{
+						content: 'Alice enjoys reading',
+						entities: ['Alice']
+					}
+				],
 				consolidate: false
 			})
 
@@ -252,7 +352,9 @@ describe('Retrieval methods', () => {
 
 			// Should find the recent meeting, not the old conference
 			expect(result.memories.length).toBeGreaterThan(0)
-			expect(result.memories[0]!.sources).toContain('temporal')
+			expect(result.memories[0]!.sources).toContain(
+				'temporal'
+			)
 		})
 
 		it('returns empty when no memories in range', async () => {
@@ -289,23 +391,40 @@ describe('Retrieval methods', () => {
 						factType: 'world',
 						entities: ['Alice', 'TechCorp']
 					},
-					{ content: "Bob is Alice's manager", factType: 'world', entities: ['Bob', 'Alice'] }
+					{
+						content: "Bob is Alice's manager",
+						factType: 'world',
+						entities: ['Bob', 'Alice']
+					}
 				],
 				consolidate: false
 			})
 
-			const aliceFact = retained.memories.find(memory => memory.content.includes('TechCorp'))
-			const bobFact = retained.memories.find(memory => memory.content.includes('manager'))
+			const aliceFact = retained.memories.find(memory =>
+				memory.content.includes('TechCorp')
+			)
+			const bobFact = retained.memories.find(memory =>
+				memory.content.includes('manager')
+			)
 			expect(aliceFact).toBeDefined()
 			expect(bobFact).toBeDefined()
 
 			const { hdb, memoryVec } = getInternals(t.hs)
-			const results = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				factTypes: ['world'],
-				seedMemoryIds: [aliceFact!.id]
-			})
+			const results = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					factTypes: ['world'],
+					seedMemoryIds: [aliceFact!.id]
+				}
+			)
 
-			expect(results.some(hit => hit.id === bobFact!.id)).toBe(true)
+			expect(
+				results.some(hit => hit.id === bobFact!.id)
+			).toBe(true)
 		})
 
 		it('loads edges lazily — only fetches edges for frontier nodes actually reached', async () => {
@@ -320,7 +439,9 @@ describe('Retrieval methods', () => {
 			)
 
 			const loadedFrontiers: string[][] = []
-			const loadEdges = async (frontierNodeIds: string[]): Promise<EdgesByType> => {
+			const loadEdges = async (
+				frontierNodeIds: string[]
+			): Promise<EdgesByType> => {
 				loadedFrontiers.push([...frontierNodeIds])
 				return {
 					semantic: {
@@ -348,7 +469,12 @@ describe('Retrieval methods', () => {
 				return {}
 			}
 
-			const result = await mpfpTraverseAsync([], ['semantic'], loadEdges, cache)
+			const result = await mpfpTraverseAsync(
+				[],
+				['semantic'],
+				loadEdges,
+				cache
+			)
 
 			expect(result.scores).toEqual({})
 			expect(loadCalls).toBe(0)
@@ -391,9 +517,17 @@ describe('Retrieval methods', () => {
 				{ alpha: 0.15, threshold: 1e-9, topKNeighbors: 10 }
 			)
 
-			expect(result.scores['neighbor-1']).toBeGreaterThan(result.scores['neighbor-2'] ?? 0)
-			expect(result.scores['neighbor-1']).toBeCloseTo((1 - 0.15) * (0.8 / 1.2), 5)
-			expect(result.scores['neighbor-2']).toBeCloseTo((1 - 0.15) * (0.4 / 1.2), 5)
+			expect(result.scores['neighbor-1']).toBeGreaterThan(
+				result.scores['neighbor-2'] ?? 0
+			)
+			expect(result.scores['neighbor-1']).toBeCloseTo(
+				(1 - 0.15) * (0.8 / 1.2),
+				5
+			)
+			expect(result.scores['neighbor-2']).toBeCloseTo(
+				(1 - 0.15) * (0.4 / 1.2),
+				5
+			)
 		})
 
 		it('two-hop traversal propagates mass through intermediate nodes', async () => {
@@ -407,7 +541,9 @@ describe('Retrieval methods', () => {
 				['seed-1']
 			)
 
-			const loadEdges = async (frontierNodeIds: string[]): Promise<EdgesByType> => {
+			const loadEdges = async (
+				frontierNodeIds: string[]
+			): Promise<EdgesByType> => {
 				if (frontierNodeIds.includes('hop-1')) {
 					return {
 						semantic: {
@@ -449,10 +585,16 @@ describe('Retrieval methods', () => {
 				return {}
 			}
 
-			await mpfpTraverseAsync([{ nodeId: 'seed-1', score: 1 }], ['semantic'], loadEdges, cache, {
-				alpha: 0.15,
-				threshold: 1e-9
-			})
+			await mpfpTraverseAsync(
+				[{ nodeId: 'seed-1', score: 1 }],
+				['semantic'],
+				loadEdges,
+				cache,
+				{
+					alpha: 0.15,
+					threshold: 1e-9
+				}
+			)
 
 			expect(loadCalls).toBe(0)
 		})
@@ -512,7 +654,10 @@ describe('Retrieval methods', () => {
 					{
 						pattern: ['semantic'],
 						scores: Object.fromEntries(
-							Array.from({ length: 10 }, (_, i) => [`node-${i}`, 1 / (i + 1)])
+							Array.from({ length: 10 }, (_, i) => [
+								`node-${i}`,
+								1 / (i + 1)
+							])
 						)
 					}
 				],
@@ -588,29 +733,51 @@ describe('Retrieval methods', () => {
 					content: hdb.schema.memoryUnits.content
 				})
 				.from(hdb.schema.memoryUnits)
-				.where(eq(hdb.schema.memoryUnits.factType, 'observation'))
+				.where(
+					eq(hdb.schema.memoryUnits.factType, 'observation')
+				)
 				.all()
 
 			expect(observations.length).toBeGreaterThanOrEqual(2)
 
-			const aliceObs = observations.find(obs => obs.content.includes('Alice'))
-			const bobObs = observations.find(obs => obs.content.includes('Bob'))
+			const aliceObs = observations.find(obs =>
+				obs.content.includes('Alice')
+			)
+			const bobObs = observations.find(obs =>
+				obs.content.includes('Bob')
+			)
 			expect(aliceObs).toBeDefined()
 			expect(bobObs).toBeDefined()
 
-			const graphResults = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				factTypes: ['observation'],
-				seedMemoryIds: [aliceObs!.id]
-			})
+			const graphResults = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					factTypes: ['observation'],
+					seedMemoryIds: [aliceObs!.id]
+				}
+			)
 
-			expect(graphResults.some(r => r.id === bobObs!.id)).toBe(true)
+			expect(
+				graphResults.some(r => r.id === bobObs!.id)
+			).toBe(true)
 		})
 
 		it('uses fallback memory_links (semantic/temporal/entity) when primary expansion has no hits', async () => {
 			const retained = await t.hs.retain(bankId, 'test', {
 				facts: [
-					{ content: 'Quantum computing roadmap update', factType: 'world' },
-					{ content: 'Compiler optimization milestone reached', factType: 'world' }
+					{
+						content: 'Quantum computing roadmap update',
+						factType: 'world'
+					},
+					{
+						content:
+							'Compiler optimization milestone reached',
+						factType: 'world'
+					}
 				],
 				consolidate: false,
 				dedupThreshold: 0
@@ -634,26 +801,47 @@ describe('Retrieval methods', () => {
 				})
 				.run()
 
-			const graphResults = await searchGraph(hdb, memoryVec, bankId, 'ignored', 10, {
-				factTypes: ['world'],
-				seedMemoryIds: [source.id]
-			})
+			const graphResults = await searchGraph(
+				hdb,
+				memoryVec,
+				bankId,
+				'ignored',
+				10,
+				{
+					factTypes: ['world'],
+					seedMemoryIds: [source.id]
+				}
+			)
 
-			expect(graphResults.some(hit => hit.id === target.id)).toBe(true)
+			expect(
+				graphResults.some(hit => hit.id === target.id)
+			).toBe(true)
 		})
 
 		it('merges temporal seeds with semantic seeds', async () => {
 			const retained = await t.hs.retain(bankId, 'test', {
 				facts: [
-					{ content: 'Alice writes backend services', factType: 'world', entities: ['Alice'] },
-					{ content: 'Alice maintains deployment scripts', factType: 'world', entities: ['Alice'] }
+					{
+						content: 'Alice writes backend services',
+						factType: 'world',
+						entities: ['Alice']
+					},
+					{
+						content: 'Alice maintains deployment scripts',
+						factType: 'world',
+						entities: ['Alice']
+					}
 				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 
-			const first = retained.memories.find(memory => memory.content.includes('backend'))
-			const second = retained.memories.find(memory => memory.content.includes('deployment'))
+			const first = retained.memories.find(memory =>
+				memory.content.includes('backend')
+			)
+			const second = retained.memories.find(memory =>
+				memory.content.includes('deployment')
+			)
 			expect(first).toBeDefined()
 			expect(second).toBeDefined()
 
@@ -671,7 +859,9 @@ describe('Retrieval methods', () => {
 				}
 			)
 
-			expect(graphResults.some(hit => hit.id === second!.id)).toBe(true)
+			expect(
+				graphResults.some(hit => hit.id === second!.id)
+			).toBe(true)
 		})
 	})
 
@@ -681,15 +871,30 @@ describe('Retrieval methods', () => {
 		it('combines results from all methods', async () => {
 			await t.hs.retain(bankId, 'test', {
 				facts: [
-					{ content: 'Peter enjoys mountain hiking trails', entities: ['Peter'] },
-					{ content: 'Alice likes reading books', entities: ['Alice'] }
+					{
+						content: 'Peter enjoys mountain hiking trails',
+						entities: ['Peter']
+					},
+					{
+						content: 'Alice likes reading books',
+						entities: ['Alice']
+					}
 				],
 				consolidate: false
 			})
 
-			const result = await t.hs.recall(bankId, 'Peter hiking', {
-				methods: ['semantic', 'fulltext', 'graph', 'temporal']
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'Peter hiking',
+				{
+					methods: [
+						'semantic',
+						'fulltext',
+						'graph',
+						'temporal'
+					]
+				}
+			)
 
 			// Should return results — at least fulltext + graph should match "Peter hiking"
 			expect(result.memories.length).toBeGreaterThan(0)

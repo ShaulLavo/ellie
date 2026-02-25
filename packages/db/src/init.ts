@@ -11,8 +11,14 @@ export interface SQLiteManagerConfig {
 const EXT = process.platform === 'darwin' ? 'dylib' : 'so'
 
 const CUSTOM_LIB_PATHS = [
-	resolve(import.meta.dirname, `../vendor/libsqlite3-vec.${EXT}`), // committed
-	resolve(import.meta.dirname, `../dist/libsqlite3-vec.${EXT}`) // build output
+	resolve(
+		import.meta.dirname,
+		`../vendor/libsqlite3-vec.${EXT}`
+	), // committed
+	resolve(
+		import.meta.dirname,
+		`../dist/libsqlite3-vec.${EXT}`
+	) // build output
 ]
 
 /**
@@ -33,7 +39,9 @@ class SQLiteManager {
 	private readonly customLibPath: string | undefined
 
 	private constructor(config: SQLiteManagerConfig = {}) {
-		this.customLibPath = config.customLibPath ?? CUSTOM_LIB_PATHS.find(existsSync)
+		this.customLibPath =
+			config.customLibPath ??
+			CUSTOM_LIB_PATHS.find(existsSync)
 	}
 
 	static get instance(): SQLiteManager {
@@ -93,7 +101,9 @@ class SQLiteManager {
 	private verifyVec0(): boolean {
 		const db = new Database(':memory:')
 		try {
-			db.run('CREATE VIRTUAL TABLE _vec_probe USING vec0(id TEXT PRIMARY KEY, v float[4])')
+			db.run(
+				'CREATE VIRTUAL TABLE _vec_probe USING vec0(id TEXT PRIMARY KEY, v float[4])'
+			)
 			db.run('DROP TABLE _vec_probe')
 			return true
 		} catch {
@@ -112,7 +122,8 @@ class SQLiteManager {
 
 		if (this.needsLoadExtension) {
 			// require() was already verified to succeed in init()
-			const vec = require('sqlite-vec') as typeof import('sqlite-vec')
+			const vec =
+				require('sqlite-vec') as typeof import('sqlite-vec')
 			vec.load(db)
 		}
 

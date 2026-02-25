@@ -117,17 +117,29 @@ if (!result.success) {
 	// [] - No errors at root level
 
 	// Navigate nested errors with optional chaining (IMPORTANT!)
-	console.log(tree.properties?.user?.properties?.profile?.properties?.name?.errors)
+	console.log(
+		tree.properties?.user?.properties?.profile?.properties
+			?.name?.errors
+	)
 	// ["String must contain at least 1 character(s)"]
 
-	console.log(tree.properties?.user?.properties?.profile?.properties?.email?.errors)
+	console.log(
+		tree.properties?.user?.properties?.profile?.properties
+			?.email?.errors
+	)
 	// ["Invalid email"]
 
-	console.log(tree.properties?.user?.properties?.settings?.properties?.notifications?.errors)
+	console.log(
+		tree.properties?.user?.properties?.settings?.properties
+			?.notifications?.errors
+	)
 	// ["Expected boolean, received string"]
 
 	// Array errors use 'items' property
-	console.log(tree.properties?.posts?.items?.[0]?.properties?.content?.errors)
+	console.log(
+		tree.properties?.posts?.items?.[0]?.properties?.content
+			?.errors
+	)
 	// ["Expected string, received number"]
 }
 ```
@@ -239,7 +251,9 @@ const NameSchema = z.string({
 const EmailSchema = z.string().email({
 	error: issue => {
 		if (issue.code === 'invalid_string') {
-			return { message: 'Please provide a valid email address' }
+			return {
+				message: 'Please provide a valid email address'
+			}
 		}
 	}
 })
@@ -253,7 +267,9 @@ const AgeSchema = z.number().min(18, {
 const result = UserSchema.parse(data, {
 	error: issue => {
 		// Custom error logic for this specific parse
-		return { message: `Validation failed at ${issue.path.join('.')}` }
+		return {
+			message: `Validation failed at ${issue.path.join('.')}`
+		}
 	}
 })
 
@@ -310,7 +326,9 @@ z.string({
 			return { message: `Minimum length: ${issue.minimum}` }
 		}
 		if (issue.code === 'invalid_type') {
-			return { message: `Expected string, got ${issue.received}` }
+			return {
+				message: `Expected string, got ${issue.received}`
+			}
 		}
 		return undefined // Use default message
 	}
@@ -367,7 +385,9 @@ z.config({
 ```typescript
 const LoginSchema = z.object({
 	email: z.string().email('Invalid email address'),
-	password: z.string().min(8, 'Password must be at least 8 characters')
+	password: z
+		.string()
+		.min(8, 'Password must be at least 8 characters')
 })
 
 const result = LoginSchema.safeParse(formData)
@@ -430,8 +450,11 @@ if (!result.success) {
 	const tree = z.treeifyError(result.error)
 
 	// Access nested errors with optional chaining
-	const firstNameError = tree.properties?.personal?.properties?.firstName?.errors?.[0]
-	const emailError = tree.properties?.contact?.properties?.email?.errors?.[0]
+	const firstNameError =
+		tree.properties?.personal?.properties?.firstName
+			?.errors?.[0]
+	const emailError =
+		tree.properties?.contact?.properties?.email?.errors?.[0]
 
 	setFieldError('personal.firstName', firstNameError)
 	setFieldError('contact.email', emailError)

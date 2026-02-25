@@ -1,17 +1,39 @@
 import { forwardRef, useImperativeHandle } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const LayersIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const LayersIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = async () => {
-			await animate('.top-block', { x: -20 }, { duration: 0.4, ease: [0.4, 0, 0.2, 1] })
+			await animate(
+				'.top-block',
+				{ x: -20 },
+				{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }
+			)
 		}
 
 		const stop = async () => {
-			await animate('.top-block', { x: 0 }, { duration: 0.4, ease: [0.4, 0, 0.2, 1] })
+			await animate(
+				'.top-block',
+				{ x: 0 },
+				{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }
+			)
 		}
 
 		useImperativeHandle(ref, () => ({
@@ -53,7 +75,14 @@ const LayersIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 				/>
 
 				{/* Bottom block */}
-				<rect x="20" y="62" width="64" height="40" rx="12" fill={color} />
+				<rect
+					x="20"
+					y="62"
+					width="64"
+					height="40"
+					rx="12"
+					fill={color}
+				/>
 			</motion.svg>
 		)
 	}

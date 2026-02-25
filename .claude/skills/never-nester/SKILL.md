@@ -123,7 +123,11 @@ Never nest a ternary expression inside another ternary. If you need conditional 
 **Bad — nested ternary:**
 
 ```ts
-const label = isAdmin ? 'Admin' : isEditor ? 'Editor' : 'Viewer'
+const label = isAdmin
+	? 'Admin'
+	: isEditor
+		? 'Editor'
+		: 'Viewer'
 ```
 
 **Good — separate variables:**

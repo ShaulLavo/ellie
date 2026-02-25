@@ -6,14 +6,22 @@
  * for OAuth token authentication.
  */
 
-import { createAnthropicChat, type AnthropicChatModel } from '@tanstack/ai-anthropic'
+import {
+	createAnthropicChat,
+	type AnthropicChatModel
+} from '@tanstack/ai-anthropic'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import { loadProviderCredential, type OAuthCredential } from './credentials'
+import {
+	loadProviderCredential,
+	type OAuthCredential
+} from './credentials'
 
-const TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token'
+const TOKEN_URL =
+	'https://console.anthropic.com/v1/oauth/token'
 
 // Required beta header for OAuth token authentication
-const OAUTH_BETA_HEADER = 'claude-code-20250219,oauth-2025-04-20'
+const OAUTH_BETA_HEADER =
+	'claude-code-20250219,oauth-2025-04-20'
 
 /**
  * Create an Anthropic adapter using an OAuth access token.
@@ -28,13 +36,20 @@ const OAUTH_BETA_HEADER = 'claude-code-20250219,oauth-2025-04-20'
  * const adapter = anthropicOAuth("claude-haiku-4-5", accessToken)
  * ```
  */
-export function anthropicOAuth(model: string, accessToken: string): AnyTextAdapter {
-	return createAnthropicChat(model as AnthropicChatModel, '', {
-		authToken: accessToken,
-		defaultHeaders: {
-			'anthropic-beta': OAUTH_BETA_HEADER
-		}
-	} as Record<string, unknown>)
+export function anthropicOAuth(
+	model: string,
+	accessToken: string
+): AnyTextAdapter {
+	return createAnthropicChat(
+		model as AnthropicChatModel,
+		'',
+		{
+			authToken: accessToken,
+			defaultHeaders: {
+				'anthropic-beta': OAUTH_BETA_HEADER
+			}
+		} as Record<string, unknown>
+	)
 }
 
 /**
@@ -62,7 +77,10 @@ export async function anthropicFromCredentials(
 	credentialsPath: string,
 	name = 'anthropic'
 ): Promise<AnyTextAdapter | null> {
-	const cred = await loadProviderCredential(credentialsPath, name)
+	const cred = await loadProviderCredential(
+		credentialsPath,
+		name
+	)
 	if (!cred) return null
 
 	if (cred.type === 'oauth') {
@@ -70,7 +88,10 @@ export async function anthropicFromCredentials(
 	}
 
 	if (cred.type === 'api_key') {
-		return createAnthropicChat(model as AnthropicChatModel, cred.key)
+		return createAnthropicChat(
+			model as AnthropicChatModel,
+			cred.key
+		)
 	}
 
 	return null
@@ -84,7 +105,9 @@ export async function anthropicFromCredentials(
  *
  * Does NOT save to disk — caller is responsible for persisting.
  */
-export async function refreshOAuthToken(cred: OAuthCredential): Promise<OAuthCredential | null> {
+export async function refreshOAuthToken(
+	cred: OAuthCredential
+): Promise<OAuthCredential | null> {
 	try {
 		const res = await fetch(TOKEN_URL, {
 			method: 'POST',
@@ -98,7 +121,9 @@ export async function refreshOAuthToken(cred: OAuthCredential): Promise<OAuthCre
 
 		if (!res.ok) {
 			const body = await res.text().catch(() => '')
-			console.error(`[anthropic-oauth] refresh failed (${res.status}): ${body.slice(0, 200)}`)
+			console.error(
+				`[anthropic-oauth] refresh failed (${res.status}): ${body.slice(0, 200)}`
+			)
 			return null
 		}
 

@@ -1,4 +1,11 @@
-import { openSync, closeSync, writeSync, readSync, statSync, mkdirSync } from 'fs'
+import {
+	openSync,
+	closeSync,
+	writeSync,
+	readSync,
+	statSync,
+	mkdirSync
+} from 'fs'
 import { dirname } from 'path'
 import { constants } from 'fs'
 
@@ -23,7 +30,12 @@ export class LogFile {
 		mkdirSync(dirname(filePath), { recursive: true })
 
 		// Open for append + read. Create if not exists.
-		this.fd = openSync(filePath, constants.O_RDWR | constants.O_CREAT | constants.O_APPEND)
+		this.fd = openSync(
+			filePath,
+			constants.O_RDWR |
+				constants.O_CREAT |
+				constants.O_APPEND
+		)
 
 		// Track current file size for byte position calculation
 		this.currentSize = statSync(filePath).size
@@ -33,7 +45,10 @@ export class LogFile {
 	 * Append data as a single JSONL line.
 	 * Returns the byte position and length of the written record.
 	 */
-	append(data: Uint8Array): { bytePos: number; length: number } {
+	append(data: Uint8Array): {
+		bytePos: number
+		length: number
+	} {
 		const bytePos = this.currentSize
 
 		// Two writeSync calls are safe: writeSync blocks the event loop,
@@ -59,8 +74,12 @@ export class LogFile {
 	 * Read multiple records by their byte positions.
 	 * Convenience wrapper — calls readAt for each entry.
 	 */
-	readRange(entries: Array<{ bytePos: number; length: number }>): Uint8Array[] {
-		return entries.map(e => this.readAt(e.bytePos, e.length))
+	readRange(
+		entries: Array<{ bytePos: number; length: number }>
+	): Uint8Array[] {
+		return entries.map(e =>
+			this.readAt(e.bytePos, e.length)
+		)
 	}
 
 	/**

@@ -28,7 +28,13 @@ function TodoList() {
 		setItems(items.filter(item => item.id !== id))
 	}, []) // ❌ Missing items dependency - will use stale items!
 
-	return <ItemsEditor items={items} onAdd={addItems} onRemove={removeItem} />
+	return (
+		<ItemsEditor
+			items={items}
+			onAdd={addItems}
+			onRemove={removeItem}
+		/>
+	)
 }
 ```
 
@@ -50,7 +56,13 @@ function TodoList() {
 		setItems(curr => curr.filter(item => item.id !== id))
 	}, []) // ✅ Safe and stable
 
-	return <ItemsEditor items={items} onAdd={addItems} onRemove={removeItem} />
+	return (
+		<ItemsEditor
+			items={items}
+			onAdd={addItems}
+			onRemove={removeItem}
+		/>
+	)
 }
 ```
 

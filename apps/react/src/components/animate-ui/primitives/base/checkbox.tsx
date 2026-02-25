@@ -2,7 +2,11 @@
 
 import * as React from 'react'
 import { Checkbox as CheckboxPrimitive } from '@base-ui-components/react/checkbox'
-import { motion, type HTMLMotionProps, type SVGMotionProps } from 'motion/react'
+import {
+	motion,
+	type HTMLMotionProps,
+	type SVGMotionProps
+} from 'motion/react'
 
 import { getStrictContext } from '@/lib/get-strict-context'
 import { useControlledState } from '@/hooks/use-controlled-state'
@@ -13,9 +17,13 @@ type CheckboxContextType = {
 	isIndeterminate: boolean | undefined
 }
 
-const [CheckboxProvider, useCheckbox] = getStrictContext<CheckboxContextType>('CheckboxContext')
+const [CheckboxProvider, useCheckbox] =
+	getStrictContext<CheckboxContextType>('CheckboxContext')
 
-type CheckboxProps = Omit<React.ComponentProps<typeof CheckboxPrimitive.Root>, 'render'> &
+type CheckboxProps = Omit<
+	React.ComponentProps<typeof CheckboxPrimitive.Root>,
+	'render'
+> &
 	HTMLMotionProps<'button'>
 
 function Checkbox({
@@ -41,7 +49,13 @@ function Checkbox({
 	})
 
 	return (
-		<CheckboxProvider value={{ isChecked, setIsChecked, isIndeterminate: indeterminate }}>
+		<CheckboxProvider
+			value={{
+				isChecked,
+				setIsChecked,
+				isIndeterminate: indeterminate
+			}}
+		>
 			<CheckboxPrimitive.Root
 				name={name}
 				defaultChecked={defaultChecked}

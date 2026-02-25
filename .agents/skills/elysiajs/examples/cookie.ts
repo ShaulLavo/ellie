@@ -26,7 +26,10 @@ const app = new Elysia({
 			})
 		}
 	)
-	.get('/create', ({ cookie: { name } }) => (name.value = 'Himari'))
+	.get(
+		'/create',
+		({ cookie: { name } }) => (name.value = 'Himari')
+	)
 	.get(
 		'/update',
 		({ cookie: { name } }) => {

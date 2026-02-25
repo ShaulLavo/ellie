@@ -151,7 +151,12 @@ const MENTAL_MODEL_QUERIES = [
 
 // ── Deduplicate ─────────────────────────────────────────────────────────────
 
-const ALL_TEXTS = [...CONTENT_STRINGS, ...QUERY_STRINGS, ...ENTITY_NAMES, ...MENTAL_MODEL_QUERIES]
+const ALL_TEXTS = [
+	...CONTENT_STRINGS,
+	...QUERY_STRINGS,
+	...ENTITY_NAMES,
+	...MENTAL_MODEL_QUERIES
+]
 
 const uniqueTexts = [...new Set(ALL_TEXTS)].sort()
 
@@ -162,7 +167,9 @@ interface OllamaEmbedResponse {
 	embeddings: number[][]
 }
 
-async function embedBatch(texts: string[]): Promise<number[][]> {
+async function embedBatch(
+	texts: string[]
+): Promise<number[][]> {
 	const response = await fetch(`${BASE_URL}/api/embed`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -171,10 +178,13 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
 
 	if (!response.ok) {
 		const body = await response.text()
-		throw new Error(`Ollama embed failed (${response.status}): ${body}`)
+		throw new Error(
+			`Ollama embed failed (${response.status}): ${body}`
+		)
 	}
 
-	const data = (await response.json()) as OllamaEmbedResponse
+	const data =
+		(await response.json()) as OllamaEmbedResponse
 	if (data.embeddings.length !== texts.length) {
 		throw new Error(
 			`Embedding count mismatch: expected ${texts.length}, got ${data.embeddings.length}`
@@ -186,7 +196,9 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-	console.log(`Generating embeddings for ${uniqueTexts.length} unique texts...`)
+	console.log(
+		`Generating embeddings for ${uniqueTexts.length} unique texts...`
+	)
 	console.log(`Model: ${MODEL}`)
 	console.log(`Endpoint: ${BASE_URL}/api/embed`)
 	console.log()
@@ -196,8 +208,12 @@ async function main() {
 	for (let i = 0; i < uniqueTexts.length; i += BATCH_SIZE) {
 		const batch = uniqueTexts.slice(i, i + BATCH_SIZE)
 		const batchNum = Math.floor(i / BATCH_SIZE) + 1
-		const totalBatches = Math.ceil(uniqueTexts.length / BATCH_SIZE)
-		console.log(`  Batch ${batchNum}/${totalBatches}: ${batch.length} texts...`)
+		const totalBatches = Math.ceil(
+			uniqueTexts.length / BATCH_SIZE
+		)
+		console.log(
+			`  Batch ${batchNum}/${totalBatches}: ${batch.length} texts...`
+		)
 
 		const vectors = await embedBatch(batch)
 		for (let j = 0; j < batch.length; j++) {
@@ -208,10 +224,18 @@ async function main() {
 	const dims = Object.values(embeddings)[0]?.length
 	console.log()
 	console.log(`Embedding dimensions: ${dims}`)
-	console.log(`Total embeddings: ${Object.keys(embeddings).length}`)
+	console.log(
+		`Total embeddings: ${Object.keys(embeddings).length}`
+	)
 
 	// Write fixture (sorted keys for stable diffs)
-	const fixtureDir = join(__dirname, '..', 'src', 'test', 'fixtures')
+	const fixtureDir = join(
+		__dirname,
+		'..',
+		'src',
+		'test',
+		'fixtures'
+	)
 	mkdirSync(fixtureDir, { recursive: true })
 
 	const sorted: Record<string, number[]> = {}
@@ -220,7 +244,10 @@ async function main() {
 	}
 
 	const fixturePath = join(fixtureDir, 'embeddings.json')
-	writeFileSync(fixturePath, JSON.stringify(sorted, null, 2) + '\n')
+	writeFileSync(
+		fixturePath,
+		JSON.stringify(sorted, null, 2) + '\n'
+	)
 	console.log(`Written to: ${fixturePath}`)
 }
 

@@ -45,14 +45,18 @@ Type 'string | undefined' is not assignable to type 'string'
 import { HeavySchema } from './schemas/heavy'
 
 // Lazy load when needed
-const HeavySchema = z.lazy(() => import('./schemas/heavy').then(m => m.HeavySchema))
+const HeavySchema = z.lazy(() =>
+	import('./schemas/heavy').then(m => m.HeavySchema)
+)
 ```
 
 **Solution 2**: Code splitting by route/page:
 
 ```typescript
 // Only load schema when route is accessed
-const ProfileSchema = lazy(() => import('./schemas/profile'))
+const ProfileSchema = lazy(
+	() => import('./schemas/profile')
+)
 ```
 
 **Solution 3**: Extract shared schemas:
@@ -132,7 +136,9 @@ const QuickUsernameSchema = z
 	.regex(/^[a-z0-9_]+$/)
 
 // Validate availability asynchronously after submission
-async function validateUsernameAvailability(username: string) {
+async function validateUsernameAvailability(
+	username: string
+) {
 	const exists = await checkUsernameExists(username)
 	if (exists) {
 		throw new Error('Username already taken')
@@ -509,13 +515,19 @@ z.string().email()
 // ✓ Fast + good type inference
 z.discriminatedUnion('type', [
 	z.object({ type: z.literal('success'), data: z.any() }),
-	z.object({ type: z.literal('error'), message: z.string() })
+	z.object({
+		type: z.literal('error'),
+		message: z.string()
+	})
 ])
 
 // ✗ Slow + poor type inference
 z.union([
 	z.object({ type: z.literal('success'), data: z.any() }),
-	z.object({ type: z.literal('error'), message: z.string() })
+	z.object({
+		type: z.literal('error'),
+		message: z.string()
+	})
 ])
 ```
 

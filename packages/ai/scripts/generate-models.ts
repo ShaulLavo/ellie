@@ -32,29 +32,43 @@ interface ModelsDevModel {
 async function fetchOpenRouterModels(): Promise<Model[]> {
 	try {
 		console.log('Fetching models from OpenRouter API...')
-		const response = await fetch('https://openrouter.ai/api/v1/models')
+		const response = await fetch(
+			'https://openrouter.ai/api/v1/models'
+		)
 		const data = await response.json()
 
 		const models: Model[] = []
 
 		for (const model of data.data) {
-			if (!model.supported_parameters?.includes('tools')) continue
+			if (!model.supported_parameters?.includes('tools'))
+				continue
 
 			const input: ('text' | 'image')[] = ['text']
 			if (model.architecture?.modality?.includes('image')) {
 				input.push('image')
 			}
 
-			const inputCost = parseFloat(model.pricing?.prompt || '0') * 1_000_000
-			const outputCost = parseFloat(model.pricing?.completion || '0') * 1_000_000
-			const cacheReadCost = parseFloat(model.pricing?.input_cache_read || '0') * 1_000_000
-			const cacheWriteCost = parseFloat(model.pricing?.input_cache_write || '0') * 1_000_000
+			const inputCost =
+				parseFloat(model.pricing?.prompt || '0') * 1_000_000
+			const outputCost =
+				parseFloat(model.pricing?.completion || '0') *
+				1_000_000
+			const cacheReadCost =
+				parseFloat(model.pricing?.input_cache_read || '0') *
+				1_000_000
+			const cacheWriteCost =
+				parseFloat(
+					model.pricing?.input_cache_write || '0'
+				) * 1_000_000
 
 			models.push({
 				id: model.id,
 				name: model.name,
 				provider: 'openrouter',
-				reasoning: model.supported_parameters?.includes('reasoning') || false,
+				reasoning:
+					model.supported_parameters?.includes(
+						'reasoning'
+					) || false,
 				input,
 				cost: {
 					input: inputCost,
@@ -63,14 +77,20 @@ async function fetchOpenRouterModels(): Promise<Model[]> {
 					cacheWrite: cacheWriteCost
 				},
 				contextWindow: model.context_length || 4096,
-				maxTokens: model.top_provider?.max_completion_tokens || 4096
+				maxTokens:
+					model.top_provider?.max_completion_tokens || 4096
 			})
 		}
 
-		console.log(`Fetched ${models.length} tool-capable models from OpenRouter`)
+		console.log(
+			`Fetched ${models.length} tool-capable models from OpenRouter`
+		)
 		return models
 	} catch (error) {
-		console.error('Failed to fetch OpenRouter models:', error)
+		console.error(
+			'Failed to fetch OpenRouter models:',
+			error
+		)
 		return []
 	}
 }
@@ -78,14 +98,18 @@ async function fetchOpenRouterModels(): Promise<Model[]> {
 async function loadModelsDevData(): Promise<Model[]> {
 	try {
 		console.log('Fetching models from models.dev API...')
-		const response = await fetch('https://models.dev/api.json')
+		const response = await fetch(
+			'https://models.dev/api.json'
+		)
 		const data = await response.json()
 
 		const models: Model[] = []
 
 		// Process Anthropic models
 		if (data.anthropic?.models) {
-			for (const [modelId, model] of Object.entries(data.anthropic.models)) {
+			for (const [modelId, model] of Object.entries(
+				data.anthropic.models
+			)) {
 				const m = model as ModelsDevModel
 				if (m.tool_call !== true) continue
 
@@ -94,7 +118,9 @@ async function loadModelsDevData(): Promise<Model[]> {
 					name: m.name || modelId,
 					provider: 'anthropic',
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes('image') ? ['text', 'image'] : ['text'],
+					input: m.modalities?.input?.includes('image')
+						? ['text', 'image']
+						: ['text'],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -109,7 +135,9 @@ async function loadModelsDevData(): Promise<Model[]> {
 
 		// Process OpenAI models
 		if (data.openai?.models) {
-			for (const [modelId, model] of Object.entries(data.openai.models)) {
+			for (const [modelId, model] of Object.entries(
+				data.openai.models
+			)) {
 				const m = model as ModelsDevModel
 				if (m.tool_call !== true) continue
 
@@ -118,7 +146,9 @@ async function loadModelsDevData(): Promise<Model[]> {
 					name: m.name || modelId,
 					provider: 'openai',
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes('image') ? ['text', 'image'] : ['text'],
+					input: m.modalities?.input?.includes('image')
+						? ['text', 'image']
+						: ['text'],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -131,7 +161,9 @@ async function loadModelsDevData(): Promise<Model[]> {
 			}
 		}
 
-		console.log(`Loaded ${models.length} tool-capable models from models.dev`)
+		console.log(
+			`Loaded ${models.length} tool-capable models from models.dev`
+		)
 		return models
 	} catch (error) {
 		console.error('Failed to load models.dev data:', error)
@@ -143,10 +175,17 @@ async function generateModels() {
 	const modelsDevModels = await loadModelsDevData()
 	const openRouterModels = await fetchOpenRouterModels()
 
-	const allModels = [...modelsDevModels, ...openRouterModels]
+	const allModels = [
+		...modelsDevModels,
+		...openRouterModels
+	]
 
 	// Fix incorrect cache pricing for Claude Opus 4.5 from models.dev
-	const opus45 = allModels.find(m => m.provider === 'anthropic' && m.id === 'claude-opus-4-5')
+	const opus45 = allModels.find(
+		m =>
+			m.provider === 'anthropic' &&
+			m.id === 'claude-opus-4-5'
+	)
 	if (opus45) {
 		opus45.cost.cacheRead = 0.5
 		opus45.cost.cacheWrite = 6.25
@@ -155,7 +194,8 @@ async function generateModels() {
 	// Temporary overrides until upstream model metadata is corrected
 	for (const candidate of allModels) {
 		if (
-			(candidate.provider === 'anthropic' || candidate.provider === 'openrouter') &&
+			(candidate.provider === 'anthropic' ||
+				candidate.provider === 'openrouter') &&
 			candidate.id === 'claude-opus-4-6'
 		) {
 			candidate.contextWindow = 200000
@@ -163,7 +203,13 @@ async function generateModels() {
 	}
 
 	// Add missing Claude Opus 4.6 if not present
-	if (!allModels.some(m => m.provider === 'anthropic' && m.id === 'claude-opus-4-6')) {
+	if (
+		!allModels.some(
+			m =>
+				m.provider === 'anthropic' &&
+				m.id === 'claude-opus-4-6'
+		)
+	) {
 		allModels.push({
 			id: 'claude-opus-4-6',
 			name: 'Claude Opus 4.6',
@@ -182,25 +228,44 @@ async function generateModels() {
 	}
 
 	// Add "auto" alias for openrouter
-	if (!allModels.some(m => m.provider === 'openrouter' && m.id === 'auto')) {
+	if (
+		!allModels.some(
+			m => m.provider === 'openrouter' && m.id === 'auto'
+		)
+	) {
 		allModels.push({
 			id: 'auto',
 			name: 'Auto',
 			provider: 'openrouter',
 			reasoning: true,
 			input: ['text', 'image'],
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0
+			},
 			contextWindow: 2000000,
 			maxTokens: 30000
 		})
 	}
 
 	// Filter to only our 4 supported providers
-	const supportedProviders = new Set(['anthropic', 'openai', 'ollama', 'openrouter'])
-	const filteredModels = allModels.filter(m => supportedProviders.has(m.provider))
+	const supportedProviders = new Set([
+		'anthropic',
+		'openai',
+		'ollama',
+		'openrouter'
+	])
+	const filteredModels = allModels.filter(m =>
+		supportedProviders.has(m.provider)
+	)
 
 	// Group by provider and deduplicate by model ID
-	const providers: Record<string, Record<string, Model>> = {}
+	const providers: Record<
+		string,
+		Record<string, Model>
+	> = {}
 	for (const model of filteredModels) {
 		if (!providers[model.provider]) {
 			providers[model.provider] = {}
@@ -257,19 +322,30 @@ export const MODELS: Record<ProviderName, Record<string, Model>> = {
 
 	output += `};\n`
 
-	writeFileSync(join(packageRoot, 'src/models.generated.ts'), output)
+	writeFileSync(
+		join(packageRoot, 'src/models.generated.ts'),
+		output
+	)
 	console.log('Generated src/models.generated.ts')
 
 	// Print statistics
 	const totalModels = filteredModels.length
-	const reasoningModels = filteredModels.filter(m => m.reasoning).length
+	const reasoningModels = filteredModels.filter(
+		m => m.reasoning
+	).length
 
 	console.log(`\nModel Statistics:`)
 	console.log(`  Total tool-capable models: ${totalModels}`)
-	console.log(`  Reasoning-capable models: ${reasoningModels}`)
+	console.log(
+		`  Reasoning-capable models: ${reasoningModels}`
+	)
 
-	for (const [provider, models] of Object.entries(providers)) {
-		console.log(`  ${provider}: ${Object.keys(models).length} models`)
+	for (const [provider, models] of Object.entries(
+		providers
+	)) {
+		console.log(
+			`  ${provider}: ${Object.keys(models).length} models`
+		)
 	}
 }
 

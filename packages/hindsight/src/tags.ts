@@ -11,33 +11,53 @@ import type { TagsMatch } from './types'
  * - "any_strict": memory has any matching tag (excludes untagged)
  * - "all_strict": memory has ALL filter tags (excludes untagged)
  */
-export function matchesTags(memoryTags: string[], filterTags: string[], mode: TagsMatch): boolean {
+export function matchesTags(
+	memoryTags: string[],
+	filterTags: string[],
+	mode: TagsMatch
+): boolean {
 	if (filterTags.length === 0) return true
 
 	const isUntagged = memoryTags.length === 0
 
 	switch (mode) {
 		case 'any':
-			return isUntagged || memoryTags.some(t => filterTags.includes(t))
+			return (
+				isUntagged ||
+				memoryTags.some(t => filterTags.includes(t))
+			)
 		case 'all':
-			return isUntagged || filterTags.every(t => memoryTags.includes(t))
+			return (
+				isUntagged ||
+				filterTags.every(t => memoryTags.includes(t))
+			)
 		case 'any_strict':
-			return !isUntagged && memoryTags.some(t => filterTags.includes(t))
+			return (
+				!isUntagged &&
+				memoryTags.some(t => filterTags.includes(t))
+			)
 		case 'all_strict':
-			return !isUntagged && filterTags.every(t => memoryTags.includes(t))
+			return (
+				!isUntagged &&
+				filterTags.every(t => memoryTags.includes(t))
+			)
 	}
 }
 
 /**
  * Parse a JSON-encoded string array, returning [] on malformed input.
  */
-export function parseStringArray(raw: string | null): string[] {
+export function parseStringArray(
+	raw: string | null
+): string[] {
 	if (!raw) return []
 
 	try {
 		const parsed = JSON.parse(raw)
 		if (!Array.isArray(parsed)) return []
-		return parsed.filter((value): value is string => typeof value === 'string')
+		return parsed.filter(
+			(value): value is string => typeof value === 'string'
+		)
 	} catch {
 		return []
 	}
@@ -53,5 +73,9 @@ export function passesTagFilter(
 	mode: TagsMatch = 'any'
 ): boolean {
 	if (!filterTags || filterTags.length === 0) return true
-	return matchesTags(parseStringArray(rawTags), filterTags, mode)
+	return matchesTags(
+		parseStringArray(rawTags),
+		filterTags,
+		mode
+	)
 }

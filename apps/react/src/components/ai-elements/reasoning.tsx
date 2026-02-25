@@ -4,13 +4,20 @@ import type { ComponentProps, ReactNode } from 'react'
 
 // TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
 import { useControllableState } from '@radix-ui/react-use-controllable-state'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger
+} from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
 import { math } from '@streamdown/math'
 import { mermaid } from '@streamdown/mermaid'
-import { Brain as BrainIcon, CaretDown as ChevronDownIcon } from '@phosphor-icons/react'
+import {
+	Brain as BrainIcon,
+	CaretDown as ChevronDownIcon
+} from '@phosphor-icons/react'
 import {
 	createContext,
 	memo,
@@ -32,17 +39,22 @@ interface ReasoningContextValue {
 	duration: number | undefined
 }
 
-const ReasoningContext = createContext<ReasoningContextValue | null>(null)
+const ReasoningContext =
+	createContext<ReasoningContextValue | null>(null)
 
 export const useReasoning = () => {
 	const context = useContext(ReasoningContext)
 	if (!context) {
-		throw new Error('Reasoning components must be used within Reasoning')
+		throw new Error(
+			'Reasoning components must be used within Reasoning'
+		)
 	}
 	return context
 }
 
-export type ReasoningProps = ComponentProps<typeof Collapsible> & {
+export type ReasoningProps = ComponentProps<
+	typeof Collapsible
+> & {
 	isStreaming?: boolean
 	open?: boolean
 	defaultOpen?: boolean
@@ -68,18 +80,22 @@ export const Reasoning = memo(
 		// Track if defaultOpen was explicitly set to false (to prevent auto-open)
 		const isExplicitlyClosed = defaultOpen === false
 
-		const [isOpen, setIsOpen] = useControllableState<boolean>({
-			defaultProp: resolvedDefaultOpen,
-			onChange: onOpenChange,
-			prop: open
-		})
-		const [duration, setDuration] = useControllableState<number | undefined>({
+		const [isOpen, setIsOpen] =
+			useControllableState<boolean>({
+				defaultProp: resolvedDefaultOpen,
+				onChange: onOpenChange,
+				prop: open
+			})
+		const [duration, setDuration] = useControllableState<
+			number | undefined
+		>({
 			defaultProp: undefined,
 			prop: durationProp
 		})
 
 		const hasEverStreamedRef = useRef(isStreaming)
-		const [hasAutoClosed, setHasAutoClosed] = useState(false)
+		const [hasAutoClosed, setHasAutoClosed] =
+			useState(false)
 		const startTimeRef = useRef<number | null>(null)
 
 		// Track when streaming starts and compute duration
@@ -90,7 +106,11 @@ export const Reasoning = memo(
 					startTimeRef.current = Date.now()
 				}
 			} else if (startTimeRef.current !== null) {
-				setDuration(Math.ceil((Date.now() - startTimeRef.current) / MS_IN_S))
+				setDuration(
+					Math.ceil(
+						(Date.now() - startTimeRef.current) / MS_IN_S
+					)
+				)
 				startTimeRef.current = null
 			}
 		}, [isStreaming, setDuration])
@@ -104,7 +124,12 @@ export const Reasoning = memo(
 
 		// Auto-close when streaming ends (once only, and only if it ever streamed)
 		useEffect(() => {
-			if (hasEverStreamedRef.current && !isStreaming && isOpen && !hasAutoClosed) {
+			if (
+				hasEverStreamedRef.current &&
+				!isStreaming &&
+				isOpen &&
+				!hasAutoClosed
+			) {
 				const timer = setTimeout(() => {
 					setIsOpen(false)
 					setHasAutoClosed(true)
@@ -141,12 +166,20 @@ export const Reasoning = memo(
 	}
 )
 
-export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
+export type ReasoningTriggerProps = ComponentProps<
+	typeof CollapsibleTrigger
+> & {
 	icon?: ReactNode
-	getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode
+	getThinkingMessage?: (
+		isStreaming: boolean,
+		duration?: number
+	) => ReactNode
 }
 
-const defaultGetThinkingMessage = (isStreaming: boolean, duration?: number) => {
+const defaultGetThinkingMessage = (
+	isStreaming: boolean,
+	duration?: number
+) => {
 	if (isStreaming || duration === 0) {
 		return <Shimmer duration={1}>Thinking...</Shimmer>
 	}
@@ -179,7 +212,10 @@ export const ReasoningTrigger = memo(
 						{icon ?? <BrainIcon className="size-4" />}
 						{getThinkingMessage(isStreaming, duration)}
 						<ChevronDownIcon
-							className={cn('size-4 transition-transform', isOpen ? 'rotate-180' : 'rotate-0')}
+							className={cn(
+								'size-4 transition-transform',
+								isOpen ? 'rotate-180' : 'rotate-0'
+							)}
 						/>
 					</>
 				)}
@@ -188,52 +224,72 @@ export const ReasoningTrigger = memo(
 	}
 )
 
-export type ReasoningContentProps = ComponentProps<typeof CollapsibleContent> & {
+export type ReasoningContentProps = ComponentProps<
+	typeof CollapsibleContent
+> & {
 	children: string
 }
 
 const streamdownPlugins = { cjk, code, math, mermaid }
 
-export const ReasoningContent = memo(({ className, children, ...props }: ReasoningContentProps) => {
-	const contentRef = useRef<HTMLDivElement>(null)
+export const ReasoningContent = memo(
+	({
+		className,
+		children,
+		...props
+	}: ReasoningContentProps) => {
+		const contentRef = useRef<HTMLDivElement>(null)
 
-	useEffect(() => {
-		const element = contentRef.current
-		if (!element) return
+		useEffect(() => {
+			const element = contentRef.current
+			if (!element) return
 
-		const handleAnimationStart = () => {
-			element.dataset.animating = 'true'
-		}
+			const handleAnimationStart = () => {
+				element.dataset.animating = 'true'
+			}
 
-		const handleAnimationEnd = () => {
-			element.dataset.animating = 'false'
-		}
+			const handleAnimationEnd = () => {
+				element.dataset.animating = 'false'
+			}
 
-		element.addEventListener('animationstart', handleAnimationStart)
-		element.addEventListener('animationend', handleAnimationEnd)
+			element.addEventListener(
+				'animationstart',
+				handleAnimationStart
+			)
+			element.addEventListener(
+				'animationend',
+				handleAnimationEnd
+			)
 
-		return () => {
-			element.removeEventListener('animationstart', handleAnimationStart)
-			element.removeEventListener('animationend', handleAnimationEnd)
-		}
-	}, [])
+			return () => {
+				element.removeEventListener(
+					'animationstart',
+					handleAnimationStart
+				)
+				element.removeEventListener(
+					'animationend',
+					handleAnimationEnd
+				)
+			}
+		}, [])
 
-	return (
-		<CollapsibleContent
-			ref={contentRef}
-			className={cn(
-				'mt-4 text-sm',
-				'data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in',
-				className
-			)}
-			{...props}
-		>
-			<Streamdown plugins={streamdownPlugins} {...props}>
-				{children}
-			</Streamdown>
-		</CollapsibleContent>
-	)
-})
+		return (
+			<CollapsibleContent
+				ref={contentRef}
+				className={cn(
+					'mt-4 text-sm',
+					'data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in',
+					className
+				)}
+				{...props}
+			>
+				<Streamdown plugins={streamdownPlugins} {...props}>
+					{children}
+				</Streamdown>
+			</CollapsibleContent>
+		)
+	}
+)
 
 Reasoning.displayName = 'Reasoning'
 ReasoningTrigger.displayName = 'ReasoningTrigger'

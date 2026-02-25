@@ -1,5 +1,8 @@
 import { memo, useMemo } from 'react'
-import { CheckCircle as CheckCircleIcon, XCircle as XCircleIcon } from '@phosphor-icons/react'
+import {
+	CheckCircle as CheckCircleIcon,
+	XCircle as XCircleIcon
+} from '@phosphor-icons/react'
 import Ansi from 'ansi-to-react'
 import { cn } from '@/lib/utils'
 import {
@@ -18,10 +21,16 @@ interface ShellResult {
 	error?: string
 }
 
-function parseShellResult(result: string): ShellResult | null {
+function parseShellResult(
+	result: string
+): ShellResult | null {
 	try {
 		const parsed = JSON.parse(result)
-		if (typeof parsed === 'object' && parsed !== null && 'exitCode' in parsed) {
+		if (
+			typeof parsed === 'object' &&
+			parsed !== null &&
+			'exitCode' in parsed
+		) {
 			return parsed as ShellResult
 		}
 		return null
@@ -41,7 +50,10 @@ export const ShellOutput = memo(function ShellOutput({
 	result,
 	className
 }: ShellOutputProps) {
-	const parsed = useMemo(() => parseShellResult(result), [result])
+	const parsed = useMemo(
+		() => parseShellResult(result),
+		[result]
+	)
 
 	const fullOutput = useMemo(() => {
 		if (!parsed) return null
@@ -57,7 +69,9 @@ export const ShellOutput = memo(function ShellOutput({
 	}, [command, parsed])
 
 	if (!parsed) {
-		return <ToolOutput output={result} errorText={undefined} />
+		return (
+			<ToolOutput output={result} errorText={undefined} />
+		)
 	}
 
 	const { exitCode, stdout, stderr, error } = parsed
@@ -94,14 +108,24 @@ export const ShellOutput = memo(function ShellOutput({
 	)
 })
 
-const ExitCodeBadge = ({ exitCode }: { exitCode: number }) => (
+const ExitCodeBadge = ({
+	exitCode
+}: {
+	exitCode: number
+}) => (
 	<span
 		className={cn(
 			'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-mono',
-			exitCode === 0 ? 'bg-muted text-muted-foreground' : 'bg-red-500/10 text-red-600'
+			exitCode === 0
+				? 'bg-muted text-muted-foreground'
+				: 'bg-red-500/10 text-red-600'
 		)}
 	>
-		{exitCode === 0 ? <CheckCircleIcon className="size-3" /> : <XCircleIcon className="size-3" />}
+		{exitCode === 0 ? (
+			<CheckCircleIcon className="size-3" />
+		) : (
+			<XCircleIcon className="size-3" />
+		)}
 		exit {exitCode}
 	</span>
 )

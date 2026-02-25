@@ -69,7 +69,9 @@ body: t.Object({
 import { fileType } from 'elysia'
 
 body: z.object({
-	file: z.file().refine(file => fileType(file, 'image/jpeg'))
+	file: z
+		.file()
+		.refine(file => fileType(file, 'image/jpeg'))
 })
 ```
 

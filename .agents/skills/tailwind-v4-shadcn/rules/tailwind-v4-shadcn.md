@@ -63,7 +63,8 @@ pnpm add -D tw-animate-css
 
 ```css
 /* ❌ v3 - require() in config */
-plugins: [require('@tailwindcss/typography')] /* ✅ v4 - @plugin directive in CSS */ @plugin
+plugins: [require('@tailwindcss/typography')]
+	/* ✅ v4 - @plugin directive in CSS */ @plugin
 	'@tailwindcss/typography';
 ```
 

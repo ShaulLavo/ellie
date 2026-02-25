@@ -6,7 +6,11 @@ import { useEffect, useRef, useState } from 'react'
  * During streaming, text appears word-by-word with easing.
  * Once streaming stops, the full text is shown immediately.
  */
-export function useAnimatedText(text: string, isStreaming: boolean, delimiter = ' ') {
+export function useAnimatedText(
+	text: string,
+	isStreaming: boolean,
+	delimiter = ' '
+) {
 	const [cursor, setCursor] = useState(0)
 	const [startingCursor, setStartingCursor] = useState(0)
 	const prevTextRef = useRef(text)
@@ -15,7 +19,9 @@ export function useAnimatedText(text: string, isStreaming: boolean, delimiter = 
 		const prevText = prevTextRef.current
 		if (prevText !== text) {
 			prevTextRef.current = text
-			setStartingCursor(text.startsWith(prevText) ? cursor : 0) // eslint-disable-line react-hooks/set-state-in-effect -- intentional: sync cursor reset on text change
+			setStartingCursor(
+				text.startsWith(prevText) ? cursor : 0
+			) // eslint-disable-line react-hooks/set-state-in-effect -- intentional: sync cursor reset on text change
 		}
 	}, [text, cursor])
 
@@ -41,5 +47,8 @@ export function useAnimatedText(text: string, isStreaming: boolean, delimiter = 
 
 	if (!isStreaming) return text
 
-	return text.split(delimiter).slice(0, cursor).join(delimiter)
+	return text
+		.split(delimiter)
+		.slice(0, cursor)
+		.join(delimiter)
 }

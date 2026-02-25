@@ -1,6 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { EventStore } from './event-store'
-import { existsSync, rmSync, mkdtempSync, readdirSync, readFileSync } from 'fs'
+import {
+	existsSync,
+	rmSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync
+} from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -86,10 +98,14 @@ describe('EventStore', () => {
 				}
 			})
 
-			expect(store.query({ sessionId: 'cascade' })).toHaveLength(1)
+			expect(
+				store.query({ sessionId: 'cascade' })
+			).toHaveLength(1)
 
 			store.deleteSession('cascade')
-			expect(store.query({ sessionId: 'cascade' })).toHaveLength(0)
+			expect(
+				store.query({ sessionId: 'cascade' })
+			).toHaveLength(0)
 		})
 	})
 
@@ -121,17 +137,29 @@ describe('EventStore', () => {
 			const r1 = store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'a' }], timestamp: Date.now() }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'a' }],
+					timestamp: Date.now()
+				}
 			})
 			const r2 = store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'b' }], timestamp: Date.now() }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'b' }],
+					timestamp: Date.now()
+				}
 			})
 			const r3 = store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'c' }], timestamp: Date.now() }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'c' }],
+					timestamp: Date.now()
+				}
 			})
 
 			expect(r1.seq).toBe(1)
@@ -145,7 +173,11 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'x' }], timestamp: Date.now() }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'x' }],
+					timestamp: Date.now()
+				}
 			})
 			const after = store.getSession('s1')!.updatedAt
 			expect(after).toBeGreaterThan(before)
@@ -156,7 +188,11 @@ describe('EventStore', () => {
 				store.append({
 					sessionId: 'nope',
 					type: 'user_message',
-					payload: { role: 'user', content: [{ type: 'text', text: 'x' }], timestamp: Date.now() }
+					payload: {
+						role: 'user',
+						content: [{ type: 'text', text: 'x' }],
+						timestamp: Date.now()
+					}
 				})
 			).toThrow('Session not found')
 		})
@@ -193,24 +229,36 @@ describe('EventStore', () => {
 
 			expect(r1.id).toBe(r2.id)
 			expect(r1.seq).toBe(r2.seq)
-			expect(store.query({ sessionId: 's1' })).toHaveLength(1)
+			expect(store.query({ sessionId: 's1' })).toHaveLength(
+				1
+			)
 		})
 
 		it('different dedupeKeys create separate events', () => {
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'a' }], timestamp: Date.now() },
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'a' }],
+					timestamp: Date.now()
+				},
 				dedupeKey: 'msg-1'
 			})
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'b' }], timestamp: Date.now() },
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'b' }],
+					timestamp: Date.now()
+				},
 				dedupeKey: 'msg-2'
 			})
 
-			expect(store.query({ sessionId: 's1' })).toHaveLength(2)
+			expect(store.query({ sessionId: 's1' })).toHaveLength(
+				2
+			)
 		})
 	})
 
@@ -226,10 +274,10 @@ describe('EventStore', () => {
 				store.append({
 					sessionId: 's1',
 					type: 'user_message',
-					payload: { role: 'invalid', content: 'not-an-array' } as unknown as Record<
-						string,
-						unknown
-					>
+					payload: {
+						role: 'invalid',
+						content: 'not-an-array'
+					} as unknown as Record<string, unknown>
 				})
 			).toThrow()
 		})
@@ -274,7 +322,11 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 1000 },
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'hello' }],
+					timestamp: 1000
+				},
 				runId: 'run-1'
 			})
 			store.append({
@@ -297,7 +349,13 @@ describe('EventStore', () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0
+						}
 					},
 					stopReason: 'stop',
 					timestamp: 2000
@@ -318,7 +376,10 @@ describe('EventStore', () => {
 		})
 
 		it('filters by afterSeq', () => {
-			const events = store.query({ sessionId: 's1', afterSeq: 2 })
+			const events = store.query({
+				sessionId: 's1',
+				afterSeq: 2
+			})
 			expect(events).toHaveLength(2)
 			expect(events[0]!.seq).toBe(3)
 			expect(events[1]!.seq).toBe(4)
@@ -341,12 +402,18 @@ describe('EventStore', () => {
 				runId: 'other-run'
 			})
 
-			const events = store.query({ sessionId: 's1', runId: 'run-1' })
+			const events = store.query({
+				sessionId: 's1',
+				runId: 'run-1'
+			})
 			expect(events).toHaveLength(4)
 		})
 
 		it('respects limit', () => {
-			const events = store.query({ sessionId: 's1', limit: 2 })
+			const events = store.query({
+				sessionId: 's1',
+				limit: 2
+			})
 			expect(events).toHaveLength(2)
 			expect(events[0]!.seq).toBe(1)
 			expect(events[1]!.seq).toBe(2)
@@ -377,7 +444,11 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 1000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'hello' }],
+					timestamp: 1000
+				}
 			})
 			store.append({
 				sessionId: 's1',
@@ -391,7 +462,12 @@ describe('EventStore', () => {
 					role: 'assistant',
 					content: [
 						{ type: 'text', text: "I'll help" },
-						{ type: 'toolCall', id: 'tc1', name: 'search', arguments: { q: 'test' } }
+						{
+							type: 'toolCall',
+							id: 'tc1',
+							name: 'search',
+							arguments: { q: 'test' }
+						}
 					],
 					provider: 'anthropic',
 					model: 'test',
@@ -401,7 +477,13 @@ describe('EventStore', () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0
+						}
 					},
 					stopReason: 'toolUse',
 					timestamp: 2000
@@ -424,7 +506,9 @@ describe('EventStore', () => {
 				type: 'assistant_final',
 				payload: {
 					role: 'assistant',
-					content: [{ type: 'text', text: 'Here are the results' }],
+					content: [
+						{ type: 'text', text: 'Here are the results' }
+					],
 					provider: 'anthropic',
 					model: 'test',
 					usage: {
@@ -433,7 +517,13 @@ describe('EventStore', () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0
+						}
 					},
 					stopReason: 'stop',
 					timestamp: 4000
@@ -456,15 +546,35 @@ describe('EventStore', () => {
 		it('excludes agent_start, agent_end, turn events from history', () => {
 			store.createSession('s1')
 
-			store.append({ sessionId: 's1', type: 'agent_start', payload: {} })
-			store.append({ sessionId: 's1', type: 'turn_start', payload: {} })
+			store.append({
+				sessionId: 's1',
+				type: 'agent_start',
+				payload: {}
+			})
+			store.append({
+				sessionId: 's1',
+				type: 'turn_start',
+				payload: {}
+			})
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 1000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'hi' }],
+					timestamp: 1000
+				}
 			})
-			store.append({ sessionId: 's1', type: 'turn_end', payload: {} })
-			store.append({ sessionId: 's1', type: 'agent_end', payload: { messages: [] } })
+			store.append({
+				sessionId: 's1',
+				type: 'turn_end',
+				payload: {}
+			})
+			store.append({
+				sessionId: 's1',
+				type: 'agent_end',
+				payload: { messages: [] }
+			})
 
 			const history = store.getConversationHistory('s1')
 			expect(history).toHaveLength(1)
@@ -545,12 +655,20 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 'a',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'from a' }], timestamp: 1000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'from a' }],
+					timestamp: 1000
+				}
 			})
 			store.append({
 				sessionId: 'b',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'from b' }], timestamp: 2000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'from b' }],
+					timestamp: 2000
+				}
 			})
 			store.append({
 				sessionId: 'a',
@@ -562,16 +680,28 @@ describe('EventStore', () => {
 				}
 			})
 
-			expect(store.query({ sessionId: 'a' })).toHaveLength(2)
-			expect(store.query({ sessionId: 'b' })).toHaveLength(1)
+			expect(store.query({ sessionId: 'a' })).toHaveLength(
+				2
+			)
+			expect(store.query({ sessionId: 'b' })).toHaveLength(
+				1
+			)
 		})
 
 		it('seq is independent per session', () => {
 			store.createSession('a')
 			store.createSession('b')
 
-			const ra = store.append({ sessionId: 'a', type: 'agent_start', payload: {} })
-			const rb = store.append({ sessionId: 'b', type: 'agent_start', payload: {} })
+			const ra = store.append({
+				sessionId: 'a',
+				type: 'agent_start',
+				payload: {}
+			})
+			const rb = store.append({
+				sessionId: 'b',
+				type: 'agent_start',
+				payload: {}
+			})
 
 			expect(ra.seq).toBe(1)
 			expect(rb.seq).toBe(1)
@@ -586,12 +716,20 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 'persist',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'before' }], timestamp: 1000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'before' }],
+					timestamp: 1000
+				}
 			})
 			store.append({
 				sessionId: 'persist',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'also before' }], timestamp: 2000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'also before' }],
+					timestamp: 2000
+				}
 			})
 			store.close()
 
@@ -600,7 +738,8 @@ describe('EventStore', () => {
 			const events = store.query({ sessionId: 'persist' })
 			expect(events).toHaveLength(2)
 
-			const history = store.getConversationHistory('persist')
+			const history =
+				store.getConversationHistory('persist')
 			expect(history).toHaveLength(2)
 		})
 
@@ -609,7 +748,11 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 'resume',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'first' }], timestamp: 1000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'first' }],
+					timestamp: 1000
+				}
 			})
 			store.close()
 
@@ -617,7 +760,11 @@ describe('EventStore', () => {
 			store.append({
 				sessionId: 'resume',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'second' }], timestamp: 2000 }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'second' }],
+					timestamp: 2000
+				}
 			})
 
 			const events = store.query({ sessionId: 'resume' })
@@ -646,7 +793,9 @@ describe('EventStore', () => {
 			}
 			const elapsed = performance.now() - start
 
-			console.log(`[perf] 1,000 appends in ${elapsed.toFixed(0)}ms`)
+			console.log(
+				`[perf] 1,000 appends in ${elapsed.toFixed(0)}ms`
+			)
 
 			const events = store.query({ sessionId: 'bulk' })
 			expect(events).toHaveLength(1_000)
@@ -671,7 +820,10 @@ describe('EventStore', () => {
 				})
 			}
 
-			const events = store.query({ sessionId: 's1', afterSeq: 5 })
+			const events = store.query({
+				sessionId: 's1',
+				afterSeq: 5
+			})
 			expect(events).toHaveLength(5)
 			expect(events[0]!.seq).toBe(6)
 			expect(events[4]!.seq).toBe(10)
@@ -679,9 +831,16 @@ describe('EventStore', () => {
 
 		it('afterSeq past end returns empty', () => {
 			store.createSession('s1')
-			store.append({ sessionId: 's1', type: 'agent_start', payload: {} })
+			store.append({
+				sessionId: 's1',
+				type: 'agent_start',
+				payload: {}
+			})
 
-			const events = store.query({ sessionId: 's1', afterSeq: 999 })
+			const events = store.query({
+				sessionId: 's1',
+				afterSeq: 999
+			})
 			expect(events).toHaveLength(0)
 		})
 	})
@@ -691,13 +850,20 @@ describe('EventStore', () => {
 	describe('audit logging', () => {
 		it('creates audit log when auditLogDir is provided', () => {
 			const auditDir = join(tmpDir, 'audit')
-			const auditStore = new EventStore(join(tmpDir, 'audit-test.db'), auditDir)
+			const auditStore = new EventStore(
+				join(tmpDir, 'audit-test.db'),
+				auditDir
+			)
 
 			auditStore.createSession('s1')
 			auditStore.append({
 				sessionId: 's1',
 				type: 'user_message',
-				payload: { role: 'user', content: [{ type: 'text', text: 'test' }], timestamp: Date.now() }
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'test' }],
+					timestamp: Date.now()
+				}
 			})
 
 			auditStore.close()
@@ -705,9 +871,14 @@ describe('EventStore', () => {
 			expect(existsSync(auditDir)).toBe(true)
 
 			// Verify audit file contains the expected entry
-			const files = readdirSync(auditDir).filter(f => f.endsWith('.jsonl'))
+			const files = readdirSync(auditDir).filter(f =>
+				f.endsWith('.jsonl')
+			)
 			expect(files.length).toBeGreaterThan(0)
-			const content = readFileSync(join(auditDir, files[0]!), 'utf-8').trim()
+			const content = readFileSync(
+				join(auditDir, files[0]!),
+				'utf-8'
+			).trim()
 			const entry = JSON.parse(content)
 			expect(entry.sessionId).toBe('s1')
 			expect(entry.type).toBe('user_message')
@@ -719,12 +890,16 @@ describe('EventStore', () => {
 
 	describe('pragmas', () => {
 		it('uses WAL mode', () => {
-			const result = store.sqlite.prepare('PRAGMA journal_mode').get() as { journal_mode: string }
+			const result = store.sqlite
+				.prepare('PRAGMA journal_mode')
+				.get() as { journal_mode: string }
 			expect(result.journal_mode).toBe('wal')
 		})
 
 		it('enables foreign keys', () => {
-			const result = store.sqlite.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }
+			const result = store.sqlite
+				.prepare('PRAGMA foreign_keys')
+				.get() as { foreign_keys: number }
 			expect(result.foreign_keys).toBe(1)
 		})
 	})

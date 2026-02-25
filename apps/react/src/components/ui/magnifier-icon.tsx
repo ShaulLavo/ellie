@@ -1,9 +1,23 @@
 import { forwardRef, useImperativeHandle } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const MagnifierIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const MagnifierIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = async () => {
@@ -19,7 +33,11 @@ const MagnifierIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		}
 
 		const stop = () => {
-			animate('.magnifier-group', { x: 0, y: 0, rotate: 0 }, { duration: 0.2, ease: 'easeOut' })
+			animate(
+				'.magnifier-group',
+				{ x: 0, y: 0, rotate: 0 },
+				{ duration: 0.2, ease: 'easeOut' }
+			)
 		}
 
 		useImperativeHandle(ref, () => ({
@@ -60,7 +78,12 @@ const MagnifierIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 					}}
 				>
 					<motion.path d="m21.393,18.565l7.021,7.021c.781.781.781,2.047,0,2.828h0c-.781.781-2.047.781-2.828,0l-7.021-7.021" />
-					<motion.circle cx="13" cy="13" r="10" strokeLinecap="square" />
+					<motion.circle
+						cx="13"
+						cy="13"
+						r="10"
+						strokeLinecap="square"
+					/>
 				</motion.g>
 			</motion.svg>
 		)

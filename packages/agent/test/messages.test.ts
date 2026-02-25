@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { toModelMessage, toModelMessages } from '../src/messages'
-import type { UserMessage, AssistantMessage, ToolResultMessage } from '../src/types'
+import {
+	toModelMessage,
+	toModelMessages
+} from '../src/messages'
+import type {
+	UserMessage,
+	AssistantMessage,
+	ToolResultMessage
+} from '../src/types'
 
 describe('toModelMessage', () => {
 	test('converts UserMessage with text', () => {
@@ -13,7 +20,9 @@ describe('toModelMessage', () => {
 		const result = toModelMessage(msg)
 
 		expect(result.role).toBe('user')
-		expect(result.content).toEqual([{ type: 'text', content: 'Hello' }])
+		expect(result.content).toEqual([
+			{ type: 'text', content: 'Hello' }
+		])
 	})
 
 	test('converts UserMessage with image', () => {
@@ -21,7 +30,11 @@ describe('toModelMessage', () => {
 			role: 'user',
 			content: [
 				{ type: 'text', text: 'Look at this' },
-				{ type: 'image', data: 'base64data', mimeType: 'image/png' }
+				{
+					type: 'image',
+					data: 'base64data',
+					mimeType: 'image/png'
+				}
 			],
 			timestamp: 1000
 		}
@@ -33,7 +46,11 @@ describe('toModelMessage', () => {
 			{ type: 'text', content: 'Look at this' },
 			{
 				type: 'image',
-				source: { type: 'data', value: 'base64data', mimeType: 'image/png' }
+				source: {
+					type: 'data',
+					value: 'base64data',
+					mimeType: 'image/png'
+				}
 			}
 		])
 	})
@@ -50,7 +67,13 @@ describe('toModelMessage', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 15,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'stop',
 			timestamp: 1000
@@ -83,7 +106,13 @@ describe('toModelMessage', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 30,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'toolUse',
 			timestamp: 1000
@@ -109,7 +138,10 @@ describe('toModelMessage', () => {
 		const msg: AssistantMessage = {
 			role: 'assistant',
 			content: [
-				{ type: 'thinking', thinking: 'Let me think about this...' },
+				{
+					type: 'thinking',
+					thinking: 'Let me think about this...'
+				},
 				{ type: 'text', text: 'The answer is 42' }
 			],
 			provider: 'anthropic',
@@ -120,7 +152,13 @@ describe('toModelMessage', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 15,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'stop',
 			timestamp: 1000
@@ -150,7 +188,13 @@ describe('toModelMessage', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 15,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'toolUse',
 			timestamp: 1000
@@ -189,7 +233,9 @@ describe('toModelMessages', () => {
 			},
 			{
 				role: 'assistant' as const,
-				content: [{ type: 'text' as const, text: 'Hello!' }],
+				content: [
+					{ type: 'text' as const, text: 'Hello!' }
+				],
 				provider: 'anthropic' as const,
 				model: 'claude-sonnet-4-6',
 				usage: {

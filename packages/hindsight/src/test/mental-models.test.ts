@@ -5,8 +5,18 @@
  * Integration tests.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 async function waitFor(
 	condition: () => boolean,
@@ -16,9 +26,13 @@ async function waitFor(
 	const startedAt = Date.now()
 	while (Date.now() - startedAt <= timeoutMs) {
 		if (condition()) return
-		await new Promise(resolve => setTimeout(resolve, intervalMs))
+		await new Promise(resolve =>
+			setTimeout(resolve, intervalMs)
+		)
 	}
-	throw new Error(`Timed out waiting for condition after ${timeoutMs}ms`)
+	throw new Error(
+		`Timed out waiting for condition after ${timeoutMs}ms`
+	)
 }
 
 describe('Mental models', () => {
@@ -40,12 +54,15 @@ describe('Mental models', () => {
 		it('creates a mental model with required fields', async () => {
 			const model = await t.hs.createMentalModel(bankId, {
 				name: 'Team Preferences',
-				sourceQuery: "What are the team's communication preferences?"
+				sourceQuery:
+					"What are the team's communication preferences?"
 			})
 
 			expect(model.id).toBeDefined()
 			expect(model.name).toBe('Team Preferences')
-			expect(model.sourceQuery).toBe("What are the team's communication preferences?")
+			expect(model.sourceQuery).toBe(
+				"What are the team's communication preferences?"
+			)
 			expect(model.bankId).toBe(bankId)
 		})
 
@@ -53,10 +70,13 @@ describe('Mental models', () => {
 			const model = await t.hs.createMentalModel(bankId, {
 				name: 'Summary',
 				sourceQuery: 'Team summary',
-				content: 'The team prefers async communication via Slack'
+				content:
+					'The team prefers async communication via Slack'
 			})
 
-			expect(model.content).toBe('The team prefers async communication via Slack')
+			expect(model.content).toBe(
+				'The team prefers async communication via Slack'
+			)
 		})
 
 		it('creates with tags', async () => {
@@ -117,7 +137,9 @@ describe('Mental models', () => {
 		})
 
 		it('returns undefined for non-existent ID', () => {
-			expect(t.hs.getMentalModel(bankId, 'nonexistent')).toBeUndefined()
+			expect(
+				t.hs.getMentalModel(bankId, 'nonexistent')
+			).toBeUndefined()
 		})
 
 		it('returns undefined for wrong bank', async () => {
@@ -127,7 +149,9 @@ describe('Mental models', () => {
 				sourceQuery: 'query'
 			})
 
-			expect(t.hs.getMentalModel(otherBank, model.id)).toBeUndefined()
+			expect(
+				t.hs.getMentalModel(otherBank, model.id)
+			).toBeUndefined()
 		})
 	})
 
@@ -139,9 +163,18 @@ describe('Mental models', () => {
 		})
 
 		it('returns all mental models for a bank', async () => {
-			await t.hs.createMentalModel(bankId, { name: 'M1', sourceQuery: 'q1' })
-			await t.hs.createMentalModel(bankId, { name: 'M2', sourceQuery: 'q2' })
-			await t.hs.createMentalModel(bankId, { name: 'M3', sourceQuery: 'q3' })
+			await t.hs.createMentalModel(bankId, {
+				name: 'M1',
+				sourceQuery: 'q1'
+			})
+			await t.hs.createMentalModel(bankId, {
+				name: 'M2',
+				sourceQuery: 'q2'
+			})
+			await t.hs.createMentalModel(bankId, {
+				name: 'M3',
+				sourceQuery: 'q3'
+			})
 
 			expect(t.hs.listMentalModels(bankId)).toHaveLength(3)
 		})
@@ -162,22 +195,34 @@ describe('Mental models', () => {
 				sourceQuery: 'q3'
 			})
 
-			const filteredTag1 = t.hs.listMentalModels(bankId, { tags: ['tag1'] })
+			const filteredTag1 = t.hs.listMentalModels(bankId, {
+				tags: ['tag1']
+			})
 			expect(filteredTag1).toHaveLength(1)
 			expect(filteredTag1[0]!.name).toBe('Tag 1 model')
 
-			const filteredTag2 = t.hs.listMentalModels(bankId, { tags: ['tag2'] })
+			const filteredTag2 = t.hs.listMentalModels(bankId, {
+				tags: ['tag2']
+			})
 			expect(filteredTag2).toHaveLength(1)
 			expect(filteredTag2[0]!.name).toBe('Tag 2 model')
 		})
 
 		it('is bank-scoped', async () => {
 			const otherBank = createTestBank(t.hs, 'other-bank')
-			await t.hs.createMentalModel(bankId, { name: 'Bank1Model', sourceQuery: 'q' })
-			await t.hs.createMentalModel(otherBank, { name: 'Bank2Model', sourceQuery: 'q' })
+			await t.hs.createMentalModel(bankId, {
+				name: 'Bank1Model',
+				sourceQuery: 'q'
+			})
+			await t.hs.createMentalModel(otherBank, {
+				name: 'Bank2Model',
+				sourceQuery: 'q'
+			})
 
 			expect(t.hs.listMentalModels(bankId)).toHaveLength(1)
-			expect(t.hs.listMentalModels(otherBank)).toHaveLength(1)
+			expect(t.hs.listMentalModels(otherBank)).toHaveLength(
+				1
+			)
 		})
 	})
 
@@ -190,9 +235,13 @@ describe('Mental models', () => {
 				sourceQuery: 'query'
 			})
 
-			const updated = await t.hs.updateMentalModel(bankId, model.id, {
-				name: 'New Name'
-			})
+			const updated = await t.hs.updateMentalModel(
+				bankId,
+				model.id,
+				{
+					name: 'New Name'
+				}
+			)
 
 			expect(updated.name).toBe('New Name')
 		})
@@ -204,9 +253,13 @@ describe('Mental models', () => {
 				content: 'Old content'
 			})
 
-			const updated = await t.hs.updateMentalModel(bankId, model.id, {
-				content: 'New content'
-			})
+			const updated = await t.hs.updateMentalModel(
+				bankId,
+				model.id,
+				{
+					content: 'New content'
+				}
+			)
 
 			expect(updated.content).toBe('New content')
 		})
@@ -218,11 +271,18 @@ describe('Mental models', () => {
 				tags: ['old-tag']
 			})
 
-			const updated = await t.hs.updateMentalModel(bankId, model.id, {
-				tags: ['new-tag-1', 'new-tag-2']
-			})
+			const updated = await t.hs.updateMentalModel(
+				bankId,
+				model.id,
+				{
+					tags: ['new-tag-1', 'new-tag-2']
+				}
+			)
 
-			expect(updated.tags).toEqual(['new-tag-1', 'new-tag-2'])
+			expect(updated.tags).toEqual([
+				'new-tag-1',
+				'new-tag-2'
+			])
 		})
 
 		it('updates autoRefresh', async () => {
@@ -232,9 +292,13 @@ describe('Mental models', () => {
 				autoRefresh: false
 			})
 
-			const updated = await t.hs.updateMentalModel(bankId, model.id, {
-				autoRefresh: true
-			})
+			const updated = await t.hs.updateMentalModel(
+				bankId,
+				model.id,
+				{
+					autoRefresh: true
+				}
+			)
 
 			expect(updated.autoRefresh).toBe(true)
 		})
@@ -245,11 +309,17 @@ describe('Mental models', () => {
 				sourceQuery: 'query'
 			})
 
-			const updated = await t.hs.updateMentalModel(bankId, model.id, {
-				name: 'Updated'
-			})
+			const updated = await t.hs.updateMentalModel(
+				bankId,
+				model.id,
+				{
+					name: 'Updated'
+				}
+			)
 
-			expect(updated.updatedAt).toBeGreaterThanOrEqual(model.createdAt)
+			expect(updated.updatedAt).toBeGreaterThanOrEqual(
+				model.createdAt
+			)
 		})
 	})
 
@@ -263,7 +333,9 @@ describe('Mental models', () => {
 			})
 
 			t.hs.deleteMentalModel(bankId, model.id)
-			expect(t.hs.getMentalModel(bankId, model.id)).toBeUndefined()
+			expect(
+				t.hs.getMentalModel(bankId, model.id)
+			).toBeUndefined()
 		})
 
 		it('does not affect other models', async () => {
@@ -278,8 +350,12 @@ describe('Mental models', () => {
 
 			t.hs.deleteMentalModel(bankId, remove.id)
 
-			expect(t.hs.getMentalModel(bankId, keep.id)).toBeDefined()
-			expect(t.hs.getMentalModel(bankId, remove.id)).toBeUndefined()
+			expect(
+				t.hs.getMentalModel(bankId, keep.id)
+			).toBeDefined()
+			expect(
+				t.hs.getMentalModel(bankId, remove.id)
+			).toBeUndefined()
 		})
 	})
 
@@ -296,12 +372,19 @@ describe('Mental models', () => {
 
 			// The mock adapter returns text via chatStream; reflect() will produce
 			// an answer from whatever the mock returns. Set a recognizable answer.
-			t.adapter.setResponse('The team prefers async communication and daily standups.')
+			t.adapter.setResponse(
+				'The team prefers async communication and daily standups.'
+			)
 
-			const result = await t.hs.refreshMentalModel(bankId, model.id)
+			const result = await t.hs.refreshMentalModel(
+				bankId,
+				model.id
+			)
 
 			// Content should be updated to the reflect answer
-			expect(result.model.content).toBe('The team prefers async communication and daily standups.')
+			expect(result.model.content).toBe(
+				'The team prefers async communication and daily standups.'
+			)
 			expect(result.reflectResult).toBeDefined()
 			expect(result.reflectResult.answer).toBe(
 				'The team prefers async communication and daily standups.'
@@ -309,7 +392,9 @@ describe('Mental models', () => {
 
 			// Verify persistence
 			const fetched = t.hs.getMentalModel(bankId, model.id)
-			expect(fetched!.content).toBe('The team prefers async communication and daily standups.')
+			expect(fetched!.content).toBe(
+				'The team prefers async communication and daily standups.'
+			)
 		})
 
 		it('updates lastRefreshedAt timestamp after refresh', async () => {
@@ -322,18 +407,27 @@ describe('Mental models', () => {
 			const beforeRefresh = Date.now()
 
 			t.adapter.setResponse('Refreshed content')
-			const result = await t.hs.refreshMentalModel(bankId, model.id)
+			const result = await t.hs.refreshMentalModel(
+				bankId,
+				model.id
+			)
 
 			const afterRefresh = Date.now()
 
 			expect(result.model.lastRefreshedAt).toBeDefined()
 			expect(result.model.lastRefreshedAt).not.toBeNull()
-			expect(result.model.lastRefreshedAt!).toBeGreaterThanOrEqual(beforeRefresh)
-			expect(result.model.lastRefreshedAt!).toBeLessThanOrEqual(afterRefresh)
+			expect(
+				result.model.lastRefreshedAt!
+			).toBeGreaterThanOrEqual(beforeRefresh)
+			expect(
+				result.model.lastRefreshedAt!
+			).toBeLessThanOrEqual(afterRefresh)
 
 			// Verify persistence via getMentalModel
 			const fetched = t.hs.getMentalModel(bankId, model.id)
-			expect(fetched!.lastRefreshedAt).toBe(result.model.lastRefreshedAt)
+			expect(fetched!.lastRefreshedAt).toBe(
+				result.model.lastRefreshedAt
+			)
 		})
 
 		it.todo(
@@ -353,18 +447,24 @@ describe('Mental models', () => {
 			t.adapter.setResponse('Concise professional answer.')
 			await t.hs.refreshMentalModel(bankId, model.id)
 
-			const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+			const lastCall =
+				t.adapter.calls[t.adapter.calls.length - 1]
 			const callText = JSON.stringify(lastCall)
-			expect(callText).toContain('## DIRECTIVES (MANDATORY)')
+			expect(callText).toContain(
+				'## DIRECTIVES (MANDATORY)'
+			)
 			expect(callText).toContain('Response Style')
-			expect(callText).toContain('Always be concise and professional')
+			expect(callText).toContain(
+				'Always be concise and professional'
+			)
 		})
 
 		it('refresh completes without error when bank has directives', async () => {
 			// Create a directive in the bank
 			t.hs.createDirective(bankId, {
 				name: 'Be precise',
-				content: 'Always provide precise information with sources.'
+				content:
+					'Always provide precise information with sources.'
 			})
 
 			// Create a mental model
@@ -375,12 +475,19 @@ describe('Mental models', () => {
 			})
 
 			// Set a mock response for the reflect call
-			t.adapter.setResponse('Precise refreshed content with sources.')
+			t.adapter.setResponse(
+				'Precise refreshed content with sources.'
+			)
 
 			// Should complete without error — directives are loaded and injected
-			const result = await t.hs.refreshMentalModel(bankId, model.id)
+			const result = await t.hs.refreshMentalModel(
+				bankId,
+				model.id
+			)
 
-			expect(result.model.content).toBe('Precise refreshed content with sources.')
+			expect(result.model.content).toBe(
+				'Precise refreshed content with sources.'
+			)
 			expect(result.reflectResult.answer).toBeDefined()
 		})
 
@@ -394,12 +501,19 @@ describe('Mental models', () => {
 			expect(model.content).toBeNull()
 			expect(model.lastRefreshedAt).toBeNull()
 
-			t.adapter.setResponse('The project uses TypeScript and Bun runtime.')
+			t.adapter.setResponse(
+				'The project uses TypeScript and Bun runtime.'
+			)
 
-			const result = await t.hs.refreshMentalModel(bankId, model.id)
+			const result = await t.hs.refreshMentalModel(
+				bankId,
+				model.id
+			)
 
 			// Content should now be set
-			expect(result.model.content).toBe('The project uses TypeScript and Bun runtime.')
+			expect(result.model.content).toBe(
+				'The project uses TypeScript and Bun runtime.'
+			)
 			expect(result.model.lastRefreshedAt).not.toBeNull()
 		})
 	})
@@ -411,14 +525,19 @@ describe('Mental models', () => {
 			await t.hs.createMentalModel(bankId, {
 				name: 'Team Collaboration Practices',
 				sourceQuery: 'How does the team collaborate?',
-				content: 'The team uses async communication via Slack and holds daily standups at 9am.',
+				content:
+					'The team uses async communication via Slack and holds daily standups at 9am.',
 				tags: ['team']
 			})
 
 			t.adapter.setResponse('Team collaboration answer.')
-			await t.hs.reflect(bankId, 'How does the team work together?')
+			await t.hs.reflect(
+				bankId,
+				'How does the team work together?'
+			)
 
-			const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+			const lastCall =
+				t.adapter.calls[t.adapter.calls.length - 1]
 			const callText = JSON.stringify(lastCall)
 			expect(callText).toContain('search_mental_models')
 		})
@@ -431,9 +550,13 @@ describe('Mental models', () => {
 			})
 
 			t.adapter.setResponse('Drill-down answer.')
-			await t.hs.reflect(bankId, 'What is the latest status?')
+			await t.hs.reflect(
+				bankId,
+				'What is the latest status?'
+			)
 
-			const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
+			const lastCall =
+				t.adapter.calls[t.adapter.calls.length - 1]
 			const callText = JSON.stringify(lastCall)
 			expect(callText).toContain('search_observations')
 			expect(callText).toContain('"recall"')
@@ -449,23 +572,34 @@ describe('Mental models', () => {
 			})
 
 			await t.hs.retain(bankId, 'retain source', {
-				facts: [{ content: 'Alice shipped a new feature.' }],
+				facts: [
+					{ content: 'Alice shipped a new feature.' }
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponses([
 				JSON.stringify([
-					{ action: 'create', text: 'Alice shipped a new feature.', reason: 'new update' }
+					{
+						action: 'create',
+						text: 'Alice shipped a new feature.',
+						reason: 'new update'
+					}
 				]),
 				'Refreshed auto model content.'
 			])
 
 			const result = await t.hs.consolidate(bankId)
-			expect(result.mentalModelsRefreshQueued).toBeGreaterThanOrEqual(1)
+			expect(
+				result.mentalModelsRefreshQueued
+			).toBeGreaterThanOrEqual(1)
 
 			await waitFor(() => {
 				const after = t.hs.getMentalModel(bankId, model.id)
-				return after?.lastRefreshedAt !== null && after?.content !== 'Initial content'
+				return (
+					after?.lastRefreshedAt !== null &&
+					after?.content !== 'Initial content'
+				)
 			})
 		})
 
@@ -484,24 +618,36 @@ describe('Mental models', () => {
 				tags: ['user:bob'],
 				autoRefresh: true
 			})
-			const mmUntagged = await t.hs.createMentalModel(bankId, {
-				name: 'Global model',
-				sourceQuery: 'What about everyone?',
-				content: 'Initial global content',
-				autoRefresh: true
-			})
+			const mmUntagged = await t.hs.createMentalModel(
+				bankId,
+				{
+					name: 'Global model',
+					sourceQuery: 'What about everyone?',
+					content: 'Initial global content',
+					autoRefresh: true
+				}
+			)
 			const aliceInitial = mmAlice.lastRefreshedAt
 			const bobInitial = mmBob.lastRefreshedAt
 			const globalInitial = mmUntagged.lastRefreshedAt
 
 			await t.hs.retain(bankId, 'retain source', {
-				facts: [{ content: 'Alice likes React', tags: ['user:alice'] }],
+				facts: [
+					{
+						content: 'Alice likes React',
+						tags: ['user:alice']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponses([
 				JSON.stringify([
-					{ action: 'create', text: 'Alice likes React', reason: 'new observation' }
+					{
+						action: 'create',
+						text: 'Alice likes React',
+						reason: 'new observation'
+					}
 				]),
 				'Alice model refreshed',
 				'Global model refreshed'
@@ -530,22 +676,33 @@ describe('Mental models', () => {
 				tags: ['project-x'],
 				autoRefresh: true
 			})
-			const untagged = await t.hs.createMentalModel(bankId, {
-				name: 'Untagged model',
-				sourceQuery: 'untagged query',
-				content: 'Initial untagged content',
-				autoRefresh: true
-			})
+			const untagged = await t.hs.createMentalModel(
+				bankId,
+				{
+					name: 'Untagged model',
+					sourceQuery: 'untagged query',
+					content: 'Initial untagged content',
+					autoRefresh: true
+				}
+			)
 			const taggedInitial = tagged.lastRefreshedAt
 			const untaggedInitial = untagged.lastRefreshedAt
 
 			await t.hs.retain(bankId, 'retain source', {
-				facts: [{ content: 'Project X note', tags: ['project-x'] }],
+				facts: [
+					{ content: 'Project X note', tags: ['project-x'] }
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Project X note', reason: 'new note' }]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Project X note',
+						reason: 'new note'
+					}
+				]),
 				'Tagged refresh',
 				'Untagged refresh'
 			])
@@ -554,11 +711,19 @@ describe('Mental models', () => {
 			expect(result.mentalModelsRefreshQueued).toBe(2)
 
 			await waitFor(() => {
-				const tModel = t.hs.getMentalModel(bankId, tagged.id)
-				const uModel = t.hs.getMentalModel(bankId, untagged.id)
+				const tModel = t.hs.getMentalModel(
+					bankId,
+					tagged.id
+				)
+				const uModel = t.hs.getMentalModel(
+					bankId,
+					untagged.id
+				)
 				return (
-					(tModel?.lastRefreshedAt ?? null) !== taggedInitial &&
-					(uModel?.lastRefreshedAt ?? null) !== untaggedInitial
+					(tModel?.lastRefreshedAt ?? null) !==
+						taggedInitial &&
+					(uModel?.lastRefreshedAt ?? null) !==
+						untaggedInitial
 				)
 			})
 		})
@@ -571,15 +736,21 @@ describe('Mental models', () => {
 	// ── Tag security boundaries ───────────────────────────────────────────
 
 	describe('tag security', () => {
-		it.todo('mental model refresh respects tag boundaries (requires real-LLM tool-calling)')
+		it.todo(
+			'mental model refresh respects tag boundaries (requires real-LLM tool-calling)'
+		)
 
-		it.todo('refresh with tags only accesses same tagged models (requires real-LLM tool-calling)')
+		it.todo(
+			'refresh with tags only accesses same tagged models (requires real-LLM tool-calling)'
+		)
 
 		it.todo(
 			'refresh of tagged model does not access different-tagged models (requires real-LLM tool-calling)'
 		)
 
-		it.todo('refresh of tagged model excludes untagged memories (requires real-LLM tool-calling)')
+		it.todo(
+			'refresh of tagged model excludes untagged memories (requires real-LLM tool-calling)'
+		)
 
 		it('consolidation does not refresh models with non-matching tags', async () => {
 			const mmAlice = await t.hs.createMentalModel(bankId, {
@@ -596,12 +767,23 @@ describe('Mental models', () => {
 			})
 
 			await t.hs.retain(bankId, 'retain source', {
-				facts: [{ content: 'Alice likes coffee', tags: ['user:alice'] }],
+				facts: [
+					{
+						content: 'Alice likes coffee',
+						tags: ['user:alice']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Alice likes coffee', reason: 'new fact' }]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Alice likes coffee',
+						reason: 'new fact'
+					}
+				]),
 				'Alice refresh response'
 			])
 
@@ -609,9 +791,18 @@ describe('Mental models', () => {
 			expect(result.mentalModelsRefreshQueued).toBe(1)
 
 			await waitFor(() => {
-				const aliceAfter = t.hs.getMentalModel(bankId, mmAlice.id)
-				const bobAfter = t.hs.getMentalModel(bankId, mmBob.id)
-				return aliceAfter?.lastRefreshedAt !== null && bobAfter?.lastRefreshedAt === null
+				const aliceAfter = t.hs.getMentalModel(
+					bankId,
+					mmAlice.id
+				)
+				const bobAfter = t.hs.getMentalModel(
+					bankId,
+					mmBob.id
+				)
+				return (
+					aliceAfter?.lastRefreshedAt !== null &&
+					bobAfter?.lastRefreshedAt === null
+				)
 			})
 		})
 	})
@@ -624,8 +815,10 @@ describe('Mental models', () => {
 			const model = await t.hs.createMentalModel(bankId, {
 				id: customId,
 				name: 'Team Communication Preferences',
-				sourceQuery: 'How does the team prefer to communicate?',
-				content: 'The team prefers async communication via Slack',
+				sourceQuery:
+					'How does the team prefer to communicate?',
+				content:
+					'The team prefers async communication via Slack',
 				tags: ['team', 'communication']
 			})
 
@@ -634,7 +827,9 @@ describe('Mental models', () => {
 			const fetched = t.hs.getMentalModel(bankId, customId)
 			expect(fetched).toBeDefined()
 			expect(fetched!.id).toBe(customId)
-			expect(fetched!.name).toBe('Team Communication Preferences')
+			expect(fetched!.name).toBe(
+				'Team Communication Preferences'
+			)
 		})
 	})
 })

@@ -3,10 +3,16 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { anthropicText } from '@tanstack/ai-anthropic'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { chat, streamToText } from '@ellie/ai'
-import { createHindsightDB, type HindsightDatabase } from './db'
+import {
+	createHindsightDB,
+	type HindsightDatabase
+} from './db'
 import { resolveModelRuntime } from './default-models'
 import { EmbeddingStore } from './embedding'
-import { retain as retainImpl, retainBatch as retainBatchImpl } from './retain'
+import {
+	retain as retainImpl,
+	retainBatch as retainBatchImpl
+} from './retain'
 import { recall as recallImpl } from './recall'
 import { WorkingMemoryStore } from './working-memory'
 import { clamp } from './util'
@@ -27,7 +33,10 @@ import {
 	updateDirective as updateDirectiveImpl,
 	deleteDirective as deleteDirectiveImpl
 } from './directives'
-import { listEpisodes as listEpisodesImpl, narrative as narrativeImpl } from './episodes'
+import {
+	listEpisodes as listEpisodesImpl,
+	narrative as narrativeImpl
+} from './episodes'
 import {
 	locationRecord as locationRecordImpl,
 	locationFind as locationFindImpl,
@@ -132,9 +141,14 @@ export class Hindsight {
 	private readonly rerank: RerankFunction | undefined
 	private readonly instanceDefaults: BankConfig | undefined
 	private readonly onTrace: TraceCallback | undefined
-	private readonly extensions: HindsightExtensions | undefined
+	private readonly extensions:
+		| HindsightExtensions
+		| undefined
 	private readonly workingMemory = new WorkingMemoryStore()
-	private readonly activeOperationTasks = new Map<string, Promise<void>>()
+	private readonly activeOperationTasks = new Map<
+		string,
+		Promise<void>
+	>()
 	private readonly cancelledOperations = new Set<string>()
 
 	constructor(config: HindsightConfig) {
@@ -142,7 +156,8 @@ export class Hindsight {
 		const dims = runtime.embeddingDimensions
 
 		this.hdb = createHindsightDB(config.dbPath, dims)
-		this.adapter = config.adapter ?? anthropicText('claude-haiku-4-5')
+		this.adapter =
+			config.adapter ?? anthropicText('claude-haiku-4-5')
 		this.rerank = runtime.rerank
 		this.instanceDefaults = config.defaults
 		this.onTrace = config.onTrace
@@ -176,7 +191,9 @@ export class Hindsight {
 	/**
 	 * Resolve effective config: call-site > bank config > instance defaults > hardcoded defaults
 	 */
-	private resolveConfig(bankId: string): Required<BankConfig> {
+	private resolveConfig(
+		bankId: string
+	): Required<BankConfig> {
 		const bankConfig = this.getBankConfigRaw(bankId)
 		return {
 			...HARDCODED_DEFAULTS,
@@ -209,7 +226,11 @@ export class Hindsight {
 		fn: () => Promise<T>,
 		extractMetadata: (result: T) => Record<string, unknown>
 	): Promise<T> {
-		const hookContext = this.buildOperationContext(hookOperation, bankId, input)
+		const hookContext = this.buildOperationContext(
+			hookOperation,
+			bankId,
+			input
+		)
 		await this.runBeforeOperationHooks(hookContext)
 		const startedAt = Date.now()
 		try {
@@ -230,7 +251,10 @@ export class Hindsight {
 			})
 			return result
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
+			const message =
+				error instanceof Error
+					? error.message
+					: String(error)
 			await this.runAfterOperationHooks({
 				...hookContext,
 				success: false,
@@ -265,7 +289,9 @@ export class Hindsight {
 				id,
 				name,
 				description: options?.description ?? null,
-				config: options?.config ? JSON.stringify(options.config) : null,
+				config: options?.config
+					? JSON.stringify(options.config)
+					: null,
 				disposition: JSON.stringify(disposition),
 				mission,
 				createdAt: now,
@@ -303,7 +329,11 @@ export class Hindsight {
 	}
 
 	listBanks(): Bank[] {
-		return this.hdb.db.select().from(this.hdb.schema.banks).all().map(toBank)
+		return this.hdb.db
+			.select()
+			.from(this.hdb.schema.banks)
+			.all()
+			.map(toBank)
 	}
 
 	deleteBank(id: string): void {
@@ -336,28 +366,46 @@ export class Hindsight {
 		}
 
 		// Clean FTS entries
-		this.hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE bank_id = ?', [id])
+		this.hdb.sqlite.run(
+			'DELETE FROM hs_memory_fts WHERE bank_id = ?',
+			[id]
+		)
 
 		// Delete the bank row (cascades to SQL tables)
-		this.hdb.db.delete(this.hdb.schema.banks).where(eq(this.hdb.schema.banks.id, id)).run()
+		this.hdb.db
+			.delete(this.hdb.schema.banks)
+			.where(eq(this.hdb.schema.banks.id, id))
+			.run()
 	}
 
-	updateBankConfig(bankId: string, config: BankConfig): Bank {
+	updateBankConfig(
+		bankId: string,
+		config: BankConfig
+	): Bank {
 		const bank = this.getBankById(bankId)
 		if (!bank) throw new Error(`Bank ${bankId} not found`)
 
 		const existing = this.getBankConfigRaw(bankId)
-		const merged = { ...existing, ...stripUndefined(config) }
+		const merged = {
+			...existing,
+			...stripUndefined(config)
+		}
 		const now = Date.now()
 		this.hdb.db
 			.update(this.hdb.schema.banks)
-			.set({ config: JSON.stringify(merged), updatedAt: now })
+			.set({
+				config: JSON.stringify(merged),
+				updatedAt: now
+			})
 			.where(eq(this.hdb.schema.banks.id, bankId))
 			.run()
 		return this.getBankById(bankId)!
 	}
 
-	setDisposition(bankId: string, traits: Partial<DispositionTraits>): Bank {
+	setDisposition(
+		bankId: string,
+		traits: Partial<DispositionTraits>
+	): Bank {
 		const bank = this.getBankById(bankId)
 		if (!bank) throw new Error(`Bank ${bankId} not found`)
 
@@ -374,7 +422,10 @@ export class Hindsight {
 		const now = Date.now()
 		this.hdb.db
 			.update(this.hdb.schema.banks)
-			.set({ disposition: JSON.stringify(merged), updatedAt: now })
+			.set({
+				disposition: JSON.stringify(merged),
+				updatedAt: now
+			})
 			.where(eq(this.hdb.schema.banks.id, bankId))
 			.run()
 		return this.getBankById(bankId)!
@@ -393,15 +444,21 @@ export class Hindsight {
 		return this.getBankById(bankId)!
 	}
 
-	updateBank(bankId: string, updates: { name?: string; mission?: string }): Bank {
+	updateBank(
+		bankId: string,
+		updates: { name?: string; mission?: string }
+	): Bank {
 		const bank = this.getBankById(bankId)
 		if (!bank) throw new Error(`Bank ${bankId} not found`)
 
-		const patch: Partial<typeof this.hdb.schema.banks.$inferInsert> = {
+		const patch: Partial<
+			typeof this.hdb.schema.banks.$inferInsert
+		> = {
 			updatedAt: Date.now()
 		}
 		if (updates.name != null) patch.name = updates.name
-		if (updates.mission != null) patch.mission = updates.mission
+		if (updates.mission != null)
+			patch.mission = updates.mission
 
 		this.hdb.db
 			.update(this.hdb.schema.banks)
@@ -411,7 +468,10 @@ export class Hindsight {
 		return this.getBankById(bankId)!
 	}
 
-	async mergeBankMission(bankId: string, newInfo: string): Promise<{ mission: string }> {
+	async mergeBankMission(
+		bankId: string,
+		newInfo: string
+	): Promise<{ mission: string }> {
 		const bank = this.getBankById(bankId)
 		if (!bank) throw new Error(`Bank ${bankId} not found`)
 
@@ -439,7 +499,9 @@ Instructions:
 			)
 			mergedMission = response.trim()
 		} catch {
-			mergedMission = bank.mission ? `${bank.mission} ${newInfo}`.trim() : newInfo
+			mergedMission = bank.mission
+				? `${bank.mission} ${newInfo}`.trim()
+				: newInfo
 		}
 
 		if (!mergedMission) {
@@ -457,7 +519,10 @@ Instructions:
 		content: RetainContentInput,
 		options?: RetainOptions
 	): Promise<RetainResult> {
-		const normalizedContent = typeof content === 'string' ? content : JSON.stringify(content)
+		const normalizedContent =
+			typeof content === 'string'
+				? content
+				: JSON.stringify(content)
 		const cfg = this.resolveConfig(bankId)
 		const resolvedOptions: RetainOptions = {
 			mode: cfg.extractionMode,
@@ -468,14 +533,21 @@ Instructions:
 		}
 		const bank = this.getBankById(bankId)
 		const retainProfile = bank
-			? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+			? {
+					name: bank.name,
+					mission: bank.mission,
+					disposition: bank.disposition
+				}
 			: undefined
 
 		return this.trace(
 			'retain',
 			'retain',
 			bankId,
-			{ contentLength: normalizedContent.length, hasOptions: Boolean(options) },
+			{
+				contentLength: normalizedContent.length,
+				hasOptions: Boolean(options)
+			},
 			() =>
 				retainImpl(
 					this.hdb,
@@ -524,7 +596,10 @@ Instructions:
 			'retain',
 			'retain_batch',
 			bankId,
-			{ itemsCount: contents.length, hasOptions: Boolean(options) },
+			{
+				itemsCount: contents.length,
+				hasOptions: Boolean(options)
+			},
 			() =>
 				retainBatchImpl(
 					this.hdb,
@@ -539,14 +614,27 @@ Instructions:
 				),
 			results => ({
 				items: contents.length,
-				memoriesExtracted: results.reduce((sum, result) => sum + result.memories.length, 0),
-				entitiesResolved: results.reduce((sum, result) => sum + result.entities.length, 0),
-				linksCreated: results.reduce((sum, result) => sum + result.links.length, 0)
+				memoriesExtracted: results.reduce(
+					(sum, result) => sum + result.memories.length,
+					0
+				),
+				entitiesResolved: results.reduce(
+					(sum, result) => sum + result.entities.length,
+					0
+				),
+				linksCreated: results.reduce(
+					(sum, result) => sum + result.links.length,
+					0
+				)
 			})
 		)
 	}
 
-	async recall(bankId: string, query: string, options?: RecallOptions): Promise<RecallResult> {
+	async recall(
+		bankId: string,
+		query: string,
+		options?: RecallOptions
+	): Promise<RecallResult> {
 		return this.trace(
 			'recall',
 			'recall',
@@ -573,7 +661,11 @@ Instructions:
 		)
 	}
 
-	async reflect(bankId: string, query: string, options?: ReflectOptions): Promise<ReflectResult> {
+	async reflect(
+		bankId: string,
+		query: string,
+		options?: ReflectOptions
+	): Promise<ReflectResult> {
 		const cfg = this.resolveConfig(bankId)
 		const resolvedOptions: ReflectOptions = {
 			budget: cfg.reflectBudget,
@@ -581,7 +673,11 @@ Instructions:
 		}
 		const bank = this.getBankById(bankId)
 		const bankProfile = bank
-			? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+			? {
+					name: bank.name,
+					mission: bank.mission,
+					disposition: bank.disposition
+				}
 			: undefined
 
 		return this.trace(
@@ -615,10 +711,17 @@ Instructions:
 
 	// ── Consolidation ───────────────────────────────────────────────────
 
-	async consolidate(bankId: string, options?: ConsolidateOptions): Promise<ConsolidateResult> {
+	async consolidate(
+		bankId: string,
+		options?: ConsolidateOptions
+	): Promise<ConsolidateResult> {
 		const bank = this.getBankById(bankId)
 		const consProfile = bank
-			? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+			? {
+					name: bank.name,
+					mission: bank.mission,
+					disposition: bank.disposition
+				}
 			: undefined
 
 		return this.trace(
@@ -627,7 +730,8 @@ Instructions:
 			bankId,
 			{
 				batchSize: options?.batchSize ?? null,
-				refreshMentalModels: options?.refreshMentalModels ?? true
+				refreshMentalModels:
+					options?.refreshMentalModels ?? true
 			},
 			() =>
 				consolidateImpl(
@@ -659,12 +763,24 @@ Instructions:
 	): Promise<SubmitAsyncRetainResult> {
 		const retainTask = async () => {
 			if (contents.length === 0) {
-				return this.retainBatch(bankId, [] as string[], options)
+				return this.retainBatch(
+					bankId,
+					[] as string[],
+					options
+				)
 			}
 			if (typeof contents[0] === 'string') {
-				return this.retainBatch(bankId, contents as string[], options)
+				return this.retainBatch(
+					bankId,
+					contents as string[],
+					options
+				)
 			}
-			return this.retainBatch(bankId, contents as RetainBatchItem[], options)
+			return this.retainBatch(
+				bankId,
+				contents as RetainBatchItem[],
+				options
+			)
 		}
 
 		const result = await this.submitAsyncOperation(
@@ -707,38 +823,59 @@ Instructions:
 		)
 	}
 
-	listOperations(bankId: string, options?: ListOperationsOptions): ListOperationsResult {
+	listOperations(
+		bankId: string,
+		options?: ListOperationsOptions
+	): ListOperationsResult {
 		const limit = options?.limit ?? 20
 		const offset = options?.offset ?? 0
 		const rows = this.hdb.db
 			.select()
 			.from(this.hdb.schema.asyncOperations)
-			.where(eq(this.hdb.schema.asyncOperations.bankId, bankId))
+			.where(
+				eq(this.hdb.schema.asyncOperations.bankId, bankId)
+			)
 			.all()
 			.filter(row => {
 				if (!options?.status) return true
 				if (options.status === 'pending') {
-					return row.status === 'pending' || row.status === 'processing'
+					return (
+						row.status === 'pending' ||
+						row.status === 'processing'
+					)
 				}
 				return row.status === options.status
 			})
 			.sort((a, b) => b.createdAt - a.createdAt)
 
 		const paged = rows.slice(offset, offset + limit)
-		const operations: AsyncOperationSummary[] = paged.map(row => {
-			const metadata = row.resultMetadata
-				? safeJson<Record<string, unknown>>(row.resultMetadata, {})
-				: {}
-			return {
-				id: row.operationId,
-				taskType: row.operationType as AsyncOperationType,
-				itemsCount: typeof metadata.itemsCount === 'number' ? metadata.itemsCount : 0,
-				documentId: typeof metadata.documentId === 'string' ? metadata.documentId : null,
-				createdAt: row.createdAt,
-				status: this.toOperationApiStatus(row.status as AsyncOperationStatus),
-				errorMessage: row.errorMessage
+		const operations: AsyncOperationSummary[] = paged.map(
+			row => {
+				const metadata = row.resultMetadata
+					? safeJson<Record<string, unknown>>(
+							row.resultMetadata,
+							{}
+						)
+					: {}
+				return {
+					id: row.operationId,
+					taskType: row.operationType as AsyncOperationType,
+					itemsCount:
+						typeof metadata.itemsCount === 'number'
+							? metadata.itemsCount
+							: 0,
+					documentId:
+						typeof metadata.documentId === 'string'
+							? metadata.documentId
+							: null,
+					createdAt: row.createdAt,
+					status: this.toOperationApiStatus(
+						row.status as AsyncOperationStatus
+					),
+					errorMessage: row.errorMessage
+				}
 			}
-		})
+		)
 
 		return {
 			total: rows.length,
@@ -746,13 +883,19 @@ Instructions:
 		}
 	}
 
-	getOperationStatus(bankId: string, operationId: string): OperationStatusResult {
+	getOperationStatus(
+		bankId: string,
+		operationId: string
+	): OperationStatusResult {
 		const row = this.hdb.db
 			.select()
 			.from(this.hdb.schema.asyncOperations)
 			.where(
 				and(
-					eq(this.hdb.schema.asyncOperations.operationId, operationId),
+					eq(
+						this.hdb.schema.asyncOperations.operationId,
+						operationId
+					),
 					eq(this.hdb.schema.asyncOperations.bankId, bankId)
 				)
 			)
@@ -773,25 +916,40 @@ Instructions:
 
 		return {
 			operationId: row.operationId,
-			status: this.toOperationApiStatus(row.status as AsyncOperationStatus),
-			operationType: row.operationType as AsyncOperationType,
+			status: this.toOperationApiStatus(
+				row.status as AsyncOperationStatus
+			),
+			operationType:
+				row.operationType as AsyncOperationType,
 			createdAt: row.createdAt,
 			updatedAt: row.updatedAt,
 			completedAt: row.completedAt,
 			errorMessage: row.errorMessage,
 			resultMetadata: row.resultMetadata
-				? safeJson<Record<string, unknown>>(row.resultMetadata, {})
+				? safeJson<Record<string, unknown>>(
+						row.resultMetadata,
+						{}
+					)
 				: null
 		}
 	}
 
-	cancelOperation(bankId: string, operationId: string): CancelOperationResult {
+	cancelOperation(
+		bankId: string,
+		operationId: string
+	): CancelOperationResult {
 		const existing = this.hdb.db
-			.select({ operationId: this.hdb.schema.asyncOperations.operationId })
+			.select({
+				operationId:
+					this.hdb.schema.asyncOperations.operationId
+			})
 			.from(this.hdb.schema.asyncOperations)
 			.where(
 				and(
-					eq(this.hdb.schema.asyncOperations.operationId, operationId),
+					eq(
+						this.hdb.schema.asyncOperations.operationId,
+						operationId
+					),
 					eq(this.hdb.schema.asyncOperations.bankId, bankId)
 				)
 			)
@@ -808,7 +966,12 @@ Instructions:
 
 		this.hdb.db
 			.delete(this.hdb.schema.asyncOperations)
-			.where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+			.where(
+				eq(
+					this.hdb.schema.asyncOperations.operationId,
+					operationId
+				)
+			)
 			.run()
 		this.cancelledOperations.add(operationId)
 
@@ -828,9 +991,17 @@ Instructions:
 			if (this.cancelledOperations.has(operationId)) return
 
 			const pendingRow = this.hdb.db
-				.select({ operationId: this.hdb.schema.asyncOperations.operationId })
+				.select({
+					operationId:
+						this.hdb.schema.asyncOperations.operationId
+				})
 				.from(this.hdb.schema.asyncOperations)
-				.where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+				.where(
+					eq(
+						this.hdb.schema.asyncOperations.operationId,
+						operationId
+					)
+				)
 				.get()
 			if (!pendingRow) return
 
@@ -840,7 +1011,12 @@ Instructions:
 					status: 'processing',
 					updatedAt: Date.now()
 				})
-				.where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+				.where(
+					eq(
+						this.hdb.schema.asyncOperations.operationId,
+						operationId
+					)
+				)
 				.run()
 
 			await task()
@@ -856,12 +1032,23 @@ Instructions:
 					completedAt,
 					errorMessage: null
 				})
-				.where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+				.where(
+					eq(
+						this.hdb.schema.asyncOperations.operationId,
+						operationId
+					)
+				)
 				.run()
 		} catch (error) {
 			if (this.cancelledOperations.has(operationId)) return
-			const message = error instanceof Error ? error.message : String(error)
-			const truncated = message.length > 5000 ? message.slice(0, 5000) : message
+			const message =
+				error instanceof Error
+					? error.message
+					: String(error)
+			const truncated =
+				message.length > 5000
+					? message.slice(0, 5000)
+					: message
 			this.hdb.db
 				.update(this.hdb.schema.asyncOperations)
 				.set({
@@ -869,7 +1056,12 @@ Instructions:
 					updatedAt: Date.now(),
 					errorMessage: truncated
 				})
-				.where(eq(this.hdb.schema.asyncOperations.operationId, operationId))
+				.where(
+					eq(
+						this.hdb.schema.asyncOperations.operationId,
+						operationId
+					)
+				)
 				.run()
 		} finally {
 			this.activeOperationTasks.delete(operationId)
@@ -892,28 +1084,48 @@ Instructions:
 		resultMetadata?: Record<string, unknown> | null,
 		dedupeByBank: boolean = false
 	): Promise<SubmitAsyncOperationResult> {
-		const hookContext = this.buildOperationContext(hookOperation, bankId, {
-			operationType,
-			dedupeByBank,
-			resultMetadata: resultMetadata ?? null
-		})
+		const hookContext = this.buildOperationContext(
+			hookOperation,
+			bankId,
+			{
+				operationType,
+				dedupeByBank,
+				resultMetadata: resultMetadata ?? null
+			}
+		)
 		try {
 			await this.runBeforeOperationHooks(hookContext)
 
 			if (dedupeByBank) {
 				const existing = this.hdb.db
-					.select({ operationId: this.hdb.schema.asyncOperations.operationId })
+					.select({
+						operationId:
+							this.hdb.schema.asyncOperations.operationId
+					})
 					.from(this.hdb.schema.asyncOperations)
 					.where(
 						and(
-							eq(this.hdb.schema.asyncOperations.bankId, bankId),
-							eq(this.hdb.schema.asyncOperations.operationType, operationType),
-							eq(this.hdb.schema.asyncOperations.status, 'pending')
+							eq(
+								this.hdb.schema.asyncOperations.bankId,
+								bankId
+							),
+							eq(
+								this.hdb.schema.asyncOperations
+									.operationType,
+								operationType
+							),
+							eq(
+								this.hdb.schema.asyncOperations.status,
+								'pending'
+							)
 						)
 					)
 					.get()
 				if (existing) {
-					const dedupResult = { operationId: existing.operationId, deduplicated: true }
+					const dedupResult = {
+						operationId: existing.operationId,
+						deduplicated: true
+					}
 					await this.runAfterOperationHooks({
 						...hookContext,
 						success: true,
@@ -932,7 +1144,9 @@ Instructions:
 					bankId,
 					operationType,
 					status: 'pending',
-					resultMetadata: resultMetadata ? JSON.stringify(resultMetadata) : null,
+					resultMetadata: resultMetadata
+						? JSON.stringify(resultMetadata)
+						: null,
 					errorMessage: null,
 					createdAt: now,
 					updatedAt: now,
@@ -940,14 +1154,18 @@ Instructions:
 				})
 				.run()
 
-			const run = () => this.executeAsyncOperation(operationId, task)
+			const run = () =>
+				this.executeAsyncOperation(operationId, task)
 
 			const taskPromise = new Promise<void>(resolve => {
 				setTimeout(() => {
 					void run().finally(resolve)
 				}, 0)
 			})
-			this.activeOperationTasks.set(operationId, taskPromise)
+			this.activeOperationTasks.set(
+				operationId,
+				taskPromise
+			)
 
 			const result = { operationId }
 			await this.runAfterOperationHooks({
@@ -957,7 +1175,10 @@ Instructions:
 			})
 			return result
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
+			const message =
+				error instanceof Error
+					? error.message
+					: String(error)
 			await this.runAfterOperationHooks({
 				...hookContext,
 				success: false,
@@ -969,15 +1190,29 @@ Instructions:
 
 	// ── Mental models ─────────────────────────────────────────────────
 
-	async createMentalModel(bankId: string, options: CreateMentalModelOptions): Promise<MentalModel> {
-		return createMentalModelImpl(this.hdb, this.modelVec, bankId, options)
+	async createMentalModel(
+		bankId: string,
+		options: CreateMentalModelOptions
+	): Promise<MentalModel> {
+		return createMentalModelImpl(
+			this.hdb,
+			this.modelVec,
+			bankId,
+			options
+		)
 	}
 
-	getMentalModel(bankId: string, id: string): MentalModel | undefined {
+	getMentalModel(
+		bankId: string,
+		id: string
+	): MentalModel | undefined {
 		return getMentalModelImpl(this.hdb, bankId, id)
 	}
 
-	listMentalModels(bankId: string, options?: ListMentalModelsOptions): MentalModel[] {
+	listMentalModels(
+		bankId: string,
+		options?: ListMentalModelsOptions
+	): MentalModel[] {
 		return listMentalModelsImpl(this.hdb, bankId, options)
 	}
 
@@ -986,17 +1221,35 @@ Instructions:
 		id: string,
 		options: UpdateMentalModelOptions
 	): Promise<MentalModel> {
-		return updateMentalModelImpl(this.hdb, this.modelVec, bankId, id, options)
+		return updateMentalModelImpl(
+			this.hdb,
+			this.modelVec,
+			bankId,
+			id,
+			options
+		)
 	}
 
 	deleteMentalModel(bankId: string, id: string): void {
-		deleteMentalModelImpl(this.hdb, this.modelVec, bankId, id)
+		deleteMentalModelImpl(
+			this.hdb,
+			this.modelVec,
+			bankId,
+			id
+		)
 	}
 
-	async refreshMentalModel(bankId: string, id: string): Promise<RefreshMentalModelResult> {
+	async refreshMentalModel(
+		bankId: string,
+		id: string
+	): Promise<RefreshMentalModelResult> {
 		const bank = this.getBankById(bankId)
 		const profile = bank
-			? { name: bank.name, mission: bank.mission, disposition: bank.disposition }
+			? {
+					name: bank.name,
+					mission: bank.mission,
+					disposition: bank.disposition
+				}
 			: undefined
 
 		return refreshMentalModelImpl(
@@ -1013,20 +1266,38 @@ Instructions:
 
 	// ── Directives ──────────────────────────────────────────────────────
 
-	createDirective(bankId: string, options: CreateDirectiveOptions): Directive {
+	createDirective(
+		bankId: string,
+		options: CreateDirectiveOptions
+	): Directive {
 		return createDirectiveImpl(this.hdb, bankId, options)
 	}
 
-	getDirective(bankId: string, id: string): Directive | undefined {
+	getDirective(
+		bankId: string,
+		id: string
+	): Directive | undefined {
 		return getDirectiveImpl(this.hdb, bankId, id)
 	}
 
-	listDirectives(bankId: string, activeOnly?: boolean): Directive[] {
+	listDirectives(
+		bankId: string,
+		activeOnly?: boolean
+	): Directive[] {
 		return listDirectivesImpl(this.hdb, bankId, activeOnly)
 	}
 
-	updateDirective(bankId: string, id: string, options: UpdateDirectiveOptions): Directive {
-		return updateDirectiveImpl(this.hdb, bankId, id, options)
+	updateDirective(
+		bankId: string,
+		id: string,
+		options: UpdateDirectiveOptions
+	): Directive {
+		return updateDirectiveImpl(
+			this.hdb,
+			bankId,
+			id,
+			options
+		)
 	}
 
 	deleteDirective(bankId: string, id: string): void {
@@ -1035,10 +1306,15 @@ Instructions:
 
 	// ── API Parity Utilities ─────────────────────────────────────────────
 
-	listMemoryUnits(bankId: string, options?: ListMemoryUnitsOptions): ListMemoryUnitsResult {
+	listMemoryUnits(
+		bankId: string,
+		options?: ListMemoryUnitsOptions
+	): ListMemoryUnitsResult {
 		const limit = options?.limit ?? 100
 		const offset = options?.offset ?? 0
-		const searchQuery = options?.searchQuery?.toLowerCase().trim()
+		const searchQuery = options?.searchQuery
+			?.toLowerCase()
+			.trim()
 
 		const rows = this.hdb.db
 			.select()
@@ -1046,21 +1322,31 @@ Instructions:
 			.where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
 			.all()
 			.filter(row => {
-				if (options?.factType && row.factType !== options.factType) return false
+				if (
+					options?.factType &&
+					row.factType !== options.factType
+				)
+					return false
 				if (!searchQuery) return true
 				const text = row.content.toLowerCase()
 				const context = (row.sourceText ?? '').toLowerCase()
-				return text.includes(searchQuery) || context.includes(searchQuery)
+				return (
+					text.includes(searchQuery) ||
+					context.includes(searchQuery)
+				)
 			})
 			.sort((a, b) => {
 				const aPrimary = a.mentionedAt ?? -1
 				const bPrimary = b.mentionedAt ?? -1
-				if (aPrimary !== bPrimary) return bPrimary - aPrimary
+				if (aPrimary !== bPrimary)
+					return bPrimary - aPrimary
 				return b.createdAt - a.createdAt
 			})
 
 		const paged = rows.slice(offset, offset + limit)
-		const entityByMemory = this.loadEntityNamesByMemoryIds(paged.map(row => row.id))
+		const entityByMemory = this.loadEntityNamesByMemoryIds(
+			paged.map(row => row.id)
+		)
 
 		const items = paged.map(row => ({
 			// Python parity: date prefers eventDate, with occurred/mentioned fallbacks.
@@ -1069,13 +1355,24 @@ Instructions:
 			text: row.content,
 			context: row.sourceText ?? '',
 			date: toIsoOrEmpty(
-				row.eventDate ?? row.occurredStart ?? row.occurredStart ?? row.mentionedAt ?? row.createdAt
+				row.eventDate ??
+					row.occurredStart ??
+					row.occurredStart ??
+					row.mentionedAt ??
+					row.createdAt
 			),
-			factType: row.factType as ListMemoryUnitsResult['items'][number]['factType'],
+			factType:
+				row.factType as ListMemoryUnitsResult['items'][number]['factType'],
 			mentionedAt: toIsoOrNull(row.mentionedAt),
-			occurredStart: toIsoOrNull(row.occurredStart ?? row.occurredStart),
-			occurredEnd: toIsoOrNull(row.occurredEnd ?? row.occurredEnd),
-			entities: (entityByMemory.get(row.id) ?? []).join(', '),
+			occurredStart: toIsoOrNull(
+				row.occurredStart ?? row.occurredStart
+			),
+			occurredEnd: toIsoOrNull(
+				row.occurredEnd ?? row.occurredEnd
+			),
+			entities: (entityByMemory.get(row.id) ?? []).join(
+				', '
+			),
 			chunkId: row.chunkId
 		}))
 
@@ -1087,7 +1384,10 @@ Instructions:
 		}
 	}
 
-	getMemoryUnit(bankId: string, memoryId: string): MemoryUnitDetail | undefined {
+	getMemoryUnit(
+		bankId: string,
+		memoryId: string
+	): MemoryUnitDetail | undefined {
 		const row = this.hdb.db
 			.select()
 			.from(this.hdb.schema.memoryUnits)
@@ -1100,31 +1400,52 @@ Instructions:
 			.get()
 		if (!row) return undefined
 
-		const entityNames = this.loadEntityNamesByMemoryIds([row.id]).get(row.id) ?? []
+		const entityNames =
+			this.loadEntityNamesByMemoryIds([row.id]).get(
+				row.id
+			) ?? []
 		const result: MemoryUnitDetail = {
 			id: row.id,
 			text: row.content,
 			context: row.sourceText ?? '',
 			date: toIsoOrEmpty(
-				row.eventDate ?? row.occurredStart ?? row.occurredStart ?? row.mentionedAt ?? row.createdAt
+				row.eventDate ??
+					row.occurredStart ??
+					row.occurredStart ??
+					row.mentionedAt ??
+					row.createdAt
 			),
 			type: row.factType as MemoryUnitDetail['type'],
 			mentionedAt: toIsoOrNull(row.mentionedAt),
-			occurredStart: toIsoOrNull(row.occurredStart ?? row.occurredStart),
-			occurredEnd: toIsoOrNull(row.occurredEnd ?? row.occurredEnd),
+			occurredStart: toIsoOrNull(
+				row.occurredStart ?? row.occurredStart
+			),
+			occurredEnd: toIsoOrNull(
+				row.occurredEnd ?? row.occurredEnd
+			),
 			entities: entityNames,
 			documentId: row.documentId,
 			chunkId: row.chunkId,
 			tags: row.tags ? safeJson<string[]>(row.tags, []) : []
 		}
 
-		const sourceMemoryIds = row.sourceMemoryIds ? safeJson<string[]>(row.sourceMemoryIds, []) : []
-		if (row.factType === 'observation' && sourceMemoryIds.length > 0) {
+		const sourceMemoryIds = row.sourceMemoryIds
+			? safeJson<string[]>(row.sourceMemoryIds, [])
+			: []
+		if (
+			row.factType === 'observation' &&
+			sourceMemoryIds.length > 0
+		) {
 			result.sourceMemoryIds = sourceMemoryIds
 			const sourceRows = this.hdb.db
 				.select()
 				.from(this.hdb.schema.memoryUnits)
-				.where(inArray(this.hdb.schema.memoryUnits.id, sourceMemoryIds))
+				.where(
+					inArray(
+						this.hdb.schema.memoryUnits.id,
+						sourceMemoryIds
+					)
+				)
 				.all()
 				.sort((a, b) => {
 					const aPrimary = a.mentionedAt ?? -1
@@ -1137,7 +1458,9 @@ Instructions:
 				text: sourceRow.content,
 				type: sourceRow.factType as MemoryUnitDetail['type'],
 				context: sourceRow.sourceText,
-				occurredStart: toIsoOrNull(sourceRow.occurredStart ?? sourceRow.occurredStart),
+				occurredStart: toIsoOrNull(
+					sourceRow.occurredStart ?? sourceRow.occurredStart
+				),
 				mentionedAt: toIsoOrNull(sourceRow.mentionedAt)
 			}))
 		}
@@ -1145,7 +1468,9 @@ Instructions:
 		return result
 	}
 
-	deleteMemoryUnit(memoryId: string): DeleteMemoryUnitResult {
+	deleteMemoryUnit(
+		memoryId: string
+	): DeleteMemoryUnitResult {
 		const row = this.hdb.db
 			.select({
 				id: this.hdb.schema.memoryUnits.id,
@@ -1163,28 +1488,40 @@ Instructions:
 		}
 
 		this.memoryVec.delete(memoryId)
-		this.hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [memoryId])
+		this.hdb.sqlite.run(
+			'DELETE FROM hs_memory_fts WHERE id = ?',
+			[memoryId]
+		)
 		this.hdb.db
 			.delete(this.hdb.schema.memoryUnits)
 			.where(eq(this.hdb.schema.memoryUnits.id, memoryId))
 			.run()
-		this.removeMemoryIdFromMentalModels(row.bankId, memoryId)
+		this.removeMemoryIdFromMentalModels(
+			row.bankId,
+			memoryId
+		)
 
 		return {
 			success: true,
 			unitId: row.id,
-			message: 'Memory unit and all its links deleted successfully'
+			message:
+				'Memory unit and all its links deleted successfully'
 		}
 	}
 
-	clearObservations(bankId: string): ClearObservationsResult {
+	clearObservations(
+		bankId: string
+	): ClearObservationsResult {
 		const observationIds = this.hdb.db
 			.select({ id: this.hdb.schema.memoryUnits.id })
 			.from(this.hdb.schema.memoryUnits)
 			.where(
 				and(
 					eq(this.hdb.schema.memoryUnits.bankId, bankId),
-					eq(this.hdb.schema.memoryUnits.factType, 'observation')
+					eq(
+						this.hdb.schema.memoryUnits.factType,
+						'observation'
+					)
 				)
 			)
 			.all()
@@ -1192,17 +1529,25 @@ Instructions:
 
 		for (const observationId of observationIds) {
 			this.memoryVec.delete(observationId)
-			this.hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [observationId])
+			this.hdb.sqlite.run(
+				'DELETE FROM hs_memory_fts WHERE id = ?',
+				[observationId]
+			)
 			this.hdb.db
 				.delete(this.hdb.schema.memoryUnits)
-				.where(eq(this.hdb.schema.memoryUnits.id, observationId))
+				.where(
+					eq(this.hdb.schema.memoryUnits.id, observationId)
+				)
 				.run()
 		}
 
 		return { deletedCount: observationIds.length }
 	}
 
-	listEntities(bankId: string, options?: { limit?: number; offset?: number }): ListEntitiesResult {
+	listEntities(
+		bankId: string,
+		options?: { limit?: number; offset?: number }
+	): ListEntitiesResult {
 		const limit = options?.limit ?? 100
 		const offset = options?.offset ?? 0
 		const rows = this.hdb.db
@@ -1228,7 +1573,12 @@ Instructions:
 				mentionCount: row.mentionCount,
 				firstSeen: toIsoOrNull(row.firstSeen),
 				lastSeen: toIsoOrNull(row.lastUpdated),
-				metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : {}
+				metadata: row.metadata
+					? safeJson<Record<string, unknown>>(
+							row.metadata,
+							{}
+						)
+					: {}
 			})),
 			total: rows.length,
 			limit,
@@ -1249,12 +1599,18 @@ Instructions:
 		}
 	}
 
-	getEntity(bankId: string, entityId: string): EntityDetail | undefined {
+	getEntity(
+		bankId: string,
+		entityId: string
+	): EntityDetail | undefined {
 		const row = this.hdb.db
 			.select()
 			.from(this.hdb.schema.entities)
 			.where(
-				and(eq(this.hdb.schema.entities.id, entityId), eq(this.hdb.schema.entities.bankId, bankId))
+				and(
+					eq(this.hdb.schema.entities.id, entityId),
+					eq(this.hdb.schema.entities.bankId, bankId)
+				)
 			)
 			.get()
 		if (!row) return undefined
@@ -1266,7 +1622,12 @@ Instructions:
 			mentionCount: row.mentionCount,
 			firstSeen: toIsoOrNull(row.firstSeen),
 			lastSeen: toIsoOrNull(row.lastUpdated),
-			metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : {},
+			metadata: row.metadata
+				? safeJson<Record<string, unknown>>(
+						row.metadata,
+						{}
+					)
+				: {},
 			observations: []
 		}
 	}
@@ -1280,16 +1641,23 @@ Instructions:
 			.select()
 			.from(this.hdb.schema.entities)
 			.where(
-				and(eq(this.hdb.schema.entities.id, entityId), eq(this.hdb.schema.entities.bankId, bankId))
+				and(
+					eq(this.hdb.schema.entities.id, entityId),
+					eq(this.hdb.schema.entities.bankId, bankId)
+				)
 			)
 			.get()
 		if (!row) return undefined
 
 		const canonicalName =
-			options.canonicalName?.trim() && options.canonicalName.trim().length > 0
+			options.canonicalName?.trim() &&
+			options.canonicalName.trim().length > 0
 				? options.canonicalName.trim()
 				: row.name
-		const description = options.description !== undefined ? options.description : row.description
+		const description =
+			options.description !== undefined
+				? options.description
+				: row.description
 		const metadata =
 			options.metadata !== undefined
 				? options.metadata
@@ -1306,17 +1674,25 @@ Instructions:
 				lastUpdated: Date.now()
 			})
 			.where(
-				and(eq(this.hdb.schema.entities.id, entityId), eq(this.hdb.schema.entities.bankId, bankId))
+				and(
+					eq(this.hdb.schema.entities.id, entityId),
+					eq(this.hdb.schema.entities.bankId, bankId)
+				)
 			)
 			.run()
 
 		return this.getEntity(bankId, entityId)
 	}
 
-	listTags(bankId: string, options?: ListTagsOptions): ListTagsResult {
+	listTags(
+		bankId: string,
+		options?: ListTagsOptions
+	): ListTagsResult {
 		const limit = options?.limit ?? 100
 		const offset = options?.offset ?? 0
-		const pattern = options?.pattern ? options.pattern.replace(/\*/g, '%').toLowerCase() : null
+		const pattern = options?.pattern
+			? options.pattern.replace(/\*/g, '%').toLowerCase()
+			: null
 
 		const totalRow = this.hdb.sqlite
 			.prepare(
@@ -1330,7 +1706,9 @@ Instructions:
           AND (? IS NULL OR lower(jt.value) LIKE ?)
       `
 			)
-			.get(bankId, pattern, pattern) as { total: number } | undefined
+			.get(bankId, pattern, pattern) as
+			| { total: number }
+			| undefined
 
 		const rows = this.hdb.sqlite
 			.prepare(
@@ -1347,7 +1725,13 @@ Instructions:
         LIMIT ? OFFSET ?
       `
 			)
-			.all(bankId, pattern, pattern, limit, offset) as Array<{
+			.all(
+				bankId,
+				pattern,
+				pattern,
+				limit,
+				offset
+			) as Array<{
 			tag: string
 			count: number
 		}>
@@ -1373,7 +1757,10 @@ Instructions:
         GROUP BY fact_type
       `
 			)
-			.all(bankId) as Array<{ factType: string; count: number }>
+			.all(bankId) as Array<{
+			factType: string
+			count: number
+		}>
 
 		const linkStats = this.hdb.sqlite
 			.prepare(
@@ -1385,7 +1772,10 @@ Instructions:
         GROUP BY ml.link_type
       `
 			)
-			.all(bankId) as Array<{ linkType: string; count: number }>
+			.all(bankId) as Array<{
+			linkType: string
+			count: number
+		}>
 
 		const linkByFactTypeStats = this.hdb.sqlite
 			.prepare(
@@ -1397,7 +1787,10 @@ Instructions:
         GROUP BY mu.fact_type
       `
 			)
-			.all(bankId) as Array<{ factType: string; count: number }>
+			.all(bankId) as Array<{
+			factType: string
+			count: number
+		}>
 
 		const linkBreakdownRows = this.hdb.sqlite
 			.prepare(
@@ -1409,7 +1802,11 @@ Instructions:
         GROUP BY mu.fact_type, ml.link_type
       `
 			)
-			.all(bankId) as Array<{ factType: string; linkType: string; count: number }>
+			.all(bankId) as Array<{
+			factType: string
+			linkType: string
+			count: number
+		}>
 
 		const operationRows = this.hdb.sqlite
 			.prepare(
@@ -1420,25 +1817,39 @@ Instructions:
         GROUP BY status
       `
 			)
-			.all(bankId) as Array<{ status: string; count: number }>
+			.all(bankId) as Array<{
+			status: string
+			count: number
+		}>
 
 		return {
 			bankId,
-			nodeCounts: Object.fromEntries(nodeStats.map(row => [row.factType, row.count])),
-			linkCounts: Object.fromEntries(linkStats.map(row => [row.linkType, row.count])),
+			nodeCounts: Object.fromEntries(
+				nodeStats.map(row => [row.factType, row.count])
+			),
+			linkCounts: Object.fromEntries(
+				linkStats.map(row => [row.linkType, row.count])
+			),
 			linkCountsByFactType: Object.fromEntries(
-				linkByFactTypeStats.map(row => [row.factType, row.count])
+				linkByFactTypeStats.map(row => [
+					row.factType,
+					row.count
+				])
 			),
 			linkBreakdown: linkBreakdownRows.map(row => ({
 				factType: row.factType,
 				linkType: row.linkType,
 				count: row.count
 			})),
-			operations: Object.fromEntries(operationRows.map(row => [row.status, row.count]))
+			operations: Object.fromEntries(
+				operationRows.map(row => [row.status, row.count])
+			)
 		}
 	}
 
-	private loadEntityNamesByMemoryIds(memoryIds: string[]): Map<string, string[]> {
+	private loadEntityNamesByMemoryIds(
+		memoryIds: string[]
+	): Map<string, string[]> {
 		if (memoryIds.length === 0) return new Map()
 
 		const relations = this.hdb.db
@@ -1447,24 +1858,37 @@ Instructions:
 				entityId: this.hdb.schema.memoryEntities.entityId
 			})
 			.from(this.hdb.schema.memoryEntities)
-			.where(inArray(this.hdb.schema.memoryEntities.memoryId, memoryIds))
+			.where(
+				inArray(
+					this.hdb.schema.memoryEntities.memoryId,
+					memoryIds
+				)
+			)
 			.all()
 		if (relations.length === 0) return new Map()
 
-		const entityIds = [...new Set(relations.map(row => row.entityId))]
+		const entityIds = [
+			...new Set(relations.map(row => row.entityId))
+		]
 		const entities = this.hdb.db
 			.select({
 				id: this.hdb.schema.entities.id,
 				name: this.hdb.schema.entities.name
 			})
 			.from(this.hdb.schema.entities)
-			.where(inArray(this.hdb.schema.entities.id, entityIds))
+			.where(
+				inArray(this.hdb.schema.entities.id, entityIds)
+			)
 			.all()
-		const entityNameById = new Map(entities.map(entity => [entity.id, entity.name]))
+		const entityNameById = new Map(
+			entities.map(entity => [entity.id, entity.name])
+		)
 
 		const byMemory = new Map<string, string[]>()
 		for (const relation of relations) {
-			const entityName = entityNameById.get(relation.entityId)
+			const entityName = entityNameById.get(
+				relation.entityId
+			)
 			if (!entityName) continue
 			const list = byMemory.get(relation.memoryId) ?? []
 			list.push(entityName)
@@ -1474,18 +1898,26 @@ Instructions:
 		return byMemory
 	}
 
-	private removeMemoryIdFromMentalModels(bankId: string, memoryId: string): void {
+	private removeMemoryIdFromMentalModels(
+		bankId: string,
+		memoryId: string
+	): void {
 		const models = this.hdb.db
 			.select({
 				id: this.hdb.schema.mentalModels.id,
-				sourceMemoryIds: this.hdb.schema.mentalModels.sourceMemoryIds
+				sourceMemoryIds:
+					this.hdb.schema.mentalModels.sourceMemoryIds
 			})
 			.from(this.hdb.schema.mentalModels)
-			.where(eq(this.hdb.schema.mentalModels.bankId, bankId))
+			.where(
+				eq(this.hdb.schema.mentalModels.bankId, bankId)
+			)
 			.all()
 
 		for (const model of models) {
-			const ids = model.sourceMemoryIds ? safeJson<string[]>(model.sourceMemoryIds, []) : []
+			const ids = model.sourceMemoryIds
+				? safeJson<string[]>(model.sourceMemoryIds, [])
+				: []
 			if (!ids.includes(memoryId)) continue
 
 			const filtered = ids.filter(id => id !== memoryId)
@@ -1495,7 +1927,9 @@ Instructions:
 					sourceMemoryIds: JSON.stringify(filtered),
 					updatedAt: Date.now()
 				})
-				.where(eq(this.hdb.schema.mentalModels.id, model.id))
+				.where(
+					eq(this.hdb.schema.mentalModels.id, model.id)
+				)
 				.run()
 		}
 	}
@@ -1504,8 +1938,17 @@ Instructions:
 
 	listDocuments(
 		bankId: string,
-		options?: { search?: string; limit?: number; offset?: number }
-	): { items: DocumentRecord[]; total: number; limit: number; offset: number } {
+		options?: {
+			search?: string
+			limit?: number
+			offset?: number
+		}
+	): {
+		items: DocumentRecord[]
+		total: number
+		limit: number
+		offset: number
+	} {
 		const limit = options?.limit ?? 100
 		const offset = options?.offset ?? 0
 		const search = options?.search?.toLowerCase().trim()
@@ -1515,7 +1958,11 @@ Instructions:
 			.from(this.hdb.schema.documents)
 			.where(eq(this.hdb.schema.documents.bankId, bankId))
 			.all()
-			.filter(row => (search ? row.id.toLowerCase().includes(search) : true))
+			.filter(row =>
+				search
+					? row.id.toLowerCase().includes(search)
+					: true
+			)
 			.sort((a, b) => b.createdAt - a.createdAt)
 
 		const paged = allRows.slice(offset, offset + limit)
@@ -1524,11 +1971,21 @@ Instructions:
 			bankId: row.bankId,
 			contentHash: row.contentHash,
 			textLength: row.originalText?.length ?? 0,
-			metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : null,
-			retainParams: row.retainParams
-				? safeJson<Record<string, unknown>>(row.retainParams, {})
+			metadata: row.metadata
+				? safeJson<Record<string, unknown>>(
+						row.metadata,
+						{}
+					)
 				: null,
-			tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
+			retainParams: row.retainParams
+				? safeJson<Record<string, unknown>>(
+						row.retainParams,
+						{}
+					)
+				: null,
+			tags: row.tags
+				? safeJson<string[]>(row.tags, [])
+				: [],
 			createdAt: row.createdAt,
 			updatedAt: row.updatedAt
 		}))
@@ -1541,7 +1998,10 @@ Instructions:
 		}
 	}
 
-	getDocument(bankId: string, documentId: string): DocumentRecord | undefined {
+	getDocument(
+		bankId: string,
+		documentId: string
+	): DocumentRecord | undefined {
 		const row = this.hdb.db
 			.select()
 			.from(this.hdb.schema.documents)
@@ -1559,24 +2019,44 @@ Instructions:
 			bankId: row.bankId,
 			contentHash: row.contentHash,
 			textLength: row.originalText?.length ?? 0,
-			metadata: row.metadata ? safeJson<Record<string, unknown>>(row.metadata, {}) : null,
-			retainParams: row.retainParams
-				? safeJson<Record<string, unknown>>(row.retainParams, {})
+			metadata: row.metadata
+				? safeJson<Record<string, unknown>>(
+						row.metadata,
+						{}
+					)
 				: null,
-			tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
+			retainParams: row.retainParams
+				? safeJson<Record<string, unknown>>(
+						row.retainParams,
+						{}
+					)
+				: null,
+			tags: row.tags
+				? safeJson<string[]>(row.tags, [])
+				: [],
 			createdAt: row.createdAt,
 			updatedAt: row.updatedAt
 		}
 	}
 
-	deleteDocument(bankId: string, documentId: string): boolean {
+	deleteDocument(
+		bankId: string,
+		documentId: string
+	): boolean {
 		this.hdb.db
 			.update(this.hdb.schema.memoryUnits)
-			.set({ documentId: null, chunkId: null, updatedAt: Date.now() })
+			.set({
+				documentId: null,
+				chunkId: null,
+				updatedAt: Date.now()
+			})
 			.where(
 				and(
 					eq(this.hdb.schema.memoryUnits.bankId, bankId),
-					eq(this.hdb.schema.memoryUnits.documentId, documentId)
+					eq(
+						this.hdb.schema.memoryUnits.documentId,
+						documentId
+					)
 				)
 			)
 			.run()
@@ -1594,11 +2074,19 @@ Instructions:
 		return true
 	}
 
-	getChunk(bankId: string, chunkId: string): ChunkRecord | undefined {
+	getChunk(
+		bankId: string,
+		chunkId: string
+	): ChunkRecord | undefined {
 		const row = this.hdb.db
 			.select()
 			.from(this.hdb.schema.chunks)
-			.where(and(eq(this.hdb.schema.chunks.id, chunkId), eq(this.hdb.schema.chunks.bankId, bankId)))
+			.where(
+				and(
+					eq(this.hdb.schema.chunks.id, chunkId),
+					eq(this.hdb.schema.chunks.bankId, bankId)
+				)
+			)
 			.get()
 		if (!row) return undefined
 
@@ -1628,19 +2116,31 @@ Instructions:
 					.from(this.hdb.schema.memoryUnits)
 					.where(
 						and(
-							eq(this.hdb.schema.memoryUnits.bankId, bankId),
-							eq(this.hdb.schema.memoryUnits.factType, options.factType)
+							eq(
+								this.hdb.schema.memoryUnits.bankId,
+								bankId
+							),
+							eq(
+								this.hdb.schema.memoryUnits.factType,
+								options.factType
+							)
 						)
 					)
 					.all()
 			: this.hdb.db
 					.select()
 					.from(this.hdb.schema.memoryUnits)
-					.where(eq(this.hdb.schema.memoryUnits.bankId, bankId))
+					.where(
+						eq(this.hdb.schema.memoryUnits.bankId, bankId)
+					)
 					.all()
 
 		const orderedRows = rows
-			.sort((a, b) => (b.mentionedAt ?? b.createdAt) - (a.mentionedAt ?? a.createdAt))
+			.sort(
+				(a, b) =>
+					(b.mentionedAt ?? b.createdAt) -
+					(a.mentionedAt ?? a.createdAt)
+			)
 			.slice(0, limit)
 
 		const nodes: GraphNode[] = orderedRows.map(row => ({
@@ -1649,13 +2149,24 @@ Instructions:
 			factType: row.factType as GraphNode['factType'],
 			documentId: row.documentId,
 			chunkId: row.chunkId,
-			tags: row.tags ? safeJson<string[]>(row.tags, []) : [],
-			sourceMemoryIds: row.sourceMemoryIds ? safeJson<string[]>(row.sourceMemoryIds, []) : []
+			tags: row.tags
+				? safeJson<string[]>(row.tags, [])
+				: [],
+			sourceMemoryIds: row.sourceMemoryIds
+				? safeJson<string[]>(row.sourceMemoryIds, [])
+				: []
 		}))
 
-		const visibleNodeIds = new Set(nodes.map(node => node.id))
+		const visibleNodeIds = new Set(
+			nodes.map(node => node.id)
+		)
 		if (visibleNodeIds.size === 0) {
-			return { nodes, edges: [], totalUnits: rows.length, limit }
+			return {
+				nodes,
+				edges: [],
+				totalUnits: rows.length,
+				limit
+			}
 		}
 
 		const visibleIds = [...visibleNodeIds]
@@ -1670,8 +2181,14 @@ Instructions:
 			.where(
 				and(
 					eq(this.hdb.schema.memoryLinks.bankId, bankId),
-					inArray(this.hdb.schema.memoryLinks.sourceId, visibleIds),
-					inArray(this.hdb.schema.memoryLinks.targetId, visibleIds)
+					inArray(
+						this.hdb.schema.memoryLinks.sourceId,
+						visibleIds
+					),
+					inArray(
+						this.hdb.schema.memoryLinks.targetId,
+						visibleIds
+					)
 				)
 			)
 			.all()
@@ -1679,7 +2196,8 @@ Instructions:
 		const sourceToObservations = new Map<string, string[]>()
 		for (const node of nodes) {
 			for (const sourceId of node.sourceMemoryIds) {
-				const existing = sourceToObservations.get(sourceId) ?? []
+				const existing =
+					sourceToObservations.get(sourceId) ?? []
 				existing.push(node.id)
 				sourceToObservations.set(sourceId, existing)
 			}
@@ -1687,8 +2205,10 @@ Instructions:
 
 		const copiedLinks: GraphEdge[] = []
 		for (const link of directLinks) {
-			const fromObs = sourceToObservations.get(link.sourceId) ?? []
-			const toObs = sourceToObservations.get(link.targetId) ?? []
+			const fromObs =
+				sourceToObservations.get(link.sourceId) ?? []
+			const toObs =
+				sourceToObservations.get(link.targetId) ?? []
 
 			for (const obsId of fromObs) {
 				if (!visibleNodeIds.has(link.targetId)) continue
@@ -1729,7 +2249,9 @@ Instructions:
 	}
 
 	private resolveTenantId(bankId: string): string {
-		return this.extensions?.resolveTenantId?.(bankId) ?? bankId
+		return (
+			this.extensions?.resolveTenantId?.(bankId) ?? bankId
+		)
 	}
 
 	private buildOperationContext(
@@ -1745,7 +2267,9 @@ Instructions:
 		}
 	}
 
-	private async runBeforeOperationHooks(context: HindsightOperationContext): Promise<void> {
+	private async runBeforeOperationHooks(
+		context: HindsightOperationContext
+	): Promise<void> {
 		if (!this.extensions) return
 		if (this.extensions.authorize) {
 			await this.extensions.authorize(context)
@@ -1755,7 +2279,9 @@ Instructions:
 		}
 	}
 
-	private async runAfterOperationHooks(context: HindsightOperationResultContext): Promise<void> {
+	private async runAfterOperationHooks(
+		context: HindsightOperationResultContext
+	): Promise<void> {
 		if (!this.extensions?.onComplete) return
 		await this.extensions.onComplete(context)
 	}
@@ -1771,8 +2297,12 @@ Instructions:
 			'list_episodes',
 			bankId,
 			options ?? {},
-			async () => listEpisodesImpl(this.hdb, bankId, options),
-			result => ({ total: result.total, count: result.items.length })
+			async () =>
+				listEpisodesImpl(this.hdb, bankId, options),
+			result => ({
+				total: result.total,
+				count: result.items.length
+			})
 		)
 	}
 
@@ -1799,7 +2329,14 @@ Instructions:
 		scope?: { profile?: string; project?: string }
 	): Promise<void> {
 		const resolved = scope ? resolveScope(scope) : undefined
-		locationRecordImpl(this.hdb, bankId, path, context, resolved?.profile, resolved?.project)
+		locationRecordImpl(
+			this.hdb,
+			bankId,
+			path,
+			context,
+			resolved?.profile,
+			resolved?.project
+		)
 	}
 
 	async locationFind(
@@ -1837,7 +2374,9 @@ const DEFAULT_DISPOSITION: DispositionTraits = {
 	empathy: 3
 }
 
-function toBank(row: typeof import('./schema').banks.$inferSelect): Bank {
+function toBank(
+	row: typeof import('./schema').banks.$inferSelect
+): Bank {
 	let config: BankConfig = {}
 	if (row.config) {
 		try {
@@ -1847,10 +2386,15 @@ function toBank(row: typeof import('./schema').banks.$inferSelect): Bank {
 		}
 	}
 
-	let disposition: DispositionTraits = { ...DEFAULT_DISPOSITION }
+	let disposition: DispositionTraits = {
+		...DEFAULT_DISPOSITION
+	}
 	if (row.disposition) {
 		try {
-			disposition = { ...DEFAULT_DISPOSITION, ...JSON.parse(row.disposition) }
+			disposition = {
+				...DEFAULT_DISPOSITION,
+				...JSON.parse(row.disposition)
+			}
 		} catch {
 			// malformed JSON → default disposition
 		}
@@ -1876,20 +2420,30 @@ function safeJson<T>(value: string, fallback: T): T {
 	}
 }
 
-function toIsoOrNull(value: number | null | undefined): string | null {
+function toIsoOrNull(
+	value: number | null | undefined
+): string | null {
 	if (value == null) return null
 	return new Date(value).toISOString()
 }
 
-function toIsoOrEmpty(value: number | null | undefined): string {
+function toIsoOrEmpty(
+	value: number | null | undefined
+): string {
 	return toIsoOrNull(value) ?? ''
 }
 
 function dedupeGraphEdges(edges: GraphEdge[]): GraphEdge[] {
 	const seen = new Map<string, GraphEdge>()
 	for (const edge of edges) {
-		const source = edge.sourceId < edge.targetId ? edge.sourceId : edge.targetId
-		const target = edge.sourceId < edge.targetId ? edge.targetId : edge.sourceId
+		const source =
+			edge.sourceId < edge.targetId
+				? edge.sourceId
+				: edge.targetId
+		const target =
+			edge.sourceId < edge.targetId
+				? edge.targetId
+				: edge.sourceId
 		const key = `${source}:${target}:${edge.linkType}`
 		const existing = seen.get(key)
 		if (!existing || edge.weight > existing.weight) {
@@ -1900,7 +2454,9 @@ function dedupeGraphEdges(edges: GraphEdge[]): GraphEdge[] {
 }
 
 /** Strip undefined keys so they don't overwrite spread defaults */
-function stripUndefined<T extends object>(obj: T): Partial<T> {
+function stripUndefined<T extends object>(
+	obj: T
+): Partial<T> {
 	const result: Partial<T> = {}
 	for (const key of Object.keys(obj) as Array<keyof T>) {
 		if (obj[key] !== undefined) {

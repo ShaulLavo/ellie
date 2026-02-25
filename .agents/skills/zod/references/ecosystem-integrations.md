@@ -95,9 +95,11 @@ import { initTRPC } from '@trpc/server'
 const t = initTRPC.create()
 
 export const appRouter = t.router({
-	getUser: t.procedure.input(z.object({ id: z.string() })).query(({ input }) => {
-		return db.user.findUnique({ where: { id: input.id } })
-	}),
+	getUser: t.procedure
+		.input(z.object({ id: z.string() }))
+		.query(({ input }) => {
+			return db.user.findUnique({ where: { id: input.id } })
+		}),
 
 	createUser: t.procedure
 		.input(
@@ -263,7 +265,9 @@ const CreateUserSchema = z.object({
 	age: z.number().int().positive().optional()
 })
 
-class CreateUserDto extends createZodDto(CreateUserSchema) {}
+class CreateUserDto extends createZodDto(
+	CreateUserSchema
+) {}
 
 @Controller('users')
 export class UsersController {
@@ -415,7 +419,9 @@ describe('UserSchema', () => {
 
 		expect(result.success).toBe(false)
 		if (!result.success) {
-			expect(result.error.issues[0].message).toContain('email')
+			expect(result.error.issues[0].message).toContain(
+				'email'
+			)
 		}
 	})
 })
@@ -436,7 +442,10 @@ Type-safe SQL ORM with Zod integration.
 ```typescript
 import { z } from 'zod'
 import { pgTable, text, integer } from 'drizzle-orm/pg-core'
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
+import {
+	createInsertSchema,
+	createSelectSchema
+} from 'drizzle-zod'
 
 const users = pgTable('users', {
 	id: text('id').primaryKey(),
@@ -479,11 +488,15 @@ const CreateUserSchema = z.object({
 	name: z.string()
 })
 
-app.post('/users', zValidator('json', CreateUserSchema), c => {
-	const user = c.req.valid('json')
-	// user is typed and validated
-	return c.json({ id: 123, ...user })
-})
+app.post(
+	'/users',
+	zValidator('json', CreateUserSchema),
+	c => {
+		const user = c.req.valid('json')
+		// user is typed and validated
+		return c.json({ id: 123, ...user })
+	}
+)
 ```
 
 ---

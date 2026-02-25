@@ -22,9 +22,13 @@ export default [
 		},
 		rules: {
 			// TypeScript rules
-			'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{ argsIgnorePattern: '^_' }
+			],
 			'@typescript-eslint/no-explicit-any': 'warn',
-			'@typescript-eslint/explicit-function-return-type': 'off',
+			'@typescript-eslint/explicit-function-return-type':
+				'off',
 
 			// Zod-specific rules (eslint-plugin-zod-x)
 			'zod-x/no-missing-error-messages': 'warn',

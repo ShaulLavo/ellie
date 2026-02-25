@@ -12,10 +12,20 @@
 
 import UploadIcon from '@/components/ui/upload-icon'
 import { AnimatePresence, motion } from 'motion/react'
-import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react'
+import {
+	type DragEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState
+} from 'react'
 import { cn } from '@/lib/utils'
 
-type FileStatus = 'idle' | 'dragging' | 'uploading' | 'error'
+type FileStatus =
+	| 'idle'
+	| 'dragging'
+	| 'uploading'
+	| 'error'
 
 interface FileError {
 	message: string
@@ -37,14 +47,28 @@ interface FileUploadProps {
 
 const DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const UPLOAD_STEP_SIZE = 5
-const FILE_SIZES = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'] as const
+const FILE_SIZES = [
+	'Bytes',
+	'KB',
+	'MB',
+	'GB',
+	'TB',
+	'PB',
+	'EB',
+	'ZB',
+	'YB'
+] as const
 
-const formatBytes = (bytes: number, decimals = 2): string => {
+const formatBytes = (
+	bytes: number,
+	decimals = 2
+): string => {
 	if (!+bytes) return '0 Bytes'
 	const k = 1024
 	const dm = decimals < 0 ? 0 : decimals
 	const i = Math.floor(Math.log(bytes) / Math.log(k))
-	const unit = FILE_SIZES[i] || FILE_SIZES[FILE_SIZES.length - 1]
+	const unit =
+		FILE_SIZES[i] || FILE_SIZES[FILE_SIZES.length - 1]
 	return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${unit}`
 }
 
@@ -109,7 +133,12 @@ const UploadIllustration = () => (
 					y1="45"
 					y2="60"
 				>
-					<animate attributeName="y2" dur="2s" repeatCount="indefinite" values="60;55;60" />
+					<animate
+						attributeName="y2"
+						dur="2s"
+						repeatCount="indefinite"
+						values="60;55;60"
+					/>
 				</line>
 				<polyline
 					className="stroke-blue-500 dark:stroke-blue-400"
@@ -131,7 +160,11 @@ const UploadIllustration = () => (
 	</div>
 )
 
-const UploadingAnimation = ({ progress }: { progress: number }) => (
+const UploadingAnimation = ({
+	progress
+}: {
+	progress: number
+}) => (
 	<div className="relative h-16 w-16">
 		<svg
 			aria-label={`Upload progress: ${Math.round(progress)}%`}
@@ -191,21 +224,110 @@ const UploadingAnimation = ({ progress }: { progress: number }) => (
                 `}
 			</style>
 
-			<g className="g-spin" mask="url(#progress-mask)" strokeDasharray="18% 40%" strokeWidth="10">
-				<circle cx="120" cy="120" opacity="0.95" r="150" stroke="#FF2E7E" />
-				<circle cx="120" cy="120" opacity="0.95" r="140" stroke="#FFD600" />
-				<circle cx="120" cy="120" opacity="0.95" r="130" stroke="#00E5FF" />
-				<circle cx="120" cy="120" opacity="0.95" r="120" stroke="#FF3D71" />
-				<circle cx="120" cy="120" opacity="0.95" r="110" stroke="#4ADE80" />
-				<circle cx="120" cy="120" opacity="0.95" r="100" stroke="#2196F3" />
-				<circle cx="120" cy="120" opacity="0.95" r="90" stroke="#FFA726" />
-				<circle cx="120" cy="120" opacity="0.95" r="80" stroke="#FF1493" />
-				<circle cx="120" cy="120" opacity="0.95" r="70" stroke="#FFEB3B" />
-				<circle cx="120" cy="120" opacity="0.95" r="60" stroke="#00BCD4" />
-				<circle cx="120" cy="120" opacity="0.95" r="50" stroke="#FF4081" />
-				<circle cx="120" cy="120" opacity="0.95" r="40" stroke="#76FF03" />
-				<circle cx="120" cy="120" opacity="0.95" r="30" stroke="#448AFF" />
-				<circle cx="120" cy="120" opacity="0.95" r="20" stroke="#FF3D00" />
+			<g
+				className="g-spin"
+				mask="url(#progress-mask)"
+				strokeDasharray="18% 40%"
+				strokeWidth="10"
+			>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="150"
+					stroke="#FF2E7E"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="140"
+					stroke="#FFD600"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="130"
+					stroke="#00E5FF"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="120"
+					stroke="#FF3D71"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="110"
+					stroke="#4ADE80"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="100"
+					stroke="#2196F3"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="90"
+					stroke="#FFA726"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="80"
+					stroke="#FF1493"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="70"
+					stroke="#FFEB3B"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="60"
+					stroke="#00BCD4"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="50"
+					stroke="#FF4081"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="40"
+					stroke="#76FF03"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="30"
+					stroke="#448AFF"
+				/>
+				<circle
+					cx="120"
+					cy="120"
+					opacity="0.95"
+					r="20"
+					stroke="#FF3D00"
+				/>
 			</g>
 		</svg>
 	</div>
@@ -227,7 +349,9 @@ export default function FileUpload({
 	const [progress, setProgress] = useState(0)
 	const [error, setError] = useState<FileError | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
-	const uploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+	const uploadIntervalRef = useRef<ReturnType<
+		typeof setInterval
+	> | null>(null)
 
 	useEffect(
 		() => () => {
@@ -256,7 +380,11 @@ export default function FileUpload({
 			if (!acceptedFileTypes?.length) return null
 
 			const fileType = file.type.toLowerCase()
-			if (!acceptedFileTypes.some(type => fileType.match(type.toLowerCase()))) {
+			if (
+				!acceptedFileTypes.some(type =>
+					fileType.match(type.toLowerCase())
+				)
+			) {
 				return {
 					message: `File type must be ${acceptedFileTypes.join(', ')}`,
 					code: 'INVALID_FILE_TYPE'
@@ -350,20 +478,36 @@ export default function FileUpload({
 			setProgress(0)
 			simulateUpload(selectedFile)
 		},
-		[simulateUpload, validateFileSize, validateFileType, validateFile, handleError]
+		[
+			simulateUpload,
+			validateFileSize,
+			validateFileType,
+			validateFile,
+			handleError
+		]
 	)
 
-	const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
-		e.preventDefault()
-		e.stopPropagation()
-		setStatus(prev => (prev !== 'uploading' ? 'dragging' : prev))
-	}, [])
+	const handleDragOver = useCallback(
+		(e: DragEvent<HTMLDivElement>) => {
+			e.preventDefault()
+			e.stopPropagation()
+			setStatus(prev =>
+				prev !== 'uploading' ? 'dragging' : prev
+			)
+		},
+		[]
+	)
 
-	const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
-		e.preventDefault()
-		e.stopPropagation()
-		setStatus(prev => (prev === 'dragging' ? 'idle' : prev))
-	}, [])
+	const handleDragLeave = useCallback(
+		(e: DragEvent<HTMLDivElement>) => {
+			e.preventDefault()
+			e.stopPropagation()
+			setStatus(prev =>
+				prev === 'dragging' ? 'idle' : prev
+			)
+		},
+		[]
+	)
 
 	const handleDrop = useCallback(
 		(e: DragEvent<HTMLDivElement>) => {
@@ -401,7 +545,10 @@ export default function FileUpload({
 	return (
 		<div
 			aria-label="File upload"
-			className={cn('relative mx-auto w-full max-w-sm', className || '')}
+			className={cn(
+				'relative mx-auto w-full max-w-sm',
+				className || ''
+			)}
 			role="complementary"
 		>
 			<div className="group relative w-full rounded-xl bg-white p-0.5 ring-1 ring-gray-200 dark:bg-black dark:ring-white/10">
@@ -417,7 +564,9 @@ export default function FileUpload({
 						<div
 							className={cn(
 								'absolute inset-0 transition-opacity duration-300',
-								status === 'dragging' ? 'opacity-100' : 'opacity-0'
+								status === 'dragging'
+									? 'opacity-100'
+									: 'opacity-0'
 							)}
 						>
 							<div className="absolute inset-x-0 top-0 h-[20%] bg-gradient-to-b from-blue-500/10 to-transparent" />
@@ -431,12 +580,15 @@ export default function FileUpload({
 
 						<div className="relative h-[240px]">
 							<AnimatePresence mode="wait">
-								{status === 'idle' || status === 'dragging' ? (
+								{status === 'idle' ||
+								status === 'dragging' ? (
 									<motion.div
 										animate={{
-											opacity: status === 'dragging' ? 0.8 : 1,
+											opacity:
+												status === 'dragging' ? 0.8 : 1,
 											y: 0,
-											scale: status === 'dragging' ? 0.98 : 1
+											scale:
+												status === 'dragging' ? 0.98 : 1
 										}}
 										className="absolute inset-0 flex flex-col items-center justify-center p-6"
 										exit={{ opacity: 0, y: -10 }}
@@ -462,7 +614,8 @@ export default function FileUpload({
 															.join(', ')
 															.toUpperCase()}`
 													: 'SVG, PNG, JPG or GIF'}{' '}
-												{maxFileSize && `up to ${formatBytes(maxFileSize)}`}
+												{maxFileSize &&
+													`up to ${formatBytes(maxFileSize)}`}
 											</p>
 										</div>
 
@@ -500,7 +653,9 @@ export default function FileUpload({
 										key="uploading"
 									>
 										<div className="mb-4">
-											<UploadingAnimation progress={progress} />
+											<UploadingAnimation
+												progress={progress}
+											/>
 										</div>
 
 										<div className="mb-4 space-y-1.5 text-center">
@@ -511,7 +666,9 @@ export default function FileUpload({
 												<span className="text-gray-500 dark:text-gray-400">
 													{formatBytes(file?.size || 0)}
 												</span>
-												<span className="font-medium text-blue-500">{Math.round(progress)}%</span>
+												<span className="font-medium text-blue-500">
+													{Math.round(progress)}%
+												</span>
 											</div>
 										</div>
 
@@ -535,7 +692,9 @@ export default function FileUpload({
 									exit={{ opacity: 0, y: -10 }}
 									initial={{ opacity: 0, y: 10 }}
 								>
-									<p className="text-red-500 text-sm dark:text-red-400">{error.message}</p>
+									<p className="text-red-500 text-sm dark:text-red-400">
+										{error.message}
+									</p>
 								</motion.div>
 							)}
 						</AnimatePresence>

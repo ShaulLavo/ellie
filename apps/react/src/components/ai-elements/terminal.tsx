@@ -5,8 +5,21 @@ import type { ComponentProps, HTMLAttributes } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import Ansi from 'ansi-to-react'
-import { CheckIcon, CopyIcon, TerminalIcon, TrashIcon } from '@phosphor-icons/react'
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+	CheckIcon,
+	CopyIcon,
+	TerminalIcon,
+	TrashIcon
+} from '@phosphor-icons/react'
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react'
 
 import { Shimmer } from './shimmer'
 
@@ -23,12 +36,13 @@ const TerminalContext = createContext<TerminalContextType>({
 	output: ''
 })
 
-export type TerminalProps = HTMLAttributes<HTMLDivElement> & {
-	output: string
-	isStreaming?: boolean
-	autoScroll?: boolean
-	onClear?: () => void
-}
+export type TerminalProps =
+	HTMLAttributes<HTMLDivElement> & {
+		output: string
+		isStreaming?: boolean
+		autoScroll?: boolean
+		onClear?: () => void
+	}
 
 export const Terminal = ({
 	output,
@@ -73,9 +87,14 @@ export const Terminal = ({
 	)
 }
 
-export type TerminalHeaderProps = HTMLAttributes<HTMLDivElement>
+export type TerminalHeaderProps =
+	HTMLAttributes<HTMLDivElement>
 
-export const TerminalHeader = ({ className, children, ...props }: TerminalHeaderProps) => (
+export const TerminalHeader = ({
+	className,
+	children,
+	...props
+}: TerminalHeaderProps) => (
 	<div
 		className={cn(
 			'flex items-center justify-between border-zinc-800 border-b px-4 py-2',
@@ -87,18 +106,34 @@ export const TerminalHeader = ({ className, children, ...props }: TerminalHeader
 	</div>
 )
 
-export type TerminalTitleProps = HTMLAttributes<HTMLDivElement>
+export type TerminalTitleProps =
+	HTMLAttributes<HTMLDivElement>
 
-export const TerminalTitle = ({ className, children, ...props }: TerminalTitleProps) => (
-	<div className={cn('flex items-center gap-2 text-sm text-zinc-400', className)} {...props}>
+export const TerminalTitle = ({
+	className,
+	children,
+	...props
+}: TerminalTitleProps) => (
+	<div
+		className={cn(
+			'flex items-center gap-2 text-sm text-zinc-400',
+			className
+		)}
+		{...props}
+	>
 		<TerminalIcon className="size-4" />
 		{children ?? 'Terminal'}
 	</div>
 )
 
-export type TerminalStatusProps = HTMLAttributes<HTMLDivElement>
+export type TerminalStatusProps =
+	HTMLAttributes<HTMLDivElement>
 
-export const TerminalStatus = ({ className, children, ...props }: TerminalStatusProps) => {
+export const TerminalStatus = ({
+	className,
+	children,
+	...props
+}: TerminalStatusProps) => {
 	const { isStreaming } = useContext(TerminalContext)
 
 	if (!isStreaming) {
@@ -106,21 +141,39 @@ export const TerminalStatus = ({ className, children, ...props }: TerminalStatus
 	}
 
 	return (
-		<div className={cn('flex items-center gap-2 text-xs text-zinc-400', className)} {...props}>
-			{children ?? <Shimmer className="w-16">Running...</Shimmer>}
+		<div
+			className={cn(
+				'flex items-center gap-2 text-xs text-zinc-400',
+				className
+			)}
+			{...props}
+		>
+			{children ?? (
+				<Shimmer className="w-16">Running...</Shimmer>
+			)}
 		</div>
 	)
 }
 
-export type TerminalActionsProps = HTMLAttributes<HTMLDivElement>
+export type TerminalActionsProps =
+	HTMLAttributes<HTMLDivElement>
 
-export const TerminalActions = ({ className, children, ...props }: TerminalActionsProps) => (
-	<div className={cn('flex items-center gap-1', className)} {...props}>
+export const TerminalActions = ({
+	className,
+	children,
+	...props
+}: TerminalActionsProps) => (
+	<div
+		className={cn('flex items-center gap-1', className)}
+		{...props}
+	>
 		{children}
 	</div>
 )
 
-export type TerminalCopyButtonProps = ComponentProps<typeof Button> & {
+export type TerminalCopyButtonProps = ComponentProps<
+	typeof Button
+> & {
 	onCopy?: () => void
 	onError?: (error: Error) => void
 	timeout?: number
@@ -139,7 +192,10 @@ export const TerminalCopyButton = ({
 	const { output } = useContext(TerminalContext)
 
 	const copyToClipboard = useCallback(async () => {
-		if (typeof window === 'undefined' || !navigator?.clipboard?.writeText) {
+		if (
+			typeof window === 'undefined' ||
+			!navigator?.clipboard?.writeText
+		) {
 			onError?.(new Error('Clipboard API not available'))
 			return
 		}
@@ -148,7 +204,10 @@ export const TerminalCopyButton = ({
 			await navigator.clipboard.writeText(output)
 			setIsCopied(true)
 			onCopy?.()
-			timeoutRef.current = window.setTimeout(() => setIsCopied(false), timeout)
+			timeoutRef.current = window.setTimeout(
+				() => setIsCopied(false),
+				timeout
+			)
 		} catch (error) {
 			onError?.(error as Error)
 		}
@@ -179,7 +238,9 @@ export const TerminalCopyButton = ({
 	)
 }
 
-export type TerminalClearButtonProps = ComponentProps<typeof Button>
+export type TerminalClearButtonProps = ComponentProps<
+	typeof Button
+>
 
 export const TerminalClearButton = ({
 	children,
@@ -208,22 +269,32 @@ export const TerminalClearButton = ({
 	)
 }
 
-export type TerminalContentProps = HTMLAttributes<HTMLDivElement>
+export type TerminalContentProps =
+	HTMLAttributes<HTMLDivElement>
 
-export const TerminalContent = ({ className, children, ...props }: TerminalContentProps) => {
-	const { output, isStreaming, autoScroll } = useContext(TerminalContext)
+export const TerminalContent = ({
+	className,
+	children,
+	...props
+}: TerminalContentProps) => {
+	const { output, isStreaming, autoScroll } =
+		useContext(TerminalContext)
 	const containerRef = useRef<HTMLDivElement>(null)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: output triggers auto-scroll when new content arrives
 	useEffect(() => {
 		if (autoScroll && containerRef.current) {
-			containerRef.current.scrollTop = containerRef.current.scrollHeight
+			containerRef.current.scrollTop =
+				containerRef.current.scrollHeight
 		}
 	}, [output, autoScroll])
 
 	return (
 		<div
-			className={cn('max-h-96 overflow-auto p-4 font-mono text-sm leading-relaxed', className)}
+			className={cn(
+				'max-h-96 overflow-auto p-4 font-mono text-sm leading-relaxed',
+				className
+			)}
 			ref={containerRef}
 			{...props}
 		>

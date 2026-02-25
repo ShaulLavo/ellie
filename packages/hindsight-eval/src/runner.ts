@@ -14,9 +14,17 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { readFileSync, rmSync } from 'fs'
 import { Hindsight } from '@ellie/hindsight'
-import type { HindsightConfig, RecallOptions } from '@ellie/hindsight'
+import type {
+	HindsightConfig,
+	RecallOptions
+} from '@ellie/hindsight'
 import { scoreCase } from './scoring'
-import type { EvalCase, EvalRunConfig, EvalCaseResult, RecallCandidate } from './types'
+import type {
+	EvalCase,
+	EvalRunConfig,
+	EvalCaseResult,
+	RecallCandidate
+} from './types'
 
 // ── Deterministic embedding ───────────────────────────────────────────────
 
@@ -26,13 +34,19 @@ const EVAL_EMBED_DIMS = 16
  * Hash-based embedding for deterministic eval runs.
  * NOT semantically meaningful — produces consistent vectors for identical text.
  */
-function deterministicEmbed(text: string): Promise<number[]> {
-	const vec = Array.from<number>({ length: EVAL_EMBED_DIMS }).fill(0)
+function deterministicEmbed(
+	text: string
+): Promise<number[]> {
+	const vec = Array.from<number>({
+		length: EVAL_EMBED_DIMS
+	}).fill(0)
 	for (let i = 0; i < text.length; i++) {
 		vec[i % EVAL_EMBED_DIMS]! += text.charCodeAt(i) / 1000
 	}
 	const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
-	return Promise.resolve(norm > 0 ? vec.map(v => v / norm) : vec)
+	return Promise.resolve(
+		norm > 0 ? vec.map(v => v / norm) : vec
+	)
 }
 
 // ── Mock adapter ──────────────────────────────────────────────────────────
@@ -78,7 +92,10 @@ function createEvalAdapter(): HindsightConfig['adapter'] {
 			}
 		},
 		structuredOutput() {
-			return Promise.resolve({ data: {}, rawResponse: '{}' })
+			return Promise.resolve({
+				data: {},
+				rawResponse: '{}'
+			})
 		}
 	} as unknown as NonNullable<HindsightConfig['adapter']>
 }
@@ -110,7 +127,9 @@ export interface RunBaselineOptions {
  * 2. For each case: create fresh DB, seed memories, run recall, score
  * 3. Return all case results
  */
-export async function runBaseline(options: RunBaselineOptions): Promise<EvalCaseResult[]> {
+export async function runBaseline(
+	options: RunBaselineOptions
+): Promise<EvalCaseResult[]> {
 	const { config, embed, embeddingDimensions } = options
 	const cases = loadFixture(config.datasetPath)
 	const results: EvalCaseResult[] = []
@@ -137,7 +156,10 @@ async function runSingleCase(
 	embed: (text: string) => Promise<number[]>,
 	embeddingDimensions: number
 ): Promise<EvalCaseResult> {
-	const dbPath = join(tmpdir(), `hindsight-eval-${Date.now()}-${caseIndex}.db`)
+	const dbPath = join(
+		tmpdir(),
+		`hindsight-eval-${Date.now()}-${caseIndex}.db`
+	)
 
 	const hs = new Hindsight({
 		dbPath,
@@ -153,12 +175,15 @@ async function runSingleCase(
 		const bank = hs.createBank(`eval-bank-${caseIndex}`)
 		const bankId = bank.id
 		// Seed memories using pre-extracted facts (bypasses LLM)
-		const baseTimestamp = new Date('2025-01-01T00:00:00Z').getTime()
+		const baseTimestamp = new Date(
+			'2025-01-01T00:00:00Z'
+		).getTime()
 		const facts = evalCase.seedFacts.map((fact, i) => ({
 			content: fact.content,
 			factType: fact.factType,
 			confidence: fact.confidence ?? 1.0,
-			occurredStart: fact.occurredStart ?? baseTimestamp + i * 60_000,
+			occurredStart:
+				fact.occurredStart ?? baseTimestamp + i * 60_000,
 			occurredEnd: fact.occurredEnd ?? null,
 			entities: fact.entities ?? [],
 			tags: fact.tags ?? []
@@ -178,24 +203,29 @@ async function runSingleCase(
 			enableTrace: true
 		}
 
-		const recallResult = await hs.recall(bankId, evalCase.query, recallOptions)
+		const recallResult = await hs.recall(
+			bankId,
+			evalCase.query,
+			recallOptions
+		)
 
 		// Collect candidates with stable tie-breaking: (score DESC, id ASC)
-		const candidates: RecallCandidate[] = recallResult.memories
-			.map(scored => ({
-				memoryId: scored.memory.id,
-				content: scored.memory.content,
-				score: scored.score,
-				rank: 0,
-				sources: [...scored.sources],
-				factType: scored.memory.factType
-			}))
-			.sort((a, b) => {
-				if (b.score !== a.score) return b.score - a.score
-				// Tie-break on content (deterministic) rather than memoryId (ULID, timestamp-dependent)
-				return a.content.localeCompare(b.content)
-			})
-			.map((c, idx) => ({ ...c, rank: idx + 1 }))
+		const candidates: RecallCandidate[] =
+			recallResult.memories
+				.map(scored => ({
+					memoryId: scored.memory.id,
+					content: scored.memory.content,
+					score: scored.score,
+					rank: 0,
+					sources: [...scored.sources],
+					factType: scored.memory.factType
+				}))
+				.sort((a, b) => {
+					if (b.score !== a.score) return b.score - a.score
+					// Tie-break on content (deterministic) rather than memoryId (ULID, timestamp-dependent)
+					return a.content.localeCompare(b.content)
+				})
+				.map((c, idx) => ({ ...c, rank: idx + 1 }))
 
 		const durationMs = Date.now() - startTime
 

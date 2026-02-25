@@ -80,7 +80,9 @@ abstract class Controller {
 	}
 }
 
-new Elysia().get('/', ({ stuff }) => Controller.doStuff(stuff))
+new Elysia().get('/', ({ stuff }) =>
+	Controller.doStuff(stuff)
+)
 ```
 
 Tying the controller to Elysia Context may lead to:
@@ -130,7 +132,9 @@ const app = new Elysia().get('/', ({ stuff }) => {
 
 describe('Controller', () => {
 	it('should work', async () => {
-		const response = await app.handle(new Request('http://localhost/')).then(x => x.text())
+		const response = await app
+			.handle(new Request('http://localhost/'))
+			.then(x => x.text())
 
 		expect(response).toBe('ok')
 	})
@@ -163,7 +167,9 @@ abstract class Service {
 	static fibo(number: number): number {
 		if (number < 2) return number
 
-		return Service.fibo(number - 1) + Service.fibo(number - 2)
+		return (
+			Service.fibo(number - 1) + Service.fibo(number - 2)
+		)
 	}
 }
 
@@ -188,7 +194,9 @@ If your service doesn't need to store a property, you may use `abstract class` a
 import { Elysia } from 'elysia'
 
 // Do
-const AuthService = new Elysia({ name: 'Auth.Service' }).macro({
+const AuthService = new Elysia({
+	name: 'Auth.Service'
+}).macro({
 	isSignIn: {
 		resolve({ cookie, status }) {
 			if (!cookie.session.value) return status(401)
@@ -200,9 +208,11 @@ const AuthService = new Elysia({ name: 'Auth.Service' }).macro({
 	}
 })
 
-const UserController = new Elysia().use(AuthService).get('/profile', ({ Auth: { user } }) => user, {
-	isSignIn: true
-})
+const UserController = new Elysia()
+	.use(AuthService)
+	.get('/profile', ({ Auth: { user } }) => user, {
+		isSignIn: true
+	})
 ```
 
 ### Do: Decorate only request dependent property
@@ -215,7 +225,11 @@ Overusing decorators may tie your code to Elysia, making it harder to test and r
 import { Elysia } from 'elysia'
 
 new Elysia()
-	.decorate('requestIP', ({ request }) => request.headers.get('x-forwarded-for') || request.ip)
+	.decorate(
+		'requestIP',
+		({ request }) =>
+			request.headers.get('x-forwarded-for') || request.ip
+	)
 	.decorate('requestTime', () => Date.now())
 	.decorate('session', ({ cookie }) => cookie.session.value)
 	.get('/', ({ requestIP, requestTime, session }) => {

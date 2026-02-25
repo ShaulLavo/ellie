@@ -12,7 +12,11 @@ import {
 	type StructuredOutputOptions,
 	type StructuredOutputResult
 } from '@tanstack/ai/adapters'
-import type { DefaultMessageMetadataByModality, StreamChunk, TextOptions } from '@tanstack/ai'
+import type {
+	DefaultMessageMetadataByModality,
+	StreamChunk,
+	TextOptions
+} from '@tanstack/ai'
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -87,12 +91,18 @@ interface OpenAIChoice {
 interface OpenAIResponse {
 	id: string
 	choices: OpenAIChoice[]
-	usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+	usage?: {
+		prompt_tokens: number
+		completion_tokens: number
+		total_tokens: number
+	}
 }
 
 // ── Adapter ─────────────────────────────────────────────────────────────────
 
-export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdapter<
+export class OpenAICompatTextAdapter<
+	TModel extends string
+> extends BaseTextAdapter<
 	TModel,
 	Record<string, unknown>,
 	readonly ['text'],
@@ -105,7 +115,14 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 	private readonly defaultHeaders: Record<string, string>
 
 	constructor(compat: OpenAICompatConfig, model: TModel) {
-		super({ apiKey: compat.apiKey, baseUrl: compat.baseUrl, timeout: compat.timeout }, model)
+		super(
+			{
+				apiKey: compat.apiKey,
+				baseUrl: compat.baseUrl,
+				timeout: compat.timeout
+			},
+			model
+		)
 		this.name = compat.providerName ?? 'openai-compat'
 		this.baseUrl = compat.baseUrl.replace(/\/$/, '')
 		this.apiKey = compat.apiKey
@@ -115,11 +132,17 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 
 	// ── chatStream ──────────────────────────────────────────────────────────
 
-	async *chatStream(options: TextOptions<Record<string, unknown>>): AsyncIterable<StreamChunk> {
+	async *chatStream(
+		options: TextOptions<Record<string, unknown>>
+	): AsyncIterable<StreamChunk> {
 		const runId = this.generateId()
 		const messageId = this.generateId()
 
-		yield { type: 'RUN_STARTED', threadId: runId, runId } as StreamChunk
+		yield {
+			type: 'RUN_STARTED',
+			threadId: runId,
+			runId
+		} as StreamChunk
 
 		const messages = this.formatMessages(options)
 		const tools = this.convertTools(options)
@@ -137,16 +160,19 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 
 		const jsonBody = JSON.stringify(body)
 
-		const response = await fetch(`${this.baseUrl}/chat/completions`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${this.apiKey}`,
-				...this.defaultHeaders
-			},
-			body: jsonBody,
-			signal: AbortSignal.timeout(this.timeout)
-		})
+		const response = await fetch(
+			`${this.baseUrl}/chat/completions`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.apiKey}`,
+					...this.defaultHeaders
+				},
+				body: jsonBody,
+				signal: AbortSignal.timeout(this.timeout)
+			}
+		)
 
 		if (!response.ok) {
 			const errorText = await response.text()
@@ -160,10 +186,16 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 			return
 		}
 
-		yield { type: 'TEXT_MESSAGE_START', messageId } as StreamChunk
+		yield {
+			type: 'TEXT_MESSAGE_START',
+			messageId
+		} as StreamChunk
 
 		// Track tool calls being built up across SSE chunks
-		const pendingToolCalls = new Map<number, { id: string; name: string; args: string }>()
+		const pendingToolCalls = new Map<
+			number,
+			{ id: string; name: string; args: string }
+		>()
 		let lastFinishReason: string | null = null
 
 		const reader = response.body!.getReader()
@@ -211,7 +243,8 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 							for (const tc of delta.tool_calls) {
 								if (tc.id) {
 									// New tool call starting
-									const initialArgs = tc.function?.arguments ?? ''
+									const initialArgs =
+										tc.function?.arguments ?? ''
 									pendingToolCalls.set(tc.index, {
 										id: tc.id,
 										name: tc.function?.name ?? '',
@@ -234,7 +267,9 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 									}
 								} else {
 									// Continuing existing tool call
-									const pending = pendingToolCalls.get(tc.index)
+									const pending = pendingToolCalls.get(
+										tc.index
+									)
 									if (pending && tc.function?.arguments) {
 										pending.args += tc.function.arguments
 										yield {
@@ -253,7 +288,10 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 						}
 
 						// Finish reason — end any pending tool calls
-						if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'stop') {
+						if (
+							choice.finish_reason === 'tool_calls' ||
+							choice.finish_reason === 'stop'
+						) {
 							for (const [, pending] of pendingToolCalls) {
 								yield {
 									type: 'TOOL_CALL_END',
@@ -269,7 +307,10 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 			reader.releaseLock()
 		}
 
-		yield { type: 'TEXT_MESSAGE_END', messageId } as StreamChunk
+		yield {
+			type: 'TEXT_MESSAGE_END',
+			messageId
+		} as StreamChunk
 
 		// Map OpenAI finish_reason to AG-UI finishReason.
 		// TanStack AI uses finishReason === "tool_calls" to decide whether to
@@ -293,17 +334,28 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 	// ── structuredOutput ────────────────────────────────────────────────────
 
 	async structuredOutput(
-		options: StructuredOutputOptions<Record<string, unknown>>
+		options: StructuredOutputOptions<
+			Record<string, unknown>
+		>
 	): Promise<StructuredOutputResult<unknown>> {
-		const messages = this.formatMessages(options.chatOptions)
+		const messages = this.formatMessages(
+			options.chatOptions
+		)
 
 		// Add schema instruction to system prompt
 		const schemaInstruction = `\n\nYou must respond with valid JSON matching this schema:\n${JSON.stringify(options.outputSchema, null, 2)}\n\nRespond ONLY with the JSON object, no extra text.`
 
-		if (messages.length > 0 && messages[0].role === 'system') {
-			messages[0].content = (messages[0].content ?? '') + schemaInstruction
+		if (
+			messages.length > 0 &&
+			messages[0].role === 'system'
+		) {
+			messages[0].content =
+				(messages[0].content ?? '') + schemaInstruction
 		} else {
-			messages.unshift({ role: 'system', content: schemaInstruction })
+			messages.unshift({
+				role: 'system',
+				content: schemaInstruction
+			})
 		}
 
 		const body: Record<string, unknown> = {
@@ -314,41 +366,57 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 			...this.mapCommonOptions(options.chatOptions)
 		}
 
-		const response = await fetch(`${this.baseUrl}/chat/completions`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${this.apiKey}`,
-				...this.defaultHeaders
-			},
-			body: JSON.stringify(body),
-			signal: AbortSignal.timeout(this.timeout)
-		})
+		const response = await fetch(
+			`${this.baseUrl}/chat/completions`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.apiKey}`,
+					...this.defaultHeaders
+				},
+				body: JSON.stringify(body),
+				signal: AbortSignal.timeout(this.timeout)
+			}
+		)
 
 		if (!response.ok) {
 			const errorText = await response.text()
-			throw new Error(`${this.name} API error ${response.status}: ${errorText}`)
+			throw new Error(
+				`${this.name} API error ${response.status}: ${errorText}`
+			)
 		}
 
 		const result: OpenAIResponse = await response.json()
-		const rawText = result.choices[0]?.message?.content ?? ''
+		const rawText =
+			result.choices[0]?.message?.content ?? ''
 
 		try {
 			const data = JSON.parse(rawText)
 			return { data, rawText }
 		} catch {
-			throw new Error(`Failed to parse JSON from ${this.name}: ${rawText.slice(0, 200)}`)
+			throw new Error(
+				`Failed to parse JSON from ${this.name}: ${rawText.slice(0, 200)}`
+			)
 		}
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────
 
-	private formatMessages(options: TextOptions<Record<string, unknown>>): OpenAIMessage[] {
+	private formatMessages(
+		options: TextOptions<Record<string, unknown>>
+	): OpenAIMessage[] {
 		const result: OpenAIMessage[] = []
 
 		// System prompts (TanStack AI passes an array via systemPrompts)
-		if (options.systemPrompts && options.systemPrompts.length > 0) {
-			result.push({ role: 'system', content: options.systemPrompts.join('\n\n') })
+		if (
+			options.systemPrompts &&
+			options.systemPrompts.length > 0
+		) {
+			result.push({
+				role: 'system',
+				content: options.systemPrompts.join('\n\n')
+			})
 		}
 
 		// Messages
@@ -357,16 +425,23 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 				const m = msg as unknown as Record<string, unknown>
 				const role = m.role as string
 				if (role === 'user') {
-					result.push({ role: 'user', content: this.extractTextContent(m) })
+					result.push({
+						role: 'user',
+						content: this.extractTextContent(m)
+					})
 				} else if (role === 'assistant') {
 					// TanStack AI stores tool calls in `toolCalls` field (array of ToolCall objects)
-					const tcArray = m.toolCalls as Array<Record<string, unknown>> | undefined
+					const tcArray = m.toolCalls as
+						| Array<Record<string, unknown>>
+						| undefined
 					if (tcArray && tcArray.length > 0) {
 						result.push({
 							role: 'assistant',
 							content: (m.content as string | null) ?? null,
 							tool_calls: tcArray.map(tc => {
-								const fn = tc.function as Record<string, unknown> | undefined
+								const fn = tc.function as
+									| Record<string, unknown>
+									| undefined
 								return {
 									id: (tc.id as string) ?? '',
 									type: 'function' as const,
@@ -375,15 +450,21 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 										arguments:
 											typeof fn?.arguments === 'string'
 												? fn.arguments
-												: JSON.stringify(fn?.arguments ?? {})
+												: JSON.stringify(
+														fn?.arguments ?? {}
+													)
 									}
 								}
 							})
 						})
 					} else {
 						// Check for tool calls in parts (UIMessage format)
-						const parts = m.parts as Array<Record<string, unknown>> | undefined
-						const toolCallParts = parts?.filter(p => p.type === 'tool-call')
+						const parts = m.parts as
+							| Array<Record<string, unknown>>
+							| undefined
+						const toolCallParts = parts?.filter(
+							p => p.type === 'tool-call'
+						)
 						if (toolCallParts && toolCallParts.length > 0) {
 							result.push({
 								role: 'assistant',
@@ -393,18 +474,27 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 									type: 'function' as const,
 									function: {
 										name: tc.toolName as string,
-										arguments: typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args)
+										arguments:
+											typeof tc.args === 'string'
+												? tc.args
+												: JSON.stringify(tc.args)
 									}
 								}))
 							})
 						} else {
-							result.push({ role: 'assistant', content: this.extractTextContent(m) })
+							result.push({
+								role: 'assistant',
+								content: this.extractTextContent(m)
+							})
 						}
 					}
 				} else if (role === 'tool') {
 					result.push({
 						role: 'tool',
-						content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+						content:
+							typeof m.content === 'string'
+								? m.content
+								: JSON.stringify(m.content),
 						tool_call_id: m.toolCallId as string
 					})
 				}
@@ -414,7 +504,9 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 		return result
 	}
 
-	private extractTextContent(msg: Record<string, unknown>): string {
+	private extractTextContent(
+		msg: Record<string, unknown>
+	): string {
 		if (typeof msg.content === 'string') return msg.content
 		if (Array.isArray(msg.content)) {
 			return (msg.content as Array<Record<string, unknown>>)
@@ -432,31 +524,50 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 		return ''
 	}
 
-	private convertTools(options: TextOptions<Record<string, unknown>>): OpenAITool[] {
+	private convertTools(
+		options: TextOptions<Record<string, unknown>>
+	): OpenAITool[] {
 		if (!options.tools) return []
 		// TanStack AI passes tools as an array of Tool objects with { name, description, inputSchema }
-		const tools = Array.isArray(options.tools) ? options.tools : Object.values(options.tools)
+		const tools = Array.isArray(options.tools)
+			? options.tools
+			: Object.values(options.tools)
 		return tools.map((t: unknown) => {
 			const tool = t as Record<string, unknown>
 			return {
 				type: 'function' as const,
 				function: {
 					name: (tool.name as string) ?? 'unknown',
-					description: tool.description as string | undefined,
-					parameters: (tool.inputSchema ?? tool.parameters) as Record<string, unknown> | undefined
+					description: tool.description as
+						| string
+						| undefined,
+					parameters: (tool.inputSchema ??
+						tool.parameters) as
+						| Record<string, unknown>
+						| undefined
 				}
 			}
 		})
 	}
 
-	private mapCommonOptions(options: TextOptions<Record<string, unknown>>): Record<string, unknown> {
+	private mapCommonOptions(
+		options: TextOptions<Record<string, unknown>>
+	): Record<string, unknown> {
 		const mapped: Record<string, unknown> = {}
-		if (options.temperature !== undefined) mapped.temperature = options.temperature
-		if (options.topP !== undefined) mapped.top_p = options.topP
-		if (options.maxTokens !== undefined) mapped.max_tokens = options.maxTokens
+		if (options.temperature !== undefined)
+			mapped.temperature = options.temperature
+		if (options.topP !== undefined)
+			mapped.top_p = options.topP
+		if (options.maxTokens !== undefined)
+			mapped.max_tokens = options.maxTokens
 		// Pass through provider-specific options (e.g. response_format for JSON mode)
-		if (options.modelOptions && typeof options.modelOptions === 'object') {
-			for (const [key, value] of Object.entries(options.modelOptions)) {
+		if (
+			options.modelOptions &&
+			typeof options.modelOptions === 'object'
+		) {
+			for (const [key, value] of Object.entries(
+				options.modelOptions
+			)) {
 				mapped[key] = value
 			}
 		}
@@ -466,7 +577,9 @@ export class OpenAICompatTextAdapter<TModel extends string> extends BaseTextAdap
 
 // ── Factory functions ───────────────────────────────────────────────────────
 
-export function createOpenAICompatChat<TModel extends string>(
+export function createOpenAICompatChat<
+	TModel extends string
+>(
 	model: TModel,
 	config: OpenAICompatConfig
 ): OpenAICompatTextAdapter<TModel> {

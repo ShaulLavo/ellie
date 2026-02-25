@@ -30,16 +30,26 @@ export {
 } from './models/index'
 
 // Usage & cost calculation
-export { calculateCost, createUsage, mapTanStackUsage } from './usage'
+export {
+	calculateCost,
+	createUsage,
+	mapTanStackUsage
+} from './usage'
 
 // Context overflow detection
-export { isContextOverflow, getOverflowPatterns } from './overflow'
+export {
+	isContextOverflow,
+	getOverflowPatterns
+} from './overflow'
 
 // Environment API key resolution
 export { getEnvApiKey, hasEnvApiKey } from './env'
 
 // Thinking level abstraction
-export { toThinkingModelOptions, supportsThinking } from './thinking'
+export {
+	toThinkingModelOptions,
+	supportsThinking
+} from './thinking'
 
 // --- TanStack AI re-exports (convenience) ---
 
@@ -61,7 +71,11 @@ export { toolDefinition } from '@tanstack/ai'
 export { ToolCallManager } from '@tanstack/ai'
 
 // Agent loop strategies
-export { maxIterations, untilFinishReason, combineStrategies } from '@tanstack/ai'
+export {
+	maxIterations,
+	untilFinishReason,
+	combineStrategies
+} from '@tanstack/ai'
 
 // Adapter extension
 export { createModel, extendAdapter } from '@tanstack/ai'
@@ -77,7 +91,10 @@ export {
 } from '@tanstack/ai'
 
 // Stream processing
-export { StreamProcessor, createReplayStream } from '@tanstack/ai'
+export {
+	StreamProcessor,
+	createReplayStream
+} from '@tanstack/ai'
 
 // Utility
 export { detectImageMimeType } from '@tanstack/ai'

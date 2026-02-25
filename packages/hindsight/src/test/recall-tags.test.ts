@@ -5,7 +5,13 @@
  * Integration tests — tests matchesTags + recall with tag filters.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { matchesTags } from '../recall'
 import {
 	createTestHindsight,
@@ -27,15 +33,25 @@ describe('matchesTags', () => {
 		})
 
 		it('returns true when memory has a matching tag', () => {
-			expect(matchesTags(['tag-a', 'tag-b'], ['tag-a'], 'any')).toBe(true)
+			expect(
+				matchesTags(['tag-a', 'tag-b'], ['tag-a'], 'any')
+			).toBe(true)
 		})
 
 		it('returns true when memory has any of the filter tags', () => {
-			expect(matchesTags(['tag-c'], ['tag-a', 'tag-b', 'tag-c'], 'any')).toBe(true)
+			expect(
+				matchesTags(
+					['tag-c'],
+					['tag-a', 'tag-b', 'tag-c'],
+					'any'
+				)
+			).toBe(true)
 		})
 
 		it('returns false when memory has no matching tags', () => {
-			expect(matchesTags(['tag-x'], ['tag-a', 'tag-b'], 'any')).toBe(false)
+			expect(
+				matchesTags(['tag-x'], ['tag-a', 'tag-b'], 'any')
+			).toBe(false)
 		})
 
 		it('returns true when filter is empty (no filtering)', () => {
@@ -45,49 +61,85 @@ describe('matchesTags', () => {
 
 	describe('mode: all (memory must have ALL filter tags)', () => {
 		it('returns true for untagged memory', () => {
-			expect(matchesTags([], ['tag-a', 'tag-b'], 'all')).toBe(true)
+			expect(
+				matchesTags([], ['tag-a', 'tag-b'], 'all')
+			).toBe(true)
 		})
 
 		it('returns true when memory has all filter tags', () => {
-			expect(matchesTags(['tag-a', 'tag-b', 'tag-c'], ['tag-a', 'tag-b'], 'all')).toBe(true)
+			expect(
+				matchesTags(
+					['tag-a', 'tag-b', 'tag-c'],
+					['tag-a', 'tag-b'],
+					'all'
+				)
+			).toBe(true)
 		})
 
 		it('returns false when memory is missing a filter tag', () => {
-			expect(matchesTags(['tag-a'], ['tag-a', 'tag-b'], 'all')).toBe(false)
+			expect(
+				matchesTags(['tag-a'], ['tag-a', 'tag-b'], 'all')
+			).toBe(false)
 		})
 	})
 
 	describe('mode: any_strict (excludes untagged)', () => {
 		it('returns false for untagged memory', () => {
-			expect(matchesTags([], ['tag-a'], 'any_strict')).toBe(false)
+			expect(matchesTags([], ['tag-a'], 'any_strict')).toBe(
+				false
+			)
 		})
 
 		it('returns true when memory has a matching tag', () => {
-			expect(matchesTags(['tag-a'], ['tag-a'], 'any_strict')).toBe(true)
+			expect(
+				matchesTags(['tag-a'], ['tag-a'], 'any_strict')
+			).toBe(true)
 		})
 
 		it('returns false when no matching tags', () => {
-			expect(matchesTags(['tag-x'], ['tag-a'], 'any_strict')).toBe(false)
+			expect(
+				matchesTags(['tag-x'], ['tag-a'], 'any_strict')
+			).toBe(false)
 		})
 	})
 
 	describe('mode: all_strict (excludes untagged, requires all)', () => {
 		it('returns false for untagged memory', () => {
-			expect(matchesTags([], ['tag-a', 'tag-b'], 'all_strict')).toBe(false)
+			expect(
+				matchesTags([], ['tag-a', 'tag-b'], 'all_strict')
+			).toBe(false)
 		})
 
 		it('returns true when memory has all filter tags', () => {
-			expect(matchesTags(['tag-a', 'tag-b'], ['tag-a', 'tag-b'], 'all_strict')).toBe(true)
+			expect(
+				matchesTags(
+					['tag-a', 'tag-b'],
+					['tag-a', 'tag-b'],
+					'all_strict'
+				)
+			).toBe(true)
 		})
 
 		it('returns false when missing tags', () => {
-			expect(matchesTags(['tag-a'], ['tag-a', 'tag-b'], 'all_strict')).toBe(false)
+			expect(
+				matchesTags(
+					['tag-a'],
+					['tag-a', 'tag-b'],
+					'all_strict'
+				)
+			).toBe(false)
 		})
 
 		it('allows superset — memory with MORE tags than requested still matches', () => {
 			// Memory has tag-a, tag-b, tag-c; filter requires tag-a, tag-b
 			// all_strict requires all filter tags present — superset should pass
-			expect(matchesTags(['tag-a', 'tag-b', 'tag-c'], ['tag-a', 'tag-b'], 'all_strict')).toBe(true)
+			expect(
+				matchesTags(
+					['tag-a', 'tag-b', 'tag-c'],
+					['tag-a', 'tag-b'],
+					'all_strict'
+				)
+			).toBe(true)
 		})
 	})
 })
@@ -106,7 +158,9 @@ describe('recall with tag filtering', () => {
 
 		// Seed memories with different tags
 		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Project Alpha update: shipped v2.0' }],
+			facts: [
+				{ content: 'Project Alpha update: shipped v2.0' }
+			],
 			tags: ['project-alpha'],
 			consolidate: false
 		})
@@ -127,7 +181,10 @@ describe('recall with tag filtering', () => {
 	})
 
 	it('returns all memories when no tag filter', async () => {
-		const result = await t.hs.recall(bankId, 'project update')
+		const result = await t.hs.recall(
+			bankId,
+			'project update'
+		)
 		// Should include all memories (no tag filter applied)
 		expect(result.memories.length).toBeGreaterThan(0)
 	})
@@ -178,15 +235,24 @@ describe('recall with tag filtering', () => {
 	it('recall returns memories with any overlapping tag (multi-tagged memory)', async () => {
 		// Add a memory with multiple tags
 		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Cross-project sync between Alpha and Beta' }],
+			facts: [
+				{
+					content:
+						'Cross-project sync between Alpha and Beta'
+				}
+			],
 			tags: ['project-alpha', 'project-beta'],
 			consolidate: false
 		})
 
-		const result = await t.hs.recall(bankId, 'cross-project sync', {
-			tags: ['project-alpha'],
-			tagsMatch: 'any_strict'
-		})
+		const result = await t.hs.recall(
+			bankId,
+			'cross-project sync',
+			{
+				tags: ['project-alpha'],
+				tagsMatch: 'any_strict'
+			}
+		)
 
 		// The multi-tagged memory should appear since it has project-alpha
 		expect(result.memories.length).toBeGreaterThan(0)
@@ -210,7 +276,9 @@ describe('recall with tag filtering', () => {
 			dedupThreshold: 0
 		})
 
-		expect(result.memories[0]!.tags).toEqual(['verified-tag'])
+		expect(result.memories[0]!.tags).toEqual([
+			'verified-tag'
+		])
 	})
 
 	it('retain with document_tags applies tags to all items', async () => {
@@ -227,7 +295,12 @@ describe('recall with tag filtering', () => {
 
 	it('retain merges document tags and item tags', async () => {
 		const result = await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Fact with own tags', tags: ['item-tag'] }],
+			facts: [
+				{
+					content: 'Fact with own tags',
+					tags: ['item-tag']
+				}
+			],
 			tags: ['doc-tag'],
 			consolidate: false,
 			dedupThreshold: 0
@@ -255,10 +328,14 @@ describe('recall with tag filtering', () => {
 				consolidate: false
 			})
 
-			const resultA = await t.hs.recall(bankId, 'private note', {
-				tags: ['user-a'],
-				tagsMatch: 'any_strict'
-			})
+			const resultA = await t.hs.recall(
+				bankId,
+				'private note',
+				{
+					tags: ['user-a'],
+					tagsMatch: 'any_strict'
+				}
+			)
 
 			for (const m of resultA.memories) {
 				expect(m.memory.tags).toContain('user-a')
@@ -309,62 +386,83 @@ describe('recall with tag filtering', () => {
 			})
 
 			// Student Alice only sees her data
-			const aliceResult = await t.hs.recall(bankId, 'homework', {
-				tags: ['student-alice'],
-				tagsMatch: 'any_strict'
-			})
+			const aliceResult = await t.hs.recall(
+				bankId,
+				'homework',
+				{
+					tags: ['student-alice'],
+					tagsMatch: 'any_strict'
+				}
+			)
 			for (const m of aliceResult.memories) {
 				expect(m.memory.tags).toContain('student-alice')
 			}
 
 			// Teacher sees all (no tag filter = all memories visible)
-			const teacherResult = await t.hs.recall(bankId, 'homework', { limit: 20 })
-			expect(teacherResult.memories.length).toBeGreaterThanOrEqual(2)
+			const teacherResult = await t.hs.recall(
+				bankId,
+				'homework',
+				{ limit: 20 }
+			)
+			expect(
+				teacherResult.memories.length
+			).toBeGreaterThanOrEqual(2)
 		})
 	})
 })
 
-describeWithLLM('reflect with tags (real LLM parity)', () => {
-	let t: RealTestHindsight
-	let bankId: string
+describeWithLLM(
+	'reflect with tags (real LLM parity)',
+	() => {
+		let t: RealTestHindsight
+		let bankId: string
 
-	beforeEach(async () => {
-		t = await createRealTestHindsight()
-		bankId = createTestBank(t.hs)
-	})
-
-	afterEach(() => {
-		t.cleanup()
-	})
-
-	it('reflect with tags only uses matching memories', async () => {
-		// Matches Python test_reflect_with_tags_filters_memories — uses benign data
-		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: "Oscar's favorite color is blue." }],
-			tags: ['user-oscar'],
-			consolidate: false
-		})
-		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: "Peter's favorite color is red." }],
-			tags: ['user-peter'],
-			consolidate: false
+		beforeEach(async () => {
+			t = await createRealTestHindsight()
+			bankId = createTestBank(t.hs)
 		})
 
-		const result = await t.hs.reflect(bankId, 'What is the favorite color?', {
-			tags: ['user-oscar'],
-			tagsMatch: 'any_strict',
-			saveObservations: false,
-			budget: 'mid'
+		afterEach(() => {
+			t.cleanup()
 		})
 
-		// Should mention Oscar/blue, not Peter/red
-		// Python parity: check answer mentions blue; check Peter isn't mentioned
-		// (avoid matching "red" as substring of other words like "stored")
-		const lower = result.answer.toLowerCase()
-		expect(lower).toContain('blue')
-		expect(lower).not.toContain('peter')
-	})
-})
+		it('reflect with tags only uses matching memories', async () => {
+			// Matches Python test_reflect_with_tags_filters_memories — uses benign data
+			await t.hs.retain(bankId, 'test', {
+				facts: [
+					{ content: "Oscar's favorite color is blue." }
+				],
+				tags: ['user-oscar'],
+				consolidate: false
+			})
+			await t.hs.retain(bankId, 'test', {
+				facts: [
+					{ content: "Peter's favorite color is red." }
+				],
+				tags: ['user-peter'],
+				consolidate: false
+			})
+
+			const result = await t.hs.reflect(
+				bankId,
+				'What is the favorite color?',
+				{
+					tags: ['user-oscar'],
+					tagsMatch: 'any_strict',
+					saveObservations: false,
+					budget: 'mid'
+				}
+			)
+
+			// Should mention Oscar/blue, not Peter/red
+			// Python parity: check answer mentions blue; check Peter isn't mentioned
+			// (avoid matching "red" as substring of other words like "stored")
+			const lower = result.answer.toLowerCase()
+			expect(lower).toContain('blue')
+			expect(lower).not.toContain('peter')
+		})
+	}
+)
 
 // ════════════════════════════════════════════════════════════════════════════
 // list tags (integration)

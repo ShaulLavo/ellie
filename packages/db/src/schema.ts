@@ -1,4 +1,10 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import {
+	sqliteTable,
+	text,
+	integer,
+	index,
+	uniqueIndex
+} from 'drizzle-orm/sqlite-core'
 
 // -- Sessions -----------------------------------------------------------------
 
@@ -20,7 +26,9 @@ export const events = sqliteTable(
 		id: integer('id').primaryKey({ autoIncrement: true }),
 		sessionId: text('session_id')
 			.notNull()
-			.references(() => sessions.id, { onDelete: 'cascade' }),
+			.references(() => sessions.id, {
+				onDelete: 'cascade'
+			}),
 		seq: integer('seq').notNull(),
 		runId: text('run_id'),
 		type: text('type').notNull(),
@@ -29,9 +37,19 @@ export const events = sqliteTable(
 		createdAt: integer('created_at').notNull()
 	},
 	table => [
-		uniqueIndex('idx_events_session_seq').on(table.sessionId, table.seq),
-		index('idx_events_session_type').on(table.sessionId, table.type),
-		index('idx_events_session_run_seq').on(table.sessionId, table.runId, table.seq)
+		uniqueIndex('idx_events_session_seq').on(
+			table.sessionId,
+			table.seq
+		),
+		index('idx_events_session_type').on(
+			table.sessionId,
+			table.type
+		),
+		index('idx_events_session_run_seq').on(
+			table.sessionId,
+			table.runId,
+			table.seq
+		)
 	]
 )
 

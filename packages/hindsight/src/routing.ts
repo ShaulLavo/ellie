@@ -51,7 +51,10 @@ interface RoutingPolicy {
 // ── Normalization helpers ────────────────────────────────────────────────────
 
 function normalizeValue(s: string): string {
-	const normalized = s.trim().toLowerCase().replace(/\s+/g, ' ')
+	const normalized = s
+		.trim()
+		.toLowerCase()
+		.replace(/\s+/g, ' ')
 	if (/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(normalized)) {
 		const asNum = Number(normalized)
 		if (Number.isFinite(asNum)) return String(asNum)
@@ -66,8 +69,10 @@ export function classifyRoute(
 	conflictDetected: boolean,
 	policy: RoutingPolicy = {}
 ): RetainRoute {
-	const reinforceThreshold = policy.reinforceThreshold ?? REINFORCE_THRESHOLD
-	const reconsolidateThreshold = policy.reconsolidateThreshold ?? RECONSOLIDATE_THRESHOLD
+	const reinforceThreshold =
+		policy.reinforceThreshold ?? REINFORCE_THRESHOLD
+	const reconsolidateThreshold =
+		policy.reconsolidateThreshold ?? RECONSOLIDATE_THRESHOLD
 	if (conflictDetected) return 'reconsolidate'
 	if (similarity >= reinforceThreshold) {
 		return 'reinforce'
@@ -81,10 +86,16 @@ export function classifyRoute(
 // ── Conflict Detection ──────────────────────────────────────────────────────
 
 export function detectConflict(
-	candidateEntities: Array<{ name: string; entityType: string }>,
+	candidateEntities: Array<{
+		name: string
+		entityType: string
+	}>,
 	incomingEntities: ExtractedEntity[]
 ): { conflictDetected: boolean; conflictKeys: string[] } {
-	if (candidateEntities.length === 0 || incomingEntities.length === 0) {
+	if (
+		candidateEntities.length === 0 ||
+		incomingEntities.length === 0
+	) {
 		return { conflictDetected: false, conflictKeys: [] }
 	}
 
@@ -99,7 +110,10 @@ export function detectConflict(
 		const key = `${normalizeValue(e.name)}|entity_type`
 		const incomingValue = normalizeValue(e.entityType)
 		const existingType = candidateMap.get(key)
-		if (existingType !== undefined && existingType !== incomingValue) {
+		if (
+			existingType !== undefined &&
+			existingType !== incomingValue
+		) {
 			conflictKeys.push(key)
 		}
 	}
@@ -123,7 +137,10 @@ function loadCandidateEntities(
        JOIN hs_entities e ON e.id = me.entity_id
        WHERE me.memory_id = ?`
 		)
-		.all(memoryId) as Array<{ name: string; entityType: string }>
+		.all(memoryId) as Array<{
+		name: string
+		entityType: string
+	}>
 	return rows
 }
 
@@ -134,7 +151,13 @@ function resolveMemoryAnchor(row: {
 	mentionedAt: number | null
 	createdAt: number
 }): number {
-	return row.eventDate ?? row.occurredStart ?? row.occurredEnd ?? row.mentionedAt ?? row.createdAt
+	return (
+		row.eventDate ??
+		row.occurredStart ??
+		row.occurredEnd ??
+		row.mentionedAt ??
+		row.createdAt
+	)
 }
 
 /**
@@ -146,8 +169,12 @@ function resolveMemoryAnchor(row: {
  * (migration 0002) have no event rows and return false — this is intentional.
  * No backfill is performed; scope filtering applies only going forward.
  */
-function candidateScopeMatches(ctx: RoutingContext, memoryId: string): boolean {
-	if (ctx.profile == null && ctx.project == null) return true
+function candidateScopeMatches(
+	ctx: RoutingContext,
+	memoryId: string
+): boolean {
+	if (ctx.profile == null && ctx.project == null)
+		return true
 	const row = ctx.hdb.sqlite
 		.prepare(
 			`SELECT profile, project
@@ -156,10 +183,14 @@ function candidateScopeMatches(ctx: RoutingContext, memoryId: string): boolean {
        ORDER BY event_time DESC, id DESC
        LIMIT 1`
 		)
-		.get(ctx.bankId, memoryId) as { profile: string | null; project: string | null } | undefined
+		.get(ctx.bankId, memoryId) as
+		| { profile: string | null; project: string | null }
+		| undefined
 	if (!row) return false
-	if (ctx.profile != null && row.profile !== ctx.profile) return false
-	if (ctx.project != null && row.project !== ctx.project) return false
+	if (ctx.profile != null && row.profile !== ctx.profile)
+		return false
+	if (ctx.project != null && row.project !== ctx.project)
+		return false
 	return true
 }
 
@@ -167,7 +198,10 @@ export function findBestCandidateByVector(
 	ctx: RoutingContext,
 	vector: Float32Array
 ): CandidateMatch | null {
-	const hits = ctx.memoryVec.searchByVector(vector, CANDIDATE_SEARCH_K)
+	const hits = ctx.memoryVec.searchByVector(
+		vector,
+		CANDIDATE_SEARCH_K
+	)
 
 	for (const hit of hits) {
 		const similarity = 1 - hit.distance
@@ -176,7 +210,8 @@ export function findBestCandidateByVector(
 			.select({
 				bankId: ctx.hdb.schema.memoryUnits.bankId,
 				eventDate: ctx.hdb.schema.memoryUnits.eventDate,
-				occurredStart: ctx.hdb.schema.memoryUnits.occurredStart,
+				occurredStart:
+					ctx.hdb.schema.memoryUnits.occurredStart,
 				occurredEnd: ctx.hdb.schema.memoryUnits.occurredEnd,
 				mentionedAt: ctx.hdb.schema.memoryUnits.mentionedAt,
 				createdAt: ctx.hdb.schema.memoryUnits.createdAt
@@ -204,7 +239,10 @@ export async function findBestCandidateAsync(
 	ctx: RoutingContext,
 	content: string
 ): Promise<CandidateMatch | null> {
-	const hits = await ctx.memoryVec.search(content, CANDIDATE_SEARCH_K)
+	const hits = await ctx.memoryVec.search(
+		content,
+		CANDIDATE_SEARCH_K
+	)
 
 	for (const hit of hits) {
 		const similarity = 1 - hit.distance
@@ -213,7 +251,8 @@ export async function findBestCandidateAsync(
 			.select({
 				bankId: ctx.hdb.schema.memoryUnits.bankId,
 				eventDate: ctx.hdb.schema.memoryUnits.eventDate,
-				occurredStart: ctx.hdb.schema.memoryUnits.occurredStart,
+				occurredStart:
+					ctx.hdb.schema.memoryUnits.occurredStart,
 				occurredEnd: ctx.hdb.schema.memoryUnits.occurredEnd,
 				mentionedAt: ctx.hdb.schema.memoryUnits.mentionedAt,
 				createdAt: ctx.hdb.schema.memoryUnits.createdAt
@@ -256,8 +295,15 @@ export function routeFactByVector(
 		}
 	}
 
-	const { conflictDetected, conflictKeys } = detectConflict(candidate.entities, incomingEntities)
-	const decidedRoute = classifyRoute(candidate.similarity, conflictDetected, policy)
+	const { conflictDetected, conflictKeys } = detectConflict(
+		candidate.entities,
+		incomingEntities
+	)
+	const decidedRoute = classifyRoute(
+		candidate.similarity,
+		conflictDetected,
+		policy
+	)
 
 	return {
 		route: decidedRoute,
@@ -274,7 +320,10 @@ export async function routeFact(
 	incomingEntities: ExtractedEntity[],
 	policy: RoutingPolicy = {}
 ): Promise<RouteDecision> {
-	const candidate = await findBestCandidateAsync(ctx, content)
+	const candidate = await findBestCandidateAsync(
+		ctx,
+		content
+	)
 	if (!candidate) {
 		return {
 			route: 'new_trace',
@@ -285,8 +334,15 @@ export async function routeFact(
 		}
 	}
 
-	const { conflictDetected, conflictKeys } = detectConflict(candidate.entities, incomingEntities)
-	const route = classifyRoute(candidate.similarity, conflictDetected, policy)
+	const { conflictDetected, conflictKeys } = detectConflict(
+		candidate.entities,
+		incomingEntities
+	)
+	const route = classifyRoute(
+		candidate.similarity,
+		conflictDetected,
+		policy
+	)
 
 	return {
 		route,
@@ -333,7 +389,10 @@ export async function applyReconsolidate(
 	if (!current) return
 
 	// Load current entity associations for the snapshot
-	const currentEntities = loadCandidateEntities(hdb, candidateMemoryId)
+	const currentEntities = loadCandidateEntities(
+		hdb,
+		candidateMemoryId
+	)
 
 	// Compute next version number
 	const maxVersionRow = hdb.sqlite
@@ -356,7 +415,10 @@ export async function applyReconsolidate(
 		)
 	}
 
-	const mergedByName = new Map<string, { name: string; entityType: string }>()
+	const mergedByName = new Map<
+		string,
+		{ name: string; entityType: string }
+	>()
 	for (const entity of currentEntities) {
 		mergedByName.set(normalizeValue(entity.name), {
 			name: entity.name,
@@ -382,7 +444,10 @@ export async function applyReconsolidate(
 				versionNo: nextVersion,
 				content: current.content,
 				entitiesJson: JSON.stringify(
-					currentEntities.map(e => ({ name: e.name, entityType: e.entityType }))
+					currentEntities.map(e => ({
+						name: e.name,
+						entityType: e.entityType
+					}))
 				),
 				attributesJson: JSON.stringify({
 					factType: current.factType,
@@ -428,12 +493,19 @@ export async function applyReconsolidate(
 				lastAccessed: now,
 				updatedAt: now
 			})
-			.where(eq(hdb.schema.memoryUnits.id, candidateMemoryId))
+			.where(
+				eq(hdb.schema.memoryUnits.id, candidateMemoryId)
+			)
 			.run()
 
 		hdb.db
 			.delete(hdb.schema.memoryEntities)
-			.where(eq(hdb.schema.memoryEntities.memoryId, candidateMemoryId))
+			.where(
+				eq(
+					hdb.schema.memoryEntities.memoryId,
+					candidateMemoryId
+				)
+			)
 			.run()
 
 		for (const entityId of mergedEntityIds) {
@@ -443,12 +515,14 @@ export async function applyReconsolidate(
 				.run()
 		}
 
-		hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [candidateMemoryId])
-		hdb.sqlite.run('INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)', [
-			candidateMemoryId,
-			current.bankId,
-			newContent
-		])
+		hdb.sqlite.run(
+			'DELETE FROM hs_memory_fts WHERE id = ?',
+			[candidateMemoryId]
+		)
+		hdb.sqlite.run(
+			'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
+			[candidateMemoryId, current.bankId, newContent]
+		)
 
 		// Update embedding before committing so we can roll back on failure
 		await memoryVec.upsert(candidateMemoryId, newContent)
@@ -480,7 +554,9 @@ export function logDecision(
 			candidateScore: decision.candidateScore,
 			conflictDetected: decision.conflictDetected ? 1 : 0,
 			conflictKeysJson:
-				decision.conflictKeys.length > 0 ? JSON.stringify(decision.conflictKeys) : null,
+				decision.conflictKeys.length > 0
+					? JSON.stringify(decision.conflictKeys)
+					: null,
 			policyVersion: POLICY_VERSION,
 			createdAt: now
 		})

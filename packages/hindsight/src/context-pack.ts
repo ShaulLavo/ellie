@@ -54,7 +54,10 @@ export interface PackResult {
  * @param candidates - Ranked candidates (highest score first)
  * @param tokenBudget - Maximum token budget
  */
-export function packContext(candidates: PackCandidate[], tokenBudget: number): PackResult {
+export function packContext(
+	candidates: PackCandidate[],
+	tokenBudget: number
+): PackResult {
 	if (candidates.length === 0) {
 		return {
 			packed: [],
@@ -68,11 +71,14 @@ export function packContext(candidates: PackCandidate[], tokenBudget: number): P
 	let totalUsed = 0
 
 	// Step 1: Always include full text for top 2 (pre-compute tokens once)
-	const top2WithTokens = candidates.slice(0, 2).map((c) => ({
+	const top2WithTokens = candidates.slice(0, 2).map(c => ({
 		...c,
 		tokens: estimateTokens(c.content)
 	}))
-	const top2Tokens = top2WithTokens.reduce((sum, c) => sum + c.tokens, 0)
+	const top2Tokens = top2WithTokens.reduce(
+		(sum, c) => sum + c.tokens,
+		0
+	)
 
 	// Step 7: If top 2 exceed budget, return them anyway with overflow=true
 	if (top2Tokens > tokenBudget) {
@@ -129,7 +135,8 @@ export function packContext(candidates: PackCandidate[], tokenBudget: number): P
 	const skippedForBackfill: PackCandidate[] = []
 
 	for (const c of remaining) {
-		const gistText = c.gist ?? generateFallbackGist(c.content)
+		const gistText =
+			c.gist ?? generateFallbackGist(c.content)
 		const gistTokens = estimateTokens(gistText)
 		const fullTokens = estimateTokens(c.content)
 
@@ -183,7 +190,8 @@ export function packContext(candidates: PackCandidate[], tokenBudget: number): P
 				allocatedIds.add(c.id)
 			} else {
 				// Try gist instead
-				const gistText = c.gist ?? generateFallbackGist(c.content)
+				const gistText =
+					c.gist ?? generateFallbackGist(c.content)
 				const gistTokens = estimateTokens(gistText)
 				if (gistTokens <= extraBudget) {
 					gistSlots.push({
@@ -206,7 +214,8 @@ export function packContext(candidates: PackCandidate[], tokenBudget: number): P
 		let extraBudget = fullRemaining
 		for (const c of skippedForBackfill) {
 			if (allocatedIds.has(c.id)) continue
-			const gistText = c.gist ?? generateFallbackGist(c.content)
+			const gistText =
+				c.gist ?? generateFallbackGist(c.content)
 			const gistTokens = estimateTokens(gistText)
 			if (gistTokens <= extraBudget) {
 				gistSlots.push({
@@ -223,7 +232,10 @@ export function packContext(candidates: PackCandidate[], tokenBudget: number): P
 	}
 
 	// Merge gist and full backfill slots (maintain score order)
-	const allExtra = [...gistSlots, ...fullBackfillSlots].sort((a, b) => b.score - a.score)
+	const allExtra = [
+		...gistSlots,
+		...fullBackfillSlots
+	].sort((a, b) => b.score - a.score)
 
 	for (const slot of allExtra) {
 		packed.push(slot)
@@ -243,7 +255,9 @@ export function packContext(candidates: PackCandidate[], tokenBudget: number): P
 /**
  * Deterministic fallback gist: truncate to 280 chars with "...".
  */
-export function generateFallbackGist(content: string): string {
+export function generateFallbackGist(
+	content: string
+): string {
 	if (content.length <= 280) return content
 	return content.slice(0, 277) + '...'
 }

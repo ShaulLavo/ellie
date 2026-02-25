@@ -1,21 +1,63 @@
-import { forwardRef, useImperativeHandle, useCallback } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useCallback
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const ChartBarIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const ChartBarIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = useCallback(() => {
-			animate('.bar-1', { scaleY: [0, 1] }, { duration: 0.3, ease: 'easeOut' })
-			animate('.bar-2', { scaleY: [0, 1] }, { duration: 0.3, ease: 'easeOut', delay: 0.1 })
-			animate('.bar-3', { scaleY: [0, 1] }, { duration: 0.3, ease: 'easeOut', delay: 0.2 })
-			animate('.base-line', { scaleX: [1, 1.05, 1] }, { duration: 0.4, ease: 'easeInOut' })
+			animate(
+				'.bar-1',
+				{ scaleY: [0, 1] },
+				{ duration: 0.3, ease: 'easeOut' }
+			)
+			animate(
+				'.bar-2',
+				{ scaleY: [0, 1] },
+				{ duration: 0.3, ease: 'easeOut', delay: 0.1 }
+			)
+			animate(
+				'.bar-3',
+				{ scaleY: [0, 1] },
+				{ duration: 0.3, ease: 'easeOut', delay: 0.2 }
+			)
+			animate(
+				'.base-line',
+				{ scaleX: [1, 1.05, 1] },
+				{ duration: 0.4, ease: 'easeInOut' }
+			)
 		}, [animate])
 
 		const stop = useCallback(() => {
-			animate('.bar-1 , .bar-2 , .bar-3', { scaleY: 1 }, { duration: 0.2, ease: 'easeInOut' })
-			animate('.base-line', { scaleX: 1 }, { duration: 0.2, ease: 'easeInOut' })
+			animate(
+				'.bar-1 , .bar-2 , .bar-3',
+				{ scaleY: 1 },
+				{ duration: 0.2, ease: 'easeInOut' }
+			)
+			animate(
+				'.base-line',
+				{ scaleX: 1 },
+				{ duration: 0.2, ease: 'easeInOut' }
+			)
 		}, [animate])
 
 		useImperativeHandle(ref, () => ({
@@ -59,7 +101,11 @@ const ChartBarIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 					style={{ transformOrigin: '18px 20px' }}
 				/>
 
-				<motion.path d="M4 20h14" className="base-line" style={{ transformOrigin: '11px 20px' }} />
+				<motion.path
+					d="M4 20h14"
+					className="base-line"
+					style={{ transformOrigin: '11px 20px' }}
+				/>
 			</motion.svg>
 		)
 	}

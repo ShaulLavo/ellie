@@ -1,6 +1,7 @@
 // ── Fact Extraction (Python parity) ────────────────────────────────────────
 
-export const EXTRACTION_CANONICAL_TIMEZONE = 'Asia/Jerusalem'
+export const EXTRACTION_CANONICAL_TIMEZONE =
+	'Asia/Jerusalem'
 
 const FACT_TYPES_INSTRUCTION = `Extract ONLY "world" and "assistant" type facts.`
 
@@ -115,15 +116,17 @@ an experience or person.`
 const VERBOSE_GUIDELINES = `Extract facts with maximum detail and preserve all specific information.
 Still apply temporal handling, coreference resolution, and classification rules exactly.`
 
-export const EXTRACT_FACTS_SYSTEM = BASE_FACT_EXTRACTION_PROMPT.replace(
-	'{extraction_guidelines}',
-	CONCISE_GUIDELINES
-)
+export const EXTRACT_FACTS_SYSTEM =
+	BASE_FACT_EXTRACTION_PROMPT.replace(
+		'{extraction_guidelines}',
+		CONCISE_GUIDELINES
+	)
 
-export const EXTRACT_FACTS_VERBOSE_SYSTEM = BASE_FACT_EXTRACTION_PROMPT.replace(
-	'{extraction_guidelines}',
-	VERBOSE_GUIDELINES
-)
+export const EXTRACT_FACTS_VERBOSE_SYSTEM =
+	BASE_FACT_EXTRACTION_PROMPT.replace(
+		'{extraction_guidelines}',
+		VERBOSE_GUIDELINES
+	)
 
 // ── Extraction mode selector ───────────────────────────────────────────────
 
@@ -131,9 +134,13 @@ export function getExtractionPrompt(
 	mode: 'concise' | 'verbose' | 'custom',
 	customGuidelines?: string
 ): string {
-	if (mode === 'verbose') return EXTRACT_FACTS_VERBOSE_SYSTEM
+	if (mode === 'verbose')
+		return EXTRACT_FACTS_VERBOSE_SYSTEM
 	if (mode === 'custom' && customGuidelines) {
-		return BASE_FACT_EXTRACTION_PROMPT.replace('{extraction_guidelines}', customGuidelines)
+		return BASE_FACT_EXTRACTION_PROMPT.replace(
+			'{extraction_guidelines}',
+			customGuidelines
+		)
 	}
 	return EXTRACT_FACTS_SYSTEM
 }
@@ -150,7 +157,8 @@ export interface ExtractFactsUserPromptInput {
 
 function formatEventDate(eventDateMs: number): string {
 	const date = new Date(eventDateMs)
-	if (Number.isNaN(date.getTime())) return 'Unknown date (invalid)'
+	if (Number.isNaN(date.getTime()))
+		return 'Unknown date (invalid)'
 	const readable = new Intl.DateTimeFormat('en-US', {
 		weekday: 'long',
 		month: 'long',
@@ -161,7 +169,9 @@ function formatEventDate(eventDateMs: number): string {
 	return `${readable} (${date.toISOString()})`
 }
 
-export const EXTRACT_FACTS_USER = (input: ExtractFactsUserPromptInput) =>
+export const EXTRACT_FACTS_USER = (
+	input: ExtractFactsUserPromptInput
+) =>
 	`Extract facts from the following text chunk.
 
 Chunk: ${input.chunkIndex + 1}/${input.totalChunks}
@@ -231,7 +241,9 @@ export interface ConsolidationPromptObservation {
 function formatEpochMs(value: number | null): string {
 	if (value == null) return 'null'
 	const date = new Date(value)
-	return Number.isNaN(date.getTime()) ? 'null' : date.toISOString()
+	return Number.isNaN(date.getTime())
+		? 'null'
+		: date.toISOString()
 }
 
 export function getConsolidationUserPrompt(
@@ -256,7 +268,8 @@ export function getConsolidationUserPrompt(
 		prompt += '\nNo existing related observations found.\n'
 	}
 
-	prompt += '\nDecide: create, update, merge observations when needed, or skip.'
+	prompt +=
+		'\nDecide: create, update, merge observations when needed, or skip.'
 	return prompt
 }
 
@@ -270,7 +283,9 @@ const BUDGET_GUIDANCE: Record<ReflectBudget, string> = {
 	high: 'You have a HIGH budget. Be thorough — search all tiers. Cross-reference observations with raw facts. Use get_entity to explore connections. Build the most complete answer possible.'
 }
 
-export function getReflectSystemPrompt(budget: ReflectBudget): string {
+export function getReflectSystemPrompt(
+	budget: ReflectBudget
+): string {
 	return `You are a reflection agent that answers questions by reasoning over a 3-tier memory hierarchy.
 
 MEMORY HIERARCHY (search in this order):
@@ -335,10 +350,14 @@ import type { Directive } from './types'
  * Build the directives section for the TOP of the reflect system prompt.
  * Returns empty string when no directives are provided.
  */
-export function buildDirectivesSection(directives: Directive[]): string {
+export function buildDirectivesSection(
+	directives: Directive[]
+): string {
 	if (directives.length === 0) return ''
 
-	const items = directives.map(d => `- **${d.name}**: ${d.content}`).join('\n')
+	const items = directives
+		.map(d => `- **${d.name}**: ${d.content}`)
+		.join('\n')
 
 	return `## DIRECTIVES (MANDATORY)
 These are hard rules you MUST follow in ALL responses:
@@ -356,10 +375,14 @@ Do NOT explain or justify how you handled directives in your answer. Just follow
  * Leverages the recency effect — LLMs weight recent context more heavily.
  * Returns empty string when no directives are provided.
  */
-export function buildDirectivesReminder(directives: Directive[]): string {
+export function buildDirectivesReminder(
+	directives: Directive[]
+): string {
 	if (directives.length === 0) return ''
 
-	const items = directives.map((d, i) => `${i + 1}. **${d.name}**: ${d.content}`).join('\n')
+	const items = directives
+		.map((d, i) => `${i + 1}. **${d.name}**: ${d.content}`)
+		.join('\n')
 
 	return `
 

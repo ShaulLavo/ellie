@@ -1,4 +1,8 @@
-export type ProviderName = 'anthropic' | 'openai' | 'ollama' | 'openrouter'
+export type ProviderName =
+	| 'anthropic'
+	| 'openai'
+	| 'ollama'
+	| 'openrouter'
 
 export type ModelInputType = 'text' | 'image'
 
@@ -45,4 +49,9 @@ export interface Usage {
 }
 
 /** Unified thinking effort levels across providers */
-export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+export type ThinkingLevel =
+	| 'minimal'
+	| 'low'
+	| 'medium'
+	| 'high'
+	| 'xhigh'

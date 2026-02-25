@@ -1,9 +1,19 @@
 import type { AgentEvent } from '@ellie/agent'
-import type { EventStore, EventRow, EventType, AgentMessage } from '@ellie/db'
+import type {
+	EventStore,
+	EventRow,
+	EventType,
+	AgentMessage
+} from '@ellie/db'
 
-export type AgentRunEvent = { type: 'event'; event: AgentEvent } | { type: 'closed' }
+export type AgentRunEvent =
+	| { type: 'event'; event: AgentEvent }
+	| { type: 'closed' }
 
-export type SessionEvent = { type: 'append'; event: EventRow }
+export type SessionEvent = {
+	type: 'append'
+	event: EventRow
+}
 
 type Listener<T> = (event: T) => void
 
@@ -11,7 +21,10 @@ const MAX_CLOSED_RUNS = 10_000
 
 export class RealtimeStore {
 	readonly #store: EventStore
-	readonly #listeners = new Map<string, Set<Listener<unknown>>>()
+	readonly #listeners = new Map<
+		string,
+		Set<Listener<unknown>>
+	>()
 	readonly #closedRuns = new Set<string>()
 
 	constructor(store: EventStore) {
@@ -32,7 +45,9 @@ export class RealtimeStore {
 		} catch {
 			// Session may have been created concurrently — verify it exists
 			if (!this.#store.getSession(sessionId))
-				throw new Error(`Failed to ensure session: ${sessionId}`)
+				throw new Error(
+					`Failed to ensure session: ${sessionId}`
+				)
 		}
 	}
 
@@ -69,7 +84,13 @@ export class RealtimeStore {
 		runId?: string,
 		dedupeKey?: string
 	): EventRow {
-		const row = this.#store.append({ sessionId, type, payload, runId, dedupeKey })
+		const row = this.#store.append({
+			sessionId,
+			type,
+			payload,
+			runId,
+			dedupeKey
+		})
 
 		// Notify session-level subscribers
 		this.#publish(`session:${sessionId}`, {
@@ -94,12 +115,21 @@ export class RealtimeStore {
 
 	// ── Agent run lifecycle ───────────────────────────────────────────────
 
-	appendAgentRunEvent(sessionId: string, runId: string, event: AgentEvent): void {
+	appendAgentRunEvent(
+		sessionId: string,
+		runId: string,
+		event: AgentEvent
+	): void {
 		// Map agent events to persisted event types
 		const mapping = this.#mapAgentEvent(event)
 		if (mapping) {
 			// Route through appendEvent so session-level subscribers (SSE) are notified
-			this.appendEvent(sessionId, mapping.type, mapping.payload, runId)
+			this.appendEvent(
+				sessionId,
+				mapping.type,
+				mapping.payload,
+				runId
+			)
 		}
 
 		// Always publish live to run subscribers (even for non-persisted events like deltas)
@@ -110,12 +140,23 @@ export class RealtimeStore {
 	}
 
 	closeAgentRun(sessionId: string, runId: string): void {
-		this.appendEvent(sessionId, 'run_closed', { reason: 'completed' }, runId)
+		this.appendEvent(
+			sessionId,
+			'run_closed',
+			{ reason: 'completed' },
+			runId
+		)
 	}
 
-	isAgentRunClosed(sessionId: string, runId: string): boolean {
+	isAgentRunClosed(
+		sessionId: string,
+		runId: string
+	): boolean {
 		// Check in-memory cache first, then fall back to DB for runs closed before this process started
-		if (this.#closedRuns.has(this.#runKey(sessionId, runId))) return true
+		if (
+			this.#closedRuns.has(this.#runKey(sessionId, runId))
+		)
+			return true
 
 		const closedEvents = this.#store.query({
 			sessionId,
@@ -136,7 +177,11 @@ export class RealtimeStore {
 		return this.#store.getConversationHistory(sessionId)
 	}
 
-	queryEvents(sessionId: string, afterSeq?: number, types?: EventType[]) {
+	queryEvents(
+		sessionId: string,
+		afterSeq?: number,
+		types?: EventType[]
+	) {
 		return this.#store.query({ sessionId, afterSeq, types })
 	}
 
@@ -146,7 +191,10 @@ export class RealtimeStore {
 
 	// ── Subscriptions ─────────────────────────────────────────────────────
 
-	subscribeToSession(sessionId: string, listener: Listener<SessionEvent>): () => void {
+	subscribeToSession(
+		sessionId: string,
+		listener: Listener<SessionEvent>
+	): () => void {
 		return this.#subscribe(`session:${sessionId}`, listener)
 	}
 
@@ -155,17 +203,26 @@ export class RealtimeStore {
 		runId: string,
 		listener: Listener<AgentRunEvent>
 	): () => void {
-		return this.#subscribe(this.#runChannel(sessionId, runId), listener)
+		return this.#subscribe(
+			this.#runChannel(sessionId, runId),
+			listener
+		)
 	}
 
 	// ── Private ───────────────────────────────────────────────────────────
 
-	#mapAgentEvent(event: AgentEvent): { type: EventType; payload: Record<string, unknown> } | null {
+	#mapAgentEvent(event: AgentEvent): {
+		type: EventType
+		payload: Record<string, unknown>
+	} | null {
 		switch (event.type) {
 			case 'agent_start':
 				return { type: 'agent_start', payload: {} }
 			case 'agent_end':
-				return { type: 'agent_end', payload: { messages: event.messages } }
+				return {
+					type: 'agent_end',
+					payload: { messages: event.messages }
+				}
 			case 'turn_start':
 				return { type: 'turn_start', payload: {} }
 			case 'turn_end':
@@ -178,7 +235,10 @@ export class RealtimeStore {
 				if (event.message.role === 'assistant') {
 					return {
 						type: 'assistant_final',
-						payload: event.message as unknown as Record<string, unknown>
+						payload: event.message as unknown as Record<
+							string,
+							unknown
+						>
 					}
 				}
 				return null
@@ -217,7 +277,10 @@ export class RealtimeStore {
 		}
 	}
 
-	#subscribe<T>(channel: string, listener: Listener<T>): () => void {
+	#subscribe<T>(
+		channel: string,
+		listener: Listener<T>
+	): () => void {
 		let listeners = this.#listeners.get(channel)
 		if (!listeners) {
 			listeners = new Set<Listener<unknown>>()

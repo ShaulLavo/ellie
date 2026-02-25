@@ -12,9 +12,19 @@ export const TEMPORAL_LINK_WINDOW_HOURS = 24
 export const TEMPORAL_LINK_MIN_WEIGHT = 0.3
 export const TEMPORAL_LINK_MAX_NEIGHBORS = 10
 
-export type TemporalDateInput = number | Date | null | undefined
+export type TemporalDateInput =
+	| number
+	| Date
+	| null
+	| undefined
 
-export type TemporalLinkTuple = [string, string, 'temporal', number, null]
+export type TemporalLinkTuple = [
+	string,
+	string,
+	'temporal',
+	number,
+	null
+]
 
 interface TemporalCandidate {
 	id: string
@@ -33,13 +43,16 @@ function clampTimestamp(ms: number): number {
  * JS Date/timestamp values are inherently comparable; this normalizes
  * supported inputs to epoch milliseconds.
  */
-export function normalizeTemporalDate(value: TemporalDateInput): number | null {
+export function normalizeTemporalDate(
+	value: TemporalDateInput
+): number | null {
 	if (value == null) return null
 	if (value instanceof Date) {
 		const ms = value.getTime()
 		return Number.isFinite(ms) ? clampTimestamp(ms) : null
 	}
-	if (typeof value !== 'number' || !Number.isFinite(value)) return null
+	if (typeof value !== 'number' || !Number.isFinite(value))
+		return null
 	return clampTimestamp(value)
 }
 
@@ -68,7 +81,10 @@ export function computeTemporalQueryBounds(
 	}
 }
 
-export function computeTemporalWeight(distanceMs: number, windowMs: number): number {
+export function computeTemporalWeight(
+	distanceMs: number,
+	windowMs: number
+): number {
 	if (windowMs <= 0) return TEMPORAL_LINK_MIN_WEIGHT
 	const linearWeight = 1 - distanceMs / windowMs
 	return Math.max(TEMPORAL_LINK_MIN_WEIGHT, linearWeight)
@@ -90,31 +106,61 @@ export function computeTemporalLinks(
 	const links: TemporalLinkTuple[] = []
 	const windowMs = timeWindowHours * MS_PER_HOUR
 
-	for (const [unitId, unitEventDate] of Object.entries(newUnits)) {
-		const normalizedUnitDate = normalizeTemporalDate(unitEventDate)
+	for (const [unitId, unitEventDate] of Object.entries(
+		newUnits
+	)) {
+		const normalizedUnitDate =
+			normalizeTemporalDate(unitEventDate)
 		if (normalizedUnitDate == null) continue
 
-		const timeLower = clampTimestamp(normalizedUnitDate - windowMs)
-		const timeUpper = clampTimestamp(normalizedUnitDate + windowMs)
+		const timeLower = clampTimestamp(
+			normalizedUnitDate - windowMs
+		)
+		const timeUpper = clampTimestamp(
+			normalizedUnitDate + windowMs
+		)
 
-		const matchingNeighbors: Array<{ id: string; eventDate: number }> = []
+		const matchingNeighbors: Array<{
+			id: string
+			eventDate: number
+		}> = []
 		for (const candidate of candidates) {
-			const normalizedCandidateDate = normalizeTemporalDate(candidate.eventDate)
+			const normalizedCandidateDate = normalizeTemporalDate(
+				candidate.eventDate
+			)
 			if (normalizedCandidateDate == null) continue
-			if (normalizedCandidateDate < timeLower || normalizedCandidateDate > timeUpper) {
+			if (
+				normalizedCandidateDate < timeLower ||
+				normalizedCandidateDate > timeUpper
+			) {
 				continue
 			}
 			matchingNeighbors.push({
 				id: String(candidate.id),
 				eventDate: normalizedCandidateDate
 			})
-			if (matchingNeighbors.length >= TEMPORAL_LINK_MAX_NEIGHBORS) break
+			if (
+				matchingNeighbors.length >=
+				TEMPORAL_LINK_MAX_NEIGHBORS
+			)
+				break
 		}
 
 		for (const neighbor of matchingNeighbors) {
-			const distanceMs = Math.abs(normalizedUnitDate - neighbor.eventDate)
-			const weight = computeTemporalWeight(distanceMs, windowMs)
-			links.push([unitId, neighbor.id, 'temporal', weight, null])
+			const distanceMs = Math.abs(
+				normalizedUnitDate - neighbor.eventDate
+			)
+			const weight = computeTemporalWeight(
+				distanceMs,
+				windowMs
+			)
+			links.push([
+				unitId,
+				neighbor.id,
+				'temporal',
+				weight,
+				null
+			])
 		}
 	}
 

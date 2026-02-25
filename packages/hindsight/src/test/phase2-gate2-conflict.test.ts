@@ -19,17 +19,27 @@ describe('Gate 2: Conflict Detection v1', () => {
 
 	describe('key structure is entity name + attribute (entity_type)', () => {
 		it('conflict key format is name|entity_type', () => {
-			const candidate = [{ name: 'Alice', entityType: 'person' }]
-			const incoming = [{ name: 'Alice', entityType: 'organization' }]
+			const candidate = [
+				{ name: 'Alice', entityType: 'person' }
+			]
+			const incoming = [
+				{ name: 'Alice', entityType: 'organization' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(true)
 			expect(result.conflictKeys).toHaveLength(1)
-			expect(result.conflictKeys[0]).toBe('alice|entity_type')
+			expect(result.conflictKeys[0]).toBe(
+				'alice|entity_type'
+			)
 		})
 
 		it('disjoint entity names => no conflict', () => {
-			const candidate = [{ name: 'Alice', entityType: 'person' }]
-			const incoming = [{ name: 'Bob', entityType: 'organization' }]
+			const candidate = [
+				{ name: 'Alice', entityType: 'person' }
+			]
+			const incoming = [
+				{ name: 'Bob', entityType: 'organization' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 			expect(result.conflictKeys).toHaveLength(0)
@@ -40,22 +50,34 @@ describe('Gate 2: Conflict Detection v1', () => {
 
 	describe('case-insensitive normalization', () => {
 		it('same value in different case => non-conflict', () => {
-			const candidate = [{ name: 'Alice', entityType: 'PERSON' }]
-			const incoming = [{ name: 'Alice', entityType: 'person' }]
+			const candidate = [
+				{ name: 'Alice', entityType: 'PERSON' }
+			]
+			const incoming = [
+				{ name: 'Alice', entityType: 'person' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})
 
 		it('same name in different case resolves to same key', () => {
-			const candidate = [{ name: 'ALICE', entityType: 'person' }]
-			const incoming = [{ name: 'alice', entityType: 'person' }]
+			const candidate = [
+				{ name: 'ALICE', entityType: 'person' }
+			]
+			const incoming = [
+				{ name: 'alice', entityType: 'person' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})
 
 		it('mixed case name with different type => conflict', () => {
-			const candidate = [{ name: 'Alice BOB', entityType: 'person' }]
-			const incoming = [{ name: 'alice bob', entityType: 'place' }]
+			const candidate = [
+				{ name: 'Alice BOB', entityType: 'person' }
+			]
+			const incoming = [
+				{ name: 'alice bob', entityType: 'place' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(true)
 		})
@@ -65,15 +87,23 @@ describe('Gate 2: Conflict Detection v1', () => {
 
 	describe('whitespace normalization', () => {
 		it('leading/trailing whitespace is trimmed => non-conflict', () => {
-			const candidate = [{ name: '  Alice  ', entityType: '  person  ' }]
-			const incoming = [{ name: 'Alice', entityType: 'person' }]
+			const candidate = [
+				{ name: '  Alice  ', entityType: '  person  ' }
+			]
+			const incoming = [
+				{ name: 'Alice', entityType: 'person' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})
 
 		it('internal multi-space collapsed to single space', () => {
-			const candidate = [{ name: 'Alice   Bob', entityType: 'person' }]
-			const incoming = [{ name: 'Alice Bob', entityType: 'person' }]
+			const candidate = [
+				{ name: 'Alice   Bob', entityType: 'person' }
+			]
+			const incoming = [
+				{ name: 'Alice Bob', entityType: 'person' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})
@@ -83,21 +113,27 @@ describe('Gate 2: Conflict Detection v1', () => {
 
 	describe('numeric string normalization', () => {
 		it('01.0 and 1 normalize to same value => non-conflict', () => {
-			const candidate = [{ name: 'Score', entityType: '01.0' }]
+			const candidate = [
+				{ name: 'Score', entityType: '01.0' }
+			]
 			const incoming = [{ name: 'Score', entityType: '1' }]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})
 
 		it('1.00 and 1 normalize to same value => non-conflict', () => {
-			const candidate = [{ name: 'Count', entityType: '1.00' }]
+			const candidate = [
+				{ name: 'Count', entityType: '1.00' }
+			]
 			const incoming = [{ name: 'Count', entityType: '1' }]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})
 
 		it('+5 and 5 normalize to same value => non-conflict', () => {
-			const candidate = [{ name: 'Level', entityType: '+5' }]
+			const candidate = [
+				{ name: 'Level', entityType: '+5' }
+			]
 			const incoming = [{ name: 'Level', entityType: '5' }]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
@@ -121,12 +157,18 @@ describe('Gate 2: Conflict Detection v1', () => {
 		})
 
 		it('candidate empty => no conflict', () => {
-			const result = detectConflict([], [{ name: 'A', entityType: 'person' }])
+			const result = detectConflict(
+				[],
+				[{ name: 'A', entityType: 'person' }]
+			)
 			expect(result.conflictDetected).toBe(false)
 		})
 
 		it('incoming empty => no conflict', () => {
-			const result = detectConflict([{ name: 'A', entityType: 'person' }], [])
+			const result = detectConflict(
+				[{ name: 'A', entityType: 'person' }],
+				[]
+			)
 			expect(result.conflictDetected).toBe(false)
 		})
 	})
@@ -146,7 +188,9 @@ describe('Gate 2: Conflict Detection v1', () => {
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(true)
 			expect(result.conflictKeys).toHaveLength(1)
-			expect(result.conflictKeys[0]).toBe('acme|entity_type')
+			expect(result.conflictKeys[0]).toBe(
+				'acme|entity_type'
+			)
 		})
 
 		it('detects multiple conflicts', () => {
@@ -182,8 +226,12 @@ describe('Gate 2: Conflict Detection v1', () => {
 
 	describe('combined normalization (case + whitespace + numeric)', () => {
 		it('all normalizations applied together => non-conflict', () => {
-			const candidate = [{ name: '  ALICE  ', entityType: '  PERSON  ' }]
-			const incoming = [{ name: 'alice', entityType: 'person' }]
+			const candidate = [
+				{ name: '  ALICE  ', entityType: '  PERSON  ' }
+			]
+			const incoming = [
+				{ name: 'alice', entityType: 'person' }
+			]
 			const result = detectConflict(candidate, incoming)
 			expect(result.conflictDetected).toBe(false)
 		})

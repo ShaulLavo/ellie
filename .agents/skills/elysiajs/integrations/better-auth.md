@@ -48,8 +48,11 @@ Extract docs from Better Auth:
 ```typescript
 import { openAPI } from 'better-auth/plugins'
 
-let _schema: ReturnType<typeof auth.api.generateOpenAPISchema>
-const getSchema = async () => (_schema ??= auth.api.generateOpenAPISchema())
+let _schema: ReturnType<
+	typeof auth.api.generateOpenAPISchema
+>
+const getSchema = async () =>
+	(_schema ??= auth.api.generateOpenAPISchema())
 
 export const OpenAPI = {
 	getPaths: (prefix = '/auth/api') =>
@@ -68,7 +71,9 @@ export const OpenAPI = {
 
 			return reference
 		}) as Promise<any>,
-	components: getSchema().then(({ components }) => components) as Promise<any>
+	components: getSchema().then(
+		({ components }) => components
+	) as Promise<any>
 } as const
 ```
 
@@ -107,22 +112,28 @@ new Elysia()
 Use macro + resolve for session/user:
 
 ```typescript
-const betterAuth = new Elysia({ name: 'better-auth' }).mount(auth.handler).macro({
-	auth: {
-		async resolve({ status, request: { headers } }) {
-			const session = await auth.api.getSession({ headers })
+const betterAuth = new Elysia({ name: 'better-auth' })
+	.mount(auth.handler)
+	.macro({
+		auth: {
+			async resolve({ status, request: { headers } }) {
+				const session = await auth.api.getSession({
+					headers
+				})
 
-			if (!session) return status(401)
+				if (!session) return status(401)
 
-			return {
-				user: session.user,
-				session: session.session
+				return {
+					user: session.user,
+					session: session.session
+				}
 			}
 		}
-	}
-})
+	})
 
-new Elysia().use(betterAuth).get('/user', ({ user }) => user, { auth: true })
+new Elysia()
+	.use(betterAuth)
+	.get('/user', ({ user }) => user, { auth: true })
 ```
 
 Access `user` and `session` in all routes.

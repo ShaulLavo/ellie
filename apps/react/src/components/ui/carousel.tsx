@@ -1,14 +1,21 @@
 'use client'
 
 import * as React from 'react'
-import useEmblaCarousel, { type UseEmblaCarouselType } from 'embla-carousel-react'
+import useEmblaCarousel, {
+	type UseEmblaCarouselType
+} from 'embla-carousel-react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
+import {
+	CaretLeftIcon,
+	CaretRightIcon
+} from '@phosphor-icons/react'
 
 type CarouselApi = UseEmblaCarouselType[1]
-type UseCarouselParameters = Parameters<typeof useEmblaCarousel>
+type UseCarouselParameters = Parameters<
+	typeof useEmblaCarousel
+>
 type CarouselOptions = UseCarouselParameters[0]
 type CarouselPlugin = UseCarouselParameters[1]
 
@@ -28,13 +35,16 @@ type CarouselContextProps = {
 	canScrollNext: boolean
 } & CarouselProps
 
-const CarouselContext = React.createContext<CarouselContextProps | null>(null)
+const CarouselContext =
+	React.createContext<CarouselContextProps | null>(null)
 
 function useCarousel() {
 	const context = React.useContext(CarouselContext)
 
 	if (!context) {
-		throw new Error('useCarousel must be used within a <Carousel />')
+		throw new Error(
+			'useCarousel must be used within a <Carousel />'
+		)
 	}
 
 	return context
@@ -56,8 +66,10 @@ function Carousel({
 		},
 		plugins
 	)
-	const [canScrollPrev, setCanScrollPrev] = React.useState(false)
-	const [canScrollNext, setCanScrollNext] = React.useState(false)
+	const [canScrollPrev, setCanScrollPrev] =
+		React.useState(false)
+	const [canScrollNext, setCanScrollNext] =
+		React.useState(false)
 
 	const onSelect = React.useCallback((api: CarouselApi) => {
 		if (!api) return
@@ -108,7 +120,9 @@ function Carousel({
 				carouselRef,
 				api: api,
 				opts,
-				orientation: orientation || (opts?.axis === 'y' ? 'vertical' : 'horizontal'),
+				orientation:
+					orientation ||
+					(opts?.axis === 'y' ? 'vertical' : 'horizontal'),
 				scrollPrev,
 				scrollNext,
 				canScrollPrev,
@@ -129,20 +143,36 @@ function Carousel({
 	)
 }
 
-function CarouselContent({ className, ...props }: React.ComponentProps<'div'>) {
+function CarouselContent({
+	className,
+	...props
+}: React.ComponentProps<'div'>) {
 	const { carouselRef, orientation } = useCarousel()
 
 	return (
-		<div ref={carouselRef} className="overflow-hidden" data-slot="carousel-content">
+		<div
+			ref={carouselRef}
+			className="overflow-hidden"
+			data-slot="carousel-content"
+		>
 			<div
-				className={cn('flex', orientation === 'horizontal' ? '-ml-4' : '-mt-4 flex-col', className)}
+				className={cn(
+					'flex',
+					orientation === 'horizontal'
+						? '-ml-4'
+						: '-mt-4 flex-col',
+					className
+				)}
 				{...props}
 			/>
 		</div>
 	)
 }
 
-function CarouselItem({ className, ...props }: React.ComponentProps<'div'>) {
+function CarouselItem({
+	className,
+	...props
+}: React.ComponentProps<'div'>) {
 	const { orientation } = useCarousel()
 
 	return (
@@ -166,7 +196,8 @@ function CarouselPrevious({
 	size = 'icon-sm',
 	...props
 }: React.ComponentProps<typeof Button>) {
-	const { orientation, scrollPrev, canScrollPrev } = useCarousel()
+	const { orientation, scrollPrev, canScrollPrev } =
+		useCarousel()
 
 	return (
 		<Button
@@ -196,7 +227,8 @@ function CarouselNext({
 	size = 'icon-sm',
 	...props
 }: React.ComponentProps<typeof Button>) {
-	const { orientation, scrollNext, canScrollNext } = useCarousel()
+	const { orientation, scrollNext, canScrollNext } =
+		useCarousel()
 
 	return (
 		<Button

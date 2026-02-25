@@ -8,12 +8,18 @@
  * - phase2_db_invariants_report.md (route-side-effect checks)
  */
 
-import type { GateResult, Phase2VerificationRun, Phase2ComparisonReport } from './phase2-types'
+import type {
+	GateResult,
+	Phase2VerificationRun,
+	Phase2ComparisonReport
+} from './phase2-types'
 
 // ── JSON Report Generation ──────────────────────────────────────────────
 
 /** Serialize a verification run to formatted JSON for artifact output. */
-export function generateVerificationRunJson(run: Phase2VerificationRun): string {
+export function generateVerificationRunJson(
+	run: Phase2VerificationRun
+): string {
 	return JSON.stringify(run, null, 2)
 }
 
@@ -33,8 +39,15 @@ export function generateComparisonReport(
 	lines.push('|------|--------|-------------|')
 
 	for (const gate of gateResults) {
-		const statusEmoji = gate.status === 'pass' ? 'PASS' : gate.status === 'fail' ? 'FAIL' : 'SKIP'
-		lines.push(`| ${gate.gate} | ${statusEmoji} | ${gate.description} |`)
+		const statusEmoji =
+			gate.status === 'pass'
+				? 'PASS'
+				: gate.status === 'fail'
+					? 'FAIL'
+					: 'SKIP'
+		lines.push(
+			`| ${gate.gate} | ${statusEmoji} | ${gate.description} |`
+		)
 	}
 
 	lines.push('')
@@ -46,14 +59,22 @@ export function generateComparisonReport(
 	lines.push('')
 	lines.push(`| Metric | Value |`)
 	lines.push(`|--------|-------|`)
-	lines.push(`| Baseline DR | ${(report.baseline.duplicateRatio * 100).toFixed(2)}% |`)
-	lines.push(`| Candidate DR | ${(report.candidate.duplicateRatio * 100).toFixed(2)}% |`)
-	lines.push(`| Reduction | ${(report.improvements.duplicateRatioReduction * 100).toFixed(2)}% |`)
+	lines.push(
+		`| Baseline DR | ${(report.baseline.duplicateRatio * 100).toFixed(2)}% |`
+	)
+	lines.push(
+		`| Candidate DR | ${(report.candidate.duplicateRatio * 100).toFixed(2)}% |`
+	)
+	lines.push(
+		`| Reduction | ${(report.improvements.duplicateRatioReduction * 100).toFixed(2)}% |`
+	)
 	lines.push(
 		`| Reduction % | ${(report.improvements.duplicateRatioReductionPercent * 100).toFixed(1)}% |`
 	)
 	lines.push(`| Threshold | >= 25% |`)
-	lines.push(`| Pass | ${report.gate6Pass ? 'YES' : 'NO'} |`)
+	lines.push(
+		`| Pass | ${report.gate6Pass ? 'YES' : 'NO'} |`
+	)
 	lines.push('')
 
 	// Gate 7: Narrative Accuracy
@@ -61,8 +82,12 @@ export function generateComparisonReport(
 	lines.push('')
 	lines.push(`| Metric | Value |`)
 	lines.push(`|--------|-------|`)
-	lines.push(`| Baseline Accuracy | ${(report.baseline.narrativeAccuracy * 100).toFixed(2)}% |`)
-	lines.push(`| Candidate Accuracy | ${(report.candidate.narrativeAccuracy * 100).toFixed(2)}% |`)
+	lines.push(
+		`| Baseline Accuracy | ${(report.baseline.narrativeAccuracy * 100).toFixed(2)}% |`
+	)
+	lines.push(
+		`| Candidate Accuracy | ${(report.candidate.narrativeAccuracy * 100).toFixed(2)}% |`
+	)
 	lines.push(
 		`| Improvement | ${(report.improvements.narrativeAccuracyImprovement * 100).toFixed(2)}% |`
 	)
@@ -70,23 +95,33 @@ export function generateComparisonReport(
 		`| Improvement % | ${(report.improvements.narrativeAccuracyImprovementPercent * 100).toFixed(1)}% |`
 	)
 	lines.push(`| Threshold | >= 15% |`)
-	lines.push(`| Pass | ${report.gate7Pass ? 'YES' : 'NO'} |`)
+	lines.push(
+		`| Pass | ${report.gate7Pass ? 'YES' : 'NO'} |`
+	)
 	lines.push('')
 
 	// Overall
-	const allPassed = gateResults.every(g => g.status !== 'fail')
+	const allPassed = gateResults.every(
+		g => g.status !== 'fail'
+	)
 	lines.push('## Final Acceptance')
 	lines.push('')
 	lines.push(`**Overall: ${allPassed ? 'PASS' : 'FAIL'}**`)
 	lines.push('')
 
 	if (!allPassed) {
-		const failures = gateResults.filter(g => g.status === 'fail')
+		const failures = gateResults.filter(
+			g => g.status === 'fail'
+		)
 		lines.push('### Failed Gates')
 		lines.push('')
 		for (const failure of failures) {
-			lines.push(`- **${failure.gate}**: ${failure.description}`)
-			for (const [key, value] of Object.entries(failure.details)) {
+			lines.push(
+				`- **${failure.gate}**: ${failure.description}`
+			)
+			for (const [key, value] of Object.entries(
+				failure.details
+			)) {
 				lines.push(`  - ${key}: ${JSON.stringify(value)}`)
 			}
 		}
@@ -98,12 +133,16 @@ export function generateComparisonReport(
 // ── DB Invariants Report ────────────────────────────────────────────────
 
 /** Generate a markdown report of Gate 3 route side-effect invariant results. */
-export function generateDbInvariantsReport(gateResults: GateResult[]): string {
+export function generateDbInvariantsReport(
+	gateResults: GateResult[]
+): string {
 	const lines: string[] = []
 
 	lines.push('# Phase 2 — DB Invariants Report')
 	lines.push('')
-	lines.push('Route side-effect verification results from transactional integration tests.')
+	lines.push(
+		'Route side-effect verification results from transactional integration tests.'
+	)
 	lines.push('')
 
 	const gate3 = gateResults.find(g => g.gate === 'Gate 3')
@@ -112,20 +151,31 @@ export function generateDbInvariantsReport(gateResults: GateResult[]): string {
 		lines.push('')
 		lines.push(`**Status:** ${gate3.status.toUpperCase()}`)
 		lines.push('')
-		const verified = gate3.status === 'pass' ? 'verified' : 'NOT verified'
+		const verified =
+			gate3.status === 'pass' ? 'verified' : 'NOT verified'
 
 		lines.push('### reinforce invariants')
 		lines.push(`- No new memory row: ${verified}`)
 		lines.push(`- No hs_memory_versions row: ${verified}`)
-		lines.push(`- Only strength/access metadata updated: ${verified}`)
+		lines.push(
+			`- Only strength/access metadata updated: ${verified}`
+		)
 		lines.push('')
 		lines.push('### reconsolidate invariants')
-		lines.push(`- Exactly one hs_memory_versions row inserted: ${verified}`)
-		lines.push(`- Canonical memory row updated: ${verified}`)
-		lines.push(`- Exactly one hs_reconsolidation_decisions row inserted: ${verified}`)
+		lines.push(
+			`- Exactly one hs_memory_versions row inserted: ${verified}`
+		)
+		lines.push(
+			`- Canonical memory row updated: ${verified}`
+		)
+		lines.push(
+			`- Exactly one hs_reconsolidation_decisions row inserted: ${verified}`
+		)
 		lines.push('')
 		lines.push('### new_trace invariants')
-		lines.push(`- Exactly one new canonical memory row: ${verified}`)
+		lines.push(
+			`- Exactly one new canonical memory row: ${verified}`
+		)
 		lines.push(`- One decision row inserted: ${verified}`)
 		lines.push(`- No version row inserted: ${verified}`)
 		lines.push('')
@@ -163,19 +213,26 @@ export function generateReproducibilityReport(
 	lines.push('| Gate | Run A | Run B | Match |')
 	lines.push('|------|-------|-------|-------|')
 
-	const maxGates = Math.max(runA.gates.length, runB.gates.length)
+	const maxGates = Math.max(
+		runA.gates.length,
+		runB.gates.length
+	)
 	for (let i = 0; i < maxGates; i++) {
 		const gateA = runA.gates[i]
 		const gateB = runB.gates[i]
 
 		if (!gateA && gateB) {
-			lines.push(`| ${gateB.gate} | MISSING | ${gateB.status} | NO |`)
+			lines.push(
+				`| ${gateB.gate} | MISSING | ${gateB.status} | NO |`
+			)
 			allMatch = false
 			continue
 		}
 
 		if (gateA && !gateB) {
-			lines.push(`| ${gateA.gate} | ${gateA.status} | MISSING | NO |`)
+			lines.push(
+				`| ${gateA.gate} | ${gateA.status} | MISSING | NO |`
+			)
 			allMatch = false
 			continue
 		}
@@ -183,7 +240,9 @@ export function generateReproducibilityReport(
 		const match = gateA!.status === gateB!.status
 		if (!match) allMatch = false
 
-		lines.push(`| ${gateA!.gate} | ${gateA!.status} | ${gateB!.status} | ${match ? 'YES' : 'NO'} |`)
+		lines.push(
+			`| ${gateA!.gate} | ${gateA!.status} | ${gateB!.status} | ${match ? 'YES' : 'NO'} |`
+		)
 	}
 
 	lines.push('')
@@ -196,7 +255,9 @@ export function generateReproducibilityReport(
 	const drB = runB.metrics.duplicateRatio?.duplicateRatio
 	const drMatch = drA === drB
 	if (!drMatch) allMatch = false
-	lines.push(`- Duplicate Ratio: Run A = ${drA}, Run B = ${drB}, Match = ${drMatch ? 'YES' : 'NO'}`)
+	lines.push(
+		`- Duplicate Ratio: Run A = ${drA}, Run B = ${drB}, Match = ${drMatch ? 'YES' : 'NO'}`
+	)
 
 	const naA = runA.metrics.narrativeAccuracy?.accuracy
 	const naB = runB.metrics.narrativeAccuracy?.accuracy
@@ -211,10 +272,16 @@ export function generateReproducibilityReport(
 	lines.push('')
 
 	if (!allMatch) {
-		lines.push('Non-timing metrics do not match exactly across the two runs.')
-		lines.push('Check for non-deterministic behavior in the routing or episode logic.')
+		lines.push(
+			'Non-timing metrics do not match exactly across the two runs.'
+		)
+		lines.push(
+			'Check for non-deterministic behavior in the routing or episode logic.'
+		)
 	} else {
-		lines.push('All non-timing metrics match exactly. Reproducibility confirmed.')
+		lines.push(
+			'All non-timing metrics match exactly. Reproducibility confirmed.'
+		)
 	}
 
 	return { pass: allMatch, report: lines.join('\n') }

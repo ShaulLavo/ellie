@@ -2,8 +2,18 @@
  * Core parity port for test_reflect_empty_based_on.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_reflect_empty_based_on.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_reflect_empty_based_on.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -54,22 +65,34 @@ describe('Core parity: test_reflect_empty_based_on.py', () => {
 	it('reflect with no memories empty bank', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('reflect without include facts', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 })

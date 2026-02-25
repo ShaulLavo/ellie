@@ -5,8 +5,17 @@
  * Light integration tests — needs DB, no LLM.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	type TestHindsight
+} from './setup'
 
 describe('Bank management', () => {
 	let t: TestHindsight
@@ -30,7 +39,9 @@ describe('Bank management', () => {
 		})
 
 		it('creates a bank with description', () => {
-			const bank = t.hs.createBank('named', { description: 'A test bank' })
+			const bank = t.hs.createBank('named', {
+				description: 'A test bank'
+			})
 			expect(bank.description).toBe('A test bank')
 		})
 
@@ -140,19 +151,31 @@ describe('Bank management', () => {
 
 		it('updates bank description/mission field', () => {
 			const bank = t.hs.createBank('mission-test')
-			const updated = t.hs.setMission(bank.id, 'I am a helpful assistant.')
-			expect(updated.mission).toBe('I am a helpful assistant.')
+			const updated = t.hs.setMission(
+				bank.id,
+				'I am a helpful assistant.'
+			)
+			expect(updated.mission).toBe(
+				'I am a helpful assistant.'
+			)
 			const retrieved = t.hs.getBankById(bank.id)
 			expect(retrieved).toBeDefined()
-			expect(retrieved!.mission).toBe('I am a helpful assistant.')
+			expect(retrieved!.mission).toBe(
+				'I am a helpful assistant.'
+			)
 		})
 
 		it('sets and retrieves bank mission field', () => {
 			const bank = t.hs.createBank('mission-roundtrip')
-			t.hs.setMission(bank.id, 'I specialize in cooking advice.')
+			t.hs.setMission(
+				bank.id,
+				'I specialize in cooking advice.'
+			)
 			const found = t.hs.getBankById(bank.id)
 			expect(found).toBeDefined()
-			expect(found!.mission).toBe('I specialize in cooking advice.')
+			expect(found!.mission).toBe(
+				'I specialize in cooking advice.'
+			)
 		})
 	})
 
@@ -185,8 +208,12 @@ describe('Bank management', () => {
 			const bank = t.hs.createBank('ts-update')
 			// Wait across a millisecond boundary so timestamps differ
 			await new Promise(resolve => setTimeout(resolve, 5))
-			const updated = t.hs.updateBankConfig(bank.id, { reflectBudget: 'high' })
-			expect(updated.updatedAt).toBeGreaterThan(bank.createdAt)
+			const updated = t.hs.updateBankConfig(bank.id, {
+				reflectBudget: 'high'
+			})
+			expect(updated.updatedAt).toBeGreaterThan(
+				bank.createdAt
+			)
 		})
 	})
 })
@@ -209,7 +236,10 @@ describe('Config resolution hierarchy', () => {
 
 	it('instance defaults override hardcoded defaults', () => {
 		const t = createTestHindsight({
-			defaults: { extractionMode: 'verbose', dedupThreshold: 0.5 }
+			defaults: {
+				extractionMode: 'verbose',
+				dedupThreshold: 0.5
+			}
 		})
 		try {
 			const bank = t.hs.createBank('instance-defaults')

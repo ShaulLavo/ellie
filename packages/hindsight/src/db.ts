@@ -5,9 +5,15 @@ import { openDatabase } from '@ellie/db'
 import type { Database } from 'bun:sqlite'
 import * as schema from './schema'
 
-const MIGRATIONS_DIR = join(import.meta.dir, '..', 'drizzle')
+const MIGRATIONS_DIR = join(
+	import.meta.dir,
+	'..',
+	'drizzle'
+)
 
-export type HindsightDB = ReturnType<typeof drizzle<typeof schema>>
+export type HindsightDB = ReturnType<
+	typeof drizzle<typeof schema>
+>
 
 export interface HindsightDatabase {
 	db: HindsightDB
@@ -21,7 +27,10 @@ export interface HindsightDatabase {
  * Uses `openDatabase()` from @ellie/db which handles sqlite-vec loading.
  * Creates Drizzle-managed tables via migrations + virtual tables (FTS5, vec0) via raw DDL.
  */
-export function createHindsightDB(dbPath: string, embeddingDims: number): HindsightDatabase {
+export function createHindsightDB(
+	dbPath: string,
+	embeddingDims: number
+): HindsightDatabase {
 	const sqlite = openDatabase(dbPath)
 	const db = drizzle(sqlite, { schema })
 

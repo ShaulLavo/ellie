@@ -44,7 +44,10 @@ When creating tasks/scripts/pipelines, you MUST:
 // turbo.json - register tasks
 {
 	"tasks": {
-		"build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**"]
+		},
 		"lint": {},
 		"test": { "dependsOn": ["build"] }
 	}

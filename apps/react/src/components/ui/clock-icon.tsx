@@ -1,10 +1,24 @@
 import { forwardRef, useImperativeHandle } from 'react'
 
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const ClockIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const ClockIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = async () => {
@@ -64,9 +78,19 @@ const ClockIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 				onHoverStart={handleHoverStart}
 				onHoverEnd={handleHoverEnd}
 			>
-				<motion.path stroke="none" d="M0 0h24v24H0z" fill="none" />
-				<motion.path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" className="clock-body" />
-				<motion.path d="M12 7v5l3 3" className="clock-hands" />
+				<motion.path
+					stroke="none"
+					d="M0 0h24v24H0z"
+					fill="none"
+				/>
+				<motion.path
+					d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"
+					className="clock-body"
+				/>
+				<motion.path
+					d="M12 7v5l3 3"
+					className="clock-hands"
+				/>
 			</motion.svg>
 		)
 	}

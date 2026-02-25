@@ -5,7 +5,13 @@
  * Integration tests.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import {
 	createTestHindsight,
 	createRealTestHindsight,
@@ -42,7 +48,9 @@ describe('Directives', () => {
 			expect(directive.id).toBeDefined()
 			expect(directive.bankId).toBe(bankId)
 			expect(directive.name).toBe('Be Concise')
-			expect(directive.content).toBe('Keep all responses under 3 sentences.')
+			expect(directive.content).toBe(
+				'Keep all responses under 3 sentences.'
+			)
 		})
 
 		it('defaults priority to 0', () => {
@@ -113,7 +121,9 @@ describe('Directives', () => {
 		})
 
 		it('returns undefined for non-existent ID', () => {
-			expect(t.hs.getDirective(bankId, 'nonexistent')).toBeUndefined()
+			expect(
+				t.hs.getDirective(bankId, 'nonexistent')
+			).toBeUndefined()
 		})
 	})
 
@@ -125,7 +135,10 @@ describe('Directives', () => {
 		})
 
 		it('returns only active directives by default', () => {
-			t.hs.createDirective(bankId, { name: 'Active', content: 'active' })
+			t.hs.createDirective(bankId, {
+				name: 'Active',
+				content: 'active'
+			})
 			t.hs.createDirective(bankId, {
 				name: 'Inactive',
 				content: 'inactive',
@@ -138,7 +151,10 @@ describe('Directives', () => {
 		})
 
 		it('returns all directives when activeOnly=false', () => {
-			t.hs.createDirective(bankId, { name: 'Active', content: 'active' })
+			t.hs.createDirective(bankId, {
+				name: 'Active',
+				content: 'active'
+			})
 			t.hs.createDirective(bankId, {
 				name: 'Inactive',
 				content: 'inactive',
@@ -150,9 +166,21 @@ describe('Directives', () => {
 		})
 
 		it('sorts by priority descending', () => {
-			t.hs.createDirective(bankId, { name: 'Low', content: 'low', priority: 1 })
-			t.hs.createDirective(bankId, { name: 'High', content: 'high', priority: 10 })
-			t.hs.createDirective(bankId, { name: 'Mid', content: 'mid', priority: 5 })
+			t.hs.createDirective(bankId, {
+				name: 'Low',
+				content: 'low',
+				priority: 1
+			})
+			t.hs.createDirective(bankId, {
+				name: 'High',
+				content: 'high',
+				priority: 10
+			})
+			t.hs.createDirective(bankId, {
+				name: 'Mid',
+				content: 'mid',
+				priority: 5
+			})
 
 			const directives = t.hs.listDirectives(bankId)
 			expect(directives[0]!.name).toBe('High')
@@ -170,9 +198,13 @@ describe('Directives', () => {
 				content: 'test'
 			})
 
-			const updated = t.hs.updateDirective(bankId, directive.id, {
-				name: 'New'
-			})
+			const updated = t.hs.updateDirective(
+				bankId,
+				directive.id,
+				{
+					name: 'New'
+				}
+			)
 			expect(updated.name).toBe('New')
 		})
 
@@ -182,9 +214,13 @@ describe('Directives', () => {
 				content: 'Old content'
 			})
 
-			const updated = t.hs.updateDirective(bankId, directive.id, {
-				content: 'New content'
-			})
+			const updated = t.hs.updateDirective(
+				bankId,
+				directive.id,
+				{
+					content: 'New content'
+				}
+			)
 			expect(updated.content).toBe('New content')
 		})
 
@@ -195,9 +231,13 @@ describe('Directives', () => {
 				priority: 0
 			})
 
-			const updated = t.hs.updateDirective(bankId, directive.id, {
-				priority: 100
-			})
+			const updated = t.hs.updateDirective(
+				bankId,
+				directive.id,
+				{
+					priority: 100
+				}
+			)
 			expect(updated.priority).toBe(100)
 		})
 
@@ -207,9 +247,13 @@ describe('Directives', () => {
 				content: 'test'
 			})
 
-			const updated = t.hs.updateDirective(bankId, directive.id, {
-				isActive: false
-			})
+			const updated = t.hs.updateDirective(
+				bankId,
+				directive.id,
+				{
+					isActive: false
+				}
+			)
 			expect(updated.isActive).toBe(false)
 		})
 
@@ -219,9 +263,13 @@ describe('Directives', () => {
 				content: 'test'
 			})
 
-			const updated = t.hs.updateDirective(bankId, directive.id, {
-				tags: ['new-tag']
-			})
+			const updated = t.hs.updateDirective(
+				bankId,
+				directive.id,
+				{
+					tags: ['new-tag']
+				}
+			)
 			expect(updated.tags).toEqual(['new-tag'])
 		})
 	})
@@ -236,7 +284,9 @@ describe('Directives', () => {
 			})
 
 			t.hs.deleteDirective(bankId, directive.id)
-			expect(t.hs.getDirective(bankId, directive.id)).toBeUndefined()
+			expect(
+				t.hs.getDirective(bankId, directive.id)
+			).toBeUndefined()
 		})
 	})
 
@@ -244,10 +294,19 @@ describe('Directives', () => {
 
 	describe('loadDirectivesForReflect', () => {
 		it('returns only tagless directives when no session tags', () => {
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 
-			t.hs.createDirective(bankId, { name: 'Global', content: 'global rule' })
-			t.hs.createDirective(bankId, { name: 'Tagged', content: 'scoped rule', tags: ['team-a'] })
+			t.hs.createDirective(bankId, {
+				name: 'Global',
+				content: 'global rule'
+			})
+			t.hs.createDirective(bankId, {
+				name: 'Tagged',
+				content: 'scoped rule',
+				tags: ['team-a']
+			})
 
 			const result = loadDirectivesForReflect(hdb, bankId)
 			expect(result).toHaveLength(1)
@@ -255,21 +314,42 @@ describe('Directives', () => {
 		})
 
 		it('returns matching directives when session tags provided', () => {
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 
-			t.hs.createDirective(bankId, { name: 'Team A Rule', content: 'for team a', tags: ['team-a'] })
-			t.hs.createDirective(bankId, { name: 'Team B Rule', content: 'for team b', tags: ['team-b'] })
+			t.hs.createDirective(bankId, {
+				name: 'Team A Rule',
+				content: 'for team a',
+				tags: ['team-a']
+			})
+			t.hs.createDirective(bankId, {
+				name: 'Team B Rule',
+				content: 'for team b',
+				tags: ['team-b']
+			})
 
-			const result = loadDirectivesForReflect(hdb, bankId, ['team-a'])
+			const result = loadDirectivesForReflect(hdb, bankId, [
+				'team-a'
+			])
 			expect(result).toHaveLength(1)
 			expect(result[0]!.name).toBe('Team A Rule')
 		})
 
 		it('excludes tag-scoped directives from tagless session', () => {
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 
-			t.hs.createDirective(bankId, { name: 'Global', content: 'global' })
-			t.hs.createDirective(bankId, { name: 'Scoped', content: 'scoped', tags: ['private'] })
+			t.hs.createDirective(bankId, {
+				name: 'Global',
+				content: 'global'
+			})
+			t.hs.createDirective(bankId, {
+				name: 'Scoped',
+				content: 'scoped',
+				tags: ['private']
+			})
 
 			const result = loadDirectivesForReflect(hdb, bankId)
 			expect(result).toHaveLength(1)
@@ -277,14 +357,25 @@ describe('Directives', () => {
 		})
 
 		it('excludes tagless directives from tagged session (any mode)', () => {
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 
-			t.hs.createDirective(bankId, { name: 'Global', content: 'global' })
-			t.hs.createDirective(bankId, { name: 'Scoped', content: 'scoped', tags: ['team-a'] })
+			t.hs.createDirective(bankId, {
+				name: 'Global',
+				content: 'global'
+			})
+			t.hs.createDirective(bankId, {
+				name: 'Scoped',
+				content: 'scoped',
+				tags: ['team-a']
+			})
 
 			// loadDirectivesForReflect excludes tagless directives from tagged sessions
 			// to enforce tag isolation. This is the intended behavior per the implementation.
-			const result = loadDirectivesForReflect(hdb, bankId, ['team-a'])
+			const result = loadDirectivesForReflect(hdb, bankId, [
+				'team-a'
+			])
 			// Only the tag-matching directive should be returned
 			expect(result).toHaveLength(1)
 			expect(result[0]!.name).toBe('Scoped')
@@ -301,12 +392,19 @@ describe('Directives', () => {
 			})
 
 			t.adapter.setResponse('Hello. Mock response.')
-			await t.hs.reflect(bankId, 'What is the summary?', { saveObservations: false })
+			await t.hs.reflect(bankId, 'What is the summary?', {
+				saveObservations: false
+			})
 
-			const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
-			const optionsText = JSON.stringify(lastCall?.options ?? {})
+			const lastCall =
+				t.adapter.calls[t.adapter.calls.length - 1]
+			const optionsText = JSON.stringify(
+				lastCall?.options ?? {}
+			)
 			expect(optionsText).toContain('DIRECTIVES')
-			expect(optionsText).toContain('Always begin with Hello.')
+			expect(optionsText).toContain(
+				'Always begin with Hello.'
+			)
 		})
 
 		it('inactive directives are excluded from reflect system prompt', async () => {
@@ -321,12 +419,21 @@ describe('Directives', () => {
 			})
 
 			t.adapter.setResponse('Hello. Mock response.')
-			await t.hs.reflect(bankId, 'What is the summary?', { saveObservations: false })
+			await t.hs.reflect(bankId, 'What is the summary?', {
+				saveObservations: false
+			})
 
-			const lastCall = t.adapter.calls[t.adapter.calls.length - 1]
-			const optionsText = JSON.stringify(lastCall?.options ?? {})
-			expect(optionsText).toContain('This should appear in prompt.')
-			expect(optionsText).not.toContain('This should not appear in prompt.')
+			const lastCall =
+				t.adapter.calls[t.adapter.calls.length - 1]
+			const optionsText = JSON.stringify(
+				lastCall?.options ?? {}
+			)
+			expect(optionsText).toContain(
+				'This should appear in prompt.'
+			)
+			expect(optionsText).not.toContain(
+				'This should not appear in prompt.'
+			)
 		})
 
 		it('reflect follows language directive (e.g., respond in Spanish)', async () => {
@@ -336,31 +443,51 @@ describe('Directives', () => {
 			})
 
 			t.adapter.setResponse('Respuesta en español.')
-			const result = await t.hs.reflect(bankId, 'What does Alice do for work?', {
-				saveObservations: false
-			})
+			const result = await t.hs.reflect(
+				bankId,
+				'What does Alice do for work?',
+				{
+					saveObservations: false
+				}
+			)
 
-			const optionsText = JSON.stringify(t.adapter.calls[t.adapter.calls.length - 1]?.options ?? {})
-			expect(optionsText).toContain('ALWAYS respond in Spanish')
-			expect(result.answer.toLowerCase()).toContain('español')
+			const optionsText = JSON.stringify(
+				t.adapter.calls[t.adapter.calls.length - 1]
+					?.options ?? {}
+			)
+			expect(optionsText).toContain(
+				'ALWAYS respond in Spanish'
+			)
+			expect(result.answer.toLowerCase()).toContain(
+				'español'
+			)
 		})
 
 		it('tagged directive not applied when session has no matching tags', async () => {
 			t.hs.createDirective(bankId, {
 				name: 'General Policy',
-				content: 'Always be polite and start responses with Hello.'
+				content:
+					'Always be polite and start responses with Hello.'
 			})
 			t.hs.createDirective(bankId, {
 				name: 'Tagged Policy',
-				content: 'ALWAYS RESPOND IN ALL CAPS. PROJECT-X ONLY.',
+				content:
+					'ALWAYS RESPOND IN ALL CAPS. PROJECT-X ONLY.',
 				tags: ['project-x']
 			})
 
 			t.adapter.setResponse('Hello. Mock response.')
-			await t.hs.reflect(bankId, 'What color is the sky?', { saveObservations: false })
+			await t.hs.reflect(bankId, 'What color is the sky?', {
+				saveObservations: false
+			})
 
-			const optionsText = JSON.stringify(t.adapter.calls[t.adapter.calls.length - 1]?.options ?? {})
-			expect(optionsText).toContain('Always be polite and start responses with Hello.')
+			const optionsText = JSON.stringify(
+				t.adapter.calls[t.adapter.calls.length - 1]
+					?.options ?? {}
+			)
+			expect(optionsText).toContain(
+				'Always be polite and start responses with Hello.'
+			)
 			expect(optionsText).not.toContain('PROJECT-X ONLY')
 		})
 	})
@@ -382,7 +509,9 @@ describeWithLLM('Directives with real LLM', () => {
 	it('reflect follows format directive with real LLM', async () => {
 		await t.hs.retain(bankId, 'facts', {
 			facts: [
-				{ content: 'Alice is a software engineer at Google.' },
+				{
+					content: 'Alice is a software engineer at Google.'
+				},
 				{ content: 'Alice enjoys hiking on weekends.' }
 			],
 			consolidate: false,
@@ -391,22 +520,35 @@ describeWithLLM('Directives with real LLM', () => {
 
 		t.hs.createDirective(bankId, {
 			name: 'Response Format',
-			content: "You MUST include the word 'CONFIRMED' somewhere in every response you give."
+			content:
+				"You MUST include the word 'CONFIRMED' somewhere in every response you give."
 		})
 
 		// Retry up to 3 times — LLMs may not always follow directives on first attempt
 		let passed = false
-		for (let attempt = 0; attempt < 3 && !passed; attempt++) {
-			const result = await t.hs.reflect(bankId, 'What does Alice do for work?', {
-				saveObservations: false,
-				budget: 'high'
-			})
-			if (result.answer.toUpperCase().includes('CONFIRMED')) {
+		for (
+			let attempt = 0;
+			attempt < 3 && !passed;
+			attempt++
+		) {
+			const result = await t.hs.reflect(
+				bankId,
+				'What does Alice do for work?',
+				{
+					saveObservations: false,
+					budget: 'high'
+				}
+			)
+			if (
+				result.answer.toUpperCase().includes('CONFIRMED')
+			) {
 				passed = true
 			}
 		}
 		expect(passed).toBe(true)
 	}, 120_000)
 
-	it.todo('reflect follows language directive with real LLM (non-English responses)')
+	it.todo(
+		'reflect follows language directive with real LLM (non-English responses)'
+	)
 })

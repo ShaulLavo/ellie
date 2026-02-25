@@ -3,7 +3,10 @@
 
 import type { Model, ProviderName } from './types'
 
-export const MODELS: Record<ProviderName, Record<string, Model>> = {
+export const MODELS: Record<
+	ProviderName,
+	Record<string, Model>
+> = {
 	anthropic: {
 		'claude-3-5-haiku-20241022': {
 			id: 'claude-3-5-haiku-20241022',

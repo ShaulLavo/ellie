@@ -36,15 +36,24 @@ export function resolveEntity(
 		let score = 0
 
 		// Factor 1: Name similarity (weight 0.5)
-		const nameSim = stringSimilarity(name.toLowerCase(), candidate.name.toLowerCase())
+		const nameSim = stringSimilarity(
+			name.toLowerCase(),
+			candidate.name.toLowerCase()
+		)
 		score += nameSim * 0.5
 
 		// Factor 2: Co-occurring entities (weight 0.3)
 		score +=
-			cooccurrenceScore(candidate.id, existingEntities, cooccurrences, nearbyEntityNames) * 0.3
+			cooccurrenceScore(
+				candidate.id,
+				existingEntities,
+				cooccurrences,
+				nearbyEntityNames
+			) * 0.3
 
 		// Factor 3: Temporal proximity (weight 0.2) — decay over 7 days
-		const daysDiff = Math.abs(now - candidate.lastUpdated) / 86_400_000
+		const daysDiff =
+			Math.abs(now - candidate.lastUpdated) / 86_400_000
 		if (daysDiff < 7) {
 			score += Math.max(0, 1 - daysDiff / 7) * 0.2
 		}
@@ -72,14 +81,22 @@ function cooccurrenceScore(
 ): number {
 	if (nearbyEntityNames.length === 0) return 0
 
-	const candidateCoocs = cooccurrences.get(candidateId) ?? new Set()
+	const candidateCoocs =
+		cooccurrences.get(candidateId) ?? new Set()
 	const nearbyIds = nearbyEntityNames
-		.map(n => existingEntities.find(e => e.name.toLowerCase() === n.toLowerCase())?.id)
+		.map(
+			n =>
+				existingEntities.find(
+					e => e.name.toLowerCase() === n.toLowerCase()
+				)?.id
+		)
 		.filter(Boolean) as string[]
 
 	if (nearbyIds.length === 0) return 0
 
-	const overlap = nearbyIds.filter(id => candidateCoocs.has(id)).length
+	const overlap = nearbyIds.filter(id =>
+		candidateCoocs.has(id)
+	).length
 	return overlap / nearbyEntityNames.length
 }
 
@@ -88,7 +105,10 @@ function cooccurrenceScore(
  *
  * Returns value in [0, 1] where 1 = identical strings.
  */
-export function stringSimilarity(a: string, b: string): number {
+export function stringSimilarity(
+	a: string,
+	b: string
+): number {
 	if (a === b) return 1
 	if (a.length < 2 || b.length < 2) return 0
 

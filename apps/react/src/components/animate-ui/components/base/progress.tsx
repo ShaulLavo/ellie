@@ -19,10 +19,16 @@ function Progress(props: ProgressProps) {
 
 type ProgressTrackProps = ProgressTrackPrimitiveProps
 
-function ProgressTrack({ className, ...props }: ProgressTrackProps) {
+function ProgressTrack({
+	className,
+	...props
+}: ProgressTrackProps) {
 	return (
 		<ProgressTrackPrimitive
-			className={cn('bg-primary/20 relative h-2 w-full overflow-hidden rounded-full', className)}
+			className={cn(
+				'bg-primary/20 relative h-2 w-full overflow-hidden rounded-full',
+				className
+			)}
 			{...props}
 		>
 			<ProgressIndicatorPrimitive className="bg-primary rounded-full h-full w-full flex-1" />
@@ -33,13 +39,23 @@ function ProgressTrack({ className, ...props }: ProgressTrackProps) {
 type ProgressLabelProps = ProgressLabelPrimitiveProps
 
 function ProgressLabel(props: ProgressLabelProps) {
-	return <ProgressLabelPrimitive className="text-sm font-medium" {...props} />
+	return (
+		<ProgressLabelPrimitive
+			className="text-sm font-medium"
+			{...props}
+		/>
+	)
 }
 
 type ProgressValueProps = ProgressValuePrimitiveProps
 
 function ProgressValue(props: ProgressValueProps) {
-	return <ProgressValuePrimitive className="text-sm" {...props} />
+	return (
+		<ProgressValuePrimitive
+			className="text-sm"
+			{...props}
+		/>
+	)
 }
 
 export {

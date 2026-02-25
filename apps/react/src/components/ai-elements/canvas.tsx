@@ -10,7 +10,10 @@ type CanvasProps = ReactFlowProps & {
 
 const deleteKeyCode = ['Backspace', 'Delete']
 
-export const Canvas = ({ children, ...props }: CanvasProps) => (
+export const Canvas = ({
+	children,
+	...props
+}: CanvasProps) => (
 	<ReactFlow
 		deleteKeyCode={deleteKeyCode}
 		fitView

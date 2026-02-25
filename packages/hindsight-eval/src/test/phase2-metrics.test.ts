@@ -99,27 +99,48 @@ describe('evaluateGate6', () => {
 
 describe('isNarrativeQuestionCorrect', () => {
 	it('returns true for empty expected IDs', () => {
-		expect(isNarrativeQuestionCorrect([], ['a', 'b'])).toBe(true)
+		expect(isNarrativeQuestionCorrect([], ['a', 'b'])).toBe(
+			true
+		)
 	})
 
 	it('returns true when all expected IDs present in correct order', () => {
-		expect(isNarrativeQuestionCorrect(['a', 'b', 'c'], ['a', 'x', 'b', 'y', 'c'])).toBe(true)
+		expect(
+			isNarrativeQuestionCorrect(
+				['a', 'b', 'c'],
+				['a', 'x', 'b', 'y', 'c']
+			)
+		).toBe(true)
 	})
 
 	it('returns false when expected ID is missing', () => {
-		expect(isNarrativeQuestionCorrect(['a', 'b', 'c'], ['a', 'b'])).toBe(false)
+		expect(
+			isNarrativeQuestionCorrect(
+				['a', 'b', 'c'],
+				['a', 'b']
+			)
+		).toBe(false)
 	})
 
 	it('returns false when expected IDs are out of order', () => {
-		expect(isNarrativeQuestionCorrect(['a', 'b', 'c'], ['c', 'b', 'a'])).toBe(false)
+		expect(
+			isNarrativeQuestionCorrect(
+				['a', 'b', 'c'],
+				['c', 'b', 'a']
+			)
+		).toBe(false)
 	})
 
 	it('returns false when partially out of order', () => {
-		expect(isNarrativeQuestionCorrect(['a', 'b'], ['b', 'a'])).toBe(false)
+		expect(
+			isNarrativeQuestionCorrect(['a', 'b'], ['b', 'a'])
+		).toBe(false)
 	})
 
 	it('returns true with single expected ID present', () => {
-		expect(isNarrativeQuestionCorrect(['a'], ['x', 'a', 'y'])).toBe(true)
+		expect(
+			isNarrativeQuestionCorrect(['a'], ['x', 'a', 'y'])
+		).toBe(true)
 	})
 })
 
@@ -131,14 +152,23 @@ describe('computeNarrativeAccuracy', () => {
 	})
 
 	it('returns 1.0 when all correct', () => {
-		const results = [{ correct: true }, { correct: true }, { correct: true }]
+		const results = [
+			{ correct: true },
+			{ correct: true },
+			{ correct: true }
+		]
 		const result = computeNarrativeAccuracy(results)
 		expect(result.accuracy).toBe(1.0)
 		expect(result.correctQuestions).toBe(3)
 	})
 
 	it('returns 0.5 when half correct', () => {
-		const results = [{ correct: true }, { correct: false }, { correct: true }, { correct: false }]
+		const results = [
+			{ correct: true },
+			{ correct: false },
+			{ correct: true },
+			{ correct: false }
+		]
 		const result = computeNarrativeAccuracy(results)
 		expect(result.accuracy).toBe(0.5)
 	})

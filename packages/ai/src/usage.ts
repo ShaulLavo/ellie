@@ -15,16 +15,23 @@ export function calculateCost(
 ): CostBreakdown {
 	const { cost } = model
 	const inputCost = (tokens.input * cost.input) / 1_000_000
-	const outputCost = (tokens.output * cost.output) / 1_000_000
-	const cacheReadCost = ((tokens.cacheRead ?? 0) * cost.cacheRead) / 1_000_000
-	const cacheWriteCost = ((tokens.cacheWrite ?? 0) * cost.cacheWrite) / 1_000_000
+	const outputCost =
+		(tokens.output * cost.output) / 1_000_000
+	const cacheReadCost =
+		((tokens.cacheRead ?? 0) * cost.cacheRead) / 1_000_000
+	const cacheWriteCost =
+		((tokens.cacheWrite ?? 0) * cost.cacheWrite) / 1_000_000
 
 	return {
 		input: inputCost,
 		output: outputCost,
 		cacheRead: cacheReadCost,
 		cacheWrite: cacheWriteCost,
-		total: inputCost + outputCost + cacheReadCost + cacheWriteCost
+		total:
+			inputCost +
+			outputCost +
+			cacheReadCost +
+			cacheWriteCost
 	}
 }
 

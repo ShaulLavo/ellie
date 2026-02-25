@@ -12,7 +12,9 @@ describe('cleanAnswerText', () => {
 	it('strips done() call from end of text', () => {
 		const text = `The team's OKRs focus on performance.done({"answer":"The team's OKRs","memory_ids":[]})`
 		const cleaned = _cleanAnswerText(text)
-		expect(cleaned).toBe("The team's OKRs focus on performance.")
+		expect(cleaned).toBe(
+			"The team's OKRs focus on performance."
+		)
 		expect(cleaned.includes('done(')).toBe(false)
 	})
 
@@ -23,13 +25,15 @@ describe('cleanAnswerText', () => {
 	})
 
 	it('preserves text without done() call', () => {
-		const text = 'This is a normal answer without any tool calls.'
+		const text =
+			'This is a normal answer without any tool calls.'
 		const cleaned = _cleanAnswerText(text)
 		expect(cleaned).toBe(text)
 	})
 
 	it("preserves 'done' word in regular text", () => {
-		const text = 'The task is done and completed successfully.'
+		const text =
+			'The task is done and completed successfully.'
 		const cleaned = _cleanAnswerText(text)
 		expect(cleaned).toBe(text)
 	})
@@ -56,7 +60,9 @@ describe('cleanDoneAnswer', () => {
 {"observation_ids": ["obs-1", "obs-2"]}
 \`\`\``
 		const cleaned = _cleanDoneAnswer(text)
-		expect(cleaned).toBe("The user's favorite color is blue.")
+		expect(cleaned).toBe(
+			"The user's favorite color is blue."
+		)
 		expect(cleaned.includes('observation_ids')).toBe(false)
 	})
 
@@ -92,7 +98,8 @@ memory_ids = ["mem-1"]`
 	})
 
 	it('preserves normal answer without leaked output', () => {
-		const text = 'This is a normal answer about observation strategies.'
+		const text =
+			'This is a normal answer about observation strategies.'
 		const cleaned = _cleanDoneAnswer(text)
 		expect(cleaned).toBe(text)
 	})
@@ -102,7 +109,8 @@ memory_ids = ["mem-1"]`
 	})
 
 	it("preserves 'observation' word in regular text content", () => {
-		const text = 'Based on my observation, the user prefers dark mode.'
+		const text =
+			'Based on my observation, the user prefers dark mode.'
 		const cleaned = _cleanDoneAnswer(text)
 		expect(cleaned).toBe(text)
 	})
@@ -126,15 +134,25 @@ describe('Tool name normalization', () => {
 	it('standard names pass through unchanged', () => {
 		expect(_normalizeToolName('done')).toBe('done')
 		expect(_normalizeToolName('recall')).toBe('recall')
-		expect(_normalizeToolName('search_mental_models')).toBe('search_mental_models')
-		expect(_normalizeToolName('search_observations')).toBe('search_observations')
+		expect(_normalizeToolName('search_mental_models')).toBe(
+			'search_mental_models'
+		)
+		expect(_normalizeToolName('search_observations')).toBe(
+			'search_observations'
+		)
 		expect(_normalizeToolName('expand')).toBe('expand')
 	})
 
 	it("normalizes 'functions.' prefix", () => {
-		expect(_normalizeToolName('functions.done')).toBe('done')
-		expect(_normalizeToolName('functions.recall')).toBe('recall')
-		expect(_normalizeToolName('functions.search_mental_models')).toBe('search_mental_models')
+		expect(_normalizeToolName('functions.done')).toBe(
+			'done'
+		)
+		expect(_normalizeToolName('functions.recall')).toBe(
+			'recall'
+		)
+		expect(
+			_normalizeToolName('functions.search_mental_models')
+		).toBe('search_mental_models')
 	})
 
 	it("normalizes 'call=' prefix", () => {
@@ -143,15 +161,31 @@ describe('Tool name normalization', () => {
 	})
 
 	it("normalizes 'call=functions.' prefix", () => {
-		expect(_normalizeToolName('call=functions.done')).toBe('done')
-		expect(_normalizeToolName('call=functions.recall')).toBe('recall')
-		expect(_normalizeToolName('call=functions.search_observations')).toBe('search_observations')
+		expect(_normalizeToolName('call=functions.done')).toBe(
+			'done'
+		)
+		expect(
+			_normalizeToolName('call=functions.recall')
+		).toBe('recall')
+		expect(
+			_normalizeToolName(
+				'call=functions.search_observations'
+			)
+		).toBe('search_observations')
 	})
 
 	it('normalizes special token suffix', () => {
-		expect(_normalizeToolName('done<|channel|>commentary')).toBe('done')
-		expect(_normalizeToolName('recall<|endoftext|>')).toBe('recall')
-		expect(_normalizeToolName('search_observations<|im_end|>extra')).toBe('search_observations')
+		expect(
+			_normalizeToolName('done<|channel|>commentary')
+		).toBe('done')
+		expect(_normalizeToolName('recall<|endoftext|>')).toBe(
+			'recall'
+		)
+		expect(
+			_normalizeToolName(
+				'search_observations<|im_end|>extra'
+			)
+		).toBe('search_observations')
 	})
 
 	it('_isDoneTool recognizes done variants', () => {
@@ -160,7 +194,9 @@ describe('Tool name normalization', () => {
 		expect(_isDoneTool('functions.done')).toBe(true)
 		expect(_isDoneTool('call=done')).toBe(true)
 		expect(_isDoneTool('call=functions.done')).toBe(true)
-		expect(_isDoneTool('done<|channel|>commentary')).toBe(true)
+		expect(_isDoneTool('done<|channel|>commentary')).toBe(
+			true
+		)
 		expect(_isDoneTool('done<|endoftext|>')).toBe(true)
 		expect(_isDoneTool('functions.recall')).toBe(false)
 		expect(_isDoneTool('call=functions.recall')).toBe(false)
@@ -177,19 +213,32 @@ describe('Reflect agent with mocked LLM', () => {
 
 	function createLoop(
 		calls: ToolCall[][],
-		tools?: Record<string, (args: Record<string, unknown>) => Promise<unknown>>
+		tools?: Record<
+			string,
+			(args: Record<string, unknown>) => Promise<unknown>
+		>
 	) {
 		let index = 0
-		const callWithTools = async (): Promise<ReflectAgentToolCallResultLike> => ({
-			toolCalls: calls[Math.min(index++, calls.length - 1)] ?? [],
-			finishReason: 'tool_calls'
-		})
+		const callWithTools =
+			async (): Promise<ReflectAgentToolCallResultLike> => ({
+				toolCalls:
+					calls[Math.min(index++, calls.length - 1)] ?? [],
+				finishReason: 'tool_calls'
+			})
 		return _runReflectAgentLoopForTesting({
 			callWithTools,
 			tools: tools ?? {
-				search_mental_models: async () => ({ mental_models: [] }),
-				search_observations: async () => ({ observations: [] }),
-				recall: async () => ({ memories: [{ id: 'mem-1', content: 'test memory' }] }),
+				search_mental_models: async () => ({
+					mental_models: []
+				}),
+				search_observations: async () => ({
+					observations: []
+				}),
+				recall: async () => ({
+					memories: [
+						{ id: 'mem-1', content: 'test memory' }
+					]
+				}),
 				expand: async () => ({ memories: [] })
 			},
 			maxIterations: 5
@@ -198,12 +247,21 @@ describe('Reflect agent with mocked LLM', () => {
 
 	it("handles 'functions.done' prefix in tool call", async () => {
 		const result = await createLoop([
-			[{ id: '1', name: 'recall', arguments: { query: 'test' } }],
+			[
+				{
+					id: '1',
+					name: 'recall',
+					arguments: { query: 'test' }
+				}
+			],
 			[
 				{
 					id: '2',
 					name: 'functions.done',
-					arguments: { answer: 'Test answer', memory_ids: ['mem-1'] }
+					arguments: {
+						answer: 'Test answer',
+						memory_ids: ['mem-1']
+					}
 				}
 			]
 		])
@@ -213,12 +271,21 @@ describe('Reflect agent with mocked LLM', () => {
 
 	it("handles 'call=functions.done' prefix", async () => {
 		const result = await createLoop([
-			[{ id: '1', name: 'recall', arguments: { query: 'test' } }],
+			[
+				{
+					id: '1',
+					name: 'recall',
+					arguments: { query: 'test' }
+				}
+			],
 			[
 				{
 					id: '2',
 					name: 'call=functions.done',
-					arguments: { answer: 'Test answer', memory_ids: ['mem-1'] }
+					arguments: {
+						answer: 'Test answer',
+						memory_ids: ['mem-1']
+					}
 				}
 			]
 		])
@@ -227,13 +294,28 @@ describe('Reflect agent with mocked LLM', () => {
 
 	it('recovers from unknown tool call', async () => {
 		const result = await createLoop([
-			[{ id: '1', name: 'invalid_tool', arguments: { foo: 'bar' } }],
-			[{ id: '2', name: 'recall', arguments: { query: 'test' } }],
+			[
+				{
+					id: '1',
+					name: 'invalid_tool',
+					arguments: { foo: 'bar' }
+				}
+			],
+			[
+				{
+					id: '2',
+					name: 'recall',
+					arguments: { query: 'test' }
+				}
+			],
 			[
 				{
 					id: '3',
 					name: 'done',
-					arguments: { answer: 'Recovered successfully', memory_ids: ['mem-1'] }
+					arguments: {
+						answer: 'Recovered successfully',
+						memory_ids: ['mem-1']
+					}
 				}
 			]
 		])
@@ -244,25 +326,49 @@ describe('Reflect agent with mocked LLM', () => {
 	it('recovers from tool execution error', async () => {
 		let calls = 0
 		const tools = {
-			search_mental_models: async () => ({ mental_models: [] }),
-			search_observations: async () => ({ observations: [] }),
+			search_mental_models: async () => ({
+				mental_models: []
+			}),
+			search_observations: async () => ({
+				observations: []
+			}),
 			recall: async () => {
 				calls += 1
-				if (calls === 1) throw new Error('Database connection failed')
-				return { memories: [{ id: 'mem-1', content: 'test memory' }] }
+				if (calls === 1)
+					throw new Error('Database connection failed')
+				return {
+					memories: [
+						{ id: 'mem-1', content: 'test memory' }
+					]
+				}
 			},
 			expand: async () => ({ memories: [] })
 		}
 
 		const result = await createLoop(
 			[
-				[{ id: '1', name: 'recall', arguments: { query: 'test' } }],
-				[{ id: '2', name: 'recall', arguments: { query: 'test retry' } }],
+				[
+					{
+						id: '1',
+						name: 'recall',
+						arguments: { query: 'test' }
+					}
+				],
+				[
+					{
+						id: '2',
+						name: 'recall',
+						arguments: { query: 'test retry' }
+					}
+				],
 				[
 					{
 						id: '3',
 						name: 'done',
-						arguments: { answer: 'Recovered from error', memory_ids: ['mem-1'] }
+						arguments: {
+							answer: 'Recovered from error',
+							memory_ids: ['mem-1']
+						}
 					}
 				]
 			],
@@ -275,18 +381,41 @@ describe('Reflect agent with mocked LLM', () => {
 	it('normalizes tool names for all tools (search_mental_models, etc.)', async () => {
 		let recallCalls = 0
 		const tools = {
-			search_mental_models: async () => ({ mental_models: [] }),
-			search_observations: async () => ({ observations: [] }),
+			search_mental_models: async () => ({
+				mental_models: []
+			}),
+			search_observations: async () => ({
+				observations: []
+			}),
 			recall: async () => {
 				recallCalls += 1
-				return { memories: [{ id: 'mem-1', content: 'test memory' }] }
+				return {
+					memories: [
+						{ id: 'mem-1', content: 'test memory' }
+					]
+				}
 			},
 			expand: async () => ({ memories: [] })
 		}
 		const result = await createLoop(
 			[
-				[{ id: '1', name: 'functions.recall', arguments: { query: 'test' } }],
-				[{ id: '2', name: 'done', arguments: { answer: 'Test answer', memory_ids: ['mem-1'] } }]
+				[
+					{
+						id: '1',
+						name: 'functions.recall',
+						arguments: { query: 'test' }
+					}
+				],
+				[
+					{
+						id: '2',
+						name: 'done',
+						arguments: {
+							answer: 'Test answer',
+							memory_ids: ['mem-1']
+						}
+					}
+				]
 			],
 			tools
 		)
@@ -305,7 +434,8 @@ describe('Reflect agent with mocked LLM', () => {
 		let index = 0
 		const result = await _runReflectAgentLoopForTesting({
 			callWithTools: async () => ({
-				toolCalls: calls[Math.min(index++, calls.length - 1)] ?? [],
+				toolCalls:
+					calls[Math.min(index++, calls.length - 1)] ?? [],
 				finishReason: 'tool_calls'
 			}),
 			tools: {},

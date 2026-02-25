@@ -11,9 +11,20 @@
  * 5. All Phase 3 exports are accessible from index.ts
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { ulid } from '@ellie/utils'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 import type { HindsightDatabase } from '../db'
 import {
 	// Location APIs
@@ -39,10 +50,18 @@ import {
 	EAGER_GIST_THRESHOLD,
 	MAX_GIST_LENGTH
 } from '../index'
-import { locationRecord, locationFind, locationStats } from '../location'
+import {
+	locationRecord,
+	locationFind,
+	locationStats
+} from '../location'
 
 /** Insert a minimal memory row to satisfy FK constraints. */
-function insertTestMemory(hdb: HindsightDatabase, bid: string, memId?: string): string {
+function insertTestMemory(
+	hdb: HindsightDatabase,
+	bid: string,
+	memId?: string
+): string {
 	const id = memId ?? ulid()
 	const now = Date.now()
 	hdb.db
@@ -78,22 +97,33 @@ describe('Gate 1: Functional Contract', () => {
 	describe('RecallOptions supports Phase 3 fields', () => {
 		it('recall accepts tokenBudget option', async () => {
 			await t.hs.retain(bankId, 'seed data', {
-				facts: [{ content: 'The sky is blue', factType: 'world' }],
+				facts: [
+					{ content: 'The sky is blue', factType: 'world' }
+				],
 				consolidate: false
 			})
 
 			// Should not throw with tokenBudget
-			const result = await t.hs.recall(bankId, 'sky color', {
-				tokenBudget: 2000,
-				limit: 5
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'sky color',
+				{
+					tokenBudget: 2000,
+					limit: 5
+				}
+			)
 			expect(result).toBeDefined()
 			expect(result.memories).toBeDefined()
 		})
 
 		it('recall accepts scope option', async () => {
 			await t.hs.retain(bankId, 'seed data', {
-				facts: [{ content: 'Alice works at TechCorp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at TechCorp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
@@ -107,7 +137,9 @@ describe('Gate 1: Functional Contract', () => {
 
 		it('recall accepts scopeMode option', async () => {
 			await t.hs.retain(bankId, 'seed data', {
-				facts: [{ content: 'Bob uses Python', factType: 'world' }],
+				facts: [
+					{ content: 'Bob uses Python', factType: 'world' }
+				],
 				consolidate: false
 			})
 
@@ -128,10 +160,14 @@ describe('Gate 1: Functional Contract', () => {
 			const memId = insertTestMemory(hdb, bankId)
 
 			// Should not throw
-			locationRecord(hdb, bankId, 'src/index.ts', { memoryId: memId })
+			locationRecord(hdb, bankId, 'src/index.ts', {
+				memoryId: memId
+			})
 
 			// Verify the path was created
-			const hits = locationFind(hdb, bankId, { path: 'src/index.ts' })
+			const hits = locationFind(hdb, bankId, {
+				path: 'src/index.ts'
+			})
 			expect(hits.length).toBe(1)
 		})
 
@@ -139,7 +175,14 @@ describe('Gate 1: Functional Contract', () => {
 			const hdb = getHdb(t.hs)
 			const memId = insertTestMemory(hdb, bankId)
 
-			locationRecord(hdb, bankId, 'src/app.ts', { memoryId: memId }, 'alice', 'proj-x')
+			locationRecord(
+				hdb,
+				bankId,
+				'src/app.ts',
+				{ memoryId: memId },
+				'alice',
+				'proj-x'
+			)
 
 			const hits = locationFind(hdb, bankId, {
 				path: 'src/app.ts',
@@ -155,9 +198,13 @@ describe('Gate 1: Functional Contract', () => {
 		it('returns array with all required fields', () => {
 			const hdb = getHdb(t.hs)
 			const memId = insertTestMemory(hdb, bankId)
-			locationRecord(hdb, bankId, 'src/utils.ts', { memoryId: memId })
+			locationRecord(hdb, bankId, 'src/utils.ts', {
+				memoryId: memId
+			})
 
-			const hits = locationFind(hdb, bankId, { path: 'src/utils.ts' })
+			const hits = locationFind(hdb, bankId, {
+				path: 'src/utils.ts'
+			})
 			expect(Array.isArray(hits)).toBe(true)
 			expect(hits.length).toBe(1)
 
@@ -175,35 +222,53 @@ describe('Gate 1: Functional Contract', () => {
 			const hdb = getHdb(t.hs)
 			for (let i = 0; i < 5; i++) {
 				const memId = insertTestMemory(hdb, bankId)
-				locationRecord(hdb, bankId, `src/file-${i}.ts`, { memoryId: memId })
+				locationRecord(hdb, bankId, `src/file-${i}.ts`, {
+					memoryId: memId
+				})
 			}
 
 			const hits1 = locationFind(hdb, bankId, {})
 			const hits2 = locationFind(hdb, bankId, {})
-			expect(hits1.map((h) => h.pathId)).toEqual(hits2.map((h) => h.pathId))
+			expect(hits1.map(h => h.pathId)).toEqual(
+				hits2.map(h => h.pathId)
+			)
 		})
 	})
 
 	describe('locationStats returns LocationStats | null schema', () => {
 		it('returns null for unknown path', () => {
 			const hdb = getHdb(t.hs)
-			const stats = locationStats(hdb, bankId, 'nonexistent.ts')
+			const stats = locationStats(
+				hdb,
+				bankId,
+				'nonexistent.ts'
+			)
 			expect(stats).toBeNull()
 		})
 
 		it('returns LocationStats with all required fields', () => {
 			const hdb = getHdb(t.hs)
 			const memId = insertTestMemory(hdb, bankId)
-			locationRecord(hdb, bankId, 'src/main.ts', { memoryId: memId })
+			locationRecord(hdb, bankId, 'src/main.ts', {
+				memoryId: memId
+			})
 
-			const stats = locationStats(hdb, bankId, 'src/main.ts')
+			const stats = locationStats(
+				hdb,
+				bankId,
+				'src/main.ts'
+			)
 			expect(stats).not.toBeNull()
 			expect(typeof stats!.pathId).toBe('string')
 			expect(typeof stats!.rawPath).toBe('string')
 			expect(typeof stats!.normalizedPath).toBe('string')
 			expect(typeof stats!.accessCount).toBe('number')
-			expect(typeof stats!.associatedMemoryCount).toBe('number')
-			expect(Array.isArray(stats!.topAssociations)).toBe(true)
+			expect(typeof stats!.associatedMemoryCount).toBe(
+				'number'
+			)
+			expect(Array.isArray(stats!.topAssociations)).toBe(
+				true
+			)
 		})
 	})
 
@@ -214,19 +279,28 @@ describe('Gate 1: Functional Contract', () => {
 			const hdb = getHdb(t.hs)
 			const memId = insertTestMemory(hdb, bankId)
 
-			await t.hs.locationRecord(bankId, 'src/test.ts', { memoryId: memId })
+			await t.hs.locationRecord(bankId, 'src/test.ts', {
+				memoryId: memId
+			})
 
-			const hits = await t.hs.locationFind(bankId, { path: 'src/test.ts' })
+			const hits = await t.hs.locationFind(bankId, {
+				path: 'src/test.ts'
+			})
 			expect(hits.length).toBe(1)
 		})
 
 		it('hs.locationFind is callable', async () => {
-			const hits = await t.hs.locationFind(bankId, { query: 'nonexistent' })
+			const hits = await t.hs.locationFind(bankId, {
+				query: 'nonexistent'
+			})
 			expect(Array.isArray(hits)).toBe(true)
 		})
 
 		it('hs.locationStats is callable', async () => {
-			const stats = await t.hs.locationStats(bankId, 'nonexistent.ts')
+			const stats = await t.hs.locationStats(
+				bankId,
+				'nonexistent.ts'
+			)
 			expect(stats).toBeNull()
 		})
 	})
@@ -235,14 +309,21 @@ describe('Gate 1: Functional Contract', () => {
 
 	describe('deriveScopeTagsFromContext deterministic', () => {
 		it('same input produces same output across calls', () => {
-			const ctx: ScopeContext = { profile: 'alice', project: 'proj-a', session: 's1' }
+			const ctx: ScopeContext = {
+				profile: 'alice',
+				project: 'proj-a',
+				session: 's1'
+			}
 			const r1 = deriveScopeTagsFromContext(ctx)
 			const r2 = deriveScopeTagsFromContext(ctx)
 			expect(r1).toEqual(r2)
 		})
 
 		it('returns Scope type with profile, project, session', () => {
-			const scope = deriveScopeTagsFromContext({ profile: 'bob', project: 'proj-b' })
+			const scope = deriveScopeTagsFromContext({
+				profile: 'bob',
+				project: 'proj-b'
+			})
 			expect(typeof scope.profile).toBe('string')
 			expect(typeof scope.project).toBe('string')
 			expect(scope.profile).toBe('bob')
@@ -252,8 +333,14 @@ describe('Gate 1: Functional Contract', () => {
 
 	describe('resolveScope deterministic', () => {
 		it('same input produces same output across calls', () => {
-			const explicit = { profile: 'alice', project: 'proj-a' }
-			const ctx = { profile: 'fallback', project: 'fallback' }
+			const explicit = {
+				profile: 'alice',
+				project: 'proj-a'
+			}
+			const ctx = {
+				profile: 'fallback',
+				project: 'fallback'
+			}
 			const r1 = resolveScope(explicit, ctx)
 			const r2 = resolveScope(explicit, ctx)
 			expect(r1).toEqual(r2)
@@ -265,10 +352,23 @@ describe('Gate 1: Functional Contract', () => {
 	describe('packContext schema validation', () => {
 		it('returns PackResult with all required fields', () => {
 			const candidates: PackCandidate[] = [
-				{ id: 'a', content: 'Hello world', gist: 'Hello', score: 0.9 },
-				{ id: 'b', content: 'Goodbye world', gist: 'Bye', score: 0.8 }
+				{
+					id: 'a',
+					content: 'Hello world',
+					gist: 'Hello',
+					score: 0.9
+				},
+				{
+					id: 'b',
+					content: 'Goodbye world',
+					gist: 'Bye',
+					score: 0.8
+				}
 			]
-			const result: PackResult = packContext(candidates, 2000)
+			const result: PackResult = packContext(
+				candidates,
+				2000
+			)
 
 			expect(Array.isArray(result.packed)).toBe(true)
 			expect(typeof result.overflow).toBe('boolean')
@@ -278,14 +378,21 @@ describe('Gate 1: Functional Contract', () => {
 
 		it('PackedMemory items have correct schema', () => {
 			const candidates: PackCandidate[] = [
-				{ id: 'a', content: 'Hello world', gist: 'Hi', score: 0.9 }
+				{
+					id: 'a',
+					content: 'Hello world',
+					gist: 'Hi',
+					score: 0.9
+				}
 			]
 			const result = packContext(candidates, 2000)
 			const item = result.packed[0]!
 
 			expect(typeof item.id).toBe('string')
 			expect(typeof item.text).toBe('string')
-			expect(item.mode === 'full' || item.mode === 'gist').toBe(true)
+			expect(
+				item.mode === 'full' || item.mode === 'gist'
+			).toBe(true)
 			expect(typeof item.score).toBe('number')
 			expect(typeof item.tokens).toBe('number')
 		})
@@ -301,7 +408,9 @@ describe('Gate 1: Functional Contract', () => {
 		})
 
 		it('scope exports are defined', () => {
-			expect(typeof deriveScopeTagsFromContext).toBe('function')
+			expect(typeof deriveScopeTagsFromContext).toBe(
+				'function'
+			)
 			expect(typeof resolveScope).toBe('function')
 			expect(typeof scopeMatches).toBe('function')
 			expect(typeof DEFAULT_PROFILE).toBe('string')

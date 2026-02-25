@@ -8,9 +8,14 @@ const app = new Elysia()
 			})
 		})
 	})
-	.post('/multiple', ({ body: { files } }) => files.reduce((a, b) => a + b.size, 0), {
-		body: t.Object({
-			files: t.Files()
-		})
-	})
+	.post(
+		'/multiple',
+		({ body: { files } }) =>
+			files.reduce((a, b) => a + b.size, 0),
+		{
+			body: t.Object({
+				files: t.Files()
+			})
+		}
+	)
 	.listen(3000)

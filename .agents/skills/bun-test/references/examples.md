@@ -71,12 +71,16 @@ async function fetchData(url: string): Promise<any> {
 }
 
 it('should fetch data', async () => {
-	const data = await fetchData('https://api.example.com/data')
+	const data = await fetchData(
+		'https://api.example.com/data'
+	)
 	expect(data).toBeDefined()
 })
 
 it('should handle errors', async () => {
-	await expect(fetchData('https://api.example.com/invalid')).rejects.toThrow()
+	await expect(
+		fetchData('https://api.example.com/invalid')
+	).rejects.toThrow()
 })
 ```
 
@@ -97,7 +101,9 @@ describe('Async operations', () => {
 			throw new Error('Async error')
 		}
 
-		await expect(asyncError()).rejects.toThrow('Async error')
+		await expect(asyncError()).rejects.toThrow(
+			'Async error'
+		)
 	})
 })
 ```
@@ -147,7 +153,9 @@ test('should match inline snapshot', () => {
 ```typescript
 describe('User API', () => {
 	it('should GET users', async () => {
-		const response = await fetch('http://localhost:3000/api/users')
+		const response = await fetch(
+			'http://localhost:3000/api/users'
+		)
 		const users = await response.json()
 
 		expect(response.status).toBe(200)
@@ -160,11 +168,14 @@ describe('User API', () => {
 			email: 'test@example.com'
 		}
 
-		const response = await fetch('http://localhost:3000/api/users', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(newUser)
-		})
+		const response = await fetch(
+			'http://localhost:3000/api/users',
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(newUser)
+			}
+		)
 
 		const created = await response.json()
 
@@ -187,11 +198,14 @@ it('should query GraphQL API', async () => {
     }
   `
 
-	const response = await fetch('http://localhost:3000/graphql', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ query })
-	})
+	const response = await fetch(
+		'http://localhost:3000/graphql',
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ query })
+		}
+	)
 
 	const result = await response.json()
 
@@ -205,7 +219,14 @@ it('should query GraphQL API', async () => {
 ### With Setup and Teardown
 
 ```typescript
-import { beforeAll, afterAll, beforeEach, describe, it, expect } from 'bun:test'
+import {
+	beforeAll,
+	afterAll,
+	beforeEach,
+	describe,
+	it,
+	expect
+} from 'bun:test'
 
 let db: Database
 
@@ -221,7 +242,9 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	// Clear test data
-	await db.query("DELETE FROM users WHERE email LIKE '%@test.com'")
+	await db.query(
+		"DELETE FROM users WHERE email LIKE '%@test.com'"
+	)
 })
 
 describe('User repository', () => {
@@ -241,7 +264,8 @@ describe('User repository', () => {
 			email: 'find@test.com'
 		})
 
-		const found = await db.users.findByEmail('find@test.com')
+		const found =
+			await db.users.findByEmail('find@test.com')
 
 		expect(found).toBeDefined()
 		expect(found.name).toBe('Test User')

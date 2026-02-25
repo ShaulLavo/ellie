@@ -2,8 +2,18 @@
  * Core parity port for test_batch_chunking.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_batch_chunking.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_batch_chunking.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -52,22 +63,38 @@ describe('Core parity: test_batch_chunking.py', () => {
 	}
 
 	it('large batch auto chunks', async () => {
-		const result = await t.hs.retainBatch(bankId, ['A'.repeat(650_000)], {
-			consolidate: false,
-			documentId: 'doc-test_large_batch_auto_chunks'
-		})
+		const result = await t.hs.retainBatch(
+			bankId,
+			['A'.repeat(650_000)],
+			{
+				consolidate: false,
+				documentId: 'doc-test_large_batch_auto_chunks'
+			}
+		)
 		expect(result.length).toBe(1)
-		expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-		expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
+		expect(
+			result[0]!.memories.length
+		).toBeGreaterThanOrEqual(1)
+		expect(
+			t.hs.listDocuments(bankId).items.length
+		).toBeGreaterThanOrEqual(1)
 	})
 
 	it('small batch no chunking', async () => {
-		const result = await t.hs.retainBatch(bankId, ['small chunk text'], {
-			consolidate: false,
-			documentId: 'doc-test_small_batch_no_chunking'
-		})
+		const result = await t.hs.retainBatch(
+			bankId,
+			['small chunk text'],
+			{
+				consolidate: false,
+				documentId: 'doc-test_small_batch_no_chunking'
+			}
+		)
 		expect(result.length).toBe(1)
-		expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-		expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
+		expect(
+			result[0]!.memories.length
+		).toBeGreaterThanOrEqual(1)
+		expect(
+			t.hs.listDocuments(bankId).items.length
+		).toBeGreaterThanOrEqual(1)
 	})
 })

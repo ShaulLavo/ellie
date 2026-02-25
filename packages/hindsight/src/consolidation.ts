@@ -40,7 +40,10 @@ import type { BankProfile } from './reflect'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function safeJsonParse<T>(value: string | null, fallback: T): T {
+function safeJsonParse<T>(
+	value: string | null,
+	fallback: T
+): T {
 	if (!value) return fallback
 	try {
 		return JSON.parse(value) as T
@@ -49,16 +52,26 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 	}
 }
 
-function getOccurredStart(row: typeof import('./schema').memoryUnits.$inferSelect): number | null {
+function getOccurredStart(
+	row: typeof import('./schema').memoryUnits.$inferSelect
+): number | null {
 	return row.occurredStart ?? row.occurredStart
 }
 
-function getOccurredEnd(row: typeof import('./schema').memoryUnits.$inferSelect): number | null {
+function getOccurredEnd(
+	row: typeof import('./schema').memoryUnits.$inferSelect
+): number | null {
 	return row.occurredEnd ?? row.occurredEnd
 }
 
-function getEventDate(row: typeof import('./schema').memoryUnits.$inferSelect): number | null {
-	return row.eventDate ?? getOccurredStart(row) ?? row.mentionedAt
+function getEventDate(
+	row: typeof import('./schema').memoryUnits.$inferSelect
+): number | null {
+	return (
+		row.eventDate ??
+		getOccurredStart(row) ??
+		row.mentionedAt
+	)
 }
 
 // ── Valibot schema for LLM consolidation response ───────────────────────
@@ -128,7 +141,10 @@ export async function consolidate(
 			and(
 				eq(schema.memoryUnits.bankId, bankId),
 				isNull(schema.memoryUnits.consolidatedAt),
-				inArray(schema.memoryUnits.factType, ['experience', 'world'])
+				inArray(schema.memoryUnits.factType, [
+					'experience',
+					'world'
+				])
 			)
 		)
 		.limit(batchSize)
@@ -145,7 +161,9 @@ export async function consolidate(
 		// Parse memory tags for tracking (safe fallback on corrupt data)
 		let memoryTags: string[] = []
 		try {
-			memoryTags = memory.tags ? JSON.parse(memory.tags) : []
+			memoryTags = memory.tags
+				? JSON.parse(memory.tags)
+				: []
 		} catch {
 			// malformed JSON → treat as untagged
 		}
@@ -163,7 +181,11 @@ export async function consolidate(
 			)
 
 			// 2. Single LLM call to decide actions
-			const actions = await consolidateWithLLM(adapter, memory, relatedObs)
+			const actions = await consolidateWithLLM(
+				adapter,
+				memory,
+				relatedObs
+			)
 
 			if (actions.length === 0) {
 				result.skipped++
@@ -177,7 +199,13 @@ export async function consolidate(
 				}
 
 				if (action.action === 'create') {
-					const createResult = await executeCreateAction(hdb, memoryVec, bankId, memory, action)
+					const createResult = await executeCreateAction(
+						hdb,
+						memoryVec,
+						bankId,
+						memory,
+						action
+					)
 					if (createResult === 'skipped') {
 						result.skipped++
 						continue
@@ -187,7 +215,13 @@ export async function consolidate(
 				}
 
 				if (action.action === 'update') {
-					const updateResult = await executeUpdateAction(hdb, memoryVec, bankId, memory, action)
+					const updateResult = await executeUpdateAction(
+						hdb,
+						memoryVec,
+						bankId,
+						memory,
+						action
+					)
 					if (updateResult === 'skipped') {
 						result.skipped++
 						continue
@@ -196,7 +230,13 @@ export async function consolidate(
 					continue
 				}
 
-				const mergeResult = await executeMergeAction(hdb, memoryVec, bankId, memory, action)
+				const mergeResult = await executeMergeAction(
+					hdb,
+					memoryVec,
+					bankId,
+					memory,
+					action
+				)
 				if (mergeResult === 'skipped') {
 					result.skipped++
 					continue
@@ -220,16 +260,17 @@ export async function consolidate(
 
 	// 5. Trigger mental model refreshes
 	if (refreshModels) {
-		result.mentalModelsRefreshQueued = await triggerMentalModelRefreshes(
-			hdb,
-			memoryVec,
-			modelVec,
-			adapter,
-			bankId,
-			allTags,
-			rerank,
-			bankProfile
-		)
+		result.mentalModelsRefreshQueued =
+			await triggerMentalModelRefreshes(
+				hdb,
+				memoryVec,
+				modelVec,
+				adapter,
+				bankId,
+				allTags,
+				rerank,
+				bankProfile
+			)
 	}
 
 	return result
@@ -266,7 +307,9 @@ async function findRelatedObservations(
 	const observations: RelatedObservation[] = []
 
 	// SECURITY: Use all_strict matching if tags provided to prevent cross-scope consolidation
-	const tagsMatch: TagsMatch = tags?.length ? 'all_strict' : 'any'
+	const tagsMatch: TagsMatch = tags?.length
+		? 'all_strict'
+		: 'any'
 
 	for (const hit of hits) {
 		if (observations.length >= limit) break
@@ -290,11 +333,15 @@ async function findRelatedObservations(
 
 		// SECURITY: Filter by tags to prevent cross-tenant observation leakage
 		if (tags?.length) {
-			const obsTags: string[] = row.tags ? JSON.parse(row.tags) : []
+			const obsTags: string[] = row.tags
+				? JSON.parse(row.tags)
+				: []
 			if (!matchesTags(obsTags, tags, tagsMatch)) continue
 		}
 
-		const sourceMemoryIds: string[] = row.sourceMemoryIds ? JSON.parse(row.sourceMemoryIds) : []
+		const sourceMemoryIds: string[] = row.sourceMemoryIds
+			? JSON.parse(row.sourceMemoryIds)
+			: []
 
 		observations.push({
 			id: row.id,
@@ -317,7 +364,10 @@ async function consolidateWithLLM(
 	sourceMemory: typeof import('./schema').memoryUnits.$inferSelect,
 	relatedObservations: RelatedObservation[]
 ): Promise<ConsolidationAction[]> {
-	const sourceTags = safeJsonParse<string[]>(sourceMemory.tags, [])
+	const sourceTags = safeJsonParse<string[]>(
+		sourceMemory.tags,
+		[]
+	)
 	const factPayload: ConsolidationPromptFact = {
 		id: sourceMemory.id,
 		content: sourceMemory.content,
@@ -326,7 +376,10 @@ async function consolidateWithLLM(
 		mentionedAt: sourceMemory.mentionedAt,
 		tags: sourceTags
 	}
-	const userPrompt = getConsolidationUserPrompt(factPayload, relatedObservations)
+	const userPrompt = getConsolidationUserPrompt(
+		factPayload,
+		relatedObservations
+	)
 
 	try {
 		const text = await streamToText(
@@ -342,19 +395,25 @@ async function consolidateWithLLM(
 
 		const parsed = parseLLMJson(text, [])
 		const normalized = normalizeConsolidationActions(parsed)
-		const validated = v.safeParse(ConsolidationActionSchema, normalized)
+		const validated = v.safeParse(
+			ConsolidationActionSchema,
+			normalized
+		)
 		return validated.success ? validated.output : []
 	} catch {
 		return []
 	}
 }
 
-function normalizeConsolidationActions(raw: unknown): ConsolidationAction[] {
+function normalizeConsolidationActions(
+	raw: unknown
+): ConsolidationAction[] {
 	if (!Array.isArray(raw)) return []
 
 	const actions: ConsolidationAction[] = []
 	for (const candidate of raw) {
-		if (!candidate || typeof candidate !== 'object') continue
+		if (!candidate || typeof candidate !== 'object')
+			continue
 		const record = candidate as Record<string, unknown>
 		const action = asString(record.action)
 		if (!action) continue
@@ -377,7 +436,9 @@ function normalizeConsolidationActions(raw: unknown): ConsolidationAction[] {
 		}
 
 		if (action === 'update') {
-			const observationId = asString(record.observationId ?? record.learning_id)
+			const observationId = asString(
+				record.observationId ?? record.learning_id
+			)
 			if (!observationId) continue
 			actions.push({
 				action: 'update',
@@ -390,7 +451,9 @@ function normalizeConsolidationActions(raw: unknown): ConsolidationAction[] {
 
 		if (action === 'merge') {
 			const observationIds = asStringArray(
-				record.observationIds ?? record.learning_ids ?? record.observation_ids
+				record.observationIds ??
+					record.learning_ids ??
+					record.observation_ids
 			)
 			if (observationIds.length < 2) continue
 			actions.push({
@@ -413,7 +476,9 @@ function asString(value: unknown): string | undefined {
 
 function asStringArray(value: unknown): string[] {
 	if (!Array.isArray(value)) return []
-	return value.map(item => asString(item)).filter((item): item is string => Boolean(item))
+	return value
+		.map(item => asString(item))
+		.filter((item): item is string => Boolean(item))
 }
 
 // ── Execute create action ───────────────────────────────────────────────
@@ -454,11 +519,10 @@ async function executeCreateAction(
 		.run()
 
 	// FTS5 index
-	hdb.sqlite.run('INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)', [
-		obsId,
-		bankId,
-		action.text
-	])
+	hdb.sqlite.run(
+		'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
+		[obsId, bankId, action.text]
+	)
 
 	// Embedding for semantic search
 	await memoryVec.upsert(obsId, action.text)
@@ -493,7 +557,10 @@ async function executeUpdateAction(
 	if (!existing) return 'skipped'
 
 	// Build history entry (safe parse in case of corrupt data)
-	const history: ObservationHistoryEntry[] = safeJsonParse(existing.history, [])
+	const history: ObservationHistoryEntry[] = safeJsonParse(
+		existing.history,
+		[]
+	)
 
 	history.push({
 		previousText: existing.content,
@@ -503,20 +570,40 @@ async function executeUpdateAction(
 	})
 
 	// Merge source memory IDs (safe parse)
-	const existingSourceIds: string[] = safeJsonParse(existing.sourceMemoryIds, [])
+	const existingSourceIds: string[] = safeJsonParse(
+		existing.sourceMemoryIds,
+		[]
+	)
 	if (!existingSourceIds.includes(sourceMemory.id)) {
 		existingSourceIds.push(sourceMemory.id)
 	}
 
 	// Merge tags (union of existing + source, safe parse)
-	const existingTags: string[] = safeJsonParse(existing.tags, [])
-	const sourceTags: string[] = safeJsonParse(sourceMemory.tags, [])
-	const mergedTags = [...new Set([...existingTags, ...sourceTags])]
+	const existingTags: string[] = safeJsonParse(
+		existing.tags,
+		[]
+	)
+	const sourceTags: string[] = safeJsonParse(
+		sourceMemory.tags,
+		[]
+	)
+	const mergedTags = [
+		...new Set([...existingTags, ...sourceTags])
+	]
 
 	// Expand temporal range
-	const occurredStart = minNullable(getOccurredStart(existing), getOccurredStart(sourceMemory))
-	const occurredEnd = maxNullable(getOccurredEnd(existing), getOccurredEnd(sourceMemory))
-	const mentionedAt = maxNullable(existing.mentionedAt, sourceMemory.mentionedAt)
+	const occurredStart = minNullable(
+		getOccurredStart(existing),
+		getOccurredStart(sourceMemory)
+	)
+	const occurredEnd = maxNullable(
+		getOccurredEnd(existing),
+		getOccurredEnd(sourceMemory)
+	)
+	const mentionedAt = maxNullable(
+		existing.mentionedAt,
+		sourceMemory.mentionedAt
+	)
 	const eventDate = occurredStart ?? mentionedAt
 
 	hdb.db
@@ -526,7 +613,10 @@ async function executeUpdateAction(
 			proofCount: existingSourceIds.length,
 			sourceMemoryIds: JSON.stringify(existingSourceIds),
 			history: JSON.stringify(history),
-			tags: mergedTags.length > 0 ? JSON.stringify(mergedTags) : null,
+			tags:
+				mergedTags.length > 0
+					? JSON.stringify(mergedTags)
+					: null,
 			eventDate,
 			occurredStart,
 			occurredEnd,
@@ -537,12 +627,13 @@ async function executeUpdateAction(
 		.run()
 
 	// Update FTS5 index
-	hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [action.observationId])
-	hdb.sqlite.run('INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)', [
-		action.observationId,
-		bankId,
-		action.text
+	hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [
+		action.observationId
 	])
+	hdb.sqlite.run(
+		'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
+		[action.observationId, bankId, action.text]
+	)
 
 	// Re-embed with new content
 	await memoryVec.upsert(action.observationId, action.text)
@@ -579,33 +670,55 @@ async function executeMergeAction(
 	)
 	if (!targetId) return 'skipped'
 
-	const target = observations.find(observation => observation.id === targetId)
+	const target = observations.find(
+		observation => observation.id === targetId
+	)
 	if (!target) return 'skipped'
 
-	const mergedAway = observations.filter(observation => observation.id !== targetId)
+	const mergedAway = observations.filter(
+		observation => observation.id !== targetId
+	)
 	if (mergedAway.length === 0) return 'skipped'
 
 	const sourceMemoryIds = new Set<string>([sourceMemory.id])
 	for (const observation of observations) {
-		const ids = parseStringArrayJson(observation.sourceMemoryIds)
+		const ids = parseStringArrayJson(
+			observation.sourceMemoryIds
+		)
 		for (const id of ids) sourceMemoryIds.add(id)
 	}
 
-	const mergedTags = new Set<string>(parseStringArrayJson(sourceMemory.tags))
+	const mergedTags = new Set<string>(
+		parseStringArrayJson(sourceMemory.tags)
+	)
 	for (const observation of observations) {
 		const tags = parseStringArrayJson(observation.tags)
 		for (const tag of tags) mergedTags.add(tag)
 	}
 
-	const history = mergeObservationHistories(observations, now, action.reason, sourceMemory.id)
+	const history = mergeObservationHistories(
+		observations,
+		now,
+		action.reason,
+		sourceMemory.id
+	)
 
 	let occurredStart = getOccurredStart(sourceMemory)
 	let occurredEnd = getOccurredEnd(sourceMemory)
 	let mentionedAt = sourceMemory.mentionedAt
 	for (const observation of observations) {
-		occurredStart = minNullable(occurredStart, getOccurredStart(observation))
-		occurredEnd = maxNullable(occurredEnd, getOccurredEnd(observation))
-		mentionedAt = maxNullable(mentionedAt, observation.mentionedAt)
+		occurredStart = minNullable(
+			occurredStart,
+			getOccurredStart(observation)
+		)
+		occurredEnd = maxNullable(
+			occurredEnd,
+			getOccurredEnd(observation)
+		)
+		mentionedAt = maxNullable(
+			mentionedAt,
+			observation.mentionedAt
+		)
 	}
 	const eventDate = occurredStart ?? mentionedAt
 
@@ -616,7 +729,10 @@ async function executeMergeAction(
 			proofCount: sourceMemoryIds.size,
 			sourceMemoryIds: JSON.stringify([...sourceMemoryIds]),
 			history: JSON.stringify(history),
-			tags: mergedTags.size > 0 ? JSON.stringify([...mergedTags]) : null,
+			tags:
+				mergedTags.size > 0
+					? JSON.stringify([...mergedTags])
+					: null,
 			eventDate,
 			occurredStart,
 			occurredEnd,
@@ -626,16 +742,23 @@ async function executeMergeAction(
 		.where(eq(schema.memoryUnits.id, targetId))
 		.run()
 
-	hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [targetId])
-	hdb.sqlite.run('INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)', [
-		targetId,
-		bankId,
-		action.text
+	hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [
+		targetId
 	])
+	hdb.sqlite.run(
+		'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
+		[targetId, bankId, action.text]
+	)
 
 	for (const observation of mergedAway) {
-		hdb.db.delete(schema.memoryUnits).where(eq(schema.memoryUnits.id, observation.id)).run()
-		hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [observation.id])
+		hdb.db
+			.delete(schema.memoryUnits)
+			.where(eq(schema.memoryUnits.id, observation.id))
+			.run()
+		hdb.sqlite.run(
+			'DELETE FROM hs_memory_fts WHERE id = ?',
+			[observation.id]
+		)
 		memoryVec.delete(observation.id)
 	}
 
@@ -655,7 +778,9 @@ function shouldRefreshModel(
 	model: { tags: string | null },
 	consolidatedTags: Set<string>
 ): boolean {
-	const modelTags: string[] = model.tags ? JSON.parse(model.tags) : []
+	const modelTags: string[] = model.tags
+		? JSON.parse(model.tags)
+		: []
 	const modelIsTagged = modelTags.length > 0
 	const hasConsolidatedTags = consolidatedTags.size > 0
 
@@ -700,16 +825,31 @@ async function triggerMentalModelRefreshes(
 	const autoRefreshModels = hdb.db
 		.select()
 		.from(schema.mentalModels)
-		.where(and(eq(schema.mentalModels.bankId, bankId), eq(schema.mentalModels.autoRefresh, 1)))
+		.where(
+			and(
+				eq(schema.mentalModels.bankId, bankId),
+				eq(schema.mentalModels.autoRefresh, 1)
+			)
+		)
 		.all()
 
 	let refreshed = 0
 
 	for (const model of autoRefreshModels) {
-		if (!shouldRefreshModel(model, consolidatedTags)) continue
+		if (!shouldRefreshModel(model, consolidatedTags))
+			continue
 
 		// Fire-and-forget refresh
-		refreshMentalModel(hdb, memoryVec, modelVec, adapter, bankId, model.id, rerank, bankProfile)
+		refreshMentalModel(
+			hdb,
+			memoryVec,
+			modelVec,
+			adapter,
+			bankId,
+			model.id,
+			rerank,
+			bankProfile
+		)
 			.then(() => {})
 			.catch(() => {})
 		refreshed++
@@ -721,7 +861,9 @@ async function triggerMentalModelRefreshes(
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function mergeObservationHistories(
-	observations: Array<typeof import('./schema').memoryUnits.$inferSelect>,
+	observations: Array<
+		typeof import('./schema').memoryUnits.$inferSelect
+	>,
 	changedAt: number,
 	reason: string,
 	sourceMemoryId: string
@@ -729,7 +871,9 @@ function mergeObservationHistories(
 	const history: ObservationHistoryEntry[] = []
 
 	for (const observation of observations) {
-		const entries = parseObservationHistory(observation.history)
+		const entries = parseObservationHistory(
+			observation.history
+		)
 		history.push(...entries)
 	}
 
@@ -745,35 +889,49 @@ function mergeObservationHistories(
 	return history
 }
 
-function parseObservationHistory(json: string | null): ObservationHistoryEntry[] {
+function parseObservationHistory(
+	json: string | null
+): ObservationHistoryEntry[] {
 	if (!json) return []
 	try {
-		const parsed = JSON.parse(json) as ObservationHistoryEntry[]
+		const parsed = JSON.parse(
+			json
+		) as ObservationHistoryEntry[]
 		return Array.isArray(parsed) ? parsed : []
 	} catch {
 		return []
 	}
 }
 
-function parseStringArrayJson(json: string | null): string[] {
+function parseStringArrayJson(
+	json: string | null
+): string[] {
 	if (!json) return []
 	try {
 		const parsed = JSON.parse(json) as string[]
 		return Array.isArray(parsed)
-			? parsed.filter((item): item is string => typeof item === 'string')
+			? parsed.filter(
+					(item): item is string => typeof item === 'string'
+				)
 			: []
 	} catch {
 		return []
 	}
 }
 
-function minNullable(a: number | null, b: number | null): number | null {
+function minNullable(
+	a: number | null,
+	b: number | null
+): number | null {
 	if (a == null) return b
 	if (b == null) return a
 	return Math.min(a, b)
 }
 
-function maxNullable(a: number | null, b: number | null): number | null {
+function maxNullable(
+	a: number | null,
+	b: number | null
+): number | null {
 	if (a == null) return b
 	if (b == null) return a
 	return Math.max(a, b)

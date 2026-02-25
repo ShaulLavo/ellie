@@ -124,7 +124,9 @@ it('should override spy implementation', () => {
 		method: (x: number) => x * 2
 	}
 
-	const spy = spyOn(obj, 'method').mockImplementation(x => x * 3)
+	const spy = spyOn(obj, 'method').mockImplementation(
+		x => x * 3
+	)
 
 	expect(obj.method(5)).toBe(15)
 	expect(spy).toHaveBeenCalled()
@@ -139,7 +141,9 @@ it('should restore original implementation', () => {
 		method: (x: number) => x * 2
 	}
 
-	const spy = spyOn(obj, 'method').mockImplementation(x => x * 3)
+	const spy = spyOn(obj, 'method').mockImplementation(
+		x => x * 3
+	)
 
 	expect(obj.method(5)).toBe(15)
 
@@ -155,7 +159,10 @@ it('should restore original implementation', () => {
 
 ```typescript
 // Create a manual mock
-const mockFetchUser = mock(() => ({ id: 1, name: 'Test User' }))
+const mockFetchUser = mock(() => ({
+	id: 1,
+	name: 'Test User'
+}))
 const mockCreateUser = mock(() => ({ success: true }))
 
 const api = {
@@ -189,7 +196,9 @@ export class UserService {
 // test
 it('should use injected dependency', async () => {
 	const mockApi: ApiClient = {
-		fetchUser: mock(() => Promise.resolve({ id: 1, name: 'Test' }))
+		fetchUser: mock(() =>
+			Promise.resolve({ id: 1, name: 'Test' })
+		)
 	}
 
 	const service = new UserService(mockApi)
@@ -214,7 +223,9 @@ it('should mock promises', async () => {
 })
 
 it('should mock rejected promises', async () => {
-	const mockFn = mock(() => Promise.reject(new Error('Failed')))
+	const mockFn = mock(() =>
+		Promise.reject(new Error('Failed'))
+	)
 
 	await expect(mockFn()).rejects.toThrow('Failed')
 })
@@ -382,7 +393,9 @@ it('should test delayed operations', async () => {
 ```typescript
 const mockDb = {
 	query: mock((sql: string) => Promise.resolve([])),
-	insert: mock((table: string, data: any) => Promise.resolve({ id: 1 }))
+	insert: mock((table: string, data: any) =>
+		Promise.resolve({ id: 1 })
+	)
 }
 ```
 

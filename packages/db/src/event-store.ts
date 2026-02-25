@@ -7,7 +7,12 @@ import type { Database } from 'bun:sqlite'
 import { openDatabase } from './init'
 import { AuditLogger } from './audit-log'
 import * as schema from './schema'
-import { sessions, events, type SessionRow, type EventRow } from './schema'
+import {
+	sessions,
+	events,
+	type SessionRow,
+	type EventRow
+} from './schema'
 import type { AgentMessage } from '@ellie/schemas'
 
 export type { AgentMessage }
@@ -34,7 +39,10 @@ const eventTypeSchema = v.picklist(EVENT_TYPES)
 
 // ── Per-type payload schemas ────────────────────────────────────────────────
 
-const textContent = v.object({ type: v.literal('text'), text: v.string() })
+const textContent = v.object({
+	type: v.literal('text'),
+	text: v.string()
+})
 const imageContent = v.object({
 	type: v.literal('image'),
 	data: v.string(),
@@ -71,7 +79,9 @@ const usageSchema = v.object({
 const payloadSchemas: Record<EventType, v.GenericSchema> = {
 	user_message: v.object({
 		role: v.literal('user'),
-		content: v.array(v.variant('type', [textContent, imageContent])),
+		content: v.array(
+			v.variant('type', [textContent, imageContent])
+		),
 		timestamp: v.number()
 	}),
 	assistant_start: v.object({
@@ -80,11 +90,23 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 	}),
 	assistant_final: v.object({
 		role: v.literal('assistant'),
-		content: v.array(v.variant('type', [textContent, thinkingContent, toolCallContent])),
+		content: v.array(
+			v.variant('type', [
+				textContent,
+				thinkingContent,
+				toolCallContent
+			])
+		),
 		provider: v.string(),
 		model: v.string(),
 		usage: usageSchema,
-		stopReason: v.picklist(['stop', 'length', 'toolUse', 'error', 'aborted']),
+		stopReason: v.picklist([
+			'stop',
+			'length',
+			'toolUse',
+			'error',
+			'aborted'
+		]),
 		errorMessage: v.optional(v.string()),
 		timestamp: v.number()
 	}),
@@ -97,7 +119,9 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		role: v.literal('toolResult'),
 		toolCallId: v.string(),
 		toolName: v.string(),
-		content: v.array(v.variant('type', [textContent, imageContent])),
+		content: v.array(
+			v.variant('type', [textContent, imageContent])
+		),
 		details: v.optional(v.unknown()),
 		isError: v.boolean(),
 		timestamp: v.number()
@@ -137,7 +161,11 @@ export interface QueryInput {
 
 // ── Resolved path ───────────────────────────────────────────────────────────
 
-const MIGRATIONS_DIR = join(import.meta.dir, '..', 'drizzle')
+const MIGRATIONS_DIR = join(
+	import.meta.dir,
+	'..',
+	'drizzle'
+)
 
 // ── EventStore ──────────────────────────────────────────────────────────────
 
@@ -146,12 +174,18 @@ export class EventStore {
 	readonly sqlite: Database
 	readonly #audit: AuditLogger | null
 
-	constructor(dbPath: string, auditLogDir?: string, migrationsFolder?: string) {
+	constructor(
+		dbPath: string,
+		auditLogDir?: string,
+		migrationsFolder?: string
+	) {
 		this.sqlite = openDatabase(dbPath)
 		this.db = drizzle(this.sqlite, { schema })
 
 		// Run Drizzle migrations
-		migrate(this.db, { migrationsFolder: migrationsFolder ?? MIGRATIONS_DIR })
+		migrate(this.db, {
+			migrationsFolder: migrationsFolder ?? MIGRATIONS_DIR
+		})
 
 		// Create partial unique index not representable in Drizzle
 		this.sqlite.run(`
@@ -160,7 +194,9 @@ export class EventStore {
         WHERE dedupe_key IS NOT NULL
     `)
 
-		this.#audit = auditLogDir ? new AuditLogger(auditLogDir) : null
+		this.#audit = auditLogDir
+			? new AuditLogger(auditLogDir)
+			: null
 	}
 
 	// ── Session CRUD ────────────────────────────────────────────────────────
@@ -171,7 +207,8 @@ export class EventStore {
 
 		if (id) {
 			const existing = this.getSession(id)
-			if (existing) throw new Error(`Session already exists: ${id}`)
+			if (existing)
+				throw new Error(`Session already exists: ${id}`)
 		}
 
 		return this.db
@@ -187,15 +224,26 @@ export class EventStore {
 	}
 
 	getSession(id: string): SessionRow | undefined {
-		return this.db.select().from(sessions).where(eq(sessions.id, id)).get()
+		return this.db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.id, id))
+			.get()
 	}
 
 	listSessions(): SessionRow[] {
-		return this.db.select().from(sessions).orderBy(asc(sessions.createdAt)).all()
+		return this.db
+			.select()
+			.from(sessions)
+			.orderBy(asc(sessions.createdAt))
+			.all()
 	}
 
 	deleteSession(id: string): void {
-		this.db.delete(sessions).where(eq(sessions.id, id)).run()
+		this.db
+			.delete(sessions)
+			.where(eq(sessions.id, id))
+			.run()
 	}
 
 	// ── Event append ────────────────────────────────────────────────────────
@@ -218,15 +266,26 @@ export class EventStore {
 				const existing = tx
 					.select()
 					.from(events)
-					.where(and(eq(events.sessionId, input.sessionId), eq(events.dedupeKey, input.dedupeKey)))
+					.where(
+						and(
+							eq(events.sessionId, input.sessionId),
+							eq(events.dedupeKey, input.dedupeKey)
+						)
+					)
 					.get()
 				if (existing) return existing
 			}
 
 			// Load and bump session seq
-			const session = tx.select().from(sessions).where(eq(sessions.id, input.sessionId)).get()
+			const session = tx
+				.select()
+				.from(sessions)
+				.where(eq(sessions.id, input.sessionId))
+				.get()
 			if (!session) {
-				throw new Error(`Session not found: ${input.sessionId}`)
+				throw new Error(
+					`Session not found: ${input.sessionId}`
+				)
 			}
 
 			const nextSeq = session.currentSeq + 1
@@ -272,7 +331,9 @@ export class EventStore {
 	// ── Event query ─────────────────────────────────────────────────────────
 
 	query(input: QueryInput): EventRow[] {
-		const conditions = [eq(events.sessionId, input.sessionId)]
+		const conditions = [
+			eq(events.sessionId, input.sessionId)
+		]
 
 		if (input.afterSeq !== undefined) {
 			conditions.push(gt(events.seq, input.afterSeq))
@@ -299,18 +360,29 @@ export class EventStore {
 
 	// ── History reconstruction ────────────────────────────────────────────
 
-	getConversationHistory(sessionId: string): AgentMessage[] {
+	getConversationHistory(
+		sessionId: string
+	): AgentMessage[] {
 		const rows = this.query({
 			sessionId,
-			types: ['user_message', 'assistant_final', 'tool_result']
+			types: [
+				'user_message',
+				'assistant_final',
+				'tool_result'
+			]
 		})
 
 		const messages: AgentMessage[] = []
 		for (const row of rows) {
 			try {
-				messages.push(JSON.parse(row.payload) as AgentMessage)
+				messages.push(
+					JSON.parse(row.payload) as AgentMessage
+				)
 			} catch (err) {
-				console.warn(`[EventStore] malformed payload in event ${row.id} (seq=${row.seq}):`, err)
+				console.warn(
+					`[EventStore] malformed payload in event ${row.id} (seq=${row.seq}):`,
+					err
+				)
 			}
 		}
 		return messages
@@ -325,7 +397,9 @@ export class EventStore {
 	 *   CREATE INDEX idx_events_stale_runs ON events(type, run_id, created_at)
 	 *     WHERE run_id IS NOT NULL;
 	 */
-	findStaleRuns(maxAgeMs: number): Array<{ sessionId: string; runId: string }> {
+	findStaleRuns(
+		maxAgeMs: number
+	): Array<{ sessionId: string; runId: string }> {
 		const cutoff = Date.now() - maxAgeMs
 
 		// Find runs that have an agent_start but no run_closed.
@@ -333,7 +407,10 @@ export class EventStore {
 		// Column mapping: events.sessionId → session_id, events.runId → run_id,
 		//   events.type → type, events.createdAt → created_at (see schema.ts)
 		const stale = this.sqlite
-			.query<{ session_id: string; run_id: string }, [number]>(
+			.query<
+				{ session_id: string; run_id: string },
+				[number]
+			>(
 				`
         SELECT DISTINCT e.session_id, e.run_id
         FROM events e

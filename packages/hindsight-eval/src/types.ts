@@ -18,7 +18,11 @@ export type Scenario =
 
 export interface SeedFact {
 	content: string
-	factType: 'world' | 'experience' | 'opinion' | 'observation'
+	factType:
+		| 'world'
+		| 'experience'
+		| 'opinion'
+		| 'observation'
 	confidence?: number
 	occurredStart?: number | null
 	occurredEnd?: number | null

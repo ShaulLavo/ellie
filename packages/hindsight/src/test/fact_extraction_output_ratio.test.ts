@@ -2,8 +2,18 @@
  * Core parity port for test_fact_extraction_output_ratio.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -68,7 +79,9 @@ describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 				]
 			})
 		)
-		const result = await t.hs.retain(bankId, 'source', { consolidate: false })
+		const result = await t.hs.retain(bankId, 'source', {
+			consolidate: false
+		})
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -89,7 +102,9 @@ describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 				]
 			})
 		)
-		const result = await t.hs.retain(bankId, 'source', { consolidate: false })
+		const result = await t.hs.retain(bankId, 'source', {
+			consolidate: false
+		})
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -110,7 +125,9 @@ describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 				]
 			})
 		)
-		const result = await t.hs.retain(bankId, 'source', { consolidate: false })
+		const result = await t.hs.retain(bankId, 'source', {
+			consolidate: false
+		})
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -131,7 +148,9 @@ describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 				]
 			})
 		)
-		const result = await t.hs.retain(bankId, 'source', { consolidate: false })
+		const result = await t.hs.retain(bankId, 'source', {
+			consolidate: false
+		})
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -152,7 +171,9 @@ describe('Core parity: test_fact_extraction_output_ratio.py', () => {
 				]
 			})
 		)
-		const result = await t.hs.retain(bankId, 'source', { consolidate: false })
+		const result = await t.hs.retain(bankId, 'source', {
+			consolidate: false
+		})
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 })

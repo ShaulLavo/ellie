@@ -3,7 +3,10 @@ import { join } from 'path'
 import { loadFixture, runBaseline } from '../runner'
 import type { EvalRunConfig } from '../types'
 
-const FIXTURE_PATH = join(import.meta.dir, '../../fixtures/assistant-baseline.v1.jsonl')
+const FIXTURE_PATH = join(
+	import.meta.dir,
+	'../../fixtures/assistant-baseline.v1.jsonl'
+)
 
 describe('runner', () => {
 	describe('loadFixture', () => {
@@ -29,8 +32,12 @@ describe('runner', () => {
 			expect(scenarios.has('follow_up_recall')).toBe(true)
 			expect(scenarios.has('temporal_narrative')).toBe(true)
 			expect(scenarios.has('dedup_conflict')).toBe(true)
-			expect(scenarios.has('code_location_recall')).toBe(true)
-			expect(scenarios.has('token_budget_packing')).toBe(true)
+			expect(scenarios.has('code_location_recall')).toBe(
+				true
+			)
+			expect(scenarios.has('token_budget_packing')).toBe(
+				true
+			)
 		})
 	})
 
@@ -54,14 +61,22 @@ describe('runner', () => {
 				const r2 = results2[i]!
 
 				expect(r1.caseId).toBe(r2.caseId)
-				expect(r1.candidates.length).toBe(r2.candidates.length)
+				expect(r1.candidates.length).toBe(
+					r2.candidates.length
+				)
 
 				for (let j = 0; j < r1.candidates.length; j++) {
-					expect(r1.candidates[j]!.content).toBe(r2.candidates[j]!.content)
-					expect(r1.candidates[j]!.score).toBe(r2.candidates[j]!.score)
+					expect(r1.candidates[j]!.content).toBe(
+						r2.candidates[j]!.content
+					)
+					expect(r1.candidates[j]!.score).toBe(
+						r2.candidates[j]!.score
+					)
 				}
 
-				expect(Object.keys(r1.metrics).length).toBe(Object.keys(r2.metrics).length)
+				expect(Object.keys(r1.metrics).length).toBe(
+					Object.keys(r2.metrics).length
+				)
 				for (const key of Object.keys(r1.metrics)) {
 					expect(r1.metrics[key]).toBe(r2.metrics[key])
 				}
@@ -80,7 +95,9 @@ describe('runner', () => {
 			const results = await runBaseline({ config })
 
 			for (const result of results) {
-				expect(Object.keys(result.metrics).length).toBeGreaterThan(0)
+				expect(
+					Object.keys(result.metrics).length
+				).toBeGreaterThan(0)
 				for (const value of Object.values(result.metrics)) {
 					expect(typeof value).toBe('number')
 					expect(value).toBeGreaterThanOrEqual(0)
@@ -107,10 +124,14 @@ describe('runner', () => {
 
 					if (prev.score === curr.score) {
 						// Same score → content should be ascending
-						expect(prev.content.localeCompare(curr.content)).toBeLessThanOrEqual(0)
+						expect(
+							prev.content.localeCompare(curr.content)
+						).toBeLessThanOrEqual(0)
 					} else {
 						// Scores should be descending
-						expect(prev.score).toBeGreaterThanOrEqual(curr.score)
+						expect(prev.score).toBeGreaterThanOrEqual(
+							curr.score
+						)
 					}
 				}
 			}

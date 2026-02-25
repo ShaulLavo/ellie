@@ -2,8 +2,18 @@
  * Core parity port for test_chunking.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_chunking.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_chunking.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -52,32 +63,56 @@ describe('Core parity: test_chunking.py', () => {
 	}
 
 	it('chunk text small', async () => {
-		const result = await t.hs.retainBatch(bankId, ['small chunk text'], {
-			consolidate: false,
-			documentId: 'doc-test_chunk_text_small'
-		})
+		const result = await t.hs.retainBatch(
+			bankId,
+			['small chunk text'],
+			{
+				consolidate: false,
+				documentId: 'doc-test_chunk_text_small'
+			}
+		)
 		expect(result.length).toBe(1)
-		expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-		expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
+		expect(
+			result[0]!.memories.length
+		).toBeGreaterThanOrEqual(1)
+		expect(
+			t.hs.listDocuments(bankId).items.length
+		).toBeGreaterThanOrEqual(1)
 	})
 
 	it('chunk text large', async () => {
-		const result = await t.hs.retainBatch(bankId, ['A'.repeat(650_000)], {
-			consolidate: false,
-			documentId: 'doc-test_chunk_text_large'
-		})
+		const result = await t.hs.retainBatch(
+			bankId,
+			['A'.repeat(650_000)],
+			{
+				consolidate: false,
+				documentId: 'doc-test_chunk_text_large'
+			}
+		)
 		expect(result.length).toBe(1)
-		expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-		expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
+		expect(
+			result[0]!.memories.length
+		).toBeGreaterThanOrEqual(1)
+		expect(
+			t.hs.listDocuments(bankId).items.length
+		).toBeGreaterThanOrEqual(1)
 	})
 
 	it('chunk text 64k', async () => {
-		const result = await t.hs.retainBatch(bankId, ['A'.repeat(650_000)], {
-			consolidate: false,
-			documentId: 'doc-test_chunk_text_64k'
-		})
+		const result = await t.hs.retainBatch(
+			bankId,
+			['A'.repeat(650_000)],
+			{
+				consolidate: false,
+				documentId: 'doc-test_chunk_text_64k'
+			}
+		)
 		expect(result.length).toBe(1)
-		expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-		expect(t.hs.listDocuments(bankId).items.length).toBeGreaterThanOrEqual(1)
+		expect(
+			result[0]!.memories.length
+		).toBeGreaterThanOrEqual(1)
+		expect(
+			t.hs.listDocuments(bankId).items.length
+		).toBeGreaterThanOrEqual(1)
 	})
 })

@@ -1,7 +1,11 @@
 'use client'
 
 import * as React from 'react'
-import { motion, type Transition, type HTMLMotionProps } from 'motion/react'
+import {
+	motion,
+	type Transition,
+	type HTMLMotionProps
+} from 'motion/react'
 
 import {
 	Highlight,
@@ -10,15 +14,22 @@ import {
 	type HighlightProps
 } from '@/components/animate-ui/primitives/effects/highlight'
 import { getStrictContext } from '@/lib/get-strict-context'
-import { Slot, type WithAsChild } from '@/components/animate-ui/primitives/animate/slot'
+import {
+	Slot,
+	type WithAsChild
+} from '@/components/animate-ui/primitives/animate/slot'
 
 type TabsContextType = {
 	activeValue: string
 	handleValueChange: (value: string) => void
-	registerTrigger: (value: string, node: HTMLElement | null) => void
+	registerTrigger: (
+		value: string,
+		node: HTMLElement | null
+	) => void
 }
 
-const [TabsProvider, useTabs] = getStrictContext<TabsContextType>('TabsContext')
+const [TabsProvider, useTabs] =
+	getStrictContext<TabsContextType>('TabsContext')
 
 type BaseTabsProps = React.ComponentProps<'div'> & {
 	children: React.ReactNode
@@ -38,9 +49,19 @@ type ControlledTabsProps = BaseTabsProps & {
 
 type TabsProps = UnControlledTabsProps | ControlledTabsProps
 
-function Tabs({ defaultValue, value, onValueChange, children, ...props }: TabsProps) {
-	const [activeValue, setActiveValue] = React.useState<string | undefined>(defaultValue)
-	const triggersRef = React.useRef(new Map<string, HTMLElement>())
+function Tabs({
+	defaultValue,
+	value,
+	onValueChange,
+	children,
+	...props
+}: TabsProps) {
+	const [activeValue, setActiveValue] = React.useState<
+		string | undefined
+	>(defaultValue)
+	const triggersRef = React.useRef(
+		new Map<string, HTMLElement>()
+	)
 	const initialSet = React.useRef(false)
 	const isControlled = value !== undefined
 
@@ -51,7 +72,8 @@ function Tabs({ defaultValue, value, onValueChange, children, ...props }: TabsPr
 			triggersRef.current.size > 0 &&
 			!initialSet.current
 		) {
-			const firstTab = triggersRef.current.keys().next().value as string | undefined
+			const firstTab = triggersRef.current.keys().next()
+				.value as string | undefined
 			if (firstTab !== undefined) {
 				setActiveValue(firstTab)
 				initialSet.current = true
@@ -63,7 +85,11 @@ function Tabs({ defaultValue, value, onValueChange, children, ...props }: TabsPr
 		(val: string, node: HTMLElement | null) => {
 			if (node) {
 				triggersRef.current.set(val, node)
-				if (!isControlled && activeValue === undefined && !initialSet.current) {
+				if (
+					!isControlled &&
+					activeValue === undefined &&
+					!initialSet.current
+				) {
 					setActiveValue(val)
 					initialSet.current = true
 				}
@@ -97,10 +123,17 @@ function Tabs({ defaultValue, value, onValueChange, children, ...props }: TabsPr
 	)
 }
 
-type TabsHighlightProps = Omit<HighlightProps, 'controlledItems' | 'value'>
+type TabsHighlightProps = Omit<
+	HighlightProps,
+	'controlledItems' | 'value'
+>
 
 function TabsHighlight({
-	transition = { type: 'spring', stiffness: 200, damping: 25 },
+	transition = {
+		type: 'spring',
+		stiffness: 200,
+		damping: 25
+	},
 	...props
 }: TabsHighlightProps) {
 	const { activeValue } = useTabs()
@@ -122,7 +155,9 @@ type TabsListProps = React.ComponentProps<'div'> & {
 }
 
 function TabsList(props: TabsListProps) {
-	return <div role="tablist" data-slot="tabs-list" {...props} />
+	return (
+		<div role="tablist" data-slot="tabs-list" {...props} />
+	)
 }
 
 type TabsHighlightItemProps = HighlightItemProps & {
@@ -130,7 +165,12 @@ type TabsHighlightItemProps = HighlightItemProps & {
 }
 
 function TabsHighlightItem(props: TabsHighlightItemProps) {
-	return <HighlightItem data-slot="tabs-highlight-item" {...props} />
+	return (
+		<HighlightItem
+			data-slot="tabs-highlight-item"
+			{...props}
+		/>
+	)
 }
 
 type TabsTriggerProps = WithAsChild<
@@ -140,11 +180,25 @@ type TabsTriggerProps = WithAsChild<
 	} & HTMLMotionProps<'button'>
 >
 
-function TabsTrigger({ ref, value, asChild = false, ...props }: TabsTriggerProps) {
-	const { activeValue, handleValueChange, registerTrigger } = useTabs()
+function TabsTrigger({
+	ref,
+	value,
+	asChild = false,
+	...props
+}: TabsTriggerProps) {
+	const {
+		activeValue,
+		handleValueChange,
+		registerTrigger
+	} = useTabs()
 
-	const localRef = React.useRef<HTMLButtonElement | null>(null)
-	React.useImperativeHandle(ref, () => localRef.current as HTMLButtonElement)
+	const localRef = React.useRef<HTMLButtonElement | null>(
+		null
+	)
+	React.useImperativeHandle(
+		ref,
+		() => localRef.current as HTMLButtonElement
+	)
 
 	React.useEffect(() => {
 		registerTrigger(value, localRef.current)
@@ -159,7 +213,9 @@ function TabsTrigger({ ref, value, asChild = false, ...props }: TabsTriggerProps
 			data-slot="tabs-trigger"
 			role="tab"
 			onClick={() => handleValueChange(value)}
-			data-state={activeValue === value ? 'active' : 'inactive'}
+			data-state={
+				activeValue === value ? 'active' : 'inactive'
+			}
 			{...props}
 		/>
 	)
@@ -184,7 +240,9 @@ function TabsContents({
 	const { activeValue } = useTabs()
 	const childrenArray = React.Children.toArray(children)
 	const activeIndex = childrenArray.findIndex(
-		(child): child is React.ReactElement<{ value: string }> =>
+		(
+			child
+		): child is React.ReactElement<{ value: string }> =>
 			React.isValidElement(child) &&
 			typeof child.props === 'object' &&
 			child.props !== null &&
@@ -192,8 +250,12 @@ function TabsContents({
 			child.props.value === activeValue
 	)
 
-	const containerRef = React.useRef<HTMLDivElement | null>(null)
-	const itemRefs = React.useRef<Array<HTMLDivElement | null>>([])
+	const containerRef = React.useRef<HTMLDivElement | null>(
+		null
+	)
+	const itemRefs = React.useRef<
+		Array<HTMLDivElement | null>
+	>([])
 	const [height, setHeight] = React.useState(0)
 	const roRef = React.useRef<ResizeObserver | null>(null)
 
@@ -207,13 +269,19 @@ function TabsContents({
 		const cs = getComputedStyle(container)
 		const isBorderBox = cs.boxSizing === 'border-box'
 		const paddingY =
-			(parseFloat(cs.paddingTop || '0') || 0) + (parseFloat(cs.paddingBottom || '0') || 0)
+			(parseFloat(cs.paddingTop || '0') || 0) +
+			(parseFloat(cs.paddingBottom || '0') || 0)
 		const borderY =
-			(parseFloat(cs.borderTopWidth || '0') || 0) + (parseFloat(cs.borderBottomWidth || '0') || 0)
+			(parseFloat(cs.borderTopWidth || '0') || 0) +
+			(parseFloat(cs.borderBottomWidth || '0') || 0)
 
-		let total = base + (isBorderBox ? paddingY + borderY : 0)
+		let total =
+			base + (isBorderBox ? paddingY + borderY : 0)
 
-		const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+		const dpr =
+			typeof window !== 'undefined'
+				? window.devicePixelRatio || 1
+				: 1
 		total = Math.ceil(total * dpr) / dpr
 
 		return total
@@ -290,7 +358,12 @@ type TabsContentProps = WithAsChild<
 	} & HTMLMotionProps<'div'>
 >
 
-function TabsContent({ value, style, asChild = false, ...props }: TabsContentProps) {
+function TabsContent({
+	value,
+	style,
+	asChild = false,
+	...props
+}: TabsContentProps) {
 	const { activeValue } = useTabs()
 	const isActive = activeValue === value
 
@@ -303,9 +376,15 @@ function TabsContent({ value, style, asChild = false, ...props }: TabsContentPro
 			inert={!isActive}
 			style={{ overflow: 'hidden', ...style }}
 			initial={{ filter: 'blur(0px)' }}
-			animate={{ filter: isActive ? 'blur(0px)' : 'blur(4px)' }}
+			animate={{
+				filter: isActive ? 'blur(0px)' : 'blur(4px)'
+			}}
 			exit={{ filter: 'blur(0px)' }}
-			transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+			transition={{
+				type: 'spring',
+				stiffness: 200,
+				damping: 25
+			}}
 			{...props}
 		/>
 	)

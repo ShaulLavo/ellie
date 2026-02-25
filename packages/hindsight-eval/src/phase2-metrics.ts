@@ -10,7 +10,10 @@
  *   accuracy = correct_questions / total_questions
  */
 
-import type { DuplicateRatioMetrics, NarrativeAccuracyMetrics } from './phase2-types'
+import type {
+	DuplicateRatioMetrics,
+	NarrativeAccuracyMetrics
+} from './phase2-types'
 
 // ── Gate 6: Duplicate Ratio ──────────────────────────────────────────────
 
@@ -21,7 +24,9 @@ import type { DuplicateRatioMetrics, NarrativeAccuracyMetrics } from './phase2-t
  * @param clusterCounts - Map from clusterId to canonical memory count
  *                        in the database after ingest.
  */
-export function computeDuplicateRatio(clusterCounts: Map<string, number>): DuplicateRatioMetrics {
+export function computeDuplicateRatio(
+	clusterCounts: Map<string, number>
+): DuplicateRatioMetrics {
 	let totalCanonicalCount = 0
 	let totalDuplicates = 0
 
@@ -31,7 +36,11 @@ export function computeDuplicateRatio(clusterCounts: Map<string, number>): Dupli
 	}
 
 	if (totalCanonicalCount === 0) {
-		return { totalCanonicalCount: 0, totalDuplicates: 0, duplicateRatio: 0 }
+		return {
+			totalCanonicalCount: 0,
+			totalDuplicates: 0,
+			duplicateRatio: 0
+		}
 	}
 
 	return {
@@ -49,7 +58,11 @@ export function computeDuplicateRatio(clusterCounts: Map<string, number>): Dupli
 export function evaluateGate6(
 	baselineDR: number,
 	candidateDR: number
-): { pass: boolean; reduction: number; reductionPercent: number } {
+): {
+	pass: boolean
+	reduction: number
+	reductionPercent: number
+} {
 	if (baselineDR === 0) {
 		return {
 			pass: false,
@@ -110,12 +123,17 @@ export function computeNarrativeAccuracy(
 	results: Array<{ correct: boolean }>
 ): NarrativeAccuracyMetrics {
 	const totalQuestions = results.length
-	const correctQuestions = results.filter(r => r.correct).length
+	const correctQuestions = results.filter(
+		r => r.correct
+	).length
 
 	return {
 		totalQuestions,
 		correctQuestions,
-		accuracy: totalQuestions > 0 ? correctQuestions / totalQuestions : 0
+		accuracy:
+			totalQuestions > 0
+				? correctQuestions / totalQuestions
+				: 0
 	}
 }
 
@@ -127,7 +145,11 @@ export function computeNarrativeAccuracy(
 export function evaluateGate7(
 	baselineAcc: number,
 	candidateAcc: number
-): { pass: boolean; improvement: number; improvementPercent: number } {
+): {
+	pass: boolean
+	improvement: number
+	improvementPercent: number
+} {
 	if (baselineAcc === 0) {
 		return {
 			pass: false,

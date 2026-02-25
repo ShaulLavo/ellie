@@ -42,7 +42,9 @@ describe('generateRollingIngestDataset', () => {
 	it('events are sorted by timestamp', () => {
 		const events = generateRollingIngestDataset(100, 42)
 		for (let i = 0; i < events.length - 1; i++) {
-			expect(events[i]!.timestamp).toBeLessThanOrEqual(events[i + 1]!.timestamp)
+			expect(events[i]!.timestamp).toBeLessThanOrEqual(
+				events[i + 1]!.timestamp
+			)
 		}
 	})
 
@@ -56,7 +58,9 @@ describe('generateRollingIngestDataset', () => {
 		const events1 = generateRollingIngestDataset(100, 42)
 		const events2 = generateRollingIngestDataset(100, 99)
 		// Not all events will differ, but at least some should
-		const differentCount = events1.filter((e, i) => e.content !== events2[i]!.content).length
+		const differentCount = events1.filter(
+			(e, i) => e.content !== events2[i]!.content
+		).length
 		expect(differentCount).toBeGreaterThan(0)
 	})
 
@@ -64,9 +68,14 @@ describe('generateRollingIngestDataset', () => {
 		const events = generateRollingIngestDataset(800, 42)
 		const clusterCounts = new Map<string, number>()
 		for (const event of events) {
-			clusterCounts.set(event.clusterId, (clusterCounts.get(event.clusterId) ?? 0) + 1)
+			clusterCounts.set(
+				event.clusterId,
+				(clusterCounts.get(event.clusterId) ?? 0) + 1
+			)
 		}
-		const hasDuplicates = [...clusterCounts.values()].some(c => c > 1)
+		const hasDuplicates = [...clusterCounts.values()].some(
+			c => c > 1
+		)
 		expect(hasDuplicates).toBe(true)
 	})
 
@@ -93,24 +102,42 @@ describe('generateTemporalNarrativeDataset', () => {
 	})
 
 	it('all questions have required fields', () => {
-		const questions = generateTemporalNarrativeDataset(10, 800, 42)
+		const questions = generateTemporalNarrativeDataset(
+			10,
+			800,
+			42
+		)
 		for (const q of questions) {
 			expect(q.questionId).toBeDefined()
 			expect(q.question).toBeDefined()
 			expect(q.anchorMemoryId).toBeDefined()
 			expect(q.expectedOrderedMemoryIds).toBeDefined()
 			expect(q.direction).toBeDefined()
-			expect(Array.isArray(q.expectedOrderedMemoryIds)).toBe(true)
-			expect(['before', 'after', 'both']).toContain(q.direction)
+			expect(
+				Array.isArray(q.expectedOrderedMemoryIds)
+			).toBe(true)
+			expect(['before', 'after', 'both']).toContain(
+				q.direction
+			)
 		}
 	})
 
 	it('expected memory IDs are in ascending order', () => {
-		const questions = generateTemporalNarrativeDataset(50, 800, 42)
+		const questions = generateTemporalNarrativeDataset(
+			50,
+			800,
+			42
+		)
 		for (const q of questions) {
-			for (let i = 0; i < q.expectedOrderedMemoryIds.length - 1; i++) {
+			for (
+				let i = 0;
+				i < q.expectedOrderedMemoryIds.length - 1;
+				i++
+			) {
 				expect(
-					q.expectedOrderedMemoryIds[i]!.localeCompare(q.expectedOrderedMemoryIds[i + 1]!)
+					q.expectedOrderedMemoryIds[i]!.localeCompare(
+						q.expectedOrderedMemoryIds[i + 1]!
+					)
 				).toBeLessThan(0)
 			}
 		}

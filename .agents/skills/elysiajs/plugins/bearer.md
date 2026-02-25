@@ -19,7 +19,8 @@ const app = new Elysia()
 	.get('/sign', ({ bearer }) => bearer, {
 		beforeHandle({ bearer, set, status }) {
 			if (!bearer) {
-				set.headers['WWW-Authenticate'] = `Bearer realm='sign', error="invalid_request"`
+				set.headers['WWW-Authenticate'] =
+					`Bearer realm='sign', error="invalid_request"`
 
 				return status(400, 'Unauthorized')
 			}

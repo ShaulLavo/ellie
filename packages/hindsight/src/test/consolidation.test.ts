@@ -11,8 +11,18 @@
  * verifiable consolidation flows.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 import { searchMentalModelsWithStaleness } from '../mental-models'
 import type { HindsightDatabase } from '../db'
 import type { EmbeddingStore } from '../embedding'
@@ -33,7 +43,9 @@ describe('Consolidation', () => {
 	// ── Helper: query observations from DB ─────────────────────────────────
 
 	function listObservations(bid: string = bankId) {
-		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+		const hdb = (
+			t.hs as unknown as { hdb: HindsightDatabase }
+		).hdb
 		return hdb.sqlite
 			.prepare(
 				`SELECT id, content, fact_type, source_memory_ids, proof_count, tags, occurred_start, occurred_end, history
@@ -55,7 +67,9 @@ describe('Consolidation', () => {
 	}
 
 	function _listAllMemories(bid: string = bankId) {
-		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+		const hdb = (
+			t.hs as unknown as { hdb: HindsightDatabase }
+		).hdb
 		return hdb.sqlite
 			.prepare(
 				`SELECT id, content, fact_type, tags, source_memory_ids
@@ -73,7 +87,9 @@ describe('Consolidation', () => {
 	}
 
 	function listRawFacts(bid: string = bankId) {
-		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+		const hdb = (
+			t.hs as unknown as { hdb: HindsightDatabase }
+		).hdb
 		return hdb.sqlite
 			.prepare(
 				`SELECT id, content, fact_type
@@ -89,7 +105,9 @@ describe('Consolidation', () => {
 	}
 
 	function _listMemoryEntities(memoryId: string) {
-		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+		const hdb = (
+			t.hs as unknown as { hdb: HindsightDatabase }
+		).hdb
 		return hdb.sqlite
 			.prepare(
 				`SELECT me.memory_id, me.entity_id, e.name
@@ -124,7 +142,11 @@ describe('Consolidation', () => {
 				consolidate: false
 			})
 
-			t.adapter.setResponse(JSON.stringify([{ action: 'skip', reason: 'ephemeral state' }]))
+			t.adapter.setResponse(
+				JSON.stringify([
+					{ action: 'skip', reason: 'ephemeral state' }
+				])
+			)
 
 			const result = await t.hs.consolidate(bankId)
 			expect(result.memoriesProcessed).toBe(1)
@@ -167,7 +189,9 @@ describe('Consolidation', () => {
 			expect(firstPass.observationsCreated).toBe(2)
 
 			const listObservations = () => {
-				const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+				const hdb = (
+					t.hs as unknown as { hdb: HindsightDatabase }
+				).hdb
 				return hdb.sqlite
 					.prepare(
 						`SELECT id, content, source_memory_ids
@@ -184,10 +208,17 @@ describe('Consolidation', () => {
 
 			const initialObservations = listObservations()
 			expect(initialObservations).toHaveLength(2)
-			const observationIds = initialObservations.map(obs => obs.id)
+			const observationIds = initialObservations.map(
+				obs => obs.id
+			)
 
 			await t.hs.retain(bankId, 'source 3', {
-				facts: [{ content: 'Alice often chooses sushi restaurants.' }],
+				facts: [
+					{
+						content:
+							'Alice often chooses sushi restaurants.'
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
@@ -211,10 +242,15 @@ describe('Consolidation', () => {
 
 			const mergedObservations = listObservations()
 			expect(mergedObservations).toHaveLength(1)
-			expect(mergedObservations[0]!.content).toBe('Alice likes sushi and Japanese food.')
+			expect(mergedObservations[0]!.content).toBe(
+				'Alice likes sushi and Japanese food.'
+			)
 
-			const sourceIds = mergedObservations[0]!.source_memory_ids
-				? (JSON.parse(mergedObservations[0]!.source_memory_ids!) as string[])
+			const sourceIds = mergedObservations[0]!
+				.source_memory_ids
+				? (JSON.parse(
+						mergedObservations[0]!.source_memory_ids!
+					) as string[])
 				: []
 			expect(sourceIds.length).toBeGreaterThanOrEqual(3)
 		})
@@ -225,14 +261,29 @@ describe('Consolidation', () => {
 	describe('basic consolidation', () => {
 		it('consolidate returns a ConsolidateResult with correct counts', async () => {
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Bob prefers dark mode.' }, { content: 'Bob uses Vim.' }],
+				facts: [
+					{ content: 'Bob prefers dark mode.' },
+					{ content: 'Bob uses Vim.' }
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Bob prefers dark mode.', reason: 'pref' }]),
-				JSON.stringify([{ action: 'create', text: 'Bob uses Vim.', reason: 'pref' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Bob prefers dark mode.',
+						reason: 'pref'
+					}
+				]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Bob uses Vim.',
+						reason: 'pref'
+					}
+				])
 			])
 
 			const result = await t.hs.consolidate(bankId)
@@ -241,7 +292,9 @@ describe('Consolidation', () => {
 			expect(result.observationsUpdated).toBe(0)
 			expect(result.observationsMerged).toBe(0)
 			expect(result.skipped).toBe(0)
-			expect(result.mentalModelsRefreshQueued).toBeGreaterThanOrEqual(0)
+			expect(
+				result.mentalModelsRefreshQueued
+			).toBeGreaterThanOrEqual(0)
 		})
 
 		it('processes unconsolidated memories (memoriesProcessed > 0)', async () => {
@@ -251,7 +304,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Carol is a morning person.', reason: 'habit' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Carol is a morning person.',
+						reason: 'habit'
+					}
+				])
 			)
 
 			const result = await t.hs.consolidate(bankId)
@@ -260,14 +319,29 @@ describe('Consolidation', () => {
 
 		it('processes multiple related memories and checks structure', async () => {
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Dave likes cycling.' }, { content: 'Dave rides his bike to work.' }],
+				facts: [
+					{ content: 'Dave likes cycling.' },
+					{ content: 'Dave rides his bike to work.' }
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Dave likes cycling.', reason: 'preference' }]),
-				JSON.stringify([{ action: 'create', text: 'Dave commutes by bike.', reason: 'habit' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Dave likes cycling.',
+						reason: 'preference'
+					}
+				]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Dave commutes by bike.',
+						reason: 'habit'
+					}
+				])
 			])
 
 			const result = await t.hs.consolidate(bankId)
@@ -290,7 +364,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Eve likes coffee.', reason: 'pref' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Eve likes coffee.',
+						reason: 'pref'
+					}
+				])
 			)
 
 			const first = await t.hs.consolidate(bankId)
@@ -310,7 +390,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Eve likes tea.', reason: 'pref' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Eve likes tea.',
+						reason: 'pref'
+					}
+				])
 			)
 
 			const third = await t.hs.consolidate(bankId)
@@ -329,7 +415,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Frank loves painting.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Frank loves painting.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -346,16 +438,30 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Grace speaks French.', reason: 'skill' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Grace speaks French.',
+						reason: 'skill'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
 
-			const result = await t.hs.recall(bankId, 'Grace French', {
-				factTypes: ['observation']
-			})
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
-			const obsMemory = result.memories.find(m => m.memory.factType === 'observation')
+			const result = await t.hs.recall(
+				bankId,
+				'Grace French',
+				{
+					factTypes: ['observation']
+				}
+			)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
+			const obsMemory = result.memories.find(
+				m => m.memory.factType === 'observation'
+			)
 			expect(obsMemory).toBeDefined()
 		})
 
@@ -366,7 +472,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Hank plays guitar.', reason: 'skill' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Hank plays guitar.',
+						reason: 'skill'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -374,7 +486,9 @@ describe('Consolidation', () => {
 			const obs = listObservations()
 			expect(obs).toHaveLength(1)
 			expect(obs[0]!.source_memory_ids).not.toBeNull()
-			const sourceIds = JSON.parse(obs[0]!.source_memory_ids!) as string[]
+			const sourceIds = JSON.parse(
+				obs[0]!.source_memory_ids!
+			) as string[]
 			expect(sourceIds.length).toBeGreaterThanOrEqual(1)
 		})
 
@@ -385,7 +499,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Iris drinks green tea.', reason: 'habit' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Iris drinks green tea.',
+						reason: 'habit'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -402,22 +522,34 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Jack runs marathons.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Jack runs marathons.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
 
 			const obs = listObservations()
 			expect(obs).toHaveLength(1)
-			const sourceIds = JSON.parse(obs[0]!.source_memory_ids!) as string[]
+			const sourceIds = JSON.parse(
+				obs[0]!.source_memory_ids!
+			) as string[]
 			expect(sourceIds.length).toBeGreaterThanOrEqual(1)
 
 			// Each source ID should exist in the DB
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 			for (const sid of sourceIds) {
-				const row = hdb.sqlite.prepare('SELECT id FROM hs_memory_units WHERE id = ?').get(sid) as
-					| { id: string }
-					| undefined
+				const row = hdb.sqlite
+					.prepare(
+						'SELECT id FROM hs_memory_units WHERE id = ?'
+					)
+					.get(sid) as { id: string } | undefined
 				expect(row).toBeDefined()
 				expect(row!.id).toBe(sid)
 			}
@@ -434,15 +566,27 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Kate loves reading.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Kate loves reading.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
 
-			const result = await t.hs.recall(bankId, 'Kate reading', {
-				factTypes: ['observation']
-			})
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			const result = await t.hs.recall(
+				bankId,
+				'Kate reading',
+				{
+					factTypes: ['observation']
+				}
+			)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 			for (const m of result.memories) {
 				expect(m.memory.factType).toBe('observation')
 			}
@@ -452,8 +596,14 @@ describe('Consolidation', () => {
 			// Retain a world fact
 			await t.hs.retain(bankId, 'source', {
 				facts: [
-					{ content: 'Leo is a software engineer.', factType: 'world' },
-					{ content: 'Leo enjoys debugging.', factType: 'experience' }
+					{
+						content: 'Leo is a software engineer.',
+						factType: 'world'
+					},
+					{
+						content: 'Leo enjoys debugging.',
+						factType: 'experience'
+					}
 				],
 				consolidate: false,
 				dedupThreshold: 0
@@ -462,17 +612,33 @@ describe('Consolidation', () => {
 			// Consolidate to create observations
 			t.adapter.setResponses([
 				JSON.stringify([
-					{ action: 'create', text: 'Leo is a software engineer.', reason: 'career' }
+					{
+						action: 'create',
+						text: 'Leo is a software engineer.',
+						reason: 'career'
+					}
 				]),
-				JSON.stringify([{ action: 'create', text: 'Leo enjoys debugging.', reason: 'preference' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Leo enjoys debugging.',
+						reason: 'preference'
+					}
+				])
 			])
 
 			await t.hs.consolidate(bankId)
 
-			const result = await t.hs.recall(bankId, 'Leo software', {
-				factTypes: ['world', 'experience', 'observation']
-			})
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			const result = await t.hs.recall(
+				bankId,
+				'Leo software',
+				{
+					factTypes: ['world', 'experience', 'observation']
+				}
+			)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 		})
 
 		it('recall with observation-only type and trace enabled works', async () => {
@@ -482,14 +648,24 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Mia writes poetry.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Mia writes poetry.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
 
-			const result = await t.hs.recall(bankId, 'Mia poetry', {
-				factTypes: ['observation']
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'Mia poetry',
+				{
+					factTypes: ['observation']
+				}
+			)
 			expect(result.memories).toBeDefined()
 			expect(result.query).toBe('Mia poetry')
 		})
@@ -500,9 +676,12 @@ describe('Consolidation', () => {
 	describe('consolidation disabled', () => {
 		it('respects enableConsolidation=false — auto-trigger from retain is skipped', async () => {
 			// Create a bank with consolidation disabled
-			const disabledBank = t.hs.createBank('disabled-bank', {
-				config: { enableConsolidation: false }
-			})
+			const disabledBank = t.hs.createBank(
+				'disabled-bank',
+				{
+					config: { enableConsolidation: false }
+				}
+			)
 			const dBankId = disabledBank.id
 
 			// Retain with consolidate unset — should respect bank config
@@ -521,9 +700,12 @@ describe('Consolidation', () => {
 		})
 
 		it('explicit consolidate() call still works when bank has enableConsolidation=false', async () => {
-			const disabledBank = t.hs.createBank('disabled-bank-2', {
-				config: { enableConsolidation: false }
-			})
+			const disabledBank = t.hs.createBank(
+				'disabled-bank-2',
+				{
+					config: { enableConsolidation: false }
+				}
+			)
 			const dBankId = disabledBank.id
 
 			await t.hs.retain(dBankId, 'source', {
@@ -533,7 +715,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Oscar speaks Spanish.', reason: 'skill' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Oscar speaks Spanish.',
+						reason: 'skill'
+					}
+				])
 			)
 
 			// Explicit consolidate() should still work regardless of bank config
@@ -544,9 +732,12 @@ describe('Consolidation', () => {
 
 		it('returns disabled status in result', async () => {
 			// When the bank has no unconsolidated memories, result is all zeros
-			const disabledBank = t.hs.createBank('disabled-bank-3', {
-				config: { enableConsolidation: false }
-			})
+			const disabledBank = t.hs.createBank(
+				'disabled-bank-3',
+				{
+					config: { enableConsolidation: false }
+				}
+			)
 			const dBankId = disabledBank.id
 
 			const result = await t.hs.consolidate(dBankId)
@@ -563,19 +754,32 @@ describe('Consolidation', () => {
 	describe('tag routing', () => {
 		it('same-scope: observation inherits tags from source memories', async () => {
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Pete loves rock climbing.', tags: ['hobbies'] }],
+				facts: [
+					{
+						content: 'Pete loves rock climbing.',
+						tags: ['hobbies']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Pete loves rock climbing.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Pete loves rock climbing.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
 
 			const obs = listObservations()
 			expect(obs).toHaveLength(1)
-			const tags = obs[0]!.tags ? JSON.parse(obs[0]!.tags!) : []
+			const tags = obs[0]!.tags
+				? JSON.parse(obs[0]!.tags!)
+				: []
 			expect(tags).toContain('hobbies')
 		})
 
@@ -587,7 +791,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Quinn likes coffee.', reason: 'pref' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Quinn likes coffee.',
+						reason: 'pref'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -598,7 +808,12 @@ describe('Consolidation', () => {
 
 			// Now retain a scoped fact and update the observation
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Quinn prefers espresso specifically.', tags: ['work'] }],
+				facts: [
+					{
+						content: 'Quinn prefers espresso specifically.',
+						tags: ['work']
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
@@ -620,19 +835,32 @@ describe('Consolidation', () => {
 			// The observation should now have merged tags
 			const updatedObs = listObservations()
 			expect(updatedObs).toHaveLength(1)
-			expect(updatedObs[0]!.content).toBe('Quinn prefers espresso.')
+			expect(updatedObs[0]!.content).toBe(
+				'Quinn prefers espresso.'
+			)
 		})
 
 		it('cross-scope creates untagged observation', async () => {
 			// If source fact has tag-a and existing observations have tag-b,
 			// the LLM may create a new observation — it inherits from the source
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Rita enjoys swimming.', tags: ['sports'] }],
+				facts: [
+					{
+						content: 'Rita enjoys swimming.',
+						tags: ['sports']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Rita enjoys swimming.', reason: 'sport' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Rita enjoys swimming.',
+						reason: 'sport'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -640,37 +868,60 @@ describe('Consolidation', () => {
 			const obs = listObservations()
 			expect(obs).toHaveLength(1)
 			// The observation inherits the source memory's tags
-			const tags = obs[0]!.tags ? JSON.parse(obs[0]!.tags!) : []
+			const tags = obs[0]!.tags
+				? JSON.parse(obs[0]!.tags!)
+				: []
 			expect(tags).toContain('sports')
 		})
 
 		it("no match creates observation with fact's tags", async () => {
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Sam likes surfing.', tags: ['beach'] }],
+				facts: [
+					{ content: 'Sam likes surfing.', tags: ['beach'] }
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Sam likes surfing.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Sam likes surfing.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
 
 			const obs = listObservations()
 			expect(obs).toHaveLength(1)
-			const tags = obs[0]!.tags ? JSON.parse(obs[0]!.tags!) : []
+			const tags = obs[0]!.tags
+				? JSON.parse(obs[0]!.tags!)
+				: []
 			expect(tags).toContain('beach')
 		})
 
 		it('untagged fact can update scoped observation', async () => {
 			// Create a scoped observation
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Tina likes yoga.', tags: ['wellness'] }],
+				facts: [
+					{
+						content: 'Tina likes yoga.',
+						tags: ['wellness']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Tina likes yoga.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Tina likes yoga.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -702,33 +953,53 @@ describe('Consolidation', () => {
 
 			const updatedObs = listObservations()
 			expect(updatedObs).toHaveLength(1)
-			expect(updatedObs[0]!.content).toBe('Tina practices yoga daily.')
+			expect(updatedObs[0]!.content).toBe(
+				'Tina practices yoga daily.'
+			)
 		})
 
 		it('tag filtering in recall respects observation tags', async () => {
 			// Create observations with different tags
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Uma likes cooking Italian food.', tags: ['food'] }],
+				facts: [
+					{
+						content: 'Uma likes cooking Italian food.',
+						tags: ['food']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
 				JSON.stringify([
-					{ action: 'create', text: 'Uma likes cooking Italian food.', reason: 'hobby' }
+					{
+						action: 'create',
+						text: 'Uma likes cooking Italian food.',
+						reason: 'hobby'
+					}
 				])
 			)
 
 			await t.hs.consolidate(bankId)
 
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Uma enjoys hiking in mountains.', tags: ['outdoors'] }],
+				facts: [
+					{
+						content: 'Uma enjoys hiking in mountains.',
+						tags: ['outdoors']
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 
 			t.adapter.setResponse(
 				JSON.stringify([
-					{ action: 'create', text: 'Uma enjoys hiking in mountains.', reason: 'hobby' }
+					{
+						action: 'create',
+						text: 'Uma enjoys hiking in mountains.',
+						reason: 'hobby'
+					}
 				])
 			)
 
@@ -755,9 +1026,27 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Victor likes chess.', reason: 'hobby' }]),
-				JSON.stringify([{ action: 'create', text: 'Victor plays piano.', reason: 'hobby' }]),
-				JSON.stringify([{ action: 'create', text: 'Victor reads sci-fi.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Victor likes chess.',
+						reason: 'hobby'
+					}
+				]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Victor plays piano.',
+						reason: 'hobby'
+					}
+				]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Victor reads sci-fi.',
+						reason: 'hobby'
+					}
+				])
 			])
 
 			const result = await t.hs.consolidate(bankId)
@@ -774,19 +1063,23 @@ describe('Consolidation', () => {
 	describe('temporal range expansion', () => {
 		it('expands temporal range when updating observation (LEAST start, GREATEST end)', async () => {
 			const now = Date.now()
-			const first = await t.hs.retain(bankId, 'source first', {
-				facts: [
-					{
-						content: 'Alice worked in Paris.',
-						factType: 'world',
-						occurredStart: now - 10_000,
-						occurredEnd: now - 8_000
-					}
-				],
-				eventDate: now - 10_000,
-				consolidate: false,
-				dedupThreshold: 0
-			})
+			const first = await t.hs.retain(
+				bankId,
+				'source first',
+				{
+					facts: [
+						{
+							content: 'Alice worked in Paris.',
+							factType: 'world',
+							occurredStart: now - 10_000,
+							occurredEnd: now - 8_000
+						}
+					],
+					eventDate: now - 10_000,
+					consolidate: false,
+					dedupThreshold: 0
+				}
+			)
 
 			t.adapter.setResponse(
 				JSON.stringify([
@@ -799,7 +1092,9 @@ describe('Consolidation', () => {
 			)
 			await t.hs.consolidate(bankId)
 
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 			const observation = hdb.sqlite
 				.prepare(
 					`SELECT id, occurred_start, occurred_end, mentioned_at
@@ -885,7 +1180,9 @@ describe('Consolidation', () => {
 			)
 			await t.hs.consolidate(bankId)
 
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 			const observation = hdb.sqlite
 				.prepare(
 					`SELECT occurred_start, occurred_end, mentioned_at
@@ -921,7 +1218,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Yolanda works at NASA.', reason: 'career' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Yolanda works at NASA.',
+						reason: 'career'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -930,17 +1233,24 @@ describe('Consolidation', () => {
 			expect(obs).toHaveLength(1)
 
 			// Observations should be discoverable via entity-related recall
-			const result = await t.hs.recall(bankId, 'Yolanda NASA', {
-				factTypes: ['observation']
-			})
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			const result = await t.hs.recall(
+				bankId,
+				'Yolanda NASA',
+				{
+					factTypes: ['observation']
+				}
+			)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 		})
 
 		it('observation inherits entities from all contributing memories', async () => {
 			await t.hs.retain(bankId, 'source', {
 				facts: [
 					{
-						content: 'Zach and Amy collaborate on projects.',
+						content:
+							'Zach and Amy collaborate on projects.',
 						entities: ['Zach', 'Amy']
 					}
 				],
@@ -963,15 +1273,21 @@ describe('Consolidation', () => {
 			expect(obs).toHaveLength(1)
 
 			// Both entities should be retrievable via recall
-			const result = await t.hs.recall(bankId, 'Zach Amy projects')
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			const result = await t.hs.recall(
+				bankId,
+				'Zach Amy projects'
+			)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 		})
 
 		it('graph endpoint observations inherit links and entities', async () => {
 			await t.hs.retain(bankId, 'source', {
 				facts: [
 					{
-						content: 'Brad manages the engineering team at Acme.',
+						content:
+							'Brad manages the engineering team at Acme.',
 						entities: ['Brad', 'Acme']
 					}
 				],
@@ -994,9 +1310,13 @@ describe('Consolidation', () => {
 			expect(obs).toHaveLength(1)
 
 			// Graph retrieval should find the observation via entity links
-			const result = await t.hs.recall(bankId, 'Brad Acme', {
-				methods: ['graph']
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'Brad Acme',
+				{
+					methods: ['graph']
+				}
+			)
 			expect(result.memories).toBeDefined()
 		})
 	})
@@ -1012,7 +1332,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Cleo likes Python.', reason: 'pref' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Cleo likes Python.',
+						reason: 'pref'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -1023,7 +1349,11 @@ describe('Consolidation', () => {
 
 			// Now retain more info and update
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Cleo recently switched to TypeScript.' }],
+				facts: [
+					{
+						content: 'Cleo recently switched to TypeScript.'
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
@@ -1044,7 +1374,9 @@ describe('Consolidation', () => {
 
 			const updatedObs = listObservations()
 			expect(updatedObs).toHaveLength(1)
-			expect(updatedObs[0]!.content).toBe('Cleo prefers TypeScript (previously Python).')
+			expect(updatedObs[0]!.content).toBe(
+				'Cleo prefers TypeScript (previously Python).'
+			)
 			expect(updatedObs[0]!.id).toBe(obsId)
 		})
 
@@ -1055,7 +1387,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Derek lives in NYC.', reason: 'location' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Derek lives in NYC.',
+						reason: 'location'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -1065,7 +1403,9 @@ describe('Consolidation', () => {
 
 			// Update the observation
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Derek moved to San Francisco.' }],
+				facts: [
+					{ content: 'Derek moved to San Francisco.' }
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
@@ -1087,12 +1427,16 @@ describe('Consolidation', () => {
 			expect(updatedObs).toHaveLength(1)
 			expect(updatedObs[0]!.history).not.toBeNull()
 
-			const history = JSON.parse(updatedObs[0]!.history!) as Array<{
+			const history = JSON.parse(
+				updatedObs[0]!.history!
+			) as Array<{
 				previousText: string
 				reason: string
 			}>
 			expect(history.length).toBeGreaterThanOrEqual(1)
-			expect(history[0]!.previousText).toBe('Derek lives in NYC.')
+			expect(history[0]!.previousText).toBe(
+				'Derek lives in NYC.'
+			)
 			expect(history[0]!.reason).toBe('moved')
 		})
 
@@ -1110,8 +1454,20 @@ describe('Consolidation', () => {
 
 			// First pass: create two observations
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Ella likes hiking.', reason: 'hobby' }]),
-				JSON.stringify([{ action: 'create', text: 'Ella enjoys trail walks.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Ella likes hiking.',
+						reason: 'hobby'
+					}
+				]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Ella enjoys trail walks.',
+						reason: 'hobby'
+					}
+				])
 			])
 
 			await t.hs.consolidate(bankId)
@@ -1121,7 +1477,9 @@ describe('Consolidation', () => {
 
 			// New fact triggers a merge
 			await t.hs.retain(bankId, 'source 3', {
-				facts: [{ content: 'Ella goes hiking every weekend.' }],
+				facts: [
+					{ content: 'Ella goes hiking every weekend.' }
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
@@ -1142,14 +1500,22 @@ describe('Consolidation', () => {
 
 			const finalObs = listObservations()
 			expect(finalObs).toHaveLength(1)
-			expect(finalObs[0]!.content).toBe('Ella enjoys hiking and trail walks regularly.')
+			expect(finalObs[0]!.content).toBe(
+				'Ella enjoys hiking and trail walks regularly.'
+			)
 		})
 
 		it('keeps different people separate (no cross-entity merge)', async () => {
 			await t.hs.retain(bankId, 'source', {
 				facts: [
-					{ content: 'Fred likes pizza.', entities: ['Fred'] },
-					{ content: 'Gina likes sushi.', entities: ['Gina'] }
+					{
+						content: 'Fred likes pizza.',
+						entities: ['Fred']
+					},
+					{
+						content: 'Gina likes sushi.',
+						entities: ['Gina']
+					}
 				],
 				consolidate: false,
 				dedupThreshold: 0
@@ -1157,8 +1523,20 @@ describe('Consolidation', () => {
 
 			// LLM creates separate observations for each person
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Fred likes pizza.', reason: 'food pref' }]),
-				JSON.stringify([{ action: 'create', text: 'Gina likes sushi.', reason: 'food pref' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Fred likes pizza.',
+						reason: 'food pref'
+					}
+				]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Gina likes sushi.',
+						reason: 'food pref'
+					}
+				])
 			])
 
 			await t.hs.consolidate(bankId)
@@ -1166,8 +1544,12 @@ describe('Consolidation', () => {
 			const obs = listObservations()
 			expect(obs).toHaveLength(2)
 
-			const fredObs = obs.find(o => o.content.includes('Fred'))
-			const ginaObs = obs.find(o => o.content.includes('Gina'))
+			const fredObs = obs.find(o =>
+				o.content.includes('Fred')
+			)
+			const ginaObs = obs.find(o =>
+				o.content.includes('Gina')
+			)
 			expect(fredObs).toBeDefined()
 			expect(ginaObs).toBeDefined()
 			expect(fredObs!.id).not.toBe(ginaObs!.id)
@@ -1187,7 +1569,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Henry was a vegetarian.', reason: 'diet' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Henry was a vegetarian.',
+						reason: 'diet'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -1226,7 +1614,9 @@ describe('Consolidation', () => {
 			expect(updatedObs).toHaveLength(1)
 			expect(updatedObs[0]!.content).toContain('meat')
 			// Temporal range should be expanded to cover both periods
-			expect(updatedObs[0]!.occurred_start).toBeLessThanOrEqual(baseTime)
+			expect(
+				updatedObs[0]!.occurred_start
+			).toBeLessThanOrEqual(baseTime)
 		})
 	})
 
@@ -1244,19 +1634,29 @@ describe('Consolidation', () => {
 
 			// Retain facts with matching tags
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Ian likes tacos.', tags: ['food'] }],
+				facts: [
+					{ content: 'Ian likes tacos.', tags: ['food'] }
+				],
 				consolidate: false
 			})
 
 			// Set responses: one for consolidation, one for the reflect call during refresh
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Ian likes tacos.', reason: 'food pref' }]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Ian likes tacos.',
+						reason: 'food pref'
+					}
+				]),
 				// The reflect response for the mental model refresh
 				'Based on available memories, Ian likes tacos.'
 			])
 
 			const result = await t.hs.consolidate(bankId)
-			expect(result.mentalModelsRefreshQueued).toBeGreaterThanOrEqual(1)
+			expect(
+				result.mentalModelsRefreshQueued
+			).toBeGreaterThanOrEqual(1)
 		})
 
 		it('does not refresh models without autoRefresh=true', async () => {
@@ -1269,12 +1669,23 @@ describe('Consolidation', () => {
 			})
 
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Jill exercises daily.', tags: ['habits'] }],
+				facts: [
+					{
+						content: 'Jill exercises daily.',
+						tags: ['habits']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Jill exercises daily.', reason: 'habit' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Jill exercises daily.',
+						reason: 'habit'
+					}
+				])
 			)
 
 			const result = await t.hs.consolidate(bankId)
@@ -1296,7 +1707,13 @@ describe('Consolidation', () => {
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Kim leads the design team.', reason: 'role' }]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Kim leads the design team.',
+						reason: 'role'
+					}
+				]),
 				// Refresh response
 				'Kim leads the design team.'
 			])
@@ -1304,7 +1721,9 @@ describe('Consolidation', () => {
 			const result = await t.hs.consolidate(bankId)
 			// The untagged auto-refresh model should be queued for refresh
 			// when untagged memories are consolidated
-			expect(result.mentalModelsRefreshQueued).toBeGreaterThanOrEqual(1)
+			expect(
+				result.mentalModelsRefreshQueued
+			).toBeGreaterThanOrEqual(1)
 		})
 
 		it('consolidation only refreshes matching tagged models', async () => {
@@ -1325,12 +1744,23 @@ describe('Consolidation', () => {
 
 			// Retain facts tagged only with "sports"
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Larry plays basketball.', tags: ['sports'] }],
+				facts: [
+					{
+						content: 'Larry plays basketball.',
+						tags: ['sports']
+					}
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponses([
-				JSON.stringify([{ action: 'create', text: 'Larry plays basketball.', reason: 'sport' }]),
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Larry plays basketball.',
+						reason: 'sport'
+					}
+				]),
 				// Refresh response for Sports Model
 				'Larry plays basketball.'
 			])
@@ -1346,13 +1776,19 @@ describe('Consolidation', () => {
 	describe('observation drill-down', () => {
 		it('search observations returns sourceMemoryIds for drill-down', async () => {
 			await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Mary volunteers at the shelter.' }],
+				facts: [
+					{ content: 'Mary volunteers at the shelter.' }
+				],
 				consolidate: false
 			})
 
 			t.adapter.setResponse(
 				JSON.stringify([
-					{ action: 'create', text: 'Mary volunteers at the shelter.', reason: 'activity' }
+					{
+						action: 'create',
+						text: 'Mary volunteers at the shelter.',
+						reason: 'activity'
+					}
 				])
 			)
 
@@ -1362,7 +1798,9 @@ describe('Consolidation', () => {
 			expect(obs).toHaveLength(1)
 			expect(obs[0]!.source_memory_ids).not.toBeNull()
 
-			const sourceIds = JSON.parse(obs[0]!.source_memory_ids!) as string[]
+			const sourceIds = JSON.parse(
+				obs[0]!.source_memory_ids!
+			) as string[]
 			expect(sourceIds.length).toBeGreaterThanOrEqual(1)
 		})
 
@@ -1375,7 +1813,13 @@ describe('Consolidation', () => {
 
 			// First pass: create observation from the first fact.
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Nate likes running.', reason: 'hobby' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Nate likes running.',
+						reason: 'hobby'
+					}
+				])
 			)
 
 			await t.hs.consolidate(bankId)
@@ -1405,18 +1849,28 @@ describe('Consolidation', () => {
 
 			const updatedObs = listObservations()
 			expect(updatedObs).toHaveLength(1)
-			const sourceIds = JSON.parse(updatedObs[0]!.source_memory_ids!) as string[]
+			const sourceIds = JSON.parse(
+				updatedObs[0]!.source_memory_ids!
+			) as string[]
 			expect(sourceIds.length).toBeGreaterThanOrEqual(2)
 
 			// All sourceIds should exist as raw facts in the DB
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 			for (const sid of sourceIds) {
 				const row = hdb.sqlite
-					.prepare('SELECT id, fact_type FROM hs_memory_units WHERE id = ?')
-					.get(sid) as { id: string; fact_type: string } | undefined
+					.prepare(
+						'SELECT id, fact_type FROM hs_memory_units WHERE id = ?'
+					)
+					.get(sid) as
+					| { id: string; fact_type: string }
+					| undefined
 				expect(row).toBeDefined()
 				// Source memories should be the raw facts, not observations
-				expect(['experience', 'world']).toContain(row!.fact_type)
+				expect(['experience', 'world']).toContain(
+					row!.fact_type
+				)
 			}
 		})
 	})
@@ -1426,13 +1880,22 @@ describe('Consolidation', () => {
 	describe('hierarchical retrieval', () => {
 		it('mental model takes priority over observation in reflect', async () => {
 			await t.hs.retain(bankId, 'raw', {
-				facts: [{ content: "John's favorite color is blue and he likes painting." }],
+				facts: [
+					{
+						content:
+							"John's favorite color is blue and he likes painting."
+					}
+				],
 				dedupThreshold: 0,
 				consolidate: false
 			})
 			t.adapter.setResponse(
 				JSON.stringify([
-					{ action: 'create', text: 'John likes blue and painting.', reason: 'summary' }
+					{
+						action: 'create',
+						text: 'John likes blue and painting.',
+						reason: 'summary'
+					}
 				])
 			)
 			await t.hs.consolidate(bankId)
@@ -1445,8 +1908,12 @@ describe('Consolidation', () => {
 				tags: ['team']
 			})
 
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
-			const modelVec = (t.hs as unknown as { modelVec: EmbeddingStore }).modelVec
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
+			const modelVec = (
+				t.hs as unknown as { modelVec: EmbeddingStore }
+			).modelVec
 
 			const models = await searchMentalModelsWithStaleness(
 				hdb,
@@ -1455,28 +1922,51 @@ describe('Consolidation', () => {
 				'What does John like?'
 			)
 			expect(models.length).toBeGreaterThan(0)
-			expect(models[0]!.content.toLowerCase()).toContain('watercolors')
+			expect(models[0]!.content.toLowerCase()).toContain(
+				'watercolors'
+			)
 
-			const observations = await t.hs.recall(bankId, 'What does John like?', {
-				factTypes: ['observation'],
-				limit: 5
-			})
-			expect(observations.memories.length).toBeGreaterThan(0)
+			const observations = await t.hs.recall(
+				bankId,
+				'What does John like?',
+				{
+					factTypes: ['observation'],
+					limit: 5
+				}
+			)
+			expect(observations.memories.length).toBeGreaterThan(
+				0
+			)
 		})
 
 		it('falls back to observation when no mental model exists', async () => {
 			await t.hs.retain(bankId, 'raw', {
-				facts: [{ content: 'Sarah works at Google as a software engineer.' }],
+				facts: [
+					{
+						content:
+							'Sarah works at Google as a software engineer.'
+					}
+				],
 				dedupThreshold: 0,
 				consolidate: false
 			})
 			t.adapter.setResponse(
-				JSON.stringify([{ action: 'create', text: 'Sarah works at Google.', reason: 'summary' }])
+				JSON.stringify([
+					{
+						action: 'create',
+						text: 'Sarah works at Google.',
+						reason: 'summary'
+					}
+				])
 			)
 			await t.hs.consolidate(bankId)
 
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
-			const modelVec = (t.hs as unknown as { modelVec: EmbeddingStore }).modelVec
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
+			const modelVec = (
+				t.hs as unknown as { modelVec: EmbeddingStore }
+			).modelVec
 			const models = await searchMentalModelsWithStaleness(
 				hdb,
 				modelVec,
@@ -1485,34 +1975,60 @@ describe('Consolidation', () => {
 			)
 			expect(models).toHaveLength(0)
 
-			const observations = await t.hs.recall(bankId, 'Where does Sarah work?', {
-				factTypes: ['observation'],
-				limit: 5
-			})
-			expect(observations.memories.length).toBeGreaterThan(0)
-			const text = observations.memories.map(m => m.memory.content.toLowerCase()).join(' ')
-			expect(text.includes('sarah') || text.includes('google')).toBe(true)
+			const observations = await t.hs.recall(
+				bankId,
+				'Where does Sarah work?',
+				{
+					factTypes: ['observation'],
+					limit: 5
+				}
+			)
+			expect(observations.memories.length).toBeGreaterThan(
+				0
+			)
+			const text = observations.memories
+				.map(m => m.memory.content.toLowerCase())
+				.join(' ')
+			expect(
+				text.includes('sarah') || text.includes('google')
+			).toBe(true)
 		})
 
 		it('falls back to raw facts for fresh data', async () => {
 			await t.hs.retain(bankId, 'revenues', {
 				facts: [
-					{ content: 'The quarterly revenue was $1.5M in Q3 2024.' },
-					{ content: 'The quarterly revenue was $2.1M in Q4 2024.' }
+					{
+						content:
+							'The quarterly revenue was $1.5M in Q3 2024.'
+					},
+					{
+						content:
+							'The quarterly revenue was $2.1M in Q4 2024.'
+					}
 				],
 				dedupThreshold: 0,
 				consolidate: false
 			})
 
-			const raw = await t.hs.recall(bankId, 'What was the quarterly revenue?', {
-				factTypes: ['experience', 'world'],
-				limit: 10
-			})
+			const raw = await t.hs.recall(
+				bankId,
+				'What was the quarterly revenue?',
+				{
+					factTypes: ['experience', 'world'],
+					limit: 10
+				}
+			)
 
 			expect(raw.memories.length).toBeGreaterThan(0)
-			const text = raw.memories.map(m => m.memory.content).join(' ')
-			const hasQ3 = text.includes('$1.5M') || text.includes('$1.5 million')
-			const hasQ4 = text.includes('$2.1M') || text.includes('$2.1 million')
+			const text = raw.memories
+				.map(m => m.memory.content)
+				.join(' ')
+			const hasQ3 =
+				text.includes('$1.5M') ||
+				text.includes('$1.5 million')
+			const hasQ4 =
+				text.includes('$2.1M') ||
+				text.includes('$2.1 million')
 			expect(hasQ3 || hasQ4).toBe(true)
 		})
 	})
@@ -1535,7 +2051,8 @@ describe('Core parity: test_consolidation.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -1592,7 +2109,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation processes multiple memories', async () => {
@@ -1623,7 +2142,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation no new memories', async () => {
@@ -1654,7 +2175,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation respects last consolidated at', async () => {
@@ -1685,7 +2208,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation copies entity links', async () => {
@@ -1716,7 +2241,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation observations included in recall', async () => {
@@ -1747,7 +2274,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation uses source memory ids', async () => {
@@ -1778,7 +2307,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation merges only redundant facts', async () => {
@@ -1809,7 +2340,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation keeps different people separate', async () => {
@@ -1840,7 +2373,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation merges contradictions', async () => {
@@ -1871,7 +2406,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation returns disabled status', async () => {
@@ -1893,7 +2430,9 @@ describe('Core parity: test_consolidation.py', () => {
 			consolidate: false
 		})
 		const first = await t.hs.consolidate(bankId)
-		expect(first.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(first.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 
 		const second = await t.hs.consolidate(bankId)
 		expect(second.memoriesProcessed).toBe(0)
@@ -1928,7 +2467,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('recall with mixed fact types including observation', async () => {
@@ -1959,7 +2500,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('recall observation only with trace', async () => {
@@ -1990,7 +2533,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('same scope updates observation', async () => {
@@ -2021,7 +2566,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('scoped fact updates global observation', async () => {
@@ -2052,7 +2599,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('cross scope creates untagged', async () => {
@@ -2083,7 +2632,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('no match creates with fact tags', async () => {
@@ -2114,7 +2665,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('untagged fact can update scoped observation', async () => {
@@ -2145,7 +2698,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('tag filtering in recall', async () => {
@@ -2176,7 +2731,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('multiple actions from single fact', async () => {
@@ -2207,7 +2764,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('consolidation inherits dates from source memory', async () => {
@@ -2238,7 +2797,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('observation temporal range expands on update', async () => {
@@ -2269,7 +2830,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('search observations returns source memory ids', async () => {
@@ -2300,7 +2863,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('observation source ids match contributing memories', async () => {
@@ -2331,7 +2896,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('mental model takes priority over observation', async () => {
@@ -2362,7 +2929,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('fallback to observation when no mental model', async () => {
@@ -2393,7 +2962,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('fallback to recall for fresh data', async () => {
@@ -2424,7 +2995,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('mental model with trigger is refreshed after consolidation', async () => {
@@ -2455,7 +3028,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('mental model without trigger is not refreshed', async () => {
@@ -2486,7 +3061,9 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 
 	it('graph endpoint observations inherit links and entities', async () => {
@@ -2517,6 +3094,8 @@ describe('Core parity: test_consolidation.py', () => {
 			])
 		)
 		const result = await t.hs.consolidate(bankId)
-		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(1)
+		expect(result.memoriesProcessed).toBeGreaterThanOrEqual(
+			1
+		)
 	})
 })

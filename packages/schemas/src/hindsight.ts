@@ -13,11 +13,24 @@ import * as v from 'valibot'
 // Enum Schemas
 // ============================================================================
 
-export const factTypeSchema = v.picklist([`world`, `experience`, `opinion`, `observation`])
+export const factTypeSchema = v.picklist([
+	`world`,
+	`experience`,
+	`opinion`,
+	`observation`
+])
 export type FactType = v.InferOutput<typeof factTypeSchema>
 
-export const entityTypeSchema = v.picklist([`person`, `organization`, `place`, `concept`, `other`])
-export type EntityType = v.InferOutput<typeof entityTypeSchema>
+export const entityTypeSchema = v.picklist([
+	`person`,
+	`organization`,
+	`place`,
+	`concept`,
+	`other`
+])
+export type EntityType = v.InferOutput<
+	typeof entityTypeSchema
+>
 
 export const linkTypeSchema = v.picklist([
 	`temporal`,
@@ -30,14 +43,33 @@ export const linkTypeSchema = v.picklist([
 ])
 export type LinkType = v.InferOutput<typeof linkTypeSchema>
 
-export const tagsMatchSchema = v.picklist([`any`, `all`, `any_strict`, `all_strict`])
-export type TagsMatch = v.InferOutput<typeof tagsMatchSchema>
+export const tagsMatchSchema = v.picklist([
+	`any`,
+	`all`,
+	`any_strict`,
+	`all_strict`
+])
+export type TagsMatch = v.InferOutput<
+	typeof tagsMatchSchema
+>
 
-export const reflectBudgetSchema = v.picklist([`low`, `mid`, `high`])
-export type ReflectBudget = v.InferOutput<typeof reflectBudgetSchema>
+export const reflectBudgetSchema = v.picklist([
+	`low`,
+	`mid`,
+	`high`
+])
+export type ReflectBudget = v.InferOutput<
+	typeof reflectBudgetSchema
+>
 
-export const freshnessSchema = v.picklist([`up_to_date`, `slightly_stale`, `stale`])
-export type Freshness = v.InferOutput<typeof freshnessSchema>
+export const freshnessSchema = v.picklist([
+	`up_to_date`,
+	`slightly_stale`,
+	`stale`
+])
+export type Freshness = v.InferOutput<
+	typeof freshnessSchema
+>
 
 // ============================================================================
 // Data Object Schemas
@@ -48,16 +80,22 @@ export const dispositionTraitsSchema = v.object({
 	literalism: v.number(),
 	empathy: v.number()
 })
-export type DispositionTraits = v.InferOutput<typeof dispositionTraitsSchema>
+export type DispositionTraits = v.InferOutput<
+	typeof dispositionTraitsSchema
+>
 
 export const bankConfigSchema = v.object({
-	extractionMode: v.optional(v.picklist([`concise`, `verbose`, `custom`])),
+	extractionMode: v.optional(
+		v.picklist([`concise`, `verbose`, `custom`])
+	),
 	customGuidelines: v.optional(v.nullable(v.string())),
 	enableConsolidation: v.optional(v.boolean()),
 	reflectBudget: v.optional(reflectBudgetSchema),
 	dedupThreshold: v.optional(v.number())
 })
-export type BankConfig = v.InferOutput<typeof bankConfigSchema>
+export type BankConfig = v.InferOutput<
+	typeof bankConfigSchema
+>
 
 export const observationHistoryEntrySchema = v.object({
 	previousText: v.string(),
@@ -65,7 +103,9 @@ export const observationHistoryEntrySchema = v.object({
 	reason: v.string(),
 	sourceMemoryId: v.string()
 })
-export type ObservationHistoryEntry = v.InferOutput<typeof observationHistoryEntrySchema>
+export type ObservationHistoryEntry = v.InferOutput<
+	typeof observationHistoryEntrySchema
+>
 
 export const memoryUnitSchema = v.object({
 	id: v.string(),
@@ -85,11 +125,15 @@ export const memoryUnitSchema = v.object({
 	consolidatedAt: v.nullable(v.number()),
 	proofCount: v.number(),
 	sourceMemoryIds: v.nullable(v.array(v.string())),
-	history: v.nullable(v.array(observationHistoryEntrySchema)),
+	history: v.nullable(
+		v.array(observationHistoryEntrySchema)
+	),
 	createdAt: v.number(),
 	updatedAt: v.number()
 })
-export type MemoryUnit = v.InferOutput<typeof memoryUnitSchema>
+export type MemoryUnit = v.InferOutput<
+	typeof memoryUnitSchema
+>
 
 export const entitySchema = v.object({
 	id: v.string(),
@@ -106,10 +150,19 @@ export type Entity = v.InferOutput<typeof entitySchema>
 export const scoredMemorySchema = v.object({
 	memory: memoryUnitSchema,
 	score: v.number(),
-	sources: v.array(v.picklist([`semantic`, `fulltext`, `graph`, `temporal`])),
+	sources: v.array(
+		v.picklist([
+			`semantic`,
+			`fulltext`,
+			`graph`,
+			`temporal`
+		])
+	),
 	entities: v.array(entitySchema)
 })
-export type ScoredMemory = v.InferOutput<typeof scoredMemorySchema>
+export type ScoredMemory = v.InferOutput<
+	typeof scoredMemorySchema
+>
 
 export const bankSchema = v.object({
 	id: v.string(),
@@ -137,7 +190,9 @@ export const createBankInputSchema = v.object({
 	name: v.string(),
 	description: v.optional(v.string()),
 	config: v.optional(bankConfigSchema),
-	disposition: v.optional(v.partial(dispositionTraitsSchema)),
+	disposition: v.optional(
+		v.partial(dispositionTraitsSchema)
+	),
 	mission: v.optional(v.string())
 })
 
@@ -153,19 +208,27 @@ export const retainInputSchema = v.object({
 						content: v.string(),
 						factType: v.optional(factTypeSchema),
 						confidence: v.optional(v.number()),
-						occurredStart: v.optional(v.nullable(v.number())),
+						occurredStart: v.optional(
+							v.nullable(v.number())
+						),
 						occurredEnd: v.optional(v.nullable(v.number())),
 						entities: v.optional(v.array(v.string())),
 						tags: v.optional(v.array(v.string()))
 					})
 				)
 			),
-			metadata: v.optional(v.record(v.string(), v.unknown())),
+			metadata: v.optional(
+				v.record(v.string(), v.unknown())
+			),
 			tags: v.optional(v.array(v.string())),
 			context: v.optional(v.string()),
-			eventDate: v.optional(v.union([v.number(), v.string()])),
+			eventDate: v.optional(
+				v.union([v.number(), v.string()])
+			),
 			documentId: v.optional(v.string()),
-			mode: v.optional(v.picklist([`concise`, `verbose`, `custom`])),
+			mode: v.optional(
+				v.picklist([`concise`, `verbose`, `custom`])
+			),
 			customGuidelines: v.optional(v.string()),
 			dedupThreshold: v.optional(v.number()),
 			consolidate: v.optional(v.boolean()),
@@ -177,7 +240,12 @@ export const retainInputSchema = v.object({
 })
 
 export const retainBatchItemSchema = v.object({
-	content: v.union([v.string(), v.array(v.object({ role: v.string(), content: v.string() }))]),
+	content: v.union([
+		v.string(),
+		v.array(
+			v.object({ role: v.string(), content: v.string() })
+		)
+	]),
 	context: v.optional(v.string()),
 	eventDate: v.optional(v.union([v.number(), v.string()])),
 	documentId: v.optional(v.string()),
@@ -186,15 +254,23 @@ export const retainBatchItemSchema = v.object({
 })
 
 export const retainBatchInputSchema = v.object({
-	contents: v.array(v.union([v.string(), retainBatchItemSchema])),
+	contents: v.array(
+		v.union([v.string(), retainBatchItemSchema])
+	),
 	options: v.optional(
 		v.object({
-			metadata: v.optional(v.record(v.string(), v.unknown())),
+			metadata: v.optional(
+				v.record(v.string(), v.unknown())
+			),
 			tags: v.optional(v.array(v.string())),
 			context: v.optional(v.string()),
-			eventDate: v.optional(v.union([v.number(), v.string()])),
+			eventDate: v.optional(
+				v.union([v.number(), v.string()])
+			),
 			documentId: v.optional(v.string()),
-			mode: v.optional(v.picklist([`concise`, `verbose`, `custom`])),
+			mode: v.optional(
+				v.picklist([`concise`, `verbose`, `custom`])
+			),
 			customGuidelines: v.optional(v.string()),
 			dedupThreshold: v.optional(v.number()),
 			consolidate: v.optional(v.boolean()),
@@ -205,8 +281,13 @@ export const retainBatchInputSchema = v.object({
 	)
 })
 
-export const recallModeSchema = v.picklist([`hybrid`, `cognitive`])
-export type RecallMode = v.InferOutput<typeof recallModeSchema>
+export const recallModeSchema = v.picklist([
+	`hybrid`,
+	`cognitive`
+])
+export type RecallMode = v.InferOutput<
+	typeof recallModeSchema
+>
 
 export const recallInputSchema = v.object({
 	query: v.string(),
@@ -223,7 +304,16 @@ export const recallInputSchema = v.object({
 					to: v.optional(v.number())
 				})
 			),
-			methods: v.optional(v.array(v.picklist([`semantic`, `fulltext`, `graph`, `temporal`]))),
+			methods: v.optional(
+				v.array(
+					v.picklist([
+						`semantic`,
+						`fulltext`,
+						`graph`,
+						`temporal`
+					])
+				)
+			),
 			tags: v.optional(v.array(v.string())),
 			tagsMatch: v.optional(tagsMatchSchema),
 			includeEntities: v.optional(v.boolean()),
@@ -247,7 +337,9 @@ export const reflectInputSchema = v.object({
 			budget: v.optional(reflectBudgetSchema),
 			tags: v.optional(v.array(v.string())),
 			tagsMatch: v.optional(tagsMatchSchema),
-			responseSchema: v.optional(v.record(v.string(), v.unknown()))
+			responseSchema: v.optional(
+				v.record(v.string(), v.unknown())
+			)
 		})
 	)
 })
@@ -258,7 +350,9 @@ export const listMemoryUnitsInputSchema = v.object({
 	factType: v.optional(factTypeSchema),
 	searchQuery: v.optional(v.string())
 })
-export type ListMemoryUnitsOptions = v.InferOutput<typeof listMemoryUnitsInputSchema>
+export type ListMemoryUnitsOptions = v.InferOutput<
+	typeof listMemoryUnitsInputSchema
+>
 
 export const listEntitiesInputSchema = v.object({
 	limit: v.optional(v.number()),
@@ -274,7 +368,9 @@ export const retainResultSchema = v.object({
 	entities: v.array(entitySchema),
 	links: v.array(linkSchema)
 })
-export type RetainResult = v.InferOutput<typeof retainResultSchema>
+export type RetainResult = v.InferOutput<
+	typeof retainResultSchema
+>
 
 export const recallResultSchema = v.object({
 	memories: v.array(scoredMemorySchema),
@@ -305,16 +401,22 @@ export const recallResultSchema = v.object({
 	),
 	trace: v.optional(v.any())
 })
-export type RecallResult = v.InferOutput<typeof recallResultSchema>
+export type RecallResult = v.InferOutput<
+	typeof recallResultSchema
+>
 
 export const reflectResultSchema = v.object({
 	answer: v.string(),
 	memories: v.array(scoredMemorySchema),
 	observations: v.array(v.string()),
-	structuredOutput: v.optional(v.nullable(v.record(v.string(), v.unknown()))),
+	structuredOutput: v.optional(
+		v.nullable(v.record(v.string(), v.unknown()))
+	),
 	trace: v.optional(v.any())
 })
-export type ReflectResult = v.InferOutput<typeof reflectResultSchema>
+export type ReflectResult = v.InferOutput<
+	typeof reflectResultSchema
+>
 
 export const bankStatsSchema = v.object({
 	bankId: v.string(),
@@ -330,7 +432,9 @@ export const bankStatsSchema = v.object({
 	),
 	operations: v.record(v.string(), v.number())
 })
-export type BankStats = v.InferOutput<typeof bankStatsSchema>
+export type BankStats = v.InferOutput<
+	typeof bankStatsSchema
+>
 
 export const memoryUnitListItemSchema = v.object({
 	id: v.string(),
@@ -344,7 +448,9 @@ export const memoryUnitListItemSchema = v.object({
 	entities: v.string(),
 	chunkId: v.nullable(v.string())
 })
-export type MemoryUnitListItem = v.InferOutput<typeof memoryUnitListItemSchema>
+export type MemoryUnitListItem = v.InferOutput<
+	typeof memoryUnitListItemSchema
+>
 
 export const listMemoryUnitsResultSchema = v.object({
 	items: v.array(memoryUnitListItemSchema),
@@ -352,7 +458,9 @@ export const listMemoryUnitsResultSchema = v.object({
 	limit: v.number(),
 	offset: v.number()
 })
-export type ListMemoryUnitsResult = v.InferOutput<typeof listMemoryUnitsResultSchema>
+export type ListMemoryUnitsResult = v.InferOutput<
+	typeof listMemoryUnitsResultSchema
+>
 
 export const memoryUnitSourceMemorySchema = v.object({
 	id: v.string(),
@@ -362,7 +470,9 @@ export const memoryUnitSourceMemorySchema = v.object({
 	occurredStart: v.nullable(v.string()),
 	mentionedAt: v.nullable(v.string())
 })
-export type MemoryUnitSourceMemory = v.InferOutput<typeof memoryUnitSourceMemorySchema>
+export type MemoryUnitSourceMemory = v.InferOutput<
+	typeof memoryUnitSourceMemorySchema
+>
 
 export const memoryUnitDetailSchema = v.object({
 	id: v.string(),
@@ -378,16 +488,22 @@ export const memoryUnitDetailSchema = v.object({
 	chunkId: v.nullable(v.string()),
 	tags: v.array(v.string()),
 	sourceMemoryIds: v.optional(v.array(v.string())),
-	sourceMemories: v.optional(v.array(memoryUnitSourceMemorySchema))
+	sourceMemories: v.optional(
+		v.array(memoryUnitSourceMemorySchema)
+	)
 })
-export type MemoryUnitDetail = v.InferOutput<typeof memoryUnitDetailSchema>
+export type MemoryUnitDetail = v.InferOutput<
+	typeof memoryUnitDetailSchema
+>
 
 export const deleteMemoryUnitResultSchema = v.object({
 	success: v.boolean(),
 	unitId: v.nullable(v.string()),
 	message: v.string()
 })
-export type DeleteMemoryUnitResult = v.InferOutput<typeof deleteMemoryUnitResultSchema>
+export type DeleteMemoryUnitResult = v.InferOutput<
+	typeof deleteMemoryUnitResultSchema
+>
 
 export const entityListItemSchema = v.object({
 	id: v.string(),
@@ -397,7 +513,9 @@ export const entityListItemSchema = v.object({
 	lastSeen: v.nullable(v.string()),
 	metadata: v.record(v.string(), v.unknown())
 })
-export type EntityListItem = v.InferOutput<typeof entityListItemSchema>
+export type EntityListItem = v.InferOutput<
+	typeof entityListItemSchema
+>
 
 export const listEntitiesResultSchema = v.object({
 	items: v.array(entityListItemSchema),
@@ -405,7 +523,9 @@ export const listEntitiesResultSchema = v.object({
 	limit: v.number(),
 	offset: v.number()
 })
-export type ListEntitiesResult = v.InferOutput<typeof listEntitiesResultSchema>
+export type ListEntitiesResult = v.InferOutput<
+	typeof listEntitiesResultSchema
+>
 
 export const entityDetailSchema = v.object({
 	id: v.string(),
@@ -417,14 +537,22 @@ export const entityDetailSchema = v.object({
 	metadata: v.record(v.string(), v.unknown()),
 	observations: v.array(v.record(v.string(), v.unknown()))
 })
-export type EntityDetail = v.InferOutput<typeof entityDetailSchema>
+export type EntityDetail = v.InferOutput<
+	typeof entityDetailSchema
+>
 
 // ============================================================================
 // Episode Schemas
 // ============================================================================
 
-export const retainRouteSchema = v.picklist([`reinforce`, `reconsolidate`, `new_trace`])
-export type RetainRouteValue = v.InferOutput<typeof retainRouteSchema>
+export const retainRouteSchema = v.picklist([
+	`reinforce`,
+	`reconsolidate`,
+	`new_trace`
+])
+export type RetainRouteValue = v.InferOutput<
+	typeof retainRouteSchema
+>
 
 export const episodeBoundaryReasonSchema = v.picklist([
 	`time_gap`,
@@ -444,7 +572,9 @@ export const episodeSummarySchema = v.object({
 	project: v.nullable(v.string()),
 	session: v.nullable(v.string())
 })
-export type EpisodeSummaryValue = v.InferOutput<typeof episodeSummarySchema>
+export type EpisodeSummaryValue = v.InferOutput<
+	typeof episodeSummarySchema
+>
 
 export const listEpisodesInputSchema = v.object({
 	profile: v.optional(v.string()),
@@ -463,7 +593,9 @@ export const listEpisodesResultSchema = v.object({
 
 export const narrativeInputSchema = v.object({
 	anchorMemoryId: v.string(),
-	direction: v.optional(v.picklist([`before`, `after`, `both`])),
+	direction: v.optional(
+		v.picklist([`before`, `after`, `both`])
+	),
 	steps: v.optional(v.number())
 })
 
@@ -486,4 +618,6 @@ export const narrativeResultSchema = v.object({
 
 export const voidSchema = v.undefined_()
 export const listBanksOutputSchema = v.array(bankSchema)
-export const retainBatchOutputSchema = v.array(retainResultSchema)
+export const retainBatchOutputSchema = v.array(
+	retainResultSchema
+)

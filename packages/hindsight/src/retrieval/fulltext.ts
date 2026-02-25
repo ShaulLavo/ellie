@@ -44,7 +44,10 @@ export function searchFulltext(
         LIMIT ?
       `
 			)
-			.all(safeQuery, bankId, limit) as Array<{ id: string; rank: number }>
+			.all(safeQuery, bankId, limit) as Array<{
+			id: string
+			rank: number
+		}>
 
 		return normalizeRanks(results)
 	}
@@ -97,7 +100,9 @@ export function searchFulltext(
 	return normalizeRanks(results)
 }
 
-function normalizeRanks(results: Array<{ id: string; rank: number }>): RetrievalHit[] {
+function normalizeRanks(
+	results: Array<{ id: string; rank: number }>
+): RetrievalHit[] {
 	if (results.length === 0) return []
 
 	// BM25 returns negative scores (more negative = more relevant)

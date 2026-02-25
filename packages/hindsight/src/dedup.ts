@@ -30,13 +30,21 @@ export async function findDuplicates(
 	hdb: HindsightDatabase,
 	memoryVec: EmbeddingStore,
 	bankId: string,
-	facts: Array<{ content: string; temporalAnchor?: number | null }>,
+	facts: Array<{
+		content: string
+		temporalAnchor?: number | null
+	}>,
 	threshold: number = DEFAULT_THRESHOLD,
 	timeWindowHours: number = DEFAULT_TIME_WINDOW_HOURS
 ): Promise<boolean[]> {
-	const windowMs = Math.max(0, timeWindowHours) * 60 * 60 * 1000
+	const windowMs =
+		Math.max(0, timeWindowHours) * 60 * 60 * 1000
 	// Run all vector searches in parallel — they are independent
-	const allHits = await Promise.all(facts.map(fact => memoryVec.search(fact.content, SEARCH_K)))
+	const allHits = await Promise.all(
+		facts.map(fact =>
+			memoryVec.search(fact.content, SEARCH_K)
+		)
+	)
 
 	return allHits.map((hits, factIndex) => {
 		const anchor = facts[factIndex]?.temporalAnchor ?? null
@@ -49,7 +57,8 @@ export async function findDuplicates(
 				.select({
 					bankId: hdb.schema.memoryUnits.bankId,
 					eventDate: hdb.schema.memoryUnits.eventDate,
-					occurredStart: hdb.schema.memoryUnits.occurredStart,
+					occurredStart:
+						hdb.schema.memoryUnits.occurredStart,
 					occurredEnd: hdb.schema.memoryUnits.occurredEnd,
 					mentionedAt: hdb.schema.memoryUnits.mentionedAt,
 					createdAt: hdb.schema.memoryUnits.createdAt
@@ -69,7 +78,8 @@ export async function findDuplicates(
 				row.occurredEnd ??
 				row.mentionedAt ??
 				row.createdAt
-			if (Math.abs(anchor - candidateAnchor) <= windowMs) return true
+			if (Math.abs(anchor - candidateAnchor) <= windowMs)
+				return true
 		}
 		return false
 	})

@@ -22,48 +22,74 @@ interface ThemeContextValue {
 
 const STORAGE_KEY = 'theme'
 
-const ThemeContext = createContext<ThemeContextValue | null>(null)
+const ThemeContext =
+	createContext<ThemeContextValue | null>(null)
 
 function getSystemTheme(): Theme {
 	if (typeof window === 'undefined') return 'light'
-	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+	return window.matchMedia('(prefers-color-scheme: dark)')
+		.matches
+		? 'dark'
+		: 'light'
 }
 
 function resolveTheme(preference: ThemePreference): Theme {
-	return preference === 'system' ? getSystemTheme() : preference
+	return preference === 'system'
+		? getSystemTheme()
+		: preference
 }
 
 function applyTheme(theme: Theme) {
-	document.documentElement.classList.toggle('dark', theme === 'dark')
+	document.documentElement.classList.toggle(
+		'dark',
+		theme === 'dark'
+	)
 	document.documentElement.style.colorScheme = theme
 }
 
 function getStoredPreference(): ThemePreference {
 	if (typeof window === 'undefined') return 'system'
 	const stored = localStorage.getItem(STORAGE_KEY)
-	if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
+	if (
+		stored === 'light' ||
+		stored === 'dark' ||
+		stored === 'system'
+	)
+		return stored
 	return 'system'
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-	const [preference, setPreferenceState] = useState<ThemePreference>(getStoredPreference)
-	const [systemTheme, setSystemTheme] = useState<Theme>(getSystemTheme)
+export function ThemeProvider({
+	children
+}: {
+	children: ReactNode
+}) {
+	const [preference, setPreferenceState] =
+		useState<ThemePreference>(getStoredPreference)
+	const [systemTheme, setSystemTheme] =
+		useState<Theme>(getSystemTheme)
 
-	const theme = preference === 'system' ? systemTheme : preference
+	const theme =
+		preference === 'system' ? systemTheme : preference
 
-	const setPreference = useCallback((next: ThemePreference) => {
-		setPreferenceState(next)
-		if (next === 'system') {
-			localStorage.removeItem(STORAGE_KEY)
-		} else {
-			localStorage.setItem(STORAGE_KEY, next)
-		}
-		applyTheme(resolveTheme(next))
-	}, [])
+	const setPreference = useCallback(
+		(next: ThemePreference) => {
+			setPreferenceState(next)
+			if (next === 'system') {
+				localStorage.removeItem(STORAGE_KEY)
+			} else {
+				localStorage.setItem(STORAGE_KEY, next)
+			}
+			applyTheme(resolveTheme(next))
+		},
+		[]
+	)
 
 	// Listen for OS-level theme changes
 	useEffect(() => {
-		const mql = window.matchMedia('(prefers-color-scheme: dark)')
+		const mql = window.matchMedia(
+			'(prefers-color-scheme: dark)'
+		)
 		const handler = (e: MediaQueryListEvent) => {
 			setSystemTheme(e.matches ? 'dark' : 'light')
 		}
@@ -81,13 +107,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 		[theme, preference, setPreference]
 	)
 
-	return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+	return (
+		<ThemeContext.Provider value={value}>
+			{children}
+		</ThemeContext.Provider>
+	)
 }
 
 export function useTheme(): ThemeContextValue {
 	const ctx = useContext(ThemeContext)
 	if (!ctx) {
-		throw new Error('useTheme must be used within a <ThemeProvider>')
+		throw new Error(
+			'useTheme must be used within a <ThemeProvider>'
+		)
 	}
 	return ctx
 }

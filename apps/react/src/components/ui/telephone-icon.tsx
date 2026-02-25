@@ -1,24 +1,65 @@
-import { forwardRef, useImperativeHandle, useCallback } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useCallback
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const TelephoneIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const TelephoneIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = useCallback(async () => {
-			animate('.stadium-roof', { y: -3 }, { duration: 0.25, ease: 'easeOut' })
+			animate(
+				'.stadium-roof',
+				{ y: -3 },
+				{ duration: 0.25, ease: 'easeOut' }
+			)
 
-			animate('.stadium-pillar-left', { y: -2 }, { duration: 0.25, ease: 'easeOut' })
+			animate(
+				'.stadium-pillar-left',
+				{ y: -2 },
+				{ duration: 0.25, ease: 'easeOut' }
+			)
 
-			animate('.stadium-pillar-right', { y: -2 }, { duration: 0.25, ease: 'easeOut' })
-			animate('.stadium-center', { scale: [1, 1.15, 1] }, { duration: 0.3, ease: 'easeInOut' })
-			animate('.stadium-bowl', { scaleY: [1, 0.97, 1] }, { duration: 0.3, ease: 'easeInOut' })
+			animate(
+				'.stadium-pillar-right',
+				{ y: -2 },
+				{ duration: 0.25, ease: 'easeOut' }
+			)
+			animate(
+				'.stadium-center',
+				{ scale: [1, 1.15, 1] },
+				{ duration: 0.3, ease: 'easeInOut' }
+			)
+			animate(
+				'.stadium-bowl',
+				{ scaleY: [1, 0.97, 1] },
+				{ duration: 0.3, ease: 'easeInOut' }
+			)
 		}, [animate])
 
 		const stop = useCallback(async () => {
 			const resetProps = { x: 0, y: 0, scale: 1, scaleY: 1 }
-			const resetOptions = { duration: 0.25, ease: 'easeInOut' as const }
+			const resetOptions = {
+				duration: 0.25,
+				ease: 'easeInOut' as const
+			}
 
 			animate(
 				'.stadium-roof, .stadium-pillar-left, .stadium-pillar-right, .stadium-center, .stadium-bowl',
@@ -67,9 +108,15 @@ const TelephoneIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 						d="M11 18H7.5C6.11929 18 5 16.8807 5 15.5V12.263C5 10.4575 6.13996 8.83551 7.84843 8.19566C19.2334 3.93478 28.7666 3.93478 40.1516 8.19566C41.86 8.83551 43 10.4575 43 12.263V15.5C43 16.8807 41.8807 18 40.5 18H37"
 					/>
 
-					<motion.path className="stadium-pillar stadium-pillar-left" d="M17 19V14" />
+					<motion.path
+						className="stadium-pillar stadium-pillar-left"
+						d="M17 19V14"
+					/>
 
-					<motion.path className="stadium-pillar stadium-pillar-right" d="M31 19V14" />
+					<motion.path
+						className="stadium-pillar stadium-pillar-right"
+						d="M31 19V14"
+					/>
 				</svg>
 			</motion.div>
 		)

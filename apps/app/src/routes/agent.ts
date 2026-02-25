@@ -9,7 +9,11 @@ import {
 } from '@ellie/schemas/agent'
 import { Elysia, sse } from 'elysia'
 import type { AgentManager } from '../agent/manager'
-import type { AgentRunEvent, RealtimeStore, SessionEvent } from '../lib/realtime-store'
+import type {
+	AgentRunEvent,
+	RealtimeStore,
+	SessionEvent
+} from '../lib/realtime-store'
 import {
 	sessionParamsSchema,
 	sessionRunParamsSchema,
@@ -39,12 +43,19 @@ export function createAgentRoutes(
 			'/:sessionId/events/sse',
 			({ params, query, request }) => {
 				const afterSeq = query.afterSeq
-				const existingEvents = store.queryEvents(params.sessionId, afterSeq)
+				const existingEvents = store.queryEvents(
+					params.sessionId,
+					afterSeq
+				)
 
 				const stream = toStreamGenerator<SessionEvent>(
 					request,
 					sseState,
-					listener => store.subscribeToSession(params.sessionId, listener),
+					listener =>
+						store.subscribeToSession(
+							params.sessionId,
+							listener
+						),
 					event => ({ event: `append`, data: event.event }),
 					{ event: `snapshot`, data: existingEvents }
 				)
@@ -59,7 +70,10 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/:runId',
 			({ params }) => {
-				return store.queryRunEvents(params.sessionId, params.runId)
+				return store.queryRunEvents(
+					params.sessionId,
+					params.runId
+				)
 			},
 			{
 				params: sessionRunParamsSchema
@@ -68,24 +82,40 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/:runId/sse',
 			({ params, request }) => {
-				const initialEvents: AgentRunEvent[] = store.isAgentRunClosed(
-					params.sessionId,
-					params.runId
-				)
-					? [{ type: `closed` }]
-					: []
+				const initialEvents: AgentRunEvent[] =
+					store.isAgentRunClosed(
+						params.sessionId,
+						params.runId
+					)
+						? [{ type: `closed` }]
+						: []
 
 				const stream = toStreamGenerator<AgentRunEvent>(
 					request,
 					sseState,
-					listener => store.subscribeToAgentRun(params.sessionId, params.runId, listener),
+					listener =>
+						store.subscribeToAgentRun(
+							params.sessionId,
+							params.runId,
+							listener
+						),
 					event => {
 						if (event.type === `event`) {
 							return { event: `event`, data: event.event }
 						}
-						return { event: `closed`, data: null, close: true }
+						return {
+							event: `closed`,
+							data: null,
+							close: true
+						}
 					},
-					{ event: `snapshot`, data: store.queryRunEvents(params.sessionId, params.runId) },
+					{
+						event: `snapshot`,
+						data: store.queryRunEvents(
+							params.sessionId,
+							params.runId
+						)
+					},
 					initialEvents
 				)
 
@@ -100,12 +130,21 @@ export function createAgentRoutes(
 			async ({ params, body, set }) => {
 				if (!agentManager) {
 					set.status = 503
-					return { error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured` }
+					return {
+						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
+					}
 				}
 
 				const message = parseAgentActionBody(body)
-				const { runId } = await agentManager.prompt(params.sessionId, message)
-				return { runId, sessionId: params.sessionId, status: `started` as const }
+				const { runId } = await agentManager.prompt(
+					params.sessionId,
+					message
+				)
+				return {
+					runId,
+					sessionId: params.sessionId,
+					status: `started` as const
+				}
 			},
 			{
 				params: sessionParamsSchema,
@@ -122,7 +161,9 @@ export function createAgentRoutes(
 			({ params, body, set }) => {
 				if (!agentManager) {
 					set.status = 503
-					return { error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured` }
+					return {
+						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
+					}
 				}
 
 				const message = parseAgentActionBody(body)
@@ -144,7 +185,9 @@ export function createAgentRoutes(
 			({ params, set }) => {
 				if (!agentManager) {
 					set.status = 503
-					return { error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured` }
+					return {
+						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
+					}
 				}
 
 				agentManager.abort(params.sessionId)
@@ -164,10 +207,16 @@ export function createAgentRoutes(
 			({ params, set }) => {
 				if (!agentManager) {
 					set.status = 503
-					return { error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured` }
+					return {
+						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
+					}
 				}
 
-				return { messages: agentManager.loadHistory(params.sessionId) }
+				return {
+					messages: agentManager.loadHistory(
+						params.sessionId
+					)
+				}
 			},
 			{
 				params: sessionParamsSchema,

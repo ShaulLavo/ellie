@@ -24,7 +24,9 @@ function Container() {
 **Correct (reuses same element):**
 
 ```tsx
-const loadingSkeleton = <div className="animate-pulse h-20 bg-gray-200" />
+const loadingSkeleton = (
+	<div className="animate-pulse h-20 bg-gray-200" />
+)
 
 function Container() {
 	return <div>{loading && loadingSkeleton}</div>

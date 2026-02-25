@@ -15,11 +15,14 @@ const app = new Elysia()
 			ws.send(message)
 		}
 	})
-	.get('/publish/:publish', ({ params: { publish: text } }) => {
-		app.server!.publish('asdf', text)
+	.get(
+		'/publish/:publish',
+		({ params: { publish: text } }) => {
+			app.server!.publish('asdf', text)
 
-		return text
-	})
+			return text
+		}
+	)
 	.listen(3000, server => {
 		console.log(`http://${server.hostname}:${server.port}`)
 	})

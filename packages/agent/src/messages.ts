@@ -2,7 +2,10 @@
  * Message conversion bridge between @ellie/agent types and TanStack AI types.
  */
 
-import type { ModelMessage, ContentPart } from '@tanstack/ai'
+import type {
+	ModelMessage,
+	ContentPart
+} from '@tanstack/ai'
 import type {
 	Message,
 	UserMessage,
@@ -29,7 +32,9 @@ export function toModelMessage(msg: Message): ModelMessage {
 /**
  * Convert an array of Messages to TanStack AI ModelMessages.
  */
-export function toModelMessages(msgs: Message[]): ModelMessage[] {
+export function toModelMessages(
+	msgs: Message[]
+): ModelMessage[] {
 	return msgs.map(toModelMessage)
 }
 
@@ -37,7 +42,9 @@ export function toModelMessages(msgs: Message[]): ModelMessage[] {
 // Internal converters
 // ============================================================================
 
-function userToModelMessage(msg: UserMessage): ModelMessage {
+function userToModelMessage(
+	msg: UserMessage
+): ModelMessage {
 	const content = msg.content.map((c): ContentPart => {
 		if (c.type === 'text') {
 			return { type: 'text', content: c.text }
@@ -45,16 +52,26 @@ function userToModelMessage(msg: UserMessage): ModelMessage {
 		// ImageContent
 		return {
 			type: 'image',
-			source: { type: 'data', value: c.data, mimeType: c.mimeType }
+			source: {
+				type: 'data',
+				value: c.data,
+				mimeType: c.mimeType
+			}
 		}
 	})
 
 	return { role: 'user', content }
 }
 
-function assistantToModelMessage(msg: AssistantMessage): ModelMessage {
-	const textParts = msg.content.filter((c): c is TextContent => c.type === 'text')
-	const toolCalls = msg.content.filter((c): c is ToolCall => c.type === 'toolCall')
+function assistantToModelMessage(
+	msg: AssistantMessage
+): ModelMessage {
+	const textParts = msg.content.filter(
+		(c): c is TextContent => c.type === 'text'
+	)
+	const toolCalls = msg.content.filter(
+		(c): c is ToolCall => c.type === 'toolCall'
+	)
 	// Thinking content is stripped — providers handle it via modelOptions
 
 	const textContent = textParts.map(c => c.text).join('')
@@ -78,7 +95,9 @@ function assistantToModelMessage(msg: AssistantMessage): ModelMessage {
 	}
 }
 
-function toolResultToModelMessage(msg: ToolResultMessage): ModelMessage {
+function toolResultToModelMessage(
+	msg: ToolResultMessage
+): ModelMessage {
 	const textContent = msg.content
 		.filter((c): c is TextContent => c.type === 'text')
 		.map(c => c.text)

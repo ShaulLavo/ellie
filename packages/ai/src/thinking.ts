@@ -1,7 +1,10 @@
 import type { ThinkingLevel, ProviderName } from './types'
 
 /** Default budget tokens for each thinking level (used by Anthropic). */
-const ANTHROPIC_THINKING_BUDGETS: Record<ThinkingLevel, number> = {
+const ANTHROPIC_THINKING_BUDGETS: Record<
+	ThinkingLevel,
+	number
+> = {
 	minimal: 1024,
 	low: 2048,
 	medium: 4096,
@@ -13,7 +16,10 @@ const ANTHROPIC_THINKING_BUDGETS: Record<ThinkingLevel, number> = {
  * OpenAI reasoning_effort mapping.
  * xhigh maps to high since OpenAI doesn't have a higher level.
  */
-const OPENAI_REASONING_EFFORT: Record<ThinkingLevel, string> = {
+const OPENAI_REASONING_EFFORT: Record<
+	ThinkingLevel,
+	string
+> = {
 	minimal: 'minimal',
 	low: 'low',
 	medium: 'medium',
@@ -71,6 +77,12 @@ export function toThinkingModelOptions(
 }
 
 /** Check if a provider supports thinking/reasoning. */
-export function supportsThinking(provider: ProviderName): boolean {
-	return provider === 'anthropic' || provider === 'openai' || provider === 'openrouter'
+export function supportsThinking(
+	provider: ProviderName
+): boolean {
+	return (
+		provider === 'anthropic' ||
+		provider === 'openai' ||
+		provider === 'openrouter'
+	)
 }

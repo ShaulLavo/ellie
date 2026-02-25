@@ -15,7 +15,9 @@ Refinements allow you to add custom validation logic beyond Zod's built-in valid
 ```typescript
 const PasswordSchema = z
 	.string()
-	.refine(val => val.length >= 8, { message: 'Password must be at least 8 characters' })
+	.refine(val => val.length >= 8, {
+		message: 'Password must be at least 8 characters'
+	})
 ```
 
 ### Multiple Refinements
@@ -24,7 +26,10 @@ const PasswordSchema = z
 const SafePasswordSchema = z
 	.string()
 	.refine(val => val.length >= 8, 'Too short')
-	.refine(val => /[A-Z]/.test(val), 'Must contain uppercase')
+	.refine(
+		val => /[A-Z]/.test(val),
+		'Must contain uppercase'
+	)
 	.refine(val => /[0-9]/.test(val), 'Must contain number')
 ```
 
@@ -69,7 +74,9 @@ Transformations allow you to modify data during parsing.
 
 ```typescript
 // Transform data during parsing
-const StringToNumberSchema = z.string().transform(val => parseInt(val))
+const StringToNumberSchema = z
+	.string()
+	.transform(val => parseInt(val))
 const result = StringToNumberSchema.parse('123') // 123 (number)
 ```
 
@@ -85,7 +92,9 @@ const TrimAndLowercaseSchema = z
 ### Pipe (Combine Schemas with Transformation)
 
 ```typescript
-const NumberStringSchema = z.string().pipe(z.coerce.number())
+const NumberStringSchema = z
+	.string()
+	.pipe(z.coerce.number())
 ```
 
 ---
@@ -154,7 +163,9 @@ Codecs provide safe methods that return result objects instead of throwing:
 
 ```typescript
 // Safe decode
-const decodeResult = DateCodec.decodeSafe('2024-01-01T00:00:00Z')
+const decodeResult = DateCodec.decodeSafe(
+	'2024-01-01T00:00:00Z'
+)
 if (decodeResult.success) {
 	console.log(decodeResult.data) // Date object
 } else {
@@ -230,13 +241,20 @@ const UserJSONCodec = JSONCodec(
 )
 
 // 2. Base64 Codec
-const Base64Codec = z.codec(z.string(), z.instanceof(Uint8Array), {
-	decode: base64 => Uint8Array.from(atob(base64), c => c.charCodeAt(0)),
-	encode: bytes => btoa(String.fromCharCode(...bytes))
-})
+const Base64Codec = z.codec(
+	z.string(),
+	z.instanceof(Uint8Array),
+	{
+		decode: base64 =>
+			Uint8Array.from(atob(base64), c => c.charCodeAt(0)),
+		encode: bytes => btoa(String.fromCharCode(...bytes))
+	}
+)
 
 // 3. URL Search Params Codec
-const QueryParamsCodec = <T extends z.ZodTypeAny>(schema: T) =>
+const QueryParamsCodec = <T extends z.ZodTypeAny>(
+	schema: T
+) =>
 	z.codec(z.string(), schema, {
 		decode: queryString => {
 			const params = new URLSearchParams(queryString)
@@ -299,7 +317,9 @@ async function getUser(id: string) {
 }
 
 // Send to API (TypeScript objects → JSON)
-async function updateUser(user: z.output<typeof UserAPISchema>) {
+async function updateUser(
+	user: z.output<typeof UserAPISchema>
+) {
 	const payload = UserAPISchema.encode(user) // Dates are ISO strings
 	await fetch(`/api/users/${user.id}`, {
 		method: 'PUT',
@@ -402,7 +422,9 @@ const UserSchema = z.object({
 })
 
 // Make everything optional except id
-const UpdateUserSchema = UserSchema.partial().required({ id: true })
+const UpdateUserSchema = UserSchema.partial().required({
+	id: true
+})
 
 type UpdateUser = z.infer<typeof UpdateUserSchema>
 // { id: string; name?: string; email?: string }
@@ -435,10 +457,15 @@ const PersonSchema = z.object({
 })
 
 // Pick specific fields
-const NameEmailSchema = PersonSchema.pick({ name: true, email: true })
+const NameEmailSchema = PersonSchema.pick({
+	name: true,
+	email: true
+})
 
 // Omit fields
-const WithoutAddressSchema = PersonSchema.omit({ address: true })
+const WithoutAddressSchema = PersonSchema.omit({
+	address: true
+})
 ```
 
 ---
@@ -489,7 +516,8 @@ const ConditionalSchema = z
 			if (!data.firstName || !data.lastName) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: 'First and last name required for individuals'
+					message:
+						'First and last name required for individuals'
 				})
 			}
 		} else {
@@ -511,7 +539,9 @@ const ConditionalSchema = z
 
 ```typescript
 // Don't load schema until needed
-const HeavySchema = z.lazy(() => import('./schemas/heavy').then(m => m.schema))
+const HeavySchema = z.lazy(() =>
+	import('./schemas/heavy').then(m => m.schema)
+)
 ```
 
 ### Discriminated Unions for Performance
@@ -520,13 +550,19 @@ const HeavySchema = z.lazy(() => import('./schemas/heavy').then(m => m.schema))
 // ✓ Fast - checks discriminator first
 const ResponseSchema = z.discriminatedUnion('status', [
 	z.object({ status: z.literal('success'), data: z.any() }),
-	z.object({ status: z.literal('error'), message: z.string() })
+	z.object({
+		status: z.literal('error'),
+		message: z.string()
+	})
 ])
 
 // ✗ Slower - tries all branches
 const SlowResponseSchema = z.union([
 	z.object({ status: z.literal('success'), data: z.any() }),
-	z.object({ status: z.literal('error'), message: z.string() })
+	z.object({
+		status: z.literal('error'),
+		message: z.string()
+	})
 ])
 ```
 

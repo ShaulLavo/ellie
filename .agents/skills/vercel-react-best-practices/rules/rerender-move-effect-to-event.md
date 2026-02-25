@@ -23,7 +23,11 @@ function Form() {
 		}
 	}, [submitted, theme])
 
-	return <button onClick={() => setSubmitted(true)}>Submit</button>
+	return (
+		<button onClick={() => setSubmitted(true)}>
+			Submit
+		</button>
+	)
 }
 ```
 

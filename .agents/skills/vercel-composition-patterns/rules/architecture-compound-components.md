@@ -44,13 +44,27 @@ function Composer({
 **Correct (compound components with shared context):**
 
 ```tsx
-const ComposerContext = createContext<ComposerContextValue | null>(null)
+const ComposerContext =
+	createContext<ComposerContextValue | null>(null)
 
-function ComposerProvider({ children, state, actions, meta }: ProviderProps) {
-	return <ComposerContext value={{ state, actions, meta }}>{children}</ComposerContext>
+function ComposerProvider({
+	children,
+	state,
+	actions,
+	meta
+}: ProviderProps) {
+	return (
+		<ComposerContext value={{ state, actions, meta }}>
+			{children}
+		</ComposerContext>
+	)
 }
 
-function ComposerFrame({ children }: { children: React.ReactNode }) {
+function ComposerFrame({
+	children
+}: {
+	children: React.ReactNode
+}) {
 	return <form>{children}</form>
 }
 
@@ -64,7 +78,9 @@ function ComposerInput() {
 		<TextInput
 			ref={inputRef}
 			value={state.input}
-			onChangeText={text => update(s => ({ ...s, input: text }))}
+			onChangeText={text =>
+				update(s => ({ ...s, input: text }))
+			}
 		/>
 	)
 }
@@ -93,7 +109,11 @@ const Composer = {
 **Usage:**
 
 ```tsx
-<Composer.Provider state={state} actions={actions} meta={meta}>
+<Composer.Provider
+	state={state}
+	actions={actions}
+	meta={meta}
+>
 	<Composer.Frame>
 		<Composer.Header />
 		<Composer.Input />

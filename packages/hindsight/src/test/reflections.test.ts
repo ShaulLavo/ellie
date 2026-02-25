@@ -2,8 +2,18 @@
  * Core parity port for test_reflections.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_reflections.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_reflections.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -54,110 +65,170 @@ describe('Core parity: test_reflections.py', () => {
 	it('bank id', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('create and get mental model', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('update mental model', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('delete mental model', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('list observations empty', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('get observation not found', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('mental models api crud', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('recall without observations by default', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('reflect searches mental models when available', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 
 	it('reflect tool trace includes reason', async () => {
 		await seedBase()
 		t.adapter.setResponse('Done. Peter likes hiking.')
-		const result = await t.hs.reflect(bankId, 'summarize Peter', {
-			saveObservations: false,
-			maxIterations: 2
-		})
+		const result = await t.hs.reflect(
+			bankId,
+			'summarize Peter',
+			{
+				saveObservations: false,
+				maxIterations: 2
+			}
+		)
 		expect(result.answer.length).toBeGreaterThan(0)
-		expect(result.answer.toLowerCase()).not.toContain('memory_ids=')
+		expect(result.answer.toLowerCase()).not.toContain(
+			'memory_ids='
+		)
 	})
 })

@@ -2,8 +2,18 @@
  * Core parity port for test_hierarchical_config.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_hierarchical_config.py', () => {
 	let t: TestHindsight
@@ -67,7 +77,9 @@ describe('Core parity: test_hierarchical_config.py', () => {
 			extractionMode: 'verbose',
 			dedupThreshold: 0.9
 		})
-		expect(first.updatedAt).toBeLessThanOrEqual(second.updatedAt)
+		expect(first.updatedAt).toBeLessThanOrEqual(
+			second.updatedAt
+		)
 		expect(second.config.extractionMode).toBe('verbose')
 	})
 
@@ -120,7 +132,10 @@ describe('Core parity: test_hierarchical_config.py', () => {
 	})
 
 	it('config permissions system', async () => {
-		const bank = t.hs.updateBank(bankId, { name: 'updated-name', mission: 'updated mission' })
+		const bank = t.hs.updateBank(bankId, {
+			name: 'updated-name',
+			mission: 'updated mission'
+		})
 		expect(bank.name).toBe('updated-name')
 		expect(bank.mission).toBe('updated mission')
 	})

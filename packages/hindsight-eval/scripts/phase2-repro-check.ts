@@ -16,15 +16,26 @@ import { generateReproducibilityReport } from '../src/phase2-report'
 import { execSync } from 'child_process'
 
 const args = process.argv.slice(2)
-const outputDirArg = args.find(a => a.startsWith('--output-dir='))
+const outputDirArg = args.find(a =>
+	a.startsWith('--output-dir=')
+)
 
-const defaultOutputDir = resolve(import.meta.dir, '..', 'artifacts', 'phase2')
+const defaultOutputDir = resolve(
+	import.meta.dir,
+	'..',
+	'artifacts',
+	'phase2'
+)
 const outputDirVal = outputDirArg?.split('=')[1]?.trim()
-const outputDir = outputDirVal ? resolve(outputDirVal) : defaultOutputDir
+const outputDir = outputDirVal
+	? resolve(outputDirVal)
+	: defaultOutputDir
 
 let gitSha = 'unknown'
 try {
-	gitSha = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
+	gitSha = execSync('git rev-parse --short HEAD', {
+		encoding: 'utf-8'
+	}).trim()
 } catch {
 	// Not in a git repo
 }
@@ -62,18 +73,32 @@ async function main() {
 	console.log('')
 
 	// Compare
-	const { pass, report } = generateReproducibilityReport(runA, runB)
+	const { pass, report } = generateReproducibilityReport(
+		runA,
+		runB
+	)
 
 	// Write artifacts
-	writeFileSync(join(outputDir, 'phase2_repro_run_a.json'), JSON.stringify(runA, null, 2))
-	writeFileSync(join(outputDir, 'phase2_repro_run_b.json'), JSON.stringify(runB, null, 2))
-	writeFileSync(join(outputDir, 'phase2_reproducibility_report.md'), report)
+	writeFileSync(
+		join(outputDir, 'phase2_repro_run_a.json'),
+		JSON.stringify(runA, null, 2)
+	)
+	writeFileSync(
+		join(outputDir, 'phase2_repro_run_b.json'),
+		JSON.stringify(runB, null, 2)
+	)
+	writeFileSync(
+		join(outputDir, 'phase2_reproducibility_report.md'),
+		report
+	)
 
 	console.log('='.repeat(60))
 	console.log(`Gate 8 Result: ${pass ? 'PASS' : 'FAIL'}`)
 	console.log('='.repeat(60))
 	console.log('')
-	console.log(`Full report: ${join(outputDir, 'phase2_reproducibility_report.md')}`)
+	console.log(
+		`Full report: ${join(outputDir, 'phase2_reproducibility_report.md')}`
+	)
 
 	process.exit(pass ? 0 : 1)
 }

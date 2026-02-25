@@ -13,7 +13,10 @@ Add version prefix to keys and store only needed fields. Prevents schema conflic
 
 ```typescript
 // No version, stores everything, no error handling
-localStorage.setItem('userConfig', JSON.stringify(fullUserObject))
+localStorage.setItem(
+	'userConfig',
+	JSON.stringify(fullUserObject)
+)
 const data = localStorage.getItem('userConfig')
 ```
 
@@ -22,9 +25,15 @@ const data = localStorage.getItem('userConfig')
 ```typescript
 const VERSION = 'v2'
 
-function saveConfig(config: { theme: string; language: string }) {
+function saveConfig(config: {
+	theme: string
+	language: string
+}) {
 	try {
-		localStorage.setItem(`userConfig:${VERSION}`, JSON.stringify(config))
+		localStorage.setItem(
+			`userConfig:${VERSION}`,
+			JSON.stringify(config)
+		)
 	} catch {
 		// Throws in incognito/private browsing, quota exceeded, or disabled
 	}
@@ -32,7 +41,9 @@ function saveConfig(config: { theme: string; language: string }) {
 
 function loadConfig() {
 	try {
-		const data = localStorage.getItem(`userConfig:${VERSION}`)
+		const data = localStorage.getItem(
+			`userConfig:${VERSION}`
+		)
 		return data ? JSON.parse(data) : null
 	} catch {
 		return null
@@ -45,7 +56,10 @@ function migrate() {
 		const v1 = localStorage.getItem('userConfig:v1')
 		if (v1) {
 			const old = JSON.parse(v1)
-			saveConfig({ theme: old.darkMode ? 'dark' : 'light', language: old.lang })
+			saveConfig({
+				theme: old.darkMode ? 'dark' : 'light',
+				language: old.lang
+			})
 			localStorage.removeItem('userConfig:v1')
 		}
 	} catch {}

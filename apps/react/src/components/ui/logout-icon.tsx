@@ -1,9 +1,27 @@
-import { forwardRef, useImperativeHandle, useCallback } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useCallback
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const LogoutIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const LogoutIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = useCallback(async () => {
@@ -66,9 +84,15 @@ const LogoutIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 						d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"
 					/>
 
-					<motion.path className="logout-arrow" d="M9 12h12" />
+					<motion.path
+						className="logout-arrow"
+						d="M9 12h12"
+					/>
 
-					<motion.path className="logout-arrow-bottom" d="M18 15l3 -3l-3 -3" />
+					<motion.path
+						className="logout-arrow-bottom"
+						d="M18 15l3 -3l-3 -3"
+					/>
 				</svg>
 			</motion.div>
 		)

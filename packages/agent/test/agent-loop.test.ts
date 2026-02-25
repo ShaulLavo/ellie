@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { agentLoop, agentLoopContinue } from '../src/agent-loop'
+import {
+	agentLoop,
+	agentLoopContinue
+} from '../src/agent-loop'
 import type {
 	AgentContext,
 	AgentEvent,
@@ -9,7 +12,10 @@ import type {
 	StreamFn,
 	AssistantMessage
 } from '../src/types'
-import type { StreamChunk, AnyTextAdapter } from '@tanstack/ai'
+import type {
+	StreamChunk,
+	AnyTextAdapter
+} from '@tanstack/ai'
 import * as v from 'valibot'
 
 // ============================================================================
@@ -17,7 +23,9 @@ import * as v from 'valibot'
 // ============================================================================
 
 /** Create a mock StreamFn that yields predetermined AG-UI events */
-function createMockStreamFn(events: StreamChunk[]): StreamFn {
+function createMockStreamFn(
+	events: StreamChunk[]
+): StreamFn {
 	return async function* () {
 		for (const event of events) {
 			yield event
@@ -26,7 +34,10 @@ function createMockStreamFn(events: StreamChunk[]): StreamFn {
 }
 
 /** Create a simple text response stream (no tool calls) */
-function textResponseStream(text: string, runId = 'run_1'): StreamChunk[] {
+function textResponseStream(
+	text: string,
+	runId = 'run_1'
+): StreamChunk[] {
 	return [
 		{ type: 'RUN_STARTED', runId, timestamp: Date.now() },
 		{
@@ -50,7 +61,11 @@ function textResponseStream(text: string, runId = 'run_1'): StreamChunk[] {
 			type: 'RUN_FINISHED',
 			runId,
 			finishReason: 'stop' as const,
-			usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			usage: {
+				promptTokens: 10,
+				completionTokens: 5,
+				totalTokens: 15
+			},
 			timestamp: Date.now()
 		}
 	]
@@ -88,7 +103,11 @@ function toolCallResponseStream(
 			type: 'RUN_FINISHED',
 			runId,
 			finishReason: 'tool_calls' as const,
-			usage: { promptTokens: 10, completionTokens: 15, totalTokens: 25 },
+			usage: {
+				promptTokens: 10,
+				completionTokens: 15,
+				totalTokens: 25
+			},
 			timestamp: Date.now()
 		}
 	]
@@ -103,13 +122,20 @@ function createMockModel() {
 		provider: 'anthropic' as const,
 		reasoning: false,
 		input: ['text' as const],
-		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+		cost: {
+			input: 3,
+			output: 15,
+			cacheRead: 0.3,
+			cacheWrite: 3.75
+		},
 		contextWindow: 200000,
 		maxTokens: 8192
 	}
 }
 
-async function collectEvents(stream: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
+async function collectEvents(
+	stream: AsyncIterable<AgentEvent>
+): Promise<AgentEvent[]> {
 	const events: AgentEvent[] = []
 	for await (const event of stream) {
 		events.push(event)
@@ -123,7 +149,9 @@ async function collectEvents(stream: AsyncIterable<AgentEvent>): Promise<AgentEv
 
 describe('agentLoop', () => {
 	test('basic text response emits correct event sequence', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Hello!'))
+		const streamFn = createMockStreamFn(
+			textResponseStream('Hello!')
+		)
 
 		const context: AgentContext = {
 			systemPrompt: 'Be helpful',
@@ -143,7 +171,13 @@ describe('agentLoop', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, undefined, streamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
 		const events = await collectEvents(stream)
 
 		const types = events.map(e => e.type)
@@ -157,14 +191,28 @@ describe('agentLoop', () => {
 		expect(types).toContain('agent_end')
 
 		// First message events should be for the user prompt
-		const firstMsgStart = events.find(e => e.type === 'message_start')
-		expect(firstMsgStart?.type === 'message_start' && firstMsgStart.message.role).toBe('user')
+		const firstMsgStart = events.find(
+			e => e.type === 'message_start'
+		)
+		expect(
+			firstMsgStart?.type === 'message_start' &&
+				firstMsgStart.message.role
+		).toBe('user')
 
 		// Should have an assistant message
-		const msgEnd = events.filter(e => e.type === 'message_end' && e.message.role === 'assistant')
+		const msgEnd = events.filter(
+			e =>
+				e.type === 'message_end' &&
+				e.message.role === 'assistant'
+		)
 		expect(msgEnd.length).toBe(1)
 
-		const assistantMsg = (msgEnd[0] as { type: 'message_end'; message: AssistantMessage }).message
+		const assistantMsg = (
+			msgEnd[0] as {
+				type: 'message_end'
+				message: AssistantMessage
+			}
+		).message
 		expect(assistantMsg.content[0]).toEqual({
 			type: 'text',
 			text: 'Hello!'
@@ -218,7 +266,13 @@ describe('agentLoop', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, undefined, streamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
 		const events = await collectEvents(stream)
 		const types = events.map(e => e.type)
 
@@ -227,12 +281,19 @@ describe('agentLoop', () => {
 		expect(types).toContain('tool_execution_end')
 
 		// Tool loop is internal to one turn when using streamFn
-		const turnStarts = events.filter(e => e.type === 'turn_start')
+		const turnStarts = events.filter(
+			e => e.type === 'turn_start'
+		)
 		expect(turnStarts.length).toBeGreaterThanOrEqual(1)
 
 		// Tool result should be in events
-		const toolEnd = events.find(e => e.type === 'tool_execution_end')
-		expect(toolEnd?.type === 'tool_execution_end' && toolEnd.isError).toBe(false)
+		const toolEnd = events.find(
+			e => e.type === 'tool_execution_end'
+		)
+		expect(
+			toolEnd?.type === 'tool_execution_end' &&
+				toolEnd.isError
+		).toBe(false)
 	})
 
 	test('tool not found produces error result', async () => {
@@ -241,7 +302,11 @@ describe('agentLoop', () => {
 		const dynamicStreamFn: StreamFn = async function* () {
 			callCount++
 			if (callCount === 1) {
-				yield* toolCallResponseStream('tc_1', 'nonexistent', {})
+				yield* toolCallResponseStream(
+					'tc_1',
+					'nonexistent',
+					{}
+				)
 			} else {
 				yield* textResponseStream('Sorry, tool not found')
 			}
@@ -266,11 +331,22 @@ describe('agentLoop', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, undefined, dynamicStreamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			dynamicStreamFn
+		)
 		const events = await collectEvents(stream)
 
-		const toolEnd = events.find(e => e.type === 'tool_execution_end')
-		expect(toolEnd?.type === 'tool_execution_end' && toolEnd.isError).toBe(true)
+		const toolEnd = events.find(
+			e => e.type === 'tool_execution_end'
+		)
+		expect(
+			toolEnd?.type === 'tool_execution_end' &&
+				toolEnd.isError
+		).toBe(true)
 	})
 
 	test('steering messages interrupt tool execution', async () => {
@@ -283,7 +359,12 @@ describe('agentLoop', () => {
 			execute: async () => {
 				toolExecutionCount++
 				return {
-					content: [{ type: 'text', text: `done ${toolExecutionCount}` }],
+					content: [
+						{
+							type: 'text',
+							text: `done ${toolExecutionCount}`
+						}
+					],
 					details: {}
 				}
 			}
@@ -365,7 +446,9 @@ describe('agentLoop', () => {
 					return [
 						{
 							role: 'user' as const,
-							content: [{ type: 'text' as const, text: 'Stop!' }],
+							content: [
+								{ type: 'text' as const, text: 'Stop!' }
+							],
 							timestamp: Date.now()
 						}
 					]
@@ -388,17 +471,28 @@ describe('agentLoop', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, undefined, streamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
 		const events = await collectEvents(stream)
 
 		// Only one tool should have actually executed
 		expect(toolExecutionCount).toBe(1)
 
 		// Second tool should be skipped
-		const toolEnds = events.filter(e => e.type === 'tool_execution_end')
+		const toolEnds = events.filter(
+			e => e.type === 'tool_execution_end'
+		)
 		expect(toolEnds.length).toBe(2)
 		const skipped = toolEnds[1]
-		expect(skipped.type === 'tool_execution_end' && skipped.isError).toBe(true)
+		expect(
+			skipped.type === 'tool_execution_end' &&
+				skipped.isError
+		).toBe(true)
 	})
 
 	test('follow-up messages continue after agent would stop', async () => {
@@ -418,7 +512,12 @@ describe('agentLoop', () => {
 					return [
 						{
 							role: 'user' as const,
-							content: [{ type: 'text' as const, text: 'Also do this' }],
+							content: [
+								{
+									type: 'text' as const,
+									text: 'Also do this'
+								}
+							],
 							timestamp: Date.now()
 						}
 					]
@@ -440,12 +539,20 @@ describe('agentLoop', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, undefined, streamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
 		const events = await collectEvents(stream)
 
 		// Should have two assistant responses (original + follow-up)
 		const assistantMsgEnds = events.filter(
-			e => e.type === 'message_end' && e.message.role === 'assistant'
+			e =>
+				e.type === 'message_end' &&
+				e.message.role === 'assistant'
 		)
 		expect(assistantMsgEnds.length).toBe(2)
 		expect(callCount).toBe(2)
@@ -483,17 +590,32 @@ describe('agentLoop', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, undefined, streamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
 		const events = await collectEvents(stream)
 
-		const agentEnd = events.find(e => e.type === 'agent_end')
+		const agentEnd = events.find(
+			e => e.type === 'agent_end'
+		)
 		expect(agentEnd).toBeDefined()
 
 		const assistantMsgs = events.filter(
-			e => e.type === 'message_end' && e.message.role === 'assistant'
+			e =>
+				e.type === 'message_end' &&
+				e.message.role === 'assistant'
 		)
 		expect(assistantMsgs.length).toBe(1)
-		const msg = (assistantMsgs[0] as { type: 'message_end'; message: AssistantMessage }).message
+		const msg = (
+			assistantMsgs[0] as {
+				type: 'message_end'
+				message: AssistantMessage
+			}
+		).message
 		expect(msg.stopReason).toBe('error')
 		expect(msg.errorMessage).toBe('Rate limit exceeded')
 	})
@@ -510,9 +632,9 @@ describe('agentLoopContinue', () => {
 			adapter: mockAdapter
 		}
 
-		expect(() => agentLoopContinue(context, config)).toThrow(
-			'Cannot continue: no messages in context'
-		)
+		expect(() =>
+			agentLoopContinue(context, config)
+		).toThrow('Cannot continue: no messages in context')
 	})
 
 	test('throws when last message is assistant', () => {
@@ -548,20 +670,26 @@ describe('agentLoopContinue', () => {
 			adapter: mockAdapter
 		}
 
-		expect(() => agentLoopContinue(context, config)).toThrow(
+		expect(() =>
+			agentLoopContinue(context, config)
+		).toThrow(
 			'Cannot continue from message role: assistant'
 		)
 	})
 
 	test('continues from user message', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Continued!'))
+		const streamFn = createMockStreamFn(
+			textResponseStream('Continued!')
+		)
 
 		const context: AgentContext = {
 			systemPrompt: '',
 			messages: [
 				{
 					role: 'user',
-					content: [{ type: 'text', text: 'Continue from here' }],
+					content: [
+						{ type: 'text', text: 'Continue from here' }
+					],
 					timestamp: Date.now()
 				}
 			]
@@ -572,7 +700,12 @@ describe('agentLoopContinue', () => {
 			adapter: mockAdapter
 		}
 
-		const stream = agentLoopContinue(context, config, undefined, streamFn)
+		const stream = agentLoopContinue(
+			context,
+			config,
+			undefined,
+			streamFn
+		)
 		const events = await collectEvents(stream)
 
 		const types = events.map(e => e.type)
@@ -580,7 +713,9 @@ describe('agentLoopContinue', () => {
 		expect(types).toContain('agent_end')
 
 		const assistantMsgs = events.filter(
-			e => e.type === 'message_end' && e.message.role === 'assistant'
+			e =>
+				e.type === 'message_end' &&
+				e.message.role === 'assistant'
 		)
 		expect(assistantMsgs.length).toBe(1)
 	})
@@ -593,7 +728,9 @@ describe('transformContext', () => {
 			signal?: AbortSignal
 		} | null = null
 
-		const streamFn = createMockStreamFn(textResponseStream('Response'))
+		const streamFn = createMockStreamFn(
+			textResponseStream('Response')
+		)
 
 		const abortController = new AbortController()
 
@@ -602,7 +739,10 @@ describe('transformContext', () => {
 			adapter: mockAdapter,
 			transformContext: async (messages, signal) => {
 				// Capture a snapshot — the original array gets mutated later by runLoop
-				transformCalledWith = { messages: [...messages], signal }
+				transformCalledWith = {
+					messages: [...messages],
+					signal
+				}
 				// Simulate context trimming: only keep the last message
 				return messages.slice(-1)
 			}
@@ -627,16 +767,28 @@ describe('transformContext', () => {
 			}
 		]
 
-		const stream = agentLoop(prompts, context, config, abortController.signal, streamFn)
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			abortController.signal,
+			streamFn
+		)
 		await collectEvents(stream)
 
 		// transformContext should have been called
 		expect(transformCalledWith).not.toBeNull()
 		// It should receive the full context (old + new messages)
 		expect(transformCalledWith!.messages.length).toBe(2)
-		expect(transformCalledWith!.messages[0].role).toBe('user')
-		expect(transformCalledWith!.messages[1].role).toBe('user')
+		expect(transformCalledWith!.messages[0].role).toBe(
+			'user'
+		)
+		expect(transformCalledWith!.messages[1].role).toBe(
+			'user'
+		)
 		// It should receive the abort signal
-		expect(transformCalledWith!.signal).toBe(abortController.signal)
+		expect(transformCalledWith!.signal).toBe(
+			abortController.signal
+		)
 	})
 })

@@ -5,10 +5,18 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { stringSimilarity, resolveEntity } from '../entity-resolver'
+import {
+	stringSimilarity,
+	resolveEntity
+} from '../entity-resolver'
 import type { EntityRow } from '../schema'
 
-function makeEntity(overrides: Partial<EntityRow> & { id: string; name: string }): EntityRow {
+function makeEntity(
+	overrides: Partial<EntityRow> & {
+		id: string
+		name: string
+	}
+): EntityRow {
 	return {
 		bankId: 'bank-1',
 		entityType: 'person',
@@ -55,7 +63,10 @@ describe('stringSimilarity', () => {
 	})
 
 	it('gives high score for near-identical strings', () => {
-		const score = stringSimilarity('javascript', 'javasript')
+		const score = stringSimilarity(
+			'javascript',
+			'javasript'
+		)
 		expect(score).toBeGreaterThan(0.8)
 	})
 
@@ -74,7 +85,14 @@ describe('resolveEntity', () => {
 	const now = Date.now()
 
 	it('returns null when no candidates exist', () => {
-		const result = resolveEntity('Peter', 'person', [], new Map(), [], now)
+		const result = resolveEntity(
+			'Peter',
+			'person',
+			[],
+			new Map(),
+			[],
+			now
+		)
 		expect(result).toBeNull()
 	})
 
@@ -86,7 +104,14 @@ describe('resolveEntity', () => {
 				lastUpdated: now
 			})
 		]
-		const result = resolveEntity('Peter', 'person', entities, new Map(), [], now)
+		const result = resolveEntity(
+			'Peter',
+			'person',
+			entities,
+			new Map(),
+			[],
+			now
+		)
 		expect(result).not.toBeNull()
 		expect(result!.entityId).toBe('e1')
 		expect(result!.isNew).toBe(false)
@@ -100,7 +125,14 @@ describe('resolveEntity', () => {
 				lastUpdated: now
 			})
 		]
-		const result = resolveEntity('peter', 'person', entities, new Map(), [], now)
+		const result = resolveEntity(
+			'peter',
+			'person',
+			entities,
+			new Map(),
+			[],
+			now
+		)
 		// stringSimilarity("peter", "peter") = 1.0 → factor 0.5
 		// temporal proximity (0 days) → factor 0.2
 		// total = 0.7 > threshold 0.6
@@ -116,7 +148,14 @@ describe('resolveEntity', () => {
 				lastUpdated: now - 30 * 86_400_000 // 30 days ago
 			})
 		]
-		const result = resolveEntity('Peter', 'person', entities, new Map(), [], now)
+		const result = resolveEntity(
+			'Peter',
+			'person',
+			entities,
+			new Map(),
+			[],
+			now
+		)
 		expect(result).toBeNull()
 	})
 
@@ -131,12 +170,23 @@ describe('resolveEntity', () => {
 
 		// Without co-occurrences: Dice("peter","pete") = 6/7 ≈ 0.857, name factor = 0.429,
 		// temporal factor = 0 (10 days > 7-day window), total ≈ 0.429 → below 0.6 threshold
-		const resultWithout = resolveEntity('Peter', 'person', entities, new Map(), [], now)
+		const resultWithout = resolveEntity(
+			'Peter',
+			'person',
+			entities,
+			new Map(),
+			[],
+			now
+		)
 
 		// With co-occurrences: add co-occurrence boost
 		const cooccurrences = new Map<string, Set<string>>()
 		cooccurrences.set('e1', new Set(['e2']))
-		const aliceEntity = makeEntity({ id: 'e2', name: 'Alice', lastUpdated: now })
+		const aliceEntity = makeEntity({
+			id: 'e2',
+			name: 'Alice',
+			lastUpdated: now
+		})
 		const allEntities = [entities[0]!, aliceEntity]
 
 		const resultWith = resolveEntity(
@@ -168,8 +218,22 @@ describe('resolveEntity', () => {
 			lastUpdated: now - 14 * 86_400_000 // 14 days ago → temporal factor = 0, total ≈ 0.429 < 0.6
 		})
 
-		const resultRecent = resolveEntity('Peter', 'person', [recentEntity], new Map(), [], now)
-		const resultOld = resolveEntity('Peter', 'person', [oldEntity], new Map(), [], now)
+		const resultRecent = resolveEntity(
+			'Peter',
+			'person',
+			[recentEntity],
+			new Map(),
+			[],
+			now
+		)
+		const resultOld = resolveEntity(
+			'Peter',
+			'person',
+			[oldEntity],
+			new Map(),
+			[],
+			now
+		)
 
 		// Recent entity should pass threshold due to temporal boost
 		expect(resultRecent).not.toBeNull()
@@ -180,10 +244,25 @@ describe('resolveEntity', () => {
 
 	it('selects highest scoring candidate', () => {
 		const entities = [
-			makeEntity({ id: 'e1', name: 'Alexandra', lastUpdated: now }),
-			makeEntity({ id: 'e2', name: 'Alexander', lastUpdated: now })
+			makeEntity({
+				id: 'e1',
+				name: 'Alexandra',
+				lastUpdated: now
+			}),
+			makeEntity({
+				id: 'e2',
+				name: 'Alexander',
+				lastUpdated: now
+			})
 		]
-		const result = resolveEntity('Alexander', 'person', entities, new Map(), [], now)
+		const result = resolveEntity(
+			'Alexander',
+			'person',
+			entities,
+			new Map(),
+			[],
+			now
+		)
 		// "Alexander" exact match → should select e2
 		expect(result).not.toBeNull()
 		expect(result!.entityId).toBe('e2')

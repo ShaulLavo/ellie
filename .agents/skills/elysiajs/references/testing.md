@@ -19,7 +19,9 @@ describe('Elysia App', () => {
 	it('should return hello world', async () => {
 		const app = new Elysia().get('/', () => 'Hello World')
 
-		const res = await app.handle(new Request('http://localhost/'))
+		const res = await app.handle(
+			new Request('http://localhost/')
+		)
 
 		expect(res.status).toBe(200)
 		expect(await res.text()).toBe('Hello World')
@@ -33,12 +35,17 @@ describe('Elysia App', () => {
 
 ```typescript
 it('should get user by id', async () => {
-	const app = new Elysia().get('/user/:id', ({ params: { id } }) => ({
-		id,
-		name: 'John Doe'
-	}))
+	const app = new Elysia().get(
+		'/user/:id',
+		({ params: { id } }) => ({
+			id,
+			name: 'John Doe'
+		})
+	)
 
-	const res = await app.handle(new Request('http://localhost/user/123'))
+	const res = await app.handle(
+		new Request('http://localhost/user/123')
+	)
 
 	const data = await res.json()
 
@@ -100,7 +107,10 @@ export const authModule = new Elysia({ prefix: '/auth' })
 	.post(
 		'/login',
 		({ body, cookie: { session } }) => {
-			if (body.username === 'admin' && body.password === 'password') {
+			if (
+				body.username === 'admin' &&
+				body.password === 'password'
+			) {
 				session.value = 'valid-session'
 				return { success: true }
 			}
@@ -167,7 +177,9 @@ describe('Auth Module', () => {
 	})
 
 	it('should return 401 for unauthenticated profile request', async () => {
-		const res = await authModule.handle(new Request('http://localhost/auth/profile'))
+		const res = await authModule.handle(
+			new Request('http://localhost/auth/profile')
+		)
 
 		expect(res.status).toBe(401)
 	})
@@ -236,7 +248,9 @@ describe('App with mocked DB', () => {
 
 		const testApp = app.decorate('db', mockDb)
 
-		const res = await testApp.handle(new Request('http://localhost/users'))
+		const res = await testApp.handle(
+			new Request('http://localhost/users')
+		)
 
 		const data = await res.json()
 		expect(data).toEqual([{ id: 1, name: 'Test User' }])
@@ -248,12 +262,15 @@ describe('App with mocked DB', () => {
 
 ```typescript
 it('should require authorization', async () => {
-	const app = new Elysia().get('/protected', ({ headers, status }) => {
-		if (!headers.authorization) {
-			return status(401)
+	const app = new Elysia().get(
+		'/protected',
+		({ headers, status }) => {
+			if (!headers.authorization) {
+				return status(401)
+			}
+			return { data: 'secret' }
 		}
-		return { data: 'secret' }
-	})
+	)
 
 	const res = await app.handle(
 		new Request('http://localhost/protected', {
@@ -273,12 +290,16 @@ it('should require authorization', async () => {
 import { Elysia, t } from 'elysia'
 
 it('should validate request body', async () => {
-	const app = new Elysia().post('/user', ({ body }) => body, {
-		body: t.Object({
-			name: t.String(),
-			age: t.Number({ minimum: 0 })
-		})
-	})
+	const app = new Elysia().post(
+		'/user',
+		({ body }) => body,
+		{
+			body: t.Object({
+				name: t.String(),
+				age: t.Number({ minimum: 0 })
+			})
+		}
+	)
 
 	// Valid request
 	const validRes = await app.handle(
@@ -342,7 +363,10 @@ export const authModule = new Elysia({ prefix: '/auth' })
 	.post(
 		'/login',
 		({ body, cookie: { session } }) => {
-			if (body.username === 'admin' && body.password === 'password') {
+			if (
+				body.username === 'admin' &&
+				body.password === 'password'
+			) {
 				session.value = 'valid-session'
 				return { success: true }
 			}

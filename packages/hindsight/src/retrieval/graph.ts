@@ -26,14 +26,43 @@ export async function searchGraph(
 ): Promise<RetrievalHit[]> {
 	if (limit <= 0) return []
 
-	const seedIds = await resolveSeedIds(hdb, memoryVec, bankId, query, limit, options)
+	const seedIds = await resolveSeedIds(
+		hdb,
+		memoryVec,
+		bankId,
+		query,
+		limit,
+		options
+	)
 	if (seedIds.length === 0) return []
 
 	const seedSet = new Set(seedIds)
-	const entityScores = expandViaEntities(hdb, bankId, seedIds, seedSet, options)
-	const causalScores = expandViaCausalLinks(hdb, bankId, seedIds, seedSet, options)
-	const fallbackScores = expandViaFallbackLinks(hdb, bankId, seedIds, seedSet, limit, options)
-	const merged = mergeScoreMaps(mergeScoreMaps(entityScores, causalScores), fallbackScores)
+	const entityScores = expandViaEntities(
+		hdb,
+		bankId,
+		seedIds,
+		seedSet,
+		options
+	)
+	const causalScores = expandViaCausalLinks(
+		hdb,
+		bankId,
+		seedIds,
+		seedSet,
+		options
+	)
+	const fallbackScores = expandViaFallbackLinks(
+		hdb,
+		bankId,
+		seedIds,
+		seedSet,
+		limit,
+		options
+	)
+	const merged = mergeScoreMaps(
+		mergeScoreMaps(entityScores, causalScores),
+		fallbackScores
+	)
 	const filtered = filterOutSeeds(merged, seedSet)
 
 	return Array.from(filtered.entries())
@@ -59,8 +88,17 @@ export interface GraphSearchOptions {
 
 // Python parity: only "caused_by" is a valid causal relation type.
 const CAUSAL_LINK_TYPES = ['caused_by'] as const
-const FALLBACK_LINK_TYPES = ['semantic', 'temporal', 'entity'] as const
-const ALL_FACT_TYPES: FactType[] = ['world', 'experience', 'opinion', 'observation']
+const FALLBACK_LINK_TYPES = [
+	'semantic',
+	'temporal',
+	'entity'
+] as const
+const ALL_FACT_TYPES: FactType[] = [
+	'world',
+	'experience',
+	'opinion',
+	'observation'
+]
 const DEFAULT_MAX_ENTITY_FREQUENCY = 500
 const DEFAULT_CAUSAL_WEIGHT_THRESHOLD = 0.3
 const DEFAULT_CAUSAL_LIMIT_PER_SEED = 10
@@ -76,15 +114,22 @@ async function resolveSeedIds(
 	options: GraphSearchOptions
 ): Promise<string[]> {
 	if (options.seedMemoryIds?.length) {
-		return unique([...options.seedMemoryIds, ...(options.temporalSeedMemoryIds ?? [])])
+		return unique([
+			...options.seedMemoryIds,
+			...(options.temporalSeedMemoryIds ?? [])
+		])
 	}
 
 	const desiredSeedCount = Math.max(
 		1,
-		Math.min(options.seedLimit ?? DEFAULT_SEED_LIMIT, Math.max(limit, 1))
+		Math.min(
+			options.seedLimit ?? DEFAULT_SEED_LIMIT,
+			Math.max(limit, 1)
+		)
 	)
 	const searchLimit = desiredSeedCount * 4
-	const seedThreshold = options.seedThreshold ?? DEFAULT_SEED_THRESHOLD
+	const seedThreshold =
+		options.seedThreshold ?? DEFAULT_SEED_THRESHOLD
 	const factTypes = getFactTypeSet(options.factTypes)
 	const hits = await memoryVec.search(query, searchLimit)
 
@@ -95,8 +140,13 @@ async function resolveSeedIds(
 	})
 
 	// Collect all IDs we need to look up (semantic hits + temporal seeds)
-	const temporalSeedIds = unique(options.temporalSeedMemoryIds ?? [])
-	const allCandidateIds = unique([...candidateHits.map(h => h.id), ...temporalSeedIds])
+	const temporalSeedIds = unique(
+		options.temporalSeedMemoryIds ?? []
+	)
+	const allCandidateIds = unique([
+		...candidateHits.map(h => h.id),
+		...temporalSeedIds
+	])
 
 	// Batch-load all candidate memory rows in one query
 	const candidateRows =
@@ -109,7 +159,12 @@ async function resolveSeedIds(
 						tags: hdb.schema.memoryUnits.tags
 					})
 					.from(hdb.schema.memoryUnits)
-					.where(inArray(hdb.schema.memoryUnits.id, allCandidateIds))
+					.where(
+						inArray(
+							hdb.schema.memoryUnits.id,
+							allCandidateIds
+						)
+					)
 					.all()
 			: []
 	const rowById = new Map(candidateRows.map(r => [r.id, r]))
@@ -125,7 +180,14 @@ async function resolveSeedIds(
 		const row = rowById.get(hit.id)
 		if (!row || row.bankId !== bankId) continue
 		if (!factTypes.has(row.factType as FactType)) continue
-		if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
+		if (
+			!passesTagFilter(
+				row.tags,
+				options.tags,
+				options.tagsMatch
+			)
+		)
+			continue
 
 		seen.add(hit.id)
 		seeds.push(hit.id)
@@ -138,7 +200,14 @@ async function resolveSeedIds(
 		const row = rowById.get(temporalSeedId)
 		if (!row || row.bankId !== bankId) continue
 		if (!factTypes.has(row.factType as FactType)) continue
-		if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
+		if (
+			!passesTagFilter(
+				row.tags,
+				options.tags,
+				options.tagsMatch
+			)
+		)
+			continue
 
 		seen.add(temporalSeedId)
 		seeds.push(temporalSeedId)
@@ -154,10 +223,21 @@ function expandViaEntities(
 	seedSet: Set<string>,
 	options: GraphSearchOptions
 ): Map<string, number> {
-	const entityIds = getRelevantEntityIds(hdb, bankId, seedIds, options)
+	const entityIds = getRelevantEntityIds(
+		hdb,
+		bankId,
+		seedIds,
+		options
+	)
 	if (entityIds.length === 0) return new Map()
 
-	const directScores = scoreDirectEntityExpansion(hdb, bankId, entityIds, seedSet, options)
+	const directScores = scoreDirectEntityExpansion(
+		hdb,
+		bankId,
+		entityIds,
+		seedSet,
+		options
+	)
 	const observationScores = scoreObservationEntityExpansion(
 		hdb,
 		bankId,
@@ -175,13 +255,28 @@ function getRelevantEntityIds(
 	seedIds: string[],
 	options: GraphSearchOptions
 ): string[] {
-	const directEntityIds = getEntityIdsForMemoryIds(hdb, seedIds)
-	const observationSourceIds = getObservationSourceIds(hdb, bankId, seedIds)
-	const sourceEntityIds = getEntityIdsForMemoryIds(hdb, observationSourceIds)
-	const allEntityIds = unique([...directEntityIds, ...sourceEntityIds])
+	const directEntityIds = getEntityIdsForMemoryIds(
+		hdb,
+		seedIds
+	)
+	const observationSourceIds = getObservationSourceIds(
+		hdb,
+		bankId,
+		seedIds
+	)
+	const sourceEntityIds = getEntityIdsForMemoryIds(
+		hdb,
+		observationSourceIds
+	)
+	const allEntityIds = unique([
+		...directEntityIds,
+		...sourceEntityIds
+	])
 	if (allEntityIds.length === 0) return []
 
-	const maxEntityFrequency = options.maxEntityFrequency ?? DEFAULT_MAX_ENTITY_FREQUENCY
+	const maxEntityFrequency =
+		options.maxEntityFrequency ??
+		DEFAULT_MAX_ENTITY_FREQUENCY
 	const rows = hdb.db
 		.select({
 			id: hdb.schema.entities.id,
@@ -192,10 +287,19 @@ function getRelevantEntityIds(
 		.where(inArray(hdb.schema.entities.id, allEntityIds))
 		.all()
 
-	return rows.filter(r => r.bankId === bankId && r.mentionCount < maxEntityFrequency).map(r => r.id)
+	return rows
+		.filter(
+			r =>
+				r.bankId === bankId &&
+				r.mentionCount < maxEntityFrequency
+		)
+		.map(r => r.id)
 }
 
-function getEntityIdsForMemoryIds(hdb: HindsightDatabase, memoryIds: string[]): string[] {
+function getEntityIdsForMemoryIds(
+	hdb: HindsightDatabase,
+	memoryIds: string[]
+): string[] {
 	if (memoryIds.length === 0) return []
 
 	const rows = hdb.db
@@ -203,7 +307,9 @@ function getEntityIdsForMemoryIds(hdb: HindsightDatabase, memoryIds: string[]): 
 			entityId: hdb.schema.memoryEntities.entityId
 		})
 		.from(hdb.schema.memoryEntities)
-		.where(inArray(hdb.schema.memoryEntities.memoryId, memoryIds))
+		.where(
+			inArray(hdb.schema.memoryEntities.memoryId, memoryIds)
+		)
 		.all()
 
 	return unique(rows.map(r => r.entityId))
@@ -216,7 +322,8 @@ function scoreDirectEntityExpansion(
 	seedSet: Set<string>,
 	options: GraphSearchOptions
 ): Map<string, number> {
-	if (!shouldSearchDirectFactTypes(options.factTypes)) return new Map()
+	if (!shouldSearchDirectFactTypes(options.factTypes))
+		return new Map()
 	if (entityIds.length === 0) return new Map()
 
 	const relations = hdb.db
@@ -224,7 +331,9 @@ function scoreDirectEntityExpansion(
 			memoryId: hdb.schema.memoryEntities.memoryId
 		})
 		.from(hdb.schema.memoryEntities)
-		.where(inArray(hdb.schema.memoryEntities.entityId, entityIds))
+		.where(
+			inArray(hdb.schema.memoryEntities.entityId, entityIds)
+		)
 		.all()
 
 	const scores = new Map<string, number>()
@@ -252,13 +361,22 @@ function scoreObservationEntityExpansion(
 	seedSet: Set<string>,
 	options: GraphSearchOptions
 ): Map<string, number> {
-	if (!shouldSearchObservationFactType(options.factTypes)) return new Map()
+	if (!shouldSearchObservationFactType(options.factTypes))
+		return new Map()
 	if (entityIds.length === 0) return new Map()
 
-	const seedSourceIds = getObservationSourceIds(hdb, bankId, seedIds)
+	const seedSourceIds = getObservationSourceIds(
+		hdb,
+		bankId,
+		seedIds
+	)
 	if (seedSourceIds.length === 0) return new Map()
 
-	const connectedSourceIds = getConnectedSourceIds(hdb, bankId, entityIds)
+	const connectedSourceIds = getConnectedSourceIds(
+		hdb,
+		bankId,
+		entityIds
+	)
 	if (connectedSourceIds.length === 0) return new Map()
 
 	const sourceIdSet = new Set(connectedSourceIds)
@@ -266,7 +384,8 @@ function scoreObservationEntityExpansion(
 		.select({
 			id: hdb.schema.memoryUnits.id,
 			tags: hdb.schema.memoryUnits.tags,
-			sourceMemoryIds: hdb.schema.memoryUnits.sourceMemoryIds
+			sourceMemoryIds:
+				hdb.schema.memoryUnits.sourceMemoryIds
 		})
 		.from(hdb.schema.memoryUnits)
 		.where(
@@ -281,7 +400,14 @@ function scoreObservationEntityExpansion(
 
 	for (const row of observationRows) {
 		if (seedSet.has(row.id)) continue
-		if (!passesTagFilter(row.tags, options.tags, options.tagsMatch)) continue
+		if (
+			!passesTagFilter(
+				row.tags,
+				options.tags,
+				options.tagsMatch
+			)
+		)
+			continue
 
 		const sourceIds = parseStringArray(row.sourceMemoryIds)
 		const overlap = countOverlap(sourceIds, sourceIdSet)
@@ -303,7 +429,8 @@ function getObservationSourceIds(
 
 	const rows = hdb.db
 		.select({
-			sourceMemoryIds: hdb.schema.memoryUnits.sourceMemoryIds
+			sourceMemoryIds:
+				hdb.schema.memoryUnits.sourceMemoryIds
 		})
 		.from(hdb.schema.memoryUnits)
 		.where(
@@ -315,7 +442,9 @@ function getObservationSourceIds(
 		)
 		.all()
 
-	const sourceIds = rows.flatMap(row => parseStringArray(row.sourceMemoryIds))
+	const sourceIds = rows.flatMap(row =>
+		parseStringArray(row.sourceMemoryIds)
+	)
 	return unique(sourceIds)
 }
 
@@ -331,10 +460,14 @@ function getConnectedSourceIds(
 			memoryId: hdb.schema.memoryEntities.memoryId
 		})
 		.from(hdb.schema.memoryEntities)
-		.where(inArray(hdb.schema.memoryEntities.entityId, entityIds))
+		.where(
+			inArray(hdb.schema.memoryEntities.entityId, entityIds)
+		)
 		.all()
 
-	const candidateIds = unique(sourceRelations.map(r => r.memoryId))
+	const candidateIds = unique(
+		sourceRelations.map(r => r.memoryId)
+	)
 	if (candidateIds.length === 0) return []
 
 	const rows = hdb.db
@@ -346,7 +479,9 @@ function getConnectedSourceIds(
 		.where(inArray(hdb.schema.memoryUnits.id, candidateIds))
 		.all()
 
-	return rows.filter(row => row.bankId === bankId).map(row => row.id)
+	return rows
+		.filter(row => row.bankId === bankId)
+		.map(row => row.id)
 }
 
 function expandViaCausalLinks(
@@ -358,9 +493,16 @@ function expandViaCausalLinks(
 ): Map<string, number> {
 	if (seedIds.length === 0) return new Map()
 
-	const causalThreshold = options.causalWeightThreshold ?? DEFAULT_CAUSAL_WEIGHT_THRESHOLD
-	const perSeedLimit = options.causalLimitPerSeed ?? DEFAULT_CAUSAL_LIMIT_PER_SEED
-	const rawLimit = Math.max(1, seedIds.length * perSeedLimit)
+	const causalThreshold =
+		options.causalWeightThreshold ??
+		DEFAULT_CAUSAL_WEIGHT_THRESHOLD
+	const perSeedLimit =
+		options.causalLimitPerSeed ??
+		DEFAULT_CAUSAL_LIMIT_PER_SEED
+	const rawLimit = Math.max(
+		1,
+		seedIds.length * perSeedLimit
+	)
 
 	const links = hdb.db
 		.select({
@@ -372,7 +514,9 @@ function expandViaCausalLinks(
 		.where(
 			and(
 				eq(hdb.schema.memoryLinks.bankId, bankId),
-				inArray(hdb.schema.memoryLinks.linkType, [...CAUSAL_LINK_TYPES]),
+				inArray(hdb.schema.memoryLinks.linkType, [
+					...CAUSAL_LINK_TYPES
+				]),
 				gte(hdb.schema.memoryLinks.weight, causalThreshold),
 				or(
 					inArray(hdb.schema.memoryLinks.sourceId, seedIds),
@@ -387,14 +531,26 @@ function expandViaCausalLinks(
 	const scores = new Map<string, number>()
 
 	for (const link of links) {
-		if (seedSet.has(link.sourceId) && !seedSet.has(link.targetId)) {
+		if (
+			seedSet.has(link.sourceId) &&
+			!seedSet.has(link.targetId)
+		) {
 			const current = scores.get(link.targetId) ?? 0
-			scores.set(link.targetId, Math.max(current, link.weight + 1))
+			scores.set(
+				link.targetId,
+				Math.max(current, link.weight + 1)
+			)
 			continue
 		}
-		if (seedSet.has(link.targetId) && !seedSet.has(link.sourceId)) {
+		if (
+			seedSet.has(link.targetId) &&
+			!seedSet.has(link.sourceId)
+		) {
 			const current = scores.get(link.sourceId) ?? 0
-			scores.set(link.sourceId, Math.max(current, link.weight + 1))
+			scores.set(
+				link.sourceId,
+				Math.max(current, link.weight + 1)
+			)
 		}
 	}
 
@@ -418,8 +574,12 @@ function expandViaFallbackLinks(
 ): Map<string, number> {
 	if (seedIds.length === 0 || limit <= 0) return new Map()
 
-	const threshold = options.causalWeightThreshold ?? DEFAULT_CAUSAL_WEIGHT_THRESHOLD
-	const perSeedLimit = options.causalLimitPerSeed ?? DEFAULT_CAUSAL_LIMIT_PER_SEED
+	const threshold =
+		options.causalWeightThreshold ??
+		DEFAULT_CAUSAL_WEIGHT_THRESHOLD
+	const perSeedLimit =
+		options.causalLimitPerSeed ??
+		DEFAULT_CAUSAL_LIMIT_PER_SEED
 	const rawLimit = Math.max(1, limit * perSeedLimit)
 
 	const links = hdb.db
@@ -432,7 +592,9 @@ function expandViaFallbackLinks(
 		.where(
 			and(
 				eq(hdb.schema.memoryLinks.bankId, bankId),
-				inArray(hdb.schema.memoryLinks.linkType, [...FALLBACK_LINK_TYPES]),
+				inArray(hdb.schema.memoryLinks.linkType, [
+					...FALLBACK_LINK_TYPES
+				]),
 				gte(hdb.schema.memoryLinks.weight, threshold),
 				or(
 					inArray(hdb.schema.memoryLinks.sourceId, seedIds),
@@ -447,14 +609,26 @@ function expandViaFallbackLinks(
 	const scores = new Map<string, number>()
 
 	for (const link of links) {
-		if (seedSet.has(link.sourceId) && !seedSet.has(link.targetId)) {
+		if (
+			seedSet.has(link.sourceId) &&
+			!seedSet.has(link.targetId)
+		) {
 			const current = scores.get(link.targetId) ?? 0
-			scores.set(link.targetId, Math.max(current, link.weight * 0.5))
+			scores.set(
+				link.targetId,
+				Math.max(current, link.weight * 0.5)
+			)
 			continue
 		}
-		if (seedSet.has(link.targetId) && !seedSet.has(link.sourceId)) {
+		if (
+			seedSet.has(link.targetId) &&
+			!seedSet.has(link.sourceId)
+		) {
 			const current = scores.get(link.sourceId) ?? 0
-			scores.set(link.sourceId, Math.max(current, link.weight * 0.5))
+			scores.set(
+				link.sourceId,
+				Math.max(current, link.weight * 0.5)
+			)
 		}
 	}
 
@@ -468,7 +642,10 @@ function expandViaFallbackLinks(
 	)
 }
 
-function filterOutSeeds(scores: Map<string, number>, seedSet: Set<string>): Map<string, number> {
+function filterOutSeeds(
+	scores: Map<string, number>,
+	seedSet: Set<string>
+): Map<string, number> {
 	const filtered = new Map<string, number>()
 	for (const [id, score] of scores) {
 		if (!seedSet.has(id)) {
@@ -492,21 +669,36 @@ function mergeScoreMaps(
 	return merged
 }
 
-function getFactTypeSet(factTypes?: FactType[]): Set<FactType> {
-	return new Set(factTypes && factTypes.length > 0 ? factTypes : ALL_FACT_TYPES)
+function getFactTypeSet(
+	factTypes?: FactType[]
+): Set<FactType> {
+	return new Set(
+		factTypes && factTypes.length > 0
+			? factTypes
+			: ALL_FACT_TYPES
+	)
 }
 
-function shouldSearchObservationFactType(factTypes?: FactType[]): boolean {
+function shouldSearchObservationFactType(
+	factTypes?: FactType[]
+): boolean {
 	if (!factTypes || factTypes.length === 0) return true
 	return factTypes.includes('observation')
 }
 
-function shouldSearchDirectFactTypes(factTypes?: FactType[]): boolean {
+function shouldSearchDirectFactTypes(
+	factTypes?: FactType[]
+): boolean {
 	if (!factTypes || factTypes.length === 0) return true
-	return factTypes.some(factType => factType !== 'observation')
+	return factTypes.some(
+		factType => factType !== 'observation'
+	)
 }
 
-function countOverlap(values: string[], lookup: Set<string>): number {
+function countOverlap(
+	values: string[],
+	lookup: Set<string>
+): number {
 	let count = 0
 	for (const value of values) {
 		if (lookup.has(value)) count++
@@ -540,7 +732,8 @@ function filterScoreMapByMemoryRows(
 	for (const row of rows) {
 		if (row.bankId !== bankId) continue
 		if (!factTypeSet.has(row.factType as FactType)) continue
-		if (!passesTagFilter(row.tags, tags, tagsMatch)) continue
+		if (!passesTagFilter(row.tags, tags, tagsMatch))
+			continue
 		const score = scores.get(row.id)
 		if (score != null) filtered.set(row.id, score)
 	}

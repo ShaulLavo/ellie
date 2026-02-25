@@ -29,7 +29,11 @@ export interface RollingIngestEvent {
 	/** Timestamp (epoch ms) */
 	timestamp: number
 	/** Fact type */
-	factType: 'world' | 'experience' | 'opinion' | 'observation'
+	factType:
+		| 'world'
+		| 'experience'
+		| 'opinion'
+		| 'observation'
 	/** Tags for filtering */
 	tags?: string[]
 }

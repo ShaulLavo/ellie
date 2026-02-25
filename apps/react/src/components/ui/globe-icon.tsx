@@ -1,26 +1,58 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useRef
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const GlobeIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const GlobeIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
-		const animationControls = useRef<Array<ReturnType<typeof animate>>>([])
+		const animationControls = useRef<
+			Array<ReturnType<typeof animate>>
+		>([])
 
 		const start = async () => {
-			animationControls.current.forEach(control => control.stop())
+			animationControls.current.forEach(control =>
+				control.stop()
+			)
 			animationControls.current = []
 
 			animationControls.current.push(
-				animate('.globe-circle', { rotate: 360 }, { duration: 2, ease: 'linear', repeat: Infinity })
+				animate(
+					'.globe-circle',
+					{ rotate: 360 },
+					{ duration: 2, ease: 'linear', repeat: Infinity }
+				)
 			)
 		}
 
 		const stop = () => {
-			animationControls.current.forEach(control => control.stop())
+			animationControls.current.forEach(control =>
+				control.stop()
+			)
 			animationControls.current = []
 
-			animate('.globe-circle', { rotate: 0 }, { duration: 0.5 })
+			animate(
+				'.globe-circle',
+				{ rotate: 0 },
+				{ duration: 0.5 }
+			)
 		}
 
 		useImperativeHandle(ref, () => ({
@@ -46,7 +78,10 @@ const GlobeIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 					strokeMiterlimit="10"
 					strokeLinecap="square"
 				>
-					<motion.g className="globe-circle" style={{ transformOrigin: '23px 19px' }}>
+					<motion.g
+						className="globe-circle"
+						style={{ transformOrigin: '23px 19px' }}
+					>
 						<motion.path
 							className="globe-continent-1"
 							d="M36.6225 22.1264C34.6145 19.2959 32.3651 15.7913 28.4377 17.3428C24.4307 18.9257 30.0493 23.15 25.2064 26.9189C22.1135 29.3259 22.8515 31.6477 23.9478 33"
@@ -68,9 +103,15 @@ const GlobeIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 						/>
 					</motion.g>
 
-					<motion.path className="globe-stand-stem" d="M23 43V38" />
+					<motion.path
+						className="globe-stand-stem"
+						d="M23 43V38"
+					/>
 
-					<motion.path className="globe-stand-base" d="M16 43H30" />
+					<motion.path
+						className="globe-stand-base"
+						d="M16 43H30"
+					/>
 
 					<motion.path
 						className="globe-axis"

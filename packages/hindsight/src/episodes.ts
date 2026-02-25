@@ -3,7 +3,15 @@
  */
 
 import { ulid } from '@ellie/utils'
-import { eq, sql, and, desc, lt, or, isNull } from 'drizzle-orm'
+import {
+	eq,
+	sql,
+	and,
+	desc,
+	lt,
+	or,
+	isNull
+} from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import {
 	NARRATIVE_STEPS_DEFAULT,
@@ -21,7 +29,11 @@ import type { EpisodeRow } from './schema'
 
 export const EPISODE_GAP_MS = 45 * 60 * 1000
 
-const BOUNDARY_PHRASES: RegExp[] = [/\bnew task\b/i, /\bswitching to\b/i, /\bdone with\b/i]
+const BOUNDARY_PHRASES: RegExp[] = [
+	/\bnew task\b/i,
+	/\bswitching to\b/i,
+	/\bdone with\b/i
+]
 
 interface CursorPayload {
 	t: number
@@ -29,32 +41,52 @@ interface CursorPayload {
 }
 
 function toSnippet(content: string): string {
-	return content.length > 200 ? `${content.slice(0, 200)}…` : content
+	return content.length > 200
+		? `${content.slice(0, 200)}…`
+		: content
 }
 
 function encodeCursor(payload: CursorPayload): string {
-	return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+	return Buffer.from(
+		JSON.stringify(payload),
+		'utf8'
+	).toString('base64url')
 }
 
-function decodeCursor(cursor: string): CursorPayload | null {
+function decodeCursor(
+	cursor: string
+): CursorPayload | null {
 	try {
-		const decoded = Buffer.from(cursor, 'base64url').toString('utf8')
-		const parsed = JSON.parse(decoded) as Partial<CursorPayload>
-		if (typeof parsed.t !== 'number' || typeof parsed.id !== 'string') return null
+		const decoded = Buffer.from(
+			cursor,
+			'base64url'
+		).toString('utf8')
+		const parsed = JSON.parse(
+			decoded
+		) as Partial<CursorPayload>
+		if (
+			typeof parsed.t !== 'number' ||
+			typeof parsed.id !== 'string'
+		)
+			return null
 		return { t: parsed.t, id: parsed.id }
 	} catch {
 		return null
 	}
 }
 
-function rowToEpisodeSummary(row: EpisodeRow): EpisodeSummary {
+function rowToEpisodeSummary(
+	row: EpisodeRow
+): EpisodeSummary {
 	return {
 		episodeId: row.id,
 		startAt: row.startAt,
 		endAt: row.endAt,
 		lastEventAt: row.lastEventAt,
 		eventCount: row.eventCount,
-		boundaryReason: (row.boundaryReason as EpisodeBoundaryReason | null) ?? 'initial',
+		boundaryReason:
+			(row.boundaryReason as EpisodeBoundaryReason | null) ??
+			'initial',
 		profile: row.profile,
 		project: row.project,
 		session: row.session
@@ -102,7 +134,11 @@ function collectEpisodeChain(
 	let cursor = anchorEpisodeId
 
 	for (let i = 0; i < maxSteps; i++) {
-		const nextId = getAdjacentEpisodeId(hdb, cursor, direction)
+		const nextId = getAdjacentEpisodeId(
+			hdb,
+			cursor,
+			direction
+		)
 		if (!nextId) break
 		if (seen.has(nextId)) break
 		chain.push(nextId)
@@ -113,7 +149,9 @@ function collectEpisodeChain(
 	return chain
 }
 
-function buildEpisodeInClause(episodeIds: string[]): string {
+function buildEpisodeInClause(
+	episodeIds: string[]
+): string {
 	return episodeIds.map(() => '?').join(',')
 }
 
@@ -124,7 +162,10 @@ export function detectBoundary(
 	project: string | null,
 	session: string | null,
 	content?: string
-): { needsNew: boolean; reason: EpisodeBoundaryReason | null } {
+): {
+	needsNew: boolean
+	reason: EpisodeBoundaryReason | null
+} {
 	if (!lastEpisode) {
 		return { needsNew: true, reason: 'initial' }
 	}
@@ -178,7 +219,10 @@ export function resolveEpisode(
 		.select()
 		.from(hdb.schema.episodes)
 		.where(and(...scopeConditions))
-		.orderBy(desc(hdb.schema.episodes.lastEventAt), desc(hdb.schema.episodes.id))
+		.orderBy(
+			desc(hdb.schema.episodes.lastEventAt),
+			desc(hdb.schema.episodes.id)
+		)
 		.limit(1)
 		.get() as EpisodeRow | undefined
 
@@ -277,17 +321,26 @@ export function recordEpisodeEvent(
 function buildEpisodeConditions(
 	schema: HindsightDatabase['schema'],
 	bankId: string,
-	options?: Pick<ListEpisodesOptions, 'profile' | 'project' | 'session'>
+	options?: Pick<
+		ListEpisodesOptions,
+		'profile' | 'project' | 'session'
+	>
 ) {
 	const conditions = [eq(schema.episodes.bankId, bankId)]
 	if (options?.profile !== undefined) {
-		conditions.push(eq(schema.episodes.profile, options.profile))
+		conditions.push(
+			eq(schema.episodes.profile, options.profile)
+		)
 	}
 	if (options?.project !== undefined) {
-		conditions.push(eq(schema.episodes.project, options.project))
+		conditions.push(
+			eq(schema.episodes.project, options.project)
+		)
 	}
 	if (options?.session !== undefined) {
-		conditions.push(eq(schema.episodes.session, options.session))
+		conditions.push(
+			eq(schema.episodes.session, options.session)
+		)
 	}
 	return conditions
 }
@@ -297,10 +350,17 @@ export function listEpisodes(
 	bankId: string,
 	options?: Omit<ListEpisodesOptions, 'bankId'>
 ): ListEpisodesResult {
-	const limit = Math.min(Math.max(options?.limit ?? 20, 1), 100)
+	const limit = Math.min(
+		Math.max(options?.limit ?? 20, 1),
+		100
+	)
 	const { schema } = hdb
 
-	const conditions = buildEpisodeConditions(schema, bankId, options)
+	const conditions = buildEpisodeConditions(
+		schema,
+		bankId,
+		options
+	)
 
 	if (options?.cursor) {
 		const cursor = decodeCursor(options.cursor)
@@ -308,19 +368,28 @@ export function listEpisodes(
 			conditions.push(
 				or(
 					lt(schema.episodes.lastEventAt, cursor.t),
-					and(eq(schema.episodes.lastEventAt, cursor.t), lt(schema.episodes.id, cursor.id))
+					and(
+						eq(schema.episodes.lastEventAt, cursor.t),
+						lt(schema.episodes.id, cursor.id)
+					)
 				)!
 			)
 		}
 	}
 
-	const where = conditions.length === 1 ? conditions[0]! : and(...conditions)
+	const where =
+		conditions.length === 1
+			? conditions[0]!
+			: and(...conditions)
 
 	const rows = hdb.db
 		.select()
 		.from(schema.episodes)
 		.where(where)
-		.orderBy(desc(schema.episodes.lastEventAt), desc(schema.episodes.id))
+		.orderBy(
+			desc(schema.episodes.lastEventAt),
+			desc(schema.episodes.id)
+		)
 		.limit(limit + 1)
 		.all() as EpisodeRow[]
 
@@ -335,8 +404,15 @@ export function listEpisodes(
 				})
 			: null
 
-	const totalConditions = buildEpisodeConditions(schema, bankId, options)
-	const totalWhere = totalConditions.length === 1 ? totalConditions[0]! : and(...totalConditions)
+	const totalConditions = buildEpisodeConditions(
+		schema,
+		bankId,
+		options
+	)
+	const totalWhere =
+		totalConditions.length === 1
+			? totalConditions[0]!
+			: and(...totalConditions)
 
 	const totalRow = hdb.db
 		.select({ count: sql<number>`COUNT(*)` })
@@ -357,8 +433,15 @@ export function narrative(
 	bankId: string,
 	options: Omit<NarrativeInput, 'bankId'>
 ): NarrativeResult {
-	const { anchorMemoryId, direction = 'both', steps = NARRATIVE_STEPS_DEFAULT } = options
-	const maxSteps = Math.min(Math.max(steps, 1), NARRATIVE_STEPS_MAX)
+	const {
+		anchorMemoryId,
+		direction = 'both',
+		steps = NARRATIVE_STEPS_DEFAULT
+	} = options
+	const maxSteps = Math.min(
+		Math.max(steps, 1),
+		NARRATIVE_STEPS_MAX
+	)
 
 	const anchorEvent = hdb.db
 		.select()
@@ -366,10 +449,16 @@ export function narrative(
 		.where(
 			and(
 				eq(hdb.schema.episodeEvents.bankId, bankId),
-				eq(hdb.schema.episodeEvents.memoryId, anchorMemoryId)
+				eq(
+					hdb.schema.episodeEvents.memoryId,
+					anchorMemoryId
+				)
 			)
 		)
-		.orderBy(desc(hdb.schema.episodeEvents.eventTime), desc(hdb.schema.episodeEvents.id))
+		.orderBy(
+			desc(hdb.schema.episodeEvents.eventTime),
+			desc(hdb.schema.episodeEvents.id)
+		)
 		.limit(1)
 		.get()
 
@@ -381,7 +470,12 @@ export function narrative(
 	const anchorEpisodeId = anchorEvent.episodeId
 
 	if (direction === 'before' || direction === 'both') {
-		const episodeIds = collectEpisodeChain(hdb, anchorEpisodeId, 'before', maxSteps)
+		const episodeIds = collectEpisodeChain(
+			hdb,
+			anchorEpisodeId,
+			'before',
+			maxSteps
+		)
 		const inClause = buildEpisodeInClause(episodeIds)
 		const beforeEvents = hdb.sqlite
 			.prepare(
@@ -436,7 +530,12 @@ export function narrative(
 	})
 
 	if (direction === 'after' || direction === 'both') {
-		const episodeIds = collectEpisodeChain(hdb, anchorEpisodeId, 'after', maxSteps)
+		const episodeIds = collectEpisodeChain(
+			hdb,
+			anchorEpisodeId,
+			'after',
+			maxSteps
+		)
 		const inClause = buildEpisodeInClause(episodeIds)
 		const afterEvents = hdb.sqlite
 			.prepare(

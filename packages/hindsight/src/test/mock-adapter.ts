@@ -92,7 +92,10 @@ export function createMockAdapter(): MockAdapter {
 		// Yields AG-UI protocol events for a text-only response.
 		chatStream(options: unknown) {
 			calls.push({ messages: [], options })
-			const response = responseQueue.length > 0 ? responseQueue.shift()! : nextResponse
+			const response =
+				responseQueue.length > 0
+					? responseQueue.shift()!
+					: nextResponse
 
 			return {
 				async *[Symbol.asyncIterator]() {
@@ -135,7 +138,10 @@ export function createMockAdapter(): MockAdapter {
 		// ── AnyTextAdapter.structuredOutput ──
 		structuredOutput(_options: unknown) {
 			calls.push({ messages: [], options: _options })
-			const response = responseQueue.length > 0 ? responseQueue.shift()! : nextResponse
+			const response =
+				responseQueue.length > 0
+					? responseQueue.shift()!
+					: nextResponse
 
 			return Promise.resolve({
 				data: JSON.parse(response),

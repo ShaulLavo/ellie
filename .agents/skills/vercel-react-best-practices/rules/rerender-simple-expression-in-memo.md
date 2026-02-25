@@ -27,7 +27,8 @@ function Header({ user, notifications }: Props) {
 
 ```tsx
 function Header({ user, notifications }: Props) {
-	const isLoading = user.isLoading || notifications.isLoading
+	const isLoading =
+		user.isLoading || notifications.isLoading
 
 	if (isLoading) return <Skeleton />
 	// return some markup

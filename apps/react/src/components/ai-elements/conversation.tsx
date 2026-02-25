@@ -4,15 +4,29 @@ import type { ComponentProps } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ArrowDownIcon, DownloadSimpleIcon } from '@phosphor-icons/react'
+import {
+	ArrowDownIcon,
+	DownloadSimpleIcon
+} from '@phosphor-icons/react'
 import { useCallback } from 'react'
-import { StickToBottom, useStickToBottomContext } from 'use-stick-to-bottom'
+import {
+	StickToBottom,
+	useStickToBottomContext
+} from 'use-stick-to-bottom'
 
-export type ConversationProps = ComponentProps<typeof StickToBottom>
+export type ConversationProps = ComponentProps<
+	typeof StickToBottom
+>
 
-export const Conversation = ({ className, ...props }: ConversationProps) => (
+export const Conversation = ({
+	className,
+	...props
+}: ConversationProps) => (
 	<StickToBottom
-		className={cn('relative flex-1 overflow-y-hidden', className)}
+		className={cn(
+			'relative flex-1 overflow-y-hidden',
+			className
+		)}
 		initial="smooth"
 		resize="smooth"
 		role="log"
@@ -20,17 +34,26 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
 	/>
 )
 
-export type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>
+export type ConversationContentProps = ComponentProps<
+	typeof StickToBottom.Content
+>
 
-export const ConversationContent = ({ className, ...props }: ConversationContentProps) => (
-	<StickToBottom.Content className={cn('flex flex-col gap-8 p-4', className)} {...props} />
+export const ConversationContent = ({
+	className,
+	...props
+}: ConversationContentProps) => (
+	<StickToBottom.Content
+		className={cn('flex flex-col gap-8 p-4', className)}
+		{...props}
+	/>
 )
 
-export type ConversationEmptyStateProps = ComponentProps<'div'> & {
-	title?: string
-	description?: string
-	icon?: React.ReactNode
-}
+export type ConversationEmptyStateProps =
+	ComponentProps<'div'> & {
+		title?: string
+		description?: string
+		icon?: React.ReactNode
+	}
 
 export const ConversationEmptyState = ({
 	className,
@@ -49,23 +72,34 @@ export const ConversationEmptyState = ({
 	>
 		{children ?? (
 			<>
-				{icon && <div className="text-muted-foreground">{icon}</div>}
+				{icon && (
+					<div className="text-muted-foreground">
+						{icon}
+					</div>
+				)}
 				<div className="space-y-1">
 					<h3 className="font-medium text-sm">{title}</h3>
-					{description && <p className="text-muted-foreground text-sm">{description}</p>}
+					{description && (
+						<p className="text-muted-foreground text-sm">
+							{description}
+						</p>
+					)}
 				</div>
 			</>
 		)}
 	</div>
 )
 
-export type ConversationScrollButtonProps = ComponentProps<typeof Button>
+export type ConversationScrollButtonProps = ComponentProps<
+	typeof Button
+>
 
 export const ConversationScrollButton = ({
 	className,
 	...props
 }: ConversationScrollButtonProps) => {
-	const { isAtBottom, scrollToBottom } = useStickToBottomContext()
+	const { isAtBottom, scrollToBottom } =
+		useStickToBottomContext()
 
 	const handleScrollToBottom = useCallback(() => {
 		scrollToBottom()
@@ -95,21 +129,37 @@ export interface ConversationMessage {
 	content: string
 }
 
-export type ConversationDownloadProps = Omit<ComponentProps<typeof Button>, 'onClick'> & {
+export type ConversationDownloadProps = Omit<
+	ComponentProps<typeof Button>,
+	'onClick'
+> & {
 	messages: ConversationMessage[]
 	filename?: string
-	formatMessage?: (message: ConversationMessage, index: number) => string
+	formatMessage?: (
+		message: ConversationMessage,
+		index: number
+	) => string
 }
 
-const defaultFormatMessage = (message: ConversationMessage): string => {
-	const roleLabel = message.role.charAt(0).toUpperCase() + message.role.slice(1)
+const defaultFormatMessage = (
+	message: ConversationMessage
+): string => {
+	const roleLabel =
+		message.role.charAt(0).toUpperCase() +
+		message.role.slice(1)
 	return `**${roleLabel}:** ${message.content}`
 }
 
 export const messagesToMarkdown = (
 	messages: ConversationMessage[],
-	formatMessage: (message: ConversationMessage, index: number) => string = defaultFormatMessage
-): string => messages.map((msg, i) => formatMessage(msg, i)).join('\n\n')
+	formatMessage: (
+		message: ConversationMessage,
+		index: number
+	) => string = defaultFormatMessage
+): string =>
+	messages
+		.map((msg, i) => formatMessage(msg, i))
+		.join('\n\n')
 
 export const ConversationDownload = ({
 	messages,
@@ -120,8 +170,13 @@ export const ConversationDownload = ({
 	...props
 }: ConversationDownloadProps) => {
 	const handleDownload = useCallback(() => {
-		const markdown = messagesToMarkdown(messages, formatMessage)
-		const blob = new Blob([markdown], { type: 'text/markdown' })
+		const markdown = messagesToMarkdown(
+			messages,
+			formatMessage
+		)
+		const blob = new Blob([markdown], {
+			type: 'text/markdown'
+		})
 		const url = URL.createObjectURL(blob)
 		const link = document.createElement('a')
 		link.href = url
@@ -144,7 +199,9 @@ export const ConversationDownload = ({
 			variant="outline"
 			{...props}
 		>
-			{children ?? <DownloadSimpleIcon className="size-4" />}
+			{children ?? (
+				<DownloadSimpleIcon className="size-4" />
+			)}
 		</Button>
 	)
 }

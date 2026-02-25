@@ -10,7 +10,9 @@
  */
 export function sanitizeText(text: string): string {
 	// eslint-disable-next-line no-control-regex -- intentionally stripping null bytes
-	return text.replace(/\0/g, '').replace(/[\uD800-\uDFFF]/gu, '')
+	return text
+		.replace(/\0/g, '')
+		.replace(/[\uD800-\uDFFF]/gu, '')
 }
 
 /**
@@ -20,7 +22,10 @@ export function sanitizeText(text: string): string {
  * This function handles that gracefully and returns a fallback value
  * if parsing fails entirely.
  */
-export function parseLLMJson<T>(text: string, fallback: T): T {
+export function parseLLMJson<T>(
+	text: string,
+	fallback: T
+): T {
 	// Strip markdown code fences if present
 	const cleaned = text
 		.replace(/^```(?:json)?\s*\n?/m, '')

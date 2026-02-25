@@ -27,12 +27,18 @@ const SlicedText: React.FC<SlicedTextProps> = ({
 	splitSpacing = 2
 }) => (
 	<motion.div
-		className={cn('relative inline-block w-full text-center', containerClassName)}
+		className={cn(
+			'relative inline-block w-full text-center',
+			containerClassName
+		)}
 		initial="default"
 		whileHover="hover"
 	>
 		<motion.div
-			className={cn('-ml-0.5 absolute w-full text-4xl', className)}
+			className={cn(
+				'-ml-0.5 absolute w-full text-4xl',
+				className
+			)}
 			transition={{ duration: 0.1 }}
 			variants={{
 				default: {
@@ -68,7 +74,9 @@ const SlicedText: React.FC<SlicedTextProps> = ({
 			{text}
 		</motion.div>
 
-		<div className={cn('invisible text-4xl', className)}>{text}</div>
+		<div className={cn('invisible text-4xl', className)}>
+			{text}
+		</div>
 	</motion.div>
 )
 

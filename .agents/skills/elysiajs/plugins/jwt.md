@@ -21,25 +21,31 @@ const app = new Elysia()
 			secret: 'Fischl von Luftschloss Narfidort'
 		})
 	)
-	.get('/sign/:name', async ({ jwt, params: { name }, cookie: { auth } }) => {
-		const value = await jwt.sign({ name })
+	.get(
+		'/sign/:name',
+		async ({ jwt, params: { name }, cookie: { auth } }) => {
+			const value = await jwt.sign({ name })
 
-		auth.set({
-			value,
-			httpOnly: true,
-			maxAge: 7 * 86400,
-			path: '/profile'
-		})
+			auth.set({
+				value,
+				httpOnly: true,
+				maxAge: 7 * 86400,
+				path: '/profile'
+			})
 
-		return `Sign in as ${value}`
-	})
-	.get('/profile', async ({ jwt, status, cookie: { auth } }) => {
-		const profile = await jwt.verify(auth.value)
+			return `Sign in as ${value}`
+		}
+	)
+	.get(
+		'/profile',
+		async ({ jwt, status, cookie: { auth } }) => {
+			const profile = await jwt.verify(auth.value)
 
-		if (!profile) return status(401, 'Unauthorized')
+			if (!profile) return status(401, 'Unauthorized')
 
-		return `Hello ${profile.name}`
-	})
+			return `Hello ${profile.name}`
+		}
+	)
 	.listen(3000)
 ```
 
@@ -221,7 +227,9 @@ const app = new Elysia()
 			exp: '7d'
 		})
 	)
-	.get('/sign/:name', async ({ jwt, params }) => jwt.sign(params))
+	.get('/sign/:name', async ({ jwt, params }) =>
+		jwt.sign(params)
+	)
 ```
 
 This will sign JWT with an expiration date of the next 7 days.

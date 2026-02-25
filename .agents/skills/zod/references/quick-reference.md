@@ -322,7 +322,10 @@ const FormSchema = z.object({
 ```typescript
 const Response = z.discriminatedUnion('status', [
 	z.object({ status: z.literal('success'), data: z.any() }),
-	z.object({ status: z.literal('error'), message: z.string() })
+	z.object({
+		status: z.literal('error'),
+		message: z.string()
+	})
 ])
 ```
 

@@ -85,7 +85,9 @@
 ```css
 @layer base {
 	body {
-		background-color: var(--background); /* Already has hsl() */
+		background-color: var(
+			--background
+		); /* Already has hsl() */
 	}
 }
 ```
@@ -309,7 +311,9 @@ import { cn } from '@/lib/utils'
 ✅ **CORRECT:**
 
 ```tsx
-<SelectItem value="placeholder">Select an option</SelectItem>
+<SelectItem value="placeholder">
+	Select an option
+</SelectItem>
 ```
 
 **Why:** Radix UI Select doesn't allow empty string values.

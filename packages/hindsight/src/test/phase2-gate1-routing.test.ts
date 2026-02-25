@@ -10,7 +10,11 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { classifyRoute, REINFORCE_THRESHOLD, RECONSOLIDATE_THRESHOLD } from '../routing'
+import {
+	classifyRoute,
+	REINFORCE_THRESHOLD,
+	RECONSOLIDATE_THRESHOLD
+} from '../routing'
 import type { ReconRoute } from '../types'
 
 describe('Gate 1: Routing Decision Correctness', () => {
@@ -32,11 +36,15 @@ describe('Gate 1: Routing Decision Correctness', () => {
 		})
 
 		it('score 0.9199, no conflict => reconsolidate', () => {
-			expect(classifyRoute(0.9199, false)).toBe('reconsolidate')
+			expect(classifyRoute(0.9199, false)).toBe(
+				'reconsolidate'
+			)
 		})
 
 		it('score 0.78, no conflict => reconsolidate', () => {
-			expect(classifyRoute(0.78, false)).toBe('reconsolidate')
+			expect(classifyRoute(0.78, false)).toBe(
+				'reconsolidate'
+			)
 		})
 
 		it('score < 0.78 (0.7799), no conflict => new_trace', () => {
@@ -60,15 +68,21 @@ describe('Gate 1: Routing Decision Correctness', () => {
 		})
 
 		it('score 0.92 with conflict => reconsolidate', () => {
-			expect(classifyRoute(0.92, true)).toBe('reconsolidate')
+			expect(classifyRoute(0.92, true)).toBe(
+				'reconsolidate'
+			)
 		})
 
 		it('score 0.9199 with conflict => reconsolidate', () => {
-			expect(classifyRoute(0.9199, true)).toBe('reconsolidate')
+			expect(classifyRoute(0.9199, true)).toBe(
+				'reconsolidate'
+			)
 		})
 
 		it('score 0.78 with conflict => reconsolidate', () => {
-			expect(classifyRoute(0.78, true)).toBe('reconsolidate')
+			expect(classifyRoute(0.78, true)).toBe(
+				'reconsolidate'
+			)
 		})
 
 		it('score 0.5 with conflict => reconsolidate', () => {
@@ -80,7 +94,9 @@ describe('Gate 1: Routing Decision Correctness', () => {
 		})
 
 		it('score -0.1 with conflict => reconsolidate', () => {
-			expect(classifyRoute(-0.1, true)).toBe('reconsolidate')
+			expect(classifyRoute(-0.1, true)).toBe(
+				'reconsolidate'
+			)
 		})
 	})
 
@@ -106,7 +122,9 @@ describe('Gate 1: Routing Decision Correctness', () => {
 
 		for (const [score, expectedRoute] of noConflictCases) {
 			it(`score ${score}, no conflict => ${expectedRoute}`, () => {
-				expect(classifyRoute(score, false)).toBe(expectedRoute)
+				expect(classifyRoute(score, false)).toBe(
+					expectedRoute
+				)
 			})
 		}
 	})
@@ -116,19 +134,32 @@ describe('Gate 1: Routing Decision Correctness', () => {
 	describe('respects custom policy thresholds', () => {
 		it('custom reinforceThreshold lowers reinforce boundary', () => {
 			const policy = { reinforceThreshold: 0.85 }
-			expect(classifyRoute(0.85, false, policy)).toBe('reinforce')
-			expect(classifyRoute(0.84, false, policy)).toBe('reconsolidate')
+			expect(classifyRoute(0.85, false, policy)).toBe(
+				'reinforce'
+			)
+			expect(classifyRoute(0.84, false, policy)).toBe(
+				'reconsolidate'
+			)
 		})
 
 		it('custom reconsolidateThreshold lowers reconsolidate boundary', () => {
 			const policy = { reconsolidateThreshold: 0.6 }
-			expect(classifyRoute(0.6, false, policy)).toBe('reconsolidate')
-			expect(classifyRoute(0.59, false, policy)).toBe('new_trace')
+			expect(classifyRoute(0.6, false, policy)).toBe(
+				'reconsolidate'
+			)
+			expect(classifyRoute(0.59, false, policy)).toBe(
+				'new_trace'
+			)
 		})
 
 		it('conflict still overrides custom thresholds', () => {
-			const policy = { reinforceThreshold: 0.99, reconsolidateThreshold: 0.95 }
-			expect(classifyRoute(0.5, true, policy)).toBe('reconsolidate')
+			const policy = {
+				reinforceThreshold: 0.99,
+				reconsolidateThreshold: 0.95
+			}
+			expect(classifyRoute(0.5, true, policy)).toBe(
+				'reconsolidate'
+			)
 		})
 	})
 })

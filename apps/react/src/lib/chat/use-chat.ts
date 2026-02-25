@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react'
 import { env } from '@ellie/env/client'
 import { eden } from '../eden'
 
@@ -29,32 +35,51 @@ interface EventRow {
 	createdAt: number
 }
 
-function parsePayload(row: EventRow): Record<string, unknown> {
+function parsePayload(
+	row: EventRow
+): Record<string, unknown> {
 	try {
-		return JSON.parse(row.payload) as Record<string, unknown>
+		return JSON.parse(row.payload) as Record<
+			string,
+			unknown
+		>
 	} catch {
 		return {}
 	}
 }
 
-export function isMessagePayload(payload: Record<string, unknown>): payload is Message {
-	return typeof payload.role === 'string' && Array.isArray(payload.content)
+export function isMessagePayload(
+	payload: Record<string, unknown>
+): payload is Message {
+	return (
+		typeof payload.role === 'string' &&
+		Array.isArray(payload.content)
+	)
 }
 
 function eventToMessage(row: EventRow): Message | null {
 	const payload = parsePayload(row)
-	if (row.type === 'user_message' || row.type === 'assistant_final' || row.type === 'tool_result') {
+	if (
+		row.type === 'user_message' ||
+		row.type === 'assistant_final' ||
+		row.type === 'tool_result'
+	) {
 		if (isMessagePayload(payload)) {
 			return payload
 		}
-		console.warn(`[eventToMessage] malformed payload for event ${row.id}:`, payload)
+		console.warn(
+			`[eventToMessage] malformed payload for event ${row.id}:`,
+			payload
+		)
 		return null
 	}
 	return null
 }
 
 function sortMessages(messages: Message[]): Message[] {
-	return [...messages].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
+	return [...messages].sort(
+		(a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
+	)
 }
 
 // ============================================================================
@@ -69,15 +94,23 @@ export function useChat(sessionId: string) {
 	const [messages, setMessages] = useState<Message[]>([])
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<Error | null>(null)
-	const baseUrl = useMemo(() => env.API_BASE_URL.replace(/\/$/, ``), [])
+	const baseUrl = useMemo(
+		() => env.API_BASE_URL.replace(/\/$/, ``),
+		[]
+	)
 	const lastSeqRef = useRef(0)
 
 	useEffect(() => {
 		lastSeqRef.current = 0 // Reset cursor on session change
 		let hasSnapshot = false
-		const url = new URL(`${baseUrl}/chat/${encodeURIComponent(sessionId)}/events/sse`)
+		const url = new URL(
+			`${baseUrl}/chat/${encodeURIComponent(sessionId)}/events/sse`
+		)
 		if (lastSeqRef.current > 0) {
-			url.searchParams.set('afterSeq', String(lastSeqRef.current))
+			url.searchParams.set(
+				'afterSeq',
+				String(lastSeqRef.current)
+			)
 		}
 
 		const source = new EventSource(url.toString())
@@ -93,7 +126,8 @@ export function useChat(sessionId: string) {
 
 				// Track highest seq
 				for (const row of rows) {
-					if (row.seq > lastSeqRef.current) lastSeqRef.current = row.seq
+					if (row.seq > lastSeqRef.current)
+						lastSeqRef.current = row.seq
 				}
 
 				// Extract messages from events
@@ -106,14 +140,18 @@ export function useChat(sessionId: string) {
 				setIsLoading(false)
 				setError(null)
 			} catch (err) {
-				console.warn('[useChat] failed to parse snapshot:', err)
+				console.warn(
+					'[useChat] failed to parse snapshot:',
+					err
+				)
 			}
 		}
 
 		const onAppend = (event: MessageEvent) => {
 			try {
 				const row = JSON.parse(event.data) as EventRow
-				if (row.seq > lastSeqRef.current) lastSeqRef.current = row.seq
+				if (row.seq > lastSeqRef.current)
+					lastSeqRef.current = row.seq
 
 				const msg = eventToMessage(row)
 				if (msg) {
@@ -121,14 +159,19 @@ export function useChat(sessionId: string) {
 					setMessages(current => [...current, msg])
 				}
 			} catch (err) {
-				console.warn('[useChat] failed to parse event:', err)
+				console.warn(
+					'[useChat] failed to parse event:',
+					err
+				)
 			}
 		}
 
 		const onError = () => {
 			if (hasSnapshot) return
 			setIsLoading(false)
-			setError(new Error(`Failed to connect to chat stream`))
+			setError(
+				new Error(`Failed to connect to chat stream`)
+			)
 		}
 
 		source.addEventListener(`snapshot`, onSnapshot)
@@ -144,21 +187,30 @@ export function useChat(sessionId: string) {
 	}, [baseUrl, sessionId])
 
 	const sendMessage = useCallback(
-		async (content: string, role: 'user' | 'assistant' | 'system' = `user`) => {
+		async (
+			content: string,
+			role: 'user' | 'assistant' | 'system' = `user`
+		) => {
 			const trimmed = content.trim()
 			if (!trimmed) return
 
 			try {
-				const { error } = await eden.chat({ sessionId }).messages.post({
-					role,
-					content: trimmed
-				})
+				const { error } = await eden
+					.chat({ sessionId })
+					.messages.post({
+						role,
+						content: trimmed
+					})
 				if (!error) return
-				throw new Error(`POST /chat/${sessionId}/messages failed`)
+				throw new Error(
+					`POST /chat/${sessionId}/messages failed`
+				)
 			} catch (err) {
 				console.error(
 					`[useChat] Failed to send message:`,
-					err instanceof Error ? err.message : JSON.stringify(err)
+					err instanceof Error
+						? err.message
+						: JSON.stringify(err)
 				)
 				throw err
 			}
@@ -168,13 +220,19 @@ export function useChat(sessionId: string) {
 
 	const clearChat = useCallback(async () => {
 		try {
-			const { error } = await eden.chat({ sessionId }).messages.delete()
+			const { error } = await eden
+				.chat({ sessionId })
+				.messages.delete()
 			if (!error) return
-			throw new Error(`DELETE /chat/${sessionId}/messages failed`)
+			throw new Error(
+				`DELETE /chat/${sessionId}/messages failed`
+			)
 		} catch (err) {
 			console.error(
 				`[useChat] Failed to clear chat:`,
-				err instanceof Error ? err.message : JSON.stringify(err)
+				err instanceof Error
+					? err.message
+					: JSON.stringify(err)
 			)
 			throw err
 		}

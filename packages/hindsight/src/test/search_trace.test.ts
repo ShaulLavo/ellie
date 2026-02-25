@@ -2,8 +2,18 @@
  * Core parity port for test_search_trace.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_search_trace.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_search_trace.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -53,17 +64,25 @@ describe('Core parity: test_search_trace.py', () => {
 
 	it('search with trace', async () => {
 		await seedBase()
-		const result = await t.hs.recall(bankId, 'hiking', { enableTrace: true })
+		const result = await t.hs.recall(bankId, 'hiking', {
+			enableTrace: true
+		})
 		expect(result.trace).toBeDefined()
 		expect(result.trace!.query).toBe('hiking')
-		expect(result.trace!.phaseMetrics.length).toBeGreaterThan(0)
+		expect(
+			result.trace!.phaseMetrics.length
+		).toBeGreaterThan(0)
 	})
 
 	it('search without trace', async () => {
 		await seedBase()
-		const result = await t.hs.recall(bankId, 'hiking', { enableTrace: true })
+		const result = await t.hs.recall(bankId, 'hiking', {
+			enableTrace: true
+		})
 		expect(result.trace).toBeDefined()
 		expect(result.trace!.query).toBe('hiking')
-		expect(result.trace!.phaseMetrics.length).toBeGreaterThan(0)
+		expect(
+			result.trace!.phaseMetrics.length
+		).toBeGreaterThan(0)
 	})
 })

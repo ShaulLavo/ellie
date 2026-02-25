@@ -1,4 +1,7 @@
-import { cva, type VariantProps } from 'class-variance-authority'
+import {
+	cva,
+	type VariantProps
+} from 'class-variance-authority'
 import { mergeProps } from '@base-ui/react/merge-props'
 import { useRender } from '@base-ui/react/use-render'
 
@@ -26,19 +29,27 @@ function ButtonGroup({
 	className,
 	orientation,
 	...props
-}: React.ComponentProps<'div'> & VariantProps<typeof buttonGroupVariants>) {
+}: React.ComponentProps<'div'> &
+	VariantProps<typeof buttonGroupVariants>) {
 	return (
 		<div
 			role="group"
 			data-slot="button-group"
 			data-orientation={orientation}
-			className={cn(buttonGroupVariants({ orientation }), className)}
+			className={cn(
+				buttonGroupVariants({ orientation }),
+				className
+			)}
 			{...props}
 		/>
 	)
 }
 
-function ButtonGroupText({ className, render, ...props }: useRender.ComponentProps<'div'>) {
+function ButtonGroupText({
+	className,
+	render,
+	...props
+}: useRender.ComponentProps<'div'>) {
 	return useRender({
 		defaultTagName: 'div',
 		props: mergeProps<'div'>(
@@ -75,4 +86,9 @@ function ButtonGroupSeparator({
 	)
 }
 
-export { ButtonGroup, ButtonGroupSeparator, ButtonGroupText, buttonGroupVariants }
+export {
+	ButtonGroup,
+	ButtonGroupSeparator,
+	ButtonGroupText,
+	buttonGroupVariants
+}

@@ -19,12 +19,21 @@ import { runPhase2Verification } from '../src/phase2-runner'
 // ── Parse args ──────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2)
-const outputDirArg = args.find(a => a.startsWith('--output-dir='))
+const outputDirArg = args.find(a =>
+	a.startsWith('--output-dir=')
+)
 const runIdArg = args.find(a => a.startsWith('--run-id='))
 
-const defaultOutputDir = resolve(import.meta.dir, '..', 'artifacts', 'phase2')
+const defaultOutputDir = resolve(
+	import.meta.dir,
+	'..',
+	'artifacts',
+	'phase2'
+)
 const outputDirVal = outputDirArg?.split('=')[1]?.trim()
-const outputDir = outputDirVal ? resolve(outputDirVal) : defaultOutputDir
+const outputDir = outputDirVal
+	? resolve(outputDirVal)
+	: defaultOutputDir
 
 const runIdVal = runIdArg?.split('=')[1]?.trim()
 const runId = runIdVal || `run-${Date.now()}`
@@ -33,7 +42,9 @@ const runId = runIdVal || `run-${Date.now()}`
 
 let gitSha = 'unknown'
 try {
-	gitSha = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
+	gitSha = execSync('git rev-parse --short HEAD', {
+		encoding: 'utf-8'
+	}).trim()
 } catch {
 	// Not in a git repo
 }
@@ -51,7 +62,12 @@ async function main() {
 
 	// Step 1: Run Gates 1-5 via bun test
 	console.log('[Step 1] Running Gate 1-5 tests...')
-	const hindsightDir = resolve(import.meta.dir, '..', '..', 'hindsight')
+	const hindsightDir = resolve(
+		import.meta.dir,
+		'..',
+		'..',
+		'hindsight'
+	)
 	try {
 		execSync(
 			`bun test --bail ${join(hindsightDir, 'src/test/phase2-gate1-routing.test.ts')} ${join(hindsightDir, 'src/test/phase2-gate2-conflict.test.ts')} ${join(hindsightDir, 'src/test/phase2-gate3-side-effects.test.ts')} ${join(hindsightDir, 'src/test/phase2-gate4-episodes.test.ts')} ${join(hindsightDir, 'src/test/phase2-gate5-api.test.ts')}`,
@@ -68,7 +84,9 @@ async function main() {
 
 	// Step 2: Run metric evaluation
 	console.log('')
-	console.log('[Step 2] Running metric evaluation (Gates 6-7)...')
+	console.log(
+		'[Step 2] Running metric evaluation (Gates 6-7)...'
+	)
 	const run = await runPhase2Verification({
 		outputDir,
 		runId,
@@ -83,8 +101,15 @@ async function main() {
 	console.log('')
 	console.log('Gate Results:')
 	for (const gate of run.gates) {
-		const icon = gate.status === 'pass' ? '[PASS]' : gate.status === 'fail' ? '[FAIL]' : '[SKIP]'
-		console.log(`  ${icon} ${gate.gate}: ${gate.description}`)
+		const icon =
+			gate.status === 'pass'
+				? '[PASS]'
+				: gate.status === 'fail'
+					? '[FAIL]'
+					: '[SKIP]'
+		console.log(
+			`  ${icon} ${gate.gate}: ${gate.description}`
+		)
 	}
 	console.log('')
 	console.log('Metrics:')

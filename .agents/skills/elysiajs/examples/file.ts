@@ -5,4 +5,6 @@ import { Elysia, file } from 'elysia'
  *
  * @see https://github.com/elysiajs/elysia-static
  */
-new Elysia().get('/tako', file('./example/takodachi.png')).listen(3000)
+new Elysia()
+	.get('/tako', file('./example/takodachi.png'))
+	.listen(3000)

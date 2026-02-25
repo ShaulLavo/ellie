@@ -20,7 +20,11 @@ Files that affect all task hashes.
 
 ```json
 {
-	"globalDependencies": ["tsconfig.json", ".env", "pnpm-lock.yaml"]
+	"globalDependencies": [
+		"tsconfig.json",
+		".env",
+		"pnpm-lock.yaml"
+	]
 }
 ```
 

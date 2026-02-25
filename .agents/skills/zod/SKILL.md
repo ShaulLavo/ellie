@@ -344,7 +344,10 @@ z.union([z.string(), z.number()])
 // Discriminated union (better performance & type inference)
 const ResponseSchema = z.discriminatedUnion('status', [
 	z.object({ status: z.literal('success'), data: z.any() }),
-	z.object({ status: z.literal('error'), message: z.string() })
+	z.object({
+		status: z.literal('error'),
+		message: z.string()
+	})
 ])
 
 type Response = z.infer<typeof ResponseSchema>
@@ -386,9 +389,11 @@ z.set(z.string()) // Set<string>
 
 ```typescript
 z.string().refine(val => val.length >= 8, 'Too short')
-z.object({ password, confirmPassword }).superRefine((data, ctx) => {
-	/* ... */
-})
+z.object({ password, confirmPassword }).superRefine(
+	(data, ctx) => {
+		/* ... */
+	}
+)
 ```
 
 **Transformations** (modify data):
@@ -411,7 +416,10 @@ const DateCodec = z.codec(z.iso.datetime(), z.date(), {
 
 ```typescript
 const CategorySchema: z.ZodType<Category> = z.lazy(() =>
-	z.object({ name: z.string(), subcategories: z.array(CategorySchema) })
+	z.object({
+		name: z.string(),
+		subcategories: z.array(CategorySchema)
+	})
 )
 ```
 
@@ -446,7 +454,8 @@ const { fieldErrors } = z.flattenError(error)
 
 // For nested data
 const tree = z.treeifyError(error)
-const nameError = tree.properties?.user?.properties?.name?.errors?.[0]
+const nameError =
+	tree.properties?.user?.properties?.name?.errors?.[0]
 
 // For debugging
 console.log(z.prettifyError(error))
@@ -616,7 +625,9 @@ const UserSchema = z.object({
 })
 
 // For PATCH requests: make everything optional except id
-const UpdateUserSchema = UserSchema.partial().required({ id: true })
+const UpdateUserSchema = UserSchema.partial().required({
+	id: true
+})
 
 type UpdateUser = z.infer<typeof UpdateUserSchema>
 // { id: string; name?: string; email?: string }

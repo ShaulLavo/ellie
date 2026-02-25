@@ -103,7 +103,10 @@ Move `await` operations into the branches where they're actually used to avoid b
 **Incorrect: blocks both branches**
 
 ```typescript
-async function handleRequest(userId: string, skipProcessing: boolean) {
+async function handleRequest(
+	userId: string,
+	skipProcessing: boolean
+) {
 	const userData = await fetchUserData(userId)
 
 	if (skipProcessing) {
@@ -119,7 +122,10 @@ async function handleRequest(userId: string, skipProcessing: boolean) {
 **Correct: only blocks when needed**
 
 ```typescript
-async function handleRequest(userId: string, skipProcessing: boolean) {
+async function handleRequest(
+	userId: string,
+	skipProcessing: boolean
+) {
 	if (skipProcessing) {
 		// Returns immediately without waiting
 		return { skipped: true }
@@ -135,7 +141,10 @@ async function handleRequest(userId: string, skipProcessing: boolean) {
 
 ```typescript
 // Incorrect: always fetches permissions
-async function updateResource(resourceId: string, userId: string) {
+async function updateResource(
+	resourceId: string,
+	userId: string
+) {
 	const permissions = await fetchPermissions(userId)
 	const resource = await getResource(resourceId)
 
@@ -151,7 +160,10 @@ async function updateResource(resourceId: string, userId: string) {
 }
 
 // Correct: fetches only when needed
-async function updateResource(resourceId: string, userId: string) {
+async function updateResource(
+	resourceId: string,
+	userId: string
+) {
 	const resource = await getResource(resourceId)
 
 	if (!resource) {
@@ -179,7 +191,10 @@ For operations with partial dependencies, use `better-all` to maximize paralleli
 **Incorrect: profile waits for config unnecessarily**
 
 ```typescript
-const [user, config] = await Promise.all([fetchUser(), fetchConfig()])
+const [user, config] = await Promise.all([
+	fetchUser(),
+	fetchConfig()
+])
 const profile = await fetchProfile(user.id)
 ```
 
@@ -205,9 +220,15 @@ const { user, config, profile } = await all({
 
 ```typescript
 const userPromise = fetchUser()
-const profilePromise = userPromise.then(user => fetchProfile(user.id))
+const profilePromise = userPromise.then(user =>
+	fetchProfile(user.id)
+)
 
-const [user, config, profile] = await Promise.all([userPromise, fetchConfig(), profilePromise])
+const [user, config, profile] = await Promise.all([
+	userPromise,
+	fetchConfig(),
+	profilePromise
+])
 ```
 
 We can also create all the promises first, and do `Promise.all()` at the end.
@@ -238,7 +259,10 @@ export async function GET(request: Request) {
 	const sessionPromise = auth()
 	const configPromise = fetchConfig()
 	const session = await sessionPromise
-	const [config, data] = await Promise.all([configPromise, fetchData(session.user.id)])
+	const [config, data] = await Promise.all([
+		configPromise,
+		fetchData(session.user.id)
+	])
 	return Response.json({ data, config })
 }
 ```
@@ -262,7 +286,11 @@ const comments = await fetchComments()
 **Correct: parallel execution, 1 round trip**
 
 ```typescript
-const [user, posts, comments] = await Promise.all([fetchUser(), fetchPosts(), fetchComments()])
+const [user, posts, comments] = await Promise.all([
+	fetchUser(),
+	fetchPosts(),
+	fetchComments()
+])
 ```
 
 ### 1.5 Strategic Suspense Boundaries
@@ -338,12 +366,20 @@ function Page() {
 	)
 }
 
-function DataDisplay({ dataPromise }: { dataPromise: Promise<Data> }) {
+function DataDisplay({
+	dataPromise
+}: {
+	dataPromise: Promise<Data>
+}) {
 	const data = use(dataPromise) // Unwraps the promise
 	return <div>{data.content}</div>
 }
 
-function DataSummary({ dataPromise }: { dataPromise: Promise<Data> }) {
+function DataSummary({
+	dataPromise
+}: {
+	dataPromise: Promise<Data>
+}) {
 	const data = use(dataPromise) // Reuses the same promise
 	return <div>{data.summary}</div>
 }
@@ -411,7 +447,10 @@ import TextField from '@mui/material/TextField'
 // next.config.js - use optimizePackageImports
 module.exports = {
 	experimental: {
-		optimizePackageImports: ['lucide-react', '@mui/material']
+		optimizePackageImports: [
+			'lucide-react',
+			'@mui/material'
+		]
 	}
 }
 
@@ -445,7 +484,11 @@ function AnimationPlayer({
 	const [frames, setFrames] = useState<Frame[] | null>(null)
 
 	useEffect(() => {
-		if (enabled && !frames && typeof window !== 'undefined') {
+		if (
+			enabled &&
+			!frames &&
+			typeof window !== 'undefined'
+		) {
 			import('./animation-frames.js')
 				.then(mod => setFrames(mod.frames))
 				.catch(() => setEnabled(false))
@@ -487,9 +530,15 @@ export default function RootLayout({ children }) {
 ```tsx
 import dynamic from 'next/dynamic'
 
-const Analytics = dynamic(() => import('@vercel/analytics/react').then(m => m.Analytics), {
-	ssr: false
-})
+const Analytics = dynamic(
+	() =>
+		import('@vercel/analytics/react').then(
+			m => m.Analytics
+		),
+	{
+		ssr: false
+	}
+)
 
 export default function RootLayout({ children }) {
 	return (
@@ -524,9 +573,12 @@ function CodePanel({ code }: { code: string }) {
 ```tsx
 import dynamic from 'next/dynamic'
 
-const MonacoEditor = dynamic(() => import('./monaco-editor').then(m => m.MonacoEditor), {
-	ssr: false
-})
+const MonacoEditor = dynamic(
+	() => import('./monaco-editor').then(m => m.MonacoEditor),
+	{
+		ssr: false
+	}
+)
 
 function CodePanel({ code }: { code: string }) {
 	return <MonacoEditor value={code} />
@@ -542,7 +594,11 @@ Preload heavy bundles before they're needed to reduce perceived latency.
 **Example: preload on hover/focus**
 
 ```tsx
-function EditorButton({ onClick }: { onClick: () => void }) {
+function EditorButton({
+	onClick
+}: {
+	onClick: () => void
+}) {
 	const preload = () => {
 		if (typeof window !== 'undefined') {
 			void import('./monaco-editor')
@@ -550,7 +606,11 @@ function EditorButton({ onClick }: { onClick: () => void }) {
 	}
 
 	return (
-		<button onMouseEnter={preload} onFocus={preload} onClick={onClick}>
+		<button
+			onMouseEnter={preload}
+			onFocus={preload}
+			onClick={onClick}
+		>
 			Open Editor
 		</button>
 	)
@@ -562,12 +622,19 @@ function EditorButton({ onClick }: { onClick: () => void }) {
 ```tsx
 function FlagsProvider({ children, flags }: Props) {
 	useEffect(() => {
-		if (flags.editorEnabled && typeof window !== 'undefined') {
+		if (
+			flags.editorEnabled &&
+			typeof window !== 'undefined'
+		) {
 			void import('./monaco-editor').then(mod => mod.init())
 		}
 	}, [flags.editorEnabled])
 
-	return <FlagsContext.Provider value={flags}>{children}</FlagsContext.Provider>
+	return (
+		<FlagsContext.Provider value={flags}>
+			{children}
+		</FlagsContext.Provider>
+	)
 }
 ```
 
@@ -618,7 +685,10 @@ export async function deleteUser(userId: string) {
 	}
 
 	// Check authorization too
-	if (session.user.role !== 'admin' && session.user.id !== userId) {
+	if (
+		session.user.role !== 'admin' &&
+		session.user.id !== userId
+	) {
 		throw unauthorized('Cannot delete other users')
 	}
 
@@ -681,7 +751,10 @@ RSC→client serialization deduplicates by object reference, not value. Same ref
 
 ```tsx
 // RSC: sends 6 strings (2 arrays × 3 items)
-<ClientList usernames={usernames} usernamesOrdered={usernames.toSorted()} />
+<ClientList
+	usernames={usernames}
+	usernamesOrdered={usernames.toSorted()}
+/>
 ```
 
 **Correct: sends 3 strings**
@@ -692,7 +765,10 @@ RSC→client serialization deduplicates by object reference, not value. Same ref
 
 // Client: transform there
 ;('use client')
-const sorted = useMemo(() => [...usernames].sort(), [usernames])
+const sorted = useMemo(
+	() => [...usernames].sort(),
+	[usernames]
+)
 ```
 
 **Nested deduplication behavior:**
@@ -912,7 +988,9 @@ Within a single request, multiple calls to `getCurrentUser()` execute the query 
 
 ```typescript
 const getUser = cache(async (params: { uid: number }) => {
-	return await db.user.findUnique({ where: { id: params.uid } })
+	return await db.user.findUnique({
+		where: { id: params.uid }
+	})
 })
 
 // Each call creates new object, never hits cache
@@ -964,13 +1042,17 @@ export async function POST(request: Request) {
 	await updateDatabase(request)
 
 	// Logging blocks the response
-	const userAgent = request.headers.get('user-agent') || 'unknown'
+	const userAgent =
+		request.headers.get('user-agent') || 'unknown'
 	await logUserAction({ userAgent })
 
-	return new Response(JSON.stringify({ status: 'success' }), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	})
+	return new Response(
+		JSON.stringify({ status: 'success' }),
+		{
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		}
+	)
 }
 ```
 
@@ -987,16 +1069,22 @@ export async function POST(request: Request) {
 
 	// Log after response is sent
 	after(async () => {
-		const userAgent = (await headers()).get('user-agent') || 'unknown'
-		const sessionCookie = (await cookies()).get('session-id')?.value || 'anonymous'
+		const userAgent =
+			(await headers()).get('user-agent') || 'unknown'
+		const sessionCookie =
+			(await cookies()).get('session-id')?.value ||
+			'anonymous'
 
 		logUserAction({ sessionCookie, userAgent })
 	})
 
-	return new Response(JSON.stringify({ status: 'success' }), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	})
+	return new Response(
+		JSON.stringify({ status: 'success' }),
+		{
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		}
+	)
 }
 ```
 
@@ -1039,7 +1127,10 @@ Use `useSWRSubscription()` to share global event listeners across component inst
 **Incorrect: N instances = N listeners**
 
 ```tsx
-function useKeyboardShortcut(key: string, callback: () => void) {
+function useKeyboardShortcut(
+	key: string,
+	callback: () => void
+) {
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
 			if (e.metaKey && e.key === key) {
@@ -1047,7 +1138,8 @@ function useKeyboardShortcut(key: string, callback: () => void) {
 			}
 		}
 		window.addEventListener('keydown', handler)
-		return () => window.removeEventListener('keydown', handler)
+		return () =>
+			window.removeEventListener('keydown', handler)
 	}, [key, callback])
 }
 ```
@@ -1062,7 +1154,10 @@ import useSWRSubscription from 'swr/subscription'
 // Module-level Map to track callbacks per key
 const keyCallbacks = new Map<string, Set<() => void>>()
 
-function useKeyboardShortcut(key: string, callback: () => void) {
+function useKeyboardShortcut(
+	key: string,
+	callback: () => void
+) {
 	// Register this callback in the Map
 	useEffect(() => {
 		if (!keyCallbacks.has(key)) {
@@ -1088,7 +1183,8 @@ function useKeyboardShortcut(key: string, callback: () => void) {
 			}
 		}
 		window.addEventListener('keydown', handler)
-		return () => window.removeEventListener('keydown', handler)
+		return () =>
+			window.removeEventListener('keydown', handler)
 	})
 }
 
@@ -1114,8 +1210,10 @@ Add `{ passive: true }` to touch and wheel event listeners to enable immediate s
 
 ```typescript
 useEffect(() => {
-	const handleTouch = (e: TouchEvent) => console.log(e.touches[0].clientX)
-	const handleWheel = (e: WheelEvent) => console.log(e.deltaY)
+	const handleTouch = (e: TouchEvent) =>
+		console.log(e.touches[0].clientX)
+	const handleWheel = (e: WheelEvent) =>
+		console.log(e.deltaY)
 
 	document.addEventListener('touchstart', handleTouch)
 	document.addEventListener('wheel', handleWheel)
@@ -1131,11 +1229,17 @@ useEffect(() => {
 
 ```typescript
 useEffect(() => {
-	const handleTouch = (e: TouchEvent) => console.log(e.touches[0].clientX)
-	const handleWheel = (e: WheelEvent) => console.log(e.deltaY)
+	const handleTouch = (e: TouchEvent) =>
+		console.log(e.touches[0].clientX)
+	const handleWheel = (e: WheelEvent) =>
+		console.log(e.deltaY)
 
-	document.addEventListener('touchstart', handleTouch, { passive: true })
-	document.addEventListener('wheel', handleWheel, { passive: true })
+	document.addEventListener('touchstart', handleTouch, {
+		passive: true
+	})
+	document.addEventListener('wheel', handleWheel, {
+		passive: true
+	})
 
 	return () => {
 		document.removeEventListener('touchstart', handleTouch)
@@ -1193,7 +1297,10 @@ function StaticContent() {
 import { useSWRMutation } from 'swr/mutation'
 
 function UpdateButton() {
-	const { trigger } = useSWRMutation('/api/user', updateUser)
+	const { trigger } = useSWRMutation(
+		'/api/user',
+		updateUser
+	)
 	return <button onClick={() => trigger()}>Update</button>
 }
 ```
@@ -1210,7 +1317,10 @@ Add version prefix to keys and store only needed fields. Prevents schema conflic
 
 ```typescript
 // No version, stores everything, no error handling
-localStorage.setItem('userConfig', JSON.stringify(fullUserObject))
+localStorage.setItem(
+	'userConfig',
+	JSON.stringify(fullUserObject)
+)
 const data = localStorage.getItem('userConfig')
 ```
 
@@ -1219,9 +1329,15 @@ const data = localStorage.getItem('userConfig')
 ```typescript
 const VERSION = 'v2'
 
-function saveConfig(config: { theme: string; language: string }) {
+function saveConfig(config: {
+	theme: string
+	language: string
+}) {
 	try {
-		localStorage.setItem(`userConfig:${VERSION}`, JSON.stringify(config))
+		localStorage.setItem(
+			`userConfig:${VERSION}`,
+			JSON.stringify(config)
+		)
 	} catch {
 		// Throws in incognito/private browsing, quota exceeded, or disabled
 	}
@@ -1229,7 +1345,9 @@ function saveConfig(config: { theme: string; language: string }) {
 
 function loadConfig() {
 	try {
-		const data = localStorage.getItem(`userConfig:${VERSION}`)
+		const data = localStorage.getItem(
+			`userConfig:${VERSION}`
+		)
 		return data ? JSON.parse(data) : null
 	} catch {
 		return null
@@ -1242,7 +1360,10 @@ function migrate() {
 		const v1 = localStorage.getItem('userConfig:v1')
 		if (v1) {
 			const old = JSON.parse(v1)
-			saveConfig({ theme: old.darkMode ? 'dark' : 'light', language: old.lang })
+			saveConfig({
+				theme: old.darkMode ? 'dark' : 'light',
+				language: old.lang
+			})
 			localStorage.removeItem('userConfig:v1')
 		}
 	} catch {}
@@ -1340,7 +1461,9 @@ function ShareButton({ chatId }: { chatId: string }) {
 ```tsx
 function ShareButton({ chatId }: { chatId: string }) {
 	const handleShare = () => {
-		const params = new URLSearchParams(window.location.search)
+		const params = new URLSearchParams(
+			window.location.search
+		)
 		const ref = params.get('ref')
 		shareChat(chatId, { ref })
 	}
@@ -1374,7 +1497,8 @@ function Header({ user, notifications }: Props) {
 
 ```tsx
 function Header({ user, notifications }: Props) {
-	const isLoading = user.isLoading || notifications.isLoading
+	const isLoading =
+		user.isLoading || notifications.isLoading
 
 	if (isLoading) return <Skeleton />
 	// return some markup
@@ -1436,7 +1560,11 @@ function Profile({ user, loading }: Props) {
 **Correct: skips computation when loading**
 
 ```tsx
-const UserAvatar = memo(function UserAvatar({ user }: { user: User }) {
+const UserAvatar = memo(function UserAvatar({
+	user
+}: {
+	user: User
+}) {
 	const id = useMemo(() => computeAvatarId(user), [user])
 	return <Avatar id={id} />
 })
@@ -1514,7 +1642,11 @@ function Form() {
 		}
 	}, [submitted, theme])
 
-	return <button onClick={() => setSubmitted(true)}>Submit</button>
+	return (
+		<button onClick={() => setSubmitted(true)}>
+			Submit
+		</button>
+	)
 }
 ```
 
@@ -1585,7 +1717,13 @@ function TodoList() {
 		setItems(items.filter(item => item.id !== id))
 	}, []) // ❌ Missing items dependency - will use stale items!
 
-	return <ItemsEditor items={items} onAdd={addItems} onRemove={removeItem} />
+	return (
+		<ItemsEditor
+			items={items}
+			onAdd={addItems}
+			onRemove={removeItem}
+		/>
+	)
 }
 ```
 
@@ -1607,7 +1745,13 @@ function TodoList() {
 		setItems(curr => curr.filter(item => item.id !== id))
 	}, []) // ✅ Safe and stable
 
-	return <ItemsEditor items={items} onAdd={addItems} onRemove={removeItem} />
+	return (
+		<ItemsEditor
+			items={items}
+			onAdd={addItems}
+			onRemove={removeItem}
+		/>
+	)
 }
 ```
 
@@ -1652,7 +1796,9 @@ Pass a function to `useState` for expensive initial values. Without the function
 ```tsx
 function FilteredList({ items }: { items: Item[] }) {
 	// buildSearchIndex() runs on EVERY render, even after initialization
-	const [searchIndex, setSearchIndex] = useState(buildSearchIndex(items))
+	const [searchIndex, setSearchIndex] = useState(
+		buildSearchIndex(items)
+	)
 	const [query, setQuery] = useState('')
 
 	// When query changes, buildSearchIndex runs again unnecessarily
@@ -1661,9 +1807,16 @@ function FilteredList({ items }: { items: Item[] }) {
 
 function UserProfile() {
 	// JSON.parse runs on every render
-	const [settings, setSettings] = useState(JSON.parse(localStorage.getItem('settings') || '{}'))
+	const [settings, setSettings] = useState(
+		JSON.parse(localStorage.getItem('settings') || '{}')
+	)
 
-	return <SettingsForm settings={settings} onChange={setSettings} />
+	return (
+		<SettingsForm
+			settings={settings}
+			onChange={setSettings}
+		/>
+	)
 }
 ```
 
@@ -1672,7 +1825,9 @@ function UserProfile() {
 ```tsx
 function FilteredList({ items }: { items: Item[] }) {
 	// buildSearchIndex() runs ONLY on initial render
-	const [searchIndex, setSearchIndex] = useState(() => buildSearchIndex(items))
+	const [searchIndex, setSearchIndex] = useState(() =>
+		buildSearchIndex(items)
+	)
 	const [query, setQuery] = useState('')
 
 	return <SearchResults index={searchIndex} query={query} />
@@ -1685,7 +1840,12 @@ function UserProfile() {
 		return stored ? JSON.parse(stored) : {}
 	})
 
-	return <SettingsForm settings={settings} onChange={setSettings} />
+	return (
+		<SettingsForm
+			settings={settings}
+			onChange={setSettings}
+		/>
+	)
 }
 ```
 
@@ -1706,8 +1866,11 @@ function ScrollTracker() {
 	const [scrollY, setScrollY] = useState(0)
 	useEffect(() => {
 		const handler = () => setScrollY(window.scrollY)
-		window.addEventListener('scroll', handler, { passive: true })
-		return () => window.removeEventListener('scroll', handler)
+		window.addEventListener('scroll', handler, {
+			passive: true
+		})
+		return () =>
+			window.removeEventListener('scroll', handler)
 	}, [])
 }
 ```
@@ -1723,8 +1886,11 @@ function ScrollTracker() {
 		const handler = () => {
 			startTransition(() => setScrollY(window.scrollY))
 		}
-		window.addEventListener('scroll', handler, { passive: true })
-		return () => window.removeEventListener('scroll', handler)
+		window.addEventListener('scroll', handler, {
+			passive: true
+		})
+		return () =>
+			window.removeEventListener('scroll', handler)
 	}, [])
 }
 ```
@@ -1744,7 +1910,8 @@ function Tracker() {
 	useEffect(() => {
 		const onMove = (e: MouseEvent) => setLastX(e.clientX)
 		window.addEventListener('mousemove', onMove)
-		return () => window.removeEventListener('mousemove', onMove)
+		return () =>
+			window.removeEventListener('mousemove', onMove)
 	}, [])
 
 	return (
@@ -1778,7 +1945,8 @@ function Tracker() {
 			}
 		}
 		window.addEventListener('mousemove', onMove)
-		return () => window.removeEventListener('mousemove', onMove)
+		return () =>
+			window.removeEventListener('mousemove', onMove)
 	}, [])
 
 	return (
@@ -1817,8 +1985,18 @@ Many browsers don't have hardware acceleration for CSS3 animations on SVG elemen
 ```tsx
 function LoadingSpinner() {
 	return (
-		<svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24">
-			<circle cx="12" cy="12" r="10" stroke="currentColor" />
+		<svg
+			className="animate-spin"
+			width="24"
+			height="24"
+			viewBox="0 0 24 24"
+		>
+			<circle
+				cx="12"
+				cy="12"
+				r="10"
+				stroke="currentColor"
+			/>
 		</svg>
 	)
 }
@@ -1831,7 +2009,12 @@ function LoadingSpinner() {
 	return (
 		<div className="animate-spin">
 			<svg width="24" height="24" viewBox="0 0 24 24">
-				<circle cx="12" cy="12" r="10" stroke="currentColor" />
+				<circle
+					cx="12"
+					cy="12"
+					r="10"
+					stroke="currentColor"
+				/>
 			</svg>
 		</div>
 	)
@@ -1858,7 +2041,11 @@ Apply `content-visibility: auto` to defer off-screen rendering.
 **Example:**
 
 ```tsx
-function MessageList({ messages }: { messages: Message[] }) {
+function MessageList({
+	messages
+}: {
+	messages: Message[]
+}) {
 	return (
 		<div className="overflow-y-auto h-screen">
 			{messages.map(msg => (
@@ -1895,7 +2082,9 @@ function Container() {
 **Correct: reuses same element**
 
 ```tsx
-const loadingSkeleton = <div className="animate-pulse h-20 bg-gray-200" />
+const loadingSkeleton = (
+	<div className="animate-pulse h-20 bg-gray-200" />
+)
 
 function Container() {
 	return <div>{loading && loadingSkeleton}</div>
@@ -1939,7 +2128,11 @@ When rendering content that depends on client-side storage (localStorage, cookie
 **Incorrect: breaks SSR**
 
 ```tsx
-function ThemeWrapper({ children }: { children: ReactNode }) {
+function ThemeWrapper({
+	children
+}: {
+	children: ReactNode
+}) {
 	// localStorage is not available on server - throws error
 	const theme = localStorage.getItem('theme') || 'light'
 
@@ -1952,7 +2145,11 @@ Server-side rendering will fail because `localStorage` is undefined.
 **Incorrect: visual flickering**
 
 ```tsx
-function ThemeWrapper({ children }: { children: ReactNode }) {
+function ThemeWrapper({
+	children
+}: {
+	children: ReactNode
+}) {
 	const [theme, setTheme] = useState('light')
 
 	useEffect(() => {
@@ -1972,7 +2169,11 @@ Component first renders with default value (`light`), then updates after hydrati
 **Correct: no flicker, no hydration mismatch**
 
 ```tsx
-function ThemeWrapper({ children }: { children: ReactNode }) {
+function ThemeWrapper({
+	children
+}: {
+	children: ReactNode
+}) {
 	return (
 		<>
 			<div id="theme-wrapper">{children}</div>
@@ -2016,7 +2217,11 @@ function Timestamp() {
 
 ```tsx
 function Timestamp() {
-	return <span suppressHydrationWarning>{new Date().toLocaleString()}</span>
+	return (
+		<span suppressHydrationWarning>
+			{new Date().toLocaleString()}
+		</span>
+	)
 }
 ```
 
@@ -2052,7 +2257,11 @@ Use explicit ternary operators (`? :`) instead of `&&` for conditional rendering
 
 ```tsx
 function Badge({ count }: { count: number }) {
-	return <div>{count && <span className="badge">{count}</span>}</div>
+	return (
+		<div>
+			{count && <span className="badge">{count}</span>}
+		</div>
+	)
 }
 
 // When count = 0, renders: <div>0</div>
@@ -2063,7 +2272,13 @@ function Badge({ count }: { count: number }) {
 
 ```tsx
 function Badge({ count }: { count: number }) {
-	return <div>{count > 0 ? <span className="badge">{count}</span> : null}</div>
+	return (
+		<div>
+			{count > 0 ? (
+				<span className="badge">{count}</span>
+			) : null}
+		</div>
+	)
 }
 
 // When count = 0, renders: <div></div>
@@ -2212,7 +2427,11 @@ function updateElementStyles(element: HTMLElement) {
 
 ```tsx
 // Incorrect: interleaving style changes with layout queries
-function Box({ isHighlighted }: { isHighlighted: boolean }) {
+function Box({
+	isHighlighted
+}: {
+	isHighlighted: boolean
+}) {
 	const ref = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -2227,8 +2446,16 @@ function Box({ isHighlighted }: { isHighlighted: boolean }) {
 }
 
 // Correct: toggle class
-function Box({ isHighlighted }: { isHighlighted: boolean }) {
-	return <div className={isHighlighted ? 'highlighted-box' : ''}>Content</div>
+function Box({
+	isHighlighted
+}: {
+	isHighlighted: boolean
+}) {
+	return (
+		<div className={isHighlighted ? 'highlighted-box' : ''}>
+			Content
+		</div>
+	)
 }
 ```
 
@@ -2412,7 +2639,9 @@ let cookieCache: Record<string, string> | null = null
 
 function getCookie(name: string) {
 	if (!cookieCache) {
-		cookieCache = Object.fromEntries(document.cookie.split('; ').map(c => c.split('=')))
+		cookieCache = Object.fromEntries(
+			document.cookie.split('; ').map(c => c.split('='))
+		)
 	}
 	return cookieCache[name]
 }
@@ -2536,7 +2765,9 @@ function validateUsers(users: User[]) {
 		// Continues checking all users even after error found
 	}
 
-	return hasError ? { valid: false, error: errorMessage } : { valid: true }
+	return hasError
+		? { valid: false, error: errorMessage }
+		: { valid: true }
 }
 ```
 
@@ -2614,7 +2845,9 @@ interface Project {
 }
 
 function getLatestProject(projects: Project[]) {
-	const sorted = [...projects].sort((a, b) => b.updatedAt - a.updatedAt)
+	const sorted = [...projects].sort(
+		(a, b) => b.updatedAt - a.updatedAt
+	)
 	return sorted[0]
 }
 ```
@@ -2625,8 +2858,13 @@ Sorts the entire array just to find the maximum value.
 
 ```typescript
 function getOldestAndNewest(projects: Project[]) {
-	const sorted = [...projects].sort((a, b) => a.updatedAt - b.updatedAt)
-	return { oldest: sorted[0], newest: sorted[sorted.length - 1] }
+	const sorted = [...projects].sort(
+		(a, b) => a.updatedAt - b.updatedAt
+	)
+	return {
+		oldest: sorted[0],
+		newest: sorted[sorted.length - 1]
+	}
 }
 ```
 
@@ -2650,14 +2888,17 @@ function getLatestProject(projects: Project[]) {
 }
 
 function getOldestAndNewest(projects: Project[]) {
-	if (projects.length === 0) return { oldest: null, newest: null }
+	if (projects.length === 0)
+		return { oldest: null, newest: null }
 
 	let oldest = projects[0]
 	let newest = projects[0]
 
 	for (let i = 1; i < projects.length; i++) {
-		if (projects[i].updatedAt < oldest.updatedAt) oldest = projects[i]
-		if (projects[i].updatedAt > newest.updatedAt) newest = projects[i]
+		if (projects[i].updatedAt < oldest.updatedAt)
+			oldest = projects[i]
+		if (projects[i].updatedAt > newest.updatedAt)
+			newest = projects[i]
 	}
 
 	return { oldest, newest }
@@ -2808,7 +3049,10 @@ Store callbacks in refs when used in effects that shouldn't re-subscribe on call
 **Incorrect: re-subscribes on every render**
 
 ```tsx
-function useWindowEvent(event: string, handler: (e) => void) {
+function useWindowEvent(
+	event: string,
+	handler: (e) => void
+) {
 	useEffect(() => {
 		window.addEventListener(event, handler)
 		return () => window.removeEventListener(event, handler)
@@ -2821,7 +3065,10 @@ function useWindowEvent(event: string, handler: (e) => void) {
 ```tsx
 import { useEffectEvent } from 'react'
 
-function useWindowEvent(event: string, handler: (e) => void) {
+function useWindowEvent(
+	event: string,
+	handler: (e) => void
+) {
 	const onEvent = useEffectEvent(handler)
 
 	useEffect(() => {
@@ -2844,7 +3091,11 @@ Access latest values in callbacks without adding them to dependency arrays. Prev
 **Incorrect: effect re-runs on every callback change**
 
 ```tsx
-function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
+function SearchInput({
+	onSearch
+}: {
+	onSearch: (q: string) => void
+}) {
 	const [query, setQuery] = useState('')
 
 	useEffect(() => {
@@ -2859,12 +3110,19 @@ function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
 ```tsx
 import { useEffectEvent } from 'react'
 
-function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
+function SearchInput({
+	onSearch
+}: {
+	onSearch: (q: string) => void
+}) {
 	const [query, setQuery] = useState('')
 	const onSearchEvent = useEffectEvent(onSearch)
 
 	useEffect(() => {
-		const timeout = setTimeout(() => onSearchEvent(query), 300)
+		const timeout = setTimeout(
+			() => onSearchEvent(query),
+			300
+		)
 		return () => clearTimeout(timeout)
 	}, [query])
 }

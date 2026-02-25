@@ -27,14 +27,18 @@ interface JSXPreviewContextValue {
 	onErrorProp?: (error: Error) => void
 }
 
-const JSXPreviewContext = createContext<JSXPreviewContextValue | null>(null)
+const JSXPreviewContext =
+	createContext<JSXPreviewContextValue | null>(null)
 
-const TAG_REGEX = /<\/?([a-zA-Z][a-zA-Z0-9]*)\s*([^>]*?)(\/)?>/
+const TAG_REGEX =
+	/<\/?([a-zA-Z][a-zA-Z0-9]*)\s*([^>]*?)(\/)?>/
 
 export const useJSXPreview = () => {
 	const context = useContext(JSXPreviewContext)
 	if (!context) {
-		throw new Error('JSXPreview components must be used within JSXPreview')
+		throw new Error(
+			'JSXPreview components must be used within JSXPreview'
+		)
 	}
 	return context
 }
@@ -50,7 +54,8 @@ const matchJsxTag = (code: string) => {
 		return null
 	}
 
-	const [fullMatch, tagName, attributes, selfClosing] = match
+	const [fullMatch, tagName, attributes, selfClosing] =
+		match
 
 	let type: 'self-closing' | 'closing' | 'opening'
 	if (selfClosing) {
@@ -86,7 +91,10 @@ const completeJsxTag = (code: string) => {
 		const { tagName, type, endIndex } = match
 
 		// Include any text content before this tag
-		result += code.slice(currentPosition, currentPosition + endIndex)
+		result += code.slice(
+			currentPosition,
+			currentPosition + endIndex
+		)
 
 		if (type === 'opening') {
 			stack.push(tagName)
@@ -151,7 +159,10 @@ export const JSXPreview = memo(
 					setError
 				}}
 			>
-				<div className={cn('relative', className)} {...props}>
+				<div
+					className={cn('relative', className)}
+					{...props}
+				>
 					{children}
 				</div>
 			</JSXPreviewContext.Provider>
@@ -161,43 +172,57 @@ export const JSXPreview = memo(
 
 JSXPreview.displayName = 'JSXPreview'
 
-export type JSXPreviewContentProps = Omit<ComponentProps<'div'>, 'children'>
+export type JSXPreviewContentProps = Omit<
+	ComponentProps<'div'>,
+	'children'
+>
 
-export const JSXPreviewContent = memo(({ className, ...props }: JSXPreviewContentProps) => {
-	const { processedJsx, components, bindings, setError, onErrorProp } = useJSXPreview()
-	const errorReportedRef = useRef<string | null>(null)
+export const JSXPreviewContent = memo(
+	({ className, ...props }: JSXPreviewContentProps) => {
+		const {
+			processedJsx,
+			components,
+			bindings,
+			setError,
+			onErrorProp
+		} = useJSXPreview()
+		const errorReportedRef = useRef<string | null>(null)
 
-	// Reset error tracking when jsx changes
-	// biome-ignore lint/correctness/useExhaustiveDependencies: processedJsx change should reset tracking
-	useEffect(() => {
-		errorReportedRef.current = null
-	}, [processedJsx])
+		// Reset error tracking when jsx changes
+		// biome-ignore lint/correctness/useExhaustiveDependencies: processedJsx change should reset tracking
+		useEffect(() => {
+			errorReportedRef.current = null
+		}, [processedJsx])
 
-	const handleError = useCallback(
-		(err: Error) => {
-			// Prevent duplicate error reports for the same jsx
-			if (errorReportedRef.current === processedJsx) {
-				return
-			}
-			errorReportedRef.current = processedJsx
-			setError(err)
-			onErrorProp?.(err)
-		},
-		[processedJsx, onErrorProp, setError]
-	)
+		const handleError = useCallback(
+			(err: Error) => {
+				// Prevent duplicate error reports for the same jsx
+				if (errorReportedRef.current === processedJsx) {
+					return
+				}
+				errorReportedRef.current = processedJsx
+				setError(err)
+				onErrorProp?.(err)
+			},
+			[processedJsx, onErrorProp, setError]
+		)
 
-	return (
-		<div className={cn('jsx-preview-content', className)} {...props}>
-			<JsxParser
-				bindings={bindings}
-				components={components}
-				jsx={processedJsx}
-				onError={handleError}
-				renderInWrapper={false}
-			/>
-		</div>
-	)
-})
+		return (
+			<div
+				className={cn('jsx-preview-content', className)}
+				{...props}
+			>
+				<JsxParser
+					bindings={bindings}
+					components={components}
+					jsx={processedJsx}
+					onError={handleError}
+					renderInWrapper={false}
+				/>
+			</div>
+		)
+	}
+)
 
 JSXPreviewContent.displayName = 'JSXPreviewContent'
 
@@ -215,31 +240,37 @@ const renderChildren = (
 	return children
 }
 
-export const JSXPreviewError = memo(({ className, children, ...props }: JSXPreviewErrorProps) => {
-	const { error } = useJSXPreview()
+export const JSXPreviewError = memo(
+	({
+		className,
+		children,
+		...props
+	}: JSXPreviewErrorProps) => {
+		const { error } = useJSXPreview()
 
-	if (!error) {
-		return null
+		if (!error) {
+			return null
+		}
+
+		return (
+			<div
+				className={cn(
+					'flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm',
+					className
+				)}
+				{...props}
+			>
+				{children ? (
+					renderChildren(children, error)
+				) : (
+					<>
+						<WarningCircleIcon className="size-4 shrink-0" />
+						<span>{error.message}</span>
+					</>
+				)}
+			</div>
+		)
 	}
-
-	return (
-		<div
-			className={cn(
-				'flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm',
-				className
-			)}
-			{...props}
-		>
-			{children ? (
-				renderChildren(children, error)
-			) : (
-				<>
-					<WarningCircleIcon className="size-4 shrink-0" />
-					<span>{error.message}</span>
-				</>
-			)}
-		</div>
-	)
-})
+)
 
 JSXPreviewError.displayName = 'JSXPreviewError'

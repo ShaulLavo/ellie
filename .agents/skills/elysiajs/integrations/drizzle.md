@@ -40,7 +40,11 @@ Add to `package.json`:
 
 ```typescript
 // src/database/schema.ts
-import { pgTable, varchar, timestamp } from 'drizzle-orm/pg-core'
+import {
+	pgTable,
+	varchar,
+	timestamp
+} from 'drizzle-orm/pg-core'
 import { createId } from '@paralleldrive/cuid2'
 
 export const user = pgTable('user', {
@@ -87,11 +91,17 @@ new Elysia().post('/sign-up', ({ body }) => {}, {
 const _createUser = createInsertSchema(table.user, {
 	email: t.String({ format: 'email' })
 })
-const createUser = t.Omit(_createUser, ['id', 'salt', 'createdAt'])
+const createUser = t.Omit(_createUser, [
+	'id',
+	'salt',
+	'createdAt'
+])
 
 // ❌ Infinite loop
 const createUser = t.Omit(
-	createInsertSchema(table.user, { email: t.String({ format: 'email' }) }),
+	createInsertSchema(table.user, {
+		email: t.String({ format: 'email' })
+	}),
 	['id', 'salt', 'createdAt']
 )
 ```
@@ -110,28 +120,46 @@ Copy as-is for simplified usage:
  */
 
 import { Kind, type TObject } from '@sinclair/typebox'
-import { createInsertSchema, createSelectSchema, BuildSchema } from 'drizzle-typebox'
+import {
+	createInsertSchema,
+	createSelectSchema,
+	BuildSchema
+} from 'drizzle-typebox'
 
 import { table } from './schema'
 import type { Table } from 'drizzle-orm'
 
-type Spread<T extends TObject | Table, Mode extends 'select' | 'insert' | undefined> =
+type Spread<
+	T extends TObject | Table,
+	Mode extends 'select' | 'insert' | undefined
+> =
 	T extends TObject<infer Fields>
 		? {
 				[K in keyof Fields]: Fields[K]
 			}
 		: T extends Table
 			? Mode extends 'select'
-				? BuildSchema<'select', T['_']['columns'], undefined>['properties']
+				? BuildSchema<
+						'select',
+						T['_']['columns'],
+						undefined
+					>['properties']
 				: Mode extends 'insert'
-					? BuildSchema<'insert', T['_']['columns'], undefined>['properties']
+					? BuildSchema<
+							'insert',
+							T['_']['columns'],
+							undefined
+						>['properties']
 					: {}
 			: {}
 
 /**
  * Spread a Drizzle schema into a plain object
  */
-export const spread = <T extends TObject | Table, Mode extends 'select' | 'insert' | undefined>(
+export const spread = <
+	T extends TObject | Table,
+	Mode extends 'select' | 'insert' | undefined
+>(
 	schema: T,
 	mode?: Mode
 ): Spread<T, Mode> => {
@@ -146,16 +174,21 @@ export const spread = <T extends TObject | Table, Mode extends 'select' | 'inser
 				break
 			}
 
-			table = mode === 'insert' ? createInsertSchema(schema) : createSelectSchema(schema)
+			table =
+				mode === 'insert'
+					? createInsertSchema(schema)
+					: createSelectSchema(schema)
 
 			break
 
 		default:
-			if (!(Kind in schema)) throw new Error('Expect a schema')
+			if (!(Kind in schema))
+				throw new Error('Expect a schema')
 			table = schema
 	}
 
-	for (const key of Object.keys(table.properties)) newSchema[key] = table.properties[key]
+	for (const key of Object.keys(table.properties))
+		newSchema[key] = table.properties[key]
 
 	return newSchema as any
 }
@@ -179,7 +212,8 @@ export const spreads = <
 	const newSchema: Record<string, unknown> = {}
 	const keys = Object.keys(models)
 
-	for (const key of keys) newSchema[key] = spread(models[key], mode)
+	for (const key of keys)
+		newSchema[key] = spread(models[key], mode)
 
 	return newSchema as any
 }
@@ -198,7 +232,11 @@ const createUser = t.Object({
 
 // ⚠️ Using t.Pick
 const _createUser = createInsertSchema(table.user)
-const createUser = t.Pick(_createUser, ['id', 'username', 'password'])
+const createUser = t.Pick(_createUser, [
+	'id',
+	'username',
+	'password'
+])
 ```
 
 ## Table Singleton Pattern
@@ -234,7 +272,10 @@ new Elysia().post('/sign-up', ({ body }) => {}, {
 
 ```typescript
 // src/database/model.ts
-import { createInsertSchema, createSelectSchema } from 'drizzle-typebox'
+import {
+	createInsertSchema,
+	createSelectSchema
+} from 'drizzle-typebox'
 
 export const db = {
 	insert: spreads(

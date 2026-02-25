@@ -16,7 +16,11 @@ Thin wrapper around TanStack AI with a model registry, cost calculation, thinkin
 ## Providers
 
 ```ts
-type ProviderName = 'anthropic' | 'openai' | 'ollama' | 'openrouter'
+type ProviderName =
+	| 'anthropic'
+	| 'openai'
+	| 'ollama'
+	| 'openrouter'
 ```
 
 ## Model Registry
@@ -70,7 +74,12 @@ All costs are in **$/million tokens**.
 Unified thinking levels across providers:
 
 ```ts
-type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+type ThinkingLevel =
+	| 'minimal'
+	| 'low'
+	| 'medium'
+	| 'high'
+	| 'xhigh'
 ```
 
 | Provider   | How it maps                                                   |
@@ -86,7 +95,9 @@ type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 chat({
 	adapter,
 	messages,
-	modelOptions: { ...toThinkingModelOptions('anthropic', 'high') }
+	modelOptions: {
+		...toThinkingModelOptions('anthropic', 'high')
+	}
 })
 ```
 

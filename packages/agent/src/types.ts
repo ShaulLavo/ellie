@@ -1,5 +1,15 @@
-import type { Model, Usage, ProviderName, ThinkingLevel } from '@ellie/ai'
-import type { ModelMessage, StreamChunk, Tool as TanStackTool, AnyTextAdapter } from '@tanstack/ai'
+import type {
+	Model,
+	Usage,
+	ProviderName,
+	ThinkingLevel
+} from '@ellie/ai'
+import type {
+	ModelMessage,
+	StreamChunk,
+	Tool as TanStackTool,
+	AnyTextAdapter
+} from '@tanstack/ai'
 import type { GenericSchema, InferOutput } from 'valibot'
 
 // ============================================================================
@@ -33,7 +43,12 @@ export interface ToolCall {
 // Messages
 // ============================================================================
 
-export type StopReason = 'stop' | 'length' | 'toolUse' | 'error' | 'aborted'
+export type StopReason =
+	| 'stop'
+	| 'length'
+	| 'toolUse'
+	| 'error'
+	| 'aborted'
 
 export interface UserMessage {
 	role: 'user'
@@ -62,7 +77,10 @@ export interface ToolResultMessage<TDetails = unknown> {
 	timestamp: number
 }
 
-export type Message = UserMessage | AssistantMessage | ToolResultMessage
+export type Message =
+	| UserMessage
+	| AssistantMessage
+	| ToolResultMessage
 
 export type AgentMessage = Message
 
@@ -79,7 +97,10 @@ export type AgentToolUpdateCallback<TDetails = unknown> = (
 	partialResult: AgentToolResult<TDetails>
 ) => void
 
-export interface AgentTool<TParameters extends GenericSchema = GenericSchema, TDetails = unknown> {
+export interface AgentTool<
+	TParameters extends GenericSchema = GenericSchema,
+	TDetails = unknown
+> {
 	name: string
 	description: string
 	parameters: TParameters
@@ -119,13 +140,25 @@ export interface AgentContext {
 
 export type AssistantStreamEvent =
 	| { type: 'text_start'; contentIndex: number }
-	| { type: 'text_delta'; contentIndex: number; delta: string }
+	| {
+			type: 'text_delta'
+			contentIndex: number
+			delta: string
+	  }
 	| { type: 'text_end'; contentIndex: number }
 	| { type: 'thinking_start'; contentIndex: number }
-	| { type: 'thinking_delta'; contentIndex: number; delta: string }
+	| {
+			type: 'thinking_delta'
+			contentIndex: number
+			delta: string
+	  }
 	| { type: 'thinking_end'; contentIndex: number }
 	| { type: 'toolcall_start'; contentIndex: number }
-	| { type: 'toolcall_delta'; contentIndex: number; delta: string }
+	| {
+			type: 'toolcall_delta'
+			contentIndex: number
+			delta: string
+	  }
 	| {
 			type: 'toolcall_end'
 			contentIndex: number
@@ -188,7 +221,9 @@ export interface StreamCallOptions {
 	abortController?: AbortController
 }
 
-export type StreamFn = (options: StreamCallOptions) => AsyncIterable<StreamChunk>
+export type StreamFn = (
+	options: StreamCallOptions
+) => AsyncIterable<StreamChunk>
 
 export interface AgentLoopConfig {
 	model: Model
@@ -200,7 +235,10 @@ export interface AgentLoopConfig {
 	/** Maximum LLM call iterations when tools are involved. Default: 10 */
 	maxTurns?: number
 
-	transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>
+	transformContext?: (
+		messages: AgentMessage[],
+		signal?: AbortSignal
+	) => Promise<AgentMessage[]>
 
 	getSteeringMessages?: () => Promise<AgentMessage[]>
 	getFollowUpMessages?: () => Promise<AgentMessage[]>

@@ -12,7 +12,10 @@
  * Datasets are deterministic (seeded) to ensure reproducibility.
  */
 
-import type { RollingIngestEvent, TemporalNarrativeQuestion } from './phase2-types'
+import type {
+	RollingIngestEvent,
+	TemporalNarrativeQuestion
+} from './phase2-types'
 
 // ── Deterministic PRNG ──────────────────────────────────────────────────
 
@@ -68,26 +71,77 @@ const ATTRIBUTES = [
 ]
 
 const VALUES: Record<string, string[]> = {
-	role: ['engineer', 'manager', 'designer', 'analyst', 'director'],
-	department: ['engineering', 'marketing', 'sales', 'hr', 'finance'],
-	location: ['remote', 'office', 'hybrid', 'traveling', 'relocating'],
-	status: ['active', 'inactive', 'pending', 'completed', 'archived'],
+	role: [
+		'engineer',
+		'manager',
+		'designer',
+		'analyst',
+		'director'
+	],
+	department: [
+		'engineering',
+		'marketing',
+		'sales',
+		'hr',
+		'finance'
+	],
+	location: [
+		'remote',
+		'office',
+		'hybrid',
+		'traveling',
+		'relocating'
+	],
+	status: [
+		'active',
+		'inactive',
+		'pending',
+		'completed',
+		'archived'
+	],
 	preference: ['high', 'medium', 'low', 'critical', 'none'],
-	category: ['technical', 'business', 'personal', 'research', 'support'],
+	category: [
+		'technical',
+		'business',
+		'personal',
+		'research',
+		'support'
+	],
 	priority: ['P0', 'P1', 'P2', 'P3', 'P4'],
-	type: ['task', 'bug', 'feature', 'improvement', 'documentation'],
-	stage: ['planning', 'development', 'testing', 'review', 'deployment'],
-	sentiment: ['positive', 'neutral', 'negative', 'mixed', 'unknown']
+	type: [
+		'task',
+		'bug',
+		'feature',
+		'improvement',
+		'documentation'
+	],
+	stage: [
+		'planning',
+		'development',
+		'testing',
+		'review',
+		'deployment'
+	],
+	sentiment: [
+		'positive',
+		'neutral',
+		'negative',
+		'mixed',
+		'unknown'
+	]
 }
 
-const SCOPES = ['work', 'personal', 'research', 'meetings', 'admin']
-
-const FACT_TYPES: Array<'world' | 'experience' | 'opinion' | 'observation'> = [
-	'world',
-	'experience',
-	'opinion',
-	'observation'
+const SCOPES = [
+	'work',
+	'personal',
+	'research',
+	'meetings',
+	'admin'
 ]
+
+const FACT_TYPES: Array<
+	'world' | 'experience' | 'opinion' | 'observation'
+> = ['world', 'experience', 'opinion', 'observation']
 
 /**
  * Generate a rolling ingest dataset with labeled clusters, entities,
@@ -102,7 +156,9 @@ export function generateRollingIngestDataset(
 ): RollingIngestEvent[] {
 	const random = mulberry32(seed)
 	const events: RollingIngestEvent[] = []
-	const baseTimestamp = new Date('2025-01-01T00:00:00Z').getTime()
+	const baseTimestamp = new Date(
+		'2025-01-01T00:00:00Z'
+	).getTime()
 
 	// Generate clusters: each cluster has a unique entity+attribute combination.
 	// Some clusters will have multiple events (duplicates) to test dedup.
@@ -116,11 +172,17 @@ export function generateRollingIngestDataset(
 	}> = []
 
 	for (let i = 0; i < numClusters; i++) {
-		const entity = ENTITIES[Math.floor(random() * ENTITIES.length)]!
-		const attribute = ATTRIBUTES[Math.floor(random() * ATTRIBUTES.length)]!
+		const entity =
+			ENTITIES[Math.floor(random() * ENTITIES.length)]!
+		const attribute =
+			ATTRIBUTES[Math.floor(random() * ATTRIBUTES.length)]!
 		const valueOptions = VALUES[attribute]!
-		const baseValue = valueOptions[Math.floor(random() * valueOptions.length)]!
-		const scope = SCOPES[Math.floor(random() * SCOPES.length)]!
+		const baseValue =
+			valueOptions[
+				Math.floor(random() * valueOptions.length)
+			]!
+		const scope =
+			SCOPES[Math.floor(random() * SCOPES.length)]!
 
 		clusterDefs.push({
 			clusterId: `cluster-${i.toString().padStart(4, '0')}`,
@@ -155,7 +217,10 @@ export function generateRollingIngestDataset(
 			value: cluster.baseValue,
 			scope: cluster.scope,
 			timestamp: baseTimestamp + timestampOffset,
-			factType: FACT_TYPES[Math.floor(random() * FACT_TYPES.length)]!,
+			factType:
+				FACT_TYPES[
+					Math.floor(random() * FACT_TYPES.length)
+				]!,
 			tags: [cluster.scope]
 		})
 
@@ -164,10 +229,13 @@ export function generateRollingIngestDataset(
 
 	// Second pass: create duplicate/update events for some clusters
 	while (eventIndex < count) {
-		const clusterIdx = Math.floor(random() * clusterDefs.length)
+		const clusterIdx = Math.floor(
+			random() * clusterDefs.length
+		)
 		const cluster = clusterDefs[clusterIdx]!
 
-		timestampOffset += Math.floor(random() * 30 + 1) * 60 * 1000
+		timestampOffset +=
+			Math.floor(random() * 30 + 1) * 60 * 1000
 
 		// 50% chance of same value (duplicate), 50% chance of changed value (conflict)
 		const isConflict = random() > 0.5
@@ -187,7 +255,10 @@ export function generateRollingIngestDataset(
 			value,
 			scope: cluster.scope,
 			timestamp: baseTimestamp + timestampOffset,
-			factType: FACT_TYPES[Math.floor(random() * FACT_TYPES.length)]!,
+			factType:
+				FACT_TYPES[
+					Math.floor(random() * FACT_TYPES.length)
+				]!,
 			tags: [cluster.scope]
 		})
 
@@ -222,7 +293,8 @@ export function generateTemporalNarrativeDataset(
 
 	for (let i = 0; i < count; i++) {
 		// Pick an anchor event somewhere in the middle
-		const anchorIdx = Math.floor(random() * (totalEvents - 10)) + 5
+		const anchorIdx =
+			Math.floor(random() * (totalEvents - 10)) + 5
 
 		// Pick 2-5 expected events around the anchor
 		const numExpected = Math.floor(random() * 4) + 2
@@ -230,7 +302,11 @@ export function generateTemporalNarrativeDataset(
 
 		const dirRoll = random()
 		const direction: 'before' | 'after' | 'both' =
-			dirRoll < 0.33 ? 'before' : dirRoll < 0.66 ? 'after' : 'both'
+			dirRoll < 0.33
+				? 'before'
+				: dirRoll < 0.66
+					? 'after'
+					: 'both'
 
 		for (let j = 0; j < numExpected; j++) {
 			let idx: number
@@ -247,7 +323,10 @@ export function generateTemporalNarrativeDataset(
 
 			idx = Math.max(0, Math.min(totalEvents - 1, idx))
 
-			if (!expectedIndices.includes(idx) && idx !== anchorIdx) {
+			if (
+				!expectedIndices.includes(idx) &&
+				idx !== anchorIdx
+			) {
 				expectedIndices.push(idx)
 			}
 		}
@@ -276,5 +355,8 @@ export function generateTemporalNarrativeDataset(
  */
 /** Convert an array of items to newline-delimited JSON (JSONL) format. */
 export function toJsonl<T>(items: T[]): string {
-	return items.map(item => JSON.stringify(item)).join('\n') + '\n'
+	return (
+		items.map(item => JSON.stringify(item)).join('\n') +
+		'\n'
+	)
 }

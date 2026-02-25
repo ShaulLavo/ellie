@@ -22,13 +22,22 @@ function Accordion(props: AccordionProps) {
 
 type AccordionItemProps = AccordionItemPrimitiveProps
 
-function AccordionItem({ className, ...props }: AccordionItemProps) {
-	return <AccordionItemPrimitive className={cn('border-b last:border-b-0', className)} {...props} />
+function AccordionItem({
+	className,
+	...props
+}: AccordionItemProps) {
+	return (
+		<AccordionItemPrimitive
+			className={cn('border-b last:border-b-0', className)}
+			{...props}
+		/>
+	)
 }
 
-type AccordionTriggerProps = AccordionTriggerPrimitiveProps & {
-	showArrow?: boolean
-}
+type AccordionTriggerProps =
+	AccordionTriggerPrimitiveProps & {
+		showArrow?: boolean
+	}
 
 function AccordionTrigger({
 	className,
@@ -58,10 +67,16 @@ type AccordionPanelProps = AccordionPanelPrimitiveProps & {
 	children: React.ReactNode
 }
 
-function AccordionPanel({ className, children, ...props }: AccordionPanelProps) {
+function AccordionPanel({
+	className,
+	children,
+	...props
+}: AccordionPanelProps) {
 	return (
 		<AccordionPanelPrimitive {...props}>
-			<div className={cn('text-sm pt-0 pb-4', className)}>{children}</div>
+			<div className={cn('text-sm pt-0 pb-4', className)}>
+				{children}
+			</div>
 		</AccordionPanelPrimitive>
 	)
 }

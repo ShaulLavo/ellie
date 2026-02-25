@@ -107,5 +107,7 @@ const app = new Elysia()
 	})
 	.all('/all', () => 'hi')
 	.listen(8080, ({ hostname, port }) => {
-		console.log(`🦊 Elysia is running at http://${hostname}:${port}`)
+		console.log(
+			`🦊 Elysia is running at http://${hostname}:${port}`
+		)
 	})

@@ -24,7 +24,9 @@ z.string({
 	required_error: 'Field is required'
 })
 
-z.string().email({ errorMap: issue => ({ message: 'Invalid email' }) })
+z.string().email({
+	errorMap: issue => ({ message: 'Invalid email' })
+})
 
 // ✅ Zod v4 (Use unified 'error' parameter)
 z.string({
@@ -54,7 +56,9 @@ z.number().parse(-Infinity) // ✗ Error: infinite values rejected
 z.number().int().parse(9007199254740992) // ✗ Error: outside safe integer range
 
 // If you need to allow infinite values, use a refinement:
-z.number().refine(n => Number.isFinite(n) || !Number.isNaN(n))
+z.number().refine(
+	n => Number.isFinite(n) || !Number.isNaN(n)
+)
 
 // .int() now enforces Number.MIN_SAFE_INTEGER to Number.MAX_SAFE_INTEGER
 // .safe() no longer permits floats (integers only)
@@ -138,7 +142,11 @@ z.enum(MyEnum) // Unified enum handling
 
 ```typescript
 // ❌ Zod v3
-const myFunc = z.function().args(z.string()).returns(z.number()).parse(someFunction)
+const myFunc = z
+	.function()
+	.args(z.string())
+	.returns(z.number())
+	.parse(someFunction)
 
 // ✅ Zod v4
 const myFunc = z
@@ -167,7 +175,9 @@ const myFunc = z
 ```typescript
 // Some previously valid UUIDs may now fail validation
 // Ensure UUIDs conform to RFC 9562/4122 format
-const uuid = z.uuid().parse('550e8400-e29b-41d4-a716-446655440000') // ✓
+const uuid = z
+	.uuid()
+	.parse('550e8400-e29b-41d4-a716-446655440000') // ✓
 ```
 
 ---

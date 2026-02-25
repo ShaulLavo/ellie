@@ -21,15 +21,24 @@ interface AITextLoadingProps {
 }
 
 export default function AITextLoading({
-	texts = ['Thinking...', 'Processing...', 'Analyzing...', 'Computing...', 'Almost...'],
+	texts = [
+		'Thinking...',
+		'Processing...',
+		'Analyzing...',
+		'Computing...',
+		'Almost...'
+	],
 	className,
 	interval = 1500
 }: AITextLoadingProps) {
-	const [currentTextIndex, setCurrentTextIndex] = useState(0)
+	const [currentTextIndex, setCurrentTextIndex] =
+		useState(0)
 
 	useEffect(() => {
 		const timer = setInterval(() => {
-			setCurrentTextIndex(prevIndex => (prevIndex + 1) % texts.length)
+			setCurrentTextIndex(
+				prevIndex => (prevIndex + 1) % texts.length
+			)
 		}, interval)
 
 		return () => clearInterval(timer)
@@ -50,7 +59,10 @@ export default function AITextLoading({
 						animate={{
 							opacity: 1,
 							y: 0,
-							backgroundPosition: ['200% center', '-200% center']
+							backgroundPosition: [
+								'200% center',
+								'-200% center'
+							]
 						}}
 						exit={{ opacity: 0, y: -20 }}
 						transition={{

@@ -5,7 +5,11 @@
  * and delegates to agentLoop/agentLoopContinue for actual execution.
  */
 
-import { getModel, type Model, type ThinkingLevel } from '@ellie/ai'
+import {
+	getModel,
+	type Model,
+	type ThinkingLevel
+} from '@ellie/ai'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { agentLoop, agentLoopContinue } from './agent-loop'
 import type {
@@ -28,7 +32,10 @@ export interface AgentOptions {
 	adapter?: AnyTextAdapter
 
 	/** Optional transform applied to context before sending to LLM. */
-	transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>
+	transformContext?: (
+		messages: AgentMessage[],
+		signal?: AbortSignal
+	) => Promise<AgentMessage[]>
 
 	/** Maximum LLM call iterations when tools are involved. Default: 10 */
 	maxTurns?: number
@@ -70,7 +77,10 @@ export class Agent {
 	private resolveRunningPrompt?: () => void
 
 	constructor(opts: AgentOptions = {}) {
-		const defaultModel = getModel('anthropic', 'claude-sonnet-4-6')
+		const defaultModel = getModel(
+			'anthropic',
+			'claude-sonnet-4-6'
+		)
 		if (!defaultModel) {
 			throw new Error(
 				"Default model 'claude-sonnet-4-6' not found in registry — check @ellie/ai model config"
@@ -184,42 +194,60 @@ export class Agent {
 	}
 
 	private dequeueSteeringMessages(): AgentMessage[] {
-		if (this.steeringQueueIdx >= this.steeringQueue.length) return []
+		if (this.steeringQueueIdx >= this.steeringQueue.length)
+			return []
 
 		if (this.steeringMode === 'one-at-a-time') {
-			const first = this.steeringQueue[this.steeringQueueIdx++]
+			const first =
+				this.steeringQueue[this.steeringQueueIdx++]
 			this.compactQueue('steering')
 			return [first]
 		}
-		const remaining = this.steeringQueue.slice(this.steeringQueueIdx)
+		const remaining = this.steeringQueue.slice(
+			this.steeringQueueIdx
+		)
 		this.steeringQueue = []
 		this.steeringQueueIdx = 0
 		return remaining
 	}
 
 	private dequeueFollowUpMessages(): AgentMessage[] {
-		if (this.followUpQueueIdx >= this.followUpQueue.length) return []
+		if (this.followUpQueueIdx >= this.followUpQueue.length)
+			return []
 
 		if (this.followUpMode === 'one-at-a-time') {
-			const first = this.followUpQueue[this.followUpQueueIdx++]
+			const first =
+				this.followUpQueue[this.followUpQueueIdx++]
 			this.compactQueue('followUp')
 			return [first]
 		}
-		const remaining = this.followUpQueue.slice(this.followUpQueueIdx)
+		const remaining = this.followUpQueue.slice(
+			this.followUpQueueIdx
+		)
 		this.followUpQueue = []
 		this.followUpQueueIdx = 0
 		return remaining
 	}
 
 	private compactQueue(which: 'steering' | 'followUp') {
-		const queue = which === 'steering' ? this.steeringQueue : this.followUpQueue
-		const idx = which === 'steering' ? this.steeringQueueIdx : this.followUpQueueIdx
+		const queue =
+			which === 'steering'
+				? this.steeringQueue
+				: this.followUpQueue
+		const idx =
+			which === 'steering'
+				? this.steeringQueueIdx
+				: this.followUpQueueIdx
 		if (idx > 32 && idx > queue.length / 2) {
 			if (which === 'steering') {
-				this.steeringQueue = this.steeringQueue.slice(this.steeringQueueIdx)
+				this.steeringQueue = this.steeringQueue.slice(
+					this.steeringQueueIdx
+				)
 				this.steeringQueueIdx = 0
 			} else {
-				this.followUpQueue = this.followUpQueue.slice(this.followUpQueueIdx)
+				this.followUpQueue = this.followUpQueue.slice(
+					this.followUpQueueIdx
+				)
 				this.followUpQueueIdx = 0
 			}
 		}
@@ -246,9 +274,17 @@ export class Agent {
 
 	// --- Prompting ---
 
-	async prompt(message: AgentMessage | AgentMessage[]): Promise<void>
-	async prompt(input: string, images?: ImageContent[]): Promise<void>
-	async prompt(input: string | AgentMessage | AgentMessage[], images?: ImageContent[]) {
+	async prompt(
+		message: AgentMessage | AgentMessage[]
+	): Promise<void>
+	async prompt(
+		input: string,
+		images?: ImageContent[]
+	): Promise<void>
+	async prompt(
+		input: string | AgentMessage | AgentMessage[],
+		images?: ImageContent[]
+	) {
 		if (this._state.isStreaming) {
 			throw new Error(
 				'Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.'
@@ -256,7 +292,9 @@ export class Agent {
 		}
 
 		if (!this.adapter) {
-			throw new Error('No adapter configured. Pass an adapter via AgentOptions.')
+			throw new Error(
+				'No adapter configured. Pass an adapter via AgentOptions.'
+			)
 		}
 
 		let msgs: AgentMessage[]
@@ -264,7 +302,9 @@ export class Agent {
 		if (Array.isArray(input)) {
 			msgs = input
 		} else if (typeof input === 'string') {
-			const content: Array<TextContent | ImageContent> = [{ type: 'text', text: input }]
+			const content: Array<TextContent | ImageContent> = [
+				{ type: 'text', text: input }
+			]
 			if (images && images.length > 0) {
 				content.push(...images)
 			}
@@ -284,7 +324,9 @@ export class Agent {
 
 	async continue() {
 		if (this._state.isStreaming) {
-			throw new Error('Agent is already processing. Wait for completion before continuing.')
+			throw new Error(
+				'Agent is already processing. Wait for completion before continuing.'
+			)
 		}
 
 		const messages = this._state.messages
@@ -292,7 +334,9 @@ export class Agent {
 			throw new Error('No messages to continue from')
 		}
 
-		if (messages[messages.length - 1].role === 'assistant') {
+		if (
+			messages[messages.length - 1].role === 'assistant'
+		) {
 			const queuedSteering = this.dequeueSteeringMessages()
 			if (queuedSteering.length > 0) {
 				await this._runLoop(queuedSteering, {
@@ -307,7 +351,9 @@ export class Agent {
 				return
 			}
 
-			throw new Error('Cannot continue from message role: assistant')
+			throw new Error(
+				'Cannot continue from message role: assistant'
+			)
 		}
 
 		await this._runLoop(undefined)
@@ -338,7 +384,8 @@ export class Agent {
 			tools: this._state.tools
 		}
 
-		let skipInitialSteeringPoll = options?.skipInitialSteeringPoll === true
+		let skipInitialSteeringPoll =
+			options?.skipInitialSteeringPoll === true
 
 		const config: AgentLoopConfig = {
 			model: this._state.model,
@@ -353,7 +400,8 @@ export class Agent {
 				}
 				return this.dequeueSteeringMessages()
 			},
-			getFollowUpMessages: async () => this.dequeueFollowUpMessages(),
+			getFollowUpMessages: async () =>
+				this.dequeueFollowUpMessages(),
 			onEvent: this.onEvent
 		}
 
@@ -361,8 +409,19 @@ export class Agent {
 
 		try {
 			const stream = messages
-				? agentLoop(messages, context, config, this.abortController.signal, this.streamFn)
-				: agentLoopContinue(context, config, this.abortController.signal, this.streamFn)
+				? agentLoop(
+						messages,
+						context,
+						config,
+						this.abortController.signal,
+						this.streamFn
+					)
+				: agentLoopContinue(
+						context,
+						config,
+						this.abortController.signal,
+						this.streamFn
+					)
 
 			for await (const event of stream) {
 				switch (event.type) {
@@ -385,9 +444,12 @@ export class Agent {
 					case 'turn_end':
 						if (
 							event.message.role === 'assistant' &&
-							(event.message as AssistantMessage).errorMessage
+							(event.message as AssistantMessage)
+								.errorMessage
 						) {
-							this._state.error = (event.message as AssistantMessage).errorMessage
+							this._state.error = (
+								event.message as AssistantMessage
+							).errorMessage
 						}
 						break
 
@@ -407,18 +469,23 @@ export class Agent {
 				(partial as AssistantMessage).content.length > 0
 			) {
 				const assistantPartial = partial as AssistantMessage
-				const hasMeaningfulContent = assistantPartial.content.some(
-					c =>
-						(c.type === 'thinking' && c.thinking.trim().length > 0) ||
-						(c.type === 'text' && c.text.trim().length > 0) ||
-						(c.type === 'toolCall' && c.name.trim().length > 0)
-				)
+				const hasMeaningfulContent =
+					assistantPartial.content.some(
+						c =>
+							(c.type === 'thinking' &&
+								c.thinking.trim().length > 0) ||
+							(c.type === 'text' &&
+								c.text.trim().length > 0) ||
+							(c.type === 'toolCall' &&
+								c.name.trim().length > 0)
+					)
 				if (hasMeaningfulContent) {
 					this.appendMessage(partial)
 				}
 			}
 		} catch (err: unknown) {
-			const errorMessage = err instanceof Error ? err.message : String(err)
+			const errorMessage =
+				err instanceof Error ? err.message : String(err)
 			const errorMsg: AgentMessage = {
 				role: 'assistant',
 				content: [{ type: 'text', text: '' }],
@@ -438,7 +505,9 @@ export class Agent {
 						total: 0
 					}
 				},
-				stopReason: this.abortController?.signal.aborted ? 'aborted' : 'error',
+				stopReason: this.abortController?.signal.aborted
+					? 'aborted'
+					: 'error',
 				errorMessage,
 				timestamp: Date.now()
 			}

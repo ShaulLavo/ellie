@@ -52,7 +52,11 @@ const TASK_SEQUENCES = [
 	}
 ]
 
-const LoadingAnimation = ({ progress }: { progress: number }) => (
+const LoadingAnimation = ({
+	progress
+}: {
+	progress: number
+}) => (
 	<div className="relative w-6 h-6">
 		<svg
 			viewBox="0 0 240 240"
@@ -102,13 +106,54 @@ const LoadingAnimation = ({ progress }: { progress: number }) => (
                 `}
 			</style>
 
-			<g className="g-spin" strokeWidth="16" strokeDasharray="18% 40%" mask="url(#progress-mask)">
-				<circle r="150" cx="120" cy="120" stroke="#FF2E7E" opacity="0.95" />
-				<circle r="130" cx="120" cy="120" stroke="#00E5FF" opacity="0.95" />
-				<circle r="110" cx="120" cy="120" stroke="#4ADE80" opacity="0.95" />
-				<circle r="90" cx="120" cy="120" stroke="#FFA726" opacity="0.95" />
-				<circle r="70" cx="120" cy="120" stroke="#FFEB3B" opacity="0.95" />
-				<circle r="50" cx="120" cy="120" stroke="#FF4081" opacity="0.95" />
+			<g
+				className="g-spin"
+				strokeWidth="16"
+				strokeDasharray="18% 40%"
+				mask="url(#progress-mask)"
+			>
+				<circle
+					r="150"
+					cx="120"
+					cy="120"
+					stroke="#FF2E7E"
+					opacity="0.95"
+				/>
+				<circle
+					r="130"
+					cx="120"
+					cy="120"
+					stroke="#00E5FF"
+					opacity="0.95"
+				/>
+				<circle
+					r="110"
+					cx="120"
+					cy="120"
+					stroke="#4ADE80"
+					opacity="0.95"
+				/>
+				<circle
+					r="90"
+					cx="120"
+					cy="120"
+					stroke="#FFA726"
+					opacity="0.95"
+				/>
+				<circle
+					r="70"
+					cx="120"
+					cy="120"
+					stroke="#FFEB3B"
+					opacity="0.95"
+				/>
+				<circle
+					r="50"
+					cx="120"
+					cy="120"
+					stroke="#FF4081"
+					opacity="0.95"
+				/>
 			</g>
 		</svg>
 	</div>
@@ -116,7 +161,9 @@ const LoadingAnimation = ({ progress }: { progress: number }) => (
 
 export default function AILoadingState() {
 	const [sequenceIndex, setSequenceIndex] = useState(0)
-	const [visibleLines, setVisibleLines] = useState<Array<{ text: string; number: number }>>([])
+	const [visibleLines, setVisibleLines] = useState<
+		Array<{ text: string; number: number }>
+	>([])
 	const [scrollPosition, setScrollPosition] = useState(0)
 	const codeContainerRef = useRef<HTMLDivElement>(null)
 	const lineHeight = 28
@@ -140,17 +187,29 @@ export default function AILoadingState() {
 	useEffect(() => {
 		const advanceTimer = setInterval(() => {
 			// Get the current first visible line index
-			const firstVisibleLineIndex = Math.floor(scrollPosition / lineHeight)
-			const nextLineIndex = (firstVisibleLineIndex + 3) % totalLines
+			const firstVisibleLineIndex = Math.floor(
+				scrollPosition / lineHeight
+			)
+			const nextLineIndex =
+				(firstVisibleLineIndex + 3) % totalLines
 
 			// If we're about to wrap around, move to next sequence
-			if (nextLineIndex < firstVisibleLineIndex && nextLineIndex !== 0) {
-				setSequenceIndex(prevIndex => (prevIndex + 1) % TASK_SEQUENCES.length)
+			if (
+				nextLineIndex < firstVisibleLineIndex &&
+				nextLineIndex !== 0
+			) {
+				setSequenceIndex(
+					prevIndex =>
+						(prevIndex + 1) % TASK_SEQUENCES.length
+				)
 				return
 			}
 
 			// Add the next line if needed
-			if (nextLineIndex >= visibleLines.length && nextLineIndex < totalLines) {
+			if (
+				nextLineIndex >= visibleLines.length &&
+				nextLineIndex < totalLines
+			) {
 				setVisibleLines(prevLines => [
 					...prevLines,
 					{
@@ -161,11 +220,20 @@ export default function AILoadingState() {
 			}
 
 			// Scroll to the next line
-			setScrollPosition(prevPosition => prevPosition + lineHeight)
+			setScrollPosition(
+				prevPosition => prevPosition + lineHeight
+			)
 		}, 2000) // Slightly slower than the example for better readability
 
 		return () => clearInterval(advanceTimer)
-	}, [scrollPosition, visibleLines, totalLines, sequenceIndex, currentSequence.lines, lineHeight])
+	}, [
+		scrollPosition,
+		visibleLines,
+		totalLines,
+		sequenceIndex,
+		currentSequence.lines,
+		lineHeight
+	])
 
 	// Apply scroll position
 	useEffect(() => {
@@ -178,8 +246,14 @@ export default function AILoadingState() {
 		<div className="flex items-center justify-center min-h-full w-full">
 			<div className="space-y-4 w-auto">
 				<div className="ml-2 flex items-center space-x-2 text-gray-600 dark:text-gray-300 font-medium">
-					<LoadingAnimation progress={(sequenceIndex / TASK_SEQUENCES.length) * 100} />
-					<span className="text-sm">{currentSequence.status}...</span>
+					<LoadingAnimation
+						progress={
+							(sequenceIndex / TASK_SEQUENCES.length) * 100
+						}
+					/>
+					<span className="text-sm">
+						{currentSequence.status}...
+					</span>
 				</div>
 
 				<div className="relative">
@@ -198,7 +272,9 @@ export default function AILoadingState() {
 										{line.number}
 									</div>
 
-									<div className="text-gray-800 dark:text-gray-200 flex-1 ml-1">{line.text}</div>
+									<div className="text-gray-800 dark:text-gray-200 flex-1 ml-1">
+										{line.text}
+									</div>
 								</div>
 							))}
 						</div>

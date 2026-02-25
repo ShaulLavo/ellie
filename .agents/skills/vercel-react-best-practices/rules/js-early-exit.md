@@ -28,7 +28,9 @@ function validateUsers(users: User[]) {
 		// Continues checking all users even after error found
 	}
 
-	return hasError ? { valid: false, error: errorMessage } : { valid: true }
+	return hasError
+		? { valid: false, error: errorMessage }
+		: { valid: true }
 }
 ```
 

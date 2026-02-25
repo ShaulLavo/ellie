@@ -1,5 +1,8 @@
 import type { Database } from 'bun:sqlite'
-import type { EmbedBatchFunction, EmbedFunction } from './types'
+import type {
+	EmbedBatchFunction,
+	EmbedFunction
+} from './types'
 
 /**
  * Thin wrapper around sqlite-vec's vec0 virtual tables.
@@ -10,7 +13,9 @@ export class EmbeddingStore {
 	constructor(
 		private readonly sqlite: Database,
 		private readonly embed: EmbedFunction,
-		private readonly embedBatch: EmbedBatchFunction | undefined,
+		private readonly embedBatch:
+			| EmbedBatchFunction
+			| undefined,
 		private readonly dims: number,
 		private readonly tableName: string
 	) {}
@@ -22,12 +27,16 @@ export class EmbeddingStore {
 	}
 
 	/** Generate embeddings for multiple texts in one batch when possible. */
-	async createVectors(texts: string[]): Promise<Float32Array[]> {
+	async createVectors(
+		texts: string[]
+	): Promise<Float32Array[]> {
 		if (texts.length === 0) return []
 
 		const rawVectors = this.embedBatch
 			? await this.embedBatch(texts)
-			: await Promise.all(texts.map(text => this.embed(text)))
+			: await Promise.all(
+					texts.map(text => this.embed(text))
+				)
 
 		if (rawVectors.length !== texts.length) {
 			throw new Error(
@@ -37,7 +46,9 @@ export class EmbeddingStore {
 
 		return rawVectors.map(vector => {
 			if (vector.length !== this.dims) {
-				throw new Error(`Embedding dimension mismatch: expected ${this.dims}, got ${vector.length}`)
+				throw new Error(
+					`Embedding dimension mismatch: expected ${this.dims}, got ${vector.length}`
+				)
 			}
 			return new Float32Array(vector)
 		})
@@ -47,7 +58,9 @@ export class EmbeddingStore {
 	 * Upsert precomputed vectors into the vec table.
 	 * Useful for batching writes inside a larger transaction.
 	 */
-	upsertVectors(items: Array<{ id: string; vector: Float32Array }>): void {
+	upsertVectors(
+		items: Array<{ id: string; vector: Float32Array }>
+	): void {
 		if (items.length === 0) return
 
 		const insert = this.sqlite.prepare(
@@ -65,7 +78,10 @@ export class EmbeddingStore {
 				}
 
 				// vec0 doesn't support ON CONFLICT — delete then insert
-				this.sqlite.run(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id])
+				this.sqlite.run(
+					`DELETE FROM ${this.tableName} WHERE id = ?`,
+					[item.id]
+				)
 				insert.run(item.id, item.vector)
 			}
 			this.sqlite.exec('RELEASE vec_upsert')
@@ -76,10 +92,14 @@ export class EmbeddingStore {
 	}
 
 	/** Generate embeddings and upsert them in one call. */
-	async upsertMany(items: Array<{ id: string; text: string }>): Promise<void> {
+	async upsertMany(
+		items: Array<{ id: string; text: string }>
+	): Promise<void> {
 		if (items.length === 0) return
 
-		const vectors = await this.createVectors(items.map(item => item.text))
+		const vectors = await this.createVectors(
+			items.map(item => item.text)
+		)
 		this.upsertVectors(
 			items.map((item, index) => ({
 				id: item.id,
@@ -89,7 +109,10 @@ export class EmbeddingStore {
 	}
 
 	/** KNN search: returns the k nearest neighbors by cosine distance. */
-	async search(query: string, k: number): Promise<Array<{ id: string; distance: number }>> {
+	async search(
+		query: string,
+		k: number
+	): Promise<Array<{ id: string; distance: number }>> {
 		const vector = await this.embed(query)
 		const floats = new Float32Array(vector)
 
@@ -103,13 +126,21 @@ export class EmbeddingStore {
         ORDER BY distance ASC
       `
 			)
-			.all(floats, floats, k) as Array<{ id: string; distance: number }>
+			.all(floats, floats, k) as Array<{
+			id: string
+			distance: number
+		}>
 	}
 
 	/** KNN search with a precomputed vector (avoids re-embedding query text). */
-	searchByVector(vector: Float32Array, k: number): Array<{ id: string; distance: number }> {
+	searchByVector(
+		vector: Float32Array,
+		k: number
+	): Array<{ id: string; distance: number }> {
 		if (vector.length !== this.dims) {
-			throw new Error(`Embedding dimension mismatch: expected ${this.dims}, got ${vector.length}`)
+			throw new Error(
+				`Embedding dimension mismatch: expected ${this.dims}, got ${vector.length}`
+			)
 		}
 
 		return this.sqlite
@@ -122,11 +153,17 @@ export class EmbeddingStore {
         ORDER BY distance ASC
       `
 			)
-			.all(vector, vector, k) as Array<{ id: string; distance: number }>
+			.all(vector, vector, k) as Array<{
+			id: string
+			distance: number
+		}>
 	}
 
 	/** Delete an embedding by ID. */
 	delete(id: string): void {
-		this.sqlite.run(`DELETE FROM ${this.tableName} WHERE id = ?`, [id])
+		this.sqlite.run(
+			`DELETE FROM ${this.tableName} WHERE id = ?`,
+			[id]
+		)
 	}
 }

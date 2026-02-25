@@ -1,5 +1,8 @@
 import { Elysia, sse } from 'elysia'
-import type { RealtimeStore, SessionEvent } from '../lib/realtime-store'
+import type {
+	RealtimeStore,
+	SessionEvent
+} from '../lib/realtime-store'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
@@ -10,7 +13,10 @@ import {
 	type SseState
 } from './common'
 
-export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
+export function createChatRoutes(
+	store: RealtimeStore,
+	sseState: SseState
+) {
 	return new Elysia({ prefix: '/chat' })
 		.get(
 			'/:sessionId/messages',
@@ -26,12 +32,22 @@ export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
 			({ params, body }) => {
 				const input = normalizeMessageInput(body)
 				store.ensureSession(params.sessionId)
-				const row = store.appendEvent(params.sessionId, 'user_message', {
-					role: input.role ?? 'user',
-					content: [{ type: 'text', text: input.content }],
-					timestamp: Date.now()
-				})
-				return { id: row.id, seq: row.seq, sessionId: row.sessionId }
+				const row = store.appendEvent(
+					params.sessionId,
+					'user_message',
+					{
+						role: input.role ?? 'user',
+						content: [
+							{ type: 'text', text: input.content }
+						],
+						timestamp: Date.now()
+					}
+				)
+				return {
+					id: row.id,
+					seq: row.seq,
+					sessionId: row.sessionId
+				}
 			},
 			{
 				params: sessionParamsSchema,
@@ -57,12 +73,19 @@ export function createChatRoutes(store: RealtimeStore, sseState: SseState) {
 				const afterSeq = query.afterSeq
 
 				// Snapshot: fetch existing events
-				const existingEvents = store.queryEvents(params.sessionId, afterSeq)
+				const existingEvents = store.queryEvents(
+					params.sessionId,
+					afterSeq
+				)
 
 				const stream = toStreamGenerator<SessionEvent>(
 					request,
 					sseState,
-					listener => store.subscribeToSession(params.sessionId, listener),
+					listener =>
+						store.subscribeToSession(
+							params.sessionId,
+							listener
+						),
 					event => ({ event: `append`, data: event.event }),
 					{ event: `snapshot`, data: existingEvents }
 				)

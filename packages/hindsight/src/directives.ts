@@ -9,7 +9,12 @@
 import { ulid } from '@ellie/utils'
 import { eq, and } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
-import type { Directive, CreateDirectiveOptions, UpdateDirectiveOptions, TagsMatch } from './types'
+import type {
+	Directive,
+	CreateDirectiveOptions,
+	UpdateDirectiveOptions,
+	TagsMatch
+} from './types'
 import type { DirectiveRow } from './schema'
 import { matchesTags } from './recall'
 
@@ -48,7 +53,9 @@ export function createDirective(
 			content: options.content,
 			priority: options.priority ?? 0,
 			isActive: options.isActive === false ? 0 : 1,
-			tags: options.tags ? JSON.stringify(options.tags) : null,
+			tags: options.tags
+				? JSON.stringify(options.tags)
+				: null,
 			createdAt: now,
 			updatedAt: now
 		})
@@ -75,7 +82,12 @@ export function getDirective(
 	const row = hdb.db
 		.select()
 		.from(hdb.schema.directives)
-		.where(and(eq(hdb.schema.directives.bankId, bankId), eq(hdb.schema.directives.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.directives.bankId, bankId),
+				eq(hdb.schema.directives.id, id)
+			)
+		)
 		.get()
 	return row ? rowToDirective(row) : undefined
 }
@@ -85,7 +97,9 @@ export function listDirectives(
 	bankId: string,
 	activeOnly: boolean = true
 ): Directive[] {
-	const conditions = [eq(hdb.schema.directives.bankId, bankId)]
+	const conditions = [
+		eq(hdb.schema.directives.bankId, bankId)
+	]
 	if (activeOnly) {
 		conditions.push(eq(hdb.schema.directives.isActive, 1))
 	}
@@ -96,7 +110,8 @@ export function listDirectives(
 		.where(and(...conditions))
 		.all()
 		.sort((a, b) => {
-			if (b.priority !== a.priority) return b.priority - a.priority
+			if (b.priority !== a.priority)
+				return b.priority - a.priority
 			return b.createdAt - a.createdAt
 		})
 		.map(rowToDirective)
@@ -110,36 +125,67 @@ export function updateDirective(
 ): Directive {
 	const now = Date.now()
 
-	const updates: Record<string, unknown> = { updatedAt: now }
+	const updates: Record<string, unknown> = {
+		updatedAt: now
+	}
 
-	if (options.name !== undefined) updates.name = options.name
-	if (options.content !== undefined) updates.content = options.content
-	if (options.priority !== undefined) updates.priority = options.priority
-	if (options.isActive !== undefined) updates.isActive = options.isActive ? 1 : 0
+	if (options.name !== undefined)
+		updates.name = options.name
+	if (options.content !== undefined)
+		updates.content = options.content
+	if (options.priority !== undefined)
+		updates.priority = options.priority
+	if (options.isActive !== undefined)
+		updates.isActive = options.isActive ? 1 : 0
 	if (options.tags !== undefined) {
-		updates.tags = options.tags === null ? null : JSON.stringify(options.tags)
+		updates.tags =
+			options.tags === null
+				? null
+				: JSON.stringify(options.tags)
 	}
 
 	hdb.db
 		.update(hdb.schema.directives)
 		.set(updates)
-		.where(and(eq(hdb.schema.directives.bankId, bankId), eq(hdb.schema.directives.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.directives.bankId, bankId),
+				eq(hdb.schema.directives.id, id)
+			)
+		)
 		.run()
 
 	const row = hdb.db
 		.select()
 		.from(hdb.schema.directives)
-		.where(and(eq(hdb.schema.directives.bankId, bankId), eq(hdb.schema.directives.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.directives.bankId, bankId),
+				eq(hdb.schema.directives.id, id)
+			)
+		)
 		.get()
 
-	if (!row) throw new Error(`Directive ${id} not found in bank ${bankId}`)
+	if (!row)
+		throw new Error(
+			`Directive ${id} not found in bank ${bankId}`
+		)
 	return rowToDirective(row)
 }
 
-export function deleteDirective(hdb: HindsightDatabase, bankId: string, id: string): void {
+export function deleteDirective(
+	hdb: HindsightDatabase,
+	bankId: string,
+	id: string
+): void {
 	hdb.db
 		.delete(hdb.schema.directives)
-		.where(and(eq(hdb.schema.directives.bankId, bankId), eq(hdb.schema.directives.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.directives.bankId, bankId),
+				eq(hdb.schema.directives.id, id)
+			)
+		)
 		.run()
 }
 
@@ -164,7 +210,9 @@ export function loadDirectivesForReflect(
 
 	if (!tags || tags.length === 0) {
 		// Isolation mode: only tagless directives
-		return allActive.filter(d => !d.tags || d.tags.length === 0)
+		return allActive.filter(
+			d => !d.tags || d.tags.length === 0
+		)
 	}
 
 	// Tag-aware mode: filter by tag matching
@@ -172,6 +220,10 @@ export function loadDirectivesForReflect(
 	return allActive.filter(d => {
 		const directiveTags = d.tags ?? []
 		if (directiveTags.length === 0) return false
-		return matchesTags(directiveTags, tags, tagsMatch ?? 'any')
+		return matchesTags(
+			directiveTags,
+			tags,
+			tagsMatch ?? 'any'
+		)
 	})
 }

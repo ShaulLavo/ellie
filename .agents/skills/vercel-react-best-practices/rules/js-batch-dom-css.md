@@ -85,7 +85,11 @@ function updateElementStyles(element: HTMLElement) {
 
 ```tsx
 // Incorrect: interleaving style changes with layout queries
-function Box({ isHighlighted }: { isHighlighted: boolean }) {
+function Box({
+	isHighlighted
+}: {
+	isHighlighted: boolean
+}) {
 	const ref = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -100,8 +104,16 @@ function Box({ isHighlighted }: { isHighlighted: boolean }) {
 }
 
 // Correct: toggle class
-function Box({ isHighlighted }: { isHighlighted: boolean }) {
-	return <div className={isHighlighted ? 'highlighted-box' : ''}>Content</div>
+function Box({
+	isHighlighted
+}: {
+	isHighlighted: boolean
+}) {
+	return (
+		<div className={isHighlighted ? 'highlighted-box' : ''}>
+			Content
+		</div>
+	)
 }
 ```
 

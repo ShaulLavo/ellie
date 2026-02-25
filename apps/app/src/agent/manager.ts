@@ -5,7 +5,12 @@
  * and exposes control methods used by HTTP routes.
  */
 
-import { Agent, type AgentOptions, type AgentEvent, type AgentMessage } from '@ellie/agent'
+import {
+	Agent,
+	type AgentOptions,
+	type AgentEvent,
+	type AgentMessage
+} from '@ellie/agent'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from '@ellie/utils'
 import type { RealtimeStore } from '../lib/realtime-store'
@@ -24,7 +29,10 @@ export class AgentManager {
 	private store: RealtimeStore
 	private options: AgentManagerOptions
 
-	constructor(store: RealtimeStore, options: AgentManagerOptions) {
+	constructor(
+		store: RealtimeStore,
+		options: AgentManagerOptions
+	) {
 		this.store = store
 		this.options = options
 	}
@@ -58,7 +66,10 @@ export class AgentManager {
 	 * Creates the agent if it doesn't exist. Loads history on first use.
 	 * Returns the runId for event stream subscription.
 	 */
-	async prompt(sessionId: string, text: string): Promise<{ runId: string }> {
+	async prompt(
+		sessionId: string,
+		text: string
+	): Promise<{ runId: string }> {
 		const agent = this.getOrCreate(sessionId)
 
 		// Load history if this is a fresh agent with no messages
@@ -71,7 +82,9 @@ export class AgentManager {
 
 		// Pre-flight checks — surface sync errors as HTTP errors to the caller
 		if (agent.state.isStreaming) {
-			throw new Error('Agent is already processing a prompt.')
+			throw new Error(
+				'Agent is already processing a prompt.'
+			)
 		}
 		if (!agent.adapter) {
 			throw new Error('No adapter configured for agent.')
@@ -96,7 +109,10 @@ export class AgentManager {
 
 		// Start the prompt (non-blocking — events flow via onEvent)
 		agent.prompt(text).catch(err => {
-			console.error(`[agent-manager] prompt failed for ${sessionId}:`, err)
+			console.error(
+				`[agent-manager] prompt failed for ${sessionId}:`,
+				err
+			)
 			// Write a terminal event so the client doesn't hang
 			this.writeErrorEvent(sessionId, runId)
 		})
@@ -109,7 +125,10 @@ export class AgentManager {
 	 */
 	steer(sessionId: string, text: string): void {
 		const agent = this.agents.get(sessionId)
-		if (!agent) throw new Error(`Agent not found for session ${sessionId}`)
+		if (!agent)
+			throw new Error(
+				`Agent not found for session ${sessionId}`
+			)
 
 		agent.steer({
 			role: 'user',
@@ -123,7 +142,10 @@ export class AgentManager {
 	 */
 	abort(sessionId: string): void {
 		const agent = this.agents.get(sessionId)
-		if (!agent) throw new Error(`Agent not found for session ${sessionId}`)
+		if (!agent)
+			throw new Error(
+				`Agent not found for session ${sessionId}`
+			)
 		agent.abort()
 	}
 
@@ -137,7 +159,9 @@ export class AgentManager {
 	 * at this boundary is safe.
 	 */
 	loadHistory(sessionId: string): AgentMessage[] {
-		return this.store.listAgentMessages(sessionId) as AgentMessage[]
+		return this.store.listAgentMessages(
+			sessionId
+		) as AgentMessage[]
 	}
 
 	/**
@@ -167,7 +191,10 @@ export class AgentManager {
 
 	// -- Internal ---
 
-	private writeErrorEvent(sessionId: string, runId: string): void {
+	private writeErrorEvent(
+		sessionId: string,
+		runId: string
+	): void {
 		try {
 			this.store.appendEvent(
 				sessionId,
@@ -181,13 +208,20 @@ export class AgentManager {
 		}
 	}
 
-	private handleEvent(sessionId: string, event: AgentEvent): void {
+	private handleEvent(
+		sessionId: string,
+		event: AgentEvent
+	): void {
 		const agent = this.agents.get(sessionId)
 		const runId = agent?.runId
 
 		if (runId) {
 			try {
-				this.store.appendAgentRunEvent(sessionId, runId, event)
+				this.store.appendAgentRunEvent(
+					sessionId,
+					runId,
+					event
+				)
 			} catch {
 				// Non-fatal
 			}

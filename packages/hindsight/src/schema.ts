@@ -54,7 +54,9 @@ export const chunks = sqliteTable(
 		id: text('id').primaryKey(),
 		documentId: text('document_id')
 			.notNull()
-			.references(() => documents.id, { onDelete: 'cascade' }),
+			.references(() => documents.id, {
+				onDelete: 'cascade'
+			}),
 		bankId: text('bank_id')
 			.notNull()
 			.references(() => banks.id, { onDelete: 'cascade' }),
@@ -93,9 +95,13 @@ export const memoryUnits = sqliteTable(
 		proofCount: integer('proof_count').notNull().default(0), // observations: number of supporting facts
 		sourceMemoryIds: text('source_memory_ids'), // observations: JSON array of ULID refs
 		history: text('history'), // observations: JSON array of change entries
-		accessCount: integer('access_count').notNull().default(0), // cognitive: times recalled
+		accessCount: integer('access_count')
+			.notNull()
+			.default(0), // cognitive: times recalled
 		lastAccessed: integer('last_accessed'), // cognitive: epoch ms of last recall (nullable for legacy rows)
-		encodingStrength: real('encoding_strength').notNull().default(1.0), // cognitive: strengthened by recall
+		encodingStrength: real('encoding_strength')
+			.notNull()
+			.default(1.0), // cognitive: strengthened by recall
 		gist: text('gist'), // Phase 3: compact summary (max 280 chars) for context packing
 		scopeProfile: text('scope_profile'), // Phase 3: profile scope tag
 		scopeProject: text('scope_project'), // Phase 3: project scope tag
@@ -105,17 +111,49 @@ export const memoryUnits = sqliteTable(
 	},
 	table => [
 		index('idx_hs_mu_bank').on(table.bankId),
-		index('idx_hs_mu_fact_type').on(table.bankId, table.factType),
-		index('idx_hs_mu_document').on(table.bankId, table.documentId),
+		index('idx_hs_mu_fact_type').on(
+			table.bankId,
+			table.factType
+		),
+		index('idx_hs_mu_document').on(
+			table.bankId,
+			table.documentId
+		),
 		index('idx_hs_mu_chunk').on(table.chunkId),
-		index('idx_hs_mu_event_date').on(table.bankId, table.eventDate),
-		index('idx_hs_mu_occurred_range').on(table.bankId, table.occurredStart, table.occurredEnd),
-		index('idx_hs_mu_mentioned_at').on(table.bankId, table.mentionedAt),
-		index('idx_hs_mu_consolidated').on(table.bankId, table.consolidatedAt),
-		index('idx_hs_mu_last_accessed').on(table.bankId, table.lastAccessed),
-		index('idx_hs_mu_access_count').on(table.bankId, table.accessCount),
-		index('idx_hs_mu_scope').on(table.bankId, table.scopeProfile, table.scopeProject),
-		check('hs_mu_encoding_strength_range', sql`encoding_strength >= 0 AND encoding_strength <= 3.0`)
+		index('idx_hs_mu_event_date').on(
+			table.bankId,
+			table.eventDate
+		),
+		index('idx_hs_mu_occurred_range').on(
+			table.bankId,
+			table.occurredStart,
+			table.occurredEnd
+		),
+		index('idx_hs_mu_mentioned_at').on(
+			table.bankId,
+			table.mentionedAt
+		),
+		index('idx_hs_mu_consolidated').on(
+			table.bankId,
+			table.consolidatedAt
+		),
+		index('idx_hs_mu_last_accessed').on(
+			table.bankId,
+			table.lastAccessed
+		),
+		index('idx_hs_mu_access_count').on(
+			table.bankId,
+			table.accessCount
+		),
+		index('idx_hs_mu_scope').on(
+			table.bankId,
+			table.scopeProfile,
+			table.scopeProject
+		),
+		check(
+			'hs_mu_encoding_strength_range',
+			sql`encoding_strength >= 0 AND encoding_strength <= 3.0`
+		)
 	]
 )
 
@@ -132,13 +170,21 @@ export const entities = sqliteTable(
 		entityType: text('entity_type').notNull(), // person | organization | place | concept | other
 		description: text('description'),
 		metadata: text('metadata'), // JSON blob
-		mentionCount: integer('mention_count').notNull().default(0),
+		mentionCount: integer('mention_count')
+			.notNull()
+			.default(0),
 		firstSeen: integer('first_seen').notNull(),
 		lastUpdated: integer('last_updated').notNull()
 	},
 	table => [
-		index('idx_hs_ent_bank_name').on(table.bankId, table.name),
-		index('idx_hs_ent_type').on(table.bankId, table.entityType)
+		index('idx_hs_ent_bank_name').on(
+			table.bankId,
+			table.name
+		),
+		index('idx_hs_ent_type').on(
+			table.bankId,
+			table.entityType
+		)
 	]
 )
 
@@ -149,13 +195,19 @@ export const memoryEntities = sqliteTable(
 	{
 		memoryId: text('memory_id')
 			.notNull()
-			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+			.references(() => memoryUnits.id, {
+				onDelete: 'cascade'
+			}),
 		entityId: text('entity_id')
 			.notNull()
-			.references(() => entities.id, { onDelete: 'cascade' })
+			.references(() => entities.id, {
+				onDelete: 'cascade'
+			})
 	},
 	table => [
-		primaryKey({ columns: [table.memoryId, table.entityId] }),
+		primaryKey({
+			columns: [table.memoryId, table.entityId]
+		}),
 		index('idx_hs_me_entity').on(table.entityId)
 	]
 )
@@ -171,10 +223,14 @@ export const memoryLinks = sqliteTable(
 			.references(() => banks.id, { onDelete: 'cascade' }),
 		sourceId: text('source_id')
 			.notNull()
-			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+			.references(() => memoryUnits.id, {
+				onDelete: 'cascade'
+			}),
 		targetId: text('target_id')
 			.notNull()
-			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+			.references(() => memoryUnits.id, {
+				onDelete: 'cascade'
+			}),
 		linkType: text('link_type').notNull(), // temporal | semantic | entity | causes | caused_by | enables | prevents
 		weight: real('weight').notNull().default(1.0),
 		metadata: text('metadata'), // JSON blob
@@ -183,8 +239,15 @@ export const memoryLinks = sqliteTable(
 	table => [
 		index('idx_hs_link_source').on(table.sourceId),
 		index('idx_hs_link_target').on(table.targetId),
-		index('idx_hs_link_bank_type').on(table.bankId, table.linkType),
-		uniqueIndex('idx_hs_link_edge').on(table.sourceId, table.targetId, table.linkType)
+		index('idx_hs_link_bank_type').on(
+			table.bankId,
+			table.linkType
+		),
+		uniqueIndex('idx_hs_link_edge').on(
+			table.sourceId,
+			table.targetId,
+			table.linkType
+		)
 	]
 )
 
@@ -198,16 +261,25 @@ export const entityCooccurrences = sqliteTable(
 			.references(() => banks.id, { onDelete: 'cascade' }),
 		entityA: text('entity_a')
 			.notNull()
-			.references(() => entities.id, { onDelete: 'cascade' }),
+			.references(() => entities.id, {
+				onDelete: 'cascade'
+			}),
 		entityB: text('entity_b')
 			.notNull()
-			.references(() => entities.id, { onDelete: 'cascade' }),
+			.references(() => entities.id, {
+				onDelete: 'cascade'
+			}),
 		count: integer('count').notNull().default(1)
 	},
 	table => [
-		primaryKey({ columns: [table.bankId, table.entityA, table.entityB] }),
+		primaryKey({
+			columns: [table.bankId, table.entityA, table.entityB]
+		}),
 		index('idx_hs_cooc_bank').on(table.bankId),
-		check('hs_cooc_canonical_order', sql`entity_a <= entity_b`)
+		check(
+			'hs_cooc_canonical_order',
+			sql`entity_a <= entity_b`
+		)
 	]
 )
 
@@ -225,14 +297,19 @@ export const mentalModels = sqliteTable(
 		content: text('content'), // synthesized answer
 		sourceMemoryIds: text('source_memory_ids'), // JSON array of ULID refs
 		tags: text('tags'), // JSON array for scoping
-		autoRefresh: integer('auto_refresh').notNull().default(0), // 0=false, 1=true
+		autoRefresh: integer('auto_refresh')
+			.notNull()
+			.default(0), // 0=false, 1=true
 		lastRefreshedAt: integer('last_refreshed_at'),
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
 	table => [
 		index('idx_hs_mm_bank').on(table.bankId),
-		uniqueIndex('idx_hs_mm_bank_name').on(table.bankId, table.name)
+		uniqueIndex('idx_hs_mm_bank_name').on(
+			table.bankId,
+			table.name
+		)
 	]
 )
 
@@ -255,7 +332,10 @@ export const directives = sqliteTable(
 	},
 	table => [
 		index('idx_hs_dir_bank').on(table.bankId),
-		index('idx_hs_dir_bank_active').on(table.bankId, table.isActive)
+		index('idx_hs_dir_bank_active').on(
+			table.bankId,
+			table.isActive
+		)
 	]
 )
 
@@ -279,7 +359,10 @@ export const asyncOperations = sqliteTable(
 	table => [
 		index('idx_hs_ops_bank').on(table.bankId),
 		index('idx_hs_ops_status').on(table.status),
-		index('idx_hs_ops_bank_status').on(table.bankId, table.status)
+		index('idx_hs_ops_bank_status').on(
+			table.bankId,
+			table.status
+		)
 	]
 )
 
@@ -294,7 +377,9 @@ export const memoryVersions = sqliteTable(
 			.references(() => banks.id, { onDelete: 'cascade' }),
 		memoryId: text('memory_id')
 			.notNull()
-			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+			.references(() => memoryUnits.id, {
+				onDelete: 'cascade'
+			}),
 		versionNo: integer('version_no').notNull(),
 		content: text('content').notNull(),
 		entitiesJson: text('entities_json'), // JSON: [{name, entityType}]
@@ -305,7 +390,10 @@ export const memoryVersions = sqliteTable(
 	table => [
 		index('idx_hs_mv_memory').on(table.memoryId),
 		index('idx_hs_mv_bank').on(table.bankId),
-		uniqueIndex('idx_hs_mv_memory_version').on(table.memoryId, table.versionNo)
+		uniqueIndex('idx_hs_mv_memory_version').on(
+			table.memoryId,
+			table.versionNo
+		)
 	]
 )
 
@@ -329,13 +417,20 @@ export const reconsolidationDecisions = sqliteTable(
 		appliedMemoryId: text('applied_memory_id').notNull(),
 		route: text('route').notNull(), // reinforce | reconsolidate | new_trace
 		candidateScore: real('candidate_score'),
-		conflictDetected: integer('conflict_detected').notNull().default(0), // 0=false, 1=true
+		conflictDetected: integer('conflict_detected')
+			.notNull()
+			.default(0), // 0=false, 1=true
 		conflictKeysJson: text('conflict_keys_json'), // JSON array of conflicting keys
-		policyVersion: text('policy_version').notNull().default('v1'),
+		policyVersion: text('policy_version')
+			.notNull()
+			.default('v1'),
 		createdAt: integer('created_at').notNull()
 	},
 	table => [
-		index('idx_hs_rd_bank_created').on(table.bankId, desc(table.createdAt)),
+		index('idx_hs_rd_bank_created').on(
+			table.bankId,
+			desc(table.createdAt)
+		),
 		index('idx_hs_rd_applied').on(table.appliedMemoryId)
 	]
 )
@@ -359,8 +454,16 @@ export const episodes = sqliteTable(
 		boundaryReason: text('boundary_reason') // time_gap | scope_change | phrase_boundary | initial
 	},
 	table => [
-		index('idx_hs_ep_bank_last_event').on(table.bankId, desc(table.lastEventAt)),
-		index('idx_hs_ep_scope').on(table.bankId, table.profile, table.project, table.session)
+		index('idx_hs_ep_bank_last_event').on(
+			table.bankId,
+			desc(table.lastEventAt)
+		),
+		index('idx_hs_ep_scope').on(
+			table.bankId,
+			table.profile,
+			table.project,
+			table.session
+		)
 	]
 )
 
@@ -372,13 +475,17 @@ export const episodeEvents = sqliteTable(
 		id: text('id').primaryKey(),
 		episodeId: text('episode_id')
 			.notNull()
-			.references(() => episodes.id, { onDelete: 'cascade' }),
+			.references(() => episodes.id, {
+				onDelete: 'cascade'
+			}),
 		bankId: text('bank_id')
 			.notNull()
 			.references(() => banks.id, { onDelete: 'cascade' }),
 		memoryId: text('memory_id')
 			.notNull()
-			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+			.references(() => memoryUnits.id, {
+				onDelete: 'cascade'
+			}),
 		eventTime: integer('event_time').notNull(),
 		route: text('route').notNull(), // reinforce | reconsolidate | new_trace
 		profile: text('profile'),
@@ -386,8 +493,15 @@ export const episodeEvents = sqliteTable(
 		session: text('session')
 	},
 	table => [
-		index('idx_hs_ee_episode_time').on(table.episodeId, table.eventTime),
-		index('idx_hs_ee_bank_memory').on(table.bankId, table.memoryId, desc(table.eventTime))
+		index('idx_hs_ee_episode_time').on(
+			table.episodeId,
+			table.eventTime
+		),
+		index('idx_hs_ee_bank_memory').on(
+			table.bankId,
+			table.memoryId,
+			desc(table.eventTime)
+		)
 	]
 )
 
@@ -399,10 +513,14 @@ export const episodeTemporalLinks = sqliteTable(
 		id: text('id').primaryKey(),
 		fromEpisodeId: text('from_episode_id')
 			.notNull()
-			.references(() => episodes.id, { onDelete: 'cascade' }),
+			.references(() => episodes.id, {
+				onDelete: 'cascade'
+			}),
 		toEpisodeId: text('to_episode_id')
 			.notNull()
-			.references(() => episodes.id, { onDelete: 'cascade' }),
+			.references(() => episodes.id, {
+				onDelete: 'cascade'
+			}),
 		reason: text('reason').notNull(),
 		gapMs: integer('gap_ms').notNull(),
 		createdAt: integer('created_at').notNull()
@@ -410,7 +528,10 @@ export const episodeTemporalLinks = sqliteTable(
 	table => [
 		index('idx_hs_etl_from').on(table.fromEpisodeId),
 		index('idx_hs_etl_to').on(table.toEpisodeId),
-		uniqueIndex('idx_hs_etl_edge').on(table.fromEpisodeId, table.toEpisodeId)
+		uniqueIndex('idx_hs_etl_edge').on(
+			table.fromEpisodeId,
+			table.toEpisodeId
+		)
 	]
 )
 
@@ -430,14 +551,17 @@ export const locationPaths = sqliteTable(
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
-	(table) => [
+	table => [
 		uniqueIndex('idx_hs_lp_unique').on(
 			table.bankId,
 			table.normalizedPath,
 			table.profile,
 			table.project
 		),
-		index('idx_hs_lp_bank_norm').on(table.bankId, table.normalizedPath)
+		index('idx_hs_lp_bank_norm').on(
+			table.bankId,
+			table.normalizedPath
+		)
 	]
 )
 
@@ -452,17 +576,31 @@ export const locationAccessContexts = sqliteTable(
 			.references(() => banks.id, { onDelete: 'cascade' }),
 		pathId: text('path_id')
 			.notNull()
-			.references(() => locationPaths.id, { onDelete: 'cascade' }),
+			.references(() => locationPaths.id, {
+				onDelete: 'cascade'
+			}),
 		memoryId: text('memory_id')
 			.notNull()
-			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+			.references(() => memoryUnits.id, {
+				onDelete: 'cascade'
+			}),
 		session: text('session'),
-		activityType: text('activity_type').notNull().default('access'), // access | retain | recall
+		activityType: text('activity_type')
+			.notNull()
+			.default('access'), // access | retain | recall
 		accessedAt: integer('accessed_at').notNull()
 	},
-	(table) => [
-		index('idx_hs_lac_path_time').on(table.bankId, table.pathId, desc(table.accessedAt)),
-		index('idx_hs_lac_memory_time').on(table.bankId, table.memoryId, desc(table.accessedAt))
+	table => [
+		index('idx_hs_lac_path_time').on(
+			table.bankId,
+			table.pathId,
+			desc(table.accessedAt)
+		),
+		index('idx_hs_lac_memory_time').on(
+			table.bankId,
+			table.memoryId,
+			desc(table.accessedAt)
+		)
 	]
 )
 
@@ -477,17 +615,30 @@ export const locationAssociations = sqliteTable(
 			.references(() => banks.id, { onDelete: 'cascade' }),
 		sourcePathId: text('source_path_id')
 			.notNull()
-			.references(() => locationPaths.id, { onDelete: 'cascade' }),
+			.references(() => locationPaths.id, {
+				onDelete: 'cascade'
+			}),
 		relatedPathId: text('related_path_id')
 			.notNull()
-			.references(() => locationPaths.id, { onDelete: 'cascade' }),
-		coAccessCount: integer('co_access_count').notNull().default(1),
+			.references(() => locationPaths.id, {
+				onDelete: 'cascade'
+			}),
+		coAccessCount: integer('co_access_count')
+			.notNull()
+			.default(1),
 		strength: real('strength').notNull().default(0.0),
 		updatedAt: integer('updated_at').notNull()
 	},
-	(table) => [
-		uniqueIndex('idx_hs_la_edge').on(table.bankId, table.sourcePathId, table.relatedPathId),
-		index('idx_hs_la_source').on(table.bankId, table.sourcePathId)
+	table => [
+		uniqueIndex('idx_hs_la_edge').on(
+			table.bankId,
+			table.sourcePathId,
+			table.relatedPathId
+		),
+		index('idx_hs_la_source').on(
+			table.bankId,
+			table.sourcePathId
+		)
 	]
 )
 
@@ -500,32 +651,54 @@ export type NewDocumentRow = typeof documents.$inferInsert
 export type ChunkRow = typeof chunks.$inferSelect
 export type NewChunkRow = typeof chunks.$inferInsert
 export type MemoryUnitRow = typeof memoryUnits.$inferSelect
-export type NewMemoryUnitRow = typeof memoryUnits.$inferInsert
+export type NewMemoryUnitRow =
+	typeof memoryUnits.$inferInsert
 export type EntityRow = typeof entities.$inferSelect
 export type NewEntityRow = typeof entities.$inferInsert
-export type MemoryEntityRow = typeof memoryEntities.$inferSelect
+export type MemoryEntityRow =
+	typeof memoryEntities.$inferSelect
 export type MemoryLinkRow = typeof memoryLinks.$inferSelect
-export type NewMemoryLinkRow = typeof memoryLinks.$inferInsert
-export type EntityCooccurrenceRow = typeof entityCooccurrences.$inferSelect
-export type MentalModelRow = typeof mentalModels.$inferSelect
-export type NewMentalModelRow = typeof mentalModels.$inferInsert
+export type NewMemoryLinkRow =
+	typeof memoryLinks.$inferInsert
+export type EntityCooccurrenceRow =
+	typeof entityCooccurrences.$inferSelect
+export type MentalModelRow =
+	typeof mentalModels.$inferSelect
+export type NewMentalModelRow =
+	typeof mentalModels.$inferInsert
 export type DirectiveRow = typeof directives.$inferSelect
 export type NewDirectiveRow = typeof directives.$inferInsert
-export type AsyncOperationRow = typeof asyncOperations.$inferSelect
-export type NewAsyncOperationRow = typeof asyncOperations.$inferInsert
-export type MemoryVersionRow = typeof memoryVersions.$inferSelect
-export type NewMemoryVersionRow = typeof memoryVersions.$inferInsert
-export type ReconsolidationDecisionRow = typeof reconsolidationDecisions.$inferSelect
-export type NewReconsolidationDecisionRow = typeof reconsolidationDecisions.$inferInsert
+export type AsyncOperationRow =
+	typeof asyncOperations.$inferSelect
+export type NewAsyncOperationRow =
+	typeof asyncOperations.$inferInsert
+export type MemoryVersionRow =
+	typeof memoryVersions.$inferSelect
+export type NewMemoryVersionRow =
+	typeof memoryVersions.$inferInsert
+export type ReconsolidationDecisionRow =
+	typeof reconsolidationDecisions.$inferSelect
+export type NewReconsolidationDecisionRow =
+	typeof reconsolidationDecisions.$inferInsert
 export type EpisodeRow = typeof episodes.$inferSelect
 export type NewEpisodeRow = typeof episodes.$inferInsert
-export type EpisodeEventRow = typeof episodeEvents.$inferSelect
-export type NewEpisodeEventRow = typeof episodeEvents.$inferInsert
-export type EpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferSelect
-export type NewEpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferInsert
-export type LocationPathRow = typeof locationPaths.$inferSelect
-export type NewLocationPathRow = typeof locationPaths.$inferInsert
-export type LocationAccessContextRow = typeof locationAccessContexts.$inferSelect
-export type NewLocationAccessContextRow = typeof locationAccessContexts.$inferInsert
-export type LocationAssociationRow = typeof locationAssociations.$inferSelect
-export type NewLocationAssociationRow = typeof locationAssociations.$inferInsert
+export type EpisodeEventRow =
+	typeof episodeEvents.$inferSelect
+export type NewEpisodeEventRow =
+	typeof episodeEvents.$inferInsert
+export type EpisodeTemporalLinkRow =
+	typeof episodeTemporalLinks.$inferSelect
+export type NewEpisodeTemporalLinkRow =
+	typeof episodeTemporalLinks.$inferInsert
+export type LocationPathRow =
+	typeof locationPaths.$inferSelect
+export type NewLocationPathRow =
+	typeof locationPaths.$inferInsert
+export type LocationAccessContextRow =
+	typeof locationAccessContexts.$inferSelect
+export type NewLocationAccessContextRow =
+	typeof locationAccessContexts.$inferInsert
+export type LocationAssociationRow =
+	typeof locationAssociations.$inferSelect
+export type NewLocationAssociationRow =
+	typeof locationAssociations.$inferInsert

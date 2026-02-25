@@ -28,7 +28,10 @@ export async function withTimeout<T>(
 ): Promise<T> {
 	const controller = new AbortController()
 
-	const promise = typeof input === 'function' ? input(controller.signal) : input
+	const promise =
+		typeof input === 'function'
+			? input(controller.signal)
+			: input
 
 	let timer: ReturnType<typeof setTimeout> | undefined
 

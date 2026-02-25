@@ -13,9 +13,20 @@
  * - locationFind ordering is deterministic
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { ulid } from '@ellie/utils'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 import type { HindsightDatabase } from '../db'
 import {
 	normalizePath,
@@ -27,8 +38,16 @@ import {
 	computeLocationBoost,
 	getMaxStrengthForPaths
 } from '../location'
-import { packContext, estimateTokens, type PackCandidate } from '../context-pack'
-import { scopeMatches, resolveScope, deriveScopeTagsFromContext } from '../scope'
+import {
+	packContext,
+	estimateTokens,
+	type PackCandidate
+} from '../context-pack'
+import {
+	scopeMatches,
+	resolveScope,
+	deriveScopeTagsFromContext
+} from '../scope'
 
 function insertTestMemory(
 	hdb: HindsightDatabase,
@@ -67,9 +86,11 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			]
 
 			for (const input of inputs) {
-				const results = Array.from({ length: 100 }, () => normalizePath(input))
+				const results = Array.from({ length: 100 }, () =>
+					normalizePath(input)
+				)
 				const first = results[0]
-				expect(results.every((r) => r === first)).toBe(true)
+				expect(results.every(r => r === first)).toBe(true)
 			}
 		})
 
@@ -83,36 +104,56 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			]
 
 			for (const query of queries) {
-				const results = Array.from({ length: 50 }, () => detectLocationSignals(query))
+				const results = Array.from({ length: 50 }, () =>
+					detectLocationSignals(query)
+				)
 				const first = JSON.stringify(results[0])
-				expect(results.every((r) => JSON.stringify(r) === first)).toBe(true)
+				expect(
+					results.every(r => JSON.stringify(r) === first)
+				).toBe(true)
 			}
 		})
 
 		it('estimateTokens is deterministic', () => {
-			const texts = ['hello', 'x'.repeat(1000), '', 'abcd', 'test string with spaces']
+			const texts = [
+				'hello',
+				'x'.repeat(1000),
+				'',
+				'abcd',
+				'test string with spaces'
+			]
 			for (const text of texts) {
-				const results = Array.from({ length: 50 }, () => estimateTokens(text))
+				const results = Array.from({ length: 50 }, () =>
+					estimateTokens(text)
+				)
 				expect(new Set(results).size).toBe(1)
 			}
 		})
 
 		it('scopeMatches is deterministic across all mode combinations', () => {
 			const cases = [
-				{ mem: { profile: 'a', project: 'p1' }, filter: { profile: 'a', project: 'p1' } },
+				{
+					mem: { profile: 'a', project: 'p1' },
+					filter: { profile: 'a', project: 'p1' }
+				},
 				{
 					mem: { profile: 'a', project: 'p1' },
 					filter: { profile: 'b', project: 'p1' }
 				},
 				{
-					mem: { profile: null as string | null, project: null as string | null },
+					mem: {
+						profile: null as string | null,
+						project: null as string | null
+					},
 					filter: { profile: 'a', project: 'p1' }
 				}
 			]
 
 			for (const { mem, filter } of cases) {
 				for (const mode of ['strict', 'broad'] as const) {
-					const results = Array.from({ length: 50 }, () => scopeMatches(mem, filter, mode))
+					const results = Array.from({ length: 50 }, () =>
+						scopeMatches(mem, filter, mode)
+					)
 					expect(new Set(results).size).toBe(1)
 				}
 			}
@@ -120,15 +161,28 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 
 		it('resolveScope is deterministic', () => {
 			const cases = [
-				{ explicit: { profile: 'a', project: 'p1' }, ctx: { profile: 'b', project: 'p2' } },
-				{ explicit: undefined, ctx: { profile: 'b', project: 'p2' } },
-				{ explicit: { profile: 'a' }, ctx: { project: 'p2' } }
+				{
+					explicit: { profile: 'a', project: 'p1' },
+					ctx: { profile: 'b', project: 'p2' }
+				},
+				{
+					explicit: undefined,
+					ctx: { profile: 'b', project: 'p2' }
+				},
+				{
+					explicit: { profile: 'a' },
+					ctx: { project: 'p2' }
+				}
 			]
 
 			for (const { explicit, ctx } of cases) {
-				const results = Array.from({ length: 50 }, () => resolveScope(explicit, ctx))
+				const results = Array.from({ length: 50 }, () =>
+					resolveScope(explicit, ctx)
+				)
 				const first = JSON.stringify(results[0])
-				expect(results.every((r) => JSON.stringify(r) === first)).toBe(true)
+				expect(
+					results.every(r => JSON.stringify(r) === first)
+				).toBe(true)
 			}
 		})
 
@@ -141,9 +195,13 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			]
 
 			for (const ctx of ctxs) {
-				const results = Array.from({ length: 50 }, () => deriveScopeTagsFromContext(ctx))
+				const results = Array.from({ length: 50 }, () =>
+					deriveScopeTagsFromContext(ctx)
+				)
 				const first = JSON.stringify(results[0])
-				expect(results.every((r) => JSON.stringify(r) === first)).toBe(true)
+				expect(
+					results.every(r => JSON.stringify(r) === first)
+				).toBe(true)
 			}
 		})
 	})
@@ -164,11 +222,15 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			const candidates = makeDataset()
 			const budget = 2000
 
-			const runs = Array.from({ length: 10 }, () => packContext(candidates, budget))
+			const runs = Array.from({ length: 10 }, () =>
+				packContext(candidates, budget)
+			)
 
-			const firstIds = runs[0]!.packed.map((p) => p.id)
+			const firstIds = runs[0]!.packed.map(p => p.id)
 			for (let i = 1; i < runs.length; i++) {
-				expect(runs[i]!.packed.map((p) => p.id)).toEqual(firstIds)
+				expect(runs[i]!.packed.map(p => p.id)).toEqual(
+					firstIds
+				)
 			}
 		})
 
@@ -176,7 +238,9 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			const candidates = makeDataset()
 			const budget = 2000
 
-			const runs = Array.from({ length: 10 }, () => packContext(candidates, budget))
+			const runs = Array.from({ length: 10 }, () =>
+				packContext(candidates, budget)
+			)
 
 			const firstTokens = runs[0]!.totalTokensUsed
 			for (let i = 1; i < runs.length; i++) {
@@ -188,11 +252,15 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			const candidates = makeDataset()
 			const budget = 2000
 
-			const runs = Array.from({ length: 10 }, () => packContext(candidates, budget))
+			const runs = Array.from({ length: 10 }, () =>
+				packContext(candidates, budget)
+			)
 
-			const firstModes = runs[0]!.packed.map((p) => p.mode)
+			const firstModes = runs[0]!.packed.map(p => p.mode)
 			for (let i = 1; i < runs.length; i++) {
-				expect(runs[i]!.packed.map((p) => p.mode)).toEqual(firstModes)
+				expect(runs[i]!.packed.map(p => p.mode)).toEqual(
+					firstModes
+				)
 			}
 		})
 
@@ -200,7 +268,9 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			const candidates = makeDataset()
 
 			for (const budget of [100, 500, 2000, 10000]) {
-				const runs = Array.from({ length: 10 }, () => packContext(candidates, budget))
+				const runs = Array.from({ length: 10 }, () =>
+					packContext(candidates, budget)
+				)
 				const firstOverflow = runs[0]!.overflow
 				for (let i = 1; i < runs.length; i++) {
 					expect(runs[i]!.overflow).toBe(firstOverflow)
@@ -229,13 +299,19 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 
 			// Seed data
 			for (let i = 0; i < 10; i++) {
-				const memId = insertTestMemory(hdb, bankId, `Memory ${i}`)
-				locationRecord(hdb, bankId, `src/file-${i}.ts`, { memoryId: memId })
+				const memId = insertTestMemory(
+					hdb,
+					bankId,
+					`Memory ${i}`
+				)
+				locationRecord(hdb, bankId, `src/file-${i}.ts`, {
+					memoryId: memId
+				})
 			}
 
 			// Run locationFind 10 times
 			const runs = Array.from({ length: 10 }, () =>
-				locationFind(hdb, bankId, {}).map((h) => h.pathId)
+				locationFind(hdb, bankId, {}).map(h => h.pathId)
 			)
 
 			const first = runs[0]
@@ -248,13 +324,29 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			const hdb = getHdb(t.hs)
 
 			for (let i = 0; i < 5; i++) {
-				const memId = insertTestMemory(hdb, bankId, `Memory ${i}`)
-				locationRecord(hdb, bankId, `src/module-${i}/index.ts`, { memoryId: memId })
+				const memId = insertTestMemory(
+					hdb,
+					bankId,
+					`Memory ${i}`
+				)
+				locationRecord(
+					hdb,
+					bankId,
+					`src/module-${i}/index.ts`,
+					{ memoryId: memId }
+				)
 			}
 
-			const signals = ['src/module-0/index.ts', 'src/module-2/index.ts']
+			const signals = [
+				'src/module-0/index.ts',
+				'src/module-2/index.ts'
+			]
 			const runs = Array.from({ length: 10 }, () => {
-				const map = resolveSignalsToPaths(hdb, bankId, signals)
+				const map = resolveSignalsToPaths(
+					hdb,
+					bankId,
+					signals
+				)
 				return JSON.stringify([...map.entries()].sort())
 			})
 
@@ -268,19 +360,43 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			const hdb = getHdb(t.hs)
 			const fixedNow = 1700000000000
 
-			const memId = insertTestMemory(hdb, bankId, 'Boost test memory')
-			locationRecord(hdb, bankId, 'src/target.ts', { memoryId: memId, session: 'sess-1' })
+			const memId = insertTestMemory(
+				hdb,
+				bankId,
+				'Boost test memory'
+			)
+			locationRecord(hdb, bankId, 'src/target.ts', {
+				memoryId: memId,
+				session: 'sess-1'
+			})
 
-			const signals = detectLocationSignals('Check src/target.ts')
-			const signalMap = resolveSignalsToPaths(hdb, bankId, signals)
+			const signals = detectLocationSignals(
+				'Check src/target.ts'
+			)
+			const signalMap = resolveSignalsToPaths(
+				hdb,
+				bankId,
+				signals
+			)
 			const queryPathIds = new Set<string>()
 			for (const ids of signalMap.values()) {
 				for (const id of ids) queryPathIds.add(id)
 			}
-			const maxStrength = getMaxStrengthForPaths(hdb, bankId, queryPathIds)
+			const maxStrength = getMaxStrengthForPaths(
+				hdb,
+				bankId,
+				queryPathIds
+			)
 
 			const runs = Array.from({ length: 10 }, () =>
-				computeLocationBoost(hdb, bankId, memId, queryPathIds, maxStrength, fixedNow)
+				computeLocationBoost(
+					hdb,
+					bankId,
+					memId,
+					queryPathIds,
+					maxStrength,
+					fixedNow
+				)
 			)
 
 			const first = runs[0]
@@ -291,11 +407,19 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 
 		it('locationStats is deterministic for same DB state', () => {
 			const hdb = getHdb(t.hs)
-			const memId = insertTestMemory(hdb, bankId, 'Stats test memory')
-			locationRecord(hdb, bankId, 'src/stats-target.ts', { memoryId: memId })
+			const memId = insertTestMemory(
+				hdb,
+				bankId,
+				'Stats test memory'
+			)
+			locationRecord(hdb, bankId, 'src/stats-target.ts', {
+				memoryId: memId
+			})
 
 			const runs = Array.from({ length: 10 }, () =>
-				JSON.stringify(locationStats(hdb, bankId, 'src/stats-target.ts'))
+				JSON.stringify(
+					locationStats(hdb, bankId, 'src/stats-target.ts')
+				)
 			)
 
 			const first = runs[0]

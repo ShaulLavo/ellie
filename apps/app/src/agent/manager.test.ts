@@ -1,8 +1,17 @@
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	expect,
+	test,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { AgentManager } from './manager'
 import { EventStore } from '@ellie/db'
 import { RealtimeStore } from '../lib/realtime-store'
-import type { AnyTextAdapter, StreamChunk } from '@tanstack/ai'
+import type {
+	AnyTextAdapter,
+	StreamChunk
+} from '@tanstack/ai'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync } from 'fs'
@@ -22,20 +31,34 @@ function createMockAdapter(): AnyTextAdapter {
 	return {
 		name: 'mock',
 		chat: async function* (): AsyncIterable<StreamChunk> {
-			yield { type: 'RUN_STARTED', threadId: 't1', runId: 'r1' } as unknown as StreamChunk
-			yield { type: 'TEXT_MESSAGE_START', messageId: 'm1' } as unknown as StreamChunk
+			yield {
+				type: 'RUN_STARTED',
+				threadId: 't1',
+				runId: 'r1'
+			} as unknown as StreamChunk
+			yield {
+				type: 'TEXT_MESSAGE_START',
+				messageId: 'm1'
+			} as unknown as StreamChunk
 			yield {
 				type: 'TEXT_MESSAGE_CONTENT',
 				messageId: 'm1',
 				delta: 'Hello from mock!'
 			} as unknown as StreamChunk
-			yield { type: 'TEXT_MESSAGE_END', messageId: 'm1' } as unknown as StreamChunk
+			yield {
+				type: 'TEXT_MESSAGE_END',
+				messageId: 'm1'
+			} as unknown as StreamChunk
 			yield {
 				type: 'RUN_FINISHED',
 				threadId: 't1',
 				runId: 'r1',
 				finishReason: 'stop',
-				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 }
+				usage: {
+					promptTokens: 10,
+					completionTokens: 5,
+					totalTokens: 15
+				}
 			} as unknown as StreamChunk
 		}
 	} as unknown as AnyTextAdapter
@@ -70,7 +93,9 @@ describe('AgentManager', () => {
 		const agent = manager.getOrCreate('session-1')
 
 		expect(agent).toBeDefined()
-		expect(agent.state.systemPrompt).toBe('You are a test assistant.')
+		expect(agent.state.systemPrompt).toBe(
+			'You are a test assistant.'
+		)
 		expect(eventStore.getSession('session-1')).toBeDefined()
 	})
 
@@ -104,7 +129,10 @@ describe('AgentManager', () => {
 	})
 
 	test('prompt creates events and persists user message', async () => {
-		const { runId } = await manager.prompt('session-1', 'Hello')
+		const { runId } = await manager.prompt(
+			'session-1',
+			'Hello'
+		)
 
 		expect(runId).toBeDefined()
 		expect(typeof runId).toBe('string')
@@ -121,15 +149,26 @@ describe('AgentManager', () => {
 		// First message should be the user message
 		const userMsg = history.find(m => m.role === 'user')
 		expect(userMsg).toBeDefined()
-		expect((userMsg as unknown as { content: { text: string }[] })?.content[0]?.text).toBe('Hello')
+		expect(
+			(
+				userMsg as unknown as {
+					content: { text: string }[]
+				}
+			)?.content[0]?.text
+		).toBe('Hello')
 
 		// Should have an assistant response
-		const assistantMsg = history.find(m => m.role === 'assistant')
+		const assistantMsg = history.find(
+			m => m.role === 'assistant'
+		)
 		expect(assistantMsg).toBeDefined()
 	})
 
 	test('prompt persists user_message event in event store', async () => {
-		const { runId } = await manager.prompt('session-1', 'Test')
+		const { runId } = await manager.prompt(
+			'session-1',
+			'Test'
+		)
 
 		// User message event should exist
 		const userEvents = eventStore.query({
@@ -137,10 +176,12 @@ describe('AgentManager', () => {
 			types: ['user_message']
 		})
 		expect(userEvents.length).toBe(1)
-		expect(JSON.parse(userEvents[0].payload)).toMatchObject({
-			role: 'user',
-			content: [{ type: 'text', text: 'Test' }]
-		})
+		expect(JSON.parse(userEvents[0].payload)).toMatchObject(
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Test' }]
+			}
+		)
 		expect(userEvents[0].runId).toBe(runId)
 
 		// Wait for agent to finish
@@ -149,13 +190,15 @@ describe('AgentManager', () => {
 	})
 
 	test('steer throws for non-existent agent', () => {
-		expect(() => manager.steer('nonexistent', 'Hey')).toThrow(
-			'Agent not found for session nonexistent'
-		)
+		expect(() =>
+			manager.steer('nonexistent', 'Hey')
+		).toThrow('Agent not found for session nonexistent')
 	})
 
 	test('abort throws for non-existent agent', () => {
-		expect(() => manager.abort('nonexistent')).toThrow('Agent not found for session nonexistent')
+		expect(() => manager.abort('nonexistent')).toThrow(
+			'Agent not found for session nonexistent'
+		)
 	})
 
 	test('evict removes agent from memory', () => {
@@ -179,7 +222,9 @@ describe('AgentManager', () => {
 
 		// Should have at least 4 messages: user1, assistant1, user2, assistant2
 		const userMsgs = history.filter(m => m.role === 'user')
-		const assistantMsgs = history.filter(m => m.role === 'assistant')
+		const assistantMsgs = history.filter(
+			m => m.role === 'assistant'
+		)
 
 		expect(userMsgs.length).toBe(2)
 		expect(assistantMsgs.length).toBe(2)

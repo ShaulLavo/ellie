@@ -16,7 +16,9 @@ import {
 } from '../prompts'
 import type { Directive } from '../types'
 
-function makeDirective(overrides: Partial<Directive>): Directive {
+function makeDirective(
+	overrides: Partial<Directive>
+): Directive {
 	return {
 		id: 'd1',
 		bankId: 'bank-1',
@@ -41,7 +43,12 @@ describe('buildDirectivesSection', () => {
 	})
 
 	it('includes directive name and content', () => {
-		const directives = [makeDirective({ name: 'Be Brief', content: 'Keep answers short.' })]
+		const directives = [
+			makeDirective({
+				name: 'Be Brief',
+				content: 'Keep answers short.'
+			})
+		]
 		const section = buildDirectivesSection(directives)
 		expect(section).toContain('Be Brief')
 		expect(section).toContain('Keep answers short.')
@@ -56,8 +63,14 @@ describe('buildDirectivesSection', () => {
 
 	it('includes multiple directives', () => {
 		const directives = [
-			makeDirective({ name: 'Rule 1', content: 'First rule.' }),
-			makeDirective({ name: 'Rule 2', content: 'Second rule.' })
+			makeDirective({
+				name: 'Rule 1',
+				content: 'First rule.'
+			}),
+			makeDirective({
+				name: 'Rule 2',
+				content: 'Second rule.'
+			})
 		]
 		const section = buildDirectivesSection(directives)
 		expect(section).toContain('Rule 1')
@@ -120,7 +133,10 @@ describe('getExtractionPrompt', () => {
 	})
 
 	it('injects custom guidelines', () => {
-		const prompt = getExtractionPrompt('custom', 'Focus on technical details.')
+		const prompt = getExtractionPrompt(
+			'custom',
+			'Focus on technical details.'
+		)
 		expect(prompt).not.toBe(EXTRACT_FACTS_SYSTEM)
 		expect(prompt).toContain('Focus on technical details.')
 	})

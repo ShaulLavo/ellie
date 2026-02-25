@@ -6,7 +6,14 @@
  */
 
 import { ulid } from '@ellie/utils'
-import { and, or, eq, desc, sql, inArray } from 'drizzle-orm'
+import {
+	and,
+	or,
+	eq,
+	desc,
+	sql,
+	inArray
+} from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 
 // ── Path normalization ──────────────────────────────────────────────────────
@@ -40,11 +47,14 @@ export function normalizePath(raw: string): string {
  * - relative paths: ./lib/x, src/foo.ts
  * - module-like tokens: foo/bar, utils.logger
  */
-export function detectLocationSignals(query: string): string[] {
+export function detectLocationSignals(
+	query: string
+): string[] {
 	const signals: string[] = []
 
 	// Match file path patterns (absolute or relative)
-	const pathRegex = /(?:^|\s)((?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+(?:\.\w+)?)/g
+	const pathRegex =
+		/(?:^|\s)((?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+(?:\.\w+)?)/g
 	let match: RegExpExecArray | null
 	while ((match = pathRegex.exec(query)) !== null) {
 		const token = match[1]!.trim()
@@ -131,7 +141,10 @@ export function locationRecord(
 		.where(
 			and(
 				eq(hdb.schema.locationPaths.bankId, bankId),
-				eq(hdb.schema.locationPaths.normalizedPath, normalized),
+				eq(
+					hdb.schema.locationPaths.normalizedPath,
+					normalized
+				),
 				eq(hdb.schema.locationPaths.profile, profile),
 				eq(hdb.schema.locationPaths.project, project)
 			)
@@ -179,7 +192,13 @@ export function locationRecord(
 
 	// Update co-access associations with other recently accessed paths in this session
 	if (context.session) {
-		updateCoAccessAssociations(hdb, bankId, pathId, context.session, now)
+		updateCoAccessAssociations(
+			hdb,
+			bankId,
+			pathId,
+			context.session,
+			now
+		)
 	}
 }
 
@@ -197,18 +216,35 @@ export function locationFind(
 	}
 ): LocationHit[] {
 	const limit = input.limit ?? 20
-	const conditions = [eq(hdb.schema.locationPaths.bankId, bankId)]
+	const conditions = [
+		eq(hdb.schema.locationPaths.bankId, bankId)
+	]
 
 	if (input.scope?.profile) {
-		conditions.push(eq(hdb.schema.locationPaths.profile, input.scope.profile))
+		conditions.push(
+			eq(
+				hdb.schema.locationPaths.profile,
+				input.scope.profile
+			)
+		)
 	}
 	if (input.scope?.project) {
-		conditions.push(eq(hdb.schema.locationPaths.project, input.scope.project))
+		conditions.push(
+			eq(
+				hdb.schema.locationPaths.project,
+				input.scope.project
+			)
+		)
 	}
 
 	if (input.path) {
 		const normalized = normalizePath(input.path)
-		conditions.push(eq(hdb.schema.locationPaths.normalizedPath, normalized))
+		conditions.push(
+			eq(
+				hdb.schema.locationPaths.normalizedPath,
+				normalized
+			)
+		)
 	}
 
 	const pathRows = hdb.db
@@ -223,12 +259,24 @@ export function locationFind(
 		const signals = detectLocationSignals(input.query)
 		if (signals.length > 0) {
 			const normalizedSignals = signals.map(normalizePath)
-			const signalConditions = [eq(hdb.schema.locationPaths.bankId, bankId)]
+			const signalConditions = [
+				eq(hdb.schema.locationPaths.bankId, bankId)
+			]
 			if (input.scope?.profile) {
-				signalConditions.push(eq(hdb.schema.locationPaths.profile, input.scope.profile))
+				signalConditions.push(
+					eq(
+						hdb.schema.locationPaths.profile,
+						input.scope.profile
+					)
+				)
 			}
 			if (input.scope?.project) {
-				signalConditions.push(eq(hdb.schema.locationPaths.project, input.scope.project))
+				signalConditions.push(
+					eq(
+						hdb.schema.locationPaths.project,
+						input.scope.project
+					)
+				)
 			}
 
 			const allMatches: LocationHit[] = []
@@ -253,7 +301,7 @@ export function locationFind(
 		return []
 	}
 
-	return pathRows.map((row) => pathRowToHit(hdb, bankId, row))
+	return pathRows.map(row => pathRowToHit(hdb, bankId, row))
 }
 
 /**
@@ -271,10 +319,14 @@ export function locationStats(
 		eq(hdb.schema.locationPaths.normalizedPath, normalized)
 	]
 	if (scope?.profile) {
-		conditions.push(eq(hdb.schema.locationPaths.profile, scope.profile))
+		conditions.push(
+			eq(hdb.schema.locationPaths.profile, scope.profile)
+		)
 	}
 	if (scope?.project) {
-		conditions.push(eq(hdb.schema.locationPaths.project, scope.project))
+		conditions.push(
+			eq(hdb.schema.locationPaths.project, scope.project)
+		)
 	}
 
 	const pathRow = hdb.db
@@ -290,13 +342,21 @@ export function locationStats(
 		.from(hdb.schema.locationAccessContexts)
 		.where(
 			and(
-				eq(hdb.schema.locationAccessContexts.bankId, bankId),
-				eq(hdb.schema.locationAccessContexts.pathId, pathRow.id)
+				eq(
+					hdb.schema.locationAccessContexts.bankId,
+					bankId
+				),
+				eq(
+					hdb.schema.locationAccessContexts.pathId,
+					pathRow.id
+				)
 			)
 		)
 		.all()
 
-	const distinctMemoryIds = new Set(accessRows.map((r) => r.memoryId))
+	const distinctMemoryIds = new Set(
+		accessRows.map(r => r.memoryId)
+	)
 
 	// Get top associations (check both directions since canonical ordering may put this path as either source or related)
 	const associations = hdb.db
@@ -306,8 +366,14 @@ export function locationStats(
 			and(
 				eq(hdb.schema.locationAssociations.bankId, bankId),
 				or(
-					eq(hdb.schema.locationAssociations.sourcePathId, pathRow.id),
-					eq(hdb.schema.locationAssociations.relatedPathId, pathRow.id)
+					eq(
+						hdb.schema.locationAssociations.sourcePathId,
+						pathRow.id
+					),
+					eq(
+						hdb.schema.locationAssociations.relatedPathId,
+						pathRow.id
+					)
 				)
 			)
 		)
@@ -316,31 +382,48 @@ export function locationStats(
 		.all()
 
 	// For each association, the "related" path is whichever one isn't us
-	const relatedPathIds = associations.map((a) =>
-		a.sourcePathId === pathRow.id ? a.relatedPathId : a.sourcePathId
+	const relatedPathIds = associations.map(a =>
+		a.sourcePathId === pathRow.id
+			? a.relatedPathId
+			: a.sourcePathId
 	)
 	const relatedPaths =
 		relatedPathIds.length > 0
 			? hdb.db
 					.select()
 					.from(hdb.schema.locationPaths)
-					.where(inArray(hdb.schema.locationPaths.id, relatedPathIds))
+					.where(
+						inArray(
+							hdb.schema.locationPaths.id,
+							relatedPathIds
+						)
+					)
 					.all()
 			: []
-	const relatedPathById = new Map(relatedPaths.map((p) => [p.id, p]))
+	const relatedPathById = new Map(
+		relatedPaths.map(p => [p.id, p])
+	)
 
 	return {
 		pathId: pathRow.id,
 		rawPath: pathRow.rawPath,
 		normalizedPath: pathRow.normalizedPath,
 		accessCount: accessRows.length,
-		lastAccessedAt: accessRows.length > 0 ? Math.max(...accessRows.map((r) => r.accessedAt)) : null,
+		lastAccessedAt:
+			accessRows.length > 0
+				? Math.max(...accessRows.map(r => r.accessedAt))
+				: null,
 		associatedMemoryCount: distinctMemoryIds.size,
-		topAssociations: associations.map((a) => {
-			const relatedId = a.sourcePathId === pathRow.id ? a.relatedPathId : a.sourcePathId
+		topAssociations: associations.map(a => {
+			const relatedId =
+				a.sourcePathId === pathRow.id
+					? a.relatedPathId
+					: a.sourcePathId
 			return {
 				relatedPathId: relatedId,
-				relatedNormalizedPath: relatedPathById.get(relatedId)?.normalizedPath ?? '',
+				relatedNormalizedPath:
+					relatedPathById.get(relatedId)?.normalizedPath ??
+					'',
 				coAccessCount: a.coAccessCount,
 				strength: a.strength
 			}
@@ -364,25 +447,39 @@ export function resolveSignalsToPaths(
 
 	for (const signal of signals) {
 		const normalized = normalizePath(signal)
-		const conditions = [eq(hdb.schema.locationPaths.bankId, bankId)]
+		const conditions = [
+			eq(hdb.schema.locationPaths.bankId, bankId)
+		]
 		if (scope?.profile) {
-			conditions.push(eq(hdb.schema.locationPaths.profile, scope.profile))
+			conditions.push(
+				eq(hdb.schema.locationPaths.profile, scope.profile)
+			)
 		}
 		if (scope?.project) {
-			conditions.push(eq(hdb.schema.locationPaths.project, scope.project))
+			conditions.push(
+				eq(hdb.schema.locationPaths.project, scope.project)
+			)
 		}
 
 		// Try exact match first
 		const exact = hdb.db
 			.select({ id: hdb.schema.locationPaths.id })
 			.from(hdb.schema.locationPaths)
-			.where(and(...conditions, eq(hdb.schema.locationPaths.normalizedPath, normalized)))
+			.where(
+				and(
+					...conditions,
+					eq(
+						hdb.schema.locationPaths.normalizedPath,
+						normalized
+					)
+				)
+			)
 			.all()
 
 		if (exact.length > 0) {
 			result.set(
 				signal,
-				exact.map((r) => r.id)
+				exact.map(r => r.id)
 			)
 			continue
 		}
@@ -403,7 +500,7 @@ export function resolveSignalsToPaths(
 		if (suffix.length > 0) {
 			result.set(
 				signal,
-				suffix.map((r) => r.id)
+				suffix.map(r => r.id)
 			)
 		}
 	}
@@ -440,20 +537,29 @@ export function computeLocationBoost(
 	const memoryAccessRows = hdb.db
 		.select({
 			pathId: hdb.schema.locationAccessContexts.pathId,
-			accessedAt: hdb.schema.locationAccessContexts.accessedAt
+			accessedAt:
+				hdb.schema.locationAccessContexts.accessedAt
 		})
 		.from(hdb.schema.locationAccessContexts)
 		.where(
 			and(
-				eq(hdb.schema.locationAccessContexts.bankId, bankId),
-				eq(hdb.schema.locationAccessContexts.memoryId, memoryId)
+				eq(
+					hdb.schema.locationAccessContexts.bankId,
+					bankId
+				),
+				eq(
+					hdb.schema.locationAccessContexts.memoryId,
+					memoryId
+				)
 			)
 		)
 		.all()
 
 	if (memoryAccessRows.length === 0) return 0
 
-	const candidatePathIds = new Set(memoryAccessRows.map((r) => r.pathId))
+	const candidatePathIds = new Set(
+		memoryAccessRows.map(r => r.pathId)
+	)
 
 	// 1. directPathBoost: +0.12 if any candidate path exactly matches a query path
 	let directPathBoost = 0
@@ -468,9 +574,13 @@ export function computeLocationBoost(
 	const accessCountByPath = new Map<string, number>()
 	const lastAccessByPath = new Map<string, number>()
 	for (const row of memoryAccessRows) {
-		accessCountByPath.set(row.pathId, (accessCountByPath.get(row.pathId) ?? 0) + 1)
+		accessCountByPath.set(
+			row.pathId,
+			(accessCountByPath.get(row.pathId) ?? 0) + 1
+		)
 		const prev = lastAccessByPath.get(row.pathId) ?? 0
-		if (row.accessedAt > prev) lastAccessByPath.set(row.pathId, row.accessedAt)
+		if (row.accessedAt > prev)
+			lastAccessByPath.set(row.pathId, row.accessedAt)
 	}
 
 	let maxFamiliarityNorm = 0
@@ -479,9 +589,12 @@ export function computeLocationBoost(
 		const count = accessCountByPath.get(pathId) ?? 0
 		const lastAccess = lastAccessByPath.get(pathId) ?? 0
 		const timeDelta = now - lastAccess
-		const f = Math.log1p(count) * Math.exp(-timeDelta / thirtyDaysMs)
+		const f =
+			Math.log1p(count) *
+			Math.exp(-timeDelta / thirtyDaysMs)
 		const fNorm = f / (1 + f)
-		if (fNorm > maxFamiliarityNorm) maxFamiliarityNorm = fNorm
+		if (fNorm > maxFamiliarityNorm)
+			maxFamiliarityNorm = fNorm
 	}
 	const familiarityBoost = 0.1 * maxFamiliarityNorm
 
@@ -497,15 +610,34 @@ export function computeLocationBoost(
 				.from(hdb.schema.locationAssociations)
 				.where(
 					and(
-						eq(hdb.schema.locationAssociations.bankId, bankId),
+						eq(
+							hdb.schema.locationAssociations.bankId,
+							bankId
+						),
 						or(
 							and(
-								inArray(hdb.schema.locationAssociations.sourcePathId, queryPathArray),
-								inArray(hdb.schema.locationAssociations.relatedPathId, candidatePathArray)
+								inArray(
+									hdb.schema.locationAssociations
+										.sourcePathId,
+									queryPathArray
+								),
+								inArray(
+									hdb.schema.locationAssociations
+										.relatedPathId,
+									candidatePathArray
+								)
 							),
 							and(
-								inArray(hdb.schema.locationAssociations.sourcePathId, candidatePathArray),
-								inArray(hdb.schema.locationAssociations.relatedPathId, queryPathArray)
+								inArray(
+									hdb.schema.locationAssociations
+										.sourcePathId,
+									candidatePathArray
+								),
+								inArray(
+									hdb.schema.locationAssociations
+										.relatedPathId,
+									queryPathArray
+								)
 							)
 						)
 					)
@@ -513,7 +645,8 @@ export function computeLocationBoost(
 				.all()
 
 			for (const assoc of assocs) {
-				const coNorm = assoc.strength / maxStrengthForQueryPaths
+				const coNorm =
+					assoc.strength / maxStrengthForQueryPaths
 				if (coNorm > maxCoNorm) maxCoNorm = coNorm
 			}
 		}
@@ -545,8 +678,14 @@ export function getMaxStrengthForPaths(
 			and(
 				eq(hdb.schema.locationAssociations.bankId, bankId),
 				or(
-					inArray(hdb.schema.locationAssociations.sourcePathId, pathArray),
-					inArray(hdb.schema.locationAssociations.relatedPathId, pathArray)
+					inArray(
+						hdb.schema.locationAssociations.sourcePathId,
+						pathArray
+					),
+					inArray(
+						hdb.schema.locationAssociations.relatedPathId,
+						pathArray
+					)
 				)
 			)
 		)
@@ -563,11 +702,17 @@ function pathRowToHit(
 	row: typeof import('./schema').locationPaths.$inferSelect
 ): LocationHit {
 	const accessRows = hdb.db
-		.select({ accessedAt: hdb.schema.locationAccessContexts.accessedAt })
+		.select({
+			accessedAt:
+				hdb.schema.locationAccessContexts.accessedAt
+		})
 		.from(hdb.schema.locationAccessContexts)
 		.where(
 			and(
-				eq(hdb.schema.locationAccessContexts.bankId, bankId),
+				eq(
+					hdb.schema.locationAccessContexts.bankId,
+					bankId
+				),
 				eq(hdb.schema.locationAccessContexts.pathId, row.id)
 			)
 		)
@@ -581,7 +726,9 @@ function pathRowToHit(
 		project: row.project,
 		accessCount: accessRows.length,
 		lastAccessedAt:
-			accessRows.length > 0 ? Math.max(...accessRows.map((r) => r.accessedAt)) : row.createdAt
+			accessRows.length > 0
+				? Math.max(...accessRows.map(r => r.accessedAt))
+				: row.createdAt
 	}
 }
 
@@ -602,24 +749,36 @@ function updateCoAccessAssociations(
 
 	// Find other paths accessed in this session within the window
 	const recentAccesses = hdb.db
-		.select({ pathId: hdb.schema.locationAccessContexts.pathId })
+		.select({
+			pathId: hdb.schema.locationAccessContexts.pathId
+		})
 		.from(hdb.schema.locationAccessContexts)
 		.where(
 			and(
-				eq(hdb.schema.locationAccessContexts.bankId, bankId),
-				eq(hdb.schema.locationAccessContexts.session, session),
+				eq(
+					hdb.schema.locationAccessContexts.bankId,
+					bankId
+				),
+				eq(
+					hdb.schema.locationAccessContexts.session,
+					session
+				),
 				sql`${hdb.schema.locationAccessContexts.accessedAt} >= ${cutoff}`,
 				sql`${hdb.schema.locationAccessContexts.pathId} != ${currentPathId}`
 			)
 		)
 		.all()
 
-	const distinctPathIds = [...new Set(recentAccesses.map((r) => r.pathId))]
+	const distinctPathIds = [
+		...new Set(recentAccesses.map(r => r.pathId))
+	]
 
 	for (const otherPathId of distinctPathIds) {
 		// Canonical ordering: smaller ID first
 		const [sourceId, relatedId] =
-			currentPathId < otherPathId ? [currentPathId, otherPathId] : [otherPathId, currentPathId]
+			currentPathId < otherPathId
+				? [currentPathId, otherPathId]
+				: [otherPathId, currentPathId]
 
 		// Atomic upsert: increment co_access_count or insert initial row.
 		// Uses ON CONFLICT on the unique index (bank_id, source_path_id, related_path_id).
@@ -634,22 +793,35 @@ function updateCoAccessAssociations(
 			 ON CONFLICT (bank_id, source_path_id, related_path_id) DO UPDATE SET
 			   co_access_count = co_access_count + 1,
 			   updated_at = ?`,
-			[ulid(), bankId, sourceId, relatedId, initStrength, now, now]
+			[
+				ulid(),
+				bankId,
+				sourceId,
+				relatedId,
+				initStrength,
+				now,
+				now
+			]
 		)
 
 		// Read back the new count and recompute strength
 		const row = hdb.sqlite
-			.query<{ co_access_count: number; id: string }, [string, string, string]>(
+			.query<
+				{ co_access_count: number; id: string },
+				[string, string, string]
+			>(
 				`SELECT id, co_access_count FROM hs_location_associations
 				 WHERE bank_id = ? AND source_path_id = ? AND related_path_id = ?`
 			)
 			.get(bankId, sourceId, relatedId)
 		if (row) {
-			const strength = Math.log1p(row.co_access_count) / (1 + Math.log1p(row.co_access_count))
-			hdb.sqlite.run(`UPDATE hs_location_associations SET strength = ? WHERE id = ?`, [
-				strength,
-				row.id
-			])
+			const strength =
+				Math.log1p(row.co_access_count) /
+				(1 + Math.log1p(row.co_access_count))
+			hdb.sqlite.run(
+				`UPDATE hs_location_associations SET strength = ? WHERE id = ?`,
+				[strength, row.id]
+			)
 		}
 	}
 }

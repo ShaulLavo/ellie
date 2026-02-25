@@ -16,7 +16,10 @@ import { loadProviderCredential } from '@ellie/ai/credentials'
 import { Hindsight } from '../hindsight'
 import type { HindsightConfig } from '../types'
 import type { HindsightDatabase } from '../db'
-import { createMockAdapter, type MockAdapter } from './mock-adapter'
+import {
+	createMockAdapter,
+	type MockAdapter
+} from './mock-adapter'
 
 // ── Load pre-generated embeddings fixture ────────────────────────────────────
 //
@@ -27,19 +30,29 @@ import { createMockAdapter, type MockAdapter } from './mock-adapter'
 
 let EMBEDDING_FIXTURE: Record<string, number[]> = {}
 try {
-	const fixturePath = join(import.meta.dir, 'fixtures', 'embeddings.json')
-	EMBEDDING_FIXTURE = JSON.parse(readFileSync(fixturePath, 'utf-8'))
+	const fixturePath = join(
+		import.meta.dir,
+		'fixtures',
+		'embeddings.json'
+	)
+	EMBEDDING_FIXTURE = JSON.parse(
+		readFileSync(fixturePath, 'utf-8')
+	)
 } catch {
 	// Fixture not yet generated — fall back to hash-based embeddings
 }
 
-const HAS_REAL_EMBEDDINGS = Object.keys(EMBEDDING_FIXTURE).length > 0
+const HAS_REAL_EMBEDDINGS =
+	Object.keys(EMBEDDING_FIXTURE).length > 0
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const EMBED_DIMS = HAS_REAL_EMBEDDINGS ? 768 : 16
-export const EXTRACTION_TEST_MODE = process.env.HINDSIGHT_EXTRACTION_TEST_MODE ?? 'deterministic'
-export const EXTRACTION_TEST_CANONICAL_TIMEZONE = 'Asia/Jerusalem'
+export const EXTRACTION_TEST_MODE =
+	process.env.HINDSIGHT_EXTRACTION_TEST_MODE ??
+	'deterministic'
+export const EXTRACTION_TEST_CANONICAL_TIMEZONE =
+	'Asia/Jerusalem'
 
 export function useRealLLMExtractionTests(): boolean {
 	return EXTRACTION_TEST_MODE === 'real-llm'
@@ -56,7 +69,9 @@ function hashEmbed(text: string, dims: number): number[] {
 	for (let i = 0; i < text.length; i++) {
 		vec[i % dims] += text.charCodeAt(i) / 1000
 	}
-	const norm = Math.sqrt(vec.reduce((s: number, v: number) => s + v * v, 0))
+	const norm = Math.sqrt(
+		vec.reduce((s: number, v: number) => s + v * v, 0)
+	)
 	return norm > 0 ? vec.map((v: number) => v / norm) : vec
 }
 
@@ -101,7 +116,9 @@ export interface RealLLMTestHindsight {
  * Returns the instance, the mock adapter (for inspecting/configuring LLM
  * responses), and a cleanup function that closes the DB and removes the file.
  */
-export function createTestHindsight(overrides?: Partial<HindsightConfig>): TestHindsight {
+export function createTestHindsight(
+	overrides?: Partial<HindsightConfig>
+): TestHindsight {
 	const dbPath = join(
 		tmpdir(),
 		`hindsight-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`
@@ -112,7 +129,8 @@ export function createTestHindsight(overrides?: Partial<HindsightConfig>): TestH
 		dbPath,
 		embed: mockEmbed,
 		embeddingDimensions: EMBED_DIMS,
-		adapter: adapter as unknown as HindsightConfig['adapter'],
+		adapter:
+			adapter as unknown as HindsightConfig['adapter'],
 		...overrides
 	})
 
@@ -151,14 +169,19 @@ function findCredentialsFile(): string | null {
 }
 
 const CREDENTIALS_PATH = findCredentialsFile()
-export const HAS_ANTHROPIC_KEY = !!process.env.ANTHROPIC_API_KEY
+export const HAS_ANTHROPIC_KEY =
+	!!process.env.ANTHROPIC_API_KEY
 export const HAS_CREDENTIALS = !!CREDENTIALS_PATH
-export const HAS_ANTHROPIC = HAS_ANTHROPIC_KEY || HAS_CREDENTIALS
+export const HAS_ANTHROPIC =
+	HAS_ANTHROPIC_KEY || HAS_CREDENTIALS
 
 // Groq credential detection (matches Python conftest.py — uses openai/gpt-oss-120b via Groq)
 export const HAS_GROQ_KEY = !!process.env.GROQ_API_KEY
 const _hasGroqCredentials = CREDENTIALS_PATH
-	? await loadProviderCredential(CREDENTIALS_PATH, 'groq').then(c => !!c)
+	? await loadProviderCredential(
+			CREDENTIALS_PATH,
+			'groq'
+		).then(c => !!c)
 	: false
 export const HAS_GROQ = HAS_GROQ_KEY || _hasGroqCredentials
 
@@ -169,11 +192,14 @@ const REAL_LLM_MODEL = 'openai/gpt-oss-120b'
  * Feature flag: set HINDSIGHT_RUN_LLM_TESTS=1 to enable real LLM tests.
  * Defaults to off so CI and local runs skip them by default.
  */
-export const RUN_LLM_TESTS = process.env.HINDSIGHT_RUN_LLM_TESTS === '1'
+export const RUN_LLM_TESTS =
+	process.env.HINDSIGHT_RUN_LLM_TESTS === '1'
 
 /** Use instead of `describe` for test blocks that require a real LLM. */
 export const describeWithLLM =
-	RUN_LLM_TESTS && (HAS_GROQ || HAS_ANTHROPIC) ? describe : describe.skip
+	RUN_LLM_TESTS && (HAS_GROQ || HAS_ANTHROPIC)
+		? describe
+		: describe.skip
 
 export interface RealTestHindsight {
 	hs: Hindsight
@@ -186,15 +212,23 @@ export interface RealTestHindsight {
  *
  * Priority: Groq (openai/gpt-oss-120b — matches Python conftest) > Anthropic.
  */
-async function resolveRealAdapter(): Promise<HindsightConfig['adapter']> {
+async function resolveRealAdapter(): Promise<
+	HindsightConfig['adapter']
+> {
 	// Priority 1: Groq via env var
 	if (process.env.GROQ_API_KEY) {
-		return groqChat(REAL_LLM_MODEL, process.env.GROQ_API_KEY)
+		return groqChat(
+			REAL_LLM_MODEL,
+			process.env.GROQ_API_KEY
+		)
 	}
 
 	// Priority 2: Groq via credentials file
 	if (CREDENTIALS_PATH) {
-		const groqCred = await loadProviderCredential(CREDENTIALS_PATH, 'groq')
+		const groqCred = await loadProviderCredential(
+			CREDENTIALS_PATH,
+			'groq'
+		)
 		if (groqCred && groqCred.type === 'api_key') {
 			return groqChat(REAL_LLM_MODEL, groqCred.key)
 		}
@@ -257,15 +291,23 @@ export async function createRealTestHindsight(
  * For test use only — reaches into private state via Reflect.
  */
 export function getHdb(hs: Hindsight): HindsightDatabase {
-	return Reflect.get(hs as object, 'hdb') as HindsightDatabase
+	return Reflect.get(
+		hs as object,
+		'hdb'
+	) as HindsightDatabase
 }
 
 /**
  * Create a bank in the test Hindsight instance and return its ID.
  */
-export function createTestBank(hs: Hindsight, name?: string, description?: string): string {
+export function createTestBank(
+	hs: Hindsight,
+	name?: string,
+	description?: string
+): string {
 	const bank = hs.createBank(
-		name ?? `test-bank-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		name ??
+			`test-bank-${Date.now()}-${Math.random().toString(36).slice(2)}`,
 		description ? { description } : undefined
 	)
 	return bank.id

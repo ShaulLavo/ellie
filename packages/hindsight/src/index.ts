@@ -1,5 +1,9 @@
 export { Hindsight } from './hindsight'
-export { DEFAULT_EMBED_MODEL, DEFAULT_RERANK_MODEL, DEFAULT_EMBED_DIMS } from './default-models'
+export {
+	DEFAULT_EMBED_MODEL,
+	DEFAULT_RERANK_MODEL,
+	DEFAULT_EMBED_DIMS
+} from './default-models'
 
 export type {
 	HindsightConfig,
@@ -98,9 +102,21 @@ export type {
 } from './types'
 
 // Phase 3: Location, scope, context packing
-export type { LocationContext, LocationHit, LocationStats } from './location'
-export { normalizePath, detectLocationSignals, hasLocationSignals } from './location'
-export type { Scope, ScopeContext, ScopeMode } from './scope'
+export type {
+	LocationContext,
+	LocationHit,
+	LocationStats
+} from './location'
+export {
+	normalizePath,
+	detectLocationSignals,
+	hasLocationSignals
+} from './location'
+export type {
+	Scope,
+	ScopeContext,
+	ScopeMode
+} from './scope'
 export {
 	deriveScopeTagsFromContext,
 	resolveScope,
@@ -108,10 +124,23 @@ export {
 	DEFAULT_PROFILE,
 	DEFAULT_PROJECT
 } from './scope'
-export type { PackCandidate, PackedMemory, PackResult } from './context-pack'
-export { packContext, generateFallbackGist, estimateTokens } from './context-pack'
+export type {
+	PackCandidate,
+	PackedMemory,
+	PackResult
+} from './context-pack'
+export {
+	packContext,
+	generateFallbackGist,
+	estimateTokens
+} from './context-pack'
 export type { GistResult } from './gist'
-export { generateGist, generateGistWithLLM, EAGER_GIST_THRESHOLD, MAX_GIST_LENGTH } from './gist'
+export {
+	generateGist,
+	generateGistWithLLM,
+	EAGER_GIST_THRESHOLD,
+	MAX_GIST_LENGTH
+} from './gist'
 
 export * as schema from './schema'
 export * as schemas from './schemas'

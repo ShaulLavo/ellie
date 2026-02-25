@@ -16,14 +16,27 @@ import { cn } from '@/lib/utils'
 
 type TooltipProviderProps = TooltipProviderPrimitiveProps
 
-function TooltipProvider({ openDelay = 0, ...props }: TooltipProviderProps) {
-	return <TooltipProviderPrimitive openDelay={openDelay} {...props} />
+function TooltipProvider({
+	openDelay = 0,
+	...props
+}: TooltipProviderProps) {
+	return (
+		<TooltipProviderPrimitive
+			openDelay={openDelay}
+			{...props}
+		/>
+	)
 }
 
 type TooltipProps = TooltipPrimitiveProps
 
-function Tooltip({ sideOffset = 10, ...props }: TooltipProps) {
-	return <TooltipPrimitive sideOffset={sideOffset} {...props} />
+function Tooltip({
+	sideOffset = 10,
+	...props
+}: TooltipProps) {
+	return (
+		<TooltipPrimitive sideOffset={sideOffset} {...props} />
+	)
 }
 
 type TooltipTriggerProps = TooltipTriggerPrimitiveProps
@@ -32,7 +45,10 @@ function TooltipTrigger({ ...props }: TooltipTriggerProps) {
 	return <TooltipTriggerPrimitive {...props} />
 }
 
-type TooltipContentProps = Omit<TooltipContentPrimitiveProps, 'asChild'> & {
+type TooltipContentProps = Omit<
+	TooltipContentPrimitiveProps,
+	'asChild'
+> & {
 	children: React.ReactNode
 	layout?: boolean | 'position' | 'size' | 'preserve-aspect'
 }
@@ -45,7 +61,10 @@ function TooltipContent({
 }: TooltipContentProps) {
 	return (
 		<TooltipContentPrimitive
-			className={cn('z-50 w-fit bg-primary text-primary-foreground rounded-md', className)}
+			className={cn(
+				'z-50 w-fit bg-primary text-primary-foreground rounded-md',
+				className
+			)}
 			{...props}
 		>
 			<motion.div className="overflow-hidden px-3 py-1.5 text-xs text-balance">

@@ -19,8 +19,19 @@
  *   - not insert version row
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 
 describe('Gate 3: Route Side-Effect Invariants', () => {
 	let t: TestHindsight
@@ -40,7 +51,9 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 	function countMemoryUnits(): number {
 		const hdb = getHdb(t.hs)
 		const row = hdb.sqlite
-			.prepare('SELECT COUNT(*) as cnt FROM hs_memory_units WHERE bank_id = ?')
+			.prepare(
+				'SELECT COUNT(*) as cnt FROM hs_memory_units WHERE bank_id = ?'
+			)
 			.get(bankId) as { cnt: number }
 		return row.cnt
 	}
@@ -48,7 +61,9 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 	function countMemoryVersions(): number {
 		const hdb = getHdb(t.hs)
 		const row = hdb.sqlite
-			.prepare('SELECT COUNT(*) as cnt FROM hs_memory_versions WHERE bank_id = ?')
+			.prepare(
+				'SELECT COUNT(*) as cnt FROM hs_memory_versions WHERE bank_id = ?'
+			)
 			.get(bankId) as { cnt: number }
 		return row.cnt
 	}
@@ -56,16 +71,18 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 	function countDecisions(): number {
 		const hdb = getHdb(t.hs)
 		const row = hdb.sqlite
-			.prepare('SELECT COUNT(*) as cnt FROM hs_reconsolidation_decisions WHERE bank_id = ?')
+			.prepare(
+				'SELECT COUNT(*) as cnt FROM hs_reconsolidation_decisions WHERE bank_id = ?'
+			)
 			.get(bankId) as { cnt: number }
 		return row.cnt
 	}
 
 	function getMemoryUnit(memoryId: string) {
 		const hdb = getHdb(t.hs)
-		return hdb.sqlite.prepare('SELECT * FROM hs_memory_units WHERE id = ?').get(memoryId) as
-			| Record<string, unknown>
-			| undefined
+		return hdb.sqlite
+			.prepare('SELECT * FROM hs_memory_units WHERE id = ?')
+			.get(memoryId) as Record<string, unknown> | undefined
 	}
 
 	function getLatestDecision() {
@@ -83,7 +100,12 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 		it('inserts exactly one new canonical memory row', async () => {
 			const before = countMemoryUnits()
 			await t.hs.retain(bankId, 'test content', {
-				facts: [{ content: 'Alice works at Acme Corp xyz 123 !@#', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp xyz 123 !@#',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const after = countMemoryUnits()
@@ -93,7 +115,12 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 		it('inserts one decision row', async () => {
 			const before = countDecisions()
 			await t.hs.retain(bankId, 'test content', {
-				facts: [{ content: 'Alice works at Acme Corp xyz 123 !@#', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp xyz 123 !@#',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const after = countDecisions()
@@ -103,7 +130,12 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 		it('does not insert version row', async () => {
 			const before = countMemoryVersions()
 			await t.hs.retain(bankId, 'test content', {
-				facts: [{ content: 'Alice works at Acme Corp xyz 123 !@#', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp xyz 123 !@#',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const after = countMemoryVersions()
@@ -112,7 +144,12 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 
 		it('decision row has route=new_trace', async () => {
 			await t.hs.retain(bankId, 'test content', {
-				facts: [{ content: 'Brand new unique fact xyz 456 !@#', factType: 'world' }],
+				facts: [
+					{
+						content: 'Brand new unique fact xyz 456 !@#',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const decision = getLatestDecision()
@@ -127,14 +164,24 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 		it('does not create a new memory row', async () => {
 			// Seed first
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const afterSeed = countMemoryUnits()
 
 			// Reinforce with exact same content
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const afterReinforce = countMemoryUnits()
@@ -143,13 +190,23 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 
 		it('does not create hs_memory_versions row', async () => {
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const versionsAfterSeed = countMemoryVersions()
 
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const versionsAfterReinforce = countMemoryVersions()
@@ -158,35 +215,60 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 
 		it('updates strength/access metadata', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const memoryId = result.memories[0]!.id
 			const beforeRow = getMemoryUnit(memoryId)
 			const beforeAccess = beforeRow!.access_count as number
-			const beforeStrength = beforeRow!.encoding_strength as number
+			const beforeStrength = beforeRow!
+				.encoding_strength as number
 
 			// Reinforce
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
 			const afterRow = getMemoryUnit(memoryId)
-			expect(afterRow!.access_count as number).toBeGreaterThan(beforeAccess)
-			expect(afterRow!.encoding_strength as number).toBeGreaterThanOrEqual(beforeStrength)
+			expect(
+				afterRow!.access_count as number
+			).toBeGreaterThan(beforeAccess)
+			expect(
+				afterRow!.encoding_strength as number
+			).toBeGreaterThanOrEqual(beforeStrength)
 			expect(afterRow!.last_accessed).toBeDefined()
 		})
 
 		it('preserves original content on reinforce', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 			const memoryId = result.memories[0]!.id
 
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
@@ -196,12 +278,22 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 
 		it('decision row has route=reinforce', async () => {
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
@@ -261,7 +353,11 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 			expect(decisions.length).toBeGreaterThanOrEqual(2)
 			// First is always new_trace; subsequent route depends on similarity score
 			expect(decisions[0]!.route).toBe('new_trace')
-			expect(['new_trace', 'reinforce', 'reconsolidate']).toContain(decisions[1]!.route)
+			expect([
+				'new_trace',
+				'reinforce',
+				'reconsolidate'
+			]).toContain(decisions[1]!.route)
 		})
 	})
 
@@ -270,16 +366,25 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 	describe('decision audit trail', () => {
 		it('all decisions have policyVersion=v1', async () => {
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Fact A xyz 123', factType: 'world' }],
+				facts: [
+					{ content: 'Fact A xyz 123', factType: 'world' }
+				],
 				consolidate: false
 			})
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Fact B xyz 456 !@#', factType: 'world' }],
+				facts: [
+					{
+						content: 'Fact B xyz 456 !@#',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
 			const decisions = getHdb(t.hs)
-				.sqlite.prepare('SELECT * FROM hs_reconsolidation_decisions WHERE bank_id = ?')
+				.sqlite.prepare(
+					'SELECT * FROM hs_reconsolidation_decisions WHERE bank_id = ?'
+				)
 				.all(bankId) as Array<Record<string, unknown>>
 
 			for (const decision of decisions) {
@@ -289,7 +394,12 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 
 		it('decision has appliedMemoryId pointing to a valid memory', async () => {
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Valid memory ref fact xyz', factType: 'world' }],
+				facts: [
+					{
+						content: 'Valid memory ref fact xyz',
+						factType: 'world'
+					}
+				],
 				consolidate: false
 			})
 
@@ -297,7 +407,9 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 			expect(decision).toBeDefined()
 			expect(decision!.applied_memory_id).toBeDefined()
 
-			const memory = getMemoryUnit(decision!.applied_memory_id as string)
+			const memory = getMemoryUnit(
+				decision!.applied_memory_id as string
+			)
 			expect(memory).toBeDefined()
 		})
 	})

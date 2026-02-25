@@ -144,7 +144,9 @@ This guide helps you migrate from hardcoded Tailwind colors (`bg-blue-600`) to s
 
 @theme inline {
 	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
+	--color-destructive-foreground: var(
+		--destructive-foreground
+	);
 	--color-success: var(--success);
 	--color-success-foreground: var(--success-foreground);
 	--color-warning: var(--warning);

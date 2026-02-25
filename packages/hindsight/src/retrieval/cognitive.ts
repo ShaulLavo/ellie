@@ -55,7 +55,9 @@ interface LinkRow {
  * Probe activation: power-law transform of semantic similarity.
  * Higher exponent (1.35) sharpens the discrimination between candidates.
  */
-export function computeProbe(semanticSimilarity: number): number {
+export function computeProbe(
+	semanticSimilarity: number
+): number {
 	return clamp(semanticSimilarity, 0, 1) ** 1.35
 }
 
@@ -75,7 +77,11 @@ export function computeBase(
 ): number {
 	if (lastAccessed == null) return 0
 	const timeDelta = Math.max(0, now - lastAccessed)
-	return encodingStrength * Math.log1p(accessCount) * Math.exp(-timeDelta / TAU_MS)
+	return (
+		encodingStrength *
+		Math.log1p(accessCount) *
+		Math.exp(-timeDelta / TAU_MS)
+	)
 }
 
 /**
@@ -90,8 +96,12 @@ export function computeSpread(
 ): number {
 	let raw = 0
 	for (const link of neighborLinks) {
-		const neighborId = link.sourceId === candidateId ? link.targetId : link.sourceId
-		const neighborActivation = sourceActivations.get(neighborId)
+		const neighborId =
+			link.sourceId === candidateId
+				? link.targetId
+				: link.sourceId
+		const neighborActivation =
+			sourceActivations.get(neighborId)
 		if (neighborActivation != null) {
 			raw += link.weight * neighborActivation
 		}
@@ -103,7 +113,11 @@ export function computeSpread(
  * Combined cognitive score.
  * Weights: probe=0.50, base=0.35, spread=0.15
  */
-export function computeCognitiveScore(probe: number, base: number, spread: number): number {
+export function computeCognitiveScore(
+	probe: number,
+	base: number,
+	spread: number
+): number {
 	return 0.5 * probe + 0.35 * base + 0.15 * spread
 }
 
@@ -139,10 +153,18 @@ export function scoreCognitive(
 
 	for (const c of candidates) {
 		const probe = computeProbe(c.semanticSimilarity)
-		const base = computeBase(c.accessCount, c.lastAccessed, now, c.encodingStrength)
+		const base = computeBase(
+			c.accessCount,
+			c.lastAccessed,
+			now,
+			c.encodingStrength
+		)
 		probeMap.set(c.id, probe)
 		baseMap.set(c.id, base)
-		sourceActivations.set(c.id, clamp(0.7 * probe + 0.3 * base, 0, 1))
+		sourceActivations.set(
+			c.id,
+			clamp(0.7 * probe + 0.3 * base, 0, 1)
+		)
 	}
 
 	// Step 2: Load 1-hop links between candidates
@@ -152,11 +174,13 @@ export function scoreCognitive(
 	// Step 3: Build per-candidate link index and compute spread
 	const linksByCandidate = new Map<string, LinkRow[]>()
 	for (const link of links) {
-		const sourceLinks = linksByCandidate.get(link.sourceId) ?? []
+		const sourceLinks =
+			linksByCandidate.get(link.sourceId) ?? []
 		sourceLinks.push(link)
 		linksByCandidate.set(link.sourceId, sourceLinks)
 
-		const targetLinks = linksByCandidate.get(link.targetId) ?? []
+		const targetLinks =
+			linksByCandidate.get(link.targetId) ?? []
 		targetLinks.push(link)
 		linksByCandidate.set(link.targetId, targetLinks)
 	}
@@ -166,8 +190,16 @@ export function scoreCognitive(
 		const probe = probeMap.get(c.id)!
 		const base = baseMap.get(c.id)!
 		const candidateLinks = linksByCandidate.get(c.id) ?? []
-		const spread = computeSpread(c.id, sourceActivations, candidateLinks)
-		const cognitiveScore = computeCognitiveScore(probe, base, spread)
+		const spread = computeSpread(
+			c.id,
+			sourceActivations,
+			candidateLinks
+		)
+		const cognitiveScore = computeCognitiveScore(
+			probe,
+			base,
+			spread
+		)
 
 		return { id: c.id, cognitiveScore, probe, base, spread }
 	})
@@ -192,7 +224,10 @@ export function scoreCognitive(
  * Queries both sourceId and targetId IN candidateIds to capture edges
  * regardless of storage direction, then filters to only intra-pool edges.
  */
-function loadNeighborLinks(hdb: HindsightDatabase, candidateIds: string[]): LinkRow[] {
+function loadNeighborLinks(
+	hdb: HindsightDatabase,
+	candidateIds: string[]
+): LinkRow[] {
 	if (candidateIds.length === 0) return []
 
 	const idSet = new Set(candidateIds)
@@ -205,7 +240,9 @@ function loadNeighborLinks(hdb: HindsightDatabase, candidateIds: string[]): Link
 			weight: hdb.schema.memoryLinks.weight
 		})
 		.from(hdb.schema.memoryLinks)
-		.where(inArray(hdb.schema.memoryLinks.sourceId, candidateIds))
+		.where(
+			inArray(hdb.schema.memoryLinks.sourceId, candidateIds)
+		)
 		.all()
 		.filter(link => idSet.has(link.targetId))
 
@@ -217,7 +254,9 @@ function loadNeighborLinks(hdb: HindsightDatabase, candidateIds: string[]): Link
 			weight: hdb.schema.memoryLinks.weight
 		})
 		.from(hdb.schema.memoryLinks)
-		.where(inArray(hdb.schema.memoryLinks.targetId, candidateIds))
+		.where(
+			inArray(hdb.schema.memoryLinks.targetId, candidateIds)
+		)
 		.all()
 		.filter(link => idSet.has(link.sourceId))
 

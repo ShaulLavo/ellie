@@ -90,7 +90,12 @@ bail = false
 Create `tests/setup.ts`:
 
 ```typescript
-import { beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
+import {
+	beforeAll,
+	afterAll,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 
 // Global test setup
 beforeAll(() => {
@@ -113,7 +118,8 @@ afterEach(() => {
 
 // Global test utilities
 globalThis.testHelpers = {
-	wait: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+	wait: (ms: number) =>
+		new Promise(resolve => setTimeout(resolve, ms))
 }
 ```
 
@@ -348,7 +354,14 @@ expect(mockFn).toHaveBeenCalledWith(arg1, arg2)
 ### Setup and Teardown
 
 ```typescript
-import { beforeAll, afterAll, beforeEach, afterEach, describe, it } from 'bun:test'
+import {
+	beforeAll,
+	afterAll,
+	beforeEach,
+	afterEach,
+	describe,
+	it
+} from 'bun:test'
 
 describe('User service', () => {
 	let db: Database

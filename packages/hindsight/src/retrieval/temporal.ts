@@ -22,7 +22,11 @@ export function searchTemporal(
 	tags?: string[],
 	tagsMatch?: TagsMatch
 ): RetrievalHit[] {
-	if (!timeRange || (timeRange.from == null && timeRange.to == null)) return []
+	if (
+		!timeRange ||
+		(timeRange.from == null && timeRange.to == null)
+	)
+		return []
 
 	const rangeFrom = timeRange.from ?? -8_640_000_000_000_000
 	const rangeTo = timeRange.to ?? 8_640_000_000_000_000
@@ -118,11 +122,20 @@ export function searchTemporal(
 	if (rows.length === 0) return []
 
 	const anchors = rows.map(row => {
-		if (row.occurred_start != null && row.occurred_end != null) {
-			return Math.round((row.occurred_start + row.occurred_end) / 2)
+		if (
+			row.occurred_start != null &&
+			row.occurred_end != null
+		) {
+			return Math.round(
+				(row.occurred_start + row.occurred_end) / 2
+			)
 		}
 		return (
-			row.occurred_start ?? row.occurred_end ?? row.mentioned_at ?? row.event_date ?? row.created_at
+			row.occurred_start ??
+			row.occurred_end ??
+			row.mentioned_at ??
+			row.event_date ??
+			row.created_at
 		)
 	})
 	const maxAnchor = Math.max(...anchors)
@@ -131,7 +144,13 @@ export function searchTemporal(
 
 	return rows.map((row, index) => {
 		const anchor = anchors[index]!
-		const normalized = range <= 0 ? 1 : Math.max(0, Math.min(1, (anchor - minAnchor) / range))
+		const normalized =
+			range <= 0
+				? 1
+				: Math.max(
+						0,
+						Math.min(1, (anchor - minAnchor) / range)
+					)
 		return {
 			id: row.id,
 			score: normalized,

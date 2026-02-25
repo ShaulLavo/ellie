@@ -11,8 +11,16 @@ import { cn } from '@/lib/utils'
 
 type RadioGroupProps = RadioGroupPrimitiveProps
 
-function RadioGroup({ className, ...props }: RadioGroupProps) {
-	return <RadioGroupPrimitive className={cn('grid gap-3', className)} {...props} />
+function RadioGroup({
+	className,
+	...props
+}: RadioGroupProps) {
+	return (
+		<RadioGroupPrimitive
+			className={cn('grid gap-3', className)}
+			{...props}
+		/>
+	)
 }
 
 type RadioProps = RadioPrimitiveProps
@@ -33,4 +41,9 @@ function Radio({ className, ...props }: RadioProps) {
 	)
 }
 
-export { RadioGroup, Radio, type RadioGroupProps, type RadioProps }
+export {
+	RadioGroup,
+	Radio,
+	type RadioGroupProps,
+	type RadioProps
+}

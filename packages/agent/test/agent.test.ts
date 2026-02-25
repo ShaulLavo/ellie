@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { Agent } from '../src/agent'
-import type { AgentEvent, AgentMessage, StreamFn, AssistantMessage } from '../src/types'
-import type { StreamChunk, AnyTextAdapter } from '@tanstack/ai'
+import type {
+	AgentEvent,
+	AgentMessage,
+	StreamFn,
+	AssistantMessage
+} from '../src/types'
+import type {
+	StreamChunk,
+	AnyTextAdapter
+} from '@tanstack/ai'
 
 // ============================================================================
 // Test helpers
@@ -9,7 +17,11 @@ import type { StreamChunk, AnyTextAdapter } from '@tanstack/ai'
 
 function textResponseStream(text: string): StreamChunk[] {
 	return [
-		{ type: 'RUN_STARTED', runId: 'r1', timestamp: Date.now() },
+		{
+			type: 'RUN_STARTED',
+			runId: 'r1',
+			timestamp: Date.now()
+		},
 		{
 			type: 'TEXT_MESSAGE_START',
 			messageId: 'm1',
@@ -31,13 +43,19 @@ function textResponseStream(text: string): StreamChunk[] {
 			type: 'RUN_FINISHED',
 			runId: 'r1',
 			finishReason: 'stop' as const,
-			usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			usage: {
+				promptTokens: 10,
+				completionTokens: 5,
+				totalTokens: 15
+			},
 			timestamp: Date.now()
 		}
 	]
 }
 
-function createMockStreamFn(events: StreamChunk[]): StreamFn {
+function createMockStreamFn(
+	events: StreamChunk[]
+): StreamFn {
 	return async function* () {
 		for (const event of events) {
 			yield event
@@ -74,7 +92,9 @@ describe('Agent', () => {
 
 	test('prompt throws without adapter', async () => {
 		const agent = new Agent()
-		await expect(agent.prompt('hi')).rejects.toThrow('No adapter configured')
+		await expect(agent.prompt('hi')).rejects.toThrow(
+			'No adapter configured'
+		)
 	})
 
 	test('prompt throws when already streaming', async () => {
@@ -103,7 +123,9 @@ describe('Agent', () => {
 		// Wait for streaming to start
 		await Bun.sleep(20)
 
-		await expect(agent.prompt('second')).rejects.toThrow('Agent is already processing')
+		await expect(agent.prompt('second')).rejects.toThrow(
+			'Agent is already processing'
+		)
 
 		// Unblock
 		resolve!()
@@ -111,8 +133,13 @@ describe('Agent', () => {
 	})
 
 	test('prompt with string creates user message and gets response', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Hello!'))
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const streamFn = createMockStreamFn(
+			textResponseStream('Hello!')
+		)
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		await agent.prompt('Hi there')
 
@@ -120,14 +147,23 @@ describe('Agent', () => {
 		expect(agent.state.messages[0].role).toBe('user')
 		expect(agent.state.messages[1].role).toBe('assistant')
 
-		const assistantMsg = agent.state.messages[1] as AssistantMessage
-		expect(assistantMsg.content[0]).toEqual({ type: 'text', text: 'Hello!' })
+		const assistantMsg = agent.state
+			.messages[1] as AssistantMessage
+		expect(assistantMsg.content[0]).toEqual({
+			type: 'text',
+			text: 'Hello!'
+		})
 		expect(assistantMsg.stopReason).toBe('stop')
 	})
 
 	test('prompt with AgentMessage array', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Got it'))
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const streamFn = createMockStreamFn(
+			textResponseStream('Got it')
+		)
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		await agent.prompt([
 			{
@@ -141,8 +177,13 @@ describe('Agent', () => {
 	})
 
 	test('subscribe receives events', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Hi'))
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const streamFn = createMockStreamFn(
+			textResponseStream('Hi')
+		)
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		const events: AgentEvent[] = []
 		const unsub = agent.subscribe(e => events.push(e))
@@ -158,8 +199,13 @@ describe('Agent', () => {
 	})
 
 	test('unsubscribe stops receiving events', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Hi'))
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const streamFn = createMockStreamFn(
+			textResponseStream('Hi')
+		)
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		const events: AgentEvent[] = []
 		const unsub = agent.subscribe(e => events.push(e))
@@ -276,8 +322,13 @@ describe('Agent', () => {
 	})
 
 	test('waitForIdle resolves after prompt completes', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Done'))
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const streamFn = createMockStreamFn(
+			textResponseStream('Done')
+		)
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		const promptPromise = agent.prompt('Go')
 		await agent.waitForIdle()
@@ -311,7 +362,10 @@ describe('Agent', () => {
 			yield* textResponseStream('should not reach').slice(1)
 		}
 
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		const promptPromise = agent.prompt('Go')
 		await Bun.sleep(20)
@@ -347,16 +401,25 @@ describe('Agent', () => {
 
 	test('continue throws with empty messages', async () => {
 		const agent = new Agent({ adapter: mockAdapter })
-		await expect(agent.continue()).rejects.toThrow('No messages to continue from')
+		await expect(agent.continue()).rejects.toThrow(
+			'No messages to continue from'
+		)
 	})
 
 	test('continue throws when last message is assistant (no queued)', async () => {
-		const streamFn = createMockStreamFn(textResponseStream('Hi'))
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const streamFn = createMockStreamFn(
+			textResponseStream('Hi')
+		)
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		await agent.prompt('Hello')
 		// Last message is now assistant
-		await expect(agent.continue()).rejects.toThrow('Cannot continue from message role: assistant')
+		await expect(agent.continue()).rejects.toThrow(
+			'Cannot continue from message role: assistant'
+		)
 	})
 
 	test('isStreaming is true during prompt', async () => {
@@ -365,7 +428,10 @@ describe('Agent', () => {
 			yield* textResponseStream('Hello')
 		}
 
-		const agent = new Agent({ adapter: mockAdapter, streamFn })
+		const agent = new Agent({
+			adapter: mockAdapter,
+			streamFn
+		})
 
 		agent.subscribe(e => {
 			if (e.type === 'message_update') {

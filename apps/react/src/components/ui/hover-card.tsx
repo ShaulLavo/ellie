@@ -16,11 +16,23 @@ function HoverCard({
 	/** @deprecated Use closeDelay on HoverCardTrigger instead (BaseUI) */
 	closeDelay?: number
 }) {
-	return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />
+	return (
+		<PreviewCardPrimitive.Root
+			data-slot="hover-card"
+			{...props}
+		/>
+	)
 }
 
-function HoverCardTrigger({ ...props }: PreviewCardPrimitive.Trigger.Props) {
-	return <PreviewCardPrimitive.Trigger data-slot="hover-card-trigger" {...props} />
+function HoverCardTrigger({
+	...props
+}: PreviewCardPrimitive.Trigger.Props) {
+	return (
+		<PreviewCardPrimitive.Trigger
+			data-slot="hover-card-trigger"
+			{...props}
+		/>
+	)
 }
 
 function HoverCardContent({
@@ -31,7 +43,10 @@ function HoverCardContent({
 	alignOffset = 4,
 	...props
 }: PreviewCardPrimitive.Popup.Props &
-	Pick<PreviewCardPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'>) {
+	Pick<
+		PreviewCardPrimitive.Positioner.Props,
+		'align' | 'alignOffset' | 'side' | 'sideOffset'
+	>) {
 	return (
 		<PreviewCardPrimitive.Portal data-slot="hover-card-portal">
 			<PreviewCardPrimitive.Positioner

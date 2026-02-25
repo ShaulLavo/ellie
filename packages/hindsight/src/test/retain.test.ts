@@ -5,8 +5,19 @@
  * Integration tests — needs DB + mock adapter.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 import { eq } from 'drizzle-orm'
 import type { HindsightDatabase } from '../db'
 
@@ -27,19 +38,37 @@ describe('retain', () => {
 
 	describe('with pre-provided facts', () => {
 		it('stores facts and returns RetainResult', async () => {
-			const result = await t.hs.retain(bankId, 'test content', {
-				facts: [
-					{ content: 'Peter loves hiking', factType: 'experience', confidence: 0.9 },
-					{ content: 'Alice likes reading', factType: 'experience', confidence: 0.85 }
-				],
-				consolidate: false
-			})
+			const result = await t.hs.retain(
+				bankId,
+				'test content',
+				{
+					facts: [
+						{
+							content: 'Peter loves hiking',
+							factType: 'experience',
+							confidence: 0.9
+						},
+						{
+							content: 'Alice likes reading',
+							factType: 'experience',
+							confidence: 0.85
+						}
+					],
+					consolidate: false
+				}
+			)
 
 			expect(result.memories).toHaveLength(2)
-			expect(result.memories[0]!.content).toBe('Peter loves hiking')
-			expect(result.memories[0]!.factType).toBe('experience')
+			expect(result.memories[0]!.content).toBe(
+				'Peter loves hiking'
+			)
+			expect(result.memories[0]!.factType).toBe(
+				'experience'
+			)
 			expect(result.memories[0]!.confidence).toBe(0.9)
-			expect(result.memories[1]!.content).toBe('Alice likes reading')
+			expect(result.memories[1]!.content).toBe(
+				'Alice likes reading'
+			)
 		})
 
 		it('assigns IDs to stored memories', async () => {
@@ -49,7 +78,9 @@ describe('retain', () => {
 			})
 
 			expect(result.memories[0]!.id).toBeDefined()
-			expect(result.memories[0]!.id.length).toBeGreaterThan(0)
+			expect(result.memories[0]!.id.length).toBeGreaterThan(
+				0
+			)
 		})
 
 		it('assigns the correct bankId', async () => {
@@ -68,12 +99,18 @@ describe('retain', () => {
 			})
 
 			// Default factType when none provided should be "experience" or "world"
-			expect(['experience', 'world']).toContain(result.memories[0]!.factType)
+			expect(['experience', 'world']).toContain(
+				result.memories[0]!.factType
+			)
 		})
 
 		it('stores multiple facts from a single retain call', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Fact A' }, { content: 'Fact B' }, { content: 'Fact C' }],
+				facts: [
+					{ content: 'Fact A' },
+					{ content: 'Fact B' },
+					{ content: 'Fact C' }
+				],
 				consolidate: false
 			})
 
@@ -83,17 +120,29 @@ describe('retain', () => {
 		it('accepts canonical transcript format content ({role, content}[])', async () => {
 			const transcript = [
 				{ role: 'user', content: 'I love hiking.' },
-				{ role: 'assistant', content: 'Nice, where do you hike?' }
+				{
+					role: 'assistant',
+					content: 'Nice, where do you hike?'
+				}
 			]
 
 			const result = await t.hs.retain(bankId, transcript, {
-				facts: [{ content: 'User loves hiking', factType: 'experience' }],
+				facts: [
+					{
+						content: 'User loves hiking',
+						factType: 'experience'
+					}
+				],
 				consolidate: false
 			})
 
 			expect(result.memories).toHaveLength(1)
-			expect(result.memories[0]!.sourceText).toContain('"role":"user"')
-			expect(result.memories[0]!.sourceText).toContain('"content":"I love hiking."')
+			expect(result.memories[0]!.sourceText).toContain(
+				'"role":"user"'
+			)
+			expect(result.memories[0]!.sourceText).toContain(
+				'"content":"I love hiking."'
+			)
 		})
 	})
 
@@ -111,7 +160,9 @@ describe('retain', () => {
 				consolidate: false
 			})
 
-			expect(result.entities.length).toBeGreaterThanOrEqual(1)
+			expect(result.entities.length).toBeGreaterThanOrEqual(
+				1
+			)
 			const names = result.entities.map(e => e.name)
 			expect(names).toContain('Peter')
 		})
@@ -119,14 +170,22 @@ describe('retain', () => {
 		it('creates entity links between memories sharing entities', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
 				facts: [
-					{ content: 'Peter loves hiking', entities: ['Peter'] },
-					{ content: 'Peter went to the store', entities: ['Peter'] }
+					{
+						content: 'Peter loves hiking',
+						entities: ['Peter']
+					},
+					{
+						content: 'Peter went to the store',
+						entities: ['Peter']
+					}
 				],
 				consolidate: false
 			})
 
 			// Both memories share "Peter" → should create entity links
-			const entityLinks = result.links.filter(l => l.linkType === 'entity')
+			const entityLinks = result.links.filter(
+				l => l.linkType === 'entity'
+			)
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 		})
 	})
@@ -141,12 +200,20 @@ describe('retain', () => {
 				consolidate: false
 			})
 
-			expect(result.memories[0]!.tags).toEqual(['project-x', 'important'])
+			expect(result.memories[0]!.tags).toEqual([
+				'project-x',
+				'important'
+			])
 		})
 
 		it('attaches tags from individual facts', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Fact with tags', tags: ['tag-a', 'tag-b'] }],
+				facts: [
+					{
+						content: 'Fact with tags',
+						tags: ['tag-a', 'tag-b']
+					}
+				],
 				consolidate: false
 			})
 
@@ -173,8 +240,12 @@ describe('retain', () => {
 
 			// Exact duplicate → reinforced, returns existing memory
 			expect(result.memories).toHaveLength(1)
-			expect(result.memories[0]!.id).toBe(first.memories[0]!.id)
-			expect(result.memories[0]!.content).toBe('Peter loves hiking')
+			expect(result.memories[0]!.id).toBe(
+				first.memories[0]!.id
+			)
+			expect(result.memories[0]!.content).toBe(
+				'Peter loves hiking'
+			)
 		})
 
 		it('allows when threshold is 0 (disabled)', async () => {
@@ -192,7 +263,9 @@ describe('retain', () => {
 
 			// dedup disabled → a brand-new memory is created, not the original reinforced
 			expect(result.memories).toHaveLength(1)
-			expect(result.memories[0]!.id).not.toBe(first.memories[0]!.id)
+			expect(result.memories[0]!.id).not.toBe(
+				first.memories[0]!.id
+			)
 		})
 	})
 
@@ -202,18 +275,24 @@ describe('retain', () => {
 		it('creates semantic links between similar memories', async () => {
 			// First retain
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Peter enjoys mountain hiking trails' }],
+				facts: [
+					{ content: 'Peter enjoys mountain hiking trails' }
+				],
 				consolidate: false
 			})
 
 			// Second retain with related content
 			const result = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Peter loves hiking in the Alps' }],
+				facts: [
+					{ content: 'Peter loves hiking in the Alps' }
+				],
 				consolidate: false,
 				dedupThreshold: 0 // disable dedup so it gets stored
 			})
 
-			const semanticLinks = result.links.filter(l => l.linkType === 'semantic')
+			const semanticLinks = result.links.filter(
+				l => l.linkType === 'semantic'
+			)
 			// Semantic links may or may not be created depending on embedding similarity
 			// The test verifies the mechanism runs without error and returns an array
 			expect(Array.isArray(semanticLinks)).toBe(true)
@@ -261,8 +340,12 @@ describe('retain', () => {
 				consolidate: false
 			})
 
-			expect(result.memories[0]!.occurredStart).toBe(occurredStart)
-			expect(result.memories[0]!.occurredEnd).toBe(occurredEnd)
+			expect(result.memories[0]!.occurredStart).toBe(
+				occurredStart
+			)
+			expect(result.memories[0]!.occurredEnd).toBe(
+				occurredEnd
+			)
 		})
 
 		it('defaults occurredStart and occurredEnd to null', async () => {
@@ -294,8 +377,12 @@ describe('retain', () => {
 				dedupThreshold: 0
 			})
 
-			const memoryIds = new Set(result.memories.map(memory => memory.id))
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const memoryIds = new Set(
+				result.memories.map(memory => memory.id)
+			)
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 			const temporalLinks = hdb.db
 				.select({
 					sourceId: hdb.schema.memoryLinks.sourceId,
@@ -305,7 +392,11 @@ describe('retain', () => {
 				.from(hdb.schema.memoryLinks)
 				.all()
 				.filter(
-					(link: { sourceId: string; targetId: string; linkType: string }) =>
+					(link: {
+						sourceId: string
+						targetId: string
+						linkType: string
+					}) =>
 						link.linkType === 'temporal' &&
 						memoryIds.has(link.sourceId) &&
 						memoryIds.has(link.targetId)
@@ -337,36 +428,54 @@ describe('retain', () => {
 	describe('context preservation', () => {
 		it('preserves context and makes it retrievable via recall', async () => {
 			// Store content with metadata and tags that serve as context
-			const result = await t.hs.retain(bankId, 'Alice told me about her trip to Japan', {
-				facts: [
-					{
-						content: 'Alice visited Tokyo last summer',
-						factType: 'experience',
-						confidence: 0.95,
-						entities: ['Alice', 'Tokyo']
-					}
-				],
-				metadata: { context: 'travel discussion', speaker: 'Alice' },
-				tags: ['travel', 'japan'],
-				consolidate: false
-			})
+			const result = await t.hs.retain(
+				bankId,
+				'Alice told me about her trip to Japan',
+				{
+					facts: [
+						{
+							content: 'Alice visited Tokyo last summer',
+							factType: 'experience',
+							confidence: 0.95,
+							entities: ['Alice', 'Tokyo']
+						}
+					],
+					metadata: {
+						context: 'travel discussion',
+						speaker: 'Alice'
+					},
+					tags: ['travel', 'japan'],
+					consolidate: false
+				}
+			)
 
 			expect(result.memories).toHaveLength(1)
 			expect(result.memories[0]!.metadata).toEqual({
 				context: 'travel discussion',
 				speaker: 'Alice'
 			})
-			expect(result.memories[0]!.tags).toEqual(['travel', 'japan'])
+			expect(result.memories[0]!.tags).toEqual([
+				'travel',
+				'japan'
+			])
 
 			// Verify the context is preserved after recall
-			const recallResult = await t.hs.recall(bankId, 'Alice trip Japan')
-			expect(recallResult.memories.length).toBeGreaterThan(0)
+			const recallResult = await t.hs.recall(
+				bankId,
+				'Alice trip Japan'
+			)
+			expect(recallResult.memories.length).toBeGreaterThan(
+				0
+			)
 			const recalled = recallResult.memories[0]!
 			expect(recalled.memory.metadata).toEqual({
 				context: 'travel discussion',
 				speaker: 'Alice'
 			})
-			expect(recalled.memory.tags).toEqual(['travel', 'japan'])
+			expect(recalled.memory.tags).toEqual([
+				'travel',
+				'japan'
+			])
 		})
 
 		it('supports different contexts per item in a batch', async () => {
@@ -387,7 +496,9 @@ describe('retain', () => {
 			expect(results).toHaveLength(3)
 			// Each batch item should produce at least one memory
 			for (const result of results) {
-				expect(result.memories.length).toBeGreaterThanOrEqual(1)
+				expect(
+					result.memories.length
+				).toBeGreaterThanOrEqual(1)
 			}
 		})
 	})
@@ -404,26 +515,41 @@ describe('retain', () => {
 		})
 
 		it('handles single-item batch correctly', async () => {
-			const result = await t.hs.retainBatch(bankId, ['Alice went hiking in Yosemite'], {
-				consolidate: false
-			})
+			const result = await t.hs.retainBatch(
+				bankId,
+				['Alice went hiking in Yosemite'],
+				{
+					consolidate: false
+				}
+			)
 
 			expect(result).toHaveLength(1)
-			expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
+			expect(
+				result[0]!.memories.length
+			).toBeGreaterThanOrEqual(1)
 		})
 
 		it('handles mixed content sizes in a batch', async () => {
 			const shortContent = 'Bob likes Python and hiking.'
-			const longContent = 'Alice met Bob at the coffee shop. '.repeat(20_000) // ~700k chars
+			const longContent =
+				'Alice met Bob at the coffee shop. '.repeat(20_000) // ~700k chars
 
-			const result = await t.hs.retainBatch(bankId, [shortContent, longContent], {
-				consolidate: false,
-				dedupThreshold: 0
-			})
+			const result = await t.hs.retainBatch(
+				bankId,
+				[shortContent, longContent],
+				{
+					consolidate: false,
+					dedupThreshold: 0
+				}
+			)
 
 			expect(result).toHaveLength(2)
-			expect(result[0]!.memories.length).toBeGreaterThanOrEqual(1)
-			expect(result[1]!.memories.length).toBeGreaterThanOrEqual(1)
+			expect(
+				result[0]!.memories.length
+			).toBeGreaterThanOrEqual(1)
+			expect(
+				result[1]!.memories.length
+			).toBeGreaterThanOrEqual(1)
 		})
 
 		it('supports rich batch items with per-item context, eventDate, documentId, tags, and metadata', async () => {
@@ -448,7 +574,11 @@ describe('retain', () => {
 						metadata: { source: 'meeting-b' }
 					}
 				],
-				{ consolidate: false, dedupThreshold: 0, tags: ['project:phoenix'] }
+				{
+					consolidate: false,
+					dedupThreshold: 0,
+					tags: ['project:phoenix']
+				}
 			)
 
 			expect(result).toHaveLength(2)
@@ -467,12 +597,20 @@ describe('retain', () => {
 			expect(second.mentionedAt).toBe(base + 5_000)
 			expect(first.tags).toContain('project:phoenix')
 			expect(second.tags).toContain('project:phoenix')
-			expect(first.metadata).toEqual({ source: 'meeting-a' })
-			expect(second.metadata).toEqual({ source: 'meeting-b' })
+			expect(first.metadata).toEqual({
+				source: 'meeting-a'
+			})
+			expect(second.metadata).toEqual({
+				source: 'meeting-b'
+			})
 
 			const docs = t.hs.listDocuments(bankId)
-			const docA = docs.items.find(doc => doc.id === 'doc-rich-a')
-			const docB = docs.items.find(doc => doc.id === 'doc-rich-b')
+			const docA = docs.items.find(
+				doc => doc.id === 'doc-rich-a'
+			)
+			const docB = docs.items.find(
+				doc => doc.id === 'doc-rich-b'
+			)
 			expect(docA).toBeDefined()
 			expect(docB).toBeDefined()
 			expect(docA!.tags).toContain('team:alpha')
@@ -497,15 +635,29 @@ describe('retain', () => {
 			const result = await t.hs.retainBatch(
 				bankId,
 				[
-					{ content: 'Temporal A', eventDate: base, documentId: 'doc-temporal-a' },
-					{ content: 'Temporal B', eventDate: base + 3_600_000, documentId: 'doc-temporal-b' },
-					{ content: 'Temporal C', eventDate: base + 2 * 3_600_000, documentId: 'doc-temporal-c' }
+					{
+						content: 'Temporal A',
+						eventDate: base,
+						documentId: 'doc-temporal-a'
+					},
+					{
+						content: 'Temporal B',
+						eventDate: base + 3_600_000,
+						documentId: 'doc-temporal-b'
+					},
+					{
+						content: 'Temporal C',
+						eventDate: base + 2 * 3_600_000,
+						documentId: 'doc-temporal-c'
+					}
 				],
 				{ consolidate: false, dedupThreshold: 0 }
 			)
 
 			const links = result.flatMap(item => item.links)
-			const temporal = links.filter(link => link.linkType === 'temporal')
+			const temporal = links.filter(
+				link => link.linkType === 'temporal'
+			)
 			expect(temporal.length).toBeGreaterThan(0)
 		})
 
@@ -533,36 +685,57 @@ describe('retain', () => {
 			]
 
 			// Seed 12 existing facts, newest first by smaller hour offset.
-			for (let hourOffset = 1; hourOffset <= 12; hourOffset++) {
-				const retainResult = await t.hs.retain(bankId, `existing-${hourOffset}`, {
+			for (
+				let hourOffset = 1;
+				hourOffset <= 12;
+				hourOffset++
+			) {
+				const retainResult = await t.hs.retain(
+					bankId,
+					`existing-${hourOffset}`,
+					{
+						facts: [
+							{
+								content: uniqueTokens[hourOffset - 1]!,
+								occurredStart: base - hourOffset * hourMs
+							}
+						],
+						consolidate: false,
+						dedupThreshold: 0
+					}
+				)
+				existingIds.push(retainResult.memories[0]!.id)
+			}
+
+			const newResult = await t.hs.retain(
+				bankId,
+				'new-source',
+				{
 					facts: [
 						{
-							content: uniqueTokens[hourOffset - 1]!,
-							occurredStart: base - hourOffset * hourMs
+							content: 'mmm @@@ $$$ %%% 303',
+							occurredStart: base
 						}
 					],
 					consolidate: false,
 					dedupThreshold: 0
-				})
-				existingIds.push(retainResult.memories[0]!.id)
-			}
-
-			const newResult = await t.hs.retain(bankId, 'new-source', {
-				facts: [{ content: 'mmm @@@ $$$ %%% 303', occurredStart: base }],
-				consolidate: false,
-				dedupThreshold: 0
-			})
+				}
+			)
 			const newId = newResult.memories[0]!.id
 			const existingSet = new Set(existingIds)
 
 			const newToExistingTemporal = newResult.links.filter(
 				link =>
-					link.linkType === 'temporal' && link.sourceId === newId && existingSet.has(link.targetId)
+					link.linkType === 'temporal' &&
+					link.sourceId === newId &&
+					existingSet.has(link.targetId)
 			)
 
 			expect(newToExistingTemporal).toHaveLength(10)
 			// Python parity: ordered by candidate recency (event_date DESC), not nearest distance sort.
-			expect(newToExistingTemporal.map(link => link.targetId)).toEqual(existingIds.slice(0, 10))
+			expect(
+				newToExistingTemporal.map(link => link.targetId)
+			).toEqual(existingIds.slice(0, 10))
 		})
 
 		it('persists temporal link weights using linear decay with 0.3 floor', async () => {
@@ -570,18 +743,33 @@ describe('retain', () => {
 			const hourMs = 3_600_000
 
 			const near = await t.hs.retain(bankId, 'near', {
-				facts: [{ content: 'Near temporal candidate', occurredStart: base - 2 * hourMs }],
+				facts: [
+					{
+						content: 'Near temporal candidate',
+						occurredStart: base - 2 * hourMs
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 			const floor = await t.hs.retain(bankId, 'floor', {
-				facts: [{ content: 'Floor temporal candidate', occurredStart: base - 23 * hourMs }],
+				facts: [
+					{
+						content: 'Floor temporal candidate',
+						occurredStart: base - 23 * hourMs
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 
 			const source = await t.hs.retain(bankId, 'source', {
-				facts: [{ content: 'Temporal weight source', occurredStart: base }],
+				facts: [
+					{
+						content: 'Temporal weight source',
+						occurredStart: base
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
@@ -590,7 +778,9 @@ describe('retain', () => {
 			const nearId = near.memories[0]!.id
 			const floorId = floor.memories[0]!.id
 
-			const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+			const hdb = (
+				t.hs as unknown as { hdb: HindsightDatabase }
+			).hdb
 			const rows = hdb.db
 				.select({
 					sourceId: hdb.schema.memoryLinks.sourceId,
@@ -601,16 +791,28 @@ describe('retain', () => {
 				.from(hdb.schema.memoryLinks)
 				.all()
 				.filter(
-					(row: { sourceId: string; targetId: string; linkType: string; weight: number }) =>
+					(row: {
+						sourceId: string
+						targetId: string
+						linkType: string
+						weight: number
+					}) =>
 						row.linkType === 'temporal' &&
 						row.sourceId === sourceId &&
-						(row.targetId === nearId || row.targetId === floorId)
+						(row.targetId === nearId ||
+							row.targetId === floorId)
 				)
 
 			expect(rows).toHaveLength(2)
 
-			const nearLink = rows.find((row: { targetId: string }) => row.targetId === nearId)
-			const floorLink = rows.find((row: { targetId: string }) => row.targetId === floorId)
+			const nearLink = rows.find(
+				(row: { targetId: string }) =>
+					row.targetId === nearId
+			)
+			const floorLink = rows.find(
+				(row: { targetId: string }) =>
+					row.targetId === floorId
+			)
 			expect(nearLink).toBeDefined()
 			expect(floorLink).toBeDefined()
 
@@ -630,7 +832,8 @@ describe('retain', () => {
 			await t.hs.retain(bankId, 'test', {
 				facts: [
 					{
-						content: 'Alice works on the search team at Google',
+						content:
+							'Alice works on the search team at Google',
 						entities: ['Alice', 'Google']
 					}
 				],
@@ -641,17 +844,20 @@ describe('retain', () => {
 			const result = await t.hs.retain(bankId, 'test', {
 				facts: [
 					{
-						content: 'Alice presented her search algorithm improvements',
+						content:
+							'Alice presented her search algorithm improvements',
 						occurredStart: baseTime,
 						entities: ['Alice']
 					},
 					{
-						content: "Alice's search team received an award for the improvements",
+						content:
+							"Alice's search team received an award for the improvements",
 						occurredStart: baseTime + oneHourMs,
 						entities: ['Alice']
 					},
 					{
-						content: 'Alice celebrated with the Google search team',
+						content:
+							'Alice celebrated with the Google search team',
 						occurredStart: baseTime + 2 * oneHourMs,
 						entities: ['Alice', 'Google']
 					}
@@ -664,15 +870,21 @@ describe('retain', () => {
 			expect(result.links.length).toBeGreaterThanOrEqual(1)
 
 			// Verify entity links exist (all facts share "Alice")
-			const entityLinks = result.links.filter(l => l.linkType === 'entity')
+			const entityLinks = result.links.filter(
+				l => l.linkType === 'entity'
+			)
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 
 			// Semantic and temporal links may or may not be created depending on
 			// embedding similarity and temporal link implementation status
-			const semanticLinks = result.links.filter(l => l.linkType === 'semantic')
+			const semanticLinks = result.links.filter(
+				l => l.linkType === 'semantic'
+			)
 			expect(Array.isArray(semanticLinks)).toBe(true)
 
-			const temporalLinks = result.links.filter(l => l.linkType === 'temporal')
+			const temporalLinks = result.links.filter(
+				l => l.linkType === 'temporal'
+			)
 			expect(Array.isArray(temporalLinks)).toBe(true)
 		})
 	})
@@ -683,7 +895,12 @@ describe('retain', () => {
 		it('creates semantic links between facts in the same batch', async () => {
 			// First seed some existing memories so the batch can form semantic links to them
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Python is widely used for data science' }],
+				facts: [
+					{
+						content:
+							'Python is widely used for data science'
+					}
+				],
 				consolidate: false
 			})
 
@@ -699,7 +916,9 @@ describe('retain', () => {
 			expect(results).toHaveLength(3)
 
 			const allLinks = results.flatMap(item => item.links)
-			const semanticLinks = allLinks.filter(link => link.linkType === 'semantic')
+			const semanticLinks = allLinks.filter(
+				link => link.linkType === 'semantic'
+			)
 			expect(Array.isArray(semanticLinks)).toBe(true)
 		})
 
@@ -708,15 +927,26 @@ describe('retain', () => {
 			const result = await t.hs.retainBatch(
 				bankId,
 				[
-					{ content: 'Batch temporal one', eventDate: base },
-					{ content: 'Batch temporal two', eventDate: base + 1_000 },
-					{ content: 'Batch temporal three', eventDate: base + 2_000 }
+					{
+						content: 'Batch temporal one',
+						eventDate: base
+					},
+					{
+						content: 'Batch temporal two',
+						eventDate: base + 1_000
+					},
+					{
+						content: 'Batch temporal three',
+						eventDate: base + 2_000
+					}
 				],
 				{ consolidate: false, dedupThreshold: 0 }
 			)
 
 			const temporalLinks = result.flatMap(item =>
-				item.links.filter(link => link.linkType === 'temporal')
+				item.links.filter(
+					link => link.linkType === 'temporal'
+				)
 			)
 			expect(temporalLinks.length).toBeGreaterThan(0)
 		})
@@ -730,11 +960,13 @@ describe('retain', () => {
 			const result = await t.hs.retain(bankId, 'test', {
 				facts: [
 					{
-						content: 'Alice is working on ProjectX at ACME Corp',
+						content:
+							'Alice is working on ProjectX at ACME Corp',
 						entities: ['Alice', 'ProjectX', 'ACME Corp']
 					},
 					{
-						content: 'ProjectX is a new AI initiative led by Alice',
+						content:
+							'ProjectX is a new AI initiative led by Alice',
 						entities: ['ProjectX', 'Alice']
 					}
 				],
@@ -743,7 +975,9 @@ describe('retain', () => {
 			})
 
 			expect(result.memories).toHaveLength(2)
-			expect(result.entities.length).toBeGreaterThanOrEqual(1)
+			expect(result.entities.length).toBeGreaterThanOrEqual(
+				1
+			)
 
 			const entityNames = result.entities.map(e => e.name)
 			expect(entityNames).toContain('Alice')
@@ -751,7 +985,9 @@ describe('retain', () => {
 			expect(entityNames).toContain('ACME Corp')
 
 			// Entity links should exist since both facts share Alice and ProjectX
-			const entityLinks = result.links.filter(l => l.linkType === 'entity')
+			const entityLinks = result.links.filter(
+				l => l.linkType === 'entity'
+			)
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 		})
 	})
@@ -773,7 +1009,9 @@ describe('retain', () => {
 							confidence: 0.95,
 							occurredStart: null,
 							occurredEnd: null,
-							entities: [{ name: 'Roma', entityType: 'place' }],
+							entities: [
+								{ name: 'Roma', entityType: 'place' }
+							],
 							tags: [],
 							causalRelations: []
 						}
@@ -796,8 +1034,12 @@ describe('retain', () => {
 			expect(t.adapter.callCount).toBeGreaterThanOrEqual(1)
 
 			// Verify extraction used the custom mode
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
-			expect(result.memories[0]!.content).toBe("Roma e la capitale d'Italia")
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
+			expect(result.memories[0]!.content).toBe(
+				"Roma e la capitale d'Italia"
+			)
 		})
 	})
 
@@ -817,7 +1059,10 @@ describe('retain', () => {
 				{ consolidate: false, dedupThreshold: 0 }
 			)
 
-			const document = t.hs.getDocument(bankId, 'doc-tags-1')
+			const document = t.hs.getDocument(
+				bankId,
+				'doc-tags-1'
+			)
 			expect(document).toBeDefined()
 			expect(document!.tags).toContain('user:testuser')
 			expect(document!.tags).toContain('app-type:taste-ai')
@@ -858,20 +1103,33 @@ describe('retain', () => {
 			// Graph-only retrieval can be sparse depending on seed resolution;
 			// use entity index for deterministic mention-count existence checks.
 			const entities = t.hs.listEntities(bankId)
-			const aliceEntity = entities.items.find(item => item.canonicalName === 'Alice')
+			const aliceEntity = entities.items.find(
+				item => item.canonicalName === 'Alice'
+			)
 			expect(aliceEntity).toBeDefined()
-			expect(aliceEntity!.mentionCount).toBeGreaterThanOrEqual(5)
+			expect(
+				aliceEntity!.mentionCount
+			).toBeGreaterThanOrEqual(5)
 
 			// Check via entities on the latest retain result
 			const lastRetain = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Alice 999 !!! uuu ppp', entities: ['Alice'] }],
+				facts: [
+					{
+						content: 'Alice 999 !!! uuu ppp',
+						entities: ['Alice']
+					}
+				],
 				consolidate: false,
 				dedupThreshold: 0
 			})
 
 			// Alice should be a resolved entity (existing, not newly created)
-			expect(lastRetain.entities.length).toBeGreaterThanOrEqual(1)
-			const alice = lastRetain.entities.find(e => e.name === 'Alice')
+			expect(
+				lastRetain.entities.length
+			).toBeGreaterThanOrEqual(1)
+			const alice = lastRetain.entities.find(
+				e => e.name === 'Alice'
+			)
 			expect(alice).toBeDefined()
 		})
 
@@ -898,7 +1156,9 @@ describe('retain', () => {
 								confidence: 0.9,
 								occurredStart: null,
 								occurredEnd: null,
-								entities: [{ name: 'Bob', entityType: 'person' }],
+								entities: [
+									{ name: 'Bob', entityType: 'person' }
+								],
 								tags: [],
 								causalRelations: []
 							}
@@ -907,17 +1167,27 @@ describe('retain', () => {
 				)
 			)
 
-			const results = await t.hs.retainBatch(bankId, batchTexts, {
-				consolidate: false,
-				dedupThreshold: 0
-			})
+			const results = await t.hs.retainBatch(
+				bankId,
+				batchTexts,
+				{
+					consolidate: false,
+					dedupThreshold: 0
+				}
+			)
 
 			expect(results).toHaveLength(6)
-			const totalMemories = results.reduce((sum, r) => sum + r.memories.length, 0)
+			const totalMemories = results.reduce(
+				(sum, r) => sum + r.memories.length,
+				0
+			)
 			expect(totalMemories).toBeGreaterThanOrEqual(6)
 
 			// Add 2 more mentions of Bob with very different content
-			const moreBatchTexts = ['Bob 777 *** ppp ggg', 'Bob 888 ### rrr hhh']
+			const moreBatchTexts = [
+				'Bob 777 *** ppp ggg',
+				'Bob 888 ### rrr hhh'
+			]
 
 			t.adapter.setResponses(
 				moreBatchTexts.map(text =>
@@ -929,7 +1199,9 @@ describe('retain', () => {
 								confidence: 0.9,
 								occurredStart: null,
 								occurredEnd: null,
-								entities: [{ name: 'Bob', entityType: 'person' }],
+								entities: [
+									{ name: 'Bob', entityType: 'person' }
+								],
 								tags: [],
 								causalRelations: []
 							}
@@ -938,17 +1210,26 @@ describe('retain', () => {
 				)
 			)
 
-			const moreResults = await t.hs.retainBatch(bankId, moreBatchTexts, {
-				consolidate: false,
-				dedupThreshold: 0
-			})
+			const moreResults = await t.hs.retainBatch(
+				bankId,
+				moreBatchTexts,
+				{
+					consolidate: false,
+					dedupThreshold: 0
+				}
+			)
 
 			expect(moreResults).toHaveLength(2)
-			const moreMemories = moreResults.reduce((sum, r) => sum + r.memories.length, 0)
+			const moreMemories = moreResults.reduce(
+				(sum, r) => sum + r.memories.length,
+				0
+			)
 			expect(moreMemories).toBeGreaterThanOrEqual(2)
 
 			// Bob entity should be resolved (not duplicated) across batches
-			const bobEntities = moreResults.flatMap(r => r.entities).filter(e => e.name === 'Bob')
+			const bobEntities = moreResults
+				.flatMap(r => r.entities)
+				.filter(e => e.name === 'Bob')
 			expect(bobEntities.length).toBeGreaterThanOrEqual(1)
 		})
 	})
@@ -964,7 +1245,9 @@ describe('retain', () => {
 				consolidate: false
 			})
 
-			expect(result.memories[0]!.mentionedAt).toBe(eventDate)
+			expect(result.memories[0]!.mentionedAt).toBe(
+				eventDate
+			)
 		})
 
 		it('occurred_start and occurred_end are null when not extractable (TDD)', async () => {
@@ -982,15 +1265,26 @@ describe('retain', () => {
 			const eventDate = 1_700_000_000_000
 			const occurredStart = 1_600_000_000_000 // deliberately different from eventDate
 			const result = await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Distinct temporal fields', occurredStart }],
+				facts: [
+					{
+						content: 'Distinct temporal fields',
+						occurredStart
+					}
+				],
 				eventDate,
 				consolidate: false
 			})
 
 			// mentionedAt comes from eventDate, occurredStart comes from the fact
-			expect(result.memories[0]!.mentionedAt).toBe(eventDate)
-			expect(result.memories[0]!.occurredStart).toBe(occurredStart)
-			expect(result.memories[0]!.mentionedAt).not.toBe(result.memories[0]!.occurredStart)
+			expect(result.memories[0]!.mentionedAt).toBe(
+				eventDate
+			)
+			expect(result.memories[0]!.occurredStart).toBe(
+				occurredStart
+			)
+			expect(result.memories[0]!.mentionedAt).not.toBe(
+				result.memories[0]!.occurredStart
+			)
 		})
 
 		it('ISO date string in context sets mentioned_at (TDD)', async () => {
@@ -1002,7 +1296,9 @@ describe('retain', () => {
 				consolidate: false
 			})
 
-			expect(result.memories[0]!.mentionedAt).toBe(expectedMs)
+			expect(result.memories[0]!.mentionedAt).toBe(
+				expectedMs
+			)
 		})
 	})
 
@@ -1014,12 +1310,14 @@ describe('retain', () => {
 			await t.hs.retain(bankId, 'test', {
 				facts: [
 					{
-						content: 'Alice is a software engineer at Google',
+						content:
+							'Alice is a software engineer at Google',
 						factType: 'experience',
 						entities: ['Alice', 'Google']
 					},
 					{
-						content: 'Bob works with Alice on the search team',
+						content:
+							'Bob works with Alice on the search team',
 						factType: 'experience',
 						entities: ['Bob', 'Alice']
 					}
@@ -1028,7 +1326,10 @@ describe('retain', () => {
 			})
 
 			// Recall should surface these memories
-			const result = await t.hs.recall(bankId, 'Who is Alice?')
+			const result = await t.hs.recall(
+				bankId,
+				'Who is Alice?'
+			)
 			expect(result.memories.length).toBeGreaterThan(0)
 
 			// At least one result should mention Alice
@@ -1057,7 +1358,8 @@ describe('Core parity: test_retain.py', () => {
 		return t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -1087,21 +1389,29 @@ describe('Core parity: test_retain.py', () => {
 	}
 
 	it('retain with chunks', async () => {
-		const result = await t.hs.retain(bankId, 'Alice visited the Colosseum in Rome', {
-			facts: [
-				{
-					content: 'Alice visited Rome',
-					factType: 'experience',
-					confidence: 0.95,
-					entities: ['Alice', 'Rome']
-				}
-			],
-			documentId: 'travel-doc-1',
-			consolidate: false
-		})
+		const result = await t.hs.retain(
+			bankId,
+			'Alice visited the Colosseum in Rome',
+			{
+				facts: [
+					{
+						content: 'Alice visited Rome',
+						factType: 'experience',
+						confidence: 0.95,
+						entities: ['Alice', 'Rome']
+					}
+				],
+				documentId: 'travel-doc-1',
+				consolidate: false
+			}
+		)
 		expect(result.memories).toHaveLength(1)
-		expect(result.memories[0]!.documentId).toBe('travel-doc-1')
-		expect(result.memories[0]!.content).toBe('Alice visited Rome')
+		expect(result.memories[0]!.documentId).toBe(
+			'travel-doc-1'
+		)
+		expect(result.memories[0]!.content).toBe(
+			'Alice visited Rome'
+		)
 	})
 
 	it('chunks and entities follow fact order', async () => {
@@ -1164,23 +1474,32 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		expect(r1.memories[0]!.eventDate).toBeLessThan(r2.memories[0]!.eventDate!)
+		expect(r1.memories[0]!.eventDate).toBeLessThan(
+			r2.memories[0]!.eventDate!
+		)
 	})
 
 	it('context preservation', async () => {
-		const result = await t.hs.retain(bankId, 'team discussion', {
-			facts: [
-				{
-					content: 'Alice proposed a new architecture',
-					factType: 'experience',
-					confidence: 0.9,
-					entities: ['Alice']
-				}
-			],
-			context: 'team meeting notes from Q4 planning session',
-			consolidate: false
-		})
-		expect(result.memories[0]!.sourceText).toContain('team meeting notes')
+		const result = await t.hs.retain(
+			bankId,
+			'team discussion',
+			{
+				facts: [
+					{
+						content: 'Alice proposed a new architecture',
+						factType: 'experience',
+						confidence: 0.9,
+						entities: ['Alice']
+					}
+				],
+				context:
+					'team meeting notes from Q4 planning session',
+				consolidate: false
+			}
+		)
+		expect(result.memories[0]!.sourceText).toContain(
+			'team meeting notes'
+		)
 	})
 
 	it('context with batch', async () => {
@@ -1196,7 +1515,9 @@ describe('Core parity: test_retain.py', () => {
 		expect(results).toHaveLength(2)
 		// Each batch item produces at least one memory via mock adapter extraction
 		for (const result of results) {
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 		}
 	})
 
@@ -1213,7 +1534,10 @@ describe('Core parity: test_retain.py', () => {
 			metadata: { source: 'unit-test', importance: 'high' },
 			consolidate: false
 		})
-		expect(result.memories[0]!.metadata).toEqual({ source: 'unit-test', importance: 'high' })
+		expect(result.memories[0]!.metadata).toEqual({
+			source: 'unit-test',
+			importance: 'high'
+		})
 	})
 
 	it('empty batch', async () => {
@@ -1222,11 +1546,17 @@ describe('Core parity: test_retain.py', () => {
 	})
 
 	it('single item batch', async () => {
-		const results = await t.hs.retainBatch(bankId, ['Alice joined the engineering team'], {
-			consolidate: false
-		})
+		const results = await t.hs.retainBatch(
+			bankId,
+			['Alice joined the engineering team'],
+			{
+				consolidate: false
+			}
+		)
 		expect(results).toHaveLength(1)
-		expect(results[0]!.memories.length).toBeGreaterThanOrEqual(1)
+		expect(
+			results[0]!.memories.length
+		).toBeGreaterThanOrEqual(1)
 	})
 
 	it('mixed content batch', async () => {
@@ -1241,7 +1571,9 @@ describe('Core parity: test_retain.py', () => {
 		)
 		expect(results).toHaveLength(3)
 		for (const result of results) {
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 		}
 	})
 
@@ -1250,7 +1582,10 @@ describe('Core parity: test_retain.py', () => {
 			bankId,
 			[
 				{ content: 'Alice joined the team' },
-				{ content: 'Bob led the project', context: 'meeting notes' },
+				{
+					content: 'Bob led the project',
+					context: 'meeting notes'
+				},
 				{
 					content: 'Charlie reviewed the code',
 					eventDate: Date.now() - 86_400_000,
@@ -1261,7 +1596,9 @@ describe('Core parity: test_retain.py', () => {
 		)
 		expect(results).toHaveLength(3)
 		for (const result of results) {
-			expect(result.memories.length).toBeGreaterThanOrEqual(1)
+			expect(result.memories.length).toBeGreaterThanOrEqual(
+				1
+			)
 		}
 	})
 
@@ -1328,36 +1665,65 @@ describe('Core parity: test_retain.py', () => {
 	})
 
 	it('chunk fact mapping', async () => {
-		const result = await t.hs.retain(bankId, 'technical documentation about APIs', {
-			facts: [
-				{ content: 'REST APIs use HTTP methods', factType: 'world', confidence: 0.9, entities: [] }
-			],
-			documentId: 'chunk-test-doc',
-			consolidate: false
-		})
-		expect(result.memories[0]!.documentId).toBe('chunk-test-doc')
+		const result = await t.hs.retain(
+			bankId,
+			'technical documentation about APIs',
+			{
+				facts: [
+					{
+						content: 'REST APIs use HTTP methods',
+						factType: 'world',
+						confidence: 0.9,
+						entities: []
+					}
+				],
+				documentId: 'chunk-test-doc',
+				consolidate: false
+			}
+		)
+		expect(result.memories[0]!.documentId).toBe(
+			'chunk-test-doc'
+		)
 		// chunkId is set based on document chunking
-		expect(typeof result.memories[0]!.chunkId).toBe('string')
+		expect(typeof result.memories[0]!.chunkId).toBe(
+			'string'
+		)
 	})
 
 	it('chunk ordering preservation', async () => {
-		const result = await t.hs.retain(bankId, 'multi-section doc', {
-			facts: [
-				{
-					content: 'First section about databases',
-					factType: 'world',
-					confidence: 0.9,
-					entities: []
-				},
-				{ content: 'Second section about APIs', factType: 'world', confidence: 0.9, entities: [] },
-				{ content: 'Third section about testing', factType: 'world', confidence: 0.9, entities: [] }
-			],
-			documentId: 'ordered-doc',
-			consolidate: false,
-			dedupThreshold: 0
-		})
+		const result = await t.hs.retain(
+			bankId,
+			'multi-section doc',
+			{
+				facts: [
+					{
+						content: 'First section about databases',
+						factType: 'world',
+						confidence: 0.9,
+						entities: []
+					},
+					{
+						content: 'Second section about APIs',
+						factType: 'world',
+						confidence: 0.9,
+						entities: []
+					},
+					{
+						content: 'Third section about testing',
+						factType: 'world',
+						confidence: 0.9,
+						entities: []
+					}
+				],
+				documentId: 'ordered-doc',
+				consolidate: false,
+				dedupThreshold: 0
+			}
+		)
 		expect(result.memories).toHaveLength(3)
-		expect(result.memories[0]!.content).toContain('databases')
+		expect(result.memories[0]!.content).toContain(
+			'databases'
+		)
 		expect(result.memories[1]!.content).toContain('APIs')
 		expect(result.memories[2]!.content).toContain('testing')
 	})
@@ -1366,13 +1732,20 @@ describe('Core parity: test_retain.py', () => {
 		const largeContent = 'A'.repeat(10_000)
 		const result = await t.hs.retain(bankId, largeContent, {
 			facts: [
-				{ content: 'Summary of large content', factType: 'world', confidence: 0.9, entities: [] }
+				{
+					content: 'Summary of large content',
+					factType: 'world',
+					confidence: 0.9,
+					entities: []
+				}
 			],
 			documentId: 'large-doc',
 			consolidate: false
 		})
 		expect(result.memories).toHaveLength(1)
-		expect(result.memories[0]!.content).toBe('Summary of large content')
+		expect(result.memories[0]!.content).toBe(
+			'Summary of large content'
+		)
 	})
 
 	it('temporal links creation', async () => {
@@ -1403,7 +1776,9 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const links = t.hs.getGraphData(bankId).edges.filter(e => e.linkType === 'temporal')
+		const links = t.hs
+			.getGraphData(bankId)
+			.edges.filter(e => e.linkType === 'temporal')
 		expect(links.length).toBeGreaterThanOrEqual(1)
 		expect(links[0]!.weight).toBeGreaterThan(0)
 		expect(links[0]!.weight).toBeLessThanOrEqual(1)
@@ -1436,7 +1811,9 @@ describe('Core parity: test_retain.py', () => {
 		})
 		// Semantic links depend on embedding similarity — with hash-based embeddings these
 		// may or may not fire, so just verify the graph has edges (entity links will be present)
-		expect(t.hs.getGraphData(bankId).edges.length).toBeGreaterThanOrEqual(1)
+		expect(
+			t.hs.getGraphData(bankId).edges.length
+		).toBeGreaterThanOrEqual(1)
 	})
 
 	it('entity links creation', async () => {
@@ -1459,7 +1836,9 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const entityLinks = result.links.filter(l => l.linkType === 'entity')
+		const entityLinks = result.links.filter(
+			l => l.linkType === 'entity'
+		)
 		expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -1475,7 +1854,9 @@ describe('Core parity: test_retain.py', () => {
 			],
 			consolidate: false
 		})
-		const entityNames = result.entities.map(e => e.name.toLowerCase())
+		const entityNames = result.entities.map(e =>
+			e.name.toLowerCase()
+		)
 		expect(entityNames).toContain('alice')
 		expect(entityNames).toContain('bob')
 	})
@@ -1501,7 +1882,9 @@ describe('Core parity: test_retain.py', () => {
 			.from(hdb.schema.entities)
 			.where(eq(hdb.schema.entities.bankId, bankId))
 			.all()
-		const alice = allEntities.find(e => e.name.toLowerCase().includes('alice'))
+		const alice = allEntities.find(e =>
+			e.name.toLowerCase().includes('alice')
+		)
 		expect(alice).toBeDefined()
 		expect(alice!.mentionCount).toBeGreaterThanOrEqual(3)
 	})
@@ -1528,7 +1911,9 @@ describe('Core parity: test_retain.py', () => {
 			.from(hdb.schema.entities)
 			.where(eq(hdb.schema.entities.bankId, bankId))
 			.all()
-		const bob = allEntities.find(e => e.name.toLowerCase().includes('bob'))
+		const bob = allEntities.find(e =>
+			e.name.toLowerCase().includes('bob')
+		)
 		expect(bob).toBeDefined()
 		expect(bob!.mentionCount).toBeGreaterThanOrEqual(3)
 	})
@@ -1536,28 +1921,41 @@ describe('Core parity: test_retain.py', () => {
 	it('causal links creation', async () => {
 		// causalRelations: targetIndex points to a PREVIOUS fact (must be < current factIndex)
 		// fact[1] is caused_by fact[0], so targetIndex=0 on fact[1]
-		const result = await t.hs.retain(bankId, 'causal chain', {
-			facts: [
-				{
-					content: 'Heavy rain flooded the roads',
-					factType: 'world',
-					confidence: 0.9,
-					entities: [],
-					tags: []
-				},
-				{
-					content: 'Traffic was diverted because of flooding',
-					factType: 'world',
-					confidence: 0.9,
-					entities: [],
-					tags: [],
-					causalRelations: [{ targetIndex: 0, relationType: 'caused_by', strength: 0.9 }]
-				}
-			],
-			consolidate: false,
-			dedupThreshold: 0
-		})
-		const causalLinks = result.links.filter(l => l.linkType === 'caused_by')
+		const result = await t.hs.retain(
+			bankId,
+			'causal chain',
+			{
+				facts: [
+					{
+						content: 'Heavy rain flooded the roads',
+						factType: 'world',
+						confidence: 0.9,
+						entities: [],
+						tags: []
+					},
+					{
+						content:
+							'Traffic was diverted because of flooding',
+						factType: 'world',
+						confidence: 0.9,
+						entities: [],
+						tags: [],
+						causalRelations: [
+							{
+								targetIndex: 0,
+								relationType: 'caused_by',
+								strength: 0.9
+							}
+						]
+					}
+				],
+				consolidate: false,
+				dedupThreshold: 0
+			}
+		)
+		const causalLinks = result.links.filter(
+			l => l.linkType === 'caused_by'
+		)
 		expect(causalLinks.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -1583,7 +1981,9 @@ describe('Core parity: test_retain.py', () => {
 			consolidate: false,
 			dedupThreshold: 0
 		})
-		const linkTypes = new Set(result.links.map(l => l.linkType))
+		const linkTypes = new Set(
+			result.links.map(l => l.linkType)
+		)
 		// Entity links created for shared entity "Alice"
 		expect(linkTypes.has('entity')).toBe(true)
 		// Temporal links created for nearby mentionedAt times
@@ -1636,7 +2036,9 @@ describe('Core parity: test_retain.py', () => {
 			dedupThreshold: 0
 		})
 		expect(result.memories).toHaveLength(2)
-		const temporalLinks = result.links.filter(l => l.linkType === 'temporal')
+		const temporalLinks = result.links.filter(
+			l => l.linkType === 'temporal'
+		)
 		expect(temporalLinks.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -1652,7 +2054,9 @@ describe('Core parity: test_retain.py', () => {
 			],
 			consolidate: false
 		})
-		const entityNames = result.entities.map(e => e.name.toLowerCase())
+		const entityNames = result.entities.map(e =>
+			e.name.toLowerCase()
+		)
 		expect(entityNames).toContain('projectx')
 		expect(entityNames).toContain('acme corp')
 	})
@@ -1688,28 +2092,32 @@ describe('Core parity: test_retain.py', () => {
 	})
 
 	it('retain batch with per item tags on document', async () => {
-		const result = await t.hs.retain(bankId, 'tagged content', {
-			facts: [
-				{
-					content: 'Alice visited Rome for work',
-					factType: 'experience',
-					confidence: 0.9,
-					entities: ['Alice'],
-					tags: ['travel']
-				},
-				{
-					content: 'Bob stayed home and coded',
-					factType: 'experience',
-					confidence: 0.9,
-					entities: ['Bob'],
-					tags: ['domestic']
-				}
-			],
-			tags: ['global-tag'],
-			documentId: 'tagged-doc',
-			consolidate: false,
-			dedupThreshold: 0
-		})
+		const result = await t.hs.retain(
+			bankId,
+			'tagged content',
+			{
+				facts: [
+					{
+						content: 'Alice visited Rome for work',
+						factType: 'experience',
+						confidence: 0.9,
+						entities: ['Alice'],
+						tags: ['travel']
+					},
+					{
+						content: 'Bob stayed home and coded',
+						factType: 'experience',
+						confidence: 0.9,
+						entities: ['Bob'],
+						tags: ['domestic']
+					}
+				],
+				tags: ['global-tag'],
+				documentId: 'tagged-doc',
+				consolidate: false,
+				dedupThreshold: 0
+			}
+		)
 		expect(result.memories).toHaveLength(2)
 		// Per-fact tags are merged with global tags
 		expect(result.memories[0]!.tags).toContain('travel')

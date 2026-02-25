@@ -5,8 +5,19 @@
  * with the retain flow (reinforce / reconsolidate / new_trace).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 import { classifyRoute, detectConflict } from '../routing'
 
 // ── Pure classification tests ────────────────────────────────────────────────
@@ -19,7 +30,9 @@ describe('classifyRoute', () => {
 	})
 
 	it('returns reconsolidate for score just below 0.92 with no conflict', () => {
-		expect(classifyRoute(0.9199, false)).toBe('reconsolidate')
+		expect(classifyRoute(0.9199, false)).toBe(
+			'reconsolidate'
+		)
 		expect(classifyRoute(0.85, false)).toBe('reconsolidate')
 		expect(classifyRoute(0.78, false)).toBe('reconsolidate')
 	})
@@ -47,46 +60,76 @@ describe('classifyRoute', () => {
 
 describe('detectConflict', () => {
 	it('returns no conflict for same entity key/value', () => {
-		const candidate = [{ name: 'Alice', entityType: 'person' }]
-		const incoming = [{ name: 'Alice', entityType: 'person' }]
+		const candidate = [
+			{ name: 'Alice', entityType: 'person' }
+		]
+		const incoming = [
+			{ name: 'Alice', entityType: 'person' }
+		]
 		const result = detectConflict(candidate, incoming)
 		expect(result.conflictDetected).toBe(false)
 		expect(result.conflictKeys).toHaveLength(0)
 	})
 
 	it('returns conflict for same name with different entityType', () => {
-		const candidate = [{ name: 'Alice', entityType: 'person' }]
-		const incoming = [{ name: 'Alice', entityType: 'organization' }]
+		const candidate = [
+			{ name: 'Alice', entityType: 'person' }
+		]
+		const incoming = [
+			{ name: 'Alice', entityType: 'organization' }
+		]
 		const result = detectConflict(candidate, incoming)
 		expect(result.conflictDetected).toBe(true)
-		expect(result.conflictKeys).toContain('alice|entity_type')
+		expect(result.conflictKeys).toContain(
+			'alice|entity_type'
+		)
 	})
 
 	it('normalizes case and whitespace for comparison', () => {
-		const candidate = [{ name: '  ALICE  ', entityType: 'person' }]
-		const incoming = [{ name: 'alice', entityType: 'person' }]
+		const candidate = [
+			{ name: '  ALICE  ', entityType: 'person' }
+		]
+		const incoming = [
+			{ name: 'alice', entityType: 'person' }
+		]
 		const result = detectConflict(candidate, incoming)
 		expect(result.conflictDetected).toBe(false)
 	})
 
 	it('normalizes numeric strings for comparison', () => {
-		const candidate = [{ name: 'Alice', entityType: '01.0' }]
+		const candidate = [
+			{ name: 'Alice', entityType: '01.0' }
+		]
 		const incoming = [{ name: 'Alice', entityType: '1' }]
 		const result = detectConflict(candidate, incoming)
 		expect(result.conflictDetected).toBe(false)
 	})
 
 	it('returns no conflict when entities are disjoint', () => {
-		const candidate = [{ name: 'Alice', entityType: 'person' }]
+		const candidate = [
+			{ name: 'Alice', entityType: 'person' }
+		]
 		const incoming = [{ name: 'Bob', entityType: 'person' }]
 		const result = detectConflict(candidate, incoming)
 		expect(result.conflictDetected).toBe(false)
 	})
 
 	it('handles empty entity arrays', () => {
-		expect(detectConflict([], []).conflictDetected).toBe(false)
-		expect(detectConflict([], [{ name: 'A', entityType: 'person' }]).conflictDetected).toBe(false)
-		expect(detectConflict([{ name: 'A', entityType: 'person' }], []).conflictDetected).toBe(false)
+		expect(detectConflict([], []).conflictDetected).toBe(
+			false
+		)
+		expect(
+			detectConflict(
+				[],
+				[{ name: 'A', entityType: 'person' }]
+			).conflictDetected
+		).toBe(false)
+		expect(
+			detectConflict(
+				[{ name: 'A', entityType: 'person' }],
+				[]
+			).conflictDetected
+		).toBe(false)
 	})
 })
 
@@ -106,66 +149,116 @@ describe('routing integration via retain', () => {
 	})
 
 	it('stores a new fact as new_trace when no candidate exists', async () => {
-		const result = await t.hs.retain(bankId, 'test content', {
-			facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }]
-		})
+		const result = await t.hs.retain(
+			bankId,
+			'test content',
+			{
+				facts: [
+					{
+						content: 'Alice works at Acme Corp',
+						factType: 'world'
+					}
+				]
+			}
+		)
 		expect(result.memories).toHaveLength(1)
-		expect(result.memories[0]!.content).toBe('Alice works at Acme Corp')
+		expect(result.memories[0]!.content).toBe(
+			'Alice works at Acme Corp'
+		)
 	})
 
 	it('reinforces exact duplicate — preserves content, bumps metadata', async () => {
 		// First retain
 		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+			facts: [
+				{
+					content: 'Alice works at Acme Corp',
+					factType: 'world'
+				}
+			],
 			dedupThreshold: 0.92
 		})
 
 		// Second retain with exact same content — should reinforce
 		const result = await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+			facts: [
+				{
+					content: 'Alice works at Acme Corp',
+					factType: 'world'
+				}
+			],
 			dedupThreshold: 0.92
 		})
 
 		// Should return the reinforced memory (content unchanged)
 		expect(result.memories).toHaveLength(1)
-		expect(result.memories[0]!.content).toBe('Alice works at Acme Corp')
+		expect(result.memories[0]!.content).toBe(
+			'Alice works at Acme Corp'
+		)
 	})
 
 	it('creates new_trace for radically different content', async () => {
 		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+			facts: [
+				{
+					content: 'Alice works at Acme Corp',
+					factType: 'world'
+				}
+			],
 			dedupThreshold: 0.92
 		})
 
 		// Very different content
 		const result = await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'xyz 123 !@# totally different', factType: 'experience' }]
+			facts: [
+				{
+					content: 'xyz 123 !@# totally different',
+					factType: 'experience'
+				}
+			]
 		})
 
 		// Should be a new_trace
 		expect(result.memories).toHaveLength(1)
-		expect(result.memories[0]!.content).toBe('xyz 123 !@# totally different')
+		expect(result.memories[0]!.content).toBe(
+			'xyz 123 !@# totally different'
+		)
 	})
 
 	it('logs reconsolidation decisions to the audit table', async () => {
 		// First retain
 		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+			facts: [
+				{
+					content: 'Alice works at Acme Corp',
+					factType: 'world'
+				}
+			],
 			dedupThreshold: 0.92
 		})
 
 		// Second retain
 		await t.hs.retain(bankId, 'test', {
-			facts: [{ content: 'Alice works at Acme Corp', factType: 'world' }],
+			facts: [
+				{
+					content: 'Alice works at Acme Corp',
+					factType: 'world'
+				}
+			],
 			dedupThreshold: 0.92
 		})
 
 		// Check that decisions were logged
 		const hdb = getHdb(t.hs)
-		const decisions = hdb.db.select().from(hdb.schema.reconsolidationDecisions).all()
+		const decisions = hdb.db
+			.select()
+			.from(hdb.schema.reconsolidationDecisions)
+			.all()
 
 		expect(decisions.length).toBeGreaterThan(0)
-		const first = decisions[0] as { policyVersion?: unknown } | undefined
+		const first = decisions[0] as
+			| { policyVersion?: unknown }
+			| undefined
 		expect(first?.policyVersion).toBe('v1')
 	})
 })

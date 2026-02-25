@@ -25,7 +25,10 @@ import type { MentalModelRow } from './schema'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function safeJsonParse<T>(value: string | null, fallback: T): T {
+function safeJsonParse<T>(
+	value: string | null,
+	fallback: T
+): T {
 	if (!value) return fallback
 	try {
 		return JSON.parse(value) as T
@@ -34,14 +37,19 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 	}
 }
 
-function rowToMentalModel(row: MentalModelRow): MentalModel {
+function rowToMentalModel(
+	row: MentalModelRow
+): MentalModel {
 	return {
 		id: row.id,
 		bankId: row.bankId,
 		name: row.name,
 		sourceQuery: row.sourceQuery,
 		content: row.content,
-		sourceMemoryIds: safeJsonParse<string[] | null>(row.sourceMemoryIds, null),
+		sourceMemoryIds: safeJsonParse<string[] | null>(
+			row.sourceMemoryIds,
+			null
+		),
 		tags: safeJsonParse<string[] | null>(row.tags, null),
 		autoRefresh: row.autoRefresh === 1,
 		lastRefreshedAt: row.lastRefreshedAt,
@@ -69,7 +77,9 @@ export async function createMentalModel(
 			name: options.name,
 			sourceQuery: options.sourceQuery,
 			content: options.content ?? null,
-			tags: options.tags ? JSON.stringify(options.tags) : null,
+			tags: options.tags
+				? JSON.stringify(options.tags)
+				: null,
 			autoRefresh: options.autoRefresh ? 1 : 0,
 			lastRefreshedAt: options.content ? now : null,
 			createdAt: now,
@@ -103,7 +113,12 @@ export function getMentalModel(
 	const row = hdb.db
 		.select()
 		.from(hdb.schema.mentalModels)
-		.where(and(eq(hdb.schema.mentalModels.bankId, bankId), eq(hdb.schema.mentalModels.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.mentalModels.bankId, bankId),
+				eq(hdb.schema.mentalModels.id, id)
+			)
+		)
 		.get()
 	return row ? rowToMentalModel(row) : undefined
 }
@@ -119,13 +134,18 @@ export function listMentalModels(
 		.where(eq(hdb.schema.mentalModels.bankId, bankId))
 		.all()
 
-	const tagsFilter = options?.tags?.filter(tag => tag.length > 0) ?? []
-	if (tagsFilter.length === 0) return rows.map(rowToMentalModel)
+	const tagsFilter =
+		options?.tags?.filter(tag => tag.length > 0) ?? []
+	if (tagsFilter.length === 0)
+		return rows.map(rowToMentalModel)
 
 	const tagsFilterSet = new Set(tagsFilter)
 	return rows
 		.filter(row => {
-			const modelTags = safeJsonParse<string[]>(row.tags, [])
+			const modelTags = safeJsonParse<string[]>(
+				row.tags,
+				[]
+			)
 			return modelTags.some(tag => tagsFilterSet.has(tag))
 		})
 		.map(rowToMentalModel)
@@ -140,21 +160,32 @@ export async function updateMentalModel(
 ): Promise<MentalModel> {
 	const now = Date.now()
 
-	const updates: Record<string, unknown> = { updatedAt: now }
+	const updates: Record<string, unknown> = {
+		updatedAt: now
+	}
 
-	if (options.name !== undefined) updates.name = options.name
-	if (options.sourceQuery !== undefined) updates.sourceQuery = options.sourceQuery
+	if (options.name !== undefined)
+		updates.name = options.name
+	if (options.sourceQuery !== undefined)
+		updates.sourceQuery = options.sourceQuery
 	if (options.content !== undefined) {
 		updates.content = options.content
 		updates.lastRefreshedAt = now
 	}
-	if (options.tags !== undefined) updates.tags = JSON.stringify(options.tags)
-	if (options.autoRefresh !== undefined) updates.autoRefresh = options.autoRefresh ? 1 : 0
+	if (options.tags !== undefined)
+		updates.tags = JSON.stringify(options.tags)
+	if (options.autoRefresh !== undefined)
+		updates.autoRefresh = options.autoRefresh ? 1 : 0
 
 	hdb.db
 		.update(hdb.schema.mentalModels)
 		.set(updates)
-		.where(and(eq(hdb.schema.mentalModels.bankId, bankId), eq(hdb.schema.mentalModels.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.mentalModels.bankId, bankId),
+				eq(hdb.schema.mentalModels.id, id)
+			)
+		)
 		.run()
 
 	// Re-embed if sourceQuery changed
@@ -165,10 +196,18 @@ export async function updateMentalModel(
 	const row = hdb.db
 		.select()
 		.from(hdb.schema.mentalModels)
-		.where(and(eq(hdb.schema.mentalModels.bankId, bankId), eq(hdb.schema.mentalModels.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.mentalModels.bankId, bankId),
+				eq(hdb.schema.mentalModels.id, id)
+			)
+		)
 		.get()
 
-	if (!row) throw new Error(`Mental model ${id} not found in bank ${bankId}`)
+	if (!row)
+		throw new Error(
+			`Mental model ${id} not found in bank ${bankId}`
+		)
 	return rowToMentalModel(row)
 }
 
@@ -180,7 +219,12 @@ export function deleteMentalModel(
 ): void {
 	hdb.db
 		.delete(hdb.schema.mentalModels)
-		.where(and(eq(hdb.schema.mentalModels.bankId, bankId), eq(hdb.schema.mentalModels.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.mentalModels.bankId, bankId),
+				eq(hdb.schema.mentalModels.id, id)
+			)
+		)
 		.run()
 
 	modelVec.delete(id)
@@ -201,16 +245,28 @@ export async function refreshMentalModel(
 	const row = hdb.db
 		.select()
 		.from(hdb.schema.mentalModels)
-		.where(and(eq(hdb.schema.mentalModels.bankId, bankId), eq(hdb.schema.mentalModels.id, id)))
+		.where(
+			and(
+				eq(hdb.schema.mentalModels.bankId, bankId),
+				eq(hdb.schema.mentalModels.id, id)
+			)
+		)
 		.get()
 
-	if (!row) throw new Error(`Mental model ${id} not found in bank ${bankId}`)
+	if (!row)
+		throw new Error(
+			`Mental model ${id} not found in bank ${bankId}`
+		)
 
 	// SECURITY: If the mental model has tags, pass them to reflect with "all_strict"
 	// matching to ensure it can only access memories with the SAME tags.
 	// This prevents cross-tenant/cross-user information leakage by excluding untagged content.
-	const tags: string[] | undefined = row.tags ? JSON.parse(row.tags) : undefined
-	const tagsMatch = tags?.length ? ('all_strict' as const) : undefined
+	const tags: string[] | undefined = row.tags
+		? JSON.parse(row.tags)
+		: undefined
+	const tagsMatch = tags?.length
+		? ('all_strict' as const)
+		: undefined
 
 	// Run the source query through reflect (without modelVec to avoid recursion)
 	const reflectResult = await reflect(
@@ -230,7 +286,9 @@ export async function refreshMentalModel(
 	)
 
 	const now = Date.now()
-	const sourceMemoryIds = reflectResult.memories.map(m => m.memory.id)
+	const sourceMemoryIds = reflectResult.memories.map(
+		m => m.memory.id
+	)
 
 	hdb.db
 		.update(hdb.schema.mentalModels)
@@ -286,7 +344,10 @@ export async function findMatchingModels(
 			.select()
 			.from(hdb.schema.mentalModels)
 			.where(
-				and(eq(hdb.schema.mentalModels.id, hit.id), eq(hdb.schema.mentalModels.bankId, bankId))
+				and(
+					eq(hdb.schema.mentalModels.id, hit.id),
+					eq(hdb.schema.mentalModels.bankId, bankId)
+				)
 			)
 			.get()
 
@@ -333,13 +394,17 @@ export async function searchMentalModelsWithStaleness(
 			.select()
 			.from(hdb.schema.mentalModels)
 			.where(
-				and(eq(hdb.schema.mentalModels.id, hit.id), eq(hdb.schema.mentalModels.bankId, bankId))
+				and(
+					eq(hdb.schema.mentalModels.id, hit.id),
+					eq(hdb.schema.mentalModels.bankId, bankId)
+				)
 			)
 			.get()
 
 		if (!row || !row.content) continue
 
-		const lastRefreshed = row.lastRefreshedAt ?? row.createdAt
+		const lastRefreshed =
+			row.lastRefreshedAt ?? row.createdAt
 		const isStale = lastRefreshed < staleCutoff
 
 		results.push({

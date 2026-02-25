@@ -15,7 +15,13 @@ itself.
 
 ```tsx
 // What does this component actually render?
-<Composer isThread isEditing={false} channelId="abc" showAttachments showFormatting={false} />
+<Composer
+	isThread
+	isEditing={false}
+	channelId="abc"
+	showAttachments
+	showFormatting={false}
+/>
 ```
 
 **Correct (explicit variants):**
@@ -37,7 +43,11 @@ use shared parts.
 **Implementation:**
 
 ```tsx
-function ThreadComposer({ channelId }: { channelId: string }) {
+function ThreadComposer({
+	channelId
+}: {
+	channelId: string
+}) {
 	return (
 		<ThreadProvider channelId={channelId}>
 			<Composer.Frame>
@@ -53,7 +63,11 @@ function ThreadComposer({ channelId }: { channelId: string }) {
 	)
 }
 
-function EditMessageComposer({ messageId }: { messageId: string }) {
+function EditMessageComposer({
+	messageId
+}: {
+	messageId: string
+}) {
 	return (
 		<EditMessageProvider messageId={messageId}>
 			<Composer.Frame>
@@ -69,7 +83,11 @@ function EditMessageComposer({ messageId }: { messageId: string }) {
 	)
 }
 
-function ForwardMessageComposer({ messageId }: { messageId: string }) {
+function ForwardMessageComposer({
+	messageId
+}: {
+	messageId: string
+}) {
 	return (
 		<ForwardMessageProvider messageId={messageId}>
 			<Composer.Frame>

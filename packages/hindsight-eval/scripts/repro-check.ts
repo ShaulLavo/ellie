@@ -11,11 +11,24 @@
 import { resolve, join } from 'path'
 import { readFileSync, existsSync } from 'fs'
 import { runBaseline } from '../src/runner'
-import type { EvalRunConfig, EvalReport } from '../src/types'
+import type {
+	EvalRunConfig,
+	EvalReport
+} from '../src/types'
 
 const PKG_ROOT = resolve(import.meta.dir, '..')
-const DEFAULT_FIXTURE = join(PKG_ROOT, 'fixtures', 'assistant-baseline.v1.jsonl')
-const LATEST_DIR = join(PKG_ROOT, 'artifacts', 'eval', 'baseline', 'latest')
+const DEFAULT_FIXTURE = join(
+	PKG_ROOT,
+	'fixtures',
+	'assistant-baseline.v1.jsonl'
+)
+const LATEST_DIR = join(
+	PKG_ROOT,
+	'artifacts',
+	'eval',
+	'baseline',
+	'latest'
+)
 
 // ── Config ────────────────────────────────────────────────────────────────
 
@@ -56,16 +69,24 @@ let allMatch = true
 const TIMING_TOLERANCE = 0 // quality metrics must be exact
 
 if (casesRun1.length !== casesRun2.length) {
-	console.error(`  MISMATCH: case count differs: ${casesRun1.length} vs ${casesRun2.length}`)
+	console.error(
+		`  MISMATCH: case count differs: ${casesRun1.length} vs ${casesRun2.length}`
+	)
 	allMatch = false
 }
 
-for (let i = 0; i < Math.min(casesRun1.length, casesRun2.length); i++) {
+for (
+	let i = 0;
+	i < Math.min(casesRun1.length, casesRun2.length);
+	i++
+) {
 	const r1 = casesRun1[i]!
 	const r2 = casesRun2[i]!
 
 	if (r1.caseId !== r2.caseId) {
-		console.error(`  MISMATCH: case order differs at index ${i}: ${r1.caseId} vs ${r2.caseId}`)
+		console.error(
+			`  MISMATCH: case order differs at index ${i}: ${r1.caseId} vs ${r2.caseId}`
+		)
 		allMatch = false
 		continue
 	}
@@ -81,12 +102,16 @@ for (let i = 0; i < Math.min(casesRun1.length, casesRun2.length); i++) {
 			const c1 = r1.candidates[j]!
 			const c2 = r2.candidates[j]!
 			if (c1.content !== c2.content) {
-				console.error(`  MISMATCH [${r1.caseId}]: candidate ${j} content differs`)
+				console.error(
+					`  MISMATCH [${r1.caseId}]: candidate ${j} content differs`
+				)
 				allMatch = false
 				break
 			}
 			if (Math.abs(c1.score - c2.score) > 1e-10) {
-				console.error(`  MISMATCH [${r1.caseId}]: candidate ${j} score ${c1.score} vs ${c2.score}`)
+				console.error(
+					`  MISMATCH [${r1.caseId}]: candidate ${j} score ${c1.score} vs ${c2.score}`
+				)
 				allMatch = false
 				break
 			}
@@ -94,12 +119,17 @@ for (let i = 0; i < Math.min(casesRun1.length, casesRun2.length); i++) {
 	}
 
 	// Compare metrics (must be exact for quality metrics)
-	const metricKeys = new Set([...Object.keys(r1.metrics), ...Object.keys(r2.metrics)])
+	const metricKeys = new Set([
+		...Object.keys(r1.metrics),
+		...Object.keys(r2.metrics)
+	])
 	for (const key of metricKeys) {
 		const v1 = r1.metrics[key] ?? 0
 		const v2 = r2.metrics[key] ?? 0
 		if (Math.abs(v1 - v2) > TIMING_TOLERANCE) {
-			console.error(`  MISMATCH [${r1.caseId}]: metric ${key} = ${v1} vs ${v2}`)
+			console.error(
+				`  MISMATCH [${r1.caseId}]: metric ${key} = ${v1} vs ${v2}`
+			)
 			allMatch = false
 		}
 	}
@@ -113,7 +143,9 @@ if (existsSync(baselineJsonPath)) {
 	console.log('')
 	console.log('Comparing against committed baseline...')
 
-	const baseline = JSON.parse(readFileSync(baselineJsonPath, 'utf-8')) as EvalReport
+	const baseline = JSON.parse(
+		readFileSync(baselineJsonPath, 'utf-8')
+	) as EvalReport
 
 	if (casesRun1.length !== baseline.cases.length) {
 		console.warn(
@@ -122,17 +154,26 @@ if (existsSync(baselineJsonPath)) {
 		baselineMatch = false
 	}
 
-	for (let i = 0; i < Math.min(casesRun1.length, baseline.cases.length); i++) {
+	for (
+		let i = 0;
+		i < Math.min(casesRun1.length, baseline.cases.length);
+		i++
+	) {
 		const current = casesRun1[i]!
 		const committed = baseline.cases[i]!
 
 		if (current.caseId !== committed.caseId) {
-			console.error(`  BASELINE MISMATCH: case order differs at ${i}`)
+			console.error(
+				`  BASELINE MISMATCH: case order differs at ${i}`
+			)
 			baselineMatch = false
 			continue
 		}
 
-		const metricKeys = new Set([...Object.keys(current.metrics), ...Object.keys(committed.metrics)])
+		const metricKeys = new Set([
+			...Object.keys(current.metrics),
+			...Object.keys(committed.metrics)
+		])
 		for (const key of metricKeys) {
 			const v1 = current.metrics[key] ?? 0
 			const v2 = committed.metrics[key] ?? 0
@@ -151,8 +192,13 @@ if (existsSync(baselineJsonPath)) {
 	}
 } else {
 	console.log('')
-	console.error('ERROR: No committed baseline found at:', LATEST_DIR)
-	console.error('Run `bun run eval:baseline` first to generate one.')
+	console.error(
+		'ERROR: No committed baseline found at:',
+		LATEST_DIR
+	)
+	console.error(
+		'Run `bun run eval:baseline` first to generate one.'
+	)
 	baselineMatch = false
 }
 
@@ -160,13 +206,19 @@ if (existsSync(baselineJsonPath)) {
 
 console.log('')
 if (allMatch) {
-	console.log('PASS: Both runs produced identical quality metrics.')
+	console.log(
+		'PASS: Both runs produced identical quality metrics.'
+	)
 	if (!baselineMatch) {
-		console.error('FAIL: Baseline comparison failed (missing or differs).')
+		console.error(
+			'FAIL: Baseline comparison failed (missing or differs).'
+		)
 		process.exit(1)
 	}
 	process.exit(0)
 } else {
-	console.error('FAIL: Runs produced different quality metrics.')
+	console.error(
+		'FAIL: Runs produced different quality metrics.'
+	)
 	process.exit(1)
 }

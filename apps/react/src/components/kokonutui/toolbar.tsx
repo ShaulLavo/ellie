@@ -18,15 +18,29 @@ import MousePointer2Icon from '@/components/ui/mouse-pointer-2-icon'
 import PaintIcon from '@/components/ui/paint-icon'
 import SlidersHorizontalIcon from '@/components/ui/sliders-horizontal-icon'
 import UserIcon from '@/components/ui/user-icon'
-import { PencilSimple, ShareNetwork } from '@phosphor-icons/react'
-import { AnimatePresence, motion, type Variants, type Transition } from 'motion/react'
+import {
+	PencilSimple,
+	ShareNetwork
+} from '@phosphor-icons/react'
+import {
+	AnimatePresence,
+	motion,
+	type Variants,
+	type Transition
+} from 'motion/react'
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-type IconComponent = React.ComponentType<{ size?: number; className?: string }>
+type IconComponent = React.ComponentType<{
+	size?: number
+	className?: string
+}>
 
 // Inline SVG icons for toolbar items with no itshover/phosphor equivalent
-const MoveIcon: IconComponent = ({ size = 16, className = '' }) => (
+const MoveIcon: IconComponent = ({
+	size = 16,
+	className = ''
+}) => (
 	<svg
 		width={size}
 		height={size}
@@ -46,7 +60,10 @@ const MoveIcon: IconComponent = ({ size = 16, className = '' }) => (
 		<line x1="12" y1="2" x2="12" y2="22" />
 	</svg>
 )
-const ShapesIcon: IconComponent = ({ size = 16, className = '' }) => (
+const ShapesIcon: IconComponent = ({
+	size = 16,
+	className = ''
+}) => (
 	<svg
 		width={size}
 		height={size}
@@ -63,7 +80,10 @@ const ShapesIcon: IconComponent = ({ size = 16, className = '' }) => (
 		<circle cx="17.5" cy="17.5" r="3.5" />
 	</svg>
 )
-const FrameIcon: IconComponent = ({ size = 16, className = '' }) => (
+const FrameIcon: IconComponent = ({
+	size = 16,
+	className = ''
+}) => (
 	<svg
 		width={size}
 		height={size}
@@ -81,7 +101,10 @@ const FrameIcon: IconComponent = ({ size = 16, className = '' }) => (
 		<line x1="18" y1="2" x2="18" y2="22" />
 	</svg>
 )
-const FileDownIcon: IconComponent = ({ size = 16, className = '' }) => (
+const FileDownIcon: IconComponent = ({
+	size = 16,
+	className = ''
+}) => (
 	<svg
 		width={size}
 		height={size}
@@ -152,30 +175,53 @@ const lineVariants = {
 	}
 }
 
-const transition = { type: 'spring', bounce: 0, duration: 0.4 }
+const transition = {
+	type: 'spring',
+	bounce: 0,
+	duration: 0.4
+}
 
 export function Toolbar({
 	className,
 	activeColor: _activeColor = 'text-primary',
 	onSearch: _onSearch
 }: ToolbarProps) {
-	const [selected, setSelected] = React.useState<string | null>('select')
+	const [selected, setSelected] = React.useState<
+		string | null
+	>('select')
 	const [isToggled, setIsToggled] = React.useState(false)
-	const [activeNotification, setActiveNotification] = React.useState<string | null>(null)
+	const [activeNotification, setActiveNotification] =
+		React.useState<string | null>(null)
 	const outsideClickRef = React.useRef(null)
 
 	const toolbarItems: ToolbarItem[] = [
-		{ id: 'select', title: 'Select', icon: MousePointer2Icon },
+		{
+			id: 'select',
+			title: 'Select',
+			icon: MousePointer2Icon
+		},
 		{ id: 'move', title: 'Move', icon: MoveIcon },
 		{ id: 'shapes', title: 'Shapes', icon: ShapesIcon },
 		{ id: 'layers', title: 'Layers', icon: LayersIcon },
 		{ id: 'frame', title: 'Frame', icon: FrameIcon },
-		{ id: 'properties', title: 'Properties', icon: SlidersHorizontalIcon },
+		{
+			id: 'properties',
+			title: 'Properties',
+			icon: SlidersHorizontalIcon
+		},
 		{ id: 'export', title: 'Export', icon: FileDownIcon },
 		{ id: 'share', title: 'Share', icon: ShareNetwork },
-		{ id: 'notifications', title: 'Notifications', icon: BellOffIcon },
+		{
+			id: 'notifications',
+			title: 'Notifications',
+			icon: BellOffIcon
+		},
 		{ id: 'profile', title: 'Profile', icon: UserIcon },
-		{ id: 'appearance', title: 'Appearance', icon: PaintIcon }
+		{
+			id: 'appearance',
+			title: 'Appearance',
+			icon: PaintIcon
+		}
 	]
 
 	const handleItemClick = (itemId: string) => {
@@ -207,7 +253,12 @@ export function Toolbar({
 							variants={notificationVariants as Variants}
 						>
 							<div className="rounded-full bg-primary px-3 py-1 text-primary-foreground text-xs">
-								{toolbarItems.find(item => item.id === activeNotification)?.title} clicked!
+								{
+									toolbarItems.find(
+										item => item.id === activeNotification
+									)?.title
+								}{' '}
+								clicked!
 							</div>
 							<motion.div
 								animate="animate"
@@ -238,7 +289,12 @@ export function Toolbar({
 							transition={transition as Transition}
 							variants={buttonVariants as Variants}
 						>
-							<item.icon className={cn(selected === item.id && 'text-white')} size={16} />
+							<item.icon
+								className={cn(
+									selected === item.id && 'text-white'
+								)}
+								size={16}
+							/>
 							<AnimatePresence initial={false}>
 								{selected === item.id && (
 									<motion.span
@@ -280,8 +336,14 @@ export function Toolbar({
 						whileHover={{ scale: 1.02 }}
 						whileTap={{ scale: 0.98 }}
 					>
-						{isToggled ? <PencilSimple size={14} /> : <LockIcon size={14} />}
-						<span className="font-medium text-sm">{isToggled ? 'On' : 'Off'}</span>
+						{isToggled ? (
+							<PencilSimple size={14} />
+						) : (
+							<LockIcon size={14} />
+						)}
+						<span className="font-medium text-sm">
+							{isToggled ? 'On' : 'Off'}
+						</span>
 					</motion.button>
 				</div>
 			</div>

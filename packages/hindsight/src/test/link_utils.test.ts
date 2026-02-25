@@ -20,7 +20,15 @@ function utcMs(
 	hour: number = 0,
 	minute: number = 0
 ): number {
-	return Date.UTC(year, monthZeroBased, day, hour, minute, 0, 0)
+	return Date.UTC(
+		year,
+		monthZeroBased,
+		day,
+		hour,
+		minute,
+		0,
+		0
+	)
 }
 
 describe('_normalize_datetime parity', () => {
@@ -37,12 +45,18 @@ describe('_normalize_datetime parity', () => {
 
 	it('aware datetime unchanged', () => {
 		const aware = new Date('2024-06-15T10:30:00.000Z')
-		expect(normalizeTemporalDate(aware)).toBe(aware.getTime())
+		expect(normalizeTemporalDate(aware)).toBe(
+			aware.getTime()
+		)
 	})
 
 	it('mixed datetimes can be compared', () => {
-		const fromDate = normalizeTemporalDate(new Date('2024-06-15T10:30:00.000Z'))
-		const fromEpoch = normalizeTemporalDate(utcMs(2024, 5, 15, 10, 30))
+		const fromDate = normalizeTemporalDate(
+			new Date('2024-06-15T10:30:00.000Z')
+		)
+		const fromEpoch = normalizeTemporalDate(
+			utcMs(2024, 5, 15, 10, 30)
+		)
 		expect(fromDate).toBe(fromEpoch)
 	})
 })
@@ -55,7 +69,10 @@ describe('compute_temporal_query_bounds parity', () => {
 	})
 
 	it('single unit normal date', () => {
-		const bounds = computeTemporalQueryBounds({ 'unit-1': utcMs(2024, 5, 15, 12, 0) }, 24)
+		const bounds = computeTemporalQueryBounds(
+			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
+			24
+		)
 		expect(bounds.minDate).toBe(utcMs(2024, 5, 14, 12, 0))
 		expect(bounds.maxDate).toBe(utcMs(2024, 5, 16, 12, 0))
 	})
@@ -86,14 +103,24 @@ describe('compute_temporal_query_bounds parity', () => {
 	})
 
 	it('overflow near datetime min', () => {
-		const bounds = computeTemporalQueryBounds({ 'unit-1': JS_DATE_MIN_MS + 24 * HOUR_MS }, 48)
+		const bounds = computeTemporalQueryBounds(
+			{ 'unit-1': JS_DATE_MIN_MS + 24 * HOUR_MS },
+			48
+		)
 		expect(bounds.minDate).toBe(JS_DATE_MIN_MS)
-		expect(bounds.maxDate).toBe(JS_DATE_MIN_MS + 72 * HOUR_MS)
+		expect(bounds.maxDate).toBe(
+			JS_DATE_MIN_MS + 72 * HOUR_MS
+		)
 	})
 
 	it('overflow near datetime max', () => {
-		const bounds = computeTemporalQueryBounds({ 'unit-1': JS_DATE_MAX_MS - 24 * HOUR_MS }, 48)
-		expect(bounds.minDate).toBe(JS_DATE_MAX_MS - 72 * HOUR_MS)
+		const bounds = computeTemporalQueryBounds(
+			{ 'unit-1': JS_DATE_MAX_MS - 24 * HOUR_MS },
+			48
+		)
+		expect(bounds.minDate).toBe(
+			JS_DATE_MAX_MS - 72 * HOUR_MS
+		)
 		expect(bounds.maxDate).toBe(JS_DATE_MAX_MS)
 	})
 })
@@ -104,14 +131,23 @@ describe('compute_temporal_links parity', () => {
 	})
 
 	it('no candidates returns empty', () => {
-		const links = computeTemporalLinks({ 'unit-1': utcMs(2024, 5, 15, 12, 0) }, [], 24)
+		const links = computeTemporalLinks(
+			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
+			[],
+			24
+		)
 		expect(links).toEqual([])
 	})
 
 	it('candidate within temporal window creates a link', () => {
 		const links = computeTemporalLinks(
 			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
-			[{ id: 'candidate-1', eventDate: utcMs(2024, 5, 15, 10, 0) }],
+			[
+				{
+					id: 'candidate-1',
+					eventDate: utcMs(2024, 5, 15, 10, 0)
+				}
+			],
 			24
 		)
 
@@ -126,7 +162,12 @@ describe('compute_temporal_links parity', () => {
 	it('candidate outside temporal window creates no link', () => {
 		const links = computeTemporalLinks(
 			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
-			[{ id: 'candidate-1', eventDate: utcMs(2024, 5, 10, 12, 0) }],
+			[
+				{
+					id: 'candidate-1',
+					eventDate: utcMs(2024, 5, 10, 12, 0)
+				}
+			],
 			24
 		)
 		expect(links).toHaveLength(0)
@@ -136,13 +177,20 @@ describe('compute_temporal_links parity', () => {
 		const links = computeTemporalLinks(
 			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
 			[
-				{ id: 'close', eventDate: utcMs(2024, 5, 15, 11, 0) },
+				{
+					id: 'close',
+					eventDate: utcMs(2024, 5, 15, 11, 0)
+				},
 				{ id: 'far', eventDate: utcMs(2024, 5, 14, 18, 0) }
 			],
 			24
 		)
-		const closeWeight = links.find(link => link[1] === 'close')![3]
-		const farWeight = links.find(link => link[1] === 'far')![3]
+		const closeWeight = links.find(
+			link => link[1] === 'close'
+		)![3]
+		const farWeight = links.find(
+			link => link[1] === 'far'
+		)![3]
 		expect(closeWeight).toBeGreaterThan(farWeight)
 	})
 
@@ -157,11 +205,18 @@ describe('compute_temporal_links parity', () => {
 	})
 
 	it('max 10 links per unit', () => {
-		const candidates = Array.from({ length: 15 }, (_, index) => ({
-			id: `candidate-${index}`,
-			eventDate: utcMs(2024, 5, 15, 11, 0)
-		}))
-		const links = computeTemporalLinks({ 'unit-1': utcMs(2024, 5, 15, 12, 0) }, candidates, 24)
+		const candidates = Array.from(
+			{ length: 15 },
+			(_, index) => ({
+				id: `candidate-${index}`,
+				eventDate: utcMs(2024, 5, 15, 11, 0)
+			})
+		)
+		const links = computeTemporalLinks(
+			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
+			candidates,
+			24
+		)
 		expect(links).toHaveLength(10)
 	})
 
@@ -179,8 +234,12 @@ describe('compute_temporal_links parity', () => {
 			24
 		)
 
-		const unit1Links = links.filter(link => link[0] === 'unit-1')
-		const unit2Links = links.filter(link => link[0] === 'unit-2')
+		const unit1Links = links.filter(
+			link => link[0] === 'unit-1'
+		)
+		const unit2Links = links.filter(
+			link => link[0] === 'unit-2'
+		)
 		expect(unit1Links).toHaveLength(1)
 		expect(unit1Links[0]![1]).toBe('c1')
 		expect(unit2Links).toHaveLength(1)
@@ -190,7 +249,12 @@ describe('compute_temporal_links parity', () => {
 	it('mixed naive and aware datetimes', () => {
 		const links = computeTemporalLinks(
 			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
-			[{ id: 'c1', eventDate: new Date('2024-06-15T10:00:00.000Z') }],
+			[
+				{
+					id: 'c1',
+					eventDate: new Date('2024-06-15T10:00:00.000Z')
+				}
+			],
 			24
 		)
 		expect(links).toHaveLength(1)
@@ -199,7 +263,12 @@ describe('compute_temporal_links parity', () => {
 	it('overflow near datetime min', () => {
 		const links = computeTemporalLinks(
 			{ 'unit-1': JS_DATE_MIN_MS + 24 * HOUR_MS },
-			[{ id: 'c1', eventDate: JS_DATE_MIN_MS + 12 * HOUR_MS }],
+			[
+				{
+					id: 'c1',
+					eventDate: JS_DATE_MIN_MS + 12 * HOUR_MS
+				}
+			],
 			48
 		)
 		expect(links).toHaveLength(1)
@@ -208,18 +277,30 @@ describe('compute_temporal_links parity', () => {
 	it('overflow near datetime max', () => {
 		const links = computeTemporalLinks(
 			{ 'unit-1': JS_DATE_MAX_MS - 24 * HOUR_MS },
-			[{ id: 'c1', eventDate: JS_DATE_MAX_MS - 12 * HOUR_MS }],
+			[
+				{
+					id: 'c1',
+					eventDate: JS_DATE_MAX_MS - 12 * HOUR_MS
+				}
+			],
 			48
 		)
 		expect(links).toHaveLength(1)
 	})
 
 	it('preserves candidate order before max-links cap', () => {
-		const candidates = Array.from({ length: 12 }, (_, index) => ({
-			id: `candidate-${index}`,
-			eventDate: utcMs(2024, 5, 15, 11, 0)
-		}))
-		const links = computeTemporalLinks({ 'unit-1': utcMs(2024, 5, 15, 12, 0) }, candidates, 24)
+		const candidates = Array.from(
+			{ length: 12 },
+			(_, index) => ({
+				id: `candidate-${index}`,
+				eventDate: utcMs(2024, 5, 15, 11, 0)
+			})
+		)
+		const links = computeTemporalLinks(
+			{ 'unit-1': utcMs(2024, 5, 15, 12, 0) },
+			candidates,
+			24
+		)
 		expect(links).toHaveLength(10)
 		expect(links.map(link => link[1])).toEqual(
 			candidates.slice(0, 10).map(candidate => candidate.id)

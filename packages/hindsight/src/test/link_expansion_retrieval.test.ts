@@ -2,8 +2,18 @@
  * Core parity port for test_link_expansion_retrieval.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_link_expansion_retrieval.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_link_expansion_retrieval.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -55,7 +66,8 @@ describe('Core parity: test_link_expansion_retrieval.py', () => {
 		await t.hs.retain(bankId, 'links', {
 			facts: [
 				{
-					content: 'Heavy rain caused flooding in the valley',
+					content:
+						'Heavy rain caused flooding in the valley',
 					factType: 'world',
 					entities: ['rain', 'valley']
 				},
@@ -67,10 +79,14 @@ describe('Core parity: test_link_expansion_retrieval.py', () => {
 			],
 			consolidate: false
 		})
-		const result = await t.hs.recall(bankId, 'flooding hiking', {
-			methods: ['graph', 'semantic'],
-			includeEntities: true
-		})
+		const result = await t.hs.recall(
+			bankId,
+			'flooding hiking',
+			{
+				methods: ['graph', 'semantic'],
+				includeEntities: true
+			}
+		)
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 
@@ -78,7 +94,8 @@ describe('Core parity: test_link_expansion_retrieval.py', () => {
 		await t.hs.retain(bankId, 'links', {
 			facts: [
 				{
-					content: 'Heavy rain caused flooding in the valley',
+					content:
+						'Heavy rain caused flooding in the valley',
 					factType: 'world',
 					entities: ['rain', 'valley']
 				},
@@ -90,10 +107,14 @@ describe('Core parity: test_link_expansion_retrieval.py', () => {
 			],
 			consolidate: false
 		})
-		const result = await t.hs.recall(bankId, 'flooding hiking', {
-			methods: ['graph', 'semantic'],
-			includeEntities: true
-		})
+		const result = await t.hs.recall(
+			bankId,
+			'flooding hiking',
+			{
+				methods: ['graph', 'semantic'],
+				includeEntities: true
+			}
+		)
 		expect(result.memories.length).toBeGreaterThanOrEqual(1)
 	})
 })

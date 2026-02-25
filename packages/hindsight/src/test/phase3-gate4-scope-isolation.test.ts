@@ -10,8 +10,19 @@
  * - Partial scope (profile-only, project-only) behaves correctly
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 import type { HindsightDatabase } from '../db'
 import {
 	scopeMatches,
@@ -28,7 +39,11 @@ function insertTestMemory(
 	hdb: HindsightDatabase,
 	bid: string,
 	content: string,
-	opts?: { profile?: string; project?: string; session?: string }
+	opts?: {
+		profile?: string
+		project?: string
+		session?: string
+	}
 ): string {
 	const id = ulid()
 	const now = Date.now()
@@ -71,51 +86,101 @@ describe('Gate 4: Scope Isolation', () => {
 
 			// Create memories across 3 projects
 			const projA_memories = [
-				insertTestMemory(hdb, bankId, 'Project A: auth module works great', {
-					profile: 'alice',
-					project: 'proj-a'
-				}),
-				insertTestMemory(hdb, bankId, 'Project A: database schema is normalized', {
-					profile: 'alice',
-					project: 'proj-a'
-				}),
-				insertTestMemory(hdb, bankId, 'Project A: API routes are RESTful', {
-					profile: 'alice',
-					project: 'proj-a'
-				})
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project A: auth module works great',
+					{
+						profile: 'alice',
+						project: 'proj-a'
+					}
+				),
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project A: database schema is normalized',
+					{
+						profile: 'alice',
+						project: 'proj-a'
+					}
+				),
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project A: API routes are RESTful',
+					{
+						profile: 'alice',
+						project: 'proj-a'
+					}
+				)
 			]
 
 			const projB_memories = [
-				insertTestMemory(hdb, bankId, 'Project B: auth uses OAuth2', {
-					profile: 'alice',
-					project: 'proj-b'
-				}),
-				insertTestMemory(hdb, bankId, 'Project B: database is MongoDB', {
-					profile: 'alice',
-					project: 'proj-b'
-				})
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project B: auth uses OAuth2',
+					{
+						profile: 'alice',
+						project: 'proj-b'
+					}
+				),
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project B: database is MongoDB',
+					{
+						profile: 'alice',
+						project: 'proj-b'
+					}
+				)
 			]
 
 			const projC_memories = [
-				insertTestMemory(hdb, bankId, 'Project C: uses GraphQL', {
-					profile: 'bob',
-					project: 'proj-c'
-				}),
-				insertTestMemory(hdb, bankId, 'Project C: deployed on AWS', {
-					profile: 'bob',
-					project: 'proj-c'
-				})
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project C: uses GraphQL',
+					{
+						profile: 'bob',
+						project: 'proj-c'
+					}
+				),
+				insertTestMemory(
+					hdb,
+					bankId,
+					'Project C: deployed on AWS',
+					{
+						profile: 'bob',
+						project: 'proj-c'
+					}
+				)
 			]
 
 			// Filter memories as if doing scoped recall
 			const allMemoryScopes = [
-				...projA_memories.map((id) => ({ id, profile: 'alice', project: 'proj-a' })),
-				...projB_memories.map((id) => ({ id, profile: 'alice', project: 'proj-b' })),
-				...projC_memories.map((id) => ({ id, profile: 'bob', project: 'proj-c' }))
+				...projA_memories.map(id => ({
+					id,
+					profile: 'alice',
+					project: 'proj-a'
+				})),
+				...projB_memories.map(id => ({
+					id,
+					profile: 'alice',
+					project: 'proj-b'
+				})),
+				...projC_memories.map(id => ({
+					id,
+					profile: 'bob',
+					project: 'proj-c'
+				}))
 			]
 
 			// Query scoped to proj-a
-			const filterScope: Scope = { profile: 'alice', project: 'proj-a' }
+			const filterScope: Scope = {
+				profile: 'alice',
+				project: 'proj-a'
+			}
 			let crossProjectHits = 0
 			let totalHits = 0
 
@@ -128,20 +193,29 @@ describe('Gate 4: Scope Isolation', () => {
 				if (matches) {
 					totalHits++
 					// Check if this is actually from a different project
-					if (mem.project !== 'proj-a' || mem.profile !== 'alice') {
+					if (
+						mem.project !== 'proj-a' ||
+						mem.profile !== 'alice'
+					) {
 						crossProjectHits++
 					}
 				}
 			}
 
-			const bleedRate = totalHits > 0 ? crossProjectHits / totalHits : 0
+			const bleedRate =
+				totalHits > 0 ? crossProjectHits / totalHits : 0
 			expect(bleedRate).toBe(0)
 			expect(totalHits).toBe(3) // Only proj-a memories
 		})
 
 		it('bleed rate is 0 across multiple cross-project query pairs', () => {
 			// Simulate 120 paired cross-project cases (as per eval plan spec)
-			const projects = ['proj-1', 'proj-2', 'proj-3', 'proj-4']
+			const projects = [
+				'proj-1',
+				'proj-2',
+				'proj-3',
+				'proj-4'
+			]
 			const profiles = ['alice', 'bob']
 
 			// Generate cross-project pairs
@@ -154,10 +228,19 @@ describe('Gate 4: Scope Isolation', () => {
 				for (const memProject of projects) {
 					for (const queryProfile of profiles) {
 						for (const queryProject of projects) {
-							if (memProject !== queryProject || memProfile !== queryProfile) {
+							if (
+								memProject !== queryProject ||
+								memProfile !== queryProfile
+							) {
 								pairs.push({
-									memScope: { profile: memProfile, project: memProject },
-									queryScope: { profile: queryProfile, project: queryProject }
+									memScope: {
+										profile: memProfile,
+										project: memProject
+									},
+									queryScope: {
+										profile: queryProfile,
+										project: queryProject
+									}
 								})
 							}
 						}
@@ -182,11 +265,19 @@ describe('Gate 4: Scope Isolation', () => {
 
 	describe('broad mode allows cross-project retrieval', () => {
 		it('scopeMode=broad returns memories from all projects', () => {
-			const crossProjectScope = { profile: 'alice', project: 'proj-a' }
-			const otherScope = { profile: 'bob', project: 'proj-b' }
+			const crossProjectScope = {
+				profile: 'alice',
+				project: 'proj-a'
+			}
+			const otherScope = {
+				profile: 'bob',
+				project: 'proj-b'
+			}
 
 			// In broad mode, everything matches
-			expect(scopeMatches(otherScope, crossProjectScope, 'broad')).toBe(true)
+			expect(
+				scopeMatches(otherScope, crossProjectScope, 'broad')
+			).toBe(true)
 		})
 
 		it('broad mode returns all memories regardless of scope', () => {
@@ -196,7 +287,10 @@ describe('Gate 4: Scope Isolation', () => {
 				{ profile: 'charlie', project: 'proj-c' }
 			]
 
-			const filter: Scope = { profile: 'alice', project: 'proj-a' }
+			const filter: Scope = {
+				profile: 'alice',
+				project: 'proj-a'
+			}
 			let matches = 0
 
 			for (const scope of scopes) {
@@ -215,30 +309,46 @@ describe('Gate 4: Scope Isolation', () => {
 			const filters: Scope[] = [
 				{ profile: 'alice', project: 'proj-a' },
 				{ profile: 'bob', project: 'proj-b' },
-				{ profile: DEFAULT_PROFILE, project: DEFAULT_PROJECT }
+				{
+					profile: DEFAULT_PROFILE,
+					project: DEFAULT_PROJECT
+				}
 			]
 
 			for (const filter of filters) {
-				expect(scopeMatches(nullScope, filter, 'strict')).toBe(true)
+				expect(
+					scopeMatches(nullScope, filter, 'strict')
+				).toBe(true)
 			}
 		})
 
 		it('null-scope memories do not count as cross-project bleed', () => {
 			const allScopes = [
-				{ profile: null as string | null, project: null as string | null }, // legacy
+				{
+					profile: null as string | null,
+					project: null as string | null
+				}, // legacy
 				{ profile: 'alice', project: 'proj-a' }, // same project
 				{ profile: 'bob', project: 'proj-b' } // different project
 			]
 
-			const filter: Scope = { profile: 'alice', project: 'proj-a' }
-			const hits = allScopes.filter((s) => scopeMatches(s, filter, 'strict'))
+			const filter: Scope = {
+				profile: 'alice',
+				project: 'proj-a'
+			}
+			const hits = allScopes.filter(s =>
+				scopeMatches(s, filter, 'strict')
+			)
 
 			// Should include: legacy (null) + alice/proj-a
 			expect(hits.length).toBe(2)
 
 			// Cross-project check: only count non-null non-matching as bleed
 			const crossBleed = hits.filter(
-				(s) => s.profile !== null && s.project !== null && s.project !== 'proj-a'
+				s =>
+					s.profile !== null &&
+					s.project !== null &&
+					s.project !== 'proj-a'
 			)
 			expect(crossBleed.length).toBe(0)
 		})
@@ -293,17 +403,41 @@ describe('Gate 4: Scope Isolation', () => {
 	describe('location API respects scope', () => {
 		it('locationFind returns only scoped results', () => {
 			const hdb = getHdb(t.hs)
-			const mem1 = insertTestMemory(hdb, bankId, 'Mem for alice proj-a', {
-				profile: 'alice',
-				project: 'proj-a'
-			})
-			const mem2 = insertTestMemory(hdb, bankId, 'Mem for bob proj-b', {
-				profile: 'bob',
-				project: 'proj-b'
-			})
+			const mem1 = insertTestMemory(
+				hdb,
+				bankId,
+				'Mem for alice proj-a',
+				{
+					profile: 'alice',
+					project: 'proj-a'
+				}
+			)
+			const mem2 = insertTestMemory(
+				hdb,
+				bankId,
+				'Mem for bob proj-b',
+				{
+					profile: 'bob',
+					project: 'proj-b'
+				}
+			)
 
-			locationRecord(hdb, bankId, 'src/shared.ts', { memoryId: mem1 }, 'alice', 'proj-a')
-			locationRecord(hdb, bankId, 'src/shared.ts', { memoryId: mem2 }, 'bob', 'proj-b')
+			locationRecord(
+				hdb,
+				bankId,
+				'src/shared.ts',
+				{ memoryId: mem1 },
+				'alice',
+				'proj-a'
+			)
+			locationRecord(
+				hdb,
+				bankId,
+				'src/shared.ts',
+				{ memoryId: mem2 },
+				'bob',
+				'proj-b'
+			)
 
 			// Scoped query: only alice/proj-a
 			const hits = locationFind(hdb, bankId, {
@@ -321,11 +455,27 @@ describe('Gate 4: Scope Isolation', () => {
 			const mem1 = insertTestMemory(hdb, bankId, 'Mem A')
 			const mem2 = insertTestMemory(hdb, bankId, 'Mem B')
 
-			locationRecord(hdb, bankId, 'src/common.ts', { memoryId: mem1 }, 'alice', 'proj-a')
-			locationRecord(hdb, bankId, 'src/common.ts', { memoryId: mem2 }, 'bob', 'proj-b')
+			locationRecord(
+				hdb,
+				bankId,
+				'src/common.ts',
+				{ memoryId: mem1 },
+				'alice',
+				'proj-a'
+			)
+			locationRecord(
+				hdb,
+				bankId,
+				'src/common.ts',
+				{ memoryId: mem2 },
+				'bob',
+				'proj-b'
+			)
 
 			// No scope filter — both should appear
-			const hits = locationFind(hdb, bankId, { path: 'src/common.ts' })
+			const hits = locationFind(hdb, bankId, {
+				path: 'src/common.ts'
+			})
 			expect(hits.length).toBe(2)
 		})
 	})
@@ -340,13 +490,19 @@ describe('Gate 4: Scope Isolation', () => {
 		})
 
 		it('resolveScope preserves explicit values', () => {
-			const scope = resolveScope({ profile: 'custom', project: 'my-proj' })
+			const scope = resolveScope({
+				profile: 'custom',
+				project: 'my-proj'
+			})
 			expect(scope.profile).toBe('custom')
 			expect(scope.project).toBe('my-proj')
 		})
 
 		it('deriveScopeTagsFromContext uses defaults for empty strings', () => {
-			const scope = deriveScopeTagsFromContext({ profile: '', project: '' })
+			const scope = deriveScopeTagsFromContext({
+				profile: '',
+				project: ''
+			})
 			expect(scope.profile).toBe(DEFAULT_PROFILE)
 			expect(scope.project).toBe(DEFAULT_PROJECT)
 		})

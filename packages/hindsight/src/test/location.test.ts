@@ -3,9 +3,19 @@
  * location recording, path resolution, and boost computation.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { ulid } from '@ellie/utils'
-import { createTestHindsight, createTestBank, getHdb } from './setup'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb
+} from './setup'
 import type { TestHindsight } from './setup'
 import type { HindsightDatabase } from '../db'
 import {
@@ -21,7 +31,11 @@ import {
 } from '../location'
 
 /** Insert a minimal memory row to satisfy FK constraints. */
-function insertTestMemory(hdb: HindsightDatabase, bid: string, memId?: string): string {
+function insertTestMemory(
+	hdb: HindsightDatabase,
+	bid: string,
+	memId?: string
+): string {
 	const id = memId ?? ulid()
 	const now = Date.now()
 	hdb.db
@@ -55,15 +69,21 @@ afterEach(() => {
 
 describe('normalizePath', () => {
 	it('trims whitespace', () => {
-		expect(normalizePath('  src/foo.ts  ')).toBe('src/foo.ts')
+		expect(normalizePath('  src/foo.ts  ')).toBe(
+			'src/foo.ts'
+		)
 	})
 
 	it('replaces backslashes with forward slashes', () => {
-		expect(normalizePath('src\\lib\\foo.ts')).toBe('src/lib/foo.ts')
+		expect(normalizePath('src\\lib\\foo.ts')).toBe(
+			'src/lib/foo.ts'
+		)
 	})
 
 	it('collapses repeated slashes', () => {
-		expect(normalizePath('src//lib///foo.ts')).toBe('src/lib/foo.ts')
+		expect(normalizePath('src//lib///foo.ts')).toBe(
+			'src/lib/foo.ts'
+		)
 	})
 
 	it('removes trailing slash except root', () => {
@@ -72,13 +92,15 @@ describe('normalizePath', () => {
 	})
 
 	it('lowercases the result', () => {
-		expect(normalizePath('Src/Lib/Foo.TS')).toBe('src/lib/foo.ts')
+		expect(normalizePath('Src/Lib/Foo.TS')).toBe(
+			'src/lib/foo.ts'
+		)
 	})
 
 	it('handles Windows-style paths', () => {
-		expect(normalizePath('C:\\Users\\dev\\project\\src\\main.ts')).toBe(
-			'c:/users/dev/project/src/main.ts'
-		)
+		expect(
+			normalizePath('C:\\Users\\dev\\project\\src\\main.ts')
+		).toBe('c:/users/dev/project/src/main.ts')
 	})
 
 	it('handles root path', () => {
@@ -94,49 +116,69 @@ describe('normalizePath', () => {
 
 describe('detectLocationSignals', () => {
 	it('detects absolute file paths', () => {
-		const signals = detectLocationSignals('What does /src/lib/utils.ts do?')
+		const signals = detectLocationSignals(
+			'What does /src/lib/utils.ts do?'
+		)
 		expect(signals).toContain('/src/lib/utils.ts')
 	})
 
 	it('detects relative file paths', () => {
-		const signals = detectLocationSignals('Look at ./lib/config.ts')
+		const signals = detectLocationSignals(
+			'Look at ./lib/config.ts'
+		)
 		expect(signals).toContain('./lib/config.ts')
 	})
 
 	it('detects module-like path tokens', () => {
-		const signals = detectLocationSignals('Check src/components/Button.tsx')
+		const signals = detectLocationSignals(
+			'Check src/components/Button.tsx'
+		)
 		expect(signals.length).toBeGreaterThan(0)
-		expect(signals.some((s) => s.includes('src/components'))).toBe(true)
+		expect(
+			signals.some(s => s.includes('src/components'))
+		).toBe(true)
 	})
 
 	it('detects dot-separated module tokens', () => {
-		const signals = detectLocationSignals('The utils.logger module is broken')
+		const signals = detectLocationSignals(
+			'The utils.logger module is broken'
+		)
 		expect(signals).toContain('utils.logger')
 	})
 
 	it('does not detect version numbers as modules', () => {
-		const signals = detectLocationSignals('We use version 1.2.3')
+		const signals = detectLocationSignals(
+			'We use version 1.2.3'
+		)
 		expect(signals.length).toBe(0)
 	})
 
 	it('does not detect sentence boundaries as modules', () => {
-		const signals = detectLocationSignals('Something happened. Then more happened.')
+		const signals = detectLocationSignals(
+			'Something happened. Then more happened.'
+		)
 		expect(signals.length).toBe(0)
 	})
 
 	it('returns empty for queries without location signals', () => {
-		const signals = detectLocationSignals("What is Peter's favorite color?")
+		const signals = detectLocationSignals(
+			"What is Peter's favorite color?"
+		)
 		expect(signals).toEqual([])
 	})
 })
 
 describe('hasLocationSignals', () => {
 	it('returns true when signals present', () => {
-		expect(hasLocationSignals('Check src/foo/bar.ts')).toBe(true)
+		expect(hasLocationSignals('Check src/foo/bar.ts')).toBe(
+			true
+		)
 	})
 
 	it('returns false when no signals', () => {
-		expect(hasLocationSignals('What is the weather?')).toBe(false)
+		expect(hasLocationSignals('What is the weather?')).toBe(
+			false
+		)
 	})
 })
 
@@ -147,9 +189,13 @@ describe('locationRecord', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
 
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: memId })
+		locationRecord(hdb, bankId, 'src/foo.ts', {
+			memoryId: memId
+		})
 
-		const hits = locationFind(hdb, bankId, { path: 'src/foo.ts' })
+		const hits = locationFind(hdb, bankId, {
+			path: 'src/foo.ts'
+		})
 		expect(hits.length).toBe(1)
 		expect(hits[0]!.normalizedPath).toBe('src/foo.ts')
 		expect(hits[0]!.accessCount).toBe(1)
@@ -160,10 +206,16 @@ describe('locationRecord', () => {
 		const mem1 = insertTestMemory(hdb, bankId)
 		const mem2 = insertTestMemory(hdb, bankId)
 
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: mem1 })
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: mem2 })
+		locationRecord(hdb, bankId, 'src/foo.ts', {
+			memoryId: mem1
+		})
+		locationRecord(hdb, bankId, 'src/foo.ts', {
+			memoryId: mem2
+		})
 
-		const hits = locationFind(hdb, bankId, { path: 'src/foo.ts' })
+		const hits = locationFind(hdb, bankId, {
+			path: 'src/foo.ts'
+		})
 		expect(hits.length).toBe(1)
 		expect(hits[0]!.accessCount).toBe(2)
 	})
@@ -172,9 +224,13 @@ describe('locationRecord', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
 
-		locationRecord(hdb, bankId, 'Src\\Foo.TS', { memoryId: memId })
+		locationRecord(hdb, bankId, 'Src\\Foo.TS', {
+			memoryId: memId
+		})
 
-		const hits = locationFind(hdb, bankId, { path: 'src/foo.ts' })
+		const hits = locationFind(hdb, bankId, {
+			path: 'src/foo.ts'
+		})
 		expect(hits.length).toBe(1)
 	})
 
@@ -194,7 +250,9 @@ describe('locationRecord', () => {
 
 		const stats = locationStats(hdb, bankId, 'src/a.ts')
 		expect(stats).not.toBeNull()
-		expect(stats!.topAssociations.length).toBeGreaterThanOrEqual(1)
+		expect(
+			stats!.topAssociations.length
+		).toBeGreaterThanOrEqual(1)
 		expect(stats!.topAssociations[0]!.coAccessCount).toBe(1)
 	})
 })
@@ -203,16 +261,22 @@ describe('locationFind', () => {
 	it('finds paths by exact match', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/utils.ts', { memoryId: memId })
+		locationRecord(hdb, bankId, 'src/utils.ts', {
+			memoryId: memId
+		})
 
-		const hits = locationFind(hdb, bankId, { path: 'src/utils.ts' })
+		const hits = locationFind(hdb, bankId, {
+			path: 'src/utils.ts'
+		})
 		expect(hits.length).toBe(1)
 	})
 
 	it('falls back to signal detection from query', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/utils/logger.ts', { memoryId: memId })
+		locationRecord(hdb, bankId, 'src/utils/logger.ts', {
+			memoryId: memId
+		})
 
 		const hits = locationFind(hdb, bankId, {
 			query: 'Check src/utils/logger.ts for bugs'
@@ -224,8 +288,22 @@ describe('locationFind', () => {
 		const hdb = getHdb(test.hs)
 		const mem1 = insertTestMemory(hdb, bankId)
 		const mem2 = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: mem1 }, 'alice', 'proj-a')
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: mem2 }, 'bob', 'proj-b')
+		locationRecord(
+			hdb,
+			bankId,
+			'src/foo.ts',
+			{ memoryId: mem1 },
+			'alice',
+			'proj-a'
+		)
+		locationRecord(
+			hdb,
+			bankId,
+			'src/foo.ts',
+			{ memoryId: mem2 },
+			'bob',
+			'proj-b'
+		)
 
 		const hitsAlice = locationFind(hdb, bankId, {
 			path: 'src/foo.ts',
@@ -239,7 +317,11 @@ describe('locationFind', () => {
 describe('locationStats', () => {
 	it('returns null for unknown path', () => {
 		const hdb = getHdb(test.hs)
-		const stats = locationStats(hdb, bankId, 'nonexistent.ts')
+		const stats = locationStats(
+			hdb,
+			bankId,
+			'nonexistent.ts'
+		)
 		expect(stats).toBeNull()
 	})
 
@@ -247,8 +329,12 @@ describe('locationStats', () => {
 		const hdb = getHdb(test.hs)
 		const mem1 = insertTestMemory(hdb, bankId)
 		const mem2 = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/main.ts', { memoryId: mem1 })
-		locationRecord(hdb, bankId, 'src/main.ts', { memoryId: mem2 })
+		locationRecord(hdb, bankId, 'src/main.ts', {
+			memoryId: mem1
+		})
+		locationRecord(hdb, bankId, 'src/main.ts', {
+			memoryId: mem2
+		})
 
 		const stats = locationStats(hdb, bankId, 'src/main.ts')
 		expect(stats).not.toBeNull()
@@ -263,9 +349,13 @@ describe('resolveSignalsToPaths', () => {
 	it('resolves exact match signals', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: memId })
+		locationRecord(hdb, bankId, 'src/foo.ts', {
+			memoryId: memId
+		})
 
-		const map = resolveSignalsToPaths(hdb, bankId, ['src/foo.ts'])
+		const map = resolveSignalsToPaths(hdb, bankId, [
+			'src/foo.ts'
+		])
 		expect(map.size).toBe(1)
 		expect(map.get('src/foo.ts')!.length).toBe(1)
 	})
@@ -273,15 +363,24 @@ describe('resolveSignalsToPaths', () => {
 	it('resolves suffix matches', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, '/home/user/project/src/utils.ts', { memoryId: memId })
+		locationRecord(
+			hdb,
+			bankId,
+			'/home/user/project/src/utils.ts',
+			{ memoryId: memId }
+		)
 
-		const map = resolveSignalsToPaths(hdb, bankId, ['src/utils.ts'])
+		const map = resolveSignalsToPaths(hdb, bankId, [
+			'src/utils.ts'
+		])
 		expect(map.size).toBe(1)
 	})
 
 	it('returns empty for unresolvable signals', () => {
 		const hdb = getHdb(test.hs)
-		const map = resolveSignalsToPaths(hdb, bankId, ['nonexistent/path.ts'])
+		const map = resolveSignalsToPaths(hdb, bankId, [
+			'nonexistent/path.ts'
+		])
 		expect(map.size).toBe(0)
 	})
 })
@@ -291,7 +390,14 @@ describe('resolveSignalsToPaths', () => {
 describe('computeLocationBoost', () => {
 	it('returns 0 when no query paths provided', () => {
 		const hdb = getHdb(test.hs)
-		const boost = computeLocationBoost(hdb, bankId, 'mem-1', new Set(), 0, Date.now())
+		const boost = computeLocationBoost(
+			hdb,
+			bankId,
+			'mem-1',
+			new Set(),
+			0,
+			Date.now()
+		)
 		expect(boost).toBe(0)
 	})
 
@@ -299,25 +405,47 @@ describe('computeLocationBoost', () => {
 		const hdb = getHdb(test.hs)
 		const mem1 = insertTestMemory(hdb, bankId)
 		const mem2 = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: mem1 })
+		locationRecord(hdb, bankId, 'src/foo.ts', {
+			memoryId: mem1
+		})
 
-		const hits = locationFind(hdb, bankId, { path: 'src/foo.ts' })
+		const hits = locationFind(hdb, bankId, {
+			path: 'src/foo.ts'
+		})
 		const pathId = hits[0]!.pathId
 
 		// mem2 has no associations
-		const boost = computeLocationBoost(hdb, bankId, mem2, new Set([pathId]), 0, Date.now())
+		const boost = computeLocationBoost(
+			hdb,
+			bankId,
+			mem2,
+			new Set([pathId]),
+			0,
+			Date.now()
+		)
 		expect(boost).toBe(0)
 	})
 
 	it('returns direct path boost when memory shares a query path', () => {
 		const hdb = getHdb(test.hs)
 		const memId = insertTestMemory(hdb, bankId)
-		locationRecord(hdb, bankId, 'src/foo.ts', { memoryId: memId })
+		locationRecord(hdb, bankId, 'src/foo.ts', {
+			memoryId: memId
+		})
 
-		const hits = locationFind(hdb, bankId, { path: 'src/foo.ts' })
+		const hits = locationFind(hdb, bankId, {
+			path: 'src/foo.ts'
+		})
 		const pathId = hits[0]!.pathId
 
-		const boost = computeLocationBoost(hdb, bankId, memId, new Set([pathId]), 0, Date.now())
+		const boost = computeLocationBoost(
+			hdb,
+			bankId,
+			memId,
+			new Set([pathId]),
+			0,
+			Date.now()
+		)
 		// Should have at least directPathBoost (0.12) + familiarityBoost
 		expect(boost).toBeGreaterThan(0.1)
 	})
@@ -326,7 +454,15 @@ describe('computeLocationBoost', () => {
 describe('getMaxStrengthForPaths', () => {
 	it('returns 0 when no associations exist', () => {
 		const hdb = getHdb(test.hs)
-		expect(getMaxStrengthForPaths(hdb, bankId, new Set())).toBe(0)
-		expect(getMaxStrengthForPaths(hdb, bankId, new Set(['nonexistent']))).toBe(0)
+		expect(
+			getMaxStrengthForPaths(hdb, bankId, new Set())
+		).toBe(0)
+		expect(
+			getMaxStrengthForPaths(
+				hdb,
+				bankId,
+				new Set(['nonexistent'])
+			)
+		).toBe(0)
 	})
 })

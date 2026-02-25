@@ -19,16 +19,20 @@ new Elysia()
 				// Query type is inherited from guard
 				.get('/profile', ({ query }) => `Hi`)
 				// Store is inherited
-				.post('/name', ({ store: { name }, body, query }) => name, {
-					body: t.Object({
-						id: t.Number({
-							minimum: 5
-						}),
-						username: t.String(),
-						profile: t.Object({
-							name: t.String()
+				.post(
+					'/name',
+					({ store: { name }, body, query }) => name,
+					{
+						body: t.Object({
+							id: t.Number({
+								minimum: 5
+							}),
+							username: t.String(),
+							profile: t.Object({
+								name: t.String()
+							})
 						})
-					})
-				})
+					}
+				)
 	)
 	.listen(3000)

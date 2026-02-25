@@ -3,8 +3,18 @@
  * and the working memory store (working-memory.ts).
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	test,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 import type { HindsightDatabase } from '../db'
 import {
 	computeProbe,
@@ -58,7 +68,11 @@ describe('computeBase', () => {
 	test('decays with time (tau = 7 days)', () => {
 		const now = Date.now()
 		const recent = computeBase(3, now - 1000, now) // 1 second ago
-		const old = computeBase(3, now - 7 * 24 * 3600 * 1000, now) // 7 days ago
+		const old = computeBase(
+			3,
+			now - 7 * 24 * 3600 * 1000,
+			now
+		) // 7 days ago
 		expect(recent).toBeGreaterThan(old)
 	})
 
@@ -93,7 +107,12 @@ describe('computeBase', () => {
 	test('encoding_strength defaults to 1.0', () => {
 		const now = Date.now()
 		const withDefault = computeBase(5, now - 1000, now)
-		const withExplicit = computeBase(5, now - 1000, now, 1.0)
+		const withExplicit = computeBase(
+			5,
+			now - 1000,
+			now,
+			1.0
+		)
 		expect(withDefault).toBe(withExplicit)
 	})
 })
@@ -106,27 +125,77 @@ describe('computeSpread', () => {
 
 	test('returns positive value when neighbors have activation', () => {
 		const activations = new Map([['neighbor1', 0.8]])
-		const links = [{ sourceId: 'target', targetId: 'neighbor1', weight: 1.0 }]
-		const result = computeSpread('target', activations, links)
+		const links = [
+			{
+				sourceId: 'target',
+				targetId: 'neighbor1',
+				weight: 1.0
+			}
+		]
+		const result = computeSpread(
+			'target',
+			activations,
+			links
+		)
 		expect(result).toBeGreaterThan(0)
 		expect(result).toBeLessThan(1) // normalized via 1 - exp(-x)
 	})
 
 	test('higher link weight produces higher spread', () => {
 		const activations = new Map([['neighbor1', 0.8]])
-		const linksLow = [{ sourceId: 'target', targetId: 'neighbor1', weight: 0.2 }]
-		const linksHigh = [{ sourceId: 'target', targetId: 'neighbor1', weight: 1.0 }]
-		const low = computeSpread('target', activations, linksLow)
-		const high = computeSpread('target', activations, linksHigh)
+		const linksLow = [
+			{
+				sourceId: 'target',
+				targetId: 'neighbor1',
+				weight: 0.2
+			}
+		]
+		const linksHigh = [
+			{
+				sourceId: 'target',
+				targetId: 'neighbor1',
+				weight: 1.0
+			}
+		]
+		const low = computeSpread(
+			'target',
+			activations,
+			linksLow
+		)
+		const high = computeSpread(
+			'target',
+			activations,
+			linksHigh
+		)
 		expect(high).toBeGreaterThan(low)
 	})
 
 	test('works when candidate is on either side of the link', () => {
 		const activations = new Map([['neighbor1', 0.8]])
-		const linksForward = [{ sourceId: 'target', targetId: 'neighbor1', weight: 1.0 }]
-		const linksBackward = [{ sourceId: 'neighbor1', targetId: 'target', weight: 1.0 }]
-		const forward = computeSpread('target', activations, linksForward)
-		const backward = computeSpread('target', activations, linksBackward)
+		const linksForward = [
+			{
+				sourceId: 'target',
+				targetId: 'neighbor1',
+				weight: 1.0
+			}
+		]
+		const linksBackward = [
+			{
+				sourceId: 'neighbor1',
+				targetId: 'target',
+				weight: 1.0
+			}
+		]
+		const forward = computeSpread(
+			'target',
+			activations,
+			linksForward
+		)
+		const backward = computeSpread(
+			'target',
+			activations,
+			linksBackward
+		)
 		expect(forward).toBeCloseTo(backward, 10)
 	})
 })
@@ -136,8 +205,11 @@ describe('computeCognitiveScore', () => {
 		const probe = 0.8
 		const base = 0.6
 		const spread = 0.4
-		const expected = 0.5 * probe + 0.35 * base + 0.15 * spread
-		expect(computeCognitiveScore(probe, base, spread)).toBeCloseTo(expected, 10)
+		const expected =
+			0.5 * probe + 0.35 * base + 0.15 * spread
+		expect(
+			computeCognitiveScore(probe, base, spread)
+		).toBeCloseTo(expected, 10)
 	})
 
 	test('returns 0 when all inputs are 0', () => {
@@ -157,21 +229,38 @@ describe('WorkingMemoryStore', () => {
 	})
 
 	test('returns 0 boost for unknown key', () => {
-		expect(wm.getBoost('bank1', 'session1', 'mem1', Date.now())).toBe(0)
+		expect(
+			wm.getBoost('bank1', 'session1', 'mem1', Date.now())
+		).toBe(0)
 	})
 
 	test('returns positive boost after touch', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
-		const boost = wm.getBoost('bank1', 'session1', 'mem1', now)
+		const boost = wm.getBoost(
+			'bank1',
+			'session1',
+			'mem1',
+			now
+		)
 		expect(boost).toBeCloseTo(0.2, 2) // 0.20 * exp(0)
 	})
 
 	test('boost decays over time', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
-		const boostNow = wm.getBoost('bank1', 'session1', 'mem1', now)
-		const boostLater = wm.getBoost('bank1', 'session1', 'mem1', now + 450_000) // 7.5 min
+		const boostNow = wm.getBoost(
+			'bank1',
+			'session1',
+			'mem1',
+			now
+		)
+		const boostLater = wm.getBoost(
+			'bank1',
+			'session1',
+			'mem1',
+			now + 450_000
+		) // 7.5 min
 		expect(boostLater).toBeLessThan(boostNow)
 		expect(boostLater).toBeGreaterThan(0)
 	})
@@ -179,18 +268,28 @@ describe('WorkingMemoryStore', () => {
 	test('returns 0 after decay period (15 min)', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
-		const boost = wm.getBoost('bank1', 'session1', 'mem1', now + 900_001)
+		const boost = wm.getBoost(
+			'bank1',
+			'session1',
+			'mem1',
+			now + 900_001
+		)
 		expect(boost).toBe(0)
 	})
 
 	test('evicts LRU entries when capacity exceeded (40)', () => {
 		const now = Date.now()
-		const ids = Array.from({ length: 45 }, (_, i) => `mem${i}`)
+		const ids = Array.from(
+			{ length: 45 },
+			(_, i) => `mem${i}`
+		)
 		wm.touch('bank1', 'session1', ids, now)
 		const entries = wm.getEntries('bank1', 'session1', now)
 		expect(entries.length).toBe(40)
 		// Oldest 5 (mem0–mem4) should be evicted, mem5–mem44 should remain
-		const survivingIds = new Set(entries.map(e => e.memoryId))
+		const survivingIds = new Set(
+			entries.map(e => e.memoryId)
+		)
 		for (let i = 0; i < 5; i++) {
 			expect(survivingIds.has(`mem${i}`)).toBe(false)
 		}
@@ -204,34 +303,49 @@ describe('WorkingMemoryStore', () => {
 		wm.touch('bank1', 'session1', ['mem1'], now)
 		wm.touch('bank1', 'session1', ['mem1'], now + 5000)
 		// Boost should be based on the more recent touch
-		const boost = wm.getBoost('bank1', 'session1', 'mem1', now + 5000)
+		const boost = wm.getBoost(
+			'bank1',
+			'session1',
+			'mem1',
+			now + 5000
+		)
 		expect(boost).toBeCloseTo(0.2, 2)
 	})
 
 	test('isolates different sessions', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
-		expect(wm.getBoost('bank1', 'session2', 'mem1', now)).toBe(0)
+		expect(
+			wm.getBoost('bank1', 'session2', 'mem1', now)
+		).toBe(0)
 	})
 
 	test('isolates different banks', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
-		expect(wm.getBoost('bank2', 'session1', 'mem1', now)).toBe(0)
+		expect(
+			wm.getBoost('bank2', 'session1', 'mem1', now)
+		).toBe(0)
 	})
 
 	test('clear removes all entries', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
 		wm.clear()
-		expect(wm.getBoost('bank1', 'session1', 'mem1', now)).toBe(0)
+		expect(
+			wm.getBoost('bank1', 'session1', 'mem1', now)
+		).toBe(0)
 	})
 
 	test('lazy cleanup removes expired entries on read', () => {
 		const now = Date.now()
 		wm.touch('bank1', 'session1', ['mem1'], now)
 		// After expiry, getEntries should return empty
-		const entries = wm.getEntries('bank1', 'session1', now + 900_001)
+		const entries = wm.getEntries(
+			'bank1',
+			'session1',
+			now + 900_001
+		)
 		expect(entries.length).toBe(0)
 	})
 })
@@ -323,7 +437,9 @@ describe('scoreCognitive (with DB)', () => {
 			now
 		)
 		expect(result[0]!.id).toBe('fresh') // boosted by base activation
-		expect(result[0]!.cognitiveScore).toBeGreaterThan(result[1]!.cognitiveScore)
+		expect(result[0]!.cognitiveScore).toBeGreaterThan(
+			result[1]!.cognitiveScore
+		)
 	})
 
 	test('deterministic tie-break by id ASC', () => {
@@ -384,8 +500,12 @@ describe('scoreCognitive (with DB)', () => {
 			now
 		)
 
-		expect(run1[0]!.cognitiveScore).toBe(run2[0]!.cognitiveScore)
-		expect(run1[1]!.cognitiveScore).toBe(run2[1]!.cognitiveScore)
+		expect(run1[0]!.cognitiveScore).toBe(
+			run2[0]!.cognitiveScore
+		)
+		expect(run1[1]!.cognitiveScore).toBe(
+			run2[1]!.cognitiveScore
+		)
 		expect(run1[0]!.id).toBe(run2[0]!.id)
 	})
 })

@@ -47,7 +47,11 @@ export interface DynamicToolUIPart {
 
 // -- Chat status --
 
-export type ChatStatus = 'submitted' | 'streaming' | 'ready' | 'error'
+export type ChatStatus =
+	| 'submitted'
+	| 'streaming'
+	| 'ready'
+	| 'error'
 
 // -- File / Source types --
 

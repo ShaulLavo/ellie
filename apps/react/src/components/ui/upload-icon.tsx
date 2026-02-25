@@ -1,9 +1,28 @@
-import { forwardRef, useImperativeHandle, useCallback, useRef } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useCallback,
+	useRef
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const UploadIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const UploadIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 		const isAnimatingRef = useRef(false)
 
@@ -13,26 +32,44 @@ const UploadIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 
 			while (isAnimatingRef.current) {
 				// 1. Fly Up and Fade Out
-				await animate('.arrow-group', { y: -12, opacity: 0 }, { duration: 0.4, ease: 'easeIn' })
+				await animate(
+					'.arrow-group',
+					{ y: -12, opacity: 0 },
+					{ duration: 0.4, ease: 'easeIn' }
+				)
 
 				if (!isAnimatingRef.current) break
 
 				// 2. Instant Reset to Bottom
-				await animate('.arrow-group', { y: 12, opacity: 0 }, { duration: 0 })
+				await animate(
+					'.arrow-group',
+					{ y: 12, opacity: 0 },
+					{ duration: 0 }
+				)
 
 				// 3. Fly In from Bottom to Center
-				await animate('.arrow-group', { y: 0, opacity: 1 }, { duration: 0.4, ease: 'easeOut' })
+				await animate(
+					'.arrow-group',
+					{ y: 0, opacity: 1 },
+					{ duration: 0.4, ease: 'easeOut' }
+				)
 
 				if (!isAnimatingRef.current) break
 
 				// Small pause at center for "intention"
-				await new Promise(resolve => setTimeout(resolve, 200))
+				await new Promise(resolve =>
+					setTimeout(resolve, 200)
+				)
 			}
 		}, [animate])
 
 		const stop = useCallback(() => {
 			isAnimatingRef.current = false
-			animate('.arrow-group', { y: 0, opacity: 1 }, { duration: 0.3, ease: 'easeOut' })
+			animate(
+				'.arrow-group',
+				{ y: 0, opacity: 1 },
+				{ duration: 0.3, ease: 'easeOut' }
+			)
 		}, [animate])
 
 		useImperativeHandle(ref, () => ({

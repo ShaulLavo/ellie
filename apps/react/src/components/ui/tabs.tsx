@@ -1,14 +1,24 @@
 import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
-import { cva, type VariantProps } from 'class-variance-authority'
+import {
+	cva,
+	type VariantProps
+} from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
-function Tabs({ className, orientation = 'horizontal', ...props }: TabsPrimitive.Root.Props) {
+function Tabs({
+	className,
+	orientation = 'horizontal',
+	...props
+}: TabsPrimitive.Root.Props) {
 	return (
 		<TabsPrimitive.Root
 			data-slot="tabs"
 			data-orientation={orientation}
-			className={cn('gap-2 group/tabs flex data-horizontal:flex-col', className)}
+			className={cn(
+				'gap-2 group/tabs flex data-horizontal:flex-col',
+				className
+			)}
 			{...props}
 		/>
 	)
@@ -33,18 +43,25 @@ function TabsList({
 	className,
 	variant = 'default',
 	...props
-}: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
+}: TabsPrimitive.List.Props &
+	VariantProps<typeof tabsListVariants>) {
 	return (
 		<TabsPrimitive.List
 			data-slot="tabs-list"
 			data-variant={variant}
-			className={cn(tabsListVariants({ variant }), className)}
+			className={cn(
+				tabsListVariants({ variant }),
+				className
+			)}
 			{...props}
 		/>
 	)
 }
 
-function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
+function TabsTrigger({
+	className,
+	...props
+}: TabsPrimitive.Tab.Props) {
 	return (
 		<TabsPrimitive.Tab
 			data-slot="tabs-trigger"
@@ -60,14 +77,26 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
 	)
 }
 
-function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
+function TabsContent({
+	className,
+	...props
+}: TabsPrimitive.Panel.Props) {
 	return (
 		<TabsPrimitive.Panel
 			data-slot="tabs-content"
-			className={cn('text-xs/relaxed flex-1 outline-none', className)}
+			className={cn(
+				'text-xs/relaxed flex-1 outline-none',
+				className
+			)}
 			{...props}
 		/>
 	)
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants }
+export {
+	Tabs,
+	TabsList,
+	TabsTrigger,
+	TabsContent,
+	tabsListVariants
+}

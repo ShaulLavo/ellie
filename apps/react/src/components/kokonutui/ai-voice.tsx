@@ -81,7 +81,9 @@ export default function AI_Voice() {
 				<button
 					className={cn(
 						'group w-16 h-16 rounded-xl flex items-center justify-center transition-colors',
-						submitted ? 'bg-none' : 'bg-none hover:bg-black/5 dark:hover:bg-white/5'
+						submitted
+							? 'bg-none'
+							: 'bg-none hover:bg-black/5 dark:hover:bg-white/5'
 					)}
 					type="button"
 					onClick={handleClick}
@@ -92,14 +94,19 @@ export default function AI_Voice() {
 							style={{ animationDuration: '3s' }}
 						/>
 					) : (
-						<TelephoneIcon size={24} className="text-black/90 dark:text-white/90" />
+						<TelephoneIcon
+							size={24}
+							className="text-black/90 dark:text-white/90"
+						/>
 					)}
 				</button>
 
 				<span
 					className={cn(
 						'font-mono text-sm transition-opacity duration-300',
-						submitted ? 'text-black/70 dark:text-white/70' : 'text-black/30 dark:text-white/30'
+						submitted
+							? 'text-black/70 dark:text-white/70'
+							: 'text-black/30 dark:text-white/30'
 					)}
 				>
 					{formatTime(time)}

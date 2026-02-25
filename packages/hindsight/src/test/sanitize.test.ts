@@ -13,7 +13,9 @@ import { sanitizeText, parseLLMJson } from '../sanitize'
 
 describe('sanitizeText', () => {
 	it('removes null bytes', () => {
-		expect(sanitizeText('hello\x00world')).toBe('helloworld')
+		expect(sanitizeText('hello\x00world')).toBe(
+			'helloworld'
+		)
 	})
 
 	it('removes multiple null bytes', () => {
@@ -21,14 +23,20 @@ describe('sanitizeText', () => {
 	})
 
 	it('removes lone surrogates', () => {
-		expect(sanitizeText('hello\uD800world')).toBe('helloworld')
-		expect(sanitizeText('hello\uDFFFworld')).toBe('helloworld')
+		expect(sanitizeText('hello\uD800world')).toBe(
+			'helloworld'
+		)
+		expect(sanitizeText('hello\uDFFFworld')).toBe(
+			'helloworld'
+		)
 	})
 
 	it('preserves valid ASCII and CJK text', () => {
 		// Note: sanitizeText strips all surrogate code units (including valid pairs),
 		// so emoji get removed. CJK and accented characters are fine (they're in BMP).
-		expect(sanitizeText('Hello, World! 日本語 Ñ')).toBe('Hello, World! 日本語 Ñ')
+		expect(sanitizeText('Hello, World! 日本語 Ñ')).toBe(
+			'Hello, World! 日本語 Ñ'
+		)
 	})
 
 	it('handles empty string', () => {
@@ -42,7 +50,9 @@ describe('sanitizeText', () => {
 	it('preserves valid emoji (surrogate pairs are preserved)', () => {
 		// Implementation was fixed to only strip lone/unpaired surrogates,
 		// preserving valid emoji formed from proper surrogate pairs.
-		expect(sanitizeText('Party 🎉 time!')).toBe('Party 🎉 time!')
+		expect(sanitizeText('Party 🎉 time!')).toBe(
+			'Party 🎉 time!'
+		)
 	})
 
 	it('removes mixed null bytes and surrogates', () => {
@@ -62,16 +72,22 @@ describe('parseLLMJson', () => {
 
 	it('strips json code fences', () => {
 		const input = '```json\n{"name": "test"}\n```'
-		expect(parseLLMJson(input, {})).toEqual({ name: 'test' })
+		expect(parseLLMJson(input, {})).toEqual({
+			name: 'test'
+		})
 	})
 
 	it('strips bare code fences', () => {
 		const input = '```\n{"name": "test"}\n```'
-		expect(parseLLMJson(input, {})).toEqual({ name: 'test' })
+		expect(parseLLMJson(input, {})).toEqual({
+			name: 'test'
+		})
 	})
 
 	it('returns fallback on invalid JSON', () => {
-		expect(parseLLMJson('not json at all', { default: true })).toEqual({
+		expect(
+			parseLLMJson('not json at all', { default: true })
+		).toEqual({
 			default: true
 		})
 	})
@@ -82,13 +98,21 @@ describe('parseLLMJson', () => {
 
 	it('handles whitespace around JSON', () => {
 		const input = '  \n  {"key": "value"}  \n  '
-		expect(parseLLMJson(input, {})).toEqual({ key: 'value' })
+		expect(parseLLMJson(input, {})).toEqual({
+			key: 'value'
+		})
 	})
 
 	it('parses arrays', () => {
-		const input = '[{"action": "create", "text": "observation"}]'
-		const fallback: Array<{ action: string; text: string }> = []
-		expect(parseLLMJson(input, fallback)).toEqual([{ action: 'create', text: 'observation' }])
+		const input =
+			'[{"action": "create", "text": "observation"}]'
+		const fallback: Array<{
+			action: string
+			text: string
+		}> = []
+		expect(parseLLMJson(input, fallback)).toEqual([
+			{ action: 'create', text: 'observation' }
+		])
 	})
 
 	it('handles nested JSON in code fences', () => {
@@ -102,7 +126,9 @@ describe('parseLLMJson', () => {
   ]
 }
 \`\`\``
-		const fallback: { facts: Array<{ content: string; factType: string }> } = {
+		const fallback: {
+			facts: Array<{ content: string; factType: string }>
+		} = {
 			facts: []
 		}
 		const result = parseLLMJson(input, fallback)

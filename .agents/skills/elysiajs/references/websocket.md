@@ -95,36 +95,39 @@ const connections = new Set<any>().ws('/chat', {
 ## Room-Based Chat
 
 ```typescript
-const rooms = new Map<string, Set<any>>().ws('/chat/:room', {
-	open(ws) {
-		const room = ws.data.params.room
-		if (!rooms.has(room)) {
-			rooms.set(room, new Set())
-		}
-		rooms.get(room)!.add(ws)
-	},
-	message(ws, message) {
-		const room = ws.data.params.room
-		const clients = rooms.get(room)
-
-		if (clients) {
-			for (const client of clients) {
-				client.send(message)
+const rooms = new Map<string, Set<any>>().ws(
+	'/chat/:room',
+	{
+		open(ws) {
+			const room = ws.data.params.room
+			if (!rooms.has(room)) {
+				rooms.set(room, new Set())
 			}
-		}
-	},
-	close(ws) {
-		const room = ws.data.params.room
-		const clients = rooms.get(room)
+			rooms.get(room)!.add(ws)
+		},
+		message(ws, message) {
+			const room = ws.data.params.room
+			const clients = rooms.get(room)
 
-		if (clients) {
-			clients.delete(ws)
-			if (clients.size === 0) {
-				rooms.delete(room)
+			if (clients) {
+				for (const client of clients) {
+					client.send(message)
+				}
+			}
+		},
+		close(ws) {
+			const room = ws.data.params.room
+			const clients = rooms.get(room)
+
+			if (clients) {
+				clients.delete(ws)
+				if (clients.size === 0) {
+					rooms.delete(room)
+				}
 			}
 		}
 	}
-})
+)
 ```
 
 ## With State/Context

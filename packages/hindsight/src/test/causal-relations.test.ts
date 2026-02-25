@@ -5,7 +5,13 @@
  * Mix of unit tests (validation) and TDD targets (extraction).
  */
 
-import { it, expect, beforeEach, afterEach, describe } from 'bun:test'
+import {
+	it,
+	expect,
+	beforeEach,
+	afterEach,
+	describe
+} from 'bun:test'
 import {
 	createTestHindsight,
 	createTestBank,
@@ -49,7 +55,10 @@ describe('Causal relations validation', () => {
 		// so a valid first fact must have an empty causalRelations array.
 		const validFirstFact = {
 			content: 'Something happened',
-			causalRelations: [] as Array<{ targetIndex: number; strength: number }>
+			causalRelations: [] as Array<{
+				targetIndex: number
+				strength: number
+			}>
 		}
 
 		expect(validFirstFact.causalRelations).toHaveLength(0)
@@ -66,7 +75,9 @@ describe('Causal relations validation', () => {
 		]
 
 		for (let i = 1; i < chain.length; i++) {
-			expect(chain[i]!.causedBy).toBeLessThan(chain[i]!.index)
+			expect(chain[i]!.causedBy).toBeLessThan(
+				chain[i]!.index
+			)
 			expect(chain[i]!.causedBy).toBeGreaterThanOrEqual(0)
 		}
 	})
@@ -99,7 +110,10 @@ describe('Causal relation storage', () => {
 		const result = await t.hs.retain(bankId, 'test', {
 			facts: [
 				{ content: 'It started raining heavily' },
-				{ content: 'The hiking trail became muddy and slippery' }
+				{
+					content:
+						'The hiking trail became muddy and slippery'
+				}
 			],
 			consolidate: false
 		})
@@ -152,13 +166,18 @@ describeWithLLM('Causal relation extraction', () => {
 Because I lost my job, I couldn't pay my rent anymore.
 Since I couldn't afford rent, I had to move out of my apartment.
 After searching for weeks, I finally found a cheaper apartment in Brooklyn.`,
-			{ consolidate: false, context: 'Personal story about housing change' }
+			{
+				consolidate: false,
+				context: 'Personal story about housing change'
+			}
 		)
 
 		// Python: assert len(facts) >= 3
 		expect(result.memories.length).toBeGreaterThanOrEqual(3)
 
-		const causalLinks = result.links.filter(l => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l =>
+			isCausal(l.linkType)
+		)
 
 		// Python: assert len(all_causal_relations) >= 2
 		expect(causalLinks.length).toBeGreaterThanOrEqual(2)
@@ -211,7 +230,9 @@ The renovation took three months and cost $15,000.`,
 		expect(result.memories.length).toBeGreaterThanOrEqual(4)
 
 		// Validate all causal links connect distinct memories
-		const causalLinks = result.links.filter(l => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l =>
+			isCausal(l.linkType)
+		)
 		if (causalLinks.length > 0) {
 			for (const link of causalLinks) {
 				expect(link.sourceId).not.toBe(link.targetId)
@@ -226,11 +247,16 @@ The renovation took three months and cost $15,000.`,
 			`The stock market crash directly caused the company to lay off employees.
 The layoffs indirectly led to reduced consumer spending in the area.
 Reduced spending somewhat affected local businesses.`,
-			{ consolidate: false, context: 'Economic impact story' }
+			{
+				consolidate: false,
+				context: 'Economic impact story'
+			}
 		)
 
 		// Query DB for stored weight values
-		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+		const hdb = (
+			t.hs as unknown as { hdb: HindsightDatabase }
+		).hdb
 		const dbLinks = hdb.db
 			.select({
 				linkType: hdb.schema.memoryLinks.linkType,
@@ -238,7 +264,9 @@ Reduced spending somewhat affected local businesses.`,
 			})
 			.from(hdb.schema.memoryLinks)
 			.all()
-			.filter((l: { linkType: string }) => isCausal(l.linkType))
+			.filter((l: { linkType: string }) =>
+				isCausal(l.linkType)
+			)
 
 		// If causal links were extracted, strengths must be in [0, 1]
 		for (const link of dbLinks) {
@@ -264,7 +292,9 @@ Her data science skills enabled her to lead the analytics team.`,
 		expect(result.memories.length).toBeGreaterThan(0)
 
 		// If causal links were extracted, verify valid chain + types
-		const causalLinks = result.links.filter(l => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l =>
+			isCausal(l.linkType)
+		)
 		const validTypes = new Set(CAUSAL_TYPES)
 		for (const link of causalLinks) {
 			expect(link.sourceId).not.toBe(link.targetId)
@@ -283,7 +313,9 @@ Machine learning fascinated me so much that I changed my career to data science.
 		)
 
 		// No causal link should be a self-reference
-		const causalLinks = result.links.filter(l => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l =>
+			isCausal(l.linkType)
+		)
 		for (const link of causalLinks) {
 			expect(link.sourceId).not.toBe(link.targetId)
 		}
@@ -297,11 +329,16 @@ Machine learning fascinated me so much that I changed my career to data science.
 			`My promotion at work caused me to move to New York.
 Moving to New York was caused by my promotion at work.
 The new role enabled me to lead a team of engineers.`,
-			{ consolidate: false, context: 'Work promotion story' }
+			{
+				consolidate: false,
+				context: 'Work promotion story'
+			}
 		)
 
 		// All causal links must connect distinct memories (backward-looking enforced by pipeline)
-		const causalLinks = result.links.filter(l => isCausal(l.linkType))
+		const causalLinks = result.links.filter(l =>
+			isCausal(l.linkType)
+		)
 		for (const link of causalLinks) {
 			expect(link.sourceId).not.toBe(link.targetId)
 		}
@@ -320,11 +357,16 @@ The new role enabled me to lead a team of engineers.`,
 			`The stock market crash directly caused the company to lay off employees.
 The layoffs indirectly led to reduced consumer spending in the area.
 Reduced spending somewhat affected local businesses.`,
-			{ consolidate: false, context: 'Economic impact story' }
+			{
+				consolidate: false,
+				context: 'Economic impact story'
+			}
 		)
 
 		// Query DB for stored weight values
-		const hdb = (t.hs as unknown as { hdb: HindsightDatabase }).hdb
+		const hdb = (
+			t.hs as unknown as { hdb: HindsightDatabase }
+		).hdb
 		const dbLinks = hdb.db
 			.select({
 				linkType: hdb.schema.memoryLinks.linkType,
@@ -332,7 +374,9 @@ Reduced spending somewhat affected local businesses.`,
 			})
 			.from(hdb.schema.memoryLinks)
 			.all()
-			.filter((l: { linkType: string }) => isCausal(l.linkType))
+			.filter((l: { linkType: string }) =>
+				isCausal(l.linkType)
+			)
 
 		for (const link of dbLinks) {
 			expect(link.weight).toBeGreaterThanOrEqual(0.0)

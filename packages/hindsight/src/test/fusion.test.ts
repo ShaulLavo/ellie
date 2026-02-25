@@ -5,12 +5,25 @@
  * Pure unit tests — no DB or LLM needed.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { reciprocalRankFusion } from '../fusion'
 import type { RetrievalHit } from '../retrieval/semantic'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
-function makeHits(ids: string[], source: string): RetrievalHit[] {
+function makeHits(
+	ids: string[],
+	source: string
+): RetrievalHit[] {
 	return ids.map((id, rank) => ({
 		id,
 		score: 1 - rank * 0.1, // decreasing score
@@ -40,7 +53,10 @@ describe('reciprocalRankFusion', () => {
 		const semantic = makeHits(['a', 'b', 'c'], 'semantic')
 		const fulltext = makeHits(['b', 'd', 'a'], 'fulltext')
 
-		const fused = reciprocalRankFusion([semantic, fulltext], 10)
+		const fused = reciprocalRankFusion(
+			[semantic, fulltext],
+			10
+		)
 
 		// "a" appears in both: rank 0 in semantic (1/61) + rank 2 in fulltext (1/63)
 		// "b" appears in both: rank 1 in semantic (1/62) + rank 0 in fulltext (1/61)
@@ -59,7 +75,10 @@ describe('reciprocalRankFusion', () => {
 		const semantic = makeHits(['a', 'b'], 'semantic')
 		const fulltext = makeHits(['b', 'c'], 'fulltext')
 
-		const fused = reciprocalRankFusion([semantic, fulltext], 10)
+		const fused = reciprocalRankFusion(
+			[semantic, fulltext],
+			10
+		)
 
 		const a = fused.find(f => f.id === 'a')!
 		expect(a.sources).toEqual(['semantic'])
@@ -74,7 +93,10 @@ describe('reciprocalRankFusion', () => {
 	})
 
 	it('respects the limit parameter', () => {
-		const hits = makeHits(['a', 'b', 'c', 'd', 'e', 'f', 'g'], 'semantic')
+		const hits = makeHits(
+			['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+			'semantic'
+		)
 		const fused = reciprocalRankFusion([hits], 3)
 		expect(fused).toHaveLength(3)
 		expect(fused[0]!.id).toBe('a')
@@ -84,10 +106,15 @@ describe('reciprocalRankFusion', () => {
 		const semantic = makeHits(['a', 'b', 'c'], 'semantic')
 		const fulltext = makeHits(['c', 'b', 'a'], 'fulltext')
 
-		const fused = reciprocalRankFusion([semantic, fulltext], 10)
+		const fused = reciprocalRankFusion(
+			[semantic, fulltext],
+			10
+		)
 
 		for (let i = 1; i < fused.length; i++) {
-			expect(fused[i - 1]!.score).toBeGreaterThanOrEqual(fused[i]!.score)
+			expect(fused[i - 1]!.score).toBeGreaterThanOrEqual(
+				fused[i]!.score
+			)
 		}
 	})
 
@@ -103,7 +130,10 @@ describe('reciprocalRankFusion', () => {
 
 	it('handles single item lists', () => {
 		const fused = reciprocalRankFusion(
-			[[{ id: 'a', score: 1, source: 'semantic' }], [{ id: 'a', score: 1, source: 'fulltext' }]],
+			[
+				[{ id: 'a', score: 1, source: 'semantic' }],
+				[{ id: 'a', score: 1, source: 'fulltext' }]
+			],
 			10
 		)
 
@@ -119,7 +149,10 @@ describe('reciprocalRankFusion', () => {
 		const graph = makeHits(['c', 'd', 'e'], 'graph')
 		const temporal = makeHits(['d', 'e', 'a'], 'temporal')
 
-		const fused = reciprocalRankFusion([semantic, fulltext, graph, temporal], 10)
+		const fused = reciprocalRankFusion(
+			[semantic, fulltext, graph, temporal],
+			10
+		)
 
 		// All 5 unique IDs should be present
 		const ids = fused.map(f => f.id)
@@ -135,7 +168,10 @@ describe('reciprocalRankFusion', () => {
 		const fulltext = makeHits(['b', 'c', 'a'], 'fulltext')
 		const graph = makeHits(['c', 'a', 'b'], 'graph')
 
-		const fused = reciprocalRankFusion([semantic, fulltext, graph], 10)
+		const fused = reciprocalRankFusion(
+			[semantic, fulltext, graph],
+			10
+		)
 
 		for (const item of fused) {
 			expect(item.score).toBeGreaterThanOrEqual(0)
@@ -180,17 +216,20 @@ describe('Combined scoring trace (TDD targets)', () => {
 		await t.hs.retain(bankId, 'test', {
 			facts: [
 				{
-					content: 'Alpha timeline includes launch and migration milestones.',
+					content:
+						'Alpha timeline includes launch and migration milestones.',
 					factType: 'world',
 					occurredStart: now - 2 * 24 * 60 * 60 * 1000
 				},
 				{
-					content: 'Beta launch checklist tracks testing and rollout readiness.',
+					content:
+						'Beta launch checklist tracks testing and rollout readiness.',
 					factType: 'world',
 					occurredStart: now - 12 * 24 * 60 * 60 * 1000
 				},
 				{
-					content: 'Gamma release notes mention deployment blockers and risks.',
+					content:
+						'Gamma release notes mention deployment blockers and risks.',
 					factType: 'experience',
 					occurredStart: now - 45 * 24 * 60 * 60 * 1000
 				}
@@ -205,10 +244,14 @@ describe('Combined scoring trace (TDD targets)', () => {
 	})
 
 	it('trace has normalized RRF scores (not raw)', async () => {
-		const result = await t.hs.recall(bankId, 'launch timeline', {
-			enableTrace: true,
-			limit: 5
-		})
+		const result = await t.hs.recall(
+			bankId,
+			'launch timeline',
+			{
+				enableTrace: true,
+				limit: 5
+			}
+		)
 
 		const trace = result.trace
 		expect(trace).toBeDefined()
@@ -216,9 +259,15 @@ describe('Combined scoring trace (TDD targets)', () => {
 
 		let differsFromRaw = false
 		for (const candidate of trace!.candidates) {
-			expect(candidate.rrfNormalized).toBeGreaterThanOrEqual(0)
+			expect(
+				candidate.rrfNormalized
+			).toBeGreaterThanOrEqual(0)
 			expect(candidate.rrfNormalized).toBeLessThanOrEqual(1)
-			if (Math.abs(candidate.rrfNormalized - candidate.rrfScore) > 1e-6) {
+			if (
+				Math.abs(
+					candidate.rrfNormalized - candidate.rrfScore
+				) > 1e-6
+			) {
 				differsFromRaw = true
 			}
 		}
@@ -226,10 +275,14 @@ describe('Combined scoring trace (TDD targets)', () => {
 	})
 
 	it('combined_score matches semantic_score and rrf_normalized components', async () => {
-		const result = await t.hs.recall(bankId, 'launch timeline', {
-			enableTrace: true,
-			limit: 5
-		})
+		const result = await t.hs.recall(
+			bankId,
+			'launch timeline',
+			{
+				enableTrace: true,
+				limit: 5
+			}
+		)
 
 		const trace = result.trace
 		expect(trace).toBeDefined()
@@ -241,7 +294,10 @@ describe('Combined scoring trace (TDD targets)', () => {
 				0.2 * candidate.rrfNormalized +
 				0.1 * candidate.temporal +
 				0.1 * candidate.recency
-			expect(candidate.combinedScore).toBeCloseTo(expected, 8)
+			expect(candidate.combinedScore).toBeCloseTo(
+				expected,
+				8
+			)
 		}
 	})
 })

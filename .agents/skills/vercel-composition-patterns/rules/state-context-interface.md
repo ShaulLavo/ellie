@@ -36,7 +36,9 @@ interface ComposerState {
 }
 
 interface ComposerActions {
-	update: (updater: (state: ComposerState) => ComposerState) => void
+	update: (
+		updater: (state: ComposerState) => ComposerState
+	) => void
 	submit: () => void
 }
 
@@ -50,7 +52,8 @@ interface ComposerContextValue {
 	meta: ComposerMeta
 }
 
-const ComposerContext = createContext<ComposerContextValue | null>(null)
+const ComposerContext =
+	createContext<ComposerContextValue | null>(null)
 ```
 
 **UI components consume the interface, not the implementation:**
@@ -68,7 +71,9 @@ function ComposerInput() {
 		<TextInput
 			ref={meta.inputRef}
 			value={state.input}
-			onChangeText={text => update(s => ({ ...s, input: text }))}
+			onChangeText={text =>
+				update(s => ({ ...s, input: text }))
+			}
 		/>
 	)
 }
@@ -78,7 +83,11 @@ function ComposerInput() {
 
 ```tsx
 // Provider A: Local state for ephemeral forms
-function ForwardMessageProvider({ children }: { children: React.ReactNode }) {
+function ForwardMessageProvider({
+	children
+}: {
+	children: React.ReactNode
+}) {
 	const [state, setState] = useState(initialState)
 	const inputRef = useRef(null)
 	const submit = useForwardMessage()
@@ -98,7 +107,8 @@ function ForwardMessageProvider({ children }: { children: React.ReactNode }) {
 
 // Provider B: Global synced state for channels
 function ChannelProvider({ channelId, children }: Props) {
-	const { state, update, submit } = useGlobalChannel(channelId)
+	const { state, update, submit } =
+		useGlobalChannel(channelId)
 	const inputRef = useRef(null)
 
 	return (
@@ -179,7 +189,12 @@ function ForwardButton() {
 // This preview lives OUTSIDE Composer.Frame but can read composer's state!
 function MessagePreview() {
 	const { state } = use(ComposerContext)
-	return <Preview message={state.input} attachments={state.attachments} />
+	return (
+		<Preview
+			message={state.input}
+			attachments={state.attachments}
+		/>
+	)
 }
 ```
 

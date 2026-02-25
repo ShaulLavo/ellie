@@ -5,8 +5,18 @@
  * Integration tests — needs DB + embeddings.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('recall', () => {
 	let t: TestHindsight
@@ -18,10 +28,25 @@ describe('recall', () => {
 		// Seed some memories
 		await t.hs.retain(bankId, 'test', {
 			facts: [
-				{ content: 'Peter loves hiking in the mountains', factType: 'experience' },
-				{ content: 'Alice enjoys reading science fiction', factType: 'experience' },
-				{ content: 'TypeScript is a typed superset of JavaScript', factType: 'world' },
-				{ content: 'Peter thinks Python is a great language', factType: 'opinion', confidence: 0.8 }
+				{
+					content: 'Peter loves hiking in the mountains',
+					factType: 'experience'
+				},
+				{
+					content: 'Alice enjoys reading science fiction',
+					factType: 'experience'
+				},
+				{
+					content:
+						'TypeScript is a typed superset of JavaScript',
+					factType: 'world'
+				},
+				{
+					content:
+						'Peter thinks Python is a great language',
+					factType: 'opinion',
+					confidence: 0.8
+				}
 			],
 			consolidate: false
 		})
@@ -54,9 +79,14 @@ describe('recall', () => {
 	})
 
 	it('returns memories sorted by score descending', async () => {
-		const result = await t.hs.recall(bankId, 'programming languages')
+		const result = await t.hs.recall(
+			bankId,
+			'programming languages'
+		)
 		for (let i = 1; i < result.memories.length; i++) {
-			expect(result.memories[i - 1]!.score).toBeGreaterThanOrEqual(result.memories[i]!.score)
+			expect(
+				result.memories[i - 1]!.score
+			).toBeGreaterThanOrEqual(result.memories[i]!.score)
 		}
 	})
 
@@ -64,7 +94,9 @@ describe('recall', () => {
 
 	describe('filtering', () => {
 		it('respects limit parameter', async () => {
-			const result = await t.hs.recall(bankId, 'test', { limit: 2 })
+			const result = await t.hs.recall(bankId, 'test', {
+				limit: 2
+			})
 			expect(result.memories.length).toBeLessThanOrEqual(2)
 		})
 
@@ -82,7 +114,9 @@ describe('recall', () => {
 				factTypes: ['experience', 'world']
 			})
 			for (const m of result.memories) {
-				expect(['experience', 'world']).toContain(m.memory.factType)
+				expect(['experience', 'world']).toContain(
+					m.memory.factType
+				)
 			}
 		})
 
@@ -91,12 +125,17 @@ describe('recall', () => {
 				minConfidence: 0.9
 			})
 			for (const m of result.memories) {
-				expect(m.memory.confidence).toBeGreaterThanOrEqual(0.9)
+				expect(m.memory.confidence).toBeGreaterThanOrEqual(
+					0.9
+				)
 			}
 		})
 
 		it('returns empty when no matches', async () => {
-			const result = await t.hs.recall(bankId, 'xyznonexistent123')
+			const result = await t.hs.recall(
+				bankId,
+				'xyznonexistent123'
+			)
 			// May still return some results from graph/temporal — just verify no crash
 			expect(result.memories).toBeDefined()
 		})
@@ -114,7 +153,12 @@ describe('recall', () => {
 	describe('source tracking', () => {
 		it('tracks retrieval sources', async () => {
 			const result = await t.hs.recall(bankId, 'hiking')
-			const validSources = ['semantic', 'fulltext', 'graph', 'temporal']
+			const validSources = [
+				'semantic',
+				'fulltext',
+				'graph',
+				'temporal'
+			]
 			for (const m of result.memories) {
 				for (const source of m.sources) {
 					expect(validSources).toContain(source)
@@ -150,18 +194,24 @@ describe('recall', () => {
 				}
 			)
 
-			const result = await t.hs.recall(bankId, 'Alice rollout', {
-				includeChunks: true,
-				includeEntities: true,
-				maxChunkTokens: 5,
-				maxEntityTokens: 1
-			})
+			const result = await t.hs.recall(
+				bankId,
+				'Alice rollout',
+				{
+					includeChunks: true,
+					includeEntities: true,
+					maxChunkTokens: 5,
+					maxEntityTokens: 1
+				}
+			)
 
 			expect(result.chunks).toBeDefined()
 			const chunkValues = Object.values(result.chunks ?? {})
 			expect(chunkValues.length).toBeGreaterThan(0)
 			expect(chunkValues[0]!.chunkId).toBeDefined()
-			expect(chunkValues[0]!.content.length).toBeLessThanOrEqual(20)
+			expect(
+				chunkValues[0]!.content.length
+			).toBeLessThanOrEqual(20)
 			expect(result.entities).toEqual({})
 		})
 	})
@@ -194,7 +244,12 @@ describe('recall', () => {
 		it('filters by entity names', async () => {
 			// First, retain with entities
 			await t.hs.retain(bankId, 'test', {
-				facts: [{ content: 'Bob built a treehouse', entities: ['Bob'] }],
+				facts: [
+					{
+						content: 'Bob built a treehouse',
+						entities: ['Bob']
+					}
+				],
 				consolidate: false
 			})
 
@@ -203,7 +258,9 @@ describe('recall', () => {
 			})
 
 			for (const m of result.memories) {
-				const entityNames = m.entities.map(e => e.name.toLowerCase())
+				const entityNames = m.entities.map(e =>
+					e.name.toLowerCase()
+				)
 				expect(entityNames).toContain('bob')
 			}
 		})
@@ -240,15 +297,24 @@ describe('recall', () => {
 					embedding?: number[]
 				}
 			}
-			if (traceAny.query && typeof traceAny.query === 'object') {
-				expect(traceAny.query.text ?? trace.query).toBe('hiking')
+			if (
+				traceAny.query &&
+				typeof traceAny.query === 'object'
+			) {
+				expect(traceAny.query.text ?? trace.query).toBe(
+					'hiking'
+				)
 				if (traceAny.query.maxTokens != null) {
 					expect(traceAny.query.maxTokens).toBe(maxTokens)
 				}
 				if (Array.isArray(traceAny.query.embedding)) {
-					expect(traceAny.query.embedding.length).toBeGreaterThan(0)
+					expect(
+						traceAny.query.embedding.length
+					).toBeGreaterThan(0)
 				} else {
-					expect(trace.phaseMetrics.length).toBeGreaterThan(0)
+					expect(trace.phaseMetrics.length).toBeGreaterThan(
+						0
+					)
 				}
 			} else {
 				expect(trace.retrieval.length).toBeGreaterThan(0)
@@ -266,20 +332,30 @@ describe('recall', () => {
 				}>
 			}
 			if (Array.isArray(traceAny.entryPoints)) {
-				expect(traceAny.entryPoints.length).toBeGreaterThan(0)
+				expect(traceAny.entryPoints.length).toBeGreaterThan(
+					0
+				)
 				for (const entry of traceAny.entryPoints) {
 					expect(entry.nodeId).toBeDefined()
 					expect(entry.text).toBeDefined()
-					expect(entry.similarityScore).toBeGreaterThanOrEqual(0)
-					expect(entry.similarityScore).toBeLessThanOrEqual(1)
+					expect(
+						entry.similarityScore
+					).toBeGreaterThanOrEqual(0)
+					expect(entry.similarityScore).toBeLessThanOrEqual(
+						1
+					)
 				}
 			} else {
 				expect(trace.retrieval.length).toBeGreaterThan(0)
-				const semantic = trace.retrieval.find(m => m.methodName === 'semantic')
+				const semantic = trace.retrieval.find(
+					m => m.methodName === 'semantic'
+				)
 				expect(semantic).toBeDefined()
 				if (semantic && semantic.results.length > 0) {
 					expect(semantic.results[0]!.id).toBeDefined()
-					expect(semantic.results[0]!.score).toBeGreaterThanOrEqual(0)
+					expect(
+						semantic.results[0]!.score
+					).toBeGreaterThanOrEqual(0)
 				}
 			}
 		})
@@ -301,13 +377,17 @@ describe('recall', () => {
 				for (const visit of traceAny.visits) {
 					expect(visit.nodeId).toBeDefined()
 					expect(visit.text).toBeDefined()
-					expect(Number.isFinite(visit.finalWeight)).toBe(true)
+					expect(Number.isFinite(visit.finalWeight)).toBe(
+						true
+					)
 				}
 			} else {
 				expect(trace.candidates.length).toBeGreaterThan(0)
 				for (const candidate of trace.candidates) {
 					expect(candidate.id).toBeDefined()
-					expect(Number.isFinite(candidate.combinedScore)).toBe(true)
+					expect(
+						Number.isFinite(candidate.combinedScore)
+					).toBe(true)
 				}
 			}
 		})
@@ -315,17 +395,24 @@ describe('recall', () => {
 		it('entry point visits have no parentNodeId or linkType', async () => {
 			const result = await recallWithTrace()
 			const traceAny = result.trace as unknown as {
-				visits?: Array<{ parentNodeId?: string; linkType?: string }>
+				visits?: Array<{
+					parentNodeId?: string
+					linkType?: string
+				}>
 			}
 			if (Array.isArray(traceAny.visits)) {
-				const roots = traceAny.visits.filter(visit => visit.parentNodeId == null)
+				const roots = traceAny.visits.filter(
+					visit => visit.parentNodeId == null
+				)
 				for (const root of roots) {
 					expect(root.parentNodeId).toBeUndefined()
 					expect(root.linkType).toBeUndefined()
 				}
 			} else {
 				// Current TS trace model does not expose visit graph edges.
-				expect(result.trace!.candidates.length).toBeGreaterThan(0)
+				expect(
+					result.trace!.candidates.length
+				).toBeGreaterThan(0)
 			}
 		})
 
@@ -336,10 +423,17 @@ describe('recall', () => {
 				visits?: unknown[]
 				summary?: { totalNodesVisited?: number }
 			}
-			if (Array.isArray(traceAny.visits) && traceAny.summary?.totalNodesVisited != null) {
-				expect(traceAny.summary.totalNodesVisited).toBe(traceAny.visits.length)
+			if (
+				Array.isArray(traceAny.visits) &&
+				traceAny.summary?.totalNodesVisited != null
+			) {
+				expect(traceAny.summary.totalNodesVisited).toBe(
+					traceAny.visits.length
+				)
 			} else {
-				expect(trace.selectedMemoryIds.length).toBeLessThanOrEqual(trace.candidates.length)
+				expect(
+					trace.selectedMemoryIds.length
+				).toBeLessThanOrEqual(trace.candidates.length)
 			}
 		})
 
@@ -349,9 +443,13 @@ describe('recall', () => {
 				summary?: { resultsReturned?: number }
 			}
 			if (traceAny.summary?.resultsReturned != null) {
-				expect(traceAny.summary.resultsReturned).toBe(result.memories.length)
+				expect(traceAny.summary.resultsReturned).toBe(
+					result.memories.length
+				)
 			} else {
-				expect(result.trace!.selectedMemoryIds.length).toBe(result.memories.length)
+				expect(result.trace!.selectedMemoryIds.length).toBe(
+					result.memories.length
+				)
 			}
 		})
 
@@ -366,9 +464,13 @@ describe('recall', () => {
 			}
 			if (traceAny.summary?.budgetUsed != null) {
 				const bound = traceAny.summary.budget ?? budget
-				expect(traceAny.summary.budgetUsed).toBeLessThanOrEqual(bound)
+				expect(
+					traceAny.summary.budgetUsed
+				).toBeLessThanOrEqual(bound)
 			} else {
-				expect(result.memories.length).toBeLessThanOrEqual(budget)
+				expect(result.memories.length).toBeLessThanOrEqual(
+					budget
+				)
 			}
 		})
 
@@ -379,7 +481,9 @@ describe('recall', () => {
 				summary?: { totalDurationSeconds?: number }
 			}
 			if (traceAny.summary?.totalDurationSeconds != null) {
-				expect(traceAny.summary.totalDurationSeconds).toBeGreaterThan(0)
+				expect(
+					traceAny.summary.totalDurationSeconds
+				).toBeGreaterThan(0)
 			} else {
 				expect(trace.totalDurationMs).toBeGreaterThan(0)
 			}
@@ -387,13 +491,20 @@ describe('recall', () => {
 
 		it('trace.summary.phaseMetrics includes generateQueryEmbedding, parallelRetrieval, rrfMerge, reranking phases', async () => {
 			const result = await recallWithTrace()
-			const names = new Set(result.trace!.phaseMetrics.map(m => m.phaseName))
+			const names = new Set(
+				result.trace!.phaseMetrics.map(m => m.phaseName)
+			)
 
 			// Current TS names use snake_case and combined scoring terminology.
-			const hasParallelRetrieval = names.has('parallel_retrieval') || names.has('parallelRetrieval')
-			const hasRrfMerge = names.has('rrf_merge') || names.has('rrfMerge')
+			const hasParallelRetrieval =
+				names.has('parallel_retrieval') ||
+				names.has('parallelRetrieval')
+			const hasRrfMerge =
+				names.has('rrf_merge') || names.has('rrfMerge')
 			const hasReranking =
-				names.has('combined_scoring') || names.has('reranking') || names.has('rerank')
+				names.has('combined_scoring') ||
+				names.has('reranking') ||
+				names.has('rerank')
 
 			expect(hasParallelRetrieval).toBe(true)
 			expect(hasRrfMerge).toBe(true)
@@ -440,7 +551,10 @@ describe('recall', () => {
 		})
 
 		it('auto-extracts temporal range from query', async () => {
-			const result = await t.hs.recall(bankId, 'what happened yesterday?')
+			const result = await t.hs.recall(
+				bankId,
+				'what happened yesterday?'
+			)
 			// Should not crash even if no memories match the temporal range
 			expect(result.memories).toBeDefined()
 		})

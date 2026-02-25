@@ -329,7 +329,9 @@ app.get('/', ({ store }) => store.build) // build doesn't exists
 ✅ Do:
 
 ```ts
-new Elysia().state('build', 1).get('/', ({ store }) => store.build)
+new Elysia()
+	.state('build', 1)
+	.get('/', ({ store }) => store.build)
 ```
 
 ## Explicit Dependencies
@@ -337,7 +339,9 @@ new Elysia().state('build', 1).get('/', ({ store }) => store.build)
 Each instance independent. **Declare what you use.**
 
 ```ts
-const auth = new Elysia().decorate('Auth', Auth).model(Auth.models)
+const auth = new Elysia()
+	.decorate('Auth', Auth)
+	.model(Auth.models)
 
 new Elysia().get('/', ({ Auth }) => Auth.getProfile()) // Auth doesn't exists
 

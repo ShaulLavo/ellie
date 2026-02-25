@@ -49,12 +49,17 @@ export async function generateGistWithLLM(
 	adapter: AnyTextAdapter,
 	content: string
 ): Promise<string> {
-	const truncatedContent = content.length > 4000 ? content.slice(0, 4000) + '...' : content
+	const truncatedContent =
+		content.length > 4000
+			? content.slice(0, 4000) + '...'
+			: content
 
 	const response = await streamToText(
 		chat({
 			adapter,
-			messages: [{ role: 'user', content: truncatedContent }],
+			messages: [
+				{ role: 'user', content: truncatedContent }
+			],
 			systemPrompts: [GIST_SYSTEM_PROMPT]
 		})
 	)
@@ -85,10 +90,16 @@ export async function generateGist(
 	if (content.length <= EAGER_GIST_THRESHOLD) {
 		// Eager: generate inline
 		try {
-			const gist = await generateGistWithLLM(adapter, content)
+			const gist = await generateGistWithLLM(
+				adapter,
+				content
+			)
 			return { gist, mode: 'eager' }
 		} catch {
-			return { gist: generateFallbackGist(content), mode: 'fallback' }
+			return {
+				gist: generateFallbackGist(content),
+				mode: 'fallback'
+			}
 		}
 	}
 
@@ -98,10 +109,13 @@ export async function generateGist(
 	if (onAsyncGist) {
 		// Fire-and-forget background generation
 		generateGistWithLLM(adapter, content)
-			.then((gist) => onAsyncGist(gist))
-			.catch((err) => {
+			.then(gist => onAsyncGist(gist))
+			.catch(err => {
 				// Fallback already set; log for diagnostics
-				console.debug?.('[gist] async generation failed:', err)
+				console.debug?.(
+					'[gist] async generation failed:',
+					err
+				)
 			})
 	}
 

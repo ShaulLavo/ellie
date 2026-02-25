@@ -42,7 +42,9 @@ export interface MpfpTraversalResult {
 	scores: Record<string, number>
 }
 
-export type EdgesByType = Partial<Record<MpfpEdgeType, Record<string, EdgeTarget[]>>>
+export type EdgesByType = Partial<
+	Record<MpfpEdgeType, Record<string, EdgeTarget[]>>
+>
 
 export type LoadAllEdgesForFrontier = (
 	frontierNodeIds: string[],
@@ -59,20 +61,39 @@ const DEFAULT_MPFP_CONFIG: MpfpConfig = {
  * Lazy edge cache keyed by edge type and source node.
  */
 export class EdgeCache {
-	private readonly edgesByType = new Map<MpfpEdgeType, Map<string, EdgeTarget[]>>()
+	private readonly edgesByType = new Map<
+		MpfpEdgeType,
+		Map<string, EdgeTarget[]>
+	>()
 	private readonly fullyLoaded = new Set<string>()
 
-	addAllEdges(edgesByType: EdgesByType, loadedNodeIds: string[]): void {
-		for (const [rawType, bySource] of Object.entries(edgesByType)) {
+	addAllEdges(
+		edgesByType: EdgesByType,
+		loadedNodeIds: string[]
+	): void {
+		for (const [rawType, bySource] of Object.entries(
+			edgesByType
+		)) {
 			if (!bySource) continue
 			const edgeType = rawType as MpfpEdgeType
-			const typeMap = this.edgesByType.get(edgeType) ?? new Map<string, EdgeTarget[]>()
+			const typeMap =
+				this.edgesByType.get(edgeType) ??
+				new Map<string, EdgeTarget[]>()
 			this.edgesByType.set(edgeType, typeMap)
 
-			for (const [sourceId, targets] of Object.entries(bySource)) {
+			for (const [sourceId, targets] of Object.entries(
+				bySource
+			)) {
 				const normalized = (targets ?? [])
-					.filter(target => Number.isFinite(target.weight) && target.weight > 0)
-					.map(target => ({ nodeId: target.nodeId, weight: target.weight }))
+					.filter(
+						target =>
+							Number.isFinite(target.weight) &&
+							target.weight > 0
+					)
+					.map(target => ({
+						nodeId: target.nodeId,
+						weight: target.weight
+					}))
 					.sort((a, b) => b.weight - a.weight)
 				typeMap.set(sourceId, normalized)
 			}
@@ -88,20 +109,32 @@ export class EdgeCache {
 	}
 
 	getUncached(nodeIds: string[]): string[] {
-		return [...new Set(nodeIds)].filter(nodeId => !this.isFullyLoaded(nodeId))
+		return [...new Set(nodeIds)].filter(
+			nodeId => !this.isFullyLoaded(nodeId)
+		)
 	}
 
-	getNeighbors(edgeType: MpfpEdgeType, nodeId: string): EdgeTarget[] {
+	getNeighbors(
+		edgeType: MpfpEdgeType,
+		nodeId: string
+	): EdgeTarget[] {
 		return this.edgesByType.get(edgeType)?.get(nodeId) ?? []
 	}
 
-	getNormalizedNeighbors(edgeType: MpfpEdgeType, nodeId: string, topK: number): EdgeTarget[] {
+	getNormalizedNeighbors(
+		edgeType: MpfpEdgeType,
+		nodeId: string,
+		topK: number
+	): EdgeTarget[] {
 		const neighbors = this.getNeighbors(edgeType, nodeId)
 			.slice(0, Math.max(0, topK))
 			.filter(target => target.weight > 0)
 		if (neighbors.length === 0) return []
 
-		const total = neighbors.reduce((sum, target) => sum + target.weight, 0)
+		const total = neighbors.reduce(
+			(sum, target) => sum + target.weight,
+			0
+		)
 		if (total <= 0) return []
 
 		return neighbors.map(target => ({
@@ -131,13 +164,20 @@ export async function mpfpTraverseAsync(
 		return { pattern, scores: {} }
 	}
 
-	const effective: MpfpConfig = { ...DEFAULT_MPFP_CONFIG, ...config }
+	const effective: MpfpConfig = {
+		...DEFAULT_MPFP_CONFIG,
+		...config
+	}
 	const scores = new Map<string, number>()
 	let frontier = new Map<string, number>()
 
 	for (const seed of seeds) {
-		if (!Number.isFinite(seed.score) || seed.score <= 0) continue
-		frontier.set(seed.nodeId, (frontier.get(seed.nodeId) ?? 0) + seed.score)
+		if (!Number.isFinite(seed.score) || seed.score <= 0)
+			continue
+		frontier.set(
+			seed.nodeId,
+			(frontier.get(seed.nodeId) ?? 0) + seed.score
+		)
 	}
 	if (frontier.size === 0) {
 		return { pattern, scores: {} }
@@ -149,7 +189,10 @@ export async function mpfpTraverseAsync(
 		const frontierNodes = [...frontier.keys()]
 		const uncached = cache.getUncached(frontierNodes)
 		if (uncached.length > 0) {
-			const edges = await loadAllEdgesForFrontier(uncached, effective.topKNeighbors)
+			const edges = await loadAllEdgesForFrontier(
+				uncached,
+				effective.topKNeighbors
+			)
 			cache.addAllEdges(edges, uncached)
 		}
 
@@ -158,12 +201,22 @@ export async function mpfpTraverseAsync(
 			if (mass < effective.threshold) continue
 
 			const retained = effective.alpha * mass
-			scores.set(nodeId, (scores.get(nodeId) ?? 0) + retained)
+			scores.set(
+				nodeId,
+				(scores.get(nodeId) ?? 0) + retained
+			)
 
 			const spill = (1 - effective.alpha) * mass
 			if (spill < effective.threshold) continue
 
-			propagateMass(cache, edgeType, nodeId, spill, effective, nextFrontier)
+			propagateMass(
+				cache,
+				edgeType,
+				nodeId,
+				spill,
+				effective,
+				nextFrontier
+			)
 		}
 		frontier = nextFrontier
 	}
@@ -174,7 +227,10 @@ export async function mpfpTraverseAsync(
 		scores.set(nodeId, (scores.get(nodeId) ?? 0) + mass)
 	}
 
-	return { pattern, scores: Object.fromEntries(scores.entries()) }
+	return {
+		pattern,
+		scores: Object.fromEntries(scores.entries())
+	}
 }
 
 function propagateMass(
@@ -185,11 +241,18 @@ function propagateMass(
 	config: MpfpConfig,
 	nextFrontier: Map<string, number>
 ): void {
-	const neighbors = cache.getNormalizedNeighbors(edgeType, nodeId, config.topKNeighbors)
+	const neighbors = cache.getNormalizedNeighbors(
+		edgeType,
+		nodeId,
+		config.topKNeighbors
+	)
 	for (const neighbor of neighbors) {
 		const propagated = spill * neighbor.weight
 		if (propagated < config.threshold) continue
-		nextFrontier.set(neighbor.nodeId, (nextFrontier.get(neighbor.nodeId) ?? 0) + propagated)
+		nextFrontier.set(
+			neighbor.nodeId,
+			(nextFrontier.get(neighbor.nodeId) ?? 0) + propagated
+		)
 	}
 }
 
@@ -210,7 +273,9 @@ export function rrfFusion(
 	const fused = new Map<string, number>()
 	for (const result of results) {
 		const entries = Object.entries(result.scores)
-			.filter(([, score]) => Number.isFinite(score) && score > 0)
+			.filter(
+				([, score]) => Number.isFinite(score) && score > 0
+			)
 			.sort((a, b) => b[1] - a[1])
 		if (entries.length === 0) continue
 
@@ -221,5 +286,7 @@ export function rrfFusion(
 		}
 	}
 
-	return [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, topK)
+	return [...fused.entries()]
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, topK)
 }

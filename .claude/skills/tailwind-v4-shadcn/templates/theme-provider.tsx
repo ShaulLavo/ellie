@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import {
+	createContext,
+	useContext,
+	useEffect,
+	useState,
+	ReactNode
+} from 'react'
 
 type Theme = 'dark' | 'light' | 'system'
 
@@ -18,7 +24,8 @@ const initialState: ThemeProviderState = {
 	setTheme: () => null
 }
 
-const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
+const ThemeProviderContext =
+	createContext<ThemeProviderState>(initialState)
 
 export function ThemeProvider({
 	children,
@@ -46,7 +53,9 @@ export function ThemeProvider({
 		root.classList.remove('light', 'dark')
 
 		if (theme === 'system') {
-			const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+			const systemTheme = window.matchMedia(
+				'(prefers-color-scheme: dark)'
+			).matches
 				? 'dark'
 				: 'light'
 
@@ -69,7 +78,9 @@ export function ThemeProvider({
 					sessionStorage.setItem(storageKey, theme)
 				} catch (err) {
 					// Both unavailable - just update state without persistence
-					console.warn('Storage unavailable, theme preference will not persist')
+					console.warn(
+						'Storage unavailable, theme preference will not persist'
+					)
 				}
 			}
 			setTheme(theme)
@@ -86,7 +97,10 @@ export function ThemeProvider({
 export const useTheme = () => {
 	const context = useContext(ThemeProviderContext)
 
-	if (context === undefined) throw new Error('useTheme must be used within a ThemeProvider')
+	if (context === undefined)
+		throw new Error(
+			'useTheme must be used within a ThemeProvider'
+		)
 
 	return context
 }

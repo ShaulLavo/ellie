@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useRef, useState, type ClipboardEvent } from 'react'
+import {
+	useCallback,
+	useMemo,
+	useRef,
+	useState,
+	type ClipboardEvent
+} from 'react'
 import { cn } from './lib/utils'
 import { useChat } from './lib/chat/use-chat'
 import type { Message } from './lib/chat/use-chat'
@@ -67,7 +73,14 @@ const SESSION_LABEL: Record<string, string> = {
 function getTextContent(msg: Message): string {
 	if (!msg.content || !Array.isArray(msg.content)) return ''
 	return (msg.content as Array<Record<string, unknown>>)
-		.filter((c): c is Record<string, unknown> & { type: 'text'; text: string } => c.type === 'text')
+		.filter(
+			(
+				c
+			): c is Record<string, unknown> & {
+				type: 'text'
+				text: string
+			} => c.type === 'text'
+		)
 		.map(c => c.text)
 		.join('')
 }
@@ -78,12 +91,15 @@ function getMsgKey(msg: Message, idx: number): string {
 }
 
 function groupMessages(messages: Message[]) {
-	const groups: Array<{ msg: Message; isFirst: boolean }> = []
+	const groups: Array<{ msg: Message; isFirst: boolean }> =
+		[]
 	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i]
 		const prev = messages[i - 1]
 		const isFirst =
-			!prev || prev.role !== msg.role || msg.timestamp - prev.timestamp > 5 * 60 * 1000
+			!prev ||
+			prev.role !== msg.role ||
+			msg.timestamp - prev.timestamp > 5 * 60 * 1000
 		groups.push({ msg, isFirst })
 	}
 	return groups
@@ -93,21 +109,29 @@ function ModeToggle() {
 	const { setPreference } = useTheme()
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger render={<ChatHeaderButton title="Toggle theme" />}>
+			<DropdownMenuTrigger
+				render={<ChatHeaderButton title="Toggle theme" />}
+			>
 				<Sun className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
 				<Moon className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
 				<span className="sr-only">Toggle theme</span>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuItem onClick={() => setPreference('light')}>
+				<DropdownMenuItem
+					onClick={() => setPreference('light')}
+				>
 					<Sun className="size-4" />
 					Light
 				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setPreference('dark')}>
+				<DropdownMenuItem
+					onClick={() => setPreference('dark')}
+				>
 					<Moon className="size-4" />
 					Dark
 				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setPreference('system')}>
+				<DropdownMenuItem
+					onClick={() => setPreference('system')}
+				>
 					<Monitor className="size-4" />
 					System
 				</DropdownMenuItem>
@@ -117,7 +141,13 @@ function ModeToggle() {
 }
 
 export function ChatPanel({ sessionId }: ChatPanelProps) {
-	const { messages, isLoading, error, sendMessage, clearChat } = useChat(sessionId)
+	const {
+		messages,
+		isLoading,
+		error,
+		sendMessage,
+		clearChat
+	} = useChat(sessionId)
 	const [input, setInput] = useState('')
 	const messagesRef = useRef<HTMLDivElement>(null)
 
@@ -130,16 +160,25 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 
 	const connectedClients = useConnectedClients()
 	const label = SESSION_LABEL[sessionId] ?? sessionId
-	const grouped = useMemo(() => groupMessages(messages), [messages])
+	const grouped = useMemo(
+		() => groupMessages(messages),
+		[messages]
+	)
 	const messageOrder = useMemo(
-		() => grouped.map((_item, idx) => getMsgKey(_item.msg, idx)),
+		() =>
+			grouped.map((_item, idx) =>
+				getMsgKey(_item.msg, idx)
+			),
 		[grouped]
 	)
 	const markdownById = useMemo(() => {
 		const markdownMap = new Map<string, string>()
 		for (let i = 0; i < grouped.length; i++) {
 			const { msg } = grouped[i]
-			markdownMap.set(getMsgKey(msg, i), getTextContent(msg))
+			markdownMap.set(
+				getMsgKey(msg, i),
+				getTextContent(msg)
+			)
 		}
 		return markdownMap
 	}, [grouped])
@@ -163,7 +202,9 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 		} catch (error) {
 			console.error(
 				'[ChatPanel] Failed to write markdown to clipboard:',
-				error instanceof Error ? error.message : JSON.stringify(error)
+				error instanceof Error
+					? error.message
+					: JSON.stringify(error)
 			)
 		}
 	}, [getSelectedMarkdown])
@@ -187,7 +228,10 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 			if (!markdown) return
 
 			event.preventDefault()
-			setMarkdownClipboardData(event.clipboardData, markdown)
+			setMarkdownClipboardData(
+				event.clipboardData,
+				markdown
+			)
 		},
 		[getSelectedMarkdown]
 	)
@@ -201,7 +245,9 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 				</ChatHeaderAddon>
 				<ChatHeaderMain>
 					<div className="grid" data-chat-meta>
-						<span className="text-sm font-semibold leading-tight truncate">{label}</span>
+						<span className="text-sm font-semibold leading-tight truncate">
+							{label}
+						</span>
 						<span className="text-xs text-muted-foreground leading-tight">
 							{isLoading
 								? 'connecting…'
@@ -220,7 +266,9 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 							{connectedClients}
 						</span>
 					)}
-					{isLoading && <Spinner className="size-4 text-muted-foreground" />}
+					{isLoading && (
+						<Spinner className="size-4 text-muted-foreground" />
+					)}
 					<ModeToggle />
 					<ChatHeaderButton
 						onClick={clearChat}
@@ -233,12 +281,21 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 			</ChatHeader>
 
 			{/* ── Messages ───────────────────────────────────── */}
-			<ChatMessages ref={messagesRef} onCopy={handleMessagesCopy}>
-				{error && <p className="mx-4 my-2 text-xs text-destructive">{error.message}</p>}
+			<ChatMessages
+				ref={messagesRef}
+				onCopy={handleMessagesCopy}
+			>
+				{error && (
+					<p className="mx-4 my-2 text-xs text-destructive">
+						{error.message}
+					</p>
+				)}
 
 				{!isLoading && messages.length === 0 && (
 					<div className="flex-1 flex items-center justify-center">
-						<p className="text-sm text-muted-foreground">No messages yet</p>
+						<p className="text-sm text-muted-foreground">
+							No messages yet
+						</p>
 					</div>
 				)}
 
@@ -247,18 +304,27 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 						const isUser = msg.role === 'user'
 						const isAssistant = msg.role === 'assistant'
 						const msgKey = getMsgKey(msg, idx)
-						const timestamp = new Date(msg.timestamp).toISOString()
+						const timestamp = new Date(
+							msg.timestamp
+						).toISOString()
 
 						/* date separator between different calendar days */
 						const prev = grouped[idx - 1]?.msg
 						const showDateSep =
 							prev &&
-							new Date(msg.timestamp).toDateString() !== new Date(prev.timestamp).toDateString()
+							new Date(msg.timestamp).toDateString() !==
+								new Date(prev.timestamp).toDateString()
 
 						return (
-							<div key={msgKey} data-chat-message-id={msgKey}>
+							<div
+								key={msgKey}
+								data-chat-message-id={msgKey}
+							>
 								{showDateSep && (
-									<ChatEvent className="items-center gap-1 my-4" data-chat-meta>
+									<ChatEvent
+										className="items-center gap-1 my-4"
+										data-chat-meta
+									>
 										<Separator className="flex-1" />
 										<ChatEventTime
 											timestamp={timestamp}
@@ -273,17 +339,31 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 								<ChatEvent
 									className={cn(
 										'group hover:bg-accent transition-colors py-0.5',
-										isFirst && idx > 0 && !showDateSep && 'mt-3'
+										isFirst &&
+											idx > 0 &&
+											!showDateSep &&
+											'mt-3'
 									)}
 								>
-									<ChatEventAddon className={isFirst ? '' : 'pt-0 items-center'} data-chat-meta>
+									<ChatEventAddon
+										className={
+											isFirst ? '' : 'pt-0 items-center'
+										}
+										data-chat-meta
+									>
 										{isFirst ? (
 											<ChatEventAvatar
 												fallback={
 													isUser ? (
-														<User weight="fill" className="size-3.5" />
+														<User
+															weight="fill"
+															className="size-3.5"
+														/>
 													) : (
-														<Robot weight="fill" className="size-3.5" />
+														<Robot
+															weight="fill"
+															className="size-3.5"
+														/>
 													)
 												}
 												className={cn(
@@ -306,7 +386,9 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 									<ChatEventBody>
 										{isFirst && (
 											<ChatEventTitle data-chat-meta>
-												<span className="font-medium capitalize">{msg.role}</span>
+												<span className="font-medium capitalize">
+													{msg.role}
+												</span>
 												<ChatEventTime
 													timestamp={timestamp}
 													className="text-[10px] text-muted-foreground/50"
@@ -315,7 +397,9 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 											</ChatEventTitle>
 										)}
 										<ChatEventContent className="text-sm">
-											<MessageResponse>{getTextContent(msg)}</MessageResponse>
+											<MessageResponse>
+												{getTextContent(msg)}
+											</MessageResponse>
 										</ChatEventContent>
 									</ChatEventBody>
 								</ChatEvent>
@@ -328,7 +412,10 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 			{/* ── Toolbar ────────────────────────────────────── */}
 			<ChatToolbar>
 				<ChatToolbarAddon align="inline-start">
-					<ChatToolbarButton title="Attach" className="rounded-full size-7">
+					<ChatToolbarButton
+						title="Attach"
+						className="rounded-full size-7"
+					>
 						<Paperclip className="size-4" />
 					</ChatToolbarButton>
 				</ChatToolbarAddon>

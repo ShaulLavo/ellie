@@ -12,7 +12,10 @@ export function reciprocalRankFusion(
 	resultSets: RetrievalHit[][],
 	limit: number
 ): Array<{ id: string; score: number; sources: string[] }> {
-	const fused = new Map<string, { score: number; sources: Set<string> }>()
+	const fused = new Map<
+		string,
+		{ score: number; sources: Set<string> }
+	>()
 
 	for (const results of resultSets) {
 		for (let rank = 0; rank < results.length; rank++) {

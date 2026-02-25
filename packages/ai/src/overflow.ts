@@ -38,7 +38,11 @@ export function isContextOverflow(
 	}
 
 	// Silent overflow detection
-	if (inputTokens !== undefined && contextWindow !== undefined && inputTokens > contextWindow) {
+	if (
+		inputTokens !== undefined &&
+		contextWindow !== undefined &&
+		inputTokens > contextWindow
+	) {
 		return true
 	}
 

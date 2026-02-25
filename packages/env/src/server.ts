@@ -6,7 +6,10 @@ import * as v from 'valibot'
 
 const ServerEnvSchema = v.object({
 	/** Base URL for the API server (must include protocol). Used to derive the port. */
-	API_BASE_URL: v.optional(v.pipe(v.string(), v.url()), 'http://localhost:3000'),
+	API_BASE_URL: v.optional(
+		v.pipe(v.string(), v.url()),
+		'http://localhost:3000'
+	),
 
 	/** Directory for persistent data storage. */
 	DATA_DIR: v.optional(v.string(), './data'),
@@ -15,7 +18,10 @@ const ServerEnvSchema = v.object({
 	ANTHROPIC_API_KEY: v.optional(v.string()),
 
 	/** Anthropic model ID for the agent adapter (default: claude-sonnet-4-5). */
-	ANTHROPIC_MODEL: v.optional(v.pipe(v.string(), v.nonEmpty()), 'claude-sonnet-4-5'),
+	ANTHROPIC_MODEL: v.optional(
+		v.pipe(v.string(), v.nonEmpty()),
+		'claude-sonnet-4-5'
+	),
 
 	/** OpenAI API key (optional — only needed if using OpenAI provider). */
 	OPENAI_API_KEY: v.optional(v.string()),
@@ -32,7 +38,9 @@ const ServerEnvSchema = v.object({
 	/** Optional rerank batch size override for Hindsight TEI defaults. */
 	HINDSIGHT_TEI_RERANK_BATCH_SIZE: v.optional(v.string()),
 	/** Optional rerank max-concurrency override for Hindsight TEI defaults. */
-	HINDSIGHT_TEI_RERANK_MAX_CONCURRENT: v.optional(v.string()),
+	HINDSIGHT_TEI_RERANK_MAX_CONCURRENT: v.optional(
+		v.string()
+	),
 
 	/** Python parity fallback for embedding TEI URL. */
 	HINDSIGHT_API_EMBEDDINGS_TEI_URL: v.optional(v.string()),
@@ -44,7 +52,9 @@ const ServerEnvSchema = v.object({
 // Parse & export
 // ============================================================================
 
-export type ServerEnv = v.InferOutput<typeof ServerEnvSchema>
+export type ServerEnv = v.InferOutput<
+	typeof ServerEnvSchema
+>
 
 /**
  * Validated server environment.
@@ -62,10 +72,15 @@ export const env: ServerEnv = v.parse(ServerEnvSchema, {
 	OPENAI_API_KEY: Bun.env.OPENAI_API_KEY,
 	OPENROUTER_API_KEY: Bun.env.OPENROUTER_API_KEY,
 	HINDSIGHT_TEI_EMBED_URL: Bun.env.HINDSIGHT_TEI_EMBED_URL,
-	HINDSIGHT_TEI_RERANK_URL: Bun.env.HINDSIGHT_TEI_RERANK_URL,
+	HINDSIGHT_TEI_RERANK_URL:
+		Bun.env.HINDSIGHT_TEI_RERANK_URL,
 	HINDSIGHT_TEI_API_KEY: Bun.env.HINDSIGHT_TEI_API_KEY,
-	HINDSIGHT_TEI_RERANK_BATCH_SIZE: Bun.env.HINDSIGHT_TEI_RERANK_BATCH_SIZE,
-	HINDSIGHT_TEI_RERANK_MAX_CONCURRENT: Bun.env.HINDSIGHT_TEI_RERANK_MAX_CONCURRENT,
-	HINDSIGHT_API_EMBEDDINGS_TEI_URL: Bun.env.HINDSIGHT_API_EMBEDDINGS_TEI_URL,
-	HINDSIGHT_API_RERANKER_TEI_URL: Bun.env.HINDSIGHT_API_RERANKER_TEI_URL
+	HINDSIGHT_TEI_RERANK_BATCH_SIZE:
+		Bun.env.HINDSIGHT_TEI_RERANK_BATCH_SIZE,
+	HINDSIGHT_TEI_RERANK_MAX_CONCURRENT:
+		Bun.env.HINDSIGHT_TEI_RERANK_MAX_CONCURRENT,
+	HINDSIGHT_API_EMBEDDINGS_TEI_URL:
+		Bun.env.HINDSIGHT_API_EMBEDDINGS_TEI_URL,
+	HINDSIGHT_API_RERANKER_TEI_URL:
+		Bun.env.HINDSIGHT_API_RERANKER_TEI_URL
 })

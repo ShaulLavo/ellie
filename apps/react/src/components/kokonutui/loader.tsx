@@ -44,7 +44,10 @@ export default function Loader({
 
 	return (
 		<div
-			className={cn('flex flex-col items-center justify-center gap-8 p-8', className)}
+			className={cn(
+				'flex flex-col items-center justify-center gap-8 p-8',
+				className
+			)}
 			{...props}
 		>
 			{/* Enhanced Monochrome Loader */}
@@ -211,7 +214,11 @@ export default function Loader({
 
 			{/* Enhanced Typography with Breathing Animation */}
 			<motion.div
-				className={cn('text-center', config.spacing, config.maxWidth)}
+				className={cn(
+					'text-center',
+					config.spacing,
+					config.maxWidth
+				)}
 				initial={{ opacity: 0, y: 12 }}
 				animate={{
 					opacity: 1,

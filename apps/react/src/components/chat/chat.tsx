@@ -4,10 +4,17 @@ export interface ChatProps extends React.ComponentProps<'div'> {
 	children?: React.ReactNode
 }
 
-export function Chat({ children, className, ...props }: ChatProps) {
+export function Chat({
+	children,
+	className,
+	...props
+}: ChatProps) {
 	return (
 		<div
-			className={cn('h-full overflow-hidden flex flex-col @container/chat', className)}
+			className={cn(
+				'h-full overflow-hidden flex flex-col @container/chat',
+				className
+			)}
 			{...props}
 		>
 			{children}

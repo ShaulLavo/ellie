@@ -134,7 +134,9 @@ export default function ProfileDropdown({
 					<div
 						className={cn(
 							'absolute -right-3 top-1/2 -translate-y-1/2 transition-all duration-200',
-							isOpen ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
+							isOpen
+								? 'opacity-100'
+								: 'opacity-60 group-hover:opacity-100'
 						)}
 					>
 						<svg
@@ -211,7 +213,10 @@ export default function ProfileDropdown({
 								/>
 							}
 						>
-							<LogoutIcon size={16} className="text-red-500 group-hover:text-red-600" />
+							<LogoutIcon
+								size={16}
+								className="text-red-500 group-hover:text-red-600"
+							/>
 							<span className="text-sm font-medium text-red-500 group-hover:text-red-600">
 								Sign Out
 							</span>

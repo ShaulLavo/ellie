@@ -26,12 +26,20 @@ interface WmEntry {
 
 export class WorkingMemoryStore {
 	/** Two-level map: bankId → sessionId → entries (avoids delimiter collisions) */
-	private readonly store = new Map<string, Map<string, WmEntry[]>>()
+	private readonly store = new Map<
+		string,
+		Map<string, WmEntry[]>
+	>()
 
 	/**
 	 * Touch (add or update) memory IDs in working memory for a session.
 	 */
-	touch(bankId: string, sessionId: string, memoryIds: string[], now: number): void {
+	touch(
+		bankId: string,
+		sessionId: string,
+		memoryIds: string[],
+		now: number
+	): void {
 		let sessions = this.store.get(bankId)
 		if (!sessions) {
 			sessions = new Map()
@@ -40,12 +48,19 @@ export class WorkingMemoryStore {
 		let entries = sessions.get(sessionId) ?? []
 
 		// Remove expired entries lazily
-		entries = entries.filter(e => now - e.touchedAt < WM_DECAY_MS)
+		entries = entries.filter(
+			e => now - e.touchedAt < WM_DECAY_MS
+		)
 
 		// Update existing or add new
-		const existingIds = new Map(entries.map(e => [e.memoryId, e]))
+		const existingIds = new Map(
+			entries.map(e => [e.memoryId, e])
+		)
 		for (const memoryId of memoryIds) {
-			existingIds.set(memoryId, { memoryId, touchedAt: now })
+			existingIds.set(memoryId, {
+				memoryId,
+				touchedAt: now
+			})
 		}
 
 		// Convert back to array
@@ -74,7 +89,12 @@ export class WorkingMemoryStore {
 	 * boost = 0.20 * exp(-ageMs / decayMs) when entry exists and not expired.
 	 * Returns 0 if not found or expired.
 	 */
-	getBoost(bankId: string, sessionId: string, memoryId: string, now: number): number {
+	getBoost(
+		bankId: string,
+		sessionId: string,
+		memoryId: string,
+		now: number
+	): number {
 		const entries = this.store.get(bankId)?.get(sessionId)
 		if (!entries) return 0
 
@@ -90,13 +110,19 @@ export class WorkingMemoryStore {
 	/**
 	 * Get all active (non-expired) entries for a session.
 	 */
-	getEntries(bankId: string, sessionId: string, now: number): WmEntry[] {
+	getEntries(
+		bankId: string,
+		sessionId: string,
+		now: number
+	): WmEntry[] {
 		const sessions = this.store.get(bankId)
 		if (!sessions) return []
 		const entries = sessions.get(sessionId)
 		if (!entries) return []
 
-		const active = entries.filter(e => now - e.touchedAt < WM_DECAY_MS)
+		const active = entries.filter(
+			e => now - e.touchedAt < WM_DECAY_MS
+		)
 
 		// Lazy cleanup: update store if we filtered out expired entries
 		if (active.length !== entries.length) {

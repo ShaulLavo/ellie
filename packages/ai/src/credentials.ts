@@ -20,10 +20,18 @@ export interface ApiKeyCredential {
 	key: string
 }
 
-export type AuthCredential = OAuthCredential | ApiKeyCredential
+export type AuthCredential =
+	| OAuthCredential
+	| ApiKeyCredential
 
-function isMultiProvider(json: unknown): json is Record<string, unknown> {
-	return typeof json === 'object' && json !== null && !('type' in json)
+function isMultiProvider(
+	json: unknown
+): json is Record<string, unknown> {
+	return (
+		typeof json === 'object' &&
+		json !== null &&
+		!('type' in json)
+	)
 }
 
 /**
@@ -43,7 +51,11 @@ export async function loadProviderCredential(
 		const json = await file.json()
 		if (isMultiProvider(json)) {
 			const cred = json[provider]
-			if (cred && typeof cred === 'object' && 'type' in cred) {
+			if (
+				cred &&
+				typeof cred === 'object' &&
+				'type' in cred
+			) {
 				return cred as AuthCredential
 			}
 			return null
@@ -60,7 +72,9 @@ export async function loadProviderCredential(
  *
  * Returns null for multi-provider files (use loadProviderCredential instead).
  */
-export async function loadCredential(path: string): Promise<AuthCredential | null> {
+export async function loadCredential(
+	path: string
+): Promise<AuthCredential | null> {
 	const file = Bun.file(path)
 	if (!(await file.exists())) return null
 	try {

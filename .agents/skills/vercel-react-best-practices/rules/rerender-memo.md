@@ -26,7 +26,11 @@ function Profile({ user, loading }: Props) {
 **Correct (skips computation when loading):**
 
 ```tsx
-const UserAvatar = memo(function UserAvatar({ user }: { user: User }) {
+const UserAvatar = memo(function UserAvatar({
+	user
+}: {
+	user: User
+}) {
 	const id = useMemo(() => computeAvatarId(user), [user])
 	return <Avatar id={id} />
 })

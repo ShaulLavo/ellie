@@ -6,7 +6,13 @@
  * - Human-readable Markdown summary
  */
 
-import type { EvalCaseResult, EvalReport, EvalRunConfig, Scenario, ScenarioSummary } from './types'
+import type {
+	EvalCaseResult,
+	EvalReport,
+	EvalRunConfig,
+	Scenario,
+	ScenarioSummary
+} from './types'
 
 // ── Scenario weights (committed and immutable for v1) ─────────────────────
 
@@ -35,7 +41,9 @@ function roundMetric(v: number): number {
 	return Number(v.toFixed(6))
 }
 
-function roundMetrics(metrics: Record<string, number>): Record<string, number> {
+function roundMetrics(
+	metrics: Record<string, number>
+): Record<string, number> {
 	const rounded: Record<string, number> = {}
 	for (const [key, value] of Object.entries(metrics)) {
 		rounded[key] = roundMetric(value)
@@ -45,7 +53,10 @@ function roundMetrics(metrics: Record<string, number>): Record<string, number> {
 
 // ── Penalty metrics (lower is better) ──────────────────────────────────────
 
-const PENALTY_METRICS = new Set(['duplicateLeakRate', 'truncationLossRate'])
+const PENALTY_METRICS = new Set([
+	'duplicateLeakRate',
+	'truncationLossRate'
+])
 
 // ── Report generation ─────────────────────────────────────────────────────
 
@@ -60,8 +71,16 @@ export interface GenerateReportOptions {
 /**
  * Generate a structured eval report from case results.
  */
-export function generateReport(options: GenerateReportOptions): EvalReport {
-	const { config, cases, gitSha, bunVersion, totalDurationMs } = options
+export function generateReport(
+	options: GenerateReportOptions
+): EvalReport {
+	const {
+		config,
+		cases,
+		gitSha,
+		bunVersion,
+		totalDurationMs
+	} = options
 
 	// Group cases by scenario
 	const byScenario = new Map<Scenario, EvalCaseResult[]>()
@@ -90,7 +109,11 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
 		'code_location_recall',
 		'token_budget_packing'
 	]
-	scenarios.sort((a, b) => scenarioOrder.indexOf(a.scenario) - scenarioOrder.indexOf(b.scenario))
+	scenarios.sort(
+		(a, b) =>
+			scenarioOrder.indexOf(a.scenario) -
+			scenarioOrder.indexOf(b.scenario)
+	)
 
 	// Compute global weighted score (weights sum to 1.0, no re-normalization)
 	let globalScore = 0
@@ -102,8 +125,12 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
 	}
 
 	// Flag partial-scenario runs
-	const presentScenarios = new Set(scenarios.map(s => s.scenario))
-	const missingScenarios = scenarioOrder.filter(s => !presentScenarios.has(s))
+	const presentScenarios = new Set(
+		scenarios.map(s => s.scenario)
+	)
+	const missingScenarios = scenarioOrder.filter(
+		s => !presentScenarios.has(s)
+	)
 	const warnings: string[] = []
 	if (missingScenarios.length > 0) {
 		warnings.push(
@@ -150,7 +177,9 @@ export function generateReport(options: GenerateReportOptions): EvalReport {
 /**
  * Average metrics across multiple cases in the same scenario.
  */
-function averageMetrics(cases: EvalCaseResult[]): Record<string, number> {
+function averageMetrics(
+	cases: EvalCaseResult[]
+): Record<string, number> {
 	if (cases.length === 0) return {}
 
 	const allKeys = new Set<string>()
@@ -162,8 +191,14 @@ function averageMetrics(cases: EvalCaseResult[]): Record<string, number> {
 
 	const avg: Record<string, number> = {}
 	for (const key of allKeys) {
-		const values = cases.map(c => c.metrics[key]).filter((v): v is number => v != null)
-		avg[key] = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0
+		const values = cases
+			.map(c => c.metrics[key])
+			.filter((v): v is number => v != null)
+		avg[key] =
+			values.length > 0
+				? values.reduce((sum, v) => sum + v, 0) /
+					values.length
+				: 0
 	}
 	return avg
 }
@@ -173,7 +208,9 @@ function averageMetrics(cases: EvalCaseResult[]): Record<string, number> {
 /**
  * Format an EvalReport as a human-readable Markdown summary.
  */
-export function formatMarkdownReport(report: EvalReport): string {
+export function formatMarkdownReport(
+	report: EvalReport
+): string {
 	const lines: string[] = []
 
 	lines.push('# Hindsight Eval Baseline Report')
@@ -182,10 +219,16 @@ export function formatMarkdownReport(report: EvalReport): string {
 	lines.push(`**Mode:** ${report.runConfig.mode}`)
 	lines.push(`**Seed:** ${report.runConfig.seed}`)
 	lines.push(`**Top-K:** ${report.runConfig.topK}`)
-	lines.push(`**Git SHA:** \`${report.runMetadata.gitSha}\``)
+	lines.push(
+		`**Git SHA:** \`${report.runMetadata.gitSha}\``
+	)
 	lines.push(`**Bun:** ${report.runMetadata.bunVersion}`)
-	lines.push(`**Timestamp:** ${report.runMetadata.timestamp}`)
-	lines.push(`**Total Duration:** ${report.totalDurationMs}ms`)
+	lines.push(
+		`**Timestamp:** ${report.runMetadata.timestamp}`
+	)
+	lines.push(
+		`**Total Duration:** ${report.totalDurationMs}ms`
+	)
 	lines.push('')
 
 	// Warnings
@@ -198,7 +241,9 @@ export function formatMarkdownReport(report: EvalReport): string {
 	}
 
 	// Global score
-	lines.push(`## Global Score: ${(report.globalScore * 100).toFixed(1)}%`)
+	lines.push(
+		`## Global Score: ${(report.globalScore * 100).toFixed(1)}%`
+	)
 	lines.push('')
 
 	// Weights table
@@ -206,10 +251,14 @@ export function formatMarkdownReport(report: EvalReport): string {
 	lines.push('')
 	lines.push('| Scenario | Weight | Primary Metric |')
 	lines.push('|----------|--------|----------------|')
-	for (const scenario of Object.keys(GLOBAL_WEIGHTS) as Scenario[]) {
+	for (const scenario of Object.keys(
+		GLOBAL_WEIGHTS
+	) as Scenario[]) {
 		const weight = GLOBAL_WEIGHTS[scenario]
 		const primary = PRIMARY_METRIC[scenario]
-		lines.push(`| ${scenario} | ${(weight * 100).toFixed(0)}% | ${primary} |`)
+		lines.push(
+			`| ${scenario} | ${(weight * 100).toFixed(0)}% | ${primary} |`
+		)
 	}
 	lines.push('')
 
@@ -218,13 +267,21 @@ export function formatMarkdownReport(report: EvalReport): string {
 	lines.push('')
 
 	for (const summary of report.scenarios) {
-		lines.push(`### ${summary.scenario} (${summary.caseCount} cases)`)
+		lines.push(
+			`### ${summary.scenario} (${summary.caseCount} cases)`
+		)
 		lines.push('')
 		lines.push('| Metric | Value |')
 		lines.push('|--------|-------|')
-		for (const [key, value] of Object.entries(summary.metrics)) {
-			const annotation = PENALTY_METRICS.has(key) ? ' (lower is better)' : ''
-			lines.push(`| ${key}${annotation} | ${(value * 100).toFixed(1)}% |`)
+		for (const [key, value] of Object.entries(
+			summary.metrics
+		)) {
+			const annotation = PENALTY_METRICS.has(key)
+				? ' (lower is better)'
+				: ''
+			lines.push(
+				`| ${key}${annotation} | ${(value * 100).toFixed(1)}% |`
+			)
 		}
 		lines.push('')
 	}
@@ -242,11 +299,17 @@ export function formatMarkdownReport(report: EvalReport): string {
 		lines.push('')
 
 		if (c.candidates.length > 0) {
-			lines.push('| Rank | Score | Content (truncated) | Sources |')
-			lines.push('|------|-------|---------------------|---------|')
+			lines.push(
+				'| Rank | Score | Content (truncated) | Sources |'
+			)
+			lines.push(
+				'|------|-------|---------------------|---------|'
+			)
 			for (const candidate of c.candidates.slice(0, 10)) {
 				const truncated =
-					candidate.content.length > 60 ? candidate.content.slice(0, 60) + '...' : candidate.content
+					candidate.content.length > 60
+						? candidate.content.slice(0, 60) + '...'
+						: candidate.content
 				lines.push(
 					`| ${candidate.rank} | ${candidate.score.toFixed(4)} | ${truncated} | ${candidate.sources.join(', ')} |`
 				)

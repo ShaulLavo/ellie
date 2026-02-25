@@ -2,10 +2,25 @@
 
 import type { HTMLAttributes, ReactNode } from 'react'
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger
+} from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-import { CaretRightIcon, FileIcon, FolderIcon, FolderOpenIcon } from '@phosphor-icons/react'
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import {
+	CaretRightIcon,
+	FileIcon,
+	FolderIcon,
+	FolderOpenIcon
+} from '@phosphor-icons/react'
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	useState
+} from 'react'
 
 interface FileTreeContextType {
 	expandedPaths: Set<string>
@@ -24,13 +39,14 @@ const FileTreeContext = createContext<FileTreeContextType>({
 	togglePath: noop
 })
 
-export type FileTreeProps = HTMLAttributes<HTMLDivElement> & {
-	expanded?: Set<string>
-	defaultExpanded?: Set<string>
-	selectedPath?: string
-	onSelect?: (path: string) => void
-	onExpandedChange?: (expanded: Set<string>) => void
-}
+export type FileTreeProps =
+	HTMLAttributes<HTMLDivElement> & {
+		expanded?: Set<string>
+		defaultExpanded?: Set<string>
+		selectedPath?: string
+		onSelect?: (path: string) => void
+		onExpandedChange?: (expanded: Set<string>) => void
+	}
 
 export const FileTree = ({
 	expanded: controlledExpanded,
@@ -42,8 +58,10 @@ export const FileTree = ({
 	children,
 	...props
 }: FileTreeProps) => {
-	const [internalExpanded, setInternalExpanded] = useState(defaultExpanded)
-	const expandedPaths = controlledExpanded ?? internalExpanded
+	const [internalExpanded, setInternalExpanded] =
+		useState(defaultExpanded)
+	const expandedPaths =
+		controlledExpanded ?? internalExpanded
 
 	const togglePath = useCallback(
 		(path: string) => {
@@ -60,14 +78,22 @@ export const FileTree = ({
 	)
 
 	const contextValue = useMemo(
-		() => ({ expandedPaths, onSelect, selectedPath, togglePath }),
+		() => ({
+			expandedPaths,
+			onSelect,
+			selectedPath,
+			togglePath
+		}),
 		[expandedPaths, onSelect, selectedPath, togglePath]
 	)
 
 	return (
 		<FileTreeContext.Provider value={contextValue}>
 			<div
-				className={cn('rounded-lg border bg-background font-mono text-sm', className)}
+				className={cn(
+					'rounded-lg border bg-background font-mono text-sm',
+					className
+				)}
 				role="tree"
 				{...props}
 			>
@@ -83,16 +109,18 @@ interface FileTreeFolderContextType {
 	isExpanded: boolean
 }
 
-const FileTreeFolderContext = createContext<FileTreeFolderContextType>({
-	isExpanded: false,
-	name: '',
-	path: ''
-})
+const FileTreeFolderContext =
+	createContext<FileTreeFolderContextType>({
+		isExpanded: false,
+		name: '',
+		path: ''
+	})
 
-export type FileTreeFolderProps = HTMLAttributes<HTMLDivElement> & {
-	path: string
-	name: string
-}
+export type FileTreeFolderProps =
+	HTMLAttributes<HTMLDivElement> & {
+		path: string
+		name: string
+	}
 
 export const FileTreeFolder = ({
 	path,
@@ -101,7 +129,12 @@ export const FileTreeFolder = ({
 	children,
 	...props
 }: FileTreeFolderProps) => {
-	const { expandedPaths, togglePath, selectedPath, onSelect } = useContext(FileTreeContext)
+	const {
+		expandedPaths,
+		togglePath,
+		selectedPath,
+		onSelect
+	} = useContext(FileTreeContext)
 	const isExpanded = expandedPaths.has(path)
 	const isSelected = selectedPath === path
 
@@ -113,12 +146,25 @@ export const FileTreeFolder = ({
 		onSelect?.(path)
 	}, [onSelect, path])
 
-	const folderContextValue = useMemo(() => ({ isExpanded, name, path }), [isExpanded, name, path])
+	const folderContextValue = useMemo(
+		() => ({ isExpanded, name, path }),
+		[isExpanded, name, path]
+	)
 
 	return (
-		<FileTreeFolderContext.Provider value={folderContextValue}>
-			<Collapsible onOpenChange={handleOpenChange} open={isExpanded}>
-				<div className={cn('', className)} role="treeitem" tabIndex={0} {...props}>
+		<FileTreeFolderContext.Provider
+			value={folderContextValue}
+		>
+			<Collapsible
+				onOpenChange={handleOpenChange}
+				open={isExpanded}
+			>
+				<div
+					className={cn('', className)}
+					role="treeitem"
+					tabIndex={0}
+					{...props}
+				>
 					<CollapsibleTrigger>
 						<button
 							className={cn(
@@ -145,7 +191,9 @@ export const FileTreeFolder = ({
 						</button>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
-						<div className="ml-4 border-l pl-2">{children}</div>
+						<div className="ml-4 border-l pl-2">
+							{children}
+						</div>
 					</CollapsibleContent>
 				</div>
 			</Collapsible>
@@ -158,16 +206,18 @@ interface FileTreeFileContextType {
 	name: string
 }
 
-const FileTreeFileContext = createContext<FileTreeFileContextType>({
-	name: '',
-	path: ''
-})
+const FileTreeFileContext =
+	createContext<FileTreeFileContextType>({
+		name: '',
+		path: ''
+	})
 
-export type FileTreeFileProps = HTMLAttributes<HTMLDivElement> & {
-	path: string
-	name: string
-	icon?: ReactNode
-}
+export type FileTreeFileProps =
+	HTMLAttributes<HTMLDivElement> & {
+		path: string
+		name: string
+		icon?: ReactNode
+	}
 
 export const FileTreeFile = ({
 	path,
@@ -177,7 +227,8 @@ export const FileTreeFile = ({
 	children,
 	...props
 }: FileTreeFileProps) => {
-	const { selectedPath, onSelect } = useContext(FileTreeContext)
+	const { selectedPath, onSelect } =
+		useContext(FileTreeContext)
 	const isSelected = selectedPath === path
 
 	const handleClick = useCallback(() => {
@@ -193,7 +244,10 @@ export const FileTreeFile = ({
 		[onSelect, path]
 	)
 
-	const fileContextValue = useMemo(() => ({ name, path }), [name, path])
+	const fileContextValue = useMemo(
+		() => ({ name, path }),
+		[name, path]
+	)
 
 	return (
 		<FileTreeFileContext.Provider value={fileContextValue}>
@@ -214,7 +268,9 @@ export const FileTreeFile = ({
 						{/* Spacer for alignment */}
 						<span className="size-4" />
 						<FileTreeIcon>
-							{icon ?? <FileIcon className="size-4 text-muted-foreground" />}
+							{icon ?? (
+								<FileIcon className="size-4 text-muted-foreground" />
+							)}
 						</FileTreeIcon>
 						<FileTreeName>{name}</FileTreeName>
 					</>
@@ -224,31 +280,50 @@ export const FileTreeFile = ({
 	)
 }
 
-export type FileTreeIconProps = HTMLAttributes<HTMLSpanElement>
+export type FileTreeIconProps =
+	HTMLAttributes<HTMLSpanElement>
 
-export const FileTreeIcon = ({ className, children, ...props }: FileTreeIconProps) => (
+export const FileTreeIcon = ({
+	className,
+	children,
+	...props
+}: FileTreeIconProps) => (
 	<span className={cn('shrink-0', className)} {...props}>
 		{children}
 	</span>
 )
 
-export type FileTreeNameProps = HTMLAttributes<HTMLSpanElement>
+export type FileTreeNameProps =
+	HTMLAttributes<HTMLSpanElement>
 
-export const FileTreeName = ({ className, children, ...props }: FileTreeNameProps) => (
+export const FileTreeName = ({
+	className,
+	children,
+	...props
+}: FileTreeNameProps) => (
 	<span className={cn('truncate', className)} {...props}>
 		{children}
 	</span>
 )
 
-export type FileTreeActionsProps = HTMLAttributes<HTMLDivElement>
+export type FileTreeActionsProps =
+	HTMLAttributes<HTMLDivElement>
 
-const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation()
+const stopPropagation = (e: React.SyntheticEvent) =>
+	e.stopPropagation()
 
-export const FileTreeActions = ({ className, children, ...props }: FileTreeActionsProps) => (
+export const FileTreeActions = ({
+	className,
+	children,
+	...props
+}: FileTreeActionsProps) => (
 	// biome-ignore lint/a11y/noNoninteractiveElementInteractions: stopPropagation required for nested interactions
 	// biome-ignore lint/a11y/useSemanticElements: fieldset doesn't fit this UI pattern
 	<div
-		className={cn('ml-auto flex items-center gap-1', className)}
+		className={cn(
+			'ml-auto flex items-center gap-1',
+			className
+		)}
 		onClick={stopPropagation}
 		onKeyDown={stopPropagation}
 		role="group"

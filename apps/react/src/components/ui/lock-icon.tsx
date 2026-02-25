@@ -1,9 +1,23 @@
 import { forwardRef, useImperativeHandle } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const LockIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 48, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const LockIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 48,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = async () => {

@@ -18,7 +18,10 @@ new Elysia()
 ```ts
 new Elysia()
 	.get('/id/:id', ({ params: { id } }) => id)
-	.get('/id/:id/:name', ({ params: { id, name } }) => id + ' ' + name)
+	.get(
+		'/id/:id/:name',
+		({ params: { id, name } }) => id + ' ' + name
+	)
 ```
 
 **Optional params**: `.get('/id/:id?', ...)`
@@ -174,7 +177,9 @@ new Elysia()
 ```ts
 new Elysia()
 	.derive(({ headers }) => ({
-		bearer: headers.authorization?.startsWith('Bearer ') ? headers.authorization.slice(7) : null
+		bearer: headers.authorization?.startsWith('Bearer ')
+			? headers.authorization.slice(7)
+			: null
 	}))
 	.get('/', ({ bearer }) => bearer)
 ```
@@ -282,7 +287,8 @@ Elysia provide a `status` function for returning HTTP status code, prefers over 
 import { Elysia, status } from 'elysia'
 
 function doThing() {
-	if (Math.random() > 0.33) return status(418, "I'm a teapot")
+	if (Math.random() > 0.33)
+		return status(418, "I'm a teapot")
 }
 
 new Elysia().get('/', ({ status }) => {

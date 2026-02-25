@@ -145,7 +145,12 @@ Actions validate or transform data within a `pipe()`. They MUST be used inside p
 
 ```typescript
 // Actions are used in pipe()
-const EmailSchema = v.pipe(v.string(), v.trim(), v.email(), v.endsWith('@example.com'))
+const EmailSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.email(),
+	v.endsWith('@example.com')
+)
 ```
 
 ## Pipelines
@@ -160,7 +165,10 @@ const UsernameSchema = v.pipe(
 	v.trim(),
 	v.minLength(3, 'Username must be at least 3 characters'),
 	v.maxLength(20, 'Username must be at most 20 characters'),
-	v.regex(/^[a-z0-9_]+$/i, 'Username can only contain letters, numbers, and underscores')
+	v.regex(
+		/^[a-z0-9_]+$/i,
+		'Username can only contain letters, numbers, and underscores'
+	)
 )
 
 const AgeSchema = v.pipe(
@@ -213,8 +221,14 @@ const AgeSchema = v.pipe(
 const PasswordSchema = v.pipe(
 	v.string(),
 	v.minLength(8),
-	v.check(input => /[A-Z]/.test(input), 'Password must contain an uppercase letter'),
-	v.check(input => /[0-9]/.test(input), 'Password must contain a number')
+	v.check(
+		input => /[A-Z]/.test(input),
+		'Password must contain an uppercase letter'
+	),
+	v.check(
+		input => /[0-9]/.test(input),
+		'Password must contain a number'
+	)
 )
 ```
 
@@ -236,10 +250,19 @@ These actions modify the value without changing its type:
 - `v.toMaxValue(n)` — Clamp to maximum value (if greater than n, set to n)
 
 ```typescript
-const NormalizedEmailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email())
+const NormalizedEmailSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.toLowerCase(),
+	v.email()
+)
 
 // Clamp number to range 0-100
-const PercentageSchema = v.pipe(v.number(), v.toMinValue(0), v.toMaxValue(100))
+const PercentageSchema = v.pipe(
+	v.number(),
+	v.toMinValue(0),
+	v.toMaxValue(100)
+)
 ```
 
 ### Type Transformations
@@ -254,10 +277,19 @@ For converting between data types, use these built-in transformation actions:
 
 ```typescript
 // Convert string to number
-const PortSchema = v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))
+const PortSchema = v.pipe(
+	v.string(),
+	v.toNumber(),
+	v.integer(),
+	v.minValue(1)
+)
 
 // Convert ISO string to Date
-const TimestampSchema = v.pipe(v.string(), v.isoDateTime(), v.toDate())
+const TimestampSchema = v.pipe(
+	v.string(),
+	v.isoDateTime(),
+	v.toDate()
+)
 
 // Convert to boolean
 const FlagSchema = v.pipe(v.string(), v.toBoolean())
@@ -312,7 +344,9 @@ const ObjectSchema = v.object({ key: v.string() })
 const LooseObjectSchema = v.looseObject({ key: v.string() })
 
 // Strict object - throws on unknown keys
-const StrictObjectSchema = v.strictObject({ key: v.string() })
+const StrictObjectSchema = v.strictObject({
+	key: v.string()
+})
 
 // Object with rest - validates unknown keys against a schema
 const ObjectWithRestSchema = v.objectWithRest(
@@ -359,7 +393,9 @@ const BaseSchema = v.object({
 const PublicUserSchema = v.pick(BaseSchema, ['id', 'name'])
 
 // Omit specific keys
-const UserWithoutPasswordSchema = v.omit(BaseSchema, ['password'])
+const UserWithoutPasswordSchema = v.omit(BaseSchema, [
+	'password'
+])
 
 // Make all optional
 const PartialUserSchema = v.partial(BaseSchema)
@@ -433,16 +469,27 @@ const ArgsSchema = v.tupleWithRest(
 ### Union
 
 ```typescript
-const StringOrNumberSchema = v.union([v.string(), v.number()])
+const StringOrNumberSchema = v.union([
+	v.string(),
+	v.number()
+])
 
-const StatusSchema = v.union([v.literal('pending'), v.literal('active'), v.literal('inactive')])
+const StatusSchema = v.union([
+	v.literal('pending'),
+	v.literal('active'),
+	v.literal('inactive')
+])
 ```
 
 ### Picklist (for string/number literals)
 
 ```typescript
 // Simpler than union of literals
-const StatusSchema = v.picklist(['pending', 'active', 'inactive'])
+const StatusSchema = v.picklist([
+	'pending',
+	'active',
+	'inactive'
+])
 
 const PrioritySchema = v.picklist([1, 2, 3])
 ```
@@ -623,7 +670,10 @@ const isUsernameAvailable = async (username: string) => {
 const UsernameSchema = v.pipeAsync(
 	v.string(),
 	v.minLength(3),
-	v.checkAsync(isUsernameAvailable, 'Username is already taken')
+	v.checkAsync(
+		isUsernameAvailable,
+		'Username is already taken'
+	)
 )
 
 // Must use parseAsync
@@ -711,8 +761,17 @@ const ApiResponseSchema = v.variant('status', [
 
 ```typescript
 const EnvSchema = v.object({
-	NODE_ENV: v.picklist(['development', 'production', 'test']),
-	PORT: v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
+	NODE_ENV: v.picklist([
+		'development',
+		'production',
+		'test'
+	]),
+	PORT: v.pipe(
+		v.string(),
+		v.transform(Number),
+		v.integer(),
+		v.minValue(1)
+	),
 	DATABASE_URL: v.pipe(v.string(), v.url()),
 	API_KEY: v.pipe(v.string(), v.minLength(32))
 })
@@ -731,7 +790,10 @@ const DateFromStringSchema = v.pipe(
 )
 
 // Date validation
-const FutureDateSchema = v.pipe(v.date(), v.minValue(new Date(), 'Date must be in the future'))
+const FutureDateSchema = v.pipe(
+	v.date(),
+	v.minValue(new Date(), 'Date must be in the future')
+)
 ```
 
 ## Additional Resources

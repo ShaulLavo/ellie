@@ -11,8 +11,14 @@ const reactCompilerPlugin: BunPlugin = {
 				filename: args.path,
 				plugins: [
 					'babel-plugin-react-compiler',
-					['@babel/plugin-transform-typescript', { isTSX: true }],
-					['@babel/plugin-transform-react-jsx', { runtime: 'automatic' }]
+					[
+						'@babel/plugin-transform-typescript',
+						{ isTSX: true }
+					],
+					[
+						'@babel/plugin-transform-react-jsx',
+						{ runtime: 'automatic' }
+					]
 				]
 			})
 

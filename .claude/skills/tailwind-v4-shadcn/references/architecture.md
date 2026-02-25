@@ -48,7 +48,9 @@ Tailwind v4 requires a specific architecture for CSS variable-based theming. Thi
 ```css
 @layer base {
 	body {
-		background-color: var(--background); /* NO hsl() wrapper here */
+		background-color: var(
+			--background
+		); /* NO hsl() wrapper here */
 		color: var(--foreground);
 	}
 }

@@ -8,20 +8,41 @@
  */
 
 import { resolve, join, relative } from 'path'
-import { mkdirSync, writeFileSync, existsSync, cpSync, rmSync } from 'fs'
+import {
+	mkdirSync,
+	writeFileSync,
+	existsSync,
+	cpSync,
+	rmSync
+} from 'fs'
 import { runBaseline } from '../src/runner'
-import { generateReport, formatMarkdownReport, PRIMARY_METRIC } from '../src/report'
+import {
+	generateReport,
+	formatMarkdownReport,
+	PRIMARY_METRIC
+} from '../src/report'
 import type { EvalRunConfig } from '../src/types'
 
 const PKG_ROOT = resolve(import.meta.dir, '..')
-const DEFAULT_FIXTURE = join(PKG_ROOT, 'fixtures', 'assistant-baseline.v1.jsonl')
-const DEFAULT_OUTPUT_DIR = join(PKG_ROOT, 'artifacts', 'eval', 'baseline')
+const DEFAULT_FIXTURE = join(
+	PKG_ROOT,
+	'fixtures',
+	'assistant-baseline.v1.jsonl'
+)
+const DEFAULT_OUTPUT_DIR = join(
+	PKG_ROOT,
+	'artifacts',
+	'eval',
+	'baseline'
+)
 
 // Parse CLI args
 const args = process.argv.slice(2)
 const outputDirArg = args.indexOf('--output-dir')
 const outputDir =
-	outputDirArg >= 0 && args[outputDirArg + 1] ? resolve(args[outputDirArg + 1]) : DEFAULT_OUTPUT_DIR
+	outputDirArg >= 0 && args[outputDirArg + 1]
+		? resolve(args[outputDirArg + 1])
+		: DEFAULT_OUTPUT_DIR
 
 // ── Run ───────────────────────────────────────────────────────────────────
 
@@ -48,7 +69,9 @@ console.log('Running baseline eval...')
 const cases = await runBaseline({ config })
 
 const totalDurationMs = Date.now() - startTime
-console.log(`Completed ${cases.length} cases in ${totalDurationMs}ms`)
+console.log(
+	`Completed ${cases.length} cases in ${totalDurationMs}ms`
+)
 
 // ── Get metadata ──────────────────────────────────────────────────────────
 
@@ -81,7 +104,10 @@ const report = generateReport({
 
 // ── Write output ──────────────────────────────────────────────────────────
 
-const dateDir = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+const dateDir = new Date()
+	.toISOString()
+	.replace(/[:.]/g, '-')
+	.slice(0, 19)
 const runDir = join(outputDir, dateDir)
 mkdirSync(runDir, { recursive: true })
 
@@ -105,11 +131,16 @@ console.log(`  JSON: ${jsonPath}`)
 console.log(`  Markdown: ${mdPath}`)
 console.log(`  Latest: ${latestDir}`)
 console.log('')
-console.log(`Global Score: ${(report.globalScore * 100).toFixed(1)}%`)
+console.log(
+	`Global Score: ${(report.globalScore * 100).toFixed(1)}%`
+)
 console.log('')
 console.log('Per-scenario scores:')
 for (const scenario of report.scenarios) {
-	const primaryKey = PRIMARY_METRIC[scenario.scenario] ?? Object.keys(scenario.metrics)[0] ?? '?'
+	const primaryKey =
+		PRIMARY_METRIC[scenario.scenario] ??
+		Object.keys(scenario.metrics)[0] ??
+		'?'
 	const primaryValue = scenario.metrics[primaryKey] ?? 0
 	console.log(
 		`  ${scenario.scenario}: ${(primaryValue * 100).toFixed(1)}% (${primaryKey}, ${scenario.caseCount} cases)`

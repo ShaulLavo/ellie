@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { EventStream } from '../src/event-stream'
 
-type TestEvent = { type: 'data'; value: string } | { type: 'end'; result: string }
+type TestEvent =
+	| { type: 'data'; value: string }
+	| { type: 'end'; result: string }
 
 function createTestStream() {
 	return new EventStream<TestEvent, string>(
@@ -86,7 +88,9 @@ describe('EventStream', () => {
 			events.push(event)
 		}
 
-		expect(events).toEqual([{ type: 'data', value: 'before' }])
+		expect(events).toEqual([
+			{ type: 'data', value: 'before' }
+		])
 	})
 
 	test('end() is idempotent', async () => {
@@ -115,7 +119,9 @@ describe('EventStream', () => {
 		stream.push({ type: 'data', value: 'x' })
 		stream.end() // No result argument, no "end" event was pushed
 
-		await expect(stream.result()).rejects.toThrow('EventStream ended without a result')
+		await expect(stream.result()).rejects.toThrow(
+			'EventStream ended without a result'
+		)
 	})
 
 	test('result() resolves when completion event was pushed even if end() has no arg', async () => {
@@ -149,6 +155,9 @@ describe('EventStream', () => {
 		expect(events.length).toBe(6)
 		expect(events[0]).toEqual({ type: 'data', value: '0' })
 		expect(events[4]).toEqual({ type: 'data', value: '4' })
-		expect(events[5]).toEqual({ type: 'end', result: 'done' })
+		expect(events[5]).toEqual({
+			type: 'end',
+			result: 'done'
+		})
 	})
 })

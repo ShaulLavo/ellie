@@ -909,7 +909,12 @@
 				},
 				"idx_hs_ep_scope": {
 					"name": "idx_hs_ep_scope",
-					"columns": ["bank_id", "profile", "project", "session"],
+					"columns": [
+						"bank_id",
+						"profile",
+						"project",
+						"session"
+					],
 					"isUnique": false
 				}
 			},
@@ -1061,7 +1066,11 @@
 				},
 				"idx_hs_link_edge": {
 					"name": "idx_hs_link_edge",
-					"columns": ["source_id", "target_id", "link_type"],
+					"columns": [
+						"source_id",
+						"target_id",
+						"link_type"
+					],
 					"isUnique": true
 				}
 			},
@@ -1295,7 +1304,11 @@
 				},
 				"idx_hs_mu_occurred_range": {
 					"name": "idx_hs_mu_occurred_range",
-					"columns": ["bank_id", "occurred_start", "occurred_end"],
+					"columns": [
+						"bank_id",
+						"occurred_start",
+						"occurred_end"
+					],
 					"isUnique": false
 				},
 				"idx_hs_mu_mentioned_at": {

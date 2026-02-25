@@ -702,7 +702,11 @@
 				},
 				"idx_hs_ee_bank_memory": {
 					"name": "idx_hs_ee_bank_memory",
-					"columns": ["bank_id", "memory_id", "\"event_time\" desc"],
+					"columns": [
+						"bank_id",
+						"memory_id",
+						"\"event_time\" desc"
+					],
 					"isUnique": false
 				}
 			},
@@ -909,7 +913,12 @@
 				},
 				"idx_hs_ep_scope": {
 					"name": "idx_hs_ep_scope",
-					"columns": ["bank_id", "profile", "project", "session"],
+					"columns": [
+						"bank_id",
+						"profile",
+						"project",
+						"session"
+					],
 					"isUnique": false
 				}
 			},
@@ -985,12 +994,20 @@
 			"indexes": {
 				"idx_hs_lac_path_time": {
 					"name": "idx_hs_lac_path_time",
-					"columns": ["bank_id", "path_id", "\"accessed_at\" desc"],
+					"columns": [
+						"bank_id",
+						"path_id",
+						"\"accessed_at\" desc"
+					],
 					"isUnique": false
 				},
 				"idx_hs_lac_memory_time": {
 					"name": "idx_hs_lac_memory_time",
-					"columns": ["bank_id", "memory_id", "\"accessed_at\" desc"],
+					"columns": [
+						"bank_id",
+						"memory_id",
+						"\"accessed_at\" desc"
+					],
 					"isUnique": false
 				}
 			},
@@ -1085,7 +1102,11 @@
 			"indexes": {
 				"idx_hs_la_edge": {
 					"name": "idx_hs_la_edge",
-					"columns": ["bank_id", "source_path_id", "related_path_id"],
+					"columns": [
+						"bank_id",
+						"source_path_id",
+						"related_path_id"
+					],
 					"isUnique": true
 				},
 				"idx_hs_la_source": {
@@ -1192,7 +1213,12 @@
 			"indexes": {
 				"idx_hs_lp_unique": {
 					"name": "idx_hs_lp_unique",
-					"columns": ["bank_id", "normalized_path", "profile", "project"],
+					"columns": [
+						"bank_id",
+						"normalized_path",
+						"profile",
+						"project"
+					],
 					"isUnique": true
 				},
 				"idx_hs_lp_bank_norm": {
@@ -1349,7 +1375,11 @@
 				},
 				"idx_hs_link_edge": {
 					"name": "idx_hs_link_edge",
-					"columns": ["source_id", "target_id", "link_type"],
+					"columns": [
+						"source_id",
+						"target_id",
+						"link_type"
+					],
 					"isUnique": true
 				}
 			},
@@ -1611,7 +1641,11 @@
 				},
 				"idx_hs_mu_occurred_range": {
 					"name": "idx_hs_mu_occurred_range",
-					"columns": ["bank_id", "occurred_start", "occurred_end"],
+					"columns": [
+						"bank_id",
+						"occurred_start",
+						"occurred_end"
+					],
 					"isUnique": false
 				},
 				"idx_hs_mu_mentioned_at": {
@@ -1636,7 +1670,11 @@
 				},
 				"idx_hs_mu_scope": {
 					"name": "idx_hs_mu_scope",
-					"columns": ["bank_id", "scope_profile", "scope_project"],
+					"columns": [
+						"bank_id",
+						"scope_profile",
+						"scope_project"
+					],
 					"isUnique": false
 				}
 			},

@@ -2,7 +2,11 @@ import { describe, it, expect } from 'bun:test'
 import { scoreCase } from '../scoring'
 import type { EvalCase, RecallCandidate } from '../types'
 
-function makeCandidate(content: string, score: number, rank: number): RecallCandidate {
+function makeCandidate(
+	content: string,
+	score: number,
+	rank: number
+): RecallCandidate {
 	return {
 		memoryId: `mem-${rank}`,
 		content,
@@ -180,13 +184,20 @@ describe('scoring', () => {
 
 		it('scores perfect path recall', () => {
 			const candidates = [
-				makeCandidate('Auth defined in auth/middleware.ts', 0.9, 1),
+				makeCandidate(
+					'Auth defined in auth/middleware.ts',
+					0.9,
+					1
+				),
 				makeCandidate('JWT logic in auth/jwt.ts', 0.8, 2),
 				makeCandidate('Other file', 0.7, 3)
 			]
 			const metrics = scoreCase(evalCase, candidates)
 			expect(metrics['pathRecall@k']).toBe(1.0)
-			expect(metrics.exactPathPrecision).toBeCloseTo(2 / 3, 3)
+			expect(metrics.exactPathPrecision).toBeCloseTo(
+				2 / 3,
+				3
+			)
 		})
 
 		it('scores 0 when no paths found', () => {

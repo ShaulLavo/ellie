@@ -1,9 +1,27 @@
-import { forwardRef, useImperativeHandle, useCallback } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useCallback
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const SendIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const SendIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = useCallback(async () => {
@@ -18,7 +36,11 @@ const SendIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 			)
 
 			// instant reset
-			await animate('.send-icon', { x: -24, y: 24 }, { duration: 0 })
+			await animate(
+				'.send-icon',
+				{ x: -24, y: 24 },
+				{ duration: 0 }
+			)
 
 			// come back
 			await animate(
@@ -33,7 +55,11 @@ const SendIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		}, [animate])
 
 		const stop = useCallback(() => {
-			animate('.send-icon', { x: 0, y: 0, opacity: 1 }, { duration: 0.2 })
+			animate(
+				'.send-icon',
+				{ x: 0, y: 0, opacity: 1 },
+				{ duration: 0.2 }
+			)
 		}, [animate])
 
 		useImperativeHandle(ref, () => ({
@@ -58,8 +84,15 @@ const SendIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 				className={`cursor-pointer ${className}`}
 				style={{ overflow: 'visible' }}
 			>
-				<motion.g className="send-icon" style={{ transformOrigin: 'center' }}>
-					<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+				<motion.g
+					className="send-icon"
+					style={{ transformOrigin: 'center' }}
+				>
+					<path
+						stroke="none"
+						d="M0 0h24v24H0z"
+						fill="none"
+					/>
 					<path d="M10 14l11 -11" />
 					<path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5" />
 				</motion.g>

@@ -60,7 +60,9 @@ describe('ulid', () => {
 		}
 
 		// Tight loop — at least one prefix group should have multiple IDs
-		const hasCollision = [...byPrefix.values()].some(g => g.length > 1)
+		const hasCollision = [...byPrefix.values()].some(
+			g => g.length > 1
+		)
 		expect(hasCollision).toBe(true)
 
 		// Within same-timestamp groups, random suffixes must differ

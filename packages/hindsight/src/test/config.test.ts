@@ -6,7 +6,10 @@
  */
 
 import { describe, it, expect, afterEach } from 'bun:test'
-import { createTestHindsight, type TestHindsight } from './setup'
+import {
+	createTestHindsight,
+	type TestHindsight
+} from './setup'
 
 describe('BankConfig validation', () => {
 	let t: TestHindsight
@@ -17,7 +20,11 @@ describe('BankConfig validation', () => {
 
 	it('accepts valid extractionMode values', () => {
 		t = createTestHindsight()
-		const modes: Array<'concise' | 'verbose' | 'custom'> = ['concise', 'verbose', 'custom']
+		const modes: Array<'concise' | 'verbose' | 'custom'> = [
+			'concise',
+			'verbose',
+			'custom'
+		]
 		for (const mode of modes) {
 			const bank = t.hs.createBank(`mode-${mode}`, {
 				config: { extractionMode: mode }
@@ -28,7 +35,11 @@ describe('BankConfig validation', () => {
 
 	it('accepts valid reflectBudget values', () => {
 		t = createTestHindsight()
-		const budgets: Array<'low' | 'mid' | 'high'> = ['low', 'mid', 'high']
+		const budgets: Array<'low' | 'mid' | 'high'> = [
+			'low',
+			'mid',
+			'high'
+		]
 		for (const budget of budgets) {
 			const bank = t.hs.createBank(`budget-${budget}`, {
 				config: { reflectBudget: budget }
@@ -50,15 +61,25 @@ describe('BankConfig validation', () => {
 
 	it('stores enableConsolidation flag', () => {
 		t = createTestHindsight()
-		const bankEnabled = t.hs.createBank('consolidation-on', {
-			config: { enableConsolidation: true }
-		})
-		expect(bankEnabled.config.enableConsolidation).toBe(true)
+		const bankEnabled = t.hs.createBank(
+			'consolidation-on',
+			{
+				config: { enableConsolidation: true }
+			}
+		)
+		expect(bankEnabled.config.enableConsolidation).toBe(
+			true
+		)
 
-		const bankDisabled = t.hs.createBank('consolidation-off', {
-			config: { enableConsolidation: false }
-		})
-		expect(bankDisabled.config.enableConsolidation).toBe(false)
+		const bankDisabled = t.hs.createBank(
+			'consolidation-off',
+			{
+				config: { enableConsolidation: false }
+			}
+		)
+		expect(bankDisabled.config.enableConsolidation).toBe(
+			false
+		)
 	})
 
 	it('stores customGuidelines', () => {
@@ -69,7 +90,9 @@ describe('BankConfig validation', () => {
 				customGuidelines: 'Focus on technical facts only.'
 			}
 		})
-		expect(bank.config.customGuidelines).toBe('Focus on technical facts only.')
+		expect(bank.config.customGuidelines).toBe(
+			'Focus on technical facts only.'
+		)
 	})
 })
 

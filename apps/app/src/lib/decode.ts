@@ -34,15 +34,22 @@ export function decodeAndValidate<T extends GenericSchema>(
 		end--
 	}
 
-	const text = decoder.decode(end === bytes.length ? bytes : bytes.subarray(0, end))
+	const text = decoder.decode(
+		end === bytes.length ? bytes : bytes.subarray(0, end)
+	)
 	const parsed: unknown = JSON.parse(text)
 
 	const result = v.safeParse(schema, parsed)
 	if (!result.success) {
 		const detail = result.issues
-			.map(e => `${e.path?.map(p => p.key).join('.') ?? '/'}: ${e.message}`)
+			.map(
+				e =>
+					`${e.path?.map(p => p.key).join('.') ?? '/'}: ${e.message}`
+			)
 			.join(`, `)
-		throw new Error(`Stream message failed schema validation: ${detail}`)
+		throw new Error(
+			`Stream message failed schema validation: ${detail}`
+		)
 	}
 
 	return result.output

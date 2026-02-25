@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
-import { agentMessageSchema, agentEventSchema } from '../src/schemas'
-import type { UserMessage, AssistantMessage, ToolResultMessage, AgentEvent } from '../src/types'
+import {
+	agentMessageSchema,
+	agentEventSchema
+} from '../src/schemas'
+import type {
+	UserMessage,
+	AssistantMessage,
+	ToolResultMessage,
+	AgentEvent
+} from '../src/types'
 
 // ============================================================================
 // Message round-trip tests
@@ -26,7 +34,11 @@ describe('agentMessageSchema', () => {
 			role: 'user',
 			content: [
 				{ type: 'text', text: 'Look' },
-				{ type: 'image', data: 'base64data', mimeType: 'image/png' }
+				{
+					type: 'image',
+					data: 'base64data',
+					mimeType: 'image/png'
+				}
 			],
 			timestamp: 1000
 		}
@@ -49,7 +61,13 @@ describe('agentMessageSchema', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 15,
-				cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 }
+				cost: {
+					input: 0.01,
+					output: 0.02,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0.03
+				}
 			},
 			stopReason: 'stop',
 			timestamp: 1000
@@ -82,7 +100,13 @@ describe('agentMessageSchema', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 30,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'toolUse',
 			timestamp: 1000
@@ -106,7 +130,13 @@ describe('agentMessageSchema', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 0,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'error',
 			errorMessage: 'Rate limit exceeded',
@@ -140,7 +170,9 @@ describe('agentMessageSchema', () => {
 			role: 'toolResult',
 			toolCallId: 'tc_2',
 			toolName: 'search',
-			content: [{ type: 'text', text: 'Connection refused' }],
+			content: [
+				{ type: 'text', text: 'Connection refused' }
+			],
 			isError: true,
 			timestamp: 1000
 		}
@@ -153,7 +185,11 @@ describe('agentMessageSchema', () => {
 
 	test('rejects invalid role', () => {
 		expect(() =>
-			v.parse(agentMessageSchema, { role: 'invalid', content: [], timestamp: 0 })
+			v.parse(agentMessageSchema, {
+				role: 'invalid',
+				content: [],
+				timestamp: 0
+			})
 		).toThrow()
 	})
 
@@ -169,7 +205,13 @@ describe('agentMessageSchema', () => {
 				cacheRead: 0,
 				cacheWrite: 0,
 				totalTokens: 0,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
 			},
 			stopReason: 'stop',
 			timestamp: 1000
@@ -189,7 +231,10 @@ describe('agentMessageSchema', () => {
 describe('agentEventSchema', () => {
 	test('round-trips agent_start', () => {
 		const event: AgentEvent = { type: 'agent_start' }
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
@@ -204,7 +249,10 @@ describe('agentEventSchema', () => {
 				}
 			]
 		}
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
@@ -222,13 +270,22 @@ describe('agentEventSchema', () => {
 					cacheRead: 0,
 					cacheWrite: 0,
 					totalTokens: 0,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+					cost: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						total: 0
+					}
 				},
 				stopReason: 'stop',
 				timestamp: 1000
 			}
 		}
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
@@ -246,7 +303,13 @@ describe('agentEventSchema', () => {
 					cacheRead: 0,
 					cacheWrite: 0,
 					totalTokens: 0,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+					cost: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						total: 0
+					}
 				},
 				stopReason: 'stop',
 				timestamp: 1000
@@ -257,7 +320,10 @@ describe('agentEventSchema', () => {
 				delta: 'Hello'
 			}
 		}
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
@@ -268,7 +334,10 @@ describe('agentEventSchema', () => {
 			toolName: 'search',
 			args: { query: 'test' }
 		}
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
@@ -278,12 +347,17 @@ describe('agentEventSchema', () => {
 			toolCallId: 'tc_1',
 			toolName: 'search',
 			result: {
-				content: [{ type: 'text', text: 'Found 3 results' }],
+				content: [
+					{ type: 'text', text: 'Found 3 results' }
+				],
 				details: { count: 3 }
 			},
 			isError: false
 		}
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
@@ -309,7 +383,13 @@ describe('agentEventSchema', () => {
 					cacheRead: 0,
 					cacheWrite: 0,
 					totalTokens: 30,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+					cost: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						total: 0
+					}
 				},
 				stopReason: 'toolUse',
 				timestamp: 1000
@@ -325,11 +405,16 @@ describe('agentEventSchema', () => {
 				}
 			]
 		}
-		const parsed = v.parse(agentEventSchema, JSON.parse(JSON.stringify(event)))
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
 		expect(parsed).toEqual(event)
 	})
 
 	test('rejects invalid event type', () => {
-		expect(() => v.parse(agentEventSchema, { type: 'invalid_event' })).toThrow()
+		expect(() =>
+			v.parse(agentEventSchema, { type: 'invalid_event' })
+		).toThrow()
 	})
 })

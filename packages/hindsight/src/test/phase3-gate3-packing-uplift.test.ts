@@ -14,7 +14,11 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { packContext, estimateTokens, type PackCandidate } from '../context-pack'
+import {
+	packContext,
+	estimateTokens,
+	type PackCandidate
+} from '../context-pack'
 
 /**
  * Baseline packer: simple sequential truncation (Phase 2 behavior).
@@ -71,25 +75,38 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 
 	it('gist packing retains more facts than baseline at tokenBudget=2000', () => {
 		// Use larger content multiplier so gist compression has more impact
-		const { candidates, goldIds } = generateDataset(25, { contentMultiplier: 1.5 })
+		const { candidates, goldIds } = generateDataset(25, {
+			contentMultiplier: 1.5
+		})
 		const tokenBudget = 2000
 
 		// Baseline: sequential full-text packing
 		const baseline = baselinePack(candidates, tokenBudget)
 
 		// Phase 3: gist-first packing
-		const phase3Result = packContext(candidates, tokenBudget)
-		const phase3Ids = new Set(phase3Result.packed.map((p) => p.id))
+		const phase3Result = packContext(
+			candidates,
+			tokenBudget
+		)
+		const phase3Ids = new Set(
+			phase3Result.packed.map(p => p.id)
+		)
 
 		// Compute fact retention
-		const baselineRetention = baseline.packedIds.size / goldIds.size
+		const baselineRetention =
+			baseline.packedIds.size / goldIds.size
 		const phase3Retention = phase3Ids.size / goldIds.size
 
 		// Phase 3 should retain at least 30% more facts
 		const uplift =
-			baselineRetention > 0 ? (phase3Retention - baselineRetention) / baselineRetention : 1.0
+			baselineRetention > 0
+				? (phase3Retention - baselineRetention) /
+					baselineRetention
+				: 1.0
 
-		expect(phase3Retention).toBeGreaterThan(baselineRetention)
+		expect(phase3Retention).toBeGreaterThan(
+			baselineRetention
+		)
 		expect(uplift).toBeGreaterThanOrEqual(0.3) // >= 30% uplift
 	})
 
@@ -108,24 +125,37 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 		let totalPhase3Retention = 0
 
 		for (const { n, contentMul } of scenarios) {
-			const { candidates, goldIds } = generateDataset(n, { contentMultiplier: contentMul })
+			const { candidates, goldIds } = generateDataset(n, {
+				contentMultiplier: contentMul
+			})
 
 			const baseline = baselinePack(candidates, tokenBudget)
-			const phase3Result = packContext(candidates, tokenBudget)
-			const phase3Ids = new Set(phase3Result.packed.map((p) => p.id))
+			const phase3Result = packContext(
+				candidates,
+				tokenBudget
+			)
+			const phase3Ids = new Set(
+				phase3Result.packed.map(p => p.id)
+			)
 
-			totalBaselineRetention += baseline.packedIds.size / goldIds.size
+			totalBaselineRetention +=
+				baseline.packedIds.size / goldIds.size
 			totalPhase3Retention += phase3Ids.size / goldIds.size
 		}
 
-		const meanBaselineRetention = totalBaselineRetention / scenarios.length
-		const meanPhase3Retention = totalPhase3Retention / scenarios.length
+		const meanBaselineRetention =
+			totalBaselineRetention / scenarios.length
+		const meanPhase3Retention =
+			totalPhase3Retention / scenarios.length
 		const uplift =
 			meanBaselineRetention > 0
-				? (meanPhase3Retention - meanBaselineRetention) / meanBaselineRetention
+				? (meanPhase3Retention - meanBaselineRetention) /
+					meanBaselineRetention
 				: 1.0
 
-		expect(meanPhase3Retention).toBeGreaterThan(meanBaselineRetention)
+		expect(meanPhase3Retention).toBeGreaterThan(
+			meanBaselineRetention
+		)
 		expect(uplift).toBeGreaterThanOrEqual(0.3)
 	})
 
@@ -146,7 +176,9 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 		const { candidates } = generateDataset(10)
 		const result = packContext(candidates, 2000)
 
-		const gistItems = result.packed.filter((p) => p.mode === 'gist')
+		const gistItems = result.packed.filter(
+			p => p.mode === 'gist'
+		)
 		expect(gistItems.length).toBeGreaterThan(0)
 
 		// All gist items should have short text
@@ -158,15 +190,32 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 	it('overflow flag set when top 2 exceed budget alone', () => {
 		// Create candidates with very large content
 		const candidates: PackCandidate[] = [
-			{ id: 'a', content: 'x'.repeat(10000), gist: 'Short a', score: 0.9 },
-			{ id: 'b', content: 'x'.repeat(10000), gist: 'Short b', score: 0.8 },
-			{ id: 'c', content: 'x'.repeat(100), gist: 'Short c', score: 0.7 }
+			{
+				id: 'a',
+				content: 'x'.repeat(10000),
+				gist: 'Short a',
+				score: 0.9
+			},
+			{
+				id: 'b',
+				content: 'x'.repeat(10000),
+				gist: 'Short b',
+				score: 0.8
+			},
+			{
+				id: 'c',
+				content: 'x'.repeat(100),
+				gist: 'Short c',
+				score: 0.7
+			}
 		]
 
 		const result = packContext(candidates, 100) // Very tight budget
 		expect(result.overflow).toBe(true)
 		expect(result.packed.length).toBe(2) // Only top 2 returned
-		expect(result.packed.every((p) => p.mode === 'full')).toBe(true)
+		expect(
+			result.packed.every(p => p.mode === 'full')
+		).toBe(true)
 	})
 
 	it('totalTokensUsed respects budget when not overflow', () => {
@@ -175,7 +224,9 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 		const result = packContext(candidates, budget)
 
 		if (!result.overflow) {
-			expect(result.totalTokensUsed).toBeLessThanOrEqual(budget)
+			expect(result.totalTokensUsed).toBeLessThanOrEqual(
+				budget
+			)
 		}
 	})
 
@@ -184,18 +235,37 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 		const budget = 5000
 		const result = packContext(candidates, budget)
 
-		expect(result.budgetRemaining).toBe(Math.max(0, budget - result.totalTokensUsed))
+		expect(result.budgetRemaining).toBe(
+			Math.max(0, budget - result.totalTokensUsed)
+		)
 	})
 
 	it('fallback gist used when gist is null', () => {
 		const candidates: PackCandidate[] = [
-			{ id: 'a', content: 'x'.repeat(400), gist: null, score: 0.9 },
-			{ id: 'b', content: 'x'.repeat(400), gist: null, score: 0.8 },
-			{ id: 'c', content: 'x'.repeat(400), gist: null, score: 0.7 }
+			{
+				id: 'a',
+				content: 'x'.repeat(400),
+				gist: null,
+				score: 0.9
+			},
+			{
+				id: 'b',
+				content: 'x'.repeat(400),
+				gist: null,
+				score: 0.8
+			},
+			{
+				id: 'c',
+				content: 'x'.repeat(400),
+				gist: null,
+				score: 0.7
+			}
 		]
 
 		const result = packContext(candidates, 300) // Tight budget forces gist usage
-		const gistItems = result.packed.filter((p) => p.mode === 'gist')
+		const gistItems = result.packed.filter(
+			p => p.mode === 'gist'
+		)
 
 		// Gist items should use fallback (truncated to 280 chars)
 		for (const item of gistItems) {
@@ -206,8 +276,18 @@ describe('Gate 3: Packing Fact-Retention Uplift', () => {
 	it('reallocation step 6 uses leftover budget from both buckets', () => {
 		// Design candidates where gist bucket is used up but full bucket has leftover
 		const candidates: PackCandidate[] = [
-			{ id: 'a', content: 'x'.repeat(40), gist: null, score: 0.9 }, // 10 tokens (top-2)
-			{ id: 'b', content: 'x'.repeat(40), gist: null, score: 0.8 }, // 10 tokens (top-2)
+			{
+				id: 'a',
+				content: 'x'.repeat(40),
+				gist: null,
+				score: 0.9
+			}, // 10 tokens (top-2)
+			{
+				id: 'b',
+				content: 'x'.repeat(40),
+				gist: null,
+				score: 0.8
+			}, // 10 tokens (top-2)
 			{
 				id: 'c',
 				content: 'x'.repeat(200),

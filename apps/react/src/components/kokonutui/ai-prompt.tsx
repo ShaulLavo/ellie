@@ -66,13 +66,22 @@ const OPENAI_SVG = (
 
 export default function AI_Prompt() {
 	const [value, setValue] = useState('')
-	const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-		minHeight: 72,
-		maxHeight: 300
-	})
-	const [selectedModel, setSelectedModel] = useState('Claude 4.5 Sonnet')
+	const { textareaRef, adjustHeight } =
+		useAutoResizeTextarea({
+			minHeight: 72,
+			maxHeight: 300
+		})
+	const [selectedModel, setSelectedModel] = useState(
+		'Claude 4.5 Sonnet'
+	)
 
-	const AI_MODELS = ['Gemini 3', 'GPT-5-mini', 'Claude 4.5 Sonnet', 'GPT-5-1 Mini', 'GPT-5-1']
+	const AI_MODELS = [
+		'Gemini 3',
+		'GPT-5-mini',
+		'Claude 4.5 Sonnet',
+		'GPT-5-1 Mini',
+		'GPT-5-1'
+	]
 
 	const MODEL_ICONS: Record<string, React.ReactNode> = {
 		'GPT-5-mini': OPENAI_SVG,
@@ -85,7 +94,13 @@ export default function AI_Prompt() {
 			>
 				<title>Gemini</title>
 				<defs>
-					<linearGradient id="lobe-icons-gemini-fill" x1="0%" x2="68.73%" y1="100%" y2="30.395%">
+					<linearGradient
+						id="lobe-icons-gemini-fill"
+						x1="0%"
+						x2="68.73%"
+						y1="100%"
+						y2="30.395%"
+					>
 						<stop offset="0%" stopColor="#1C7DFF" />
 						<stop offset="52.021%" stopColor="#1C69FF" />
 						<stop offset="100%" stopColor="#F0DCD6" />
@@ -130,7 +145,9 @@ export default function AI_Prompt() {
 		'GPT-5-1': OPENAI_SVG
 	}
 
-	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+	const handleKeyDown = (
+		e: React.KeyboardEvent<HTMLTextAreaElement>
+	) => {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault()
 			setValue('')
@@ -149,11 +166,16 @@ export default function AI_Prompt() {
 							is free this weekend!
 						</h3>
 					</div>
-					<p className="text-black text-xs tracking-tighter dark:text-white/90">Ship Now!</p>
+					<p className="text-black text-xs tracking-tighter dark:text-white/90">
+						Ship Now!
+					</p>
 				</div>
 				<div className="relative">
 					<div className="relative flex flex-col">
-						<div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+						<div
+							className="overflow-y-auto"
+							style={{ maxHeight: '400px' }}
+						>
 							<Textarea
 								className={cn(
 									'w-full resize-none rounded-xl rounded-b-none border-none bg-black/5 px-4 py-3 placeholder:text-black/70 focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-white/5 dark:text-white dark:placeholder:text-white/70',
@@ -205,7 +227,10 @@ export default function AI_Prompt() {
 												>
 													{MODEL_ICONS[selectedModel]}
 													{selectedModel}
-													<ChevronDownIcon size={12} className="opacity-50" />
+													<ChevronDownIcon
+														size={12}
+														className="opacity-50"
+													/>
 												</motion.div>
 											</AnimatePresence>
 										</DropdownMenuTrigger>
@@ -220,15 +245,25 @@ export default function AI_Prompt() {
 												<DropdownMenuItem
 													className="flex items-center justify-between gap-2"
 													key={model}
-													onSelect={() => setSelectedModel(model)}
+													onSelect={() =>
+														setSelectedModel(model)
+													}
 												>
 													<div className="flex items-center gap-2">
-														{MODEL_ICONS[model] || <BotIcon size={16} className="opacity-50" />}{' '}
+														{MODEL_ICONS[model] || (
+															<BotIcon
+																size={16}
+																className="opacity-50"
+															/>
+														)}{' '}
 														{/* Use mapped SVG or fallback */}
 														<span>{model}</span>
 													</div>
 													{selectedModel === model && (
-														<CheckIcon size={16} className="text-blue-500" />
+														<CheckIcon
+															size={16}
+															className="text-blue-500"
+														/>
 													)}
 												</DropdownMenuItem>
 											))}
@@ -244,7 +279,10 @@ export default function AI_Prompt() {
 										)}
 									>
 										<input className="hidden" type="file" />
-										<Paperclip size={16} className="transition-colors" />
+										<Paperclip
+											size={16}
+											className="transition-colors"
+										/>
 									</label>
 								</div>
 								<button
@@ -260,7 +298,9 @@ export default function AI_Prompt() {
 										size={16}
 										className={cn(
 											'transition-opacity duration-200 dark:text-white',
-											value.trim() ? 'opacity-100' : 'opacity-30'
+											value.trim()
+												? 'opacity-100'
+												: 'opacity-30'
 										)}
 									/>
 								</button>

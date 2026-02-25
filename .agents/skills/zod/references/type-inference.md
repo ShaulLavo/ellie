@@ -76,12 +76,19 @@ type Coordinates = z.infer<typeof CoordinatesSchema> // [number, number]
 ### Unions and Discriminated Unions
 
 ```typescript
-const StatusSchema = z.union([z.literal('pending'), z.literal('success'), z.literal('error')])
+const StatusSchema = z.union([
+	z.literal('pending'),
+	z.literal('success'),
+	z.literal('error')
+])
 type Status = z.infer<typeof StatusSchema> // "pending" | "success" | "error"
 
 const ResponseSchema = z.discriminatedUnion('status', [
 	z.object({ status: z.literal('success'), data: z.any() }),
-	z.object({ status: z.literal('error'), message: z.string() })
+	z.object({
+		status: z.literal('error'),
+		message: z.string()
+	})
 ])
 type Response = z.infer<typeof ResponseSchema>
 // { status: "success", data: any } | { status: "error", message: string }
@@ -288,7 +295,10 @@ Restrict which schema types can be registered in a custom registry:
 
 ```typescript
 // Only allow string schemas
-const stringRegistry = z.registry<{ label: string }, z.ZodString>()
+const stringRegistry = z.registry<
+	{ label: string },
+	z.ZodString
+>()
 
 const nameSchema = z.string()
 stringRegistry.add(nameSchema, { label: 'Name' }) // ✓ OK
@@ -399,7 +409,8 @@ const ConditionalSchema = z
 	.refine(
 		data => {
 			if (data.type === 'email') {
-				return z.string().email().safeParse(data.value).success
+				return z.string().email().safeParse(data.value)
+					.success
 			}
 			return z
 				.string()

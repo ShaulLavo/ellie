@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'bun:test'
 import * as v from 'valibot'
-import { decodeAndValidate, type StreamMessage } from './decode'
+import {
+	decodeAndValidate,
+	type StreamMessage
+} from './decode'
 
 const encoder = new TextEncoder()
 
-function makeMsg(json: string, commaTerminated = true): StreamMessage {
+function makeMsg(
+	json: string,
+	commaTerminated = true
+): StreamMessage {
 	const raw = commaTerminated ? `${json},` : json
 	return {
 		data: encoder.encode(raw),
@@ -23,18 +29,29 @@ describe(`decodeAndValidate`, () => {
 	it(`parses and validates a valid comma-terminated message`, () => {
 		const msg = makeMsg(`{"role":"user","content":"hello"}`)
 		const result = decodeAndValidate(msg, schema)
-		expect(result).toEqual({ role: `user`, content: `hello` })
+		expect(result).toEqual({
+			role: `user`,
+			content: `hello`
+		})
 	})
 
 	it(`parses a message without trailing comma`, () => {
-		const msg = makeMsg(`{"role":"user","content":"hello"}`, false)
+		const msg = makeMsg(
+			`{"role":"user","content":"hello"}`,
+			false
+		)
 		const result = decodeAndValidate(msg, schema)
-		expect(result).toEqual({ role: `user`, content: `hello` })
+		expect(result).toEqual({
+			role: `user`,
+			content: `hello`
+		})
 	})
 
 	it(`strips trailing whitespace before comma`, () => {
 		const msg: StreamMessage = {
-			data: encoder.encode(`{"role":"user","content":"hi"} ,`),
+			data: encoder.encode(
+				`{"role":"user","content":"hi"} ,`
+			),
 			offset: `0000000000000000_0000000000000001`,
 			timestamp: Date.now()
 		}
@@ -49,19 +66,29 @@ describe(`decodeAndValidate`, () => {
 
 	it(`throws when message violates schema — missing field`, () => {
 		const msg = makeMsg(`{"role":"user"}`)
-		expect(() => decodeAndValidate(msg, schema)).toThrow(/schema validation/)
+		expect(() => decodeAndValidate(msg, schema)).toThrow(
+			/schema validation/
+		)
 	})
 
 	it(`throws when message violates schema — wrong type`, () => {
 		const msg = makeMsg(`{"role":"user","content":42}`)
-		expect(() => decodeAndValidate(msg, schema)).toThrow(/schema validation/)
+		expect(() => decodeAndValidate(msg, schema)).toThrow(
+			/schema validation/
+		)
 	})
 
 	it(`allows extra properties with looseObject`, () => {
-		const msg = makeMsg(`{"role":"user","content":"hi","extra":"field"}`)
+		const msg = makeMsg(
+			`{"role":"user","content":"hi","extra":"field"}`
+		)
 		// looseObject allows additional properties (preserves them in output)
 		const result = decodeAndValidate(msg, schema)
-		expect(result).toEqual({ role: `user`, content: `hi`, extra: `field` })
+		expect(result).toEqual({
+			role: `user`,
+			content: `hi`,
+			extra: `field`
+		})
 	})
 
 	it(`rejects extra properties with strictObject`, () => {
@@ -70,8 +97,12 @@ describe(`decodeAndValidate`, () => {
 			content: v.string()
 		})
 
-		const msg = makeMsg(`{"role":"user","content":"hi","extra":"field"}`)
-		expect(() => decodeAndValidate(msg, strict)).toThrow(/schema validation/)
+		const msg = makeMsg(
+			`{"role":"user","content":"hi","extra":"field"}`
+		)
+		expect(() => decodeAndValidate(msg, strict)).toThrow(
+			/schema validation/
+		)
 	})
 
 	it(`validates a number schema`, () => {
@@ -83,6 +114,8 @@ describe(`decodeAndValidate`, () => {
 	it(`rejects wrong type for number schema`, () => {
 		const numSchema = v.number()
 		const msg = makeMsg(`"not a number"`)
-		expect(() => decodeAndValidate(msg, numSchema)).toThrow(/schema validation/)
+		expect(() => decodeAndValidate(msg, numSchema)).toThrow(
+			/schema validation/
+		)
 	})
 })

@@ -18,7 +18,15 @@ const defaults = {
 	initialDelay: 100,
 	maxDelay: 10_000,
 	multiplier: 2
-} satisfies Required<Pick<RetryOptions, 'maxRetries' | 'initialDelay' | 'maxDelay' | 'multiplier'>>
+} satisfies Required<
+	Pick<
+		RetryOptions,
+		| 'maxRetries'
+		| 'initialDelay'
+		| 'maxDelay'
+		| 'multiplier'
+	>
+>
 
 /**
  * Retry an async function with exponential backoff and full jitter.

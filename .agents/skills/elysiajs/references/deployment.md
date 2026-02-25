@@ -162,7 +162,9 @@ const app = new Elysia()
 
 ```typescript
 // Railway assigns random PORT via env variable
-new Elysia().get('/', () => 'Hello Railway').listen(process.env.PORT ?? 3000)
+new Elysia()
+	.get('/', () => 'Hello Railway')
+	.listen(process.env.PORT ?? 3000)
 ```
 
 ### Vercel
@@ -211,7 +213,9 @@ compatibility_date = "2025-06-01"
 import { Elysia } from 'elysia'
 import { node } from '@elysiajs/node'
 
-const app = new Elysia({ adapter: node() }).get('/', () => 'Hello Node.js').listen(3000)
+const app = new Elysia({ adapter: node() })
+	.get('/', () => 'Hello Node.js')
+	.listen(3000)
 ```
 
 ## Performance Optimization
@@ -265,7 +269,9 @@ new Elysia()
 ```typescript
 import { Elysia } from 'elysia'
 
-const app = new Elysia().get('/', () => 'Hello').listen(3000)
+const app = new Elysia()
+	.get('/', () => 'Hello')
+	.listen(3000)
 
 process.on('SIGTERM', () => {
 	console.log('SIGTERM received, shutting down gracefully')
@@ -365,7 +371,8 @@ export const app = new Elysia({
 })
 	.use(
 		cors({
-			origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+			origin:
+				process.env.CORS_ORIGIN || 'http://localhost:3000'
 		})
 	)
 	.use(

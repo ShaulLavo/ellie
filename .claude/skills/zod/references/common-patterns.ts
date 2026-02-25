@@ -21,7 +21,9 @@ export const EnvSchema = z.object({
 	PORT: z.coerce.number().int().positive().default(3000),
 	API_KEY: z.string().min(32),
 	JWT_SECRET: z.string().min(64),
-	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
+	LOG_LEVEL: z
+		.enum(['debug', 'info', 'warn', 'error'])
+		.default('info')
 })
 
 export type Env = z.infer<typeof EnvSchema>
@@ -47,14 +49,19 @@ export const CreateUserRequest = z.object({
 	age: z.number().int().min(13).max(120).optional()
 })
 
-export type CreateUserRequest = z.infer<typeof CreateUserRequest>
+export type CreateUserRequest = z.infer<
+	typeof CreateUserRequest
+>
 
 // Update User Request (partial)
-export const UpdateUserRequest = CreateUserRequest.partial().extend({
-	id: z.string().uuid()
-})
+export const UpdateUserRequest =
+	CreateUserRequest.partial().extend({
+		id: z.string().uuid()
+	})
 
-export type UpdateUserRequest = z.infer<typeof UpdateUserRequest>
+export type UpdateUserRequest = z.infer<
+	typeof UpdateUserRequest
+>
 
 // User Response
 export const UserResponse = z.object({
@@ -71,7 +78,9 @@ export const UserResponse = z.object({
 export type UserResponse = z.infer<typeof UserResponse>
 
 // Paginated Response
-export const PaginatedResponse = <T extends z.ZodTypeAny>(itemSchema: T) =>
+export const PaginatedResponse = <T extends z.ZodTypeAny>(
+	itemSchema: T
+) =>
 	z.object({
 		items: z.array(itemSchema),
 		total: z.number().int().nonnegative(),
@@ -88,7 +97,9 @@ export const PaginatedResponse = <T extends z.ZodTypeAny>(itemSchema: T) =>
 
 export const LoginFormSchema = z.object({
 	email: z.string().email('Invalid email address'),
-	password: z.string().min(8, 'Password must be at least 8 characters'),
+	password: z
+		.string()
+		.min(8, 'Password must be at least 8 characters'),
 	rememberMe: z.boolean().default(false)
 })
 
@@ -97,10 +108,14 @@ export type LoginFormData = z.infer<typeof LoginFormSchema>
 export const SignupFormSchema = z
 	.object({
 		email: z.string().email('Invalid email address'),
-		password: z.string().min(8, 'Password must be at least 8 characters'),
+		password: z
+			.string()
+			.min(8, 'Password must be at least 8 characters'),
 		confirmPassword: z.string(),
 		agreeToTerms: z.literal(true, {
-			errorMap: () => ({ message: 'You must accept the terms and conditions' })
+			errorMap: () => ({
+				message: 'You must accept the terms and conditions'
+			})
 		})
 	})
 	.superRefine((data, ctx) => {
@@ -113,7 +128,9 @@ export const SignupFormSchema = z
 		}
 	})
 
-export type SignupFormData = z.infer<typeof SignupFormSchema>
+export type SignupFormData = z.infer<
+	typeof SignupFormSchema
+>
 
 // ============================================================================
 // DISCRIMINATED UNIONS
@@ -133,27 +150,32 @@ export const ApiResponse = z.discriminatedUnion('status', [
 
 export type ApiResponse = z.infer<typeof ApiResponse>
 
-export const NotificationSchema = z.discriminatedUnion('type', [
-	z.object({
-		type: z.literal('email'),
-		to: z.string().email(),
-		subject: z.string(),
-		body: z.string()
-	}),
-	z.object({
-		type: z.literal('sms'),
-		to: z.string().regex(/^\+?[1-9]\d{1,14}$/),
-		message: z.string().max(160)
-	}),
-	z.object({
-		type: z.literal('push'),
-		deviceToken: z.string(),
-		title: z.string(),
-		body: z.string()
-	})
-])
+export const NotificationSchema = z.discriminatedUnion(
+	'type',
+	[
+		z.object({
+			type: z.literal('email'),
+			to: z.string().email(),
+			subject: z.string(),
+			body: z.string()
+		}),
+		z.object({
+			type: z.literal('sms'),
+			to: z.string().regex(/^\+?[1-9]\d{1,14}$/),
+			message: z.string().max(160)
+		}),
+		z.object({
+			type: z.literal('push'),
+			deviceToken: z.string(),
+			title: z.string(),
+			body: z.string()
+		})
+	]
+)
 
-export type Notification = z.infer<typeof NotificationSchema>
+export type Notification = z.infer<
+	typeof NotificationSchema
+>
 
 // ============================================================================
 // REFINEMENTS & TRANSFORMATIONS
@@ -163,10 +185,22 @@ export type Notification = z.infer<typeof NotificationSchema>
 export const StrongPasswordSchema = z
 	.string()
 	.min(8, 'Password must be at least 8 characters')
-	.refine(val => /[A-Z]/.test(val), 'Must contain at least one uppercase letter')
-	.refine(val => /[a-z]/.test(val), 'Must contain at least one lowercase letter')
-	.refine(val => /[0-9]/.test(val), 'Must contain at least one number')
-	.refine(val => /[^A-Za-z0-9]/.test(val), 'Must contain at least one special character')
+	.refine(
+		val => /[A-Z]/.test(val),
+		'Must contain at least one uppercase letter'
+	)
+	.refine(
+		val => /[a-z]/.test(val),
+		'Must contain at least one lowercase letter'
+	)
+	.refine(
+		val => /[0-9]/.test(val),
+		'Must contain at least one number'
+	)
+	.refine(
+		val => /[^A-Za-z0-9]/.test(val),
+		'Must contain at least one special character'
+	)
 
 // URL slug validation and transformation
 export const SlugSchema = z
@@ -209,7 +243,9 @@ export const DateCodec = z.codec(
 )
 
 // JSON codec: string <-> object
-export const JSONCodec = <T extends z.ZodTypeAny>(schema: T) =>
+export const JSONCodec = <T extends z.ZodTypeAny>(
+	schema: T
+) =>
 	z.codec(z.string(), schema, {
 		decode: str => JSON.parse(str),
 		encode: obj => JSON.stringify(obj)
@@ -258,12 +294,13 @@ interface Category {
 	subcategories: Category[]
 }
 
-export const CategorySchema: z.ZodType<Category> = z.lazy(() =>
-	z.object({
-		id: z.string().uuid(),
-		name: z.string().min(1).max(100),
-		subcategories: z.array(CategorySchema)
-	})
+export const CategorySchema: z.ZodType<Category> = z.lazy(
+	() =>
+		z.object({
+			id: z.string().uuid(),
+			name: z.string().min(1).max(100),
+			subcategories: z.array(CategorySchema)
+		})
 )
 
 // ============================================================================
@@ -273,9 +310,15 @@ export const CategorySchema: z.ZodType<Category> = z.lazy(() =>
 export const ImageUploadSchema = z.object({
 	file: z
 		.instanceof(File)
-		.refine(file => file.size <= 5 * 1024 * 1024, 'File must be less than 5MB')
 		.refine(
-			file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type),
+			file => file.size <= 5 * 1024 * 1024,
+			'File must be less than 5MB'
+		)
+		.refine(
+			file =>
+				['image/jpeg', 'image/png', 'image/webp'].includes(
+					file.type
+				),
 			'Only JPEG, PNG, and WebP images are allowed'
 		),
 	alt: z.string().max(200).optional()
@@ -289,20 +332,28 @@ export type ImageUpload = z.infer<typeof ImageUploadSchema>
 
 export const PaginationQuerySchema = z.object({
 	page: z.coerce.number().int().positive().default(1),
-	limit: z.coerce.number().int().min(1).max(100).default(10),
+	limit: z.coerce
+		.number()
+		.int()
+		.min(1)
+		.max(100)
+		.default(10),
 	sortBy: z.string().optional(),
 	sortOrder: z.enum(['asc', 'desc']).default('asc')
 })
 
-export type PaginationQuery = z.infer<typeof PaginationQuerySchema>
+export type PaginationQuery = z.infer<
+	typeof PaginationQuerySchema
+>
 
-export const SearchQuerySchema = PaginationQuerySchema.extend({
-	q: z.string().min(1).max(200),
-	filters: z
-		.string()
-		.optional()
-		.transform(val => (val ? JSON.parse(val) : {}))
-})
+export const SearchQuerySchema =
+	PaginationQuerySchema.extend({
+		q: z.string().min(1).max(200),
+		filters: z
+			.string()
+			.optional()
+			.transform(val => (val ? JSON.parse(val) : {}))
+	})
 
 export type SearchQuery = z.infer<typeof SearchQuerySchema>
 
@@ -324,7 +375,9 @@ export const WebhookPayloadSchema = z.object({
 	signature: z.string()
 })
 
-export type WebhookPayload = z.infer<typeof WebhookPayloadSchema>
+export type WebhookPayload = z.infer<
+	typeof WebhookPayloadSchema
+>
 
 // ============================================================================
 // CONFIGURATION SCHEMAS
@@ -334,7 +387,11 @@ export const AppConfigSchema = z.object({
 	app: z.object({
 		name: z.string(),
 		version: z.string().regex(/^\d+\.\d+\.\d+$/),
-		environment: z.enum(['development', 'staging', 'production'])
+		environment: z.enum([
+			'development',
+			'staging',
+			'production'
+		])
 	}),
 	database: z.object({
 		host: z.string(),
@@ -355,7 +412,9 @@ export type AppConfig = z.infer<typeof AppConfigSchema>
 // ERROR HANDLING UTILITIES
 // ============================================================================
 
-export function formatZodError(error: z.ZodError): Record<string, string[]> {
+export function formatZodError(
+	error: z.ZodError
+): Record<string, string[]> {
 	const flattened = z.flattenError(error)
 	return flattened.fieldErrors as Record<string, string[]>
 }
@@ -364,6 +423,8 @@ export function getFirstError(error: z.ZodError): string {
 	return error.issues[0]?.message || 'Validation failed'
 }
 
-export function prettyPrintErrors(error: z.ZodError): string {
+export function prettyPrintErrors(
+	error: z.ZodError
+): string {
 	return z.prettifyError(error)
 }

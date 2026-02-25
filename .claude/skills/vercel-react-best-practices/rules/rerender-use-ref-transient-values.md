@@ -18,7 +18,8 @@ function Tracker() {
 	useEffect(() => {
 		const onMove = (e: MouseEvent) => setLastX(e.clientX)
 		window.addEventListener('mousemove', onMove)
-		return () => window.removeEventListener('mousemove', onMove)
+		return () =>
+			window.removeEventListener('mousemove', onMove)
 	}, [])
 
 	return (
@@ -52,7 +53,8 @@ function Tracker() {
 			}
 		}
 		window.addEventListener('mousemove', onMove)
-		return () => window.removeEventListener('mousemove', onMove)
+		return () =>
+			window.removeEventListener('mousemove', onMove)
 	}, [])
 
 	return (

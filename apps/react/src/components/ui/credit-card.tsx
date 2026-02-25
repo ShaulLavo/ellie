@@ -1,9 +1,23 @@
 import { forwardRef, useImperativeHandle } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const CreditCard = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const CreditCard = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = async () => {
@@ -43,9 +57,21 @@ const CreditCard = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 		}
 
 		const stop = () => {
-			animate('.card-body', { rotate: 0, scale: 1 }, { duration: 0.2 })
-			animate('.card-stripe', { opacity: 0, x: 0 }, { duration: 0.2 })
-			animate('.card-chip', { scale: 1, opacity: 0.6 }, { duration: 0.2 })
+			animate(
+				'.card-body',
+				{ rotate: 0, scale: 1 },
+				{ duration: 0.2 }
+			)
+			animate(
+				'.card-stripe',
+				{ opacity: 0, x: 0 },
+				{ duration: 0.2 }
+			)
+			animate(
+				'.card-chip',
+				{ scale: 1, opacity: 0.6 },
+				{ duration: 0.2 }
+			)
 		}
 
 		useImperativeHandle(ref, () => {
@@ -87,7 +113,11 @@ const CreditCard = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 						d="M3 5m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z"
 					/>
 
-					<motion.path className="card-stripe" d="M3 10l18 0" opacity="0" />
+					<motion.path
+						className="card-stripe"
+						d="M3 10l18 0"
+						opacity="0"
+					/>
 
 					<motion.path
 						className="card-chip"
@@ -95,7 +125,10 @@ const CreditCard = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 						d="M7 15l.01 0"
 					/>
 
-					<motion.path className="card-number" d="M11 15l2 0" />
+					<motion.path
+						className="card-number"
+						d="M11 15l2 0"
+					/>
 				</svg>
 			</motion.div>
 		)

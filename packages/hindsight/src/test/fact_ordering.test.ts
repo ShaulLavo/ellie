@@ -2,8 +2,18 @@
  * Core parity port for test_fact_ordering.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_fact_ordering.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_fact_ordering.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -67,11 +78,14 @@ describe('Core parity: test_fact_ordering.py', () => {
 			eventDate,
 			context: 'travel diary',
 			metadata: { source: 'unit-test' },
-			documentId: 'doc-test_fact_ordering_within_conversation',
+			documentId:
+				'doc-test_fact_ordering_within_conversation',
 			consolidate: false
 		})
 		expect(result.memories.length).toBe(1)
-		expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+		expect(
+			result.memories[0]!.content.length
+		).toBeGreaterThan(0)
 	})
 
 	it('multiple documents ordering', async () => {
@@ -94,6 +108,8 @@ describe('Core parity: test_fact_ordering.py', () => {
 			consolidate: false
 		})
 		expect(result.memories.length).toBe(1)
-		expect(result.memories[0]!.content.length).toBeGreaterThan(0)
+		expect(
+			result.memories[0]!.content.length
+		).toBeGreaterThan(0)
 	})
 })

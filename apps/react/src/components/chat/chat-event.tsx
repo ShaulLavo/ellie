@@ -39,7 +39,11 @@
 
 import { cn } from '@/lib/utils'
 import { Avatar as AvatarPrimitive } from '@base-ui/react/avatar'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+	Avatar,
+	AvatarFallback,
+	AvatarImage
+} from '@/components/ui/avatar'
 import { useMemo } from 'react'
 
 /**
@@ -51,7 +55,12 @@ import { useMemo } from 'react'
  * - `"longDate"` — long date (e.g. "January 1, 2024")
  * - `"relative"` — relative time (e.g. "2 hours ago", "yesterday")
  */
-export type ChatEventTimeFormat = 'time' | 'date' | 'dateTime' | 'longDate' | 'relative'
+export type ChatEventTimeFormat =
+	| 'time'
+	| 'date'
+	| 'dateTime'
+	| 'longDate'
+	| 'relative'
 
 export interface ChatEventTimeProps extends React.ComponentProps<'time'> {
 	/** Unix timestamp (ms), Date object, or ISO date string. */
@@ -64,7 +73,10 @@ export interface ChatEventTimeProps extends React.ComponentProps<'time'> {
 	formatOptions?: Intl.DateTimeFormatOptions
 }
 
-const FORMAT_PRESETS: Record<ChatEventTimeFormat, Intl.DateTimeFormatOptions> = {
+const FORMAT_PRESETS: Record<
+	ChatEventTimeFormat,
+	Intl.DateTimeFormatOptions
+> = {
 	time: { timeStyle: 'short' },
 	date: { dateStyle: 'medium' },
 	dateTime: { dateStyle: 'medium', timeStyle: 'short' },
@@ -121,9 +133,16 @@ export interface ChatEventProps extends React.ComponentProps<'div'> {}
  * </ChatEvent>
  * ```
  */
-export function ChatEvent({ children, className, ...props }: ChatEventProps) {
+export function ChatEvent({
+	children,
+	className,
+	...props
+}: ChatEventProps) {
 	return (
-		<div className={cn('flex gap-2 px-2', className)} {...props}>
+		<div
+			className={cn('flex gap-2 px-2', className)}
+			{...props}
+		>
 			{children}
 		</div>
 	)
@@ -143,10 +162,17 @@ export interface ChatEventAddonProps extends React.ComponentProps<'div'> {}
  * </ChatEventAddon>
  * ```
  */
-export function ChatEventAddon({ children, className, ...props }: ChatEventAddonProps) {
+export function ChatEventAddon({
+	children,
+	className,
+	...props
+}: ChatEventAddonProps) {
 	return (
 		<div
-			className={cn('w-10 @md/chat:w-12 flex items-start justify-center pt-1 shrink-0', className)}
+			className={cn(
+				'w-10 @md/chat:w-12 flex items-start justify-center pt-1 shrink-0',
+				className
+			)}
 			{...props}
 		>
 			{children}
@@ -172,9 +198,16 @@ export interface ChatEventBodyProps extends React.ComponentProps<'div'> {}
  * </ChatEventBody>
  * ```
  */
-export function ChatEventBody({ children, className, ...props }: ChatEventBodyProps) {
+export function ChatEventBody({
+	children,
+	className,
+	...props
+}: ChatEventBodyProps) {
 	return (
-		<div className={cn('flex-1 flex flex-col', className)} {...props}>
+		<div
+			className={cn('flex-1 flex flex-col', className)}
+			{...props}
+		>
 			{children}
 		</div>
 	)
@@ -191,9 +224,19 @@ export interface ChatEventContentProps extends React.ComponentProps<'div'> {}
  * <ChatEventContent>Hello, world!</ChatEventContent>
  * ```
  */
-export function ChatEventContent({ children, className, ...props }: ChatEventContentProps) {
+export function ChatEventContent({
+	children,
+	className,
+	...props
+}: ChatEventContentProps) {
 	return (
-		<div className={cn('text-sm @md/chat:text-base', className)} {...props}>
+		<div
+			className={cn(
+				'text-sm @md/chat:text-base',
+				className
+			)}
+			{...props}
+		>
 			{children}
 		</div>
 	)
@@ -213,15 +256,26 @@ export interface ChatEventTitleProps extends React.ComponentProps<'div'> {}
  * </ChatEventTitle>
  * ```
  */
-export function ChatEventTitle({ children, className, ...props }: ChatEventTitleProps) {
+export function ChatEventTitle({
+	children,
+	className,
+	...props
+}: ChatEventTitleProps) {
 	return (
-		<div className={cn('flex items-center gap-2 text-sm', className)} {...props}>
+		<div
+			className={cn(
+				'flex items-center gap-2 text-sm',
+				className
+			)}
+			{...props}
+		>
 			{children}
 		</div>
 	)
 }
 
-export interface ChatEventAvatarProps extends AvatarPrimitive.Root.Props {
+export interface ChatEventAvatarProps
+	extends AvatarPrimitive.Root.Props {
 	className?: string
 	/** Image URL for the avatar. */
 	src?: AvatarPrimitive.Image.Props['src']
@@ -259,18 +313,35 @@ export function ChatEventAvatar({
 	...props
 }: ChatEventAvatarProps) {
 	return (
-		<Avatar className={cn('rounded-full size-8 @md/chat:size-10', className)} {...props}>
+		<Avatar
+			className={cn(
+				'rounded-full size-8 @md/chat:size-10',
+				className
+			)}
+			{...props}
+		>
 			<AvatarImage src={src} alt={alt} {...imageProps} />
-			{fallback && <AvatarFallback {...fallbackProps}>{fallback}</AvatarFallback>}
+			{fallback && (
+				<AvatarFallback {...fallbackProps}>
+					{fallback}
+				</AvatarFallback>
+			)}
 		</Avatar>
 	)
 }
 
-function getRelativeTimeString(date: Date, locale: string): string {
+function getRelativeTimeString(
+	date: Date,
+	locale: string
+): string {
 	const now = new Date()
-	const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+	const diffInSeconds = Math.floor(
+		(now.getTime() - date.getTime()) / 1000
+	)
 
-	const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+	const rtf = new Intl.RelativeTimeFormat(locale, {
+		numeric: 'auto'
+	})
 
 	if (diffInSeconds < 60) {
 		return rtf.format(-diffInSeconds, 'second')
@@ -337,11 +408,18 @@ export function ChatEventTime({
 	...props
 }: ChatEventTimeProps) {
 	const date = useMemo(
-		() => (timestamp instanceof Date ? timestamp : new Date(timestamp)),
+		() =>
+			timestamp instanceof Date
+				? timestamp
+				: new Date(timestamp),
 		[timestamp]
 	)
 
-	const resolvedLocale = locale ?? (typeof navigator !== 'undefined' ? navigator.language : 'en-US')
+	const resolvedLocale =
+		locale ??
+		(typeof navigator !== 'undefined'
+			? navigator.language
+			: 'en-US')
 
 	const formattedTime = useMemo(() => {
 		if (format === 'relative') {
@@ -349,15 +427,24 @@ export function ChatEventTime({
 		}
 
 		const options = formatOptions ?? FORMAT_PRESETS[format]
-		return new Intl.DateTimeFormat(resolvedLocale, options).format(date)
+		return new Intl.DateTimeFormat(
+			resolvedLocale,
+			options
+		).format(date)
 	}, [date, format, formatOptions, resolvedLocale])
 
-	const isoString = useMemo(() => date.toISOString(), [date])
+	const isoString = useMemo(
+		() => date.toISOString(),
+		[date]
+	)
 
 	return (
 		<time
 			dateTime={isoString}
-			className={cn('text-xs text-muted-foreground', className)}
+			className={cn(
+				'text-xs text-muted-foreground',
+				className
+			)}
 			{...props}
 		>
 			{formattedTime}

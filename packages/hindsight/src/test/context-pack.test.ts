@@ -35,7 +35,9 @@ describe('generateFallbackGist', () => {
 
 	it('produces exactly 280 chars for boundary case', () => {
 		const exactly280 = 'a'.repeat(280)
-		expect(generateFallbackGist(exactly280)).toBe(exactly280)
+		expect(generateFallbackGist(exactly280)).toBe(
+			exactly280
+		)
 	})
 })
 
@@ -97,7 +99,9 @@ describe('packContext', () => {
 		]
 		const result = packContext(candidates, 50) // budget allows top 2 (20) + some gists
 
-		const gistPacked = result.packed.filter((p) => p.mode === 'gist')
+		const gistPacked = result.packed.filter(
+			p => p.mode === 'gist'
+		)
 		expect(gistPacked.length).toBeGreaterThan(0)
 		expect(result.overflow).toBe(false)
 	})
@@ -111,7 +115,7 @@ describe('packContext', () => {
 		const result = packContext(candidates, 100)
 
 		// Should still pack rank 3 using fallback truncation
-		const rank3 = result.packed.find((p) => p.id === 'c')
+		const rank3 = result.packed.find(p => p.id === 'c')
 		if (rank3) {
 			expect(rank3.mode).toBe('gist')
 			expect(rank3.text.length).toBeLessThanOrEqual(280)
@@ -127,7 +131,9 @@ describe('packContext', () => {
 		]
 		const result = packContext(candidates, 250) // 250 tokens total
 
-		expect(result.totalTokensUsed).toBeLessThanOrEqual(250 + 10) // small tolerance for rounding
+		expect(result.totalTokensUsed).toBeLessThanOrEqual(
+			250 + 10
+		) // small tolerance for rounding
 	})
 
 	it('returns deterministic results for same input', () => {
@@ -139,19 +145,32 @@ describe('packContext', () => {
 		const r1 = packContext(candidates, 200)
 		const r2 = packContext(candidates, 200)
 
-		expect(r1.packed.map((p) => p.id)).toEqual(r2.packed.map((p) => p.id))
+		expect(r1.packed.map(p => p.id)).toEqual(
+			r2.packed.map(p => p.id)
+		)
 		expect(r1.totalTokensUsed).toBe(r2.totalTokensUsed)
 	})
 
 	it('handles single candidate', () => {
-		const result = packContext([makeCandidate('a', 100, 0.9)], 2000)
+		const result = packContext(
+			[makeCandidate('a', 100, 0.9)],
+			2000
+		)
 		expect(result.packed.length).toBe(1)
 		expect(result.packed[0]!.mode).toBe('full')
 	})
 
 	it('handles two candidates exactly', () => {
-		const result = packContext([makeCandidate('a', 100, 0.9), makeCandidate('b', 100, 0.8)], 2000)
+		const result = packContext(
+			[
+				makeCandidate('a', 100, 0.9),
+				makeCandidate('b', 100, 0.8)
+			],
+			2000
+		)
 		expect(result.packed.length).toBe(2)
-		expect(result.packed.every((p) => p.mode === 'full')).toBe(true)
+		expect(
+			result.packed.every(p => p.mode === 'full')
+		).toBe(true)
 	})
 })

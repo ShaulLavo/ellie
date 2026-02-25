@@ -25,7 +25,12 @@ Turbo does NOT read `.env` files. Your framework (Next.js, Vite, etc.) or `doten
 	"tasks": {
 		"build": {
 			"env": ["DATABASE_URL"],
-			"inputs": ["$TURBO_DEFAULT$", ".env", ".env.local", ".env.production"]
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				".env",
+				".env.local",
+				".env.production"
+			]
 		}
 	}
 }
@@ -41,7 +46,11 @@ In strict mode, CI provider variables (GITHUB_TOKEN, GITLAB_CI, etc.) are filter
 
 ```json
 {
-	"globalPassThroughEnv": ["GITHUB_TOKEN", "GITLAB_CI", "CI"]
+	"globalPassThroughEnv": [
+		"GITHUB_TOKEN",
+		"GITLAB_CI",
+		"CI"
+	]
 }
 ```
 
@@ -118,7 +127,11 @@ If you use `.env.development` and `.env.production`, both should be in inputs.
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"env": ["DATABASE_URL", "NEXT_PUBLIC_*", "!NEXT_PUBLIC_ANALYTICS_ID"],
+			"env": [
+				"DATABASE_URL",
+				"NEXT_PUBLIC_*",
+				"!NEXT_PUBLIC_ANALYTICS_ID"
+			],
 			"passThroughEnv": ["SENTRY_AUTH_TOKEN"],
 			"inputs": [
 				"$TURBO_DEFAULT$",

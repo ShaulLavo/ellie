@@ -1,22 +1,56 @@
 import { forwardRef, useImperativeHandle } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const GearIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const GearIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = () => {
-			animate('.gear-body', { scale: [1, 1.02, 1] }, { duration: 0.6 })
+			animate(
+				'.gear-body',
+				{ scale: [1, 1.02, 1] },
+				{ duration: 0.6 }
+			)
 
-			animate('.gear-center', { scale: [1, 1.1, 1] }, { duration: 0.3, ease: 'easeOut' })
+			animate(
+				'.gear-center',
+				{ scale: [1, 1.1, 1] },
+				{ duration: 0.3, ease: 'easeOut' }
+			)
 
-			animate('.gear-rotator', { rotate: 360 }, { duration: 0.9, ease: 'easeInOut' })
+			animate(
+				'.gear-rotator',
+				{ rotate: 360 },
+				{ duration: 0.9, ease: 'easeInOut' }
+			)
 		}
 
 		const stop = () => {
-			animate('.gear-rotator', { rotate: 0 }, { duration: 0.2 })
-			animate('.gear-center', { scale: 1 }, { duration: 0.2 })
+			animate(
+				'.gear-rotator',
+				{ rotate: 0 },
+				{ duration: 0.2 }
+			)
+			animate(
+				'.gear-center',
+				{ scale: 1 },
+				{ duration: 0.2 }
+			)
 			animate('.gear-body', { scale: 1 }, { duration: 0.2 })
 		}
 
@@ -58,7 +92,12 @@ const GearIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 						transformBox: 'fill-box'
 					}}
 				>
-					<motion.circle className="gear-center" cx="16" cy="16" r="5" />
+					<motion.circle
+						className="gear-center"
+						cx="16"
+						cy="16"
+						r="5"
+					/>
 
 					<motion.path
 						className="gear-body"

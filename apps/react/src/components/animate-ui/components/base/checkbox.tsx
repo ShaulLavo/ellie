@@ -6,7 +6,10 @@ import {
 	type CheckboxProps as CheckboxPrimitiveProps
 } from '@/components/animate-ui/primitives/base/checkbox'
 import { cn } from '@/lib/utils'
-import { cva, type VariantProps } from 'class-variance-authority'
+import {
+	cva,
+	type VariantProps
+} from 'class-variance-authority'
 
 const checkboxVariants = cva(
 	'peer shrink-0 flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-500 focus-visible:ring-offset-2 [&[data-checked],&[data-indeterminate]]:bg-primary [&[data-checked],&[data-indeterminate]]:text-primary-foreground',
@@ -47,11 +50,24 @@ type CheckboxProps = CheckboxPrimitiveProps &
 		children?: React.ReactNode
 	}
 
-function Checkbox({ className, children, variant, size, ...props }: CheckboxProps) {
+function Checkbox({
+	className,
+	children,
+	variant,
+	size,
+	...props
+}: CheckboxProps) {
 	return (
-		<CheckboxPrimitive className={cn(checkboxVariants({ variant, size, className }))} {...props}>
+		<CheckboxPrimitive
+			className={cn(
+				checkboxVariants({ variant, size, className })
+			)}
+			{...props}
+		>
 			{children}
-			<CheckboxIndicatorPrimitive className={cn(checkboxIndicatorVariants({ size }))} />
+			<CheckboxIndicatorPrimitive
+				className={cn(checkboxIndicatorVariants({ size }))}
+			/>
 		</CheckboxPrimitive>
 	)
 }

@@ -7,7 +7,12 @@
  * Utility — get_entity: cross-tier entity lookup
  */
 
-import { chat, streamToText, maxIterations, toolDefinition } from '@ellie/ai'
+import {
+	chat,
+	streamToText,
+	maxIterations,
+	toolDefinition
+} from '@ellie/ai'
 import { ulid } from '@ellie/utils'
 import { eq, and, inArray } from 'drizzle-orm'
 import * as v from 'valibot'
@@ -27,7 +32,11 @@ import { parseLLMJson } from './sanitize'
 import { recall } from './recall'
 import { searchMentalModelsWithStaleness } from './mental-models'
 import { loadDirectivesForReflect } from './directives'
-import { getReflectSystemPrompt, buildDirectivesSection, buildDirectivesReminder } from './prompts'
+import {
+	getReflectSystemPrompt,
+	buildDirectivesSection,
+	buildDirectivesReminder
+} from './prompts'
 
 /** Bank profile passed to reflect for prompt injection */
 export interface BankProfile {
@@ -68,11 +77,14 @@ export async function reflect(
 ): Promise<ReflectResult> {
 	const startedAt = Date.now()
 	const allMemories: ScoredMemory[] = []
-	const toolCalls: NonNullable<ReflectResult['trace']>['toolCalls'] = []
+	const toolCalls: NonNullable<
+		ReflectResult['trace']
+	>['toolCalls'] = []
 	const { schema } = hdb
 
 	const budget = options.budget ?? 'mid'
-	const iterations = options.maxIterations ?? BUDGET_ITERATIONS[budget]
+	const iterations =
+		options.maxIterations ?? BUDGET_ITERATIONS[budget]
 
 	const trackedToolCall = async <T>(
 		tool: string,
@@ -90,7 +102,10 @@ export async function reflect(
 			})
 			return output
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
+			const message =
+				error instanceof Error
+					? error.message
+					: String(error)
 			toolCalls.push({
 				tool,
 				durationMs: Date.now() - toolStartedAt,
@@ -113,20 +128,36 @@ export async function reflect(
 			reason: v.optional(
 				v.pipe(
 					v.string(),
-					v.description("Brief explanation of why you're making this search (for debugging)")
+					v.description(
+						"Brief explanation of why you're making this search (for debugging)"
+					)
 				)
 			),
-			query: v.pipe(v.string(), v.description('Search query for mental models'))
+			query: v.pipe(
+				v.string(),
+				v.description('Search query for mental models')
+			)
 		})
 	})
 
-	const searchMentalModels = searchMentalModelsDef.server(async _args => {
-		const args = _args as { query: string }
-		return trackedToolCall('search_mental_models', args, async () => {
-			if (!modelVec) return []
-			return searchMentalModelsWithStaleness(hdb, modelVec, bankId, args.query)
-		})
-	})
+	const searchMentalModels = searchMentalModelsDef.server(
+		async _args => {
+			const args = _args as { query: string }
+			return trackedToolCall(
+				'search_mental_models',
+				args,
+				async () => {
+					if (!modelVec) return []
+					return searchMentalModelsWithStaleness(
+						hdb,
+						modelVec,
+						bankId,
+						args.query
+					)
+				}
+			)
+		}
+	)
 
 	// ── Tier 2: search_observations ──
 
@@ -140,49 +171,82 @@ export async function reflect(
 			reason: v.optional(
 				v.pipe(
 					v.string(),
-					v.description("Brief explanation of why you're making this search (for debugging)")
+					v.description(
+						"Brief explanation of why you're making this search (for debugging)"
+					)
 				)
 			),
-			query: v.pipe(v.string(), v.description('Search query for observations')),
-			limit: v.optional(v.pipe(v.number(), v.description('Max results (default 10)'))),
-			tags: v.optional(v.array(v.string(), 'Filter by tags (merged with session-level tags)'))
-		})
-	})
-
-	const searchObservations = searchObservationsDef.server(async _args => {
-		const args = _args as { query: string; limit?: number; tags?: string[] }
-		return trackedToolCall('search_observations', args, async () => {
-			const mergedTags = mergeTags(options.tags, args.tags)
-			const result = await recall(
-				hdb,
-				memoryVec,
-				bankId,
-				args.query,
-				{
-					limit: args.limit ?? 10,
-					factTypes: ['observation'],
-					tags: mergedTags,
-					tagsMatch: options.tagsMatch
-				},
-				rerank
+			query: v.pipe(
+				v.string(),
+				v.description('Search query for observations')
+			),
+			limit: v.optional(
+				v.pipe(
+					v.number(),
+					v.description('Max results (default 10)')
+				)
+			),
+			tags: v.optional(
+				v.array(
+					v.string(),
+					'Filter by tags (merged with session-level tags)'
+				)
 			)
-
-			allMemories.push(...result.memories)
-
-			return result.memories.map(memory => {
-				const staleness = computeObservationStaleness(hdb, bankId, memory.memory.updatedAt)
-				return {
-					id: memory.memory.id,
-					content: memory.memory.content,
-					proofCount: memory.memory.proofCount,
-					sourceMemoryIds: memory.memory.sourceMemoryIds ?? [],
-					tags: memory.memory.tags,
-					score: memory.score,
-					...staleness
-				}
-			})
 		})
 	})
+
+	const searchObservations = searchObservationsDef.server(
+		async _args => {
+			const args = _args as {
+				query: string
+				limit?: number
+				tags?: string[]
+			}
+			return trackedToolCall(
+				'search_observations',
+				args,
+				async () => {
+					const mergedTags = mergeTags(
+						options.tags,
+						args.tags
+					)
+					const result = await recall(
+						hdb,
+						memoryVec,
+						bankId,
+						args.query,
+						{
+							limit: args.limit ?? 10,
+							factTypes: ['observation'],
+							tags: mergedTags,
+							tagsMatch: options.tagsMatch
+						},
+						rerank
+					)
+
+					allMemories.push(...result.memories)
+
+					return result.memories.map(memory => {
+						const staleness = computeObservationStaleness(
+							hdb,
+							bankId,
+							memory.memory.updatedAt
+						)
+						return {
+							id: memory.memory.id,
+							content: memory.memory.content,
+							proofCount: memory.memory.proofCount,
+							sourceMemoryIds:
+								memory.memory.sourceMemoryIds ?? [],
+							tags: memory.memory.tags,
+							score: memory.score,
+							...staleness
+						}
+					})
+				}
+			)
+		}
+	)
 
 	// ── Tier 3: recall / search_memories alias ──
 
@@ -190,14 +254,26 @@ export async function reflect(
 		reason: v.optional(
 			v.pipe(
 				v.string(),
-				v.description("Brief explanation of why you're making this search (for debugging)")
+				v.description(
+					"Brief explanation of why you're making this search (for debugging)"
+				)
 			)
 		),
-		query: v.pipe(v.string(), v.description('Search query — be specific and targeted')),
+		query: v.pipe(
+			v.string(),
+			v.description(
+				'Search query — be specific and targeted'
+			)
+		),
 		limit: v.optional(v.number()),
 		maxTokens: v.optional(v.number()),
 		max_tokens: v.optional(v.number()),
-		tags: v.optional(v.array(v.string(), 'Filter by tags (merged with session-level tags)'))
+		tags: v.optional(
+			v.array(
+				v.string(),
+				'Filter by tags (merged with session-level tags)'
+			)
+		)
 	})
 
 	const runRecallTool = async (
@@ -211,8 +287,12 @@ export async function reflect(
 		toolName: string
 	) =>
 		trackedToolCall(toolName, rawArgs, async () => {
-			const mergedTags = mergeTags(options.tags, rawArgs.tags)
-			const maxTokenBudget = rawArgs.maxTokens ?? rawArgs.max_tokens
+			const mergedTags = mergeTags(
+				options.tags,
+				rawArgs.tags
+			)
+			const maxTokenBudget =
+				rawArgs.maxTokens ?? rawArgs.max_tokens
 			const result = await recall(
 				hdb,
 				memoryVec,
@@ -234,7 +314,9 @@ export async function reflect(
 				id: memory.memory.id,
 				content: memory.memory.content,
 				factType: memory.memory.factType,
-				entities: memory.entities.map(entity => entity.name),
+				entities: memory.entities.map(
+					entity => entity.name
+				),
 				score: memory.score,
 				occurredAt:
 					memory.memory.occurredStart ??
@@ -266,20 +348,22 @@ export async function reflect(
 
 	const searchMemoriesDef = toolDefinition({
 		name: 'search_memories',
-		description: 'Alias for recall. Same behavior, retained for compatibility.',
+		description:
+			'Alias for recall. Same behavior, retained for compatibility.',
 		inputSchema: recallInputSchema
 	})
-	const searchMemories = searchMemoriesDef.server(async _args =>
-		runRecallTool(
-			_args as {
-				query: string
-				limit?: number
-				maxTokens?: number
-				max_tokens?: number
-				tags?: string[]
-			},
-			'search_memories'
-		)
+	const searchMemories = searchMemoriesDef.server(
+		async _args =>
+			runRecallTool(
+				_args as {
+					query: string
+					limit?: number
+					maxTokens?: number
+					max_tokens?: number
+					tags?: string[]
+				},
+				'search_memories'
+			)
 	)
 
 	// ── Utility: get_entity ──
@@ -292,10 +376,15 @@ export async function reflect(
 			reason: v.optional(
 				v.pipe(
 					v.string(),
-					v.description("Brief explanation of why you're looking up this entity (for debugging)")
+					v.description(
+						"Brief explanation of why you're looking up this entity (for debugging)"
+					)
 				)
 			),
-			name: v.pipe(v.string(), v.description('Entity name to look up'))
+			name: v.pipe(
+				v.string(),
+				v.description('Entity name to look up')
+			)
 		})
 	})
 
@@ -305,7 +394,12 @@ export async function reflect(
 			const entity = hdb.db
 				.select()
 				.from(schema.entities)
-				.where(and(eq(schema.entities.bankId, bankId), eq(schema.entities.name, args.name)))
+				.where(
+					and(
+						eq(schema.entities.bankId, bankId),
+						eq(schema.entities.name, args.name)
+					)
+				)
 				.get()
 
 			if (!entity) return { found: false as const }
@@ -313,7 +407,9 @@ export async function reflect(
 			const junctions = hdb.db
 				.select()
 				.from(schema.memoryEntities)
-				.where(eq(schema.memoryEntities.entityId, entity.id))
+				.where(
+					eq(schema.memoryEntities.entityId, entity.id)
+				)
 				.all()
 
 			const memoryRows = junctions
@@ -321,7 +417,9 @@ export async function reflect(
 					hdb.db
 						.select()
 						.from(schema.memoryUnits)
-						.where(eq(schema.memoryUnits.id, junction.memoryId))
+						.where(
+							eq(schema.memoryUnits.id, junction.memoryId)
+						)
 						.get()
 				)
 				.filter(Boolean)
@@ -354,7 +452,9 @@ export async function reflect(
 			reason: v.optional(
 				v.pipe(
 					v.string(),
-					v.description("Brief explanation of why you're expanding these memories (for debugging)")
+					v.description(
+						"Brief explanation of why you're expanding these memories (for debugging)"
+					)
 				)
 			),
 			memoryIds: v.optional(v.array(v.string())),
@@ -371,7 +471,10 @@ export async function reflect(
 		}
 		return trackedToolCall('expand', rawArgs, async () => {
 			const memoryIds = normalizeExpandMemoryIds(rawArgs)
-			if (memoryIds.length === 0) return { results: [] as Array<Record<string, unknown>> }
+			if (memoryIds.length === 0)
+				return {
+					results: [] as Array<Record<string, unknown>>
+				}
 
 			const depth = normalizeExpandDepth(rawArgs.depth)
 			const memoryRows = hdb.db
@@ -385,16 +488,25 @@ export async function reflect(
 				})
 				.from(schema.memoryUnits)
 				.where(
-					and(eq(schema.memoryUnits.bankId, bankId), inArray(schema.memoryUnits.id, memoryIds))
+					and(
+						eq(schema.memoryUnits.bankId, bankId),
+						inArray(schema.memoryUnits.id, memoryIds)
+					)
 				)
 				.all()
-			if (memoryRows.length === 0) return { results: [] as Array<Record<string, unknown>> }
+			if (memoryRows.length === 0)
+				return {
+					results: [] as Array<Record<string, unknown>>
+				}
 
 			const chunkIds = [
 				...new Set(
 					memoryRows
 						.map(row => row.chunkId)
-						.filter((id): id is string => typeof id === 'string' && id.length > 0)
+						.filter(
+							(id): id is string =>
+								typeof id === 'string' && id.length > 0
+						)
 				)
 			]
 			const chunkRows =
@@ -410,15 +522,19 @@ export async function reflect(
 							.where(inArray(schema.chunks.id, chunkIds))
 							.all()
 					: []
-			const chunkMap = new Map(chunkRows.map(row => [row.id, row]))
+			const chunkMap = new Map(
+				chunkRows.map(row => [row.id, row])
+			)
 
 			const documentIds = new Set<string>()
 			if (depth === 'document') {
 				for (const memory of memoryRows) {
-					if (memory.documentId) documentIds.add(memory.documentId)
+					if (memory.documentId)
+						documentIds.add(memory.documentId)
 					if (!memory.chunkId) continue
 					const chunk = chunkMap.get(memory.chunkId)
-					if (chunk?.documentId) documentIds.add(chunk.documentId)
+					if (chunk?.documentId)
+						documentIds.add(chunk.documentId)
 				}
 			}
 			const documentRows =
@@ -429,15 +545,31 @@ export async function reflect(
 								originalText: schema.documents.originalText
 							})
 							.from(schema.documents)
-							.where(inArray(schema.documents.id, [...documentIds]))
+							.where(
+								inArray(schema.documents.id, [
+									...documentIds
+								])
+							)
 							.all()
 					: []
-			const documentMap = new Map(documentRows.map(row => [row.id, row]))
-			const memoryMap = new Map(memoryRows.map(row => [row.id, row]))
+			const documentMap = new Map(
+				documentRows.map(row => [row.id, row])
+			)
+			const memoryMap = new Map(
+				memoryRows.map(row => [row.id, row])
+			)
 
-			const results: Array<Record<string, unknown>> = memoryIds
-				.map(id => buildExpandItem(memoryMap.get(id), chunkMap, documentMap, depth))
-				.filter(Boolean) as Array<Record<string, unknown>>
+			const results: Array<Record<string, unknown>> =
+				memoryIds
+					.map(id =>
+						buildExpandItem(
+							memoryMap.get(id),
+							chunkMap,
+							documentMap,
+							depth
+						)
+					)
+					.filter(Boolean) as Array<Record<string, unknown>>
 
 			return { results }
 		})
@@ -445,11 +577,20 @@ export async function reflect(
 
 	// ── Run the agentic loop ──
 
-	const userMessage = options.context ? `${query}\n\nAdditional context: ${options.context}` : query
+	const userMessage = options.context
+		? `${query}\n\nAdditional context: ${options.context}`
+		: query
 
-	const activeDirectives = loadDirectivesForReflect(hdb, bankId, options.tags, options.tagsMatch)
+	const activeDirectives = loadDirectivesForReflect(
+		hdb,
+		bankId,
+		options.tags,
+		options.tagsMatch
+	)
 	const basePrompt = getReflectSystemPrompt(budget)
-	const bankIdentity = bankProfile ? buildBankIdentitySection(bankProfile) : ''
+	const bankIdentity = bankProfile
+		? buildBankIdentitySection(bankProfile)
+		: ''
 	const systemPrompt =
 		buildDirectivesSection(activeDirectives) +
 		basePrompt +
@@ -467,7 +608,11 @@ export async function reflect(
 	const MAX_TOOL_IGNORING_RETRIES = 1
 
 	let rawAnswer = ''
-	for (let attempt = 0; attempt <= MAX_TOOL_IGNORING_RETRIES; attempt++) {
+	for (
+		let attempt = 0;
+		attempt <= MAX_TOOL_IGNORING_RETRIES;
+		attempt++
+	) {
 		rawAnswer = await streamToText(
 			chat({
 				adapter,
@@ -499,8 +644,14 @@ export async function reflect(
 		// Model exhausted tool iterations without producing text.
 		// Force a final text-only call (no tools) to synthesize an answer
 		// from whatever was retrieved. Matches Python's FINAL_SYSTEM_PROMPT path.
-		const contextSummary = buildToolContextSummary(allMemories)
-		const finalPrompt = buildFinalReflectPrompt(query, contextSummary, bankProfile, options.context)
+		const contextSummary =
+			buildToolContextSummary(allMemories)
+		const finalPrompt = buildFinalReflectPrompt(
+			query,
+			contextSummary,
+			bankProfile,
+			options.context
+		)
 		const forcedAnswer = await streamToText(
 			chat({
 				adapter,
@@ -517,7 +668,11 @@ export async function reflect(
 	if (options.saveObservations !== false && answer.trim()) {
 		const observationId = ulid()
 		const now = Date.now()
-		const sourceIds = [...new Set(allMemories.map(memory => memory.memory.id))]
+		const sourceIds = [
+			...new Set(
+				allMemories.map(memory => memory.memory.id)
+			)
+		]
 
 		hdb.db
 			.insert(schema.memoryUnits)
@@ -529,7 +684,9 @@ export async function reflect(
 				confidence: 1,
 				proofCount: sourceIds.length,
 				sourceMemoryIds: JSON.stringify(sourceIds),
-				tags: options.tags ? JSON.stringify(options.tags) : null,
+				tags: options.tags
+					? JSON.stringify(options.tags)
+					: null,
 				history: JSON.stringify([]),
 				consolidatedAt: now,
 				createdAt: now,
@@ -537,11 +694,10 @@ export async function reflect(
 			})
 			.run()
 
-		hdb.sqlite.run('INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)', [
-			observationId,
-			bankId,
-			answer
-		])
+		hdb.sqlite.run(
+			'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
+			[observationId, bankId, answer]
+		)
 		await memoryVec.upsert(observationId, answer)
 		observationTexts.push(answer)
 	}
@@ -555,7 +711,11 @@ export async function reflect(
 	}
 
 	const structuredOutput = options.responseSchema
-		? await generateStructuredOutput(adapter, answer, options.responseSchema)
+		? await generateStructuredOutput(
+				adapter,
+				answer,
+				options.responseSchema
+			)
 		: undefined
 
 	return {
@@ -582,9 +742,17 @@ function computeObservationStaleness(
 	bankId: string,
 	observationUpdatedAt: number
 ): ObservationStalenessInfo {
-	const pendingCount = countPendingConsolidation(hdb, bankId, observationUpdatedAt)
+	const pendingCount = countPendingConsolidation(
+		hdb,
+		bankId,
+		observationUpdatedAt
+	)
 	if (pendingCount === 0) {
-		return { isStale: false, stalenessReason: null, freshness: 'up_to_date' }
+		return {
+			isStale: false,
+			stalenessReason: null,
+			freshness: 'up_to_date'
+		}
 	}
 	if (pendingCount <= 3) {
 		return {
@@ -617,13 +785,27 @@ function countPendingConsolidation(
 	return result.cnt
 }
 
-function mergeTags(sessionTags?: string[], toolTags?: string[]): string[] | undefined {
-	if (!sessionTags?.length && !toolTags?.length) return undefined
-	return [...new Set([...(sessionTags ?? []), ...(toolTags ?? [])])]
+function mergeTags(
+	sessionTags?: string[],
+	toolTags?: string[]
+): string[] | undefined {
+	if (!sessionTags?.length && !toolTags?.length)
+		return undefined
+	return [
+		...new Set([
+			...(sessionTags ?? []),
+			...(toolTags ?? [])
+		])
+	]
 }
 
-function buildBankIdentitySection(profile: BankProfile): string {
-	const parts: string[] = ['', `## Memory Bank: ${profile.name}`]
+function buildBankIdentitySection(
+	profile: BankProfile
+): string {
+	const parts: string[] = [
+		'',
+		`## Memory Bank: ${profile.name}`
+	]
 
 	if (profile.mission) {
 		parts.push(`Mission: ${profile.mission}`)
@@ -650,9 +832,17 @@ function buildExpandItem(
 		| undefined,
 	chunkMap: Map<
 		string,
-		{ id: string; content: string; chunkIndex: number | null; documentId: string | null }
+		{
+			id: string
+			content: string
+			chunkIndex: number | null
+			documentId: string | null
+		}
 	>,
-	documentMap: Map<string, { id: string; originalText: string | null }>,
+	documentMap: Map<
+		string,
+		{ id: string; originalText: string | null }
+	>,
 	depth: 'chunk' | 'document'
 ): Record<string, unknown> | null {
 	if (!memory) return null
@@ -669,7 +859,12 @@ function buildExpandItem(
 	}
 
 	if (!memory.chunkId) {
-		attachDirectDocument(item, memory.documentId, documentMap, depth)
+		attachDirectDocument(
+			item,
+			memory.documentId,
+			documentMap,
+			depth
+		)
 		return item
 	}
 
@@ -682,30 +877,54 @@ function buildExpandItem(
 		index: chunk.chunkIndex,
 		documentId: chunk.documentId
 	}
-	attachDirectDocument(item, chunk.documentId, documentMap, depth)
+	attachDirectDocument(
+		item,
+		chunk.documentId,
+		documentMap,
+		depth
+	)
 	return item
 }
 
 function attachDirectDocument(
 	item: Record<string, unknown>,
 	documentId: string | null | undefined,
-	documentMap: Map<string, { id: string; originalText: string | null }>,
+	documentMap: Map<
+		string,
+		{ id: string; originalText: string | null }
+	>,
 	depth: 'chunk' | 'document'
 ): void {
 	if (depth !== 'document' || !documentId) return
 	const document = documentMap.get(documentId)
 	if (!document) return
-	item.document = { id: document.id, text: document.originalText }
+	item.document = {
+		id: document.id,
+		text: document.originalText
+	}
 }
 
-function normalizeExpandMemoryIds(args: { memoryIds?: string[]; memory_ids?: string[] }): string[] {
-	const fromCamel = Array.isArray(args.memoryIds) ? args.memoryIds : []
-	const fromSnake = Array.isArray(args.memory_ids) ? args.memory_ids : []
-	return [...new Set([...fromCamel, ...fromSnake].filter(Boolean))]
+function normalizeExpandMemoryIds(args: {
+	memoryIds?: string[]
+	memory_ids?: string[]
+}): string[] {
+	const fromCamel = Array.isArray(args.memoryIds)
+		? args.memoryIds
+		: []
+	const fromSnake = Array.isArray(args.memory_ids)
+		? args.memory_ids
+		: []
+	return [
+		...new Set([...fromCamel, ...fromSnake].filter(Boolean))
+	]
 }
 
-function normalizeExpandDepth(depth: string | undefined): 'chunk' | 'document' {
-	return depth?.toLowerCase() === 'document' ? 'document' : 'chunk'
+function normalizeExpandDepth(
+	depth: string | undefined
+): 'chunk' | 'document' {
+	return depth?.toLowerCase() === 'document'
+		? 'document'
+		: 'chunk'
 }
 
 // ── Final forced-text prompt (matches Python FINAL_SYSTEM_PROMPT) ──
@@ -731,9 +950,13 @@ FORMATTING: Use proper markdown formatting in your answer:
 
 IMPORTANT: Output ONLY the final answer. Do NOT include meta-commentary like "I'll search..." or "Let me analyze...". Do NOT explain your reasoning process. Just provide the direct synthesized answer.`
 
-function buildToolContextSummary(memories: ScoredMemory[]): string {
+function buildToolContextSummary(
+	memories: ScoredMemory[]
+): string {
 	if (memories.length === 0) return 'No data was retrieved.'
-	const items = memories.map(m => `- [${m.memory.factType}] ${m.memory.content}`)
+	const items = memories.map(
+		m => `- [${m.memory.factType}] ${m.memory.content}`
+	)
 	return items.join('\n')
 }
 
@@ -746,7 +969,9 @@ function buildFinalReflectPrompt(
 	const parts: string[] = []
 
 	if (bankProfile) {
-		parts.push(`## Memory Bank Context\nName: ${bankProfile.name}`)
+		parts.push(
+			`## Memory Bank Context\nName: ${bankProfile.name}`
+		)
 		if (bankProfile.mission) {
 			parts.push(`Mission: ${bankProfile.mission}`)
 		}
@@ -779,7 +1004,10 @@ function cleanReflectAnswer(text: string): string {
 export function _cleanAnswerText(text: string): string {
 	const source = text ?? ''
 	if (!source) return ''
-	const cleaned = source.trim().replace(DONE_CALL_PATTERN, '').trim()
+	const cleaned = source
+		.trim()
+		.replace(DONE_CALL_PATTERN, '')
+		.trim()
 	return cleaned || source.trim()
 }
 
@@ -801,9 +1029,13 @@ export function _normalizeToolName(name: string): string {
 		normalized = normalized.slice('call='.length).trim()
 	}
 	if (normalized.startsWith('functions.')) {
-		normalized = normalized.slice('functions.'.length).trim()
+		normalized = normalized
+			.slice('functions.'.length)
+			.trim()
 	}
-	normalized = normalized.replace(SPECIAL_TOKEN_SUFFIX_PATTERN, '').trim()
+	normalized = normalized
+		.replace(SPECIAL_TOKEN_SUFFIX_PATTERN, '')
+		.trim()
 	return normalized
 }
 
@@ -830,21 +1062,34 @@ export interface ReflectAgentLoopResultLike {
 
 export async function _runReflectAgentLoopForTesting(input: {
 	callWithTools: () => Promise<ReflectAgentToolCallResultLike>
-	tools: Record<string, (args: Record<string, unknown>) => Promise<unknown>>
+	tools: Record<
+		string,
+		(args: Record<string, unknown>) => Promise<unknown>
+	>
 	maxIterations?: number
 }): Promise<ReflectAgentLoopResultLike> {
 	const maxIterations = input.maxIterations ?? 5
 
-	for (let iteration = 1; iteration <= maxIterations; iteration++) {
+	for (
+		let iteration = 1;
+		iteration <= maxIterations;
+		iteration++
+	) {
 		const result = await input.callWithTools()
-		const toolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : []
+		const toolCalls = Array.isArray(result.toolCalls)
+			? result.toolCalls
+			: []
 		for (const toolCall of toolCalls) {
 			const normalized = _normalizeToolName(toolCall.name)
 			const args = toolCall.arguments ?? {}
 
 			if (_isDoneTool(normalized)) {
-				const answer = typeof args.answer === 'string' ? args.answer : ''
-				const usedMemoryIds = parseStringArray(args.memory_ids, args.memoryIds)
+				const answer =
+					typeof args.answer === 'string' ? args.answer : ''
+				const usedMemoryIds = parseStringArray(
+					args.memory_ids,
+					args.memoryIds
+				)
 				return {
 					text: _cleanDoneAnswer(answer),
 					usedMemoryIds,
@@ -875,7 +1120,9 @@ export async function _runReflectAgentLoopForTesting(input: {
 function parseStringArray(...values: unknown[]): string[] {
 	for (const value of values) {
 		if (!Array.isArray(value)) continue
-		const strings = value.filter((entry): entry is string => typeof entry === 'string')
+		const strings = value.filter(
+			(entry): entry is string => typeof entry === 'string'
+		)
 		return strings
 	}
 	return []
@@ -910,7 +1157,10 @@ async function generateStructuredOutput(
 				}
 			})
 		)
-		const parsed = parseLLMJson<Record<string, unknown> | null>(text, null)
+		const parsed = parseLLMJson<Record<
+			string,
+			unknown
+		> | null>(text, null)
 		if (!parsed || typeof parsed !== 'object') return null
 		return parsed
 	} catch {

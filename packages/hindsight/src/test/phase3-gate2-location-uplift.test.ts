@@ -14,9 +14,20 @@
  * location boost application.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
 import { ulid } from '@ellie/utils'
-import { createTestHindsight, createTestBank, getHdb, type TestHindsight } from './setup'
+import {
+	createTestHindsight,
+	createTestBank,
+	getHdb,
+	type TestHindsight
+} from './setup'
 import type { HindsightDatabase } from '../db'
 import {
 	locationRecord,
@@ -89,29 +100,53 @@ describe('Gate 2: Location P@5 Uplift', () => {
 
 		const memoryIds: string[] = []
 		for (let i = 0; i < files.length; i++) {
-			const memId = insertTestMemory(hdb, bankId, `Memory about ${files[i]} functionality`)
+			const memId = insertTestMemory(
+				hdb,
+				bankId,
+				`Memory about ${files[i]} functionality`
+			)
 			memoryIds.push(memId)
-			locationRecord(hdb, bankId, files[i]!, { memoryId: memId, session: 'sess-1' })
+			locationRecord(hdb, bankId, files[i]!, {
+				memoryId: memId,
+				session: 'sess-1'
+			})
 		}
 
 		// Query: "What's in src/auth/login.ts?"
 		// Gold set: memory 0 (login.ts)
 		// With location boost: memory 0 should get directPath boost (+0.12)
-		const querySignals = detectLocationSignals('Check src/auth/login.ts')
+		const querySignals = detectLocationSignals(
+			'Check src/auth/login.ts'
+		)
 		expect(querySignals.length).toBeGreaterThan(0)
 
-		const signalMap = resolveSignalsToPaths(hdb, bankId, querySignals)
+		const signalMap = resolveSignalsToPaths(
+			hdb,
+			bankId,
+			querySignals
+		)
 		const queryPathIds = new Set<string>()
 		for (const ids of signalMap.values()) {
 			for (const id of ids) queryPathIds.add(id)
 		}
 		expect(queryPathIds.size).toBeGreaterThan(0)
 
-		const maxStrength = getMaxStrengthForPaths(hdb, bankId, queryPathIds)
+		const maxStrength = getMaxStrengthForPaths(
+			hdb,
+			bankId,
+			queryPathIds
+		)
 
 		// Compute boost for each memory
-		const boosts = memoryIds.map((memId) =>
-			computeLocationBoost(hdb, bankId, memId, queryPathIds, maxStrength, now)
+		const boosts = memoryIds.map(memId =>
+			computeLocationBoost(
+				hdb,
+				bankId,
+				memId,
+				queryPathIds,
+				maxStrength,
+				now
+			)
 		)
 
 		// Memory 0 (login.ts) should have highest boost (direct path match)
@@ -129,47 +164,68 @@ describe('Gate 2: Location P@5 Uplift', () => {
 		const now = Date.now()
 
 		// Create a dataset where location signals matter
-		const dataset: Array<{ file: string; content: string; goldForQuery: string[] }> = [
+		const dataset: Array<{
+			file: string
+			content: string
+			goldForQuery: string[]
+		}> = [
 			{
 				file: 'src/auth/login.ts',
-				content: 'Login handler validates credentials and returns JWT token',
+				content:
+					'Login handler validates credentials and returns JWT token',
 				goldForQuery: ['auth login']
 			},
 			{
 				file: 'src/auth/register.ts',
-				content: 'Register handler creates new user accounts with validation',
+				content:
+					'Register handler creates new user accounts with validation',
 				goldForQuery: ['auth register']
 			},
 			{
 				file: 'src/api/users.ts',
-				content: 'User API endpoint handles CRUD operations for user profiles',
+				content:
+					'User API endpoint handles CRUD operations for user profiles',
 				goldForQuery: ['api users']
 			},
 			{
 				file: 'src/db/schema.ts',
-				content: 'Database schema defines user and post table structures',
+				content:
+					'Database schema defines user and post table structures',
 				goldForQuery: ['db schema']
 			},
 			{
 				file: 'src/utils/logger.ts',
-				content: 'Logger utility provides structured logging across the app',
+				content:
+					'Logger utility provides structured logging across the app',
 				goldForQuery: ['utils logger']
 			}
 		]
 
 		const memoryIds: string[] = []
 		for (const item of dataset) {
-			const memId = insertTestMemory(hdb, bankId, item.content)
+			const memId = insertTestMemory(
+				hdb,
+				bankId,
+				item.content
+			)
 			memoryIds.push(memId)
-			locationRecord(hdb, bankId, item.file, { memoryId: memId })
+			locationRecord(hdb, bankId, item.file, {
+				memoryId: memId
+			})
 		}
 
 		// For each query that contains a file path, check if location boost
 		// correctly identifies the associated memory
 		const queries = [
 			{ q: 'What does src/auth/login.ts do?', goldIdx: 0 },
-			{ q: 'Check src/db/schema.ts for issues', goldIdx: 3 },
-			{ q: 'Look at src/utils/logger.ts implementation', goldIdx: 4 }
+			{
+				q: 'Check src/db/schema.ts for issues',
+				goldIdx: 3
+			},
+			{
+				q: 'Look at src/utils/logger.ts implementation',
+				goldIdx: 4
+			}
 		]
 
 		let baselineHits = 0
@@ -177,13 +233,21 @@ describe('Gate 2: Location P@5 Uplift', () => {
 
 		for (const { q, goldIdx } of queries) {
 			const signals = detectLocationSignals(q)
-			const signalMap = resolveSignalsToPaths(hdb, bankId, signals)
+			const signalMap = resolveSignalsToPaths(
+				hdb,
+				bankId,
+				signals
+			)
 			const queryPathIds = new Set<string>()
 			for (const ids of signalMap.values()) {
 				for (const id of ids) queryPathIds.add(id)
 			}
 
-			const maxStrength = getMaxStrengthForPaths(hdb, bankId, queryPathIds)
+			const maxStrength = getMaxStrengthForPaths(
+				hdb,
+				bankId,
+				queryPathIds
+			)
 
 			// Baseline: all memories have equal score (no boost)
 			const baselineScores = memoryIds.map((_, i) => ({
@@ -191,16 +255,27 @@ describe('Gate 2: Location P@5 Uplift', () => {
 				score: 1.0 - i * 0.01 // slight decay by order, simulating baseline ranking
 			}))
 			baselineScores.sort((a, b) => b.score - a.score)
-			const baselineTop5 = new Set(baselineScores.slice(0, 5).map((s) => s.idx))
+			const baselineTop5 = new Set(
+				baselineScores.slice(0, 5).map(s => s.idx)
+			)
 			if (baselineTop5.has(goldIdx)) baselineHits++
 
 			// Phase 3: apply location boost
 			const phase3Scores = memoryIds.map((memId, i) => {
-				const boost = computeLocationBoost(hdb, bankId, memId, queryPathIds, maxStrength, now)
+				const boost = computeLocationBoost(
+					hdb,
+					bankId,
+					memId,
+					queryPathIds,
+					maxStrength,
+					now
+				)
 				return { idx: i, score: 1.0 - i * 0.01 + boost }
 			})
 			phase3Scores.sort((a, b) => b.score - a.score)
-			const phase3Top5 = new Set(phase3Scores.slice(0, 5).map((s) => s.idx))
+			const phase3Top5 = new Set(
+				phase3Scores.slice(0, 5).map(s => s.idx)
+			)
 			if (phase3Top5.has(goldIdx)) phase3Hits++
 		}
 
@@ -221,24 +296,43 @@ describe('Gate 2: Location P@5 Uplift', () => {
 		// Create 15 memories — gold item placed at index 10 (outside naive top-5)
 		const memories: string[] = []
 		for (let i = 0; i < 15; i++) {
-			const memId = insertTestMemory(hdb, bankId, `Memory content number ${i} about various things`)
+			const memId = insertTestMemory(
+				hdb,
+				bankId,
+				`Memory content number ${i} about various things`
+			)
 			memories.push(memId)
 		}
 
 		// Only memory 10 is associated with the target file
-		locationRecord(hdb, bankId, 'src/target/specific-file.ts', {
-			memoryId: memories[10]!,
-			session: 'sess-a'
-		})
+		locationRecord(
+			hdb,
+			bankId,
+			'src/target/specific-file.ts',
+			{
+				memoryId: memories[10]!,
+				session: 'sess-a'
+			}
+		)
 
-		const signals = detectLocationSignals('What does src/target/specific-file.ts do?')
-		const signalMap = resolveSignalsToPaths(hdb, bankId, signals)
+		const signals = detectLocationSignals(
+			'What does src/target/specific-file.ts do?'
+		)
+		const signalMap = resolveSignalsToPaths(
+			hdb,
+			bankId,
+			signals
+		)
 		const queryPathIds = new Set<string>()
 		for (const ids of signalMap.values()) {
 			for (const id of ids) queryPathIds.add(id)
 		}
 
-		const maxStrength = getMaxStrengthForPaths(hdb, bankId, queryPathIds)
+		const maxStrength = getMaxStrengthForPaths(
+			hdb,
+			bankId,
+			queryPathIds
+		)
 
 		// Baseline: memory 10 is ranked 11th (outside top-5)
 		const baselineScores = memories.map((_, i) => ({
@@ -246,16 +340,27 @@ describe('Gate 2: Location P@5 Uplift', () => {
 			score: 1.0 - i * 0.02 // descending by index
 		}))
 		baselineScores.sort((a, b) => b.score - a.score)
-		const baselineTop5 = baselineScores.slice(0, 5).map((s) => s.idx)
+		const baselineTop5 = baselineScores
+			.slice(0, 5)
+			.map(s => s.idx)
 		expect(baselineTop5).not.toContain(10) // memory 10 not in baseline top-5
 
 		// Phase 3: location boost should elevate memory 10
 		const phase3Scores = memories.map((memId, i) => {
-			const boost = computeLocationBoost(hdb, bankId, memId, queryPathIds, maxStrength, now)
+			const boost = computeLocationBoost(
+				hdb,
+				bankId,
+				memId,
+				queryPathIds,
+				maxStrength,
+				now
+			)
 			return { idx: i, score: 1.0 - i * 0.02 + boost }
 		})
 		phase3Scores.sort((a, b) => b.score - a.score)
-		const phase3Top5 = phase3Scores.slice(0, 5).map((s) => s.idx)
+		const phase3Top5 = phase3Scores
+			.slice(0, 5)
+			.map(s => s.idx)
 		expect(phase3Top5).toContain(10) // memory 10 promoted to top-5 by location boost
 	})
 
@@ -263,29 +368,81 @@ describe('Gate 2: Location P@5 Uplift', () => {
 		const hdb = getHdb(t.hs)
 		const now = Date.now()
 
-		const memA = insertTestMemory(hdb, bankId, 'Memory about auth flow')
-		const memB = insertTestMemory(hdb, bankId, 'Memory about middleware')
-		const memC = insertTestMemory(hdb, bankId, 'Memory about unrelated topic')
+		const memA = insertTestMemory(
+			hdb,
+			bankId,
+			'Memory about auth flow'
+		)
+		const memB = insertTestMemory(
+			hdb,
+			bankId,
+			'Memory about middleware'
+		)
+		const memC = insertTestMemory(
+			hdb,
+			bankId,
+			'Memory about unrelated topic'
+		)
 
 		// Files A and B co-accessed in same session
-		locationRecord(hdb, bankId, 'src/auth.ts', { memoryId: memA, session: 'sess-x' })
-		locationRecord(hdb, bankId, 'src/middleware.ts', { memoryId: memB, session: 'sess-x' })
+		locationRecord(hdb, bankId, 'src/auth.ts', {
+			memoryId: memA,
+			session: 'sess-x'
+		})
+		locationRecord(hdb, bankId, 'src/middleware.ts', {
+			memoryId: memB,
+			session: 'sess-x'
+		})
 		// File C in different session
-		locationRecord(hdb, bankId, 'src/other.ts', { memoryId: memC, session: 'sess-y' })
+		locationRecord(hdb, bankId, 'src/other.ts', {
+			memoryId: memC,
+			session: 'sess-y'
+		})
 
 		// Query about auth.ts — memory B should get co-access boost
-		const signals = detectLocationSignals('Check src/auth.ts')
-		const signalMap = resolveSignalsToPaths(hdb, bankId, signals)
+		const signals = detectLocationSignals(
+			'Check src/auth.ts'
+		)
+		const signalMap = resolveSignalsToPaths(
+			hdb,
+			bankId,
+			signals
+		)
 		const queryPathIds = new Set<string>()
 		for (const ids of signalMap.values()) {
 			for (const id of ids) queryPathIds.add(id)
 		}
 
-		const maxStrength = getMaxStrengthForPaths(hdb, bankId, queryPathIds)
+		const maxStrength = getMaxStrengthForPaths(
+			hdb,
+			bankId,
+			queryPathIds
+		)
 
-		const boostA = computeLocationBoost(hdb, bankId, memA, queryPathIds, maxStrength, now)
-		const boostB = computeLocationBoost(hdb, bankId, memB, queryPathIds, maxStrength, now)
-		const boostC = computeLocationBoost(hdb, bankId, memC, queryPathIds, maxStrength, now)
+		const boostA = computeLocationBoost(
+			hdb,
+			bankId,
+			memA,
+			queryPathIds,
+			maxStrength,
+			now
+		)
+		const boostB = computeLocationBoost(
+			hdb,
+			bankId,
+			memB,
+			queryPathIds,
+			maxStrength,
+			now
+		)
+		const boostC = computeLocationBoost(
+			hdb,
+			bankId,
+			memC,
+			queryPathIds,
+			maxStrength,
+			now
+		)
 
 		// A has direct path match — highest boost
 		expect(boostA).toBeGreaterThan(boostB)
@@ -300,17 +457,36 @@ describe('Gate 2: Location P@5 Uplift', () => {
 		const hdb = getHdb(t.hs)
 		const now = Date.now()
 
-		const memId = insertTestMemory(hdb, bankId, 'Memory for direct path test')
-		locationRecord(hdb, bankId, 'src/exact-match.ts', { memoryId: memId })
+		const memId = insertTestMemory(
+			hdb,
+			bankId,
+			'Memory for direct path test'
+		)
+		locationRecord(hdb, bankId, 'src/exact-match.ts', {
+			memoryId: memId
+		})
 
-		const signals = detectLocationSignals('Check src/exact-match.ts')
-		const signalMap = resolveSignalsToPaths(hdb, bankId, signals)
+		const signals = detectLocationSignals(
+			'Check src/exact-match.ts'
+		)
+		const signalMap = resolveSignalsToPaths(
+			hdb,
+			bankId,
+			signals
+		)
 		const queryPathIds = new Set<string>()
 		for (const ids of signalMap.values()) {
 			for (const id of ids) queryPathIds.add(id)
 		}
 
-		const boost = computeLocationBoost(hdb, bankId, memId, queryPathIds, 0, now)
+		const boost = computeLocationBoost(
+			hdb,
+			bankId,
+			memId,
+			queryPathIds,
+			0,
+			now
+		)
 
 		// directPathBoost (0.12) + familiarityBoost (some small amount based on recency)
 		// directPathBoost alone is 0.12, familiarity adds up to 0.10

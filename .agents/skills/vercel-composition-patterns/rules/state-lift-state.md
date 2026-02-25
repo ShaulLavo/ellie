@@ -70,7 +70,9 @@ function ForwardMessageDialog() {
 	return (
 		<Dialog>
 			<ForwardMessageComposer stateRef={stateRef} />
-			<ForwardButton onPress={() => submit(stateRef.current)} />
+			<ForwardButton
+				onPress={() => submit(stateRef.current)}
+			/>
 		</Dialog>
 	)
 }
@@ -79,7 +81,11 @@ function ForwardMessageDialog() {
 **Correct (state lifted to provider):**
 
 ```tsx
-function ForwardMessageProvider({ children }: { children: React.ReactNode }) {
+function ForwardMessageProvider({
+	children
+}: {
+	children: React.ReactNode
+}) {
 	const [state, setState] = useState(initialState)
 	const forwardMessage = useForwardMessage()
 	const inputRef = useRef(null)
@@ -100,10 +106,12 @@ function ForwardMessageDialog() {
 		<ForwardMessageProvider>
 			<Dialog>
 				<ForwardMessageComposer />
-				<MessagePreview /> {/* Custom components can access state and actions */}
+				<MessagePreview />{' '}
+				{/* Custom components can access state and actions */}
 				<DialogActions>
 					<CancelButton />
-					<ForwardButton /> {/* Custom components can access state and actions */}
+					<ForwardButton />{' '}
+					{/* Custom components can access state and actions */}
 				</DialogActions>
 			</Dialog>
 		</ForwardMessageProvider>

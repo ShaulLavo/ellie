@@ -20,7 +20,10 @@ describe('deriveScopeTagsFromContext', () => {
 	})
 
 	it('returns defaults when context has empty strings', () => {
-		const scope = deriveScopeTagsFromContext({ profile: '', project: '' })
+		const scope = deriveScopeTagsFromContext({
+			profile: '',
+			project: ''
+		})
 		expect(scope.profile).toBe(DEFAULT_PROFILE)
 		expect(scope.project).toBe(DEFAULT_PROJECT)
 	})
@@ -37,7 +40,9 @@ describe('deriveScopeTagsFromContext', () => {
 	})
 
 	it('fills in defaults for partial context', () => {
-		const scope = deriveScopeTagsFromContext({ profile: 'alice' })
+		const scope = deriveScopeTagsFromContext({
+			profile: 'alice'
+		})
 		expect(scope.profile).toBe('alice')
 		expect(scope.project).toBe(DEFAULT_PROJECT)
 	})
@@ -46,7 +51,10 @@ describe('deriveScopeTagsFromContext', () => {
 describe('resolveScope', () => {
 	it('uses explicit scope when fully provided', () => {
 		const scope = resolveScope(
-			{ profile: 'explicit-profile', project: 'explicit-project' },
+			{
+				profile: 'explicit-profile',
+				project: 'explicit-project'
+			},
 			{ profile: 'ctx-profile', project: 'ctx-project' }
 		)
 		expect(scope.profile).toBe('explicit-profile')
@@ -79,13 +87,20 @@ describe('resolveScope', () => {
 	})
 
 	it('carries session from context when explicit has none', () => {
-		const scope = resolveScope({ profile: 'p', project: 'proj' }, { session: 'sess-1' })
+		const scope = resolveScope(
+			{ profile: 'p', project: 'proj' },
+			{ session: 'sess-1' }
+		)
 		expect(scope.session).toBe('sess-1')
 	})
 
 	it('explicit session overrides context session', () => {
 		const scope = resolveScope(
-			{ profile: 'p', project: 'proj', session: 'explicit-sess' },
+			{
+				profile: 'p',
+				project: 'proj',
+				session: 'explicit-sess'
+			},
 			{ session: 'ctx-sess' }
 		)
 		expect(scope.session).toBe('explicit-sess')
@@ -145,7 +160,10 @@ describe('scopeMatches', () => {
 
 	it('defaults to strict mode', () => {
 		expect(
-			scopeMatches({ profile: 'alice', project: 'proj-a' }, { profile: 'bob', project: 'proj-a' })
+			scopeMatches(
+				{ profile: 'alice', project: 'proj-a' },
+				{ profile: 'bob', project: 'proj-a' }
+			)
 		).toBe(false)
 	})
 

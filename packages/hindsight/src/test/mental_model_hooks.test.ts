@@ -2,8 +2,18 @@
  * Core parity port for test_mental_model_hooks.py.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { createTestHindsight, createTestBank, type TestHindsight } from './setup'
+import {
+	describe,
+	it,
+	expect,
+	beforeEach,
+	afterEach
+} from 'bun:test'
+import {
+	createTestHindsight,
+	createTestBank,
+	type TestHindsight
+} from './setup'
 
 describe('Core parity: test_mental_model_hooks.py', () => {
 	let t: TestHindsight
@@ -22,7 +32,8 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 		await t.hs.retain(bankId, 'seed', {
 			facts: [
 				{
-					content: 'Peter met Alice in June 2024 and planned a hike',
+					content:
+						'Peter met Alice in June 2024 and planned a hike',
 					factType: 'experience',
 					confidence: 0.91,
 					entities: ['Peter', 'Alice'],
@@ -58,7 +69,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('create result success', async () => {
@@ -68,7 +81,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('create result failure', async () => {
@@ -78,7 +93,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('create result with all fields', async () => {
@@ -88,7 +105,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('create result failure', async () => {
@@ -98,7 +117,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('validate mental model get default accepts', async () => {
@@ -108,7 +129,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('on mental model get complete default noop', async () => {
@@ -118,7 +141,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('on mental model refresh complete default noop', async () => {
@@ -128,7 +153,9 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 
 	it('imports from extensions package', async () => {
@@ -138,6 +165,8 @@ describe('Core parity: test_mental_model_hooks.py', () => {
 			autoRefresh: false
 		})
 		expect(model.id).toBeDefined()
-		expect(t.hs.getMentalModel(bankId, model.id)).toBeDefined()
+		expect(
+			t.hs.getMentalModel(bankId, model.id)
+		).toBeDefined()
 	})
 })

@@ -38,7 +38,9 @@ import path from 'path'
 
 export default defineConfig({
 	plugins: [react(), tailwindcss()],
-	resolve: { alias: { '@': path.resolve(__dirname, './src') } }
+	resolve: {
+		alias: { '@': path.resolve(__dirname, './src') }
+	}
 })
 ```
 
@@ -69,7 +71,9 @@ Skipping steps will break your theme. Follow exactly:
 @import 'tw-animate-css'; /* Required for shadcn/ui animations */
 
 :root {
-	--background: hsl(0 0% 100%); /* ← hsl() wrapper required */
+	--background: hsl(
+		0 0% 100%
+	); /* ← hsl() wrapper required */
 	--foreground: hsl(222.2 84% 4.9%);
 	--primary: hsl(221.2 83.2% 53.3%);
 	/* ... all light mode colors */
@@ -103,7 +107,9 @@ Skipping steps will break your theme. Follow exactly:
 ```css
 @layer base {
 	body {
-		background-color: var(--background); /* NO hsl() wrapper here */
+		background-color: var(
+			--background
+		); /* NO hsl() wrapper here */
 		color: var(--foreground);
 	}
 }
@@ -398,7 +404,9 @@ v4 configuration happens in `src/index.css` using `@theme` directive.
 }
 
 body {
-	background-color: var(--background); /* No @layer needed */
+	background-color: var(
+		--background
+	); /* No @layer needed */
 }
 ```
 
@@ -442,7 +450,9 @@ Tailwind v4.0 replaced the entire default color palette with OKLCH, a perceptual
 ```css
 .bg-blue-500 {
 	background-color: #3b82f6; /* sRGB fallback */
-	background-color: oklch(0.6 0.24 264); /* Modern browsers */
+	background-color: oklch(
+		0.6 0.24 264
+	); /* Modern browsers */
 }
 ```
 
@@ -503,7 +513,9 @@ pnpm add -D @tailwindcss/typography
 ```
 
 ```html
-<article class="prose dark:prose-invert">{{ content }}</article>
+<article class="prose dark:prose-invert">
+	{{ content }}
+</article>
 ```
 
 **Forms** (cross-browser form styling):
@@ -521,7 +533,9 @@ pnpm add -D @tailwindcss/forms
 
 ```tsx
 <div className="@container">
-	<div className="@md:text-lg">Responds to container width</div>
+	<div className="@md:text-lg">
+		Responds to container width
+	</div>
 </div>
 ```
 
@@ -617,7 +631,9 @@ pnpm add -D @tailwindcss/typography
 ```
 
 ```tsx
-<article className="prose dark:prose-invert">{/* All elements styled automatically */}</article>
+<article className="prose dark:prose-invert">
+	{/* All elements styled automatically */}
+</article>
 ```
 
 **Option 2: Add custom base styles**:

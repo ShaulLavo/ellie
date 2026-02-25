@@ -1,9 +1,27 @@
-import { forwardRef, useImperativeHandle, useCallback } from 'react'
-import type { AnimatedIconHandle, AnimatedIconProps } from './types'
+import {
+	forwardRef,
+	useImperativeHandle,
+	useCallback
+} from 'react'
+import type {
+	AnimatedIconHandle,
+	AnimatedIconProps
+} from './types'
 import { motion, useAnimate } from 'motion/react'
 
-const FileDescriptionIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
-	({ size = 24, color = 'currentColor', strokeWidth = 2, className = '' }, ref) => {
+const FileDescriptionIcon = forwardRef<
+	AnimatedIconHandle,
+	AnimatedIconProps
+>(
+	(
+		{
+			size = 24,
+			color = 'currentColor',
+			strokeWidth = 2,
+			className = ''
+		},
+		ref
+	) => {
 		const [scope, animate] = useAnimate()
 
 		const start = useCallback(async () => {
@@ -65,7 +83,10 @@ const FileDescriptionIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
 			>
 				<path stroke="none" d="M0 0h24v24H0z" fill="none" />
 
-				<motion.path d="M14 3v4a1 1 0 0 0 1 1h4" className="file-fold" />
+				<motion.path
+					d="M14 3v4a1 1 0 0 0 1 1h4"
+					className="file-fold"
+				/>
 
 				<path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" />
 
