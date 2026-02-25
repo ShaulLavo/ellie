@@ -8,11 +8,9 @@ import {
 import { cn } from './lib/utils'
 import { useAgentChat } from './lib/chat/use-agent-chat'
 import type { Message } from './lib/chat/use-chat'
-import { useHotkey } from '@tanstack/react-hotkeys'
 import {
 	resolveSelectedMarkdown,
-	setMarkdownClipboardData,
-	writeMarkdownToSystemClipboard
+	setMarkdownClipboardData
 } from './lib/chat/markdown-copy'
 import { Chat } from './components/chat/chat'
 import {
@@ -290,11 +288,25 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 		const text = input.trim()
 		if (!text) return
 		setInput('')
-		void sendMessage(text)
+		sendMessage(text).catch(err => {
+			console.error(
+				'[AIChatPanel] Failed to send:',
+				err instanceof Error
+					? err.message
+					: JSON.stringify(err)
+			)
+		})
 	}, [input, sendMessage])
 
 	const handleAbort = useCallback(() => {
-		void abort()
+		abort().catch(err => {
+			console.error(
+				'[AIChatPanel] Failed to abort:',
+				err instanceof Error
+					? err.message
+					: JSON.stringify(err)
+			)
+		})
 	}, [abort])
 
 	const toolResultMap = useMemo(
@@ -352,34 +364,6 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 				markdownById
 			}),
 		[markdownById, messageOrder]
-	)
-
-	const handleHotkeyCopy = useCallback(async () => {
-		const markdown = getSelectedMarkdown()
-		if (!markdown) return
-		try {
-			await writeMarkdownToSystemClipboard(markdown)
-		} catch (err) {
-			console.error(
-				'[AIChatPanel] Clipboard write failed:',
-				err instanceof Error
-					? err.message
-					: JSON.stringify(err)
-			)
-		}
-	}, [getSelectedMarkdown])
-
-	useHotkey(
-		'Mod+C',
-		() => {
-			void handleHotkeyCopy()
-		},
-		{
-			target: messagesRef,
-			eventType: 'keydown',
-			preventDefault: true,
-			stopPropagation: true
-		}
 	)
 
 	const handleMessagesCopy = useCallback(
@@ -641,8 +625,9 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 			<ChatToolbar>
 				<ChatToolbarAddon align="inline-start">
 					<ChatToolbarButton
-						title="Attach"
+						title="Attach (coming soon)"
 						className="rounded-full size-7"
+						disabled
 					>
 						<Paperclip className="size-4" />
 					</ChatToolbarButton>
