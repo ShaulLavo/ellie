@@ -13,7 +13,11 @@ export interface Message {
 	[key: string]: unknown
 }
 
-/** Mirrors packages/db/src/schema.ts → EventRow (keep in sync) */
+/**
+ * Mirrors packages/db/src/schema.ts → EventRow.
+ * Intentionally duplicated: @ellie/db depends on bun:sqlite which cannot
+ * be bundled into a browser build. Keep field names/types in sync manually.
+ */
 interface EventRow {
 	id: number
 	sessionId: string
@@ -33,10 +37,18 @@ function parsePayload(row: EventRow): Record<string, unknown> {
 	}
 }
 
+export function isMessagePayload(payload: Record<string, unknown>): payload is Message {
+	return typeof payload.role === 'string' && Array.isArray(payload.content)
+}
+
 function eventToMessage(row: EventRow): Message | null {
 	const payload = parsePayload(row)
 	if (row.type === 'user_message' || row.type === 'assistant_final' || row.type === 'tool_result') {
-		return payload as unknown as Message
+		if (isMessagePayload(payload)) {
+			return payload
+		}
+		console.warn(`[eventToMessage] malformed payload for event ${row.id}:`, payload)
+		return null
 	}
 	return null
 }
@@ -61,6 +73,7 @@ export function useChat(sessionId: string) {
 	const lastSeqRef = useRef(0)
 
 	useEffect(() => {
+		lastSeqRef.current = 0 // Reset cursor on session change
 		let hasSnapshot = false
 		const url = new URL(`${baseUrl}/chat/${encodeURIComponent(sessionId)}/events/sse`)
 		if (lastSeqRef.current > 0) {
@@ -92,8 +105,8 @@ export function useChat(sessionId: string) {
 				setMessages(sortMessages(msgs))
 				setIsLoading(false)
 				setError(null)
-			} catch {
-				// Parse error
+			} catch (err) {
+				console.warn('[useChat] failed to parse snapshot:', err)
 			}
 		}
 
@@ -104,10 +117,11 @@ export function useChat(sessionId: string) {
 
 				const msg = eventToMessage(row)
 				if (msg) {
-					setMessages((current) => sortMessages([...current, msg]))
+					// Events arrive in monotonic seq order over SSE — just append
+					setMessages((current) => [...current, msg])
 				}
-			} catch {
-				// Parse error
+			} catch (err) {
+				console.warn('[useChat] failed to parse event:', err)
 			}
 		}
 

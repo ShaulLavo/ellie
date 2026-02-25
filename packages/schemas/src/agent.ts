@@ -1,6 +1,7 @@
 /**
  * Valibot schemas for serializing AgentMessage and AgentEvent to/from JSON.
- * Used by TypedLog / DurableStore for JSONL persistence.
+ * Used by the SQLite EventStore for validated event persistence and
+ * by AuditLogger for structured audit logging.
  */
 
 import * as v from 'valibot'
@@ -86,7 +87,7 @@ export const toolResultMessageSchema = v.object({
 
 /**
  * Schema for any AgentMessage (discriminated on `role`).
- * Use this with TypedLog for JSONL persistence.
+ * Used by the SQLite EventStore to validate payloads on append.
  */
 export const agentMessageSchema = v.variant('role', [
 	userMessageSchema,
@@ -237,7 +238,7 @@ const toolExecutionEndEventSchema = v.object({
 
 /**
  * Schema for any AgentEvent (discriminated on `type`).
- * Use this with TypedLog for JSONL persistence of lifecycle events.
+ * Used by the agent runtime to type lifecycle events streamed over SSE.
  */
 export const agentEventSchema = v.variant('type', [
 	agentStartEventSchema,

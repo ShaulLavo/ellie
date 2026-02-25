@@ -28,8 +28,8 @@ for (const { sessionId, runId } of staleRuns) {
 	console.log(`[server] recovering stale run: session=${sessionId} run=${runId}`)
 	try {
 		store.appendEvent(sessionId, 'run_closed', { reason: 'recovered_after_crash' }, runId)
-	} catch {
-		// Non-fatal
+	} catch (err) {
+		console.warn('[server] failed to recover stale run:', sessionId, runId, err)
 	}
 }
 if (staleRuns.length > 0) {

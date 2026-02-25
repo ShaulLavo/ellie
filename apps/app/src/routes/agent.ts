@@ -38,7 +38,7 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/sse',
 			({ params, query, request }) => {
-				const afterSeq = query.afterSeq ? Number(query.afterSeq) : undefined
+				const afterSeq = query.afterSeq
 				const existingEvents = store.queryEvents(params.sessionId, afterSeq)
 
 				const stream = toStreamGenerator<SessionEvent>(

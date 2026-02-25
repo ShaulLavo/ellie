@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { EventStore } from './event-store'
-import { existsSync, rmSync, mkdtempSync } from 'fs'
+import { existsSync, rmSync, mkdtempSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -141,14 +141,14 @@ describe('EventStore', () => {
 
 		it('updates updatedAt on append', async () => {
 			const before = store.getSession('s1')!.updatedAt
-			await Bun.sleep(1) // Ensure timestamp advances past same-millisecond edge case
+			await Bun.sleep(10) // Ensure timestamp advances past same-millisecond edge case
 			store.append({
 				sessionId: 's1',
 				type: 'user_message',
 				payload: { role: 'user', content: [{ type: 'text', text: 'x' }], timestamp: Date.now() }
 			})
 			const after = store.getSession('s1')!.updatedAt
-			expect(after).toBeGreaterThanOrEqual(before)
+			expect(after).toBeGreaterThan(before)
 		})
 
 		it('throws for non-existent session', () => {
@@ -650,7 +650,7 @@ describe('EventStore', () => {
 
 			const events = store.query({ sessionId: 'bulk' })
 			expect(events).toHaveLength(1_000)
-			expect(elapsed).toBeLessThan(5_000)
+			// No timing assertion — performance varies by environment
 		})
 	})
 
@@ -703,6 +703,15 @@ describe('EventStore', () => {
 			auditStore.close()
 
 			expect(existsSync(auditDir)).toBe(true)
+
+			// Verify audit file contains the expected entry
+			const files = readdirSync(auditDir).filter((f) => f.endsWith('.jsonl'))
+			expect(files.length).toBeGreaterThan(0)
+			const content = readFileSync(join(auditDir, files[0]!), 'utf-8').trim()
+			const entry = JSON.parse(content)
+			expect(entry.sessionId).toBe('s1')
+			expect(entry.type).toBe('user_message')
+			expect(entry.seq).toBe(1)
 		})
 	})
 

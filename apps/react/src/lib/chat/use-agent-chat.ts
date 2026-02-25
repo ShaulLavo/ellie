@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { env } from '@ellie/env/client'
 import { eden } from '../eden'
-import type { Message } from './use-chat'
+import { isMessagePayload, type Message } from './use-chat'
 
 // ============================================================================
 // Types
@@ -9,7 +9,11 @@ import type { Message } from './use-chat'
 
 type AgentMessage = Message
 
-/** Mirrors packages/db/src/schema.ts → EventRow (keep in sync) */
+/**
+ * Mirrors packages/db/src/schema.ts → EventRow.
+ * Intentionally duplicated: @ellie/db depends on bun:sqlite which cannot
+ * be bundled into a browser build. Keep field names/types in sync manually.
+ */
 interface EventRow {
 	id: number
 	sessionId: string
@@ -32,7 +36,11 @@ function parsePayload(row: EventRow): Record<string, unknown> {
 function eventToMessage(row: EventRow): AgentMessage | null {
 	const payload = parsePayload(row)
 	if (row.type === 'user_message' || row.type === 'assistant_final' || row.type === 'tool_result') {
-		return payload as unknown as AgentMessage
+		if (isMessagePayload(payload)) {
+			return payload
+		}
+		console.warn(`[eventToMessage] malformed payload for event ${row.id}:`, payload)
+		return null
 	}
 	return null
 }
@@ -62,6 +70,7 @@ export function useAgentChat(sessionId: string) {
 	const [isSending, setIsSending] = useState(false)
 
 	useEffect(() => {
+		lastSeqRef.current = 0 // Reset cursor on session change
 		let hasSnapshot = false
 		const url = new URL(`${baseUrl}/agent/${encodeURIComponent(sessionId)}/events/sse`)
 		if (lastSeqRef.current > 0) {
@@ -91,8 +100,8 @@ export function useAgentChat(sessionId: string) {
 				setMessages(sortMessages(msgs))
 				setIsLoading(false)
 				setError(null)
-			} catch {
-				// Parse error
+			} catch (err) {
+				console.warn('[useAgentChat] failed to parse snapshot:', err)
 			}
 		}
 
@@ -103,10 +112,11 @@ export function useAgentChat(sessionId: string) {
 
 				const msg = eventToMessage(row)
 				if (msg) {
-					setMessages((current) => sortMessages([...current, msg]))
+					// Events arrive in monotonic seq order over SSE — just append
+					setMessages((current) => [...current, msg])
 				}
-			} catch {
-				// Parse error
+			} catch (err) {
+				console.warn('[useAgentChat] failed to parse event:', err)
 			}
 		}
 
