@@ -284,31 +284,6 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 	const [input, setInput] = useState('')
 	const messagesRef = useRef<HTMLDivElement>(null)
 
-	const handleSubmit = useCallback(() => {
-		const text = input.trim()
-		if (!text) return
-		setInput('')
-		sendMessage(text).catch(err => {
-			console.error(
-				'[AIChatPanel] Failed to send:',
-				err instanceof Error
-					? err.message
-					: JSON.stringify(err)
-			)
-		})
-	}, [input, sendMessage])
-
-	const handleAbort = useCallback(() => {
-		abort().catch(err => {
-			console.error(
-				'[AIChatPanel] Failed to abort:',
-				err instanceof Error
-					? err.message
-					: JSON.stringify(err)
-			)
-		})
-	}, [abort])
-
 	const toolResultMap = useMemo(
 		() => buildToolResultMap(messages),
 		[messages]
@@ -337,6 +312,32 @@ export function AIChatPanel({ sessionId }: AIChatPanelProps) {
 			return true
 		return false
 	}, [messages, isSending])
+
+	const handleSubmit = useCallback(() => {
+		if (isAgentWorking) return
+		const text = input.trim()
+		if (!text) return
+		setInput('')
+		sendMessage(text).catch(err => {
+			console.error(
+				'[AIChatPanel] Failed to send:',
+				err instanceof Error
+					? err.message
+					: JSON.stringify(err)
+			)
+		})
+	}, [input, sendMessage, isAgentWorking])
+
+	const handleAbort = useCallback(() => {
+		abort().catch(err => {
+			console.error(
+				'[AIChatPanel] Failed to abort:',
+				err instanceof Error
+					? err.message
+					: JSON.stringify(err)
+			)
+		})
+	}, [abort])
 
 	// ── Markdown copy support ────────────────────────────
 	const messageOrder = useMemo(
