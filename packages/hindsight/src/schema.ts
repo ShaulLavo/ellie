@@ -642,6 +642,62 @@ export const locationAssociations = sqliteTable(
 	]
 )
 
+// ── Visual Memories (Phase 4) ─────────────────────────────────────────────
+
+export const visualMemories = sqliteTable(
+	'hs_visual_memories',
+	{
+		id: text('id').primaryKey(),
+		bankId: text('bank_id')
+			.notNull()
+			.references(() => banks.id, { onDelete: 'cascade' }),
+		sourceId: text('source_id'), // caller-owned reference
+		description: text('description').notNull(), // caption / scene summary
+		scopeProfile: text('scope_profile'),
+		scopeProject: text('scope_project'),
+		scopeSession: text('scope_session'),
+		createdAt: integer('created_at').notNull(),
+		updatedAt: integer('updated_at').notNull()
+	},
+	table => [
+		index('idx_hs_vm_bank_created').on(
+			table.bankId,
+			desc(table.createdAt)
+		),
+		index('idx_hs_vm_bank_scope').on(
+			table.bankId,
+			table.scopeProject,
+			desc(table.createdAt)
+		)
+	]
+)
+
+// ── Visual Access History (Phase 4) ──────────────────────────────────────
+
+export const visualAccessHistory = sqliteTable(
+	'hs_visual_access_history',
+	{
+		id: text('id').primaryKey(),
+		bankId: text('bank_id')
+			.notNull()
+			.references(() => banks.id, { onDelete: 'cascade' }),
+		visualMemoryId: text('visual_memory_id')
+			.notNull()
+			.references(() => visualMemories.id, {
+				onDelete: 'cascade'
+			}),
+		accessedAt: integer('accessed_at').notNull(),
+		sessionId: text('session_id')
+	},
+	table => [
+		index('idx_hs_vah_bank_visual').on(
+			table.bankId,
+			table.visualMemoryId,
+			desc(table.accessedAt)
+		)
+	]
+)
+
 // ── Type exports ───────────────────────────────────────────────────────────
 
 export type BankRow = typeof banks.$inferSelect
@@ -702,3 +758,11 @@ export type LocationAssociationRow =
 	typeof locationAssociations.$inferSelect
 export type NewLocationAssociationRow =
 	typeof locationAssociations.$inferInsert
+export type VisualMemoryRow =
+	typeof visualMemories.$inferSelect
+export type NewVisualMemoryRow =
+	typeof visualMemories.$inferInsert
+export type VisualAccessHistoryRow =
+	typeof visualAccessHistory.$inferSelect
+export type NewVisualAccessHistoryRow =
+	typeof visualAccessHistory.$inferInsert

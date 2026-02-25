@@ -312,6 +312,10 @@ export interface RecallOptions {
 	}
 	/** Phase 3: Scope matching mode. "strict" = same profile+project (default). "broad" = no scope filter. */
 	scopeMode?: 'strict' | 'broad'
+	/** Phase 4: Include visual semantic memories in recall results. Default: false */
+	includeVisual?: boolean
+	/** Phase 4: Maximum share of final results that can be visual entries. Default: 0.2, hard cap 0.2 */
+	visualMaxShare?: number
 }
 
 /** Options for reflect() */
@@ -345,6 +349,8 @@ export interface RecallResult {
 	entities?: Record<string, RecallEntityState>
 	chunks?: Record<string, RecallChunk>
 	trace?: RecallTrace
+	/** Phase 4: Visual memory results (only when includeVisual=true) */
+	visualMemories?: ScoredVisualMemory[]
 }
 
 /** Result from reflect() */
@@ -828,4 +834,59 @@ export interface NarrativeEvent {
 export interface NarrativeResult {
 	events: NarrativeEvent[]
 	anchorMemoryId: string
+}
+
+// ── Phase 4: Visual Semantics ─────────────────────────────────────────────
+
+/** Input for retaining a visual description. */
+export interface VisualRetainInput {
+	/** Bank to store in */
+	bankId: string
+	/** Caller-owned reference ID */
+	sourceId?: string
+	/** Caption / scene summary text (required) */
+	description: string
+	/** Epoch ms timestamp */
+	ts?: number
+	/** Scope tags */
+	scope?: {
+		profile?: string
+		project?: string
+		session?: string
+	}
+}
+
+/** Result from retaining a visual description. */
+export interface VisualRetainResult {
+	id: string
+	bankId: string
+	sourceId: string | null
+	description: string
+	createdAt: number
+}
+
+/** A scored visual memory returned from recall fusion. */
+export interface ScoredVisualMemory {
+	id: string
+	bankId: string
+	sourceId: string | null
+	description: string
+	score: number
+	createdAt: number
+}
+
+/** Stats for visual memories in a bank. */
+export interface VisualStats {
+	bankId: string
+	totalVisualMemories: number
+	totalAccessEvents: number
+}
+
+/** A visual memory search hit. */
+export interface VisualFindHit {
+	id: string
+	sourceId: string | null
+	description: string
+	distance: number
+	createdAt: number
 }

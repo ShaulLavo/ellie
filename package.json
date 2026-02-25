@@ -10,7 +10,7 @@
 		"dev": "turbo run dev",
 		"lint": "oxlint --ignore-path .gitignore apps packages",
 		"lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
-		"format": "oxfmt --write \"**/*.{ts,tsx,md}\"",
+		"format": "oxfmt --write .",
 		"check-types": "turbo run check-types",
 		"test": "turbo run test"
 	},

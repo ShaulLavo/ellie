@@ -57,5 +57,11 @@ export function createHindsightDB(
     USING vec0(id TEXT PRIMARY KEY, embedding float[${embeddingDims}])
   `)
 
+	// Phase 4: visual memory embeddings
+	sqlite.run(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS hs_visual_vec
+    USING vec0(id TEXT PRIMARY KEY, embedding float[${embeddingDims}])
+  `)
+
 	return { db, sqlite, schema }
 }
