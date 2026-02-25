@@ -96,6 +96,10 @@ export const memoryUnits = sqliteTable(
 		accessCount: integer('access_count').notNull().default(0), // cognitive: times recalled
 		lastAccessed: integer('last_accessed'), // cognitive: epoch ms of last recall (nullable for legacy rows)
 		encodingStrength: real('encoding_strength').notNull().default(1.0), // cognitive: strengthened by recall
+		gist: text('gist'), // Phase 3: compact summary (max 280 chars) for context packing
+		scopeProfile: text('scope_profile'), // Phase 3: profile scope tag
+		scopeProject: text('scope_project'), // Phase 3: project scope tag
+		scopeSession: text('scope_session'), // Phase 3: session scope tag
 		createdAt: integer('created_at').notNull(),
 		updatedAt: integer('updated_at').notNull()
 	},
@@ -110,6 +114,7 @@ export const memoryUnits = sqliteTable(
 		index('idx_hs_mu_consolidated').on(table.bankId, table.consolidatedAt),
 		index('idx_hs_mu_last_accessed').on(table.bankId, table.lastAccessed),
 		index('idx_hs_mu_access_count').on(table.bankId, table.accessCount),
+		index('idx_hs_mu_scope').on(table.bankId, table.scopeProfile, table.scopeProject),
 		check('hs_mu_encoding_strength_range', sql`encoding_strength >= 0 AND encoding_strength <= 3.0`)
 	]
 )
@@ -409,6 +414,83 @@ export const episodeTemporalLinks = sqliteTable(
 	]
 )
 
+// ── Location Paths ────────────────────────────────────────────────────────
+
+export const locationPaths = sqliteTable(
+	'hs_location_paths',
+	{
+		id: text('id').primaryKey(),
+		bankId: text('bank_id')
+			.notNull()
+			.references(() => banks.id, { onDelete: 'cascade' }),
+		rawPath: text('raw_path').notNull(),
+		normalizedPath: text('normalized_path').notNull(),
+		profile: text('profile').notNull().default('default'),
+		project: text('project').notNull().default('default'),
+		createdAt: integer('created_at').notNull(),
+		updatedAt: integer('updated_at').notNull()
+	},
+	(table) => [
+		uniqueIndex('idx_hs_lp_unique').on(
+			table.bankId,
+			table.normalizedPath,
+			table.profile,
+			table.project
+		),
+		index('idx_hs_lp_bank_norm').on(table.bankId, table.normalizedPath)
+	]
+)
+
+// ── Location Access Contexts ──────────────────────────────────────────────
+
+export const locationAccessContexts = sqliteTable(
+	'hs_location_access_contexts',
+	{
+		id: text('id').primaryKey(),
+		bankId: text('bank_id')
+			.notNull()
+			.references(() => banks.id, { onDelete: 'cascade' }),
+		pathId: text('path_id')
+			.notNull()
+			.references(() => locationPaths.id, { onDelete: 'cascade' }),
+		memoryId: text('memory_id')
+			.notNull()
+			.references(() => memoryUnits.id, { onDelete: 'cascade' }),
+		session: text('session'),
+		activityType: text('activity_type').notNull().default('access'), // access | retain | recall
+		accessedAt: integer('accessed_at').notNull()
+	},
+	(table) => [
+		index('idx_hs_lac_path_time').on(table.bankId, table.pathId, desc(table.accessedAt)),
+		index('idx_hs_lac_memory_time').on(table.bankId, table.memoryId, desc(table.accessedAt))
+	]
+)
+
+// ── Location Associations ─────────────────────────────────────────────────
+
+export const locationAssociations = sqliteTable(
+	'hs_location_associations',
+	{
+		id: text('id').primaryKey(),
+		bankId: text('bank_id')
+			.notNull()
+			.references(() => banks.id, { onDelete: 'cascade' }),
+		sourcePathId: text('source_path_id')
+			.notNull()
+			.references(() => locationPaths.id, { onDelete: 'cascade' }),
+		relatedPathId: text('related_path_id')
+			.notNull()
+			.references(() => locationPaths.id, { onDelete: 'cascade' }),
+		coAccessCount: integer('co_access_count').notNull().default(1),
+		strength: real('strength').notNull().default(0.0),
+		updatedAt: integer('updated_at').notNull()
+	},
+	(table) => [
+		uniqueIndex('idx_hs_la_edge').on(table.bankId, table.sourcePathId, table.relatedPathId),
+		index('idx_hs_la_source').on(table.bankId, table.sourcePathId)
+	]
+)
+
 // ── Type exports ───────────────────────────────────────────────────────────
 
 export type BankRow = typeof banks.$inferSelect
@@ -441,3 +523,9 @@ export type EpisodeEventRow = typeof episodeEvents.$inferSelect
 export type NewEpisodeEventRow = typeof episodeEvents.$inferInsert
 export type EpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferSelect
 export type NewEpisodeTemporalLinkRow = typeof episodeTemporalLinks.$inferInsert
+export type LocationPathRow = typeof locationPaths.$inferSelect
+export type NewLocationPathRow = typeof locationPaths.$inferInsert
+export type LocationAccessContextRow = typeof locationAccessContexts.$inferSelect
+export type NewLocationAccessContextRow = typeof locationAccessContexts.$inferInsert
+export type LocationAssociationRow = typeof locationAssociations.$inferSelect
+export type NewLocationAssociationRow = typeof locationAssociations.$inferInsert

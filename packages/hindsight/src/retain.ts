@@ -42,6 +42,8 @@ import {
 } from './routing'
 import { resolveEpisode, recordEpisodeEvent } from './episodes'
 import type { RouteDecision, RetainRoute } from './types'
+import { generateGistWithLLM } from './gist'
+import { generateFallbackGist } from './context-pack'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +53,47 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 		return JSON.parse(value) as T
 	} catch {
 		return fallback
+	}
+}
+
+/** Max concurrent LLM gist generation requests. */
+const GIST_CONCURRENCY = 3
+
+/**
+ * Fire-and-forget LLM gist upgrade with bounded concurrency.
+ * Runs at most GIST_CONCURRENCY requests in parallel and logs per-item errors
+ * without aborting the queue.
+ */
+function scheduleGistUpgrades(
+	adapter: AnyTextAdapter,
+	hdb: HindsightDatabase,
+	schema: typeof import('./schema'),
+	memories: { id: string; content: string }[]
+): void {
+	const queue = memories
+	if (queue.length === 0) return
+
+	let cursor = 0
+
+	async function runLane(): Promise<void> {
+		while (cursor < queue.length) {
+			const mem = queue[cursor++]!
+			try {
+				const gist = await generateGistWithLLM(adapter, mem.content)
+				hdb.db
+					.update(schema.memoryUnits)
+					.set({ gist })
+					.where(eq(schema.memoryUnits.id, mem.id))
+					.run()
+			} catch (err) {
+				console.debug?.('[gist] async LLM gist failed:', err)
+			}
+		}
+	}
+
+	const laneCount = Math.min(GIST_CONCURRENCY, queue.length)
+	for (let i = 0; i < laneCount; i++) {
+		runLane()
 	}
 }
 
@@ -1114,6 +1157,10 @@ export async function retain(
 				accessCount: 0,
 				lastAccessed: null,
 				encodingStrength: 1.0,
+				gist: generateFallbackGist(fact.content),
+				scopeProfile: options.profile ?? null,
+				scopeProject: options.project ?? null,
+				scopeSession: options.session ?? null,
 				createdAt: now,
 				updatedAt: now
 			})
@@ -1343,6 +1390,10 @@ export async function retain(
 		)
 	}
 
+	// ── Step 8b: Fire-and-forget LLM gist generation ──
+	// Upgrade the deterministic fallback gist with LLM-generated gists asynchronously.
+	scheduleGistUpgrades(adapter, hdb, schema, memories)
+
 	return {
 		memories: allMemories,
 		entities: Array.from(entityMap.values()),
@@ -1452,6 +1503,10 @@ async function processNewTraceMemories(ctx: {
 			accessCount: 0,
 			lastAccessed: null,
 			encodingStrength: 1.0,
+			gist: generateFallbackGist(item.fact.content),
+			scopeProfile: item.profile ?? null,
+			scopeProject: item.project ?? null,
+			scopeSession: item.session ?? null,
 			createdAt: now,
 			updatedAt: now
 		})
@@ -1928,6 +1983,10 @@ export async function retainBatch(
 			// consolidation is best-effort
 		})
 	}
+
+	// Fire-and-forget LLM gist generation for batch memories
+	const allBatchMemories = aggregate.flatMap((r) => r.memories)
+	scheduleGistUpgrades(adapter, hdb, hdb.schema, allBatchMemories)
 
 	return aggregate
 }
