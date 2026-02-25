@@ -544,6 +544,24 @@ describe('Retrieval methods', () => {
 
 	describe('link expansion retrieval', () => {
 		it('observations traverse source_memory_ids to find related observations', async () => {
+			await t.hs.retain(bankId, 'test', {
+				facts: [
+					{
+						content: 'Alice works with Python at TechCorp',
+						factType: 'world',
+						entities: ['Alice', 'Python', 'TechCorp']
+					},
+					{
+						content: 'Bob uses Python at DataSoft',
+						factType: 'world',
+						entities: ['Bob', 'Python', 'DataSoft']
+					}
+				],
+				consolidate: false
+			})
+
+			// Set consolidation responses AFTER retain so fire-and-forget gist
+			// generation doesn't consume them from the mock adapter queue.
 			t.adapter.setResponses([
 				JSON.stringify([
 					{
@@ -560,22 +578,6 @@ describe('Retrieval methods', () => {
 					}
 				])
 			])
-
-			await t.hs.retain(bankId, 'test', {
-				facts: [
-					{
-						content: 'Alice works with Python at TechCorp',
-						factType: 'world',
-						entities: ['Alice', 'Python', 'TechCorp']
-					},
-					{
-						content: 'Bob uses Python at DataSoft',
-						factType: 'world',
-						entities: ['Bob', 'Python', 'DataSoft']
-					}
-				],
-				consolidate: false
-			})
 
 			await t.hs.consolidate(bankId)
 

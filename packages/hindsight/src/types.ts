@@ -243,7 +243,7 @@ export type RecallMode = 'hybrid' | 'cognitive'
 export interface RecallOptions {
 	/** Maximum results to return. Default: 10 */
 	limit?: number
-	/** Optional token budget for returned memory content. */
+	/** Optional token budget for returned memory content (raw truncation). @see tokenBudget for gist-first packing. */
 	maxTokens?: number
 	/** Minimum confidence threshold. Default: 0 */
 	minConfidence?: number
@@ -273,6 +273,17 @@ export interface RecallOptions {
 	mode?: RecallMode
 	/** Session ID for working-memory boost effects (only used in "cognitive" mode). */
 	sessionId?: string
+	/**
+	 * Phase 3: Token budget for gist-first context packing. When set, memories are packed
+	 * using gist/full strategy (top-2 full, then 70% gist / 30% full backfill).
+	 * Takes precedence over maxTokens for packing decisions.
+	 * @see maxTokens — applies raw content truncation independently.
+	 */
+	tokenBudget?: number
+	/** Phase 3: Scope filter for preventing cross-project memory bleed. */
+	scope?: { profile?: string; project?: string; session?: string }
+	/** Phase 3: Scope matching mode. "strict" = same profile+project (default). "broad" = no scope filter. */
+	scopeMode?: 'strict' | 'broad'
 }
 
 /** Options for reflect() */

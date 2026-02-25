@@ -28,6 +28,15 @@ import {
 	deleteDirective as deleteDirectiveImpl
 } from './directives'
 import { listEpisodes as listEpisodesImpl, narrative as narrativeImpl } from './episodes'
+import {
+	locationRecord as locationRecordImpl,
+	locationFind as locationFindImpl,
+	locationStats as locationStatsImpl,
+	type LocationContext,
+	type LocationHit,
+	type LocationStats
+} from './location'
+import { resolveScope } from './scope'
 import type {
 	HindsightConfig,
 	BankConfig,
@@ -1779,6 +1788,38 @@ Instructions:
 			async () => narrativeImpl(this.hdb, bankId, options),
 			result => ({ eventCount: result.events.length })
 		)
+	}
+
+	// ── Location APIs (Phase 3) ─────────────────────────────────────────
+
+	async locationRecord(
+		bankId: string,
+		path: string,
+		context: LocationContext,
+		scope?: { profile?: string; project?: string }
+	): Promise<void> {
+		const resolved = scope ? resolveScope(scope) : undefined
+		locationRecordImpl(this.hdb, bankId, path, context, resolved?.profile, resolved?.project)
+	}
+
+	async locationFind(
+		bankId: string,
+		input: {
+			query?: string
+			path?: string
+			limit?: number
+			scope?: { profile?: string; project?: string }
+		}
+	): Promise<LocationHit[]> {
+		return locationFindImpl(this.hdb, bankId, input)
+	}
+
+	async locationStats(
+		bankId: string,
+		path: string,
+		scope?: { profile?: string; project?: string }
+	): Promise<LocationStats | null> {
+		return locationStatsImpl(this.hdb, bankId, path, scope)
 	}
 
 	// ── Lifecycle ───────────────────────────────────────────────────────
