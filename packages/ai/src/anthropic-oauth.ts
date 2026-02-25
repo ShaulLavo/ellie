@@ -14,11 +14,7 @@ import {
 	type AnthropicChatModel
 } from '@tanstack/ai-anthropic'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import {
-	loadProviderCredential,
-	type OAuthCredential,
-	type NormalizedOAuthCredential
-} from './credentials'
+import type { NormalizedOAuthCredential } from './credentials'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -83,34 +79,6 @@ export function anthropicOAuth(
 			}
 		} as Record<string, unknown>
 	)
-}
-
-/**
- * Create an Anthropic adapter from a credentials file.
- */
-export async function anthropicFromCredentials(
-	model: string,
-	credentialsPath: string,
-	name = 'anthropic'
-): Promise<AnyTextAdapter | null> {
-	const cred = await loadProviderCredential(
-		credentialsPath,
-		name
-	)
-	if (!cred) return null
-
-	if (cred.type === 'oauth') {
-		return anthropicOAuth(model, cred.access_token)
-	}
-
-	if (cred.type === 'api_key') {
-		return createAnthropicChat(
-			model as AnthropicChatModel,
-			cred.key
-		)
-	}
-
-	return null
 }
 
 // ── OAuth flow helpers ───────────────────────────────────────────────────────
@@ -327,56 +295,6 @@ export async function refreshNormalizedOAuthToken(
 	} catch (err) {
 		console.warn(
 			`[anthropic-oauth] token refresh error: ${err instanceof Error ? err.message : String(err)}`
-		)
-		return null
-	}
-}
-
-/**
- * Refresh an Anthropic OAuth token using the refresh_token grant.
- * Returns the updated credential, or null if refresh fails.
- *
- * Does NOT save to disk — caller is responsible for persisting.
- */
-export async function refreshOAuthToken(
-	cred: OAuthCredential
-): Promise<OAuthCredential | null> {
-	try {
-		const res = await fetch(TOKEN_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				grant_type: 'refresh_token',
-				client_id: cred.client_id,
-				refresh_token: cred.refresh_token
-			})
-		})
-
-		if (!res.ok) {
-			const body = await res.text().catch(() => '')
-			console.error(
-				`[anthropic-oauth] refresh failed (${res.status}): ${body.slice(0, 200)}`
-			)
-			return null
-		}
-
-		const json = (await res.json()) as {
-			access_token: string
-			refresh_token: string
-			expires_in: number
-		}
-
-		return {
-			type: 'oauth',
-			access_token: json.access_token,
-			refresh_token: json.refresh_token,
-			expires_at: Date.now() + json.expires_in * 1000,
-			client_id: cred.client_id,
-			client_secret: cred.client_secret
-		}
-	} catch (err) {
-		console.error(
-			`[anthropic-oauth] refresh error: ${err instanceof Error ? err.message : String(err)}`
 		)
 		return null
 	}
