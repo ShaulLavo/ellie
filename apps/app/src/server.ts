@@ -73,10 +73,9 @@ const STUDIO_PUBLIC = resolve(
 	'../../react/public'
 )
 
-const CREDENTIALS_PATH = resolve(
-	import.meta.dir,
-	'../../../.credentials.json'
-)
+const CREDENTIALS_PATH =
+	process.env.CREDENTIALS_PATH ??
+	resolve(import.meta.dir, '../../../.credentials.json')
 
 // ── Auth resolution: ANTHROPIC_OAUTH_TOKEN > BEARER_TOKEN > API_KEY > file ──
 async function resolveAdapter(): Promise<AnyTextAdapter | null> {
@@ -169,6 +168,7 @@ export const app = new Elysia()
 			return { error: `Not Found` }
 		},
 		{
+			detail: { hide: true },
 			response: {
 				404: errorSchema
 			}
@@ -181,6 +181,7 @@ export const app = new Elysia()
 			return { error: `Not Found` }
 		},
 		{
+			detail: { hide: true },
 			response: {
 				404: errorSchema
 			}
@@ -193,6 +194,7 @@ export const app = new Elysia()
 			return { error: `Not Found` }
 		},
 		{
+			detail: { hide: true },
 			response: {
 				404: errorSchema
 			}

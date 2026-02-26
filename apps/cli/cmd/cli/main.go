@@ -141,6 +141,12 @@ func cmdAuthClear() {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), string(body))
+		os.Exit(1)
+	}
+
 	var result struct {
 		Cleared bool `json:"cleared"`
 	}
@@ -279,6 +285,10 @@ func authOAuth(mode string) {
 	var authResp struct {
 		URL      string `json:"url"`
 		Verifier string `json:"verifier"`
+		// State is captured but not forwarded to the exchange endpoint.
+		// Anthropic embeds the state in the callback code (code#state),
+		// and server-side validation occurs during the token exchange.
+		State string `json:"state"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Invalid response:", err)
