@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AIChatPanel } from './AIChatPanel'
+import { ChatRoom } from './components/chat-room'
 import { eden } from './lib/eden'
 
 function App() {
@@ -29,7 +29,7 @@ function App() {
 
 	return (
 		<div className="h-screen flex overflow-hidden">
-			<AIChatPanel sessionId={sessionId} />
+			<ChatRoom sessionId={sessionId} />
 		</div>
 	)
 }

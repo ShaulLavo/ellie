@@ -3,10 +3,9 @@
 @import 'shadcn/tailwind.css';
 @import 'streamdown/styles.css';
 @plugin "@tailwindcss/typography";
-@import '@fontsource-variable/geist';
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource/dm-sans';
 @import '@fontsource-variable/jetbrains-mono';
-@import '@fontsource/geist-mono';
-@import '@fontsource/google-sans-flex';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -20,10 +19,10 @@
 	--radius-4xl: calc(var(--radius) + 16px);
 
 	/* Typography */
-	--font-display: 'Geist Variable', system-ui, sans-serif;
-	--font-sans: 'Google Sans Flex', system-ui, sans-serif;
-	--font-mono:
-		'JetBrains Mono Variable', 'Geist Mono', monospace;
+	--font-display:
+		'Bricolage Grotesque', system-ui, sans-serif;
+	--font-sans: 'DM Sans', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
 	/* Color tokens */
 	--color-background: var(--background);
@@ -61,11 +60,6 @@
 	);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
-	--color-color-1: var(--color-1);
-	--color-color-2: var(--color-2);
-	--color-color-3: var(--color-3);
-	--color-color-4: var(--color-4);
-	--color-color-5: var(--color-5);
 
 	/* Custom animations */
 	--animate-message-in: message-in 0.3s ease-out both;
@@ -85,7 +79,12 @@
 		linear;
 	--animate-shine: shine var(--duration) infinite linear;
 	--animate-gradient: gradient 8s linear infinite;
-
+	--animate-meteor: meteor 5s linear infinite;
+	--color-color-5: var(--color-5);
+	--color-color-4: var(--color-4);
+	--color-color-3: var(--color-3);
+	--color-color-2: var(--color-2);
+	--color-color-1: var(--color-1);
 	@keyframes marquee {
 		from {
 			transform: translateX(0);
@@ -147,7 +146,6 @@
 			background-position: var(--bg-size, 300%) 0;
 		}
 	}
-	--animate-meteor: meteor 5s linear infinite;
 	@keyframes meteor {
 		0% {
 			transform: rotate(var(--angle)) translateX(0);
