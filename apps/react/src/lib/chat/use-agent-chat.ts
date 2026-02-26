@@ -54,10 +54,13 @@ function eventToMessage(
 		row.type === 'tool_result'
 	) {
 		if (isMessagePayload(payload)) {
+			console.log(
+				`[useAgentChat] eventToMessage id=${row.id} seq=${row.seq} type=${row.type} role=${payload.role} stopReason=${payload.stopReason ?? 'none'} errorMessage=${typeof payload.errorMessage === 'string' ? payload.errorMessage.slice(0, 100) : 'none'} contentLength=${Array.isArray(payload.content) ? payload.content.length : 0}`
+			)
 			return payload
 		}
 		console.warn(
-			`[eventToMessage] malformed payload for event ${row.id}:`,
+			`[useAgentChat] malformed payload for event ${row.id}:`,
 			payload
 		)
 		return null
@@ -142,6 +145,9 @@ export function useAgentChat(sessionId: string) {
 			try {
 				const rows = JSON.parse(event.data) as EventRow[]
 				hasSnapshot = true
+				console.log(
+					`[useAgentChat] snapshot received rows=${rows.length} session=${sessionId}`
+				)
 
 				for (const row of rows) {
 					if (row.seq > lastSeqRef.current)
@@ -153,6 +159,9 @@ export function useAgentChat(sessionId: string) {
 					const msg = eventToMessage(row)
 					if (msg) msgs.push(msg)
 				}
+				console.log(
+					`[useAgentChat] snapshot parsed messages=${msgs.length} (from ${rows.length} rows)`
+				)
 				setMessages(sortMessages(msgs))
 				setIsAgentRunning(isAgentRunOpen(rows))
 				setIsLoading(false)
@@ -168,6 +177,9 @@ export function useAgentChat(sessionId: string) {
 		const onAppend = (event: MessageEvent) => {
 			try {
 				const row = JSON.parse(event.data) as EventRow
+				console.log(
+					`[useAgentChat] append received id=${row.id} seq=${row.seq} type=${row.type} session=${sessionId}`
+				)
 				if (row.seq > lastSeqRef.current)
 					lastSeqRef.current = row.seq
 
@@ -180,8 +192,15 @@ export function useAgentChat(sessionId: string) {
 
 				const msg = eventToMessage(row)
 				if (msg) {
+					console.log(
+						`[useAgentChat] appending message role=${msg.role} stopReason=${msg.stopReason ?? 'none'}`
+					)
 					// Events arrive in monotonic seq order over SSE — just append
 					setMessages(current => [...current, msg])
+				} else {
+					console.log(
+						`[useAgentChat] append skipped — eventToMessage returned null for type=${row.type}`
+					)
 				}
 			} catch (err) {
 				console.warn(
@@ -215,6 +234,9 @@ export function useAgentChat(sessionId: string) {
 		async (text: string) => {
 			const trimmed = text.trim()
 			if (!trimmed) return
+			console.log(
+				`[useAgentChat] sendMessage content=${trimmed.slice(0, 100)} session=${sessionId}`
+			)
 			setIsSending(true)
 			try {
 				const { error: chatError } = await eden
@@ -228,8 +250,9 @@ export function useAgentChat(sessionId: string) {
 						`POST /chat/${sessionId}/messages failed`
 					)
 				}
-				// The server-side AgentWatcher auto-routes
-				// this message to the agent if available.
+				console.log(
+					`[useAgentChat] sendMessage success session=${sessionId}`
+				)
 			} catch (err) {
 				console.error(
 					`[useAgentChat] Failed to send message:`,

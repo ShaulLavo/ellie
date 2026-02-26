@@ -97,6 +97,25 @@ interface ToolResultInfo {
 // Helpers
 // ============================================================================
 
+/** Extract a human-readable error string from a raw errorMessage. */
+function getErrorText(raw: unknown): string {
+	if (typeof raw !== 'string' || !raw)
+		return 'An error occurred'
+	const jsonStart = raw.indexOf('{')
+	if (jsonStart !== -1) {
+		try {
+			const parsed = JSON.parse(raw.slice(jsonStart)) as {
+				error?: { message?: string }
+			}
+			if (parsed?.error?.message)
+				return parsed.error.message
+		} catch {
+			// fall through
+		}
+	}
+	return raw
+}
+
 function getContentParts(msg: Message): ContentPart[] {
 	if (!msg.content || !Array.isArray(msg.content)) return []
 	return msg.content as ContentPart[]
@@ -210,6 +229,15 @@ function AssistantMessageContent({
 	msg: Message
 	toolResultMap: Map<string, ToolResultInfo>
 }) {
+	// Error messages: show the error text prominently
+	if (msg.stopReason === 'error') {
+		return (
+			<p className="text-destructive">
+				{getErrorText(msg.errorMessage)}
+			</p>
+		)
+	}
+
 	const parts = getContentParts(msg)
 	const thinkingParts = parts.filter(
 		(p): p is ThinkingPart => p.type === 'thinking'
@@ -291,10 +319,17 @@ export function AIChatPanel({
 		[messages]
 	)
 
-	const grouped = useMemo(
-		() => groupMessages(messages),
-		[messages]
-	)
+	const grouped = useMemo(() => {
+		const g = groupMessages(messages)
+		for (const { msg } of g) {
+			if (msg.role === 'assistant') {
+				console.log(
+					`[AIChatPanel] assistant message stopReason=${msg.stopReason ?? 'none'} errorMessage=${typeof msg.errorMessage === 'string' ? msg.errorMessage.slice(0, 100) : 'none'} contentLength=${Array.isArray(msg.content) ? msg.content.length : 0}`
+				)
+			}
+		}
+		return g
+	}, [messages])
 
 	const displayMessageCount = useMemo(
 		() => messages.filter(m => !isToolResultMsg(m)).length,
@@ -347,7 +382,13 @@ export function AIChatPanel({
 		const map = new Map<string, string>()
 		for (let i = 0; i < grouped.length; i++) {
 			const { msg } = grouped[i]
-			map.set(getMsgKey(msg, i), getTextContent(msg))
+			const isAssistant = msg.role === 'assistant'
+			const name = isAssistant ? 'Agent' : 'You'
+			const text =
+				msg.stopReason === 'error'
+					? `[Error] ${getErrorText(msg.errorMessage)}`
+					: getTextContent(msg)
+			map.set(getMsgKey(msg, i), `${name}: ${text}`)
 		}
 		return map
 	}, [grouped])
