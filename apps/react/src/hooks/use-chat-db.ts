@@ -111,6 +111,7 @@ export function useChatDB(sessionId: string) {
 	const [sessionVersion, setSessionVersion] = useState(0)
 
 	const streamRef = useRef<StreamClient | null>(null)
+	const isInitialLoadRef = useRef(true)
 
 	// ── Live query: reactive sorted messages ───────────────────────────
 	const { data: storedMessages } = useLiveQuery(
@@ -176,6 +177,8 @@ export function useChatDB(sessionId: string) {
 
 	// ── StreamClient setup ─────────────────────────────────────────────
 	useEffect(() => {
+		isInitialLoadRef.current = true
+
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events) {
 				// Filter to only renderable message events
@@ -189,7 +192,17 @@ export function useChatDB(sessionId: string) {
 						e.type === 'tool_result'
 				)
 				const msgs = messageEvents.map(eventToMessage)
-				syncReplaceAll(msgs)
+
+				if (isInitialLoadRef.current) {
+					// First connect: full replace
+					syncReplaceAll(msgs)
+					isInitialLoadRef.current = false
+				} else {
+					// Resync after visibility change: only add new events
+					if (msgs.length > 0) {
+						syncWrite(msgs)
+					}
+				}
 				// Clear any stale streaming state on snapshot
 				setStreamingMessage(null)
 			},

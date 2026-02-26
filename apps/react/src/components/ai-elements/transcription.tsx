@@ -3,8 +3,7 @@
 import type { Experimental_TranscriptionResult as TranscriptionResult } from './types'
 import type { ComponentProps, ReactNode } from 'react'
 
-// TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
-import { useControllableState } from '@radix-ui/react-use-controllable-state'
+import { useControlledState } from '@/hooks/use-controlled-state'
 import { cn } from '@/lib/utils'
 import {
 	createContext,
@@ -57,12 +56,11 @@ export const Transcription = ({
 	children,
 	...props
 }: TranscriptionProps) => {
-	const [currentTime, setCurrentTime] =
-		useControllableState({
-			defaultProp: 0,
-			onChange: onSeek,
-			prop: externalCurrentTime
-		})
+	const [currentTime, setCurrentTime] = useControlledState({
+		defaultValue: 0,
+		onChange: onSeek,
+		value: externalCurrentTime
+	})
 
 	const contextValue = useMemo(
 		() => ({

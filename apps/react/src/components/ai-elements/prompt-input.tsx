@@ -1139,7 +1139,7 @@ export const PromptInputButton = ({
 
 	return (
 		<Tooltip>
-			<TooltipTrigger asChild>{button}</TooltipTrigger>
+			<TooltipTrigger render={button} />
 			<TooltipContent side={side}>
 				{tooltipContent}
 				{shortcut && (

@@ -128,7 +128,7 @@ export const MessageAction = ({
 		return (
 			<TooltipProvider>
 				<Tooltip>
-					<TooltipTrigger asChild>{button}</TooltipTrigger>
+					<TooltipTrigger render={button} />
 					<TooltipContent>
 						<p>{tooltip}</p>
 					</TooltipContent>
@@ -370,7 +370,13 @@ export type MessageResponseProps = ComponentProps<
 	typeof Streamdown
 >
 
-const streamdownPlugins = { cjk, code, math, mermaid }
+// Cast needed: @streamdown/code bundles shiki@3.22 types but streamdown uses shiki@3.23
+const streamdownPlugins = {
+	cjk,
+	code,
+	math,
+	mermaid
+} as Parameters<typeof Streamdown>[0]['plugins']
 
 export const MessageResponse = memo(
 	({ className, ...props }: MessageResponseProps) => (

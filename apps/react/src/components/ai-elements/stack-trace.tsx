@@ -2,8 +2,7 @@
 
 import type { ComponentProps } from 'react'
 
-// TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
-import { useControllableState } from '@radix-ui/react-use-controllable-state'
+import { useControlledState } from '@/hooks/use-controlled-state'
 import { Button } from '@/components/ui/button'
 import {
 	Collapsible,
@@ -207,10 +206,10 @@ export const StackTrace = memo(
 		children,
 		...props
 	}: StackTraceProps) => {
-		const [isOpen, setIsOpen] = useControllableState({
-			defaultProp: defaultOpen,
+		const [isOpen, setIsOpen] = useControlledState({
+			defaultValue: defaultOpen,
 			onChange: onOpenChange,
-			prop: open
+			value: open
 		})
 
 		const parsedTrace = useMemo(

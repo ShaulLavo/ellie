@@ -3,7 +3,6 @@ import {
 	cva,
 	type VariantProps
 } from 'class-variance-authority'
-import { Slot } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
 
@@ -47,25 +46,36 @@ function Button({
 	className,
 	variant = 'default',
 	size = 'default',
-	asChild = false,
 	render,
 	...props
 }: React.ComponentProps<'button'> &
 	VariantProps<typeof buttonVariants> & {
-		asChild?: boolean
 		render?: React.ReactElement
 	}) {
-	const Comp = render || asChild ? Slot.Root : 'button'
+	const mergedClassName = cn(
+		buttonVariants({ variant, size, className })
+	)
+
+	if (render) {
+		return React.cloneElement(render, {
+			'data-slot': 'button',
+			'data-variant': variant,
+			'data-size': size,
+			className: cn(
+				mergedClassName,
+				(render.props as { className?: string })?.className
+			),
+			...props
+		} as Record<string, unknown>)
+	}
 
 	return (
-		<Comp
+		<button
 			data-slot="button"
 			data-variant={variant}
 			data-size={size}
-			className={cn(
-				buttonVariants({ variant, size, className })
-			)}
-			{...(render ? { ...props, children: render } : props)}
+			className={mergedClassName}
+			{...props}
 		/>
 	)
 }

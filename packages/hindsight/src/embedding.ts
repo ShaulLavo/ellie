@@ -10,15 +10,25 @@ import type {
  * Handles upsert, KNN search, and deletion for a single vec0 table.
  */
 export class EmbeddingStore {
+	readonly sqlite: Database
+	readonly embed: EmbedFunction
+	readonly embedBatch: EmbedBatchFunction | undefined
+	readonly dims: number
+	readonly tableName: string
+
 	constructor(
-		private readonly sqlite: Database,
-		private readonly embed: EmbedFunction,
-		private readonly embedBatch:
-			| EmbedBatchFunction
-			| undefined,
-		private readonly dims: number,
-		private readonly tableName: string
-	) {}
+		sqlite: Database,
+		embed: EmbedFunction,
+		embedBatch: EmbedBatchFunction | undefined,
+		dims: number,
+		tableName: string
+	) {
+		this.sqlite = sqlite
+		this.embed = embed
+		this.embedBatch = embedBatch
+		this.dims = dims
+		this.tableName = tableName
+	}
 
 	/** Generate an embedding and store it in the vec0 table. */
 	async upsert(id: string, text: string): Promise<void> {

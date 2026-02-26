@@ -2,8 +2,7 @@
 
 import type { ComponentProps, ReactNode } from 'react'
 
-// TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
-import { useControllableState } from '@radix-ui/react-use-controllable-state'
+import { useControlledState } from '@/hooks/use-controlled-state'
 import { Button } from '@/components/ui/button'
 import {
 	Command,
@@ -82,16 +81,18 @@ export const VoiceSelector = ({
 	children,
 	...props
 }: VoiceSelectorProps) => {
-	const [value, setValue] = useControllableState({
-		defaultProp: defaultValue,
+	const [value, setValue] = useControlledState<
+		string | undefined
+	>({
+		defaultValue: defaultValue,
 		onChange: onValueChange,
-		prop: valueProp
+		value: valueProp
 	})
 
-	const [open, setOpen] = useControllableState({
-		defaultProp: defaultOpen,
+	const [open, setOpen] = useControlledState({
+		defaultValue: defaultOpen,
 		onChange: onOpenChange,
-		prop: openProp
+		value: openProp
 	})
 
 	const voiceSelectorContext = useMemo(

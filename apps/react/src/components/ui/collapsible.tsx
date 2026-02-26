@@ -1,31 +1,17 @@
-import {
-	Collapsible as CollapsiblePrimitive,
-	Slot
-} from 'radix-ui'
+import { Collapsible as CollapsiblePrimitive } from '@base-ui/react/collapsible'
 
 function Collapsible({
 	render,
 	...props
-}: React.ComponentProps<
-	typeof CollapsiblePrimitive.Root
-> & {
+}: CollapsiblePrimitive.Root.Props & {
 	render?: React.ReactElement
 }) {
 	return (
 		<CollapsiblePrimitive.Root
 			data-slot="collapsible"
-			asChild={!!render}
+			{...(render ? { render } : {})}
 			{...props}
-		>
-			{render ? (
-				<Slot.Root>
-					{render}
-					{props.children}
-				</Slot.Root>
-			) : (
-				props.children
-			)}
-		</CollapsiblePrimitive.Root>
+		/>
 	)
 }
 
@@ -33,29 +19,17 @@ function CollapsibleTrigger({
 	render,
 	children,
 	...props
-}: React.ComponentProps<
-	typeof CollapsiblePrimitive.CollapsibleTrigger
-> & {
+}: CollapsiblePrimitive.Trigger.Props & {
 	render?: React.ReactElement
 }) {
-	if (render) {
-		return (
-			<CollapsiblePrimitive.CollapsibleTrigger
-				data-slot="collapsible-trigger"
-				asChild
-				{...props}
-			>
-				{render}
-			</CollapsiblePrimitive.CollapsibleTrigger>
-		)
-	}
 	return (
-		<CollapsiblePrimitive.CollapsibleTrigger
+		<CollapsiblePrimitive.Trigger
 			data-slot="collapsible-trigger"
+			{...(render ? { render } : {})}
 			{...props}
 		>
-			{children}
-		</CollapsiblePrimitive.CollapsibleTrigger>
+			{render ? undefined : children}
+		</CollapsiblePrimitive.Trigger>
 	)
 }
 
@@ -63,29 +37,17 @@ function CollapsibleContent({
 	render,
 	children,
 	...props
-}: React.ComponentProps<
-	typeof CollapsiblePrimitive.CollapsibleContent
-> & {
+}: CollapsiblePrimitive.Panel.Props & {
 	render?: React.ReactElement
 }) {
-	if (render) {
-		return (
-			<CollapsiblePrimitive.CollapsibleContent
-				data-slot="collapsible-content"
-				asChild
-				{...props}
-			>
-				{render}
-			</CollapsiblePrimitive.CollapsibleContent>
-		)
-	}
 	return (
-		<CollapsiblePrimitive.CollapsibleContent
+		<CollapsiblePrimitive.Panel
 			data-slot="collapsible-content"
+			{...(render ? { render } : {})}
 			{...props}
 		>
-			{children}
-		</CollapsiblePrimitive.CollapsibleContent>
+			{render ? undefined : children}
+		</CollapsiblePrimitive.Panel>
 	)
 }
 

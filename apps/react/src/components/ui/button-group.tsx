@@ -1,8 +1,8 @@
+import { cloneElement, type ReactElement } from 'react'
 import {
 	cva,
 	type VariantProps
 } from 'class-variance-authority'
-import { Slot } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
@@ -46,24 +46,27 @@ function ButtonGroup({
 
 function ButtonGroupText({
 	className,
-	asChild = false,
 	render,
 	...props
 }: React.ComponentProps<'div'> & {
-	asChild?: boolean
-	render?: React.ReactElement
+	render?: ReactElement
 }) {
-	const Comp = render || asChild ? Slot.Root : 'div'
-
-	return (
-		<Comp
-			className={cn(
-				"bg-muted flex items-center gap-2 rounded-md border px-4 text-sm font-medium shadow-xs [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
-				className
-			)}
-			{...(render ? { ...props, children: render } : props)}
-		/>
+	const mergedClassName = cn(
+		"bg-muted flex items-center gap-2 rounded-md border px-4 text-sm font-medium shadow-xs [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
+		className
 	)
+
+	if (render) {
+		return cloneElement(render, {
+			className: cn(
+				mergedClassName,
+				(render.props as { className?: string })?.className
+			),
+			...props
+		} as Record<string, unknown>)
+	}
+
+	return <div className={mergedClassName} {...props} />
 }
 
 function ButtonGroupSeparator({

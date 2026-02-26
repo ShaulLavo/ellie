@@ -6,7 +6,7 @@ import React, {
 	useEffect,
 	useState
 } from 'react'
-import * as AccordionPrimitive from '@radix-ui/react-accordion'
+import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion'
 import {
 	FileIcon,
 	FolderIcon,
@@ -183,17 +183,16 @@ const Tree = forwardRef<HTMLDivElement, TreeViewProps>(
 					>
 						<AccordionPrimitive.Root
 							{...props}
-							type="multiple"
+							multiple
 							defaultValue={expandedItems}
 							value={expandedItems}
 							className="flex flex-col gap-1"
-							onValueChange={(value: string[]) =>
+							onValueChange={(value: (string | number)[]) =>
 								setExpandedItems(prev => [
 									...(prev ?? []),
-									value[0]
+									String(value[0])
 								])
 							}
-							dir={dir as Direction}
 						>
 							{children}
 						</AccordionPrimitive.Root>
@@ -232,9 +231,8 @@ type FolderProps = {
 	element: string
 	isSelectable?: boolean
 	isSelect?: boolean
-} & React.ComponentPropsWithoutRef<
-	typeof AccordionPrimitive.Item
->
+} & AccordionPrimitive.Item.Props &
+	React.HTMLAttributes<HTMLDivElement>
 
 const Folder = forwardRef<
 	HTMLDivElement,
@@ -253,7 +251,6 @@ const Folder = forwardRef<
 		_ref
 	) => {
 		const {
-			direction,
 			handleExpand,
 			expandedItems,
 			indicator,
@@ -280,9 +277,9 @@ const Folder = forwardRef<
 						}
 					)}
 					disabled={!isSelectable}
-					onClick={() => handleExpand(value)}
+					onClick={() => handleExpand(value as string)}
 				>
-					{expandedItems?.includes(value)
+					{expandedItems?.includes(value as string)
 						? (openIcon ?? (
 								<FolderOpenIcon className="size-4" />
 							))
@@ -291,26 +288,25 @@ const Folder = forwardRef<
 							))}
 					<span>{element}</span>
 				</AccordionPrimitive.Trigger>
-				<AccordionPrimitive.Content className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down relative h-full overflow-hidden text-sm">
+				<AccordionPrimitive.Panel className="data-closed:animate-accordion-up data-open:animate-accordion-down relative h-full overflow-hidden text-sm">
 					{element && indicator && (
 						<TreeIndicator aria-hidden="true" />
 					)}
 					<AccordionPrimitive.Root
-						dir={direction}
-						type="multiple"
+						multiple
 						className="ml-5 flex flex-col gap-1 py-1 rtl:mr-5"
 						defaultValue={expandedItems}
 						value={expandedItems}
-						onValueChange={(value: string[]) => {
+						onValueChange={(value: (string | number)[]) => {
 							setExpandedItems?.(prev => [
 								...(prev ?? []),
-								value[0]
+								String(value[0])
 							])
 						}}
 					>
 						{children}
 					</AccordionPrimitive.Root>
-				</AccordionPrimitive.Content>
+				</AccordionPrimitive.Panel>
 			</AccordionPrimitive.Item>
 		)
 	}

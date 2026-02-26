@@ -3,8 +3,7 @@
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import type { ComponentProps, ReactNode } from 'react'
 
-// TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
-import { useControllableState } from '@radix-ui/react-use-controllable-state'
+import { useControlledState } from '@/hooks/use-controlled-state'
 import { Badge } from '@/components/ui/badge'
 import {
 	Collapsible,
@@ -57,10 +56,10 @@ export const ChainOfThought = memo(
 		children,
 		...props
 	}: ChainOfThoughtProps) => {
-		const [isOpen, setIsOpen] = useControllableState({
-			defaultProp: defaultOpen,
+		const [isOpen, setIsOpen] = useControlledState({
+			defaultValue: defaultOpen,
 			onChange: onOpenChange,
-			prop: open
+			value: open
 		})
 
 		const chainOfThoughtContext = useMemo(

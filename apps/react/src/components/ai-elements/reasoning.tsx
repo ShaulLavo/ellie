@@ -2,8 +2,7 @@
 
 import type { ComponentProps, ReactNode } from 'react'
 
-// TODO: migrate to BaseUI — replace @radix-ui/react-use-controllable-state with a BaseUI equivalent or custom hook
-import { useControllableState } from '@radix-ui/react-use-controllable-state'
+import { useControlledState } from '@/hooks/use-controlled-state'
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -80,17 +79,18 @@ export const Reasoning = memo(
 		// Track if defaultOpen was explicitly set to false (to prevent auto-open)
 		const isExplicitlyClosed = defaultOpen === false
 
-		const [isOpen, setIsOpen] =
-			useControllableState<boolean>({
-				defaultProp: resolvedDefaultOpen,
+		const [isOpen, setIsOpen] = useControlledState<boolean>(
+			{
+				defaultValue: resolvedDefaultOpen,
 				onChange: onOpenChange,
-				prop: open
-			})
-		const [duration, setDuration] = useControllableState<
+				value: open
+			}
+		)
+		const [duration, setDuration] = useControlledState<
 			number | undefined
 		>({
-			defaultProp: undefined,
-			prop: durationProp
+			defaultValue: undefined,
+			value: durationProp
 		})
 
 		const hasEverStreamedRef = useRef(isStreaming)
@@ -230,7 +230,13 @@ export type ReasoningContentProps = ComponentProps<
 	children: string
 }
 
-const streamdownPlugins = { cjk, code, math, mermaid }
+// Cast needed: @streamdown/code bundles shiki@3.22 types but streamdown uses shiki@3.23
+const streamdownPlugins = {
+	cjk,
+	code,
+	math,
+	mermaid
+} as Parameters<typeof Streamdown>[0]['plugins']
 
 export const ReasoningContent = memo(
 	({
