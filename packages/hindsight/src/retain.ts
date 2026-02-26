@@ -97,11 +97,8 @@ function scheduleGistUpgrades(
 					.set({ gist })
 					.where(eq(schema.memoryUnits.id, mem.id))
 					.run()
-			} catch (err) {
-				console.debug?.(
-					'[gist] async LLM gist failed:',
-					err
-				)
+			} catch {
+				// Expected when DB closes before async gist finishes
 			}
 		}
 	}

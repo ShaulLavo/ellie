@@ -9,9 +9,9 @@
  * - Lone surrogates (U+D800-U+DFFF) are invalid in UTF-8
  */
 export function sanitizeText(text: string): string {
-	// eslint-disable-next-line no-control-regex -- intentionally stripping null bytes
+	const nullChar = String.fromCharCode(0)
 	return text
-		.replace(/\0/g, '')
+		.replaceAll(nullChar, '')
 		.replace(/[\uD800-\uDFFF]/gu, '')
 }
 

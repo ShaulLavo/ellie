@@ -27,6 +27,7 @@ import { createAgentRoutes } from './routes/agent'
 import { createChatRoutes } from './routes/chat'
 import { createStatusRoutes } from './routes/status'
 import { createAuthRoutes } from './routes/auth'
+import { createSessionRoutes } from './routes/session'
 
 const parsedUrl = new URL(env.API_BASE_URL)
 const port =
@@ -224,6 +225,10 @@ export const app = new Elysia()
 					{
 						name: 'Auth',
 						description: 'Anthropic credential management'
+					},
+					{
+						name: 'Session',
+						description: 'Session management'
 					}
 				]
 			},
@@ -231,6 +236,7 @@ export const app = new Elysia()
 		})
 	)
 	.use(createStatusRoutes(() => sseState.activeClients))
+	.use(createSessionRoutes(store))
 	.use(createChatRoutes(store, sseState, getAgentWatcher))
 	.use(createAgentRoutes(store, getAgentManager, sseState))
 	.use(
