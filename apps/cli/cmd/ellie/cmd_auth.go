@@ -49,7 +49,7 @@ func cmdAuthStatus() {
 
 	if !status.Configured || status.Mode == nil {
 		fmt.Println("  No credentials configured.")
-		fmt.Println(styleDim.Render("  Run `cli auth` to set up authentication."))
+		fmt.Println(styleDim.Render("  Run `ellie auth` to set up authentication."))
 		fmt.Println()
 		return
 	}

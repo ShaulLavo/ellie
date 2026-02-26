@@ -6,9 +6,9 @@
 		"ellie": "./bin/ellie"
 	},
 	"scripts": {
-		"dev": "go run ./cmd/cli",
-		"build": "go build -o bin/ellie ./cmd/cli",
-		"install-global": "go build -o $(go env GOPATH)/bin/ellie ./cmd/cli",
+		"dev": "go run ./cmd/ellie",
+		"build": "go build -o bin/ellie ./cmd/ellie",
+		"install-global": "go install ./cmd/ellie",
 		"test": "go test ./...",
 		"check-types": "go test ./..."
 	}
