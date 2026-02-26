@@ -8,7 +8,6 @@ import {
 import { Elysia, sse } from 'elysia'
 import type { AgentManager } from '../agent/manager'
 import type {
-	AgentRunEvent,
 	RealtimeStore,
 	SessionEvent
 } from '../lib/realtime-store'
@@ -80,41 +79,34 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/:runId/sse',
 			({ params, request }) => {
-				const initialEvents: AgentRunEvent[] =
-					store.isAgentRunClosed(
-						params.sessionId,
-						params.runId
-					)
-						? [{ type: `closed` }]
-						: []
+				const { sessionId, runId } = params
 
-				const stream = toStreamGenerator<AgentRunEvent>(
+				const stream = toStreamGenerator<SessionEvent>(
 					request,
 					sseState,
 					listener =>
-						store.subscribeToAgentRun(
-							params.sessionId,
-							params.runId,
-							listener
-						),
+						store.subscribeToSession(sessionId, event => {
+							// Filter: only forward events for this run
+							if (event.event.runId !== runId) return
+							listener(event)
+						}),
 					event => {
-						if (event.type === `event`) {
-							return { event: `event`, data: event.event }
+						if (event.event.type === 'run_closed') {
+							return {
+								event: 'closed',
+								data: null,
+								close: true
+							}
 						}
 						return {
-							event: `closed`,
-							data: null,
-							close: true
+							event: 'append',
+							data: event.event
 						}
 					},
 					{
-						event: `snapshot`,
-						data: store.queryRunEvents(
-							params.sessionId,
-							params.runId
-						)
-					},
-					initialEvents
+						event: 'snapshot',
+						data: store.queryRunEvents(sessionId, runId)
+					}
 				)
 
 				return sse(stream)

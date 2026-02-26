@@ -1,14 +1,9 @@
-import type { AgentEvent } from '@ellie/agent'
 import type {
 	EventStore,
 	EventRow,
 	EventType,
 	AgentMessage
 } from '@ellie/db'
-
-export type AgentRunEvent =
-	| { type: 'event'; event: AgentEvent }
-	| { type: 'closed' }
 
 export type SessionEvent = {
 	type: 'append'
@@ -62,15 +57,10 @@ export class RealtimeStore {
 		// Clean up in-memory session listeners
 		this.#listeners.delete(`session:${sessionId}`)
 
-		// Clean up closed runs and run-level listeners for this session
+		// Clean up closed-run cache for this session
 		for (const key of this.#closedRuns) {
 			if (key.startsWith(`${sessionId}:`)) {
 				this.#closedRuns.delete(key)
-			}
-		}
-		for (const channel of this.#listeners.keys()) {
-			if (channel.startsWith(`run:${sessionId}:`)) {
-				this.#listeners.delete(channel)
 			}
 		}
 	}
@@ -98,53 +88,18 @@ export class RealtimeStore {
 			event: row
 		} satisfies SessionEvent)
 
-		// If this is a run_closed, also notify run-specific subscribers
+		// Track run closure in memory cache
 		if (type === 'run_closed' && runId) {
 			this.#closedRuns.add(this.#runKey(sessionId, runId))
-			// Evict all entries when cache exceeds bound — DB fallback guarantees correctness
 			if (this.#closedRuns.size > MAX_CLOSED_RUNS) {
 				this.#closedRuns.clear()
 			}
-			this.#publish(this.#runChannel(sessionId, runId), {
-				type: 'closed'
-			} satisfies AgentRunEvent)
 		}
 
 		return row
 	}
 
 	// ── Agent run lifecycle ───────────────────────────────────────────────
-
-	appendAgentRunEvent(
-		sessionId: string,
-		runId: string,
-		event: AgentEvent
-	): void {
-		// Map agent events to persisted event types
-		const mapping = this.#mapAgentEvent(event)
-		if (mapping) {
-			console.log(
-				`[realtime-store] persisting event session=${sessionId} runId=${runId} agentType=${event.type} → dbType=${mapping.type}`
-			)
-			// Route through appendEvent so session-level subscribers (SSE) are notified
-			this.appendEvent(
-				sessionId,
-				mapping.type,
-				mapping.payload,
-				runId
-			)
-		} else {
-			console.log(
-				`[realtime-store] skipping persistence for session=${sessionId} runId=${runId} type=${event.type} (no mapping)`
-			)
-		}
-
-		// Always publish live to run subscribers (even for non-persisted events like deltas)
-		this.#publish(this.#runChannel(sessionId, runId), {
-			type: 'event',
-			event
-		} satisfies AgentRunEvent)
-	}
 
 	closeAgentRun(sessionId: string, runId: string): void {
 		this.appendEvent(
@@ -205,95 +160,10 @@ export class RealtimeStore {
 		return this.#subscribe(`session:${sessionId}`, listener)
 	}
 
-	subscribeToAgentRun(
-		sessionId: string,
-		runId: string,
-		listener: Listener<AgentRunEvent>
-	): () => void {
-		return this.#subscribe(
-			this.#runChannel(sessionId, runId),
-			listener
-		)
-	}
-
 	// ── Private ───────────────────────────────────────────────────────────
-
-	#mapAgentEvent(event: AgentEvent): {
-		type: EventType
-		payload: Record<string, unknown>
-	} | null {
-		switch (event.type) {
-			case 'agent_start':
-				return { type: 'agent_start', payload: {} }
-			case 'agent_end':
-				return {
-					type: 'agent_end',
-					payload: { messages: event.messages }
-				}
-			case 'turn_start':
-				return { type: 'turn_start', payload: {} }
-			case 'turn_end':
-				return {
-					type: 'turn_end',
-					payload: {}
-				}
-			case 'message_end': {
-				// Persist the final message based on its role
-				const msg = event.message
-				if (msg.role === 'assistant') {
-					const asst = msg as unknown as Record<
-						string,
-						unknown
-					>
-					const contentArr = Array.isArray(asst.content)
-						? asst.content
-						: []
-					const textParts = (
-						contentArr as Array<{
-							type: string
-							text?: string
-						}>
-					)
-						.filter(c => c.type === 'text')
-						.map(c => c.text ?? '')
-					const textPreview = textParts
-						.join('')
-						.slice(0, 80)
-					console.log(
-						`[realtime-store] mapping message_end → assistant_final contentParts=${contentArr.length} stopReason=${asst.stopReason ?? 'unknown'} errorMessage=${asst.errorMessage ?? 'none'} text="${textPreview}"`
-					)
-					return {
-						type: 'assistant_final',
-						payload: asst
-					}
-				}
-				return null
-			}
-			case 'tool_execution_end':
-				return {
-					type: 'tool_result',
-					payload: {
-						role: 'toolResult',
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						content: event.result.content,
-						details: event.result.details,
-						isError: event.isError,
-						timestamp: Date.now()
-					}
-				}
-			// Non-persisted events (message_start, message_update, tool_execution_start, etc.)
-			default:
-				return null
-		}
-	}
 
 	#runKey(sessionId: string, runId: string): string {
 		return `${sessionId}:${runId}`
-	}
-
-	#runChannel(sessionId: string, runId: string): string {
-		return `run:${sessionId}:${runId}`
 	}
 
 	#publish<T>(channel: string, event: T): void {

@@ -11,6 +11,7 @@ import {
 	type AgentEvent,
 	type AgentMessage
 } from '@ellie/agent'
+import type { EventType } from '@ellie/db'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from '@ellie/utils'
 import type { RealtimeStore } from '../lib/realtime-store'
@@ -251,27 +252,33 @@ export class AgentManager {
 			`[agent-manager] event session=${sessionId} runId=${runId ?? 'none'} ${eventSummary}`
 		)
 
-		if (runId) {
-			try {
-				this.store.appendAgentRunEvent(
-					sessionId,
-					runId,
-					event
-				)
-			} catch (err) {
-				console.error(
-					`[agent-manager] failed to persist event session=${sessionId} runId=${runId} type=${event.type}:`,
-					err instanceof Error ? err.message : String(err)
-				)
-			}
-		} else {
+		if (!runId) {
 			console.warn(
 				`[agent-manager] event received without runId session=${sessionId} type=${event.type} — not persisted`
 			)
+			return
+		}
+
+		// Map every AgentEvent to one or more DB rows and persist
+		const rows = this.mapEventToDb(event)
+		for (const row of rows) {
+			try {
+				this.store.appendEvent(
+					sessionId,
+					row.type,
+					row.payload,
+					runId
+				)
+			} catch (err) {
+				console.error(
+					`[agent-manager] failed to persist event session=${sessionId} runId=${runId} dbType=${row.type}:`,
+					err instanceof Error ? err.message : String(err)
+				)
+			}
 		}
 
 		// On agent_end, close the run
-		if (event.type === 'agent_end' && runId) {
+		if (event.type === 'agent_end') {
 			console.log(
 				`[agent-manager] closing run session=${sessionId} runId=${runId}`
 			)
@@ -283,6 +290,137 @@ export class AgentManager {
 			if (agent) {
 				agent.runId = undefined
 			}
+		}
+	}
+
+	/**
+	 * Map an AgentEvent to one or more DB event rows.
+	 *
+	 * Most events map 1:1. Two exceptions produce dual writes for
+	 * backward compatibility with getConversationHistory():
+	 *   message_end (assistant) → message_end + assistant_final
+	 *   tool_execution_end      → tool_execution_end + tool_result
+	 */
+	private mapEventToDb(event: AgentEvent): Array<{
+		type: EventType
+		payload: Record<string, unknown>
+	}> {
+		switch (event.type) {
+			case 'agent_start':
+				return [{ type: 'agent_start', payload: {} }]
+			case 'agent_end':
+				return [
+					{
+						type: 'agent_end',
+						payload: { messages: event.messages }
+					}
+				]
+			case 'turn_start':
+				return [{ type: 'turn_start', payload: {} }]
+			case 'turn_end':
+				return [{ type: 'turn_end', payload: {} }]
+
+			case 'message_start':
+				return [
+					{
+						type: 'message_start',
+						payload: {
+							message: event.message
+						}
+					}
+				]
+
+			case 'message_update':
+				// Store only the delta, not the accumulated partial
+				return [
+					{
+						type: 'message_update',
+						payload: {
+							streamEvent: event.streamEvent
+						}
+					}
+				]
+
+			case 'message_end': {
+				const msg = event.message
+				const rows: Array<{
+					type: EventType
+					payload: Record<string, unknown>
+				}> = [
+					{
+						type: 'message_end',
+						payload: { message: msg }
+					}
+				]
+
+				// Dual-write: also persist as assistant_final for backward compat
+				if (msg.role === 'assistant') {
+					rows.push({
+						type: 'assistant_final',
+						payload: msg as unknown as Record<
+							string,
+							unknown
+						>
+					})
+				}
+
+				return rows
+			}
+
+			case 'tool_execution_start':
+				return [
+					{
+						type: 'tool_execution_start',
+						payload: {
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							args: event.args
+						}
+					}
+				]
+
+			case 'tool_execution_update':
+				return [
+					{
+						type: 'tool_execution_update',
+						payload: {
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							args: event.args,
+							partialResult: event.partialResult
+						}
+					}
+				]
+
+			case 'tool_execution_end': {
+				return [
+					{
+						type: 'tool_execution_end',
+						payload: {
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							result: event.result,
+							isError: event.isError
+						}
+					},
+					// Dual-write: also persist as tool_result for backward compat
+					{
+						type: 'tool_result',
+						payload: {
+							role: 'toolResult',
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							content: event.result.content,
+							details: event.result.details,
+							isError: event.isError,
+							timestamp: Date.now()
+						}
+					}
+				]
+			}
+
+			default:
+				return []
 		}
 	}
 

@@ -30,7 +30,14 @@ const EVENT_TYPES = [
 	'turn_start',
 	'turn_end',
 	'run_closed',
-	'error'
+	'error',
+	// Streaming / lifecycle events (persisted as raw log entries)
+	'message_start',
+	'message_update',
+	'message_end',
+	'tool_execution_start',
+	'tool_execution_update',
+	'tool_execution_end'
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]
@@ -138,6 +145,27 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 	error: v.object({
 		message: v.string(),
 		code: v.optional(v.string())
+	}),
+	// Streaming / lifecycle — loose schemas (store is dumb, doesn't validate internals)
+	message_start: v.record(v.string(), v.unknown()),
+	message_update: v.record(v.string(), v.unknown()),
+	message_end: v.record(v.string(), v.unknown()),
+	tool_execution_start: v.object({
+		toolCallId: v.string(),
+		toolName: v.string(),
+		args: v.unknown()
+	}),
+	tool_execution_update: v.object({
+		toolCallId: v.string(),
+		toolName: v.string(),
+		args: v.unknown(),
+		partialResult: v.unknown()
+	}),
+	tool_execution_end: v.object({
+		toolCallId: v.string(),
+		toolName: v.string(),
+		result: v.unknown(),
+		isError: v.boolean()
 	})
 }
 
