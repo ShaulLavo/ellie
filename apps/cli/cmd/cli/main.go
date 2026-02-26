@@ -427,6 +427,10 @@ func authOAuth(mode string) {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Invalid response:", err)
 		os.Exit(1)
 	}
+	if authResp.URL == "" || authResp.Verifier == "" {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Server returned empty authorize URL or verifier")
+		os.Exit(1)
+	}
 
 	// Step 2: Open browser
 	fmt.Println(styleBold.Render("Opening browser for authentication..."))

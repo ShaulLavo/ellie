@@ -24,7 +24,7 @@ import {
 
 export function createAgentRoutes(
 	store: RealtimeStore,
-	agentManager: AgentManager | null,
+	getAgentManager: () => Promise<AgentManager | null>,
 	sseState: SseState
 ) {
 	return new Elysia({ prefix: '/agent', tags: ['Agent'] })
@@ -125,7 +125,8 @@ export function createAgentRoutes(
 		)
 		.post(
 			'/:sessionId/steer',
-			({ params, body, set }) => {
+			async ({ params, body, set }) => {
+				const agentManager = await getAgentManager()
 				if (!agentManager) {
 					set.status = 503
 					return {
@@ -149,7 +150,8 @@ export function createAgentRoutes(
 		)
 		.post(
 			'/:sessionId/abort',
-			({ params, set }) => {
+			async ({ params, set }) => {
+				const agentManager = await getAgentManager()
 				if (!agentManager) {
 					set.status = 503
 					return {
@@ -171,7 +173,8 @@ export function createAgentRoutes(
 		)
 		.get(
 			'/:sessionId/history',
-			({ params, set }) => {
+			async ({ params, set }) => {
+				const agentManager = await getAgentManager()
 				if (!agentManager) {
 					set.status = 503
 					return {

@@ -55,6 +55,10 @@ export function agentLoop(
 				messages: [...context.messages, ...prompts]
 			}
 
+			console.log(
+				`[agent-loop] agentLoop starting prompts=${prompts.length} contextMessages=${context.messages.length}`
+			)
+
 			emit({ type: 'agent_start' })
 			emit({ type: 'turn_start' })
 
@@ -72,7 +76,11 @@ export function agentLoop(
 				emit,
 				streamFn
 			)
-		} catch {
+		} catch (err) {
+			console.error(
+				`[agent-loop] agentLoop top-level CATCH:`,
+				err instanceof Error ? err.message : String(err)
+			)
 			emit({ type: 'agent_end', messages: [] })
 			stream.end([])
 		}
@@ -127,7 +135,11 @@ export function agentLoopContinue(
 				emit,
 				streamFn
 			)
-		} catch {
+		} catch (err) {
+			console.error(
+				`[agent-loop] agentLoopContinue top-level CATCH:`,
+				err instanceof Error ? err.message : String(err)
+			)
 			emit({ type: 'agent_end', messages: [] })
 			stream.end([])
 		}
@@ -373,12 +385,19 @@ async function runLoop(
 		// Process assistant response
 		// With chat(): TanStack handles tool loop internally via maxIterations.
 		// With streamFn: we must handle tool execution + re-call manually.
+		console.log(
+			`[agent-loop] runLoop calling processAgentStream contextMessages=${currentContext.messages.length}`
+		)
 		let result = await processAgentStream(
 			currentContext,
 			config,
 			signal,
 			emit,
 			streamFn
+		)
+
+		console.log(
+			`[agent-loop] processAgentStream returned messages=${result.messages.length} abortedOrError=${result.abortedOrError} stopReason=${result.lastAssistant.stopReason} errorMessage=${result.lastAssistant.errorMessage ?? 'none'}`
 		)
 
 		// Collect messages from this iteration
@@ -730,9 +749,15 @@ async function processAgentStream(
 	let turnCount = 0
 	const partialJsonMap = new Map<string, string>()
 	const toolCallIndexMap = new Map<string, number>()
+	let chunkCount = 0
+
+	console.log(
+		`[agent-loop] processAgentStream starting model=${config.model.id} llmMessages=${llmMessages.length} tools=${tanStackTools ? 'yes' : 'no'} streamFn=${streamFn ? 'custom' : 'tanstack'}`
+	)
 
 	try {
 		for await (const chunk of streamSource) {
+			chunkCount++
 			if (signal?.aborted) {
 				partial.stopReason = 'aborted'
 				partial.errorMessage = 'Request was aborted'
@@ -815,9 +840,16 @@ async function processAgentStream(
 			: 'error'
 		partial.errorMessage =
 			err instanceof Error ? err.message : String(err)
+		console.error(
+			`[agent-loop] processAgentStream CAUGHT ERROR after ${chunkCount} chunks: stopReason=${partial.stopReason} errorMessage=${partial.errorMessage}`
+		)
 	} finally {
 		cleanupAbortListener?.()
 	}
+
+	console.log(
+		`[agent-loop] processAgentStream finalizing after ${chunkCount} chunks, emittedStart=${emittedStart} contentParts=${partial.content.length} stopReason=${partial.stopReason} errorMessage=${partial.errorMessage ?? 'none'}`
+	)
 
 	// Finalize last partial
 	finalizePartial(
@@ -859,6 +891,15 @@ function finalizePartial(
 	allMessages: AgentMessage[],
 	emit: EmitFn
 ): void {
+	const textParts = partial.content
+		.filter(c => c.type === 'text')
+		.map(c => ('text' in c ? c.text : ''))
+	const textPreview = textParts.join('').slice(0, 80)
+
+	console.log(
+		`[agent-loop] finalizePartial emittedStart=${emittedStart} contentParts=${partial.content.length} stopReason=${partial.stopReason} errorMessage=${partial.errorMessage ?? 'none'} text="${textPreview}"`
+	)
+
 	if (!emittedStart) {
 		emit({ type: 'message_start', message: { ...partial } })
 	}

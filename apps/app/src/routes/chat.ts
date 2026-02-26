@@ -17,7 +17,7 @@ import {
 export function createChatRoutes(
 	store: RealtimeStore,
 	sseState: SseState,
-	agentWatcher?: AgentWatcher | null
+	getAgentWatcher?: () => Promise<AgentWatcher | null>
 ) {
 	return new Elysia({ prefix: '/chat', tags: ['Chat'] })
 		.get(
@@ -31,11 +31,15 @@ export function createChatRoutes(
 		)
 		.post(
 			'/:sessionId/messages',
-			({ params, body }) => {
+			async ({ params, body }) => {
 				const input = normalizeMessageInput(body)
+				console.log(
+					`[chat-route] POST /chat/${params.sessionId}/messages role=${input.role ?? 'user'} content=${input.content.slice(0, 100)}`
+				)
 				store.ensureSession(params.sessionId)
 				// Subscribe the watcher BEFORE appending so it
 				// picks up the event via the synchronous publish.
+				const agentWatcher = await getAgentWatcher?.()
 				agentWatcher?.watch(params.sessionId)
 				const row = store.appendEvent(
 					params.sessionId,
@@ -47,6 +51,9 @@ export function createChatRoutes(
 						],
 						timestamp: Date.now()
 					}
+				)
+				console.log(
+					`[chat-route] user_message persisted id=${row.id} seq=${row.seq} session=${row.sessionId}`
 				)
 				return {
 					id: row.id,

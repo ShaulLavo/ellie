@@ -113,18 +113,44 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 	}
 }
 
-const resolvedAdapter = await resolveAdapter()
+// ── Lazy agent manager / watcher ────────────────────────────────────────────
+// Cached on first access, invalidated when credentials change so routes
+// always use the current adapter without requiring a server restart.
 
-const agentManager: AgentManager | null = resolvedAdapter
-	? new AgentManager(store, {
-			adapter: resolvedAdapter,
-			systemPrompt: 'You are a helpful assistant.'
-		})
-	: null
+let cachedAgentManager: AgentManager | null | undefined
+let cachedAgentWatcher: AgentWatcher | null | undefined
 
-const agentWatcher = agentManager
-	? new AgentWatcher(store, agentManager)
-	: null
+async function getAgentManager(): Promise<AgentManager | null> {
+	if (cachedAgentManager !== undefined)
+		return cachedAgentManager
+	const adapter = await resolveAdapter()
+	cachedAgentManager = adapter
+		? new AgentManager(store, {
+				adapter,
+				systemPrompt: 'You are a helpful assistant.'
+			})
+		: null
+	return cachedAgentManager
+}
+
+async function getAgentWatcher(): Promise<AgentWatcher | null> {
+	const mgr = await getAgentManager()
+	if (cachedAgentWatcher !== undefined)
+		return cachedAgentWatcher
+	cachedAgentWatcher = mgr
+		? new AgentWatcher(store, mgr)
+		: null
+	return cachedAgentWatcher
+}
+
+/** Call after credentials are written/cleared to force re-resolution. */
+function invalidateAgentCache() {
+	cachedAgentManager = undefined
+	cachedAgentWatcher = undefined
+}
+
+// Eagerly resolve once at startup so first request doesn't pay the cost
+await getAgentManager()
 
 const sseState: SseState = {
 	activeClients: 0
@@ -158,9 +184,11 @@ export const app = new Elysia()
 		})
 	)
 	.use(createStatusRoutes(() => sseState.activeClients))
-	.use(createChatRoutes(store, sseState, agentWatcher))
-	.use(createAgentRoutes(store, agentManager, sseState))
-	.use(createAuthRoutes(CREDENTIALS_PATH))
+	.use(createChatRoutes(store, sseState, getAgentWatcher))
+	.use(createAgentRoutes(store, getAgentManager, sseState))
+	.use(
+		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
+	)
 	.all(
 		`/api/*`,
 		({ set }) => {

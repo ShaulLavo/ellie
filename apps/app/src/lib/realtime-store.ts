@@ -123,12 +123,19 @@ export class RealtimeStore {
 		// Map agent events to persisted event types
 		const mapping = this.#mapAgentEvent(event)
 		if (mapping) {
+			console.log(
+				`[realtime-store] persisting event session=${sessionId} runId=${runId} agentType=${event.type} → dbType=${mapping.type}`
+			)
 			// Route through appendEvent so session-level subscribers (SSE) are notified
 			this.appendEvent(
 				sessionId,
 				mapping.type,
 				mapping.payload,
 				runId
+			)
+		} else {
+			console.log(
+				`[realtime-store] skipping persistence for session=${sessionId} runId=${runId} type=${event.type} (no mapping)`
 			)
 		}
 
@@ -230,18 +237,38 @@ export class RealtimeStore {
 					type: 'turn_end',
 					payload: {}
 				}
-			case 'message_end':
+			case 'message_end': {
 				// Persist the final message based on its role
-				if (event.message.role === 'assistant') {
+				const msg = event.message
+				if (msg.role === 'assistant') {
+					const asst = msg as unknown as Record<
+						string,
+						unknown
+					>
+					const contentArr = Array.isArray(asst.content)
+						? asst.content
+						: []
+					const textParts = (
+						contentArr as Array<{
+							type: string
+							text?: string
+						}>
+					)
+						.filter(c => c.type === 'text')
+						.map(c => c.text ?? '')
+					const textPreview = textParts
+						.join('')
+						.slice(0, 80)
+					console.log(
+						`[realtime-store] mapping message_end → assistant_final contentParts=${contentArr.length} stopReason=${asst.stopReason ?? 'unknown'} errorMessage=${asst.errorMessage ?? 'none'} text="${textPreview}"`
+					)
 					return {
 						type: 'assistant_final',
-						payload: event.message as unknown as Record<
-							string,
-							unknown
-						>
+						payload: asst
 					}
 				}
 				return null
+			}
 			case 'tool_execution_end':
 				return {
 					type: 'tool_result',

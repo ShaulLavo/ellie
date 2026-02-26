@@ -50,7 +50,10 @@ function keyPreview(key: string): string {
 
 // ── Route factory ────────────────────────────────────────────────────────────
 
-export function createAuthRoutes(credentialsPath: string) {
+export function createAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
 	return (
 		new Elysia({
 			prefix: '/api/auth/anthropic',
@@ -153,6 +156,7 @@ export function createAuthRoutes(credentialsPath: string) {
 				async () => {
 					const cleared =
 						await clearAnthropicCredential(credentialsPath)
+					if (cleared) onCredentialChange?.()
 					return { cleared }
 				},
 				{
@@ -213,6 +217,7 @@ export function createAuthRoutes(credentialsPath: string) {
 						return { error: result.error }
 					}
 
+					onCredentialChange?.()
 					return {
 						ok: true as const,
 						mode: 'api_key' as const
@@ -250,6 +255,7 @@ export function createAuthRoutes(credentialsPath: string) {
 						return { error: result.error }
 					}
 
+					onCredentialChange?.()
 					return {
 						ok: true as const,
 						mode: 'token' as const
@@ -331,6 +337,7 @@ export function createAuthRoutes(credentialsPath: string) {
 							}
 						}
 
+						onCredentialChange?.()
 						return {
 							ok: true as const,
 							mode: 'api_key' as const,
@@ -352,6 +359,7 @@ export function createAuthRoutes(credentialsPath: string) {
 						return { error: saveResult.error }
 					}
 
+					onCredentialChange?.()
 					return {
 						ok: true as const,
 						mode: 'oauth' as const,

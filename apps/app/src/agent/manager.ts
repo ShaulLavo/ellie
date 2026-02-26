@@ -91,11 +91,17 @@ export class AgentManager {
 		sessionId: string,
 		text: string
 	): Promise<{ runId: string }> {
+		console.log(
+			`[agent-manager] runAgent session=${sessionId} text=${text.slice(0, 100)}`
+		)
 		const agent = this.getOrCreate(sessionId)
 
 		// Load history if this is a fresh agent with no messages
 		if (agent.state.messages.length === 0) {
 			const history = this.loadHistory(sessionId)
+			console.log(
+				`[agent-manager] loaded ${history.length} history messages for session=${sessionId}`
+			)
 			if (history.length > 0) {
 				agent.replaceMessages(history)
 			}
@@ -103,15 +109,24 @@ export class AgentManager {
 
 		// Pre-flight checks — surface sync errors as HTTP errors to the caller
 		if (agent.state.isStreaming) {
+			console.warn(
+				`[agent-manager] agent busy session=${sessionId}, rejecting`
+			)
 			throw new Error(
 				'Agent is already processing a prompt.'
 			)
 		}
 		if (!agent.adapter) {
+			console.error(
+				`[agent-manager] no adapter session=${sessionId}`
+			)
 			throw new Error('No adapter configured for agent.')
 		}
 
 		const runId = ulid()
+		console.log(
+			`[agent-manager] starting prompt session=${sessionId} runId=${runId}`
+		)
 
 		// Store the runId so the event handler knows where to write
 		agent.runId = runId
@@ -119,8 +134,8 @@ export class AgentManager {
 		// Start the prompt (non-blocking — events flow via onEvent)
 		agent.prompt(text).catch(err => {
 			console.error(
-				`[agent-manager] prompt failed for ${sessionId}:`,
-				err
+				`[agent-manager] prompt FAILED session=${sessionId} runId=${runId}:`,
+				err instanceof Error ? err.message : String(err)
 			)
 			// Write a terminal event so the client doesn't hang
 			this.writeErrorEvent(sessionId, runId)
@@ -204,6 +219,9 @@ export class AgentManager {
 		sessionId: string,
 		runId: string
 	): void {
+		console.error(
+			`[agent-manager] writing error event session=${sessionId} runId=${runId}`
+		)
 		try {
 			this.store.appendEvent(
 				sessionId,
@@ -212,8 +230,11 @@ export class AgentManager {
 				runId
 			)
 			this.store.closeAgentRun(sessionId, runId)
-		} catch {
-			// Stream may already be closed — nothing more to do
+		} catch (err) {
+			console.error(
+				`[agent-manager] writeErrorEvent failed session=${sessionId} runId=${runId}:`,
+				err instanceof Error ? err.message : String(err)
+			)
 		}
 	}
 
@@ -224,6 +245,12 @@ export class AgentManager {
 		const agent = this.agents.get(sessionId)
 		const runId = agent?.runId
 
+		// Log every event flowing through the pipeline
+		const eventSummary = this.summarizeEvent(event)
+		console.log(
+			`[agent-manager] event session=${sessionId} runId=${runId ?? 'none'} ${eventSummary}`
+		)
+
 		if (runId) {
 			try {
 				this.store.appendAgentRunEvent(
@@ -231,13 +258,23 @@ export class AgentManager {
 					runId,
 					event
 				)
-			} catch {
-				// Non-fatal
+			} catch (err) {
+				console.error(
+					`[agent-manager] failed to persist event session=${sessionId} runId=${runId} type=${event.type}:`,
+					err instanceof Error ? err.message : String(err)
+				)
 			}
+		} else {
+			console.warn(
+				`[agent-manager] event received without runId session=${sessionId} type=${event.type} — not persisted`
+			)
 		}
 
 		// On agent_end, close the run
 		if (event.type === 'agent_end' && runId) {
+			console.log(
+				`[agent-manager] closing run session=${sessionId} runId=${runId}`
+			)
 			try {
 				this.store.closeAgentRun(sessionId, runId)
 			} catch {
@@ -246,6 +283,51 @@ export class AgentManager {
 			if (agent) {
 				agent.runId = undefined
 			}
+		}
+	}
+
+	private summarizeEvent(event: AgentEvent): string {
+		switch (event.type) {
+			case 'message_end': {
+				const msg = event.message
+				const role = msg.role
+				if (role === 'assistant') {
+					const asst = msg as unknown as Record<
+						string,
+						unknown
+					>
+					const contentLen = Array.isArray(asst.content)
+						? asst.content.length
+						: 0
+					const textParts = Array.isArray(asst.content)
+						? (
+								asst.content as Array<{
+									type: string
+									text?: string
+								}>
+							)
+								.filter(c => c.type === 'text')
+								.map(c => c.text ?? '')
+						: []
+					const textPreview = textParts
+						.join('')
+						.slice(0, 80)
+					return `type=message_end role=assistant contentParts=${contentLen} stopReason=${asst.stopReason ?? 'unknown'} errorMessage=${asst.errorMessage ?? 'none'} text="${textPreview}"`
+				}
+				return `type=message_end role=${role}`
+			}
+			case 'agent_end':
+				return `type=agent_end messages=${event.messages?.length ?? 0}`
+			case 'message_start':
+				return `type=message_start role=${event.message.role}`
+			case 'message_update':
+				return `type=message_update role=${event.message.role}`
+			case 'turn_start':
+				return `type=turn_start`
+			case 'turn_end':
+				return `type=turn_end role=${event.message.role}`
+			default:
+				return `type=${event.type}`
 		}
 	}
 }

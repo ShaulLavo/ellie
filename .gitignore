@@ -58,3 +58,4 @@ apps/react/src/output.css
 # Claude
 .claude/worktrees/
 .claude/settings.local.json
+apps/cli/cli
