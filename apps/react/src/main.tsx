@@ -1,3 +1,6 @@
+import '@fontsource-variable/bricolage-grotesque'
+import '@fontsource/dm-sans'
+import '@fontsource-variable/jetbrains-mono'
 import './output.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

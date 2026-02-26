@@ -1,35 +1,37 @@
 import { resolve } from 'node:path'
-import { openapi } from '@elysiajs/openapi'
-import { toJsonSchema } from '@valibot/to-json-schema'
-import { staticPlugin } from '@elysiajs/static'
-import { EventStore } from '@ellie/db'
-import { env } from '@ellie/env/server'
-import {
-	anthropicText,
-	createAnthropicChat,
-	type AnthropicChatModel
-} from '@tanstack/ai-anthropic'
-import type { AnyTextAdapter } from '@tanstack/ai'
-import {
-	loadAnthropicCredential,
-	setAnthropicCredential
-} from '@ellie/ai/credentials'
 import {
 	anthropicOAuth,
 	refreshNormalizedOAuthToken
 } from '@ellie/ai/anthropic-oauth'
-import { Elysia } from 'elysia'
+import {
+	loadAnthropicCredential,
+	loadGroqCredential,
+	setAnthropicCredential
+} from '@ellie/ai/credentials'
+import { groqChat } from '@ellie/ai/openai-compat'
+import { EventStore } from '@ellie/db'
+import { env } from '@ellie/env/server'
 import { Hindsight } from '@ellie/hindsight'
 import { createHindsightApp } from '@ellie/hindsight/server'
+import { openapi } from '@elysiajs/openapi'
+import { staticPlugin } from '@elysiajs/static'
+import type { AnyTextAdapter } from '@tanstack/ai'
+import {
+	type AnthropicChatModel,
+	anthropicText,
+	createAnthropicChat
+} from '@tanstack/ai-anthropic'
+import { toJsonSchema } from '@valibot/to-json-schema'
+import { Elysia } from 'elysia'
 import { AgentManager } from './agent/manager'
 import { AgentWatcher } from './agent/watcher'
 import { RealtimeStore } from './lib/realtime-store'
-import { errorSchema, type SseState } from './routes/common'
 import { createAgentRoutes } from './routes/agent'
-import { createChatRoutes } from './routes/chat'
-import { createStatusRoutes } from './routes/status'
 import { createAuthRoutes } from './routes/auth'
+import { createChatRoutes } from './routes/chat'
+import { errorSchema, type SseState } from './routes/common'
 import { createSessionRoutes } from './routes/session'
+import { createStatusRoutes } from './routes/status'
 
 const parsedUrl = new URL(env.API_BASE_URL)
 const port =
@@ -86,8 +88,10 @@ const CREDENTIALS_PATH =
 	process.env.CREDENTIALS_PATH ??
 	resolve(import.meta.dir, '../../../.credentials.json')
 
-// ── Auth resolution: ANTHROPIC_OAUTH_TOKEN > BEARER_TOKEN > API_KEY > file ──
-async function resolveAdapter(): Promise<AnyTextAdapter | null> {
+// ── Auth resolution ──────────────────────────────────────────────────────────
+// Priority: Anthropic (env vars > file) → Groq (env var > file)
+
+async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
 	const model = env.ANTHROPIC_MODEL as AnthropicChatModel
 
 	// ANTHROPIC_OAUTH_TOKEN and ANTHROPIC_BEARER_TOKEN are intentionally read
@@ -144,6 +148,31 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 			cred satisfies never
 			return null
 	}
+}
+
+async function resolveGroqAdapter(): Promise<AnyTextAdapter | null> {
+	// Env var first
+	if (process.env.GROQ_API_KEY) {
+		return groqChat(
+			'qwen/qwen3-32b',
+			process.env.GROQ_API_KEY
+		)
+	}
+
+	// File fallback
+	const cred = await loadGroqCredential(CREDENTIALS_PATH)
+	if (cred) {
+		return groqChat('qwen/qwen3-32b', cred.key)
+	}
+
+	return null
+}
+
+async function resolveAdapter(): Promise<AnyTextAdapter | null> {
+	return (
+		(await resolveAnthropicAdapter()) ??
+		(await resolveGroqAdapter())
+	)
 }
 
 // ── Lazy agent manager / watcher ────────────────────────────────────────────
@@ -204,8 +233,10 @@ await getAgentManager()
 
 // ── Hindsight (memory) ────────────────────────────────────────────────────
 // Single default bank is created lazily on first access.
+const hindsightAdapter = await resolveAdapter()
 const hindsight = new Hindsight({
-	dbPath: `${DATA_DIR}/hindsight.db`
+	dbPath: `${DATA_DIR}/hindsight.db`,
+	...(hindsightAdapter ? { adapter: hindsightAdapter } : {})
 })
 
 const sseState: SseState = {

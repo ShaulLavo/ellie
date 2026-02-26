@@ -20,6 +20,7 @@
 		"@ellie/hindsight": "workspace:*",
 		"@ellie/schemas": "workspace:*",
 		"@ellie/utils": "workspace:*",
+		"@elysiajs/cors": "1.4.1",
 		"@elysiajs/openapi": "^1.4.14",
 		"@elysiajs/static": "^1.4.7",
 		"@tanstack/ai": "^0.5.1",

@@ -1,6 +1,6 @@
 import { ulid } from '@ellie/utils'
 import { eq, and, inArray } from 'drizzle-orm'
-import { anthropicText } from '@tanstack/ai-anthropic'
+import { groqChat } from '@ellie/ai/openai-compat'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { chat, streamToText } from '@ellie/ai'
 import {
@@ -148,7 +148,19 @@ export class Hindsight {
 	private readonly entityVec: EmbeddingStore
 	private readonly modelVec: EmbeddingStore
 	private readonly visualVec: EmbeddingStore
-	private readonly adapter: AnyTextAdapter
+	private _configAdapter?: AnyTextAdapter
+	private _resolvedAdapter?: AnyTextAdapter
+	private get adapter(): AnyTextAdapter {
+		if (!this._resolvedAdapter) {
+			this._resolvedAdapter =
+				this._configAdapter ??
+				groqChat(
+					'qwen/qwen3-32b',
+					process.env.GROQ_API_KEY!
+				)
+		}
+		return this._resolvedAdapter
+	}
 	private readonly rerank: RerankFunction | undefined
 	private readonly instanceDefaults: BankConfig | undefined
 	private readonly onTrace: TraceCallback | undefined
@@ -167,8 +179,7 @@ export class Hindsight {
 		const dims = runtime.embeddingDimensions
 
 		this.hdb = createHindsightDB(config.dbPath, dims)
-		this.adapter =
-			config.adapter ?? anthropicText('claude-haiku-4-5')
+		this._configAdapter = config.adapter
 		this.rerank = runtime.rerank
 		this.instanceDefaults = config.defaults
 		this.onTrace = config.onTrace

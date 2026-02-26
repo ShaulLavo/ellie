@@ -3,12 +3,15 @@
  *
  * Supports two formats:
  * 1. Legacy single-provider: { type: "oauth", ... } or { type: "api_key", key: "..." }
- * 2. Multi-provider: { anthropic: { type: "oauth", ... }, groq: { type: "api_key", key: "..." } }
+ * 2. Multi-provider: { anthropic: { ... }, groq: { ... } }
  *
  * Anthropic credential shapes (persisted):
  *   API key:  { "type": "api_key", "key": "..." }
  *   Token:    { "type": "token", "token": "...", "expires"?: number }
  *   OAuth:    { "type": "oauth", "access": "...", "refresh": "...", "expires": number }
+ *
+ * Groq credential shapes (persisted):
+ *   API key:  { "type": "api_key", "key": "..." }
  *
  * Legacy field aliases accepted on read:
  *   access_token → access, refresh_token → refresh, expires_at → expires
@@ -42,6 +45,9 @@ export type AnthropicCredential =
 	| ApiKeyCredential
 	| TokenCredential
 	| NormalizedOAuthCredential
+
+/** Groq only supports API key authentication. */
+export type GroqCredential = ApiKeyCredential
 
 export type CredentialMap = Record<string, unknown>
 
@@ -149,6 +155,114 @@ export async function loadAnthropicCredential(
 	return normalizeAnthropicCredential(
 		map as Record<string, unknown>
 	)
+}
+
+/**
+ * Read the groq credential from the credential map.
+ * Groq only supports API key auth.
+ */
+export async function loadGroqCredential(
+	path: string
+): Promise<GroqCredential | null> {
+	const map = await loadCredentialMap(path)
+	if (!map) return null
+
+	if (!isMultiProvider(map)) return null
+
+	const raw = map.groq
+	if (
+		raw &&
+		typeof raw === 'object' &&
+		'type' in raw &&
+		(raw as Record<string, unknown>).type === 'api_key' &&
+		'key' in raw &&
+		typeof (raw as Record<string, unknown>).key === 'string'
+	) {
+		return {
+			type: 'api_key',
+			key: (raw as Record<string, unknown>).key as string
+		}
+	}
+	return null
+}
+
+/**
+ * Set the groq credential in the credential map file.
+ * Preserves all other provider entries.
+ */
+export async function setGroqCredential(
+	path: string,
+	credential: GroqCredential
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const file = Bun.file(path)
+	let map: CredentialMap = {}
+
+	if (await file.exists()) {
+		try {
+			const raw = await file.text()
+			const parsed = JSON.parse(raw)
+			if (typeof parsed !== 'object' || parsed === null) {
+				return {
+					ok: false,
+					error:
+						'Credentials file is not a valid JSON object. Fix or delete the file manually.'
+				}
+			}
+			map = parsed as CredentialMap
+		} catch {
+			return {
+				ok: false,
+				error:
+					'Credentials file contains invalid JSON. Fix or delete the file manually.'
+			}
+		}
+	}
+
+	map.groq = credential
+	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
+	try {
+		await chmod(path, 0o600)
+	} catch {
+		// chmod may fail on some platforms; best-effort
+	}
+	return { ok: true }
+}
+
+/**
+ * Remove only the groq key from the credential map.
+ * Preserves all other entries.
+ */
+export async function clearGroqCredential(
+	path: string
+): Promise<boolean> {
+	const file = Bun.file(path)
+	if (!(await file.exists())) return false
+
+	try {
+		const raw = await file.text()
+		const parsed = JSON.parse(raw)
+		if (
+			typeof parsed !== 'object' ||
+			parsed === null ||
+			!('groq' in parsed)
+		) {
+			return false
+		}
+		const map = parsed as CredentialMap
+		delete map.groq
+		await Bun.write(
+			path,
+			JSON.stringify(map, null, 2) + '\n'
+		)
+		try {
+			await chmod(path, 0o600)
+		} catch {
+			// best-effort
+		}
+		return true
+	} catch {
+		return false
+	}
 }
 
 /**

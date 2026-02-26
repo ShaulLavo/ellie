@@ -1,26 +1,26 @@
-import {
-	useState,
-	useEffect,
-	useRef,
-	useCallback,
-	useMemo
-} from 'react'
-import { useLiveQuery } from '@tanstack/react-db'
 import type {
 	ChatMessage,
 	ConnectionState,
 	ContentPart,
 	MessageSender
 } from '@ellie/schemas/chat'
+import { useLiveQuery } from '@tanstack/react-db'
 import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react'
+import {
+	destroyChatMessagesCollection,
+	fromStored,
 	getChatMessagesCollection,
 	getChatMessagesSyncHandle,
-	destroyChatMessagesCollection,
-	toStored,
-	fromStored,
-	type StoredChatMessage
+	type StoredChatMessage,
+	toStored
 } from '../collections/chat-messages'
-import { StreamClient, type EventRow } from '../lib/stream'
+import { type EventRow, StreamClient } from '../lib/stream'
 
 /** Convert an EventRow from the event store into a ChatMessage. */
 function eventToMessage(row: EventRow): ChatMessage {
@@ -78,6 +78,7 @@ function eventToMessage(row: EventRow): ChatMessage {
 		sender = 'user'
 	} else if (
 		row.type === 'assistant_message' ||
+		row.type === 'assistant_final' ||
 		parsed.role === 'assistant'
 	) {
 		sender = 'agent'
@@ -182,18 +183,99 @@ export function useChatDB(sessionId: string) {
 					e =>
 						e.type === 'user_message' ||
 						e.type === 'assistant_message' ||
+						e.type === 'assistant_final' ||
 						e.type === 'system_message' ||
 						e.type === 'tool_call' ||
 						e.type === 'tool_result'
 				)
 				const msgs = messageEvents.map(eventToMessage)
 				syncReplaceAll(msgs)
+				// Clear any stale streaming state on snapshot
+				setStreamingMessage(null)
 			},
 
 			onAppend(event) {
+				// Handle streaming events for live assistant responses
+				if (event.type === 'message_start') {
+					const parsed =
+						typeof event.payload === 'string'
+							? JSON.parse(event.payload)
+							: event.payload
+					const msg = parsed.message as Record<
+						string,
+						unknown
+					>
+					setStreamingMessage({
+						id: `streaming-${event.id}`,
+						timestamp: new Date(event.createdAt),
+						text: '',
+						parts: [],
+						line: event.seq,
+						sender: msg?.role === 'user' ? 'user' : 'agent',
+						isStreaming: true
+					})
+					return
+				}
+
+				if (event.type === 'message_update') {
+					const parsed =
+						typeof event.payload === 'string'
+							? JSON.parse(event.payload)
+							: event.payload
+					const streamEvent = parsed.streamEvent as
+						| Record<string, unknown>
+						| undefined
+					if (!streamEvent) return
+
+					setStreamingMessage(prev => {
+						if (!prev) return prev
+						const eventType = streamEvent.type as string
+
+						if (
+							eventType === 'text_delta' &&
+							typeof streamEvent.delta === 'string'
+						) {
+							const newText =
+								prev.text + (streamEvent.delta as string)
+							return {
+								...prev,
+								text: newText,
+								parts: [
+									{
+										type: 'text' as const,
+										text: newText
+									}
+								]
+							}
+						}
+
+						if (
+							eventType === 'thinking_delta' &&
+							typeof streamEvent.delta === 'string'
+						) {
+							return {
+								...prev,
+								thinking:
+									(prev.thinking ?? '') +
+									(streamEvent.delta as string)
+							}
+						}
+
+						return prev
+					})
+					return
+				}
+
+				if (event.type === 'message_end') {
+					// message_end carries the final message — let assistant_final handle persistence
+					setStreamingMessage(null)
+					return
+				}
+
 				const renderableTypes = [
 					'user_message',
 					'assistant_message',
+					'assistant_final',
 					'system_message',
 					'tool_call',
 					'tool_result'
