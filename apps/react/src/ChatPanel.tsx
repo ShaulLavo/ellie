@@ -69,6 +69,26 @@ const SESSION_LABEL: Record<string, string> = {
 	'session-1': 'Ellie'
 }
 
+/** Extract a human-readable error string from a raw errorMessage. */
+function getErrorText(raw: unknown): string {
+	if (typeof raw !== 'string' || !raw)
+		return 'An error occurred'
+	// Try to parse JSON error bodies like "401 {\"type\":\"error\",...}"
+	const jsonStart = raw.indexOf('{')
+	if (jsonStart !== -1) {
+		try {
+			const parsed = JSON.parse(raw.slice(jsonStart)) as {
+				error?: { message?: string }
+			}
+			if (parsed?.error?.message)
+				return parsed.error.message
+		} catch {
+			// fall through
+		}
+	}
+	return raw
+}
+
 /** Extract text content from a Message's content array. */
 function getTextContent(msg: Message): string {
 	if (!msg.content || !Array.isArray(msg.content)) return ''
@@ -160,10 +180,17 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 
 	const connectedClients = useConnectedClients()
 	const label = SESSION_LABEL[sessionId] ?? sessionId
-	const grouped = useMemo(
-		() => groupMessages(messages),
-		[messages]
-	)
+	const grouped = useMemo(() => {
+		const g = groupMessages(messages)
+		for (const { msg } of g) {
+			if (msg.role === 'assistant') {
+				console.log(
+					`[ChatPanel] rendering assistant message stopReason=${msg.stopReason ?? 'none'} errorMessage=${typeof msg.errorMessage === 'string' ? msg.errorMessage.slice(0, 100) : 'none'} contentLength=${Array.isArray(msg.content) ? msg.content.length : 0}`
+				)
+			}
+		}
+		return g
+	}, [messages])
 	const messageOrder = useMemo(
 		() =>
 			grouped.map((_item, idx) =>
@@ -175,10 +202,13 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 		const markdownMap = new Map<string, string>()
 		for (let i = 0; i < grouped.length; i++) {
 			const { msg } = grouped[i]
-			markdownMap.set(
-				getMsgKey(msg, i),
-				getTextContent(msg)
-			)
+			const name =
+				msg.role.charAt(0).toUpperCase() + msg.role.slice(1)
+			const text =
+				msg.stopReason === 'error'
+					? `[Error] ${getErrorText(msg.errorMessage)}`
+					: getTextContent(msg)
+			markdownMap.set(getMsgKey(msg, i), `${name}: ${text}`)
 		}
 		return markdownMap
 	}, [grouped])
@@ -397,9 +427,15 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 											</ChatEventTitle>
 										)}
 										<ChatEventContent className="text-sm">
-											<MessageResponse>
-												{getTextContent(msg)}
-											</MessageResponse>
+											{msg.stopReason === 'error' ? (
+												<p className="text-destructive">
+													{getErrorText(msg.errorMessage)}
+												</p>
+											) : (
+												<MessageResponse>
+													{getTextContent(msg)}
+												</MessageResponse>
+											)}
 										</ChatEventContent>
 									</ChatEventBody>
 								</ChatEvent>

@@ -65,10 +65,13 @@ function eventToMessage(row: EventRow): Message | null {
 		row.type === 'tool_result'
 	) {
 		if (isMessagePayload(payload)) {
+			console.log(
+				`[useChat] eventToMessage id=${row.id} seq=${row.seq} type=${row.type} role=${payload.role} stopReason=${payload.stopReason ?? 'none'} errorMessage=${typeof payload.errorMessage === 'string' ? payload.errorMessage.slice(0, 100) : 'none'} contentLength=${Array.isArray(payload.content) ? payload.content.length : 0}`
+			)
 			return payload
 		}
 		console.warn(
-			`[eventToMessage] malformed payload for event ${row.id}:`,
+			`[useChat] malformed payload for event id=${row.id} type=${row.type}:`,
 			payload
 		)
 		return null
@@ -123,6 +126,9 @@ export function useChat(sessionId: string) {
 			try {
 				const rows = JSON.parse(event.data) as EventRow[]
 				hasSnapshot = true
+				console.log(
+					`[useChat] snapshot received rows=${rows.length} session=${sessionId}`
+				)
 
 				// Track highest seq
 				for (const row of rows) {
@@ -136,11 +142,14 @@ export function useChat(sessionId: string) {
 					const msg = eventToMessage(row)
 					if (msg) msgs.push(msg)
 				}
+				console.log(
+					`[useChat] snapshot parsed messages=${msgs.length} (from ${rows.length} rows)`
+				)
 				setMessages(sortMessages(msgs))
 				setIsLoading(false)
 				setError(null)
 			} catch (err) {
-				console.warn(
+				console.error(
 					'[useChat] failed to parse snapshot:',
 					err
 				)
@@ -150,23 +159,37 @@ export function useChat(sessionId: string) {
 		const onAppend = (event: MessageEvent) => {
 			try {
 				const row = JSON.parse(event.data) as EventRow
+				console.log(
+					`[useChat] append received id=${row.id} seq=${row.seq} type=${row.type} session=${sessionId}`
+				)
 				if (row.seq > lastSeqRef.current)
 					lastSeqRef.current = row.seq
 
 				const msg = eventToMessage(row)
 				if (msg) {
+					console.log(
+						`[useChat] appending message role=${msg.role} stopReason=${msg.stopReason ?? 'none'}`
+					)
 					// Events arrive in monotonic seq order over SSE — just append
 					setMessages(current => [...current, msg])
+				} else {
+					console.log(
+						`[useChat] append skipped — eventToMessage returned null for type=${row.type}`
+					)
 				}
 			} catch (err) {
-				console.warn(
-					'[useChat] failed to parse event:',
+				console.error(
+					'[useChat] failed to parse append event:',
 					err
 				)
 			}
 		}
 
-		const onError = () => {
+		const onError = (e: Event) => {
+			console.error(
+				`[useChat] SSE error session=${sessionId} hasSnapshot=${hasSnapshot}`,
+				e
+			)
 			if (hasSnapshot) return
 			setIsLoading(false)
 			setError(
@@ -194,6 +217,10 @@ export function useChat(sessionId: string) {
 			const trimmed = content.trim()
 			if (!trimmed) return
 
+			console.log(
+				`[useChat] sendMessage role=${role} content=${trimmed.slice(0, 100)} session=${sessionId}`
+			)
+
 			try {
 				const { error } = await eden
 					.chat({ sessionId })
@@ -201,7 +228,16 @@ export function useChat(sessionId: string) {
 						role,
 						content: trimmed
 					})
-				if (!error) return
+				if (!error) {
+					console.log(
+						`[useChat] sendMessage success session=${sessionId}`
+					)
+					return
+				}
+				console.error(
+					`[useChat] sendMessage got error response session=${sessionId}:`,
+					error
+				)
 				throw new Error(
 					`POST /chat/${sessionId}/messages failed`
 				)

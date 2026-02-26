@@ -33,6 +33,9 @@ export class AgentWatcher {
 	watch(sessionId: string): void {
 		if (this.unsubscribers.has(sessionId)) return
 
+		console.log(
+			`[agent-watcher] watching session=${sessionId}`
+		)
 		const unsub = this.store.subscribeToSession(
 			sessionId,
 			(event: SessionEvent) => {
@@ -44,8 +47,16 @@ export class AgentWatcher {
 				// If the message already has a runId it was
 				// persisted by AgentManager.prompt() — skip
 				// to avoid double-prompting.
-				if (row.runId) return
+				if (row.runId) {
+					console.log(
+						`[agent-watcher] skipping user_message with runId=${row.runId} (already managed)`
+					)
+					return
+				}
 
+				console.log(
+					`[agent-watcher] detected user_message seq=${row.seq} session=${sessionId}, triggering agent`
+				)
 				this.handleUserMessage(sessionId, row.payload)
 			}
 		)
@@ -82,19 +93,36 @@ export class AgentWatcher {
 					?.filter(c => c.type === 'text')
 					.map(c => c.text ?? '')
 					.join('') ?? ''
-		} catch {
+		} catch (err) {
+			console.error(
+				`[agent-watcher] failed to parse payload for session=${sessionId}:`,
+				err instanceof Error ? err.message : String(err),
+				`payload=${payload.slice(0, 200)}`
+			)
 			return
 		}
 
-		if (!text.trim()) return
+		if (!text.trim()) {
+			console.warn(
+				`[agent-watcher] empty text after parse for session=${sessionId}, skipping`
+			)
+			return
+		}
 
+		console.log(
+			`[agent-watcher] dispatching runAgent session=${sessionId} text=${text.slice(0, 100)}`
+		)
 		// Fire-and-forget — errors are logged, not propagated
 		this.agentManager
 			.runAgent(sessionId, text)
+			.then(({ runId }) => {
+				console.log(
+					`[agent-watcher] runAgent started session=${sessionId} runId=${runId}`
+				)
+			})
 			.catch(err => {
-				// Expected: agent busy, no adapter, etc.
-				console.warn(
-					`[agent-watcher] could not run agent for session=${sessionId}:`,
+				console.error(
+					`[agent-watcher] runAgent FAILED session=${sessionId}:`,
 					err instanceof Error ? err.message : String(err)
 				)
 			})

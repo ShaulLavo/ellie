@@ -12,7 +12,7 @@ import { rmSync, readFileSync, existsSync } from 'fs'
 import { describe } from 'bun:test'
 import { anthropicText } from '@tanstack/ai-anthropic'
 import { groqChat } from '@ellie/ai/openai-compat'
-import { loadProviderCredential } from '@ellie/ai/credentials'
+import { loadCredentialMap } from '@ellie/ai/credentials'
 import { Hindsight } from '../hindsight'
 import type { HindsightConfig } from '../types'
 import type { HindsightDatabase } from '../db'
@@ -178,10 +178,13 @@ export const HAS_ANTHROPIC =
 // Groq credential detection (matches Python conftest.py — uses openai/gpt-oss-120b via Groq)
 export const HAS_GROQ_KEY = !!process.env.GROQ_API_KEY
 const _hasGroqCredentials = CREDENTIALS_PATH
-	? await loadProviderCredential(
-			CREDENTIALS_PATH,
-			'groq'
-		).then(c => !!c)
+	? await loadCredentialMap(CREDENTIALS_PATH).then(
+			map =>
+				map !== null &&
+				typeof map.groq === 'object' &&
+				map.groq !== null &&
+				'type' in map.groq
+		)
 	: false
 export const HAS_GROQ = HAS_GROQ_KEY || _hasGroqCredentials
 
@@ -225,12 +228,19 @@ async function resolveRealAdapter(): Promise<
 
 	// Priority 2: Groq via credentials file
 	if (CREDENTIALS_PATH) {
-		const groqCred = await loadProviderCredential(
-			CREDENTIALS_PATH,
-			'groq'
-		)
-		if (groqCred && groqCred.type === 'api_key') {
-			return groqChat(REAL_LLM_MODEL, groqCred.key)
+		const map = await loadCredentialMap(CREDENTIALS_PATH)
+		const groq = map?.groq
+		if (
+			groq &&
+			typeof groq === 'object' &&
+			'type' in groq &&
+			(groq as { type: string }).type === 'api_key' &&
+			'key' in groq
+		) {
+			return groqChat(
+				REAL_LLM_MODEL,
+				(groq as { key: string }).key
+			)
 		}
 	}
 

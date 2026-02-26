@@ -45,6 +45,9 @@ data/
 # Credentials
 .credentials.json
 
+# Go binaries
+apps/cli/bin/
+
 # Misc
 .DS_Store
 *.pem
@@ -55,3 +58,4 @@ apps/react/src/output.css
 # Claude
 .claude/worktrees/
 .claude/settings.local.json
+apps/cli/cli

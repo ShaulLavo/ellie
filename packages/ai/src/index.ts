@@ -45,6 +45,33 @@ export {
 // Environment API key resolution
 export { getEnvApiKey, hasEnvApiKey } from './env'
 
+// Credential helpers
+export {
+	loadAnthropicCredential,
+	setAnthropicCredential,
+	clearAnthropicCredential,
+	normalizeAnthropicCredential
+} from './credentials'
+export type {
+	AnthropicCredential,
+	NormalizedOAuthCredential,
+	TokenCredential
+} from './credentials'
+
+// OAuth flow helpers
+export {
+	oauthAuthorize,
+	oauthExchange,
+	oauthCreateApiKey,
+	tokensToCredential,
+	refreshNormalizedOAuthToken
+} from './anthropic-oauth'
+export type {
+	OAuthMode,
+	OAuthAuthorizeResult,
+	OAuthTokens
+} from './anthropic-oauth'
+
 // Thinking level abstraction
 export {
 	toThinkingModelOptions,
