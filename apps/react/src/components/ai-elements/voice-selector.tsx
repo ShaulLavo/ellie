@@ -104,7 +104,7 @@ export const VoiceSelector = ({
 			value={voiceSelectorContext}
 		>
 			<Dialog
-				onOpenChange={value => setOpen(value)}
+				onOpenChange={(value: boolean) => setOpen(value)}
 				open={open}
 				{...props}
 			>

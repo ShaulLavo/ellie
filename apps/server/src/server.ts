@@ -10,8 +10,14 @@ import {
 	type AnthropicChatModel
 } from '@tanstack/ai-anthropic'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import { loadAnthropicCredential } from '@ellie/ai/credentials'
-import { anthropicOAuth } from '@ellie/ai/anthropic-oauth'
+import {
+	loadAnthropicCredential,
+	setAnthropicCredential
+} from '@ellie/ai/credentials'
+import {
+	anthropicOAuth,
+	refreshNormalizedOAuthToken
+} from '@ellie/ai/anthropic-oauth'
 import { Elysia } from 'elysia'
 import { AgentManager } from './agent/manager'
 import { AgentWatcher } from './agent/watcher'
@@ -103,8 +109,32 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 	switch (cred.type) {
 		case 'api_key':
 			return createAnthropicChat(model, cred.key)
-		case 'oauth':
+		case 'oauth': {
+			// Auto-refresh if expired or expiring within 5 minutes
+			const REFRESH_BUFFER_MS = 5 * 60 * 1000
+			if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
+				console.log(
+					'[server] OAuth token expired or expiring soon, refreshing…'
+				)
+				const refreshed = await refreshNormalizedOAuthToken(
+					cred.refresh
+				)
+				if (refreshed) {
+					await setAnthropicCredential(
+						CREDENTIALS_PATH,
+						refreshed
+					)
+					console.log(
+						'[server] OAuth token refreshed successfully'
+					)
+					return anthropicOAuth(model, refreshed.access)
+				}
+				console.warn(
+					'[server] OAuth token refresh failed, using existing token'
+				)
+			}
 			return anthropicOAuth(model, cred.access)
+		}
 		case 'token':
 			return createAnthropicChat(model, cred.token)
 		default:
@@ -120,7 +150,24 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 let cachedAgentManager: AgentManager | null | undefined
 let cachedAgentWatcher: AgentWatcher | null | undefined
 
+/**
+ * Check if file-based OAuth token is expired/expiring and invalidate cache
+ * so resolveAdapter() will run the refresh flow on next access.
+ */
+async function ensureTokenFresh(): Promise<void> {
+	const cred = await loadAnthropicCredential(
+		CREDENTIALS_PATH
+	)
+	if (!cred || cred.type !== 'oauth') return
+
+	const REFRESH_BUFFER_MS = 5 * 60 * 1000
+	if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
+		invalidateAgentCache()
+	}
+}
+
 async function getAgentManager(): Promise<AgentManager | null> {
+	await ensureTokenFresh()
 	if (cachedAgentManager !== undefined)
 		return cachedAgentManager
 	const adapter = await resolveAdapter()
@@ -189,51 +236,26 @@ export const app = new Elysia()
 	.use(
 		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
 	)
-	.all(
-		`/api/*`,
-		({ set }) => {
-			set.status = 404
-			return { error: `Not Found` }
-		},
-		{
-			detail: { hide: true },
-			response: {
-				404: errorSchema
-			}
-		}
-	)
-	.all(
-		`/chat/*`,
-		({ set }) => {
-			set.status = 404
-			return { error: `Not Found` }
-		},
-		{
-			detail: { hide: true },
-			response: {
-				404: errorSchema
-			}
-		}
-	)
-	.all(
-		`/agent/*`,
-		({ set }) => {
-			set.status = 404
-			return { error: `Not Found` }
-		},
-		{
-			detail: { hide: true },
-			response: {
-				404: errorSchema
-			}
-		}
-	)
+	.get('/', ({ redirect }) => redirect('/app'))
 	.use(
 		await staticPlugin({
 			assets: STUDIO_PUBLIC,
-			prefix: `/`,
+			prefix: `/app`,
 			indexHTML: true
 		})
+	)
+	.all(
+		`/*`,
+		({ set }) => {
+			set.status = 404
+			return { error: `Not Found` }
+		},
+		{
+			detail: { hide: true },
+			response: {
+				404: errorSchema
+			}
+		}
 	)
 	.onError(({ code, error, set }) => {
 		if (code === `VALIDATION`) {

@@ -27,10 +27,10 @@
 		"@tailwindcss/typography": "^0.5.19",
 		"@types/babel__core": "^7.20.5",
 		"@typescript/native-preview": "latest",
-		"app": "workspace:*",
 		"lefthook": "^2.1.1",
 		"oxfmt": "^0.35.0",
 		"oxlint": "^1.48.0",
+		"server": "workspace:*",
 		"turbo": "^2.8.10",
 		"typescript": "5.9.2"
 	},

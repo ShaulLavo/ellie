@@ -284,9 +284,9 @@ export interface ChatEventAvatarProps
 	/** Fallback content shown while the image loads or if it fails (e.g. initials). */
 	fallback?: React.ReactNode
 	/** Additional props forwarded to the inner `AvatarImage`. */
-	imageProps?: AvatarPrimitive.Image.Props
+	imageProps?: React.ComponentProps<'img'>
 	/** Additional props forwarded to the inner `AvatarFallback`. */
-	fallbackProps?: AvatarPrimitive.Fallback.Props
+	fallbackProps?: React.ComponentProps<'span'>
 }
 
 /**
