@@ -408,7 +408,7 @@ function errorStatus(error: unknown): number {
 	return 500
 }
 
-function createHindsightApp(hs: Hindsight) {
+export function createHindsightApp(hs: Hindsight) {
 	const handlers = createHindsightHandlers(hs)
 
 	const invoke = (

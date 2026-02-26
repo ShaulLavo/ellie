@@ -1,6 +1,6 @@
 {
 	"$schema": "https://ui.shadcn.com/schema.json",
-	"style": "base-mira",
+	"style": "new-york",
 	"rsc": false,
 	"tsx": true,
 	"tailwind": {
@@ -10,10 +10,8 @@
 		"cssVariables": true,
 		"prefix": ""
 	},
-	"iconLibrary": "phosphor",
+	"iconLibrary": "lucide",
 	"rtl": false,
-	"menuColor": "default",
-	"menuAccent": "subtle",
 	"aliases": {
 		"components": "@/components",
 		"utils": "@/lib/utils",
@@ -22,9 +20,6 @@
 		"hooks": "@/hooks"
 	},
 	"registries": {
-		"@abui": "https://abui.io/r/{name}.json",
-		"@kokonutui": "https://kokonutui.com/r/{name}.json",
-		"@animate-ui": "https://animate-ui.com/r/{name}.json",
 		"@magicui": "https://magicui.design/r/{name}"
 	}
 }

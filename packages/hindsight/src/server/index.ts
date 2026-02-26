@@ -1,4 +1,5 @@
 export {
 	handleHindsightRequest,
-	createHindsightHandlers
+	createHindsightHandlers,
+	createHindsightApp
 } from './routes'

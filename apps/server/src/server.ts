@@ -19,6 +19,8 @@ import {
 	refreshNormalizedOAuthToken
 } from '@ellie/ai/anthropic-oauth'
 import { Elysia } from 'elysia'
+import { Hindsight } from '@ellie/hindsight'
+import { createHindsightApp } from '@ellie/hindsight/server'
 import { AgentManager } from './agent/manager'
 import { AgentWatcher } from './agent/watcher'
 import { RealtimeStore } from './lib/realtime-store'
@@ -200,6 +202,12 @@ function invalidateAgentCache() {
 // Eagerly resolve once at startup so first request doesn't pay the cost
 await getAgentManager()
 
+// ── Hindsight (memory) ────────────────────────────────────────────────────
+// Single default bank is created lazily on first access.
+const hindsight = new Hindsight({
+	dbPath: `${DATA_DIR}/hindsight.db`
+})
+
 const sseState: SseState = {
 	activeClients: 0
 }
@@ -242,6 +250,7 @@ export const app = new Elysia()
 	.use(
 		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
 	)
+	.use(createHindsightApp(hindsight))
 	.get('/', ({ redirect }) => redirect('/app'))
 	.use(
 		await staticPlugin({

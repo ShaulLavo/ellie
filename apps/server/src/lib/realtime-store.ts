@@ -133,6 +133,16 @@ export class RealtimeStore {
 		return false
 	}
 
+	// ── Session management ───────────────────────────────────────────────
+
+	createSession(id?: string) {
+		return this.#store.createSession(id)
+	}
+
+	listSessions() {
+		return this.#store.listSessions()
+	}
+
 	// ── Query wrappers ────────────────────────────────────────────────────
 
 	listAgentMessages(sessionId: string): AgentMessage[] {
@@ -142,9 +152,15 @@ export class RealtimeStore {
 	queryEvents(
 		sessionId: string,
 		afterSeq?: number,
-		types?: EventType[]
+		types?: EventType[],
+		limit?: number
 	) {
-		return this.#store.query({ sessionId, afterSeq, types })
+		return this.#store.query({
+			sessionId,
+			afterSeq,
+			types,
+			limit
+		})
 	}
 
 	queryRunEvents(sessionId: string, runId: string) {

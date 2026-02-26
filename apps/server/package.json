@@ -17,6 +17,7 @@
 		"@ellie/ai": "workspace:*",
 		"@ellie/db": "workspace:*",
 		"@ellie/env": "workspace:*",
+		"@ellie/hindsight": "workspace:*",
 		"@ellie/schemas": "workspace:*",
 		"@ellie/utils": "workspace:*",
 		"@elysiajs/openapi": "^1.4.14",
