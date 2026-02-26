@@ -46,7 +46,7 @@ data/
 .credentials.json
 
 # Go binaries
-apps/cli/cli
+apps/cli/bin/
 
 # Misc
 .DS_Store

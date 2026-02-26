@@ -19,7 +19,7 @@ export function createChatRoutes(
 	sseState: SseState,
 	agentWatcher?: AgentWatcher | null
 ) {
-	return new Elysia({ prefix: '/chat' })
+	return new Elysia({ prefix: '/chat', tags: ['Chat'] })
 		.get(
 			'/:sessionId/messages',
 			({ params }) => {

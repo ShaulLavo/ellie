@@ -2,9 +2,13 @@
 	"name": "cli",
 	"version": "0.0.1",
 	"private": true,
+	"bin": {
+		"ellie": "./bin/ellie"
+	},
 	"scripts": {
 		"dev": "go run ./cmd/cli",
-		"build": "go build ./...",
+		"build": "go build -o bin/ellie ./cmd/cli",
+		"install-global": "go build -o $(go env GOPATH)/bin/ellie ./cmd/cli",
 		"test": "go test ./...",
 		"check-types": "go test ./..."
 	}

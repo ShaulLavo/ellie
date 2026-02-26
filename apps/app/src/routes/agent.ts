@@ -27,7 +27,7 @@ export function createAgentRoutes(
 	agentManager: AgentManager | null,
 	sseState: SseState
 ) {
-	return new Elysia({ prefix: '/agent' })
+	return new Elysia({ prefix: '/agent', tags: ['Agent'] })
 		.get(
 			'/:sessionId/messages',
 			({ params }) => {

@@ -4,7 +4,10 @@ import { statusSchema } from './common'
 export function createStatusRoutes(
 	getConnectedClients: () => number
 ) {
-	return new Elysia({ prefix: '/api' }).get(
+	return new Elysia({
+		prefix: '/api',
+		tags: ['Status']
+	}).get(
 		'/status',
 		() => {
 			return {

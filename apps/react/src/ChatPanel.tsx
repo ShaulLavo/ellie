@@ -175,10 +175,10 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 		const markdownMap = new Map<string, string>()
 		for (let i = 0; i < grouped.length; i++) {
 			const { msg } = grouped[i]
-			markdownMap.set(
-				getMsgKey(msg, i),
-				getTextContent(msg)
-			)
+			const name =
+				msg.role.charAt(0).toUpperCase() + msg.role.slice(1)
+			const text = getTextContent(msg)
+			markdownMap.set(getMsgKey(msg, i), `${name}: ${text}`)
 		}
 		return markdownMap
 	}, [grouped])
