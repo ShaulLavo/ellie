@@ -444,8 +444,8 @@ export class TusServer {
 				responseData.headers['Upload-Offset'] =
 					newOffset.toString()
 				isFinal =
-					newOffset ===
-					Number.parseInt(upload_length as string, 10)
+					upload_length !== null &&
+					newOffset === Number.parseInt(upload_length, 10)
 				upload.offset = newOffset
 			}
 		} catch (e) {
@@ -468,22 +468,17 @@ export class TusServer {
 			}
 		}
 
-		// Expiration header
+		// Expiration header (only for incomplete uploads)
 		if (
 			this.store.hasExtension('expiration') &&
 			this.store.getExpiration() > 0 &&
-			upload.creation_date
+			upload.creation_date &&
+			!isFinal
 		) {
-			const created = await this.store.getUpload(upload.id)
-			if (
-				created.offset !==
-				Number.parseInt(upload_length as string, 10)
-			) {
-				const creation = new Date(upload.creation_date)
-				responseData.headers['Upload-Expires'] = new Date(
-					creation.getTime() + this.store.getExpiration()
-				).toUTCString()
-			}
+			const creation = new Date(upload.creation_date)
+			responseData.headers['Upload-Expires'] = new Date(
+				creation.getTime() + this.store.getExpiration()
+			).toUTCString()
 		}
 
 		if (
@@ -792,9 +787,23 @@ export class TusServer {
 					)
 				: Readable.from([])
 
-			nodeStream.on('error', () => {
-				/* swallow client disconnections */
-			})
+			nodeStream.on(
+				'error',
+				(err: NodeJS.ErrnoException) => {
+					// Silently ignore expected client disconnections
+					if (
+						err.code === 'ECONNRESET' ||
+						err.code === 'ECONNABORTED' ||
+						err.code === 'ERR_STREAM_PREMATURE_CLOSE'
+					) {
+						return
+					}
+					console.warn(
+						'[tus] unexpected stream error:',
+						err
+					)
+				}
+			)
 
 			const onAbort = () => {
 				nodeStream.unpipe(proxy)

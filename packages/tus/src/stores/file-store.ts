@@ -41,19 +41,10 @@ export class FileStore extends DataStore {
 			'termination',
 			'expiration'
 		]
-		this.checkOrCreateDirectory()
-	}
-
-	private checkOrCreateDirectory() {
-		fs.mkdir(
-			this.directory,
-			{ mode: 0o777, recursive: true },
-			error => {
-				if (error && error.code !== 'EEXIST') {
-					throw error
-				}
-			}
-		)
+		fs.mkdirSync(this.directory, {
+			mode: 0o755,
+			recursive: true
+		})
 	}
 
 	async create(file: Upload): Promise<Upload> {
@@ -77,19 +68,13 @@ export class FileStore extends DataStore {
 	}
 
 	async remove(file_id: string): Promise<void> {
-		return new Promise((resolve, reject) => {
-			fs.unlink(`${this.directory}/${file_id}`, err => {
-				if (err) {
-					reject(ERRORS.FILE_NOT_FOUND)
-					return
-				}
-				try {
-					resolve(this.configstore.delete(file_id))
-				} catch (error) {
-					reject(error)
-				}
-			})
-		})
+		const filePath = path.join(this.directory, file_id)
+		try {
+			await fsProm.unlink(filePath)
+		} catch {
+			throw ERRORS.FILE_NOT_FOUND
+		}
+		await this.configstore.delete(file_id)
 	}
 
 	async write(
@@ -134,43 +119,36 @@ export class FileStore extends DataStore {
 			throw ERRORS.FILE_NOT_FOUND
 		}
 
-		return new Promise((resolve, reject) => {
-			const file_path = `${this.directory}/${id}`
-			fs.stat(file_path, (error, stats) => {
-				if (
-					error &&
-					error.code === FILE_DOESNT_EXIST &&
-					file
-				) {
-					return reject(ERRORS.FILE_NO_LONGER_EXISTS)
-				}
+		const file_path = path.join(this.directory, id)
+		let stats: fs.Stats
+		try {
+			stats = await fsProm.stat(file_path)
+		} catch (error: unknown) {
+			if (
+				error &&
+				typeof error === 'object' &&
+				'code' in error &&
+				error.code === FILE_DOESNT_EXIST
+			) {
+				throw ERRORS.FILE_NO_LONGER_EXISTS
+			}
+			throw error
+		}
 
-				if (error && error.code === FILE_DOESNT_EXIST) {
-					return reject(ERRORS.FILE_NOT_FOUND)
-				}
+		if (stats.isDirectory()) {
+			throw ERRORS.FILE_NOT_FOUND
+		}
 
-				if (error) {
-					return reject(error)
-				}
-
-				if (stats.isDirectory()) {
-					return reject(ERRORS.FILE_NOT_FOUND)
-				}
-
-				return resolve(
-					new Upload({
-						id,
-						size: file.size,
-						offset: stats.size,
-						metadata: file.metadata,
-						creation_date: file.creation_date,
-						storage: {
-							type: 'file',
-							path: file_path
-						}
-					})
-				)
-			})
+		return new Upload({
+			id,
+			size: file.size,
+			offset: stats.size,
+			metadata: file.metadata,
+			creation_date: file.creation_date,
+			storage: {
+				type: 'file',
+				path: file_path
+			}
 		})
 	}
 

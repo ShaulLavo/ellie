@@ -37,7 +37,7 @@ export function parse(
 	const meta: Record<string, string | null> = {}
 
 	if (!str || str.trim().length === 0) {
-		throw new Error('Metadata string is not valid')
+		return {}
 	}
 
 	for (const pair of str.split(',')) {

@@ -327,7 +327,8 @@ export const app = new Elysia()
 	.use(
 		createTusApp({
 			datastore: uploadStore,
-			relativeLocation: true
+			relativeLocation: true,
+			maxSize: 500 * 1024 * 1024 // 500 MB
 		})
 	)
 	.use(createHindsightApp(hindsight))

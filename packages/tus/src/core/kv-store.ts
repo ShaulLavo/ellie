@@ -28,8 +28,16 @@ export class FileKvStore<T = Upload> implements KvStore<T> {
 				'utf8'
 			)
 			return JSON.parse(buffer)
-		} catch {
-			return undefined
+		} catch (err: unknown) {
+			if (
+				err &&
+				typeof err === 'object' &&
+				'code' in err &&
+				err.code === 'ENOENT'
+			) {
+				return undefined
+			}
+			throw err
 		}
 	}
 
@@ -41,24 +49,39 @@ export class FileKvStore<T = Upload> implements KvStore<T> {
 	}
 
 	async delete(key: string): Promise<void> {
-		await fs.rm(this.resolve(key))
+		await fs.rm(this.resolve(key), { force: true })
 	}
 
 	async list(): Promise<Array<string>> {
 		const files = await fs.readdir(this.directory)
-		const sorted = files.sort((a, b) => a.localeCompare(b))
-		const name = (file: string) =>
-			path.basename(file, '.json')
-		// Only return tus file IDs — check if the file has a corresponding JSON info file
-		return sorted.filter(
-			(file, idx) =>
-				idx < sorted.length - 1 &&
-				name(file) === name(sorted[idx + 1])
-		)
+		const jsonFiles = new Set<string>()
+		for (const file of files) {
+			if (file.endsWith('.json')) {
+				jsonFiles.add(path.basename(file, '.json'))
+			}
+		}
+		return [...jsonFiles].sort((a, b) => a.localeCompare(b))
 	}
 
 	private resolve(key: string): string {
-		return path.resolve(this.directory, `${key}.json`)
+		// Sanitize key to prevent path traversal
+		if (key.includes('..') || path.isAbsolute(key)) {
+			throw new Error(
+				`Invalid key: ${key} (must not contain ".." or be an absolute path)`
+			)
+		}
+		const sanitized = key.replace(/^[/\\]+/, '')
+		const finalPath = path.resolve(
+			this.directory,
+			`${sanitized}.json`
+		)
+		const base = path.resolve(this.directory)
+		if (!finalPath.startsWith(base + path.sep)) {
+			throw new Error(
+				`Invalid key: resolved path escapes base directory`
+			)
+		}
+		return finalPath
 	}
 }
 

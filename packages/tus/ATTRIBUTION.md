@@ -14,7 +14,7 @@ under the MIT License.
 
 ## MIT License (tus-node-server)
 
-```
+```text
 MIT License
 
 Copyright (c) Transloadit

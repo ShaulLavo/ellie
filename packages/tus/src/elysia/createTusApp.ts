@@ -15,6 +15,35 @@ import {
 import type { DataStore } from '../core/data-store'
 import type { Upload } from '../core/upload'
 
+// ── Type guard for stores that expose a configstore ─────────────────────
+
+interface ConfigStoreCapable {
+	configstore: {
+		list: () => Promise<string[]>
+		get: (key: string) => Promise<Upload | undefined>
+	}
+}
+
+function hasConfigStore(
+	s: DataStore
+): s is DataStore & ConfigStoreCapable {
+	const candidate = s as unknown as Record<string, unknown>
+	if (
+		!candidate.configstore ||
+		typeof candidate.configstore !== 'object'
+	) {
+		return false
+	}
+	const cs = candidate.configstore as Record<
+		string,
+		unknown
+	>
+	return (
+		typeof cs.list === 'function' &&
+		typeof cs.get === 'function'
+	)
+}
+
 // ── Localhost guard ────────────────────────────────────────────────────────
 
 const LOOPBACK_ADDRS = new Set([
@@ -143,26 +172,13 @@ export function createTusApp(options: CreateTusAppOptions) {
 				`${rpcPrefix}/list`,
 				async () => {
 					const store = options.datastore
-					if (!store.hasExtension('expiration')) {
+					if (!hasConfigStore(store)) {
 						return { uploads: [] }
 					}
-					// KvStore-backed listing
-					const fileStore = store as unknown as {
-						configstore?: {
-							list?: () => Promise<string[]>
-							get?: (
-								key: string
-							) => Promise<Upload | undefined>
-						}
-					}
-					if (!fileStore.configstore?.list) {
-						return { uploads: [] }
-					}
-					const keys = await fileStore.configstore.list()
+					const keys = await store.configstore.list()
 					const uploads: Upload[] = []
 					for (const key of keys) {
-						const info =
-							await fileStore.configstore.get?.(key)
+						const info = await store.configstore.get(key)
 						if (info) uploads.push(info)
 					}
 					return { uploads }

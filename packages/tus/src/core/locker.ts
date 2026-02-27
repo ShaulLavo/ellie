@@ -83,11 +83,11 @@ class MemoryLock implements Lock {
 		requestRelease: RequestRelease,
 		signal: AbortSignal
 	): Promise<boolean> {
-		const lock = this.locker.locks.get(id)
-
 		if (signal.aborted) {
-			return typeof lock !== 'undefined'
+			return false
 		}
+
+		const lock = this.locker.locks.get(id)
 
 		if (!lock) {
 			this.locker.locks.set(id, { requestRelease })
@@ -97,11 +97,11 @@ class MemoryLock implements Lock {
 		await lock.requestRelease?.()
 
 		return await new Promise((resolve, reject) => {
-			setImmediate(() => {
+			setTimeout(() => {
 				this.acquireLock(id, requestRelease, signal)
 					.then(resolve)
 					.catch(reject)
-			})
+			}, 25)
 		})
 	}
 

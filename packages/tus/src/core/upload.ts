@@ -27,7 +27,7 @@ export class Upload {
 	constructor(upload: TUpload) {
 		if (!upload.id) {
 			throw new Error(
-				'[File] constructor must be given an ID'
+				'[Upload] constructor must be given an ID'
 			)
 		}
 
