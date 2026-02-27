@@ -169,14 +169,17 @@ function findCredentialsFile(): string | null {
 }
 
 const CREDENTIALS_PATH = findCredentialsFile()
-export const HAS_ANTHROPIC_KEY =
-	!!process.env.ANTHROPIC_API_KEY
-export const HAS_CREDENTIALS = !!CREDENTIALS_PATH
+export const HAS_ANTHROPIC_KEY = Boolean(
+	process.env.ANTHROPIC_API_KEY
+)
+export const HAS_CREDENTIALS = Boolean(CREDENTIALS_PATH)
 export const HAS_ANTHROPIC =
 	HAS_ANTHROPIC_KEY || HAS_CREDENTIALS
 
 // Groq credential detection (matches Python conftest.py — uses openai/gpt-oss-120b via Groq)
-export const HAS_GROQ_KEY = !!process.env.GROQ_API_KEY
+export const HAS_GROQ_KEY = Boolean(
+	process.env.GROQ_API_KEY
+)
 const _hasGroqCredentials = CREDENTIALS_PATH
 	? await loadCredentialMap(CREDENTIALS_PATH).then(
 			map =>

@@ -422,7 +422,7 @@ export const PromptInput = ({
 }: PromptInputProps) => {
 	// Try to use a provider controller if present
 	const controller = useOptionalPromptInputController()
-	const usingProvider = !!controller
+	const usingProvider = Boolean(controller)
 
 	// Refs
 	const inputRef = useRef<HTMLInputElement | null>(null)

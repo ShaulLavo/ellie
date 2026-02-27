@@ -255,7 +255,7 @@ function ActionSearchBar({
 							onBlur={handleBlur}
 							onKeyDown={handleKeyDown}
 							role="combobox"
-							aria-expanded={isFocused && !!result}
+							aria-expanded={isFocused && Boolean(result)}
 							aria-autocomplete="list"
 							aria-activedescendant={
 								activeIndex >= 0
