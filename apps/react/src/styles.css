@@ -283,6 +283,11 @@
 	* {
 		@apply border-border outline-ring/50;
 	}
+	html,
+	body,
+	#root {
+		@apply h-full;
+	}
 	body {
 		@apply bg-background text-foreground font-sans antialiased;
 	}
@@ -373,6 +378,52 @@
 }
 ::-webkit-scrollbar-thumb:hover {
 	background: oklch(0.5 0 0 / 30%);
+}
+
+/* ─── Code Block Overrides ─── */
+/* Remove outer border from Streamdown code blocks; the inner body already
+   has its own bg so the outer wrapper just needs to be borderless. */
+[data-streamdown='code-block'] {
+	position: relative;
+	border: none !important;
+	border-color: transparent !important;
+	divide-color: transparent !important;
+	background-color: var(--background) !important;
+	border-radius: 0.75rem !important;
+}
+[data-streamdown='code-block'] > * + * {
+	border-top: none !important;
+}
+
+/* Put language label and copy/download buttons on the same row as the header */
+[data-streamdown='code-block-header'] + div {
+	position: absolute !important;
+	top: 0 !important;
+	right: 0.5rem !important;
+	margin-top: 0 !important;
+	height: 2rem !important;
+	display: flex !important;
+	align-items: center !important;
+	z-index: 11 !important;
+	pointer-events: auto !important;
+}
+[data-streamdown='code-block-actions'] {
+	border: none !important;
+	background: transparent !important;
+	backdrop-filter: none !important;
+	padding: 0 !important;
+}
+[data-streamdown='code-block-body'] {
+	border: none !important;
+	padding: 0.5rem !important;
+}
+[data-streamdown='code-block-body'] code > span::before {
+	content: counter(line, hebrew) !important;
+}
+html.dark
+	[data-streamdown='code-block'][data-streamdown='code-block'] {
+	background: oklch(0.14 0.01 260) !important;
+	background-color: oklch(0.14 0.01 260) !important;
 }
 
 /* ─── Prompt Input Glow ─── */
