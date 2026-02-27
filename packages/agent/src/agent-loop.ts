@@ -13,12 +13,20 @@ import {
 } from '@tanstack/ai'
 import {
 	mapTanStackUsage,
-	toThinkingModelOptions
+	toThinkingModelOptions,
+	classifyError,
+	isRetryable
 } from '@ellie/ai'
 import type { Model, Usage } from '@ellie/ai'
 import * as v from 'valibot'
 import { EventStream } from './event-stream'
 import { toModelMessages } from './messages'
+import { withRetry } from './retry'
+import { trimMessages } from './context-recovery'
+import {
+	truncateToolResult,
+	needsTruncation
+} from './tool-safety'
 import type {
 	AgentContext,
 	AgentEvent,
@@ -255,7 +263,8 @@ function wrapToolsForTanStack(
 	tracker: ToolCallTracker,
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
-	toolResultCollector: ToolResultMessage[]
+	toolResultCollector: ToolResultMessage[],
+	maxToolResultChars?: number
 ) {
 	return tools.map(tool => ({
 		name: tool.name,
@@ -302,6 +311,21 @@ function wrapToolsForTanStack(
 					details: {}
 				}
 				isError = true
+			}
+
+			// Truncate oversized tool results
+			if (
+				!isError &&
+				maxToolResultChars &&
+				needsTruncation(result, maxToolResultChars)
+			) {
+				console.log(
+					`[agent-loop] truncating tool result for "${tool.name}" (exceeded ${maxToolResultChars} chars)`
+				)
+				result = truncateToolResult(
+					result,
+					maxToolResultChars
+				)
 			}
 
 			emit({
@@ -382,13 +406,13 @@ async function runLoop(
 			pendingMessages = []
 		}
 
-		// Process assistant response
+		// Process assistant response (with retry on transient errors)
 		// With chat(): TanStack handles tool loop internally via maxIterations.
 		// With streamFn: we must handle tool execution + re-call manually.
 		console.log(
-			`[agent-loop] runLoop calling processAgentStream contextMessages=${currentContext.messages.length}`
+			`[agent-loop] runLoop calling processAgentStreamWithRetry contextMessages=${currentContext.messages.length}`
 		)
-		let result = await processAgentStream(
+		let result = await processAgentStreamWithRetry(
 			currentContext,
 			config,
 			signal,
@@ -397,7 +421,7 @@ async function runLoop(
 		)
 
 		console.log(
-			`[agent-loop] processAgentStream returned messages=${result.messages.length} abortedOrError=${result.abortedOrError} stopReason=${result.lastAssistant.stopReason} errorMessage=${result.lastAssistant.errorMessage ?? 'none'}`
+			`[agent-loop] processAgentStreamWithRetry returned messages=${result.messages.length} abortedOrError=${result.abortedOrError} stopReason=${result.lastAssistant.stopReason} errorMessage=${result.lastAssistant.errorMessage ?? 'none'}`
 		)
 
 		// Collect messages from this iteration
@@ -481,7 +505,8 @@ async function runLoop(
 						toolCalls[i],
 						currentContext.tools ?? [],
 						signal,
-						emit
+						emit,
+						config.toolSafety?.maxToolResultChars ?? 50_000
 					)
 					for (const tr of toolResults) {
 						currentContext.messages.push(tr)
@@ -492,8 +517,8 @@ async function runLoop(
 
 				if (signal?.aborted) break
 
-				// Re-call the LLM with tool results
-				result = await processAgentStream(
+				// Re-call the LLM with tool results (with retry)
+				result = await processAgentStreamWithRetry(
 					currentContext,
 					config,
 					signal,
@@ -555,7 +580,8 @@ async function executeToolCall(
 	toolCall: ToolCall,
 	tools: AgentTool[],
 	signal: AbortSignal | undefined,
-	emit: EmitFn
+	emit: EmitFn,
+	maxToolResultChars?: number
 ): Promise<ToolResultMessage[]> {
 	const tool = tools.find(t => t.name === toolCall.name)
 
@@ -614,6 +640,18 @@ async function executeToolCall(
 		}
 	}
 
+	// Truncate oversized tool results
+	if (
+		!isError &&
+		maxToolResultChars &&
+		needsTruncation(result, maxToolResultChars)
+	) {
+		console.log(
+			`[agent-loop] truncating tool result for "${toolCall.name}" (exceeded ${maxToolResultChars} chars)`
+		)
+		result = truncateToolResult(result, maxToolResultChars)
+	}
+
 	emit({
 		type: 'tool_execution_end',
 		toolCallId: toolCall.id,
@@ -639,6 +677,184 @@ async function executeToolCall(
 	emit({ type: 'message_end', message: toolResultMessage })
 
 	return [toolResultMessage]
+}
+
+// ============================================================================
+// Retry-aware stream processing
+// ============================================================================
+
+/**
+ * Wrapper around processAgentStream that adds retry logic:
+ * 1. Call processAgentStream as normal
+ * 2. If result has error → classify it
+ * 3. If not retryable (auth, billing, format) → return error immediately
+ * 4. If requiresRecovery (context_overflow) → trim context, emit context_compacted
+ * 5. If retryable without recovery (transient/rate_limit/timeout) → retry
+ * 6. Pop the error assistant message before retry (zclaw's history_rollback pattern)
+ *
+ * The retry loop uses withRetry() for exponential backoff + jitter.
+ */
+async function processAgentStreamWithRetry(
+	context: AgentContext,
+	config: AgentLoopConfig,
+	signal: AbortSignal | undefined,
+	emit: EmitFn,
+	streamFn?: StreamFn
+): Promise<ProcessResult> {
+	const retryConfig = config.retry ?? {}
+	const maxAttempts = retryConfig.maxAttempts ?? 3
+
+	// If retry is disabled (maxAttempts=1), call directly
+	if (maxAttempts <= 1) {
+		return processAgentStream(
+			context,
+			config,
+			signal,
+			emit,
+			streamFn
+		)
+	}
+
+	let lastResult: ProcessResult | undefined
+
+	const result = await withRetry(
+		async () => {
+			const processResult = await processAgentStream(
+				context,
+				config,
+				signal,
+				emit,
+				streamFn
+			)
+
+			// If no error, return successfully
+			if (!processResult.abortedOrError) {
+				return processResult
+			}
+
+			// Aborted by user — not retryable
+			if (
+				processResult.lastAssistant.stopReason === 'aborted'
+			) {
+				lastResult = processResult
+				return processResult
+			}
+
+			// Classify the error
+			const errorMessage =
+				processResult.lastAssistant.errorMessage ?? ''
+			const classified = classifyError(
+				new Error(errorMessage)
+			)
+
+			console.log(
+				`[agent-loop] error classified: class=${classified.errorClass} retryable=${classified.retryable} requiresRecovery=${classified.requiresRecovery} message="${errorMessage.slice(0, 100)}"`
+			)
+
+			// Not retryable — return the error result as-is
+			if (!isRetryable(classified)) {
+				lastResult = processResult
+				return processResult
+			}
+
+			// --- Retryable error: prepare for retry ---
+
+			// Pop the error assistant message from context
+			// (zclaw's history_rollback pattern — don't let the LLM see its own error)
+			const errorAssistant = processResult.lastAssistant
+			const contextIdx =
+				context.messages.indexOf(errorAssistant)
+			if (contextIdx !== -1) {
+				context.messages.splice(contextIdx, 1)
+			}
+
+			// If recovery needed (context_overflow), trim context first
+			if (classified.requiresRecovery) {
+				const recoveryResult = trimMessages(
+					context.messages,
+					{
+						contextWindow: config.model.contextWindow,
+						safetyMargin:
+							config.contextRecovery?.safetyMargin ?? 0.85,
+						minPreservedMessages:
+							config.contextRecovery
+								?.minPreservedMessages ?? 4,
+						charsPerToken:
+							config.contextRecovery?.charsPerToken ?? 4
+					}
+				)
+
+				if (recoveryResult.removedCount > 0) {
+					context.messages = recoveryResult.messages
+					emit({
+						type: 'context_compacted',
+						removedCount: recoveryResult.removedCount,
+						remainingCount: recoveryResult.messages.length,
+						estimatedTokens: recoveryResult.estimatedTokens
+					})
+					console.log(
+						`[agent-loop] context compacted: removed=${recoveryResult.removedCount} remaining=${recoveryResult.messages.length} estimatedTokens=${recoveryResult.estimatedTokens}`
+					)
+				}
+			}
+
+			// Store result and throw to trigger retry
+			lastResult = processResult
+
+			// Create an error with retryAfterMs for the retry engine
+			const retryError = new Error(
+				errorMessage
+			) as Error & {
+				retryAfterMs?: number
+			}
+			if (classified.retryAfterMs) {
+				retryError.retryAfterMs = classified.retryAfterMs
+			}
+			throw retryError
+		},
+		{
+			maxAttempts,
+			baseDelayMs: retryConfig.baseDelayMs ?? 1000,
+			maxDelayMs: retryConfig.maxDelayMs ?? 30000,
+			backoffMultiplier: retryConfig.backoffMultiplier ?? 2,
+			signal,
+			onRetry: (err, attempt, delayMs) => {
+				const reason =
+					err instanceof Error
+						? err.message.slice(0, 200)
+						: String(err)
+				console.log(
+					`[agent-loop] retrying LLM call: attempt=${attempt}/${maxAttempts} delay=${delayMs}ms reason="${reason}"`
+				)
+				emit({
+					type: 'retry',
+					attempt,
+					maxAttempts,
+					reason,
+					delayMs
+				})
+			}
+		}
+	).catch((err: unknown) => {
+		// All retries exhausted (or shouldRetry returned false)
+		// Return the last result if we have one, otherwise create an error result
+		if (lastResult) return lastResult
+
+		// Fallback: create a minimal error result
+		const errorMessage =
+			err instanceof Error ? err.message : String(err)
+		const errorPartial = createPartial(config)
+		errorPartial.stopReason = 'error'
+		errorPartial.errorMessage = errorMessage
+		return {
+			messages: [errorPartial] as AgentMessage[],
+			toolResults: [] as ToolResultMessage[],
+			lastAssistant: errorPartial,
+			abortedOrError: true
+		} satisfies ProcessResult
+	})
+
+	return result
 }
 
 // ============================================================================
@@ -679,13 +895,16 @@ async function processAgentStream(
 	// Set up tool bridge
 	const tracker = createToolCallTracker()
 	const toolResultCollector: ToolResultMessage[] = []
+	const maxToolResultChars =
+		config.toolSafety?.maxToolResultChars ?? 50_000
 	const tanStackTools = context.tools?.length
 		? wrapToolsForTanStack(
 				context.tools,
 				tracker,
 				signal,
 				emit,
-				toolResultCollector
+				toolResultCollector,
+				maxToolResultChars
 			)
 		: undefined
 

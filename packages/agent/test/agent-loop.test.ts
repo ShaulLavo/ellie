@@ -579,7 +579,9 @@ describe('agentLoop', () => {
 
 		const config: AgentLoopConfig = {
 			model: createMockModel(),
-			adapter: mockAdapter
+			adapter: mockAdapter,
+			// Disable retry so the error propagates immediately as a single assistant message
+			retry: { maxAttempts: 1 }
 		}
 
 		const prompts: AgentMessage[] = [

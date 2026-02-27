@@ -205,6 +205,26 @@ export type AgentEvent =
 			result: AgentToolResult
 			isError: boolean
 	  }
+	// --- Resilience events ---
+	| {
+			type: 'retry'
+			attempt: number
+			maxAttempts: number
+			reason: string
+			delayMs: number
+	  }
+	| {
+			type: 'context_compacted'
+			removedCount: number
+			remainingCount: number
+			estimatedTokens: number
+	  }
+	| {
+			type: 'tool_loop_detected'
+			pattern: string
+			toolName: string
+			message: string
+	  }
 
 // ============================================================================
 // Stream function & loop config
@@ -245,4 +265,34 @@ export interface AgentLoopConfig {
 
 	/** Called alongside EventStream.push() for each event. Use for durable persistence. Must be synchronous. */
 	onEvent?: (event: AgentEvent) => void
+
+	// --- Resilience config ---
+
+	/** Retry configuration for transient LLM errors. Default: 3 attempts, 1s base, 30s max. */
+	retry?: {
+		maxAttempts?: number
+		baseDelayMs?: number
+		maxDelayMs?: number
+		backoffMultiplier?: number
+	}
+
+	/** Context recovery configuration for overflow errors. Uses model.contextWindow by default. */
+	contextRecovery?: {
+		safetyMargin?: number
+		minPreservedMessages?: number
+		charsPerToken?: number
+	}
+
+	/** Tool result truncation configuration. Default: 50_000 chars per result. */
+	toolSafety?: {
+		maxToolResultChars?: number
+	}
+
+	/** Tool loop detection configuration. */
+	toolLoopDetection?: {
+		maxRepeatedCalls?: number
+		maxPingPongCycles?: number
+		historySize?: number
+		requireIdenticalResults?: boolean
+	}
 }
