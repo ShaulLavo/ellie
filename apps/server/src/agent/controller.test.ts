@@ -8,6 +8,7 @@ import {
 import { AgentController } from './controller'
 import { EventStore } from '@ellie/db'
 import { RealtimeStore } from '../lib/realtime-store'
+import { seedWorkspace } from './workspace'
 import type {
 	AnyTextAdapter,
 	StreamChunk
@@ -73,14 +74,16 @@ describe('AgentController', () => {
 	let eventStore: EventStore
 	let store: RealtimeStore
 	let controller: AgentController
+	let workspaceDir: string
 
 	beforeEach(() => {
 		tmpDir = createTempDir()
 		eventStore = new EventStore(join(tmpDir, 'events.db'))
-		store = new RealtimeStore(eventStore)
+		store = new RealtimeStore(eventStore, 'test-session')
+		workspaceDir = seedWorkspace(tmpDir)
 		controller = new AgentController(store, {
 			adapter: createMockAdapter(),
-			systemPrompt: 'You are a test assistant.'
+			workspaceDir
 		})
 	})
 
@@ -90,41 +93,12 @@ describe('AgentController', () => {
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
 
-	test('getOrCreate creates agent and session', () => {
-		const agent = controller.getOrCreate('session-1')
-
-		expect(agent).toBeDefined()
-		expect(agent.state.systemPrompt).toBe(
-			'You are a test assistant.'
-		)
-		expect(eventStore.getSession('session-1')).toBeDefined()
-	})
-
-	test('getOrCreate returns same agent for same sessionId', () => {
-		const agent1 = controller.getOrCreate('session-1')
-		const agent2 = controller.getOrCreate('session-1')
-
-		expect(agent1).toBe(agent2)
-	})
-
-	test('getOrCreate returns different agents for different sessionIds', () => {
-		const agent1 = controller.getOrCreate('session-1')
-		const agent2 = controller.getOrCreate('session-2')
-
-		expect(agent1).not.toBe(agent2)
-	})
-
 	test('hasSession returns false for non-existent session', () => {
 		expect(controller.hasSession('nonexistent')).toBe(false)
 	})
 
-	test('hasSession returns true after getOrCreate', () => {
-		controller.getOrCreate('session-1')
-		expect(controller.hasSession('session-1')).toBe(true)
-	})
-
 	test('loadHistory returns empty for new session', () => {
-		controller.getOrCreate('session-1')
+		store.ensureSession('session-1')
 		const history = controller.loadHistory('session-1')
 		expect(history).toEqual([])
 	})
@@ -143,13 +117,9 @@ describe('AgentController', () => {
 
 		expect(runId).toBeDefined()
 		expect(routed).toBe('prompt')
-
-		// Wait for agent to finish
-		const agent = controller.getOrCreate('session-1')
-		await agent.waitForIdle()
 	})
 
-	test('handleMessage routes to followUp when busy', async () => {
+	test('handleMessage routes to followUp when busy on same session', async () => {
 		// Persist user messages
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
@@ -177,31 +147,51 @@ describe('AgentController', () => {
 			'Second'
 		)
 		expect(result2.routed).toBe('followUp')
-
-		// Wait for agent to finish (should process both)
-		const agent = controller.getOrCreate('session-1')
-		await agent.waitForIdle()
 	})
 
-	test('steer throws for non-existent agent', () => {
+	test('handleMessage queues cross-session when busy', async () => {
+		store.ensureSession('session-1')
+		store.ensureSession('session-2')
+
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'First' }],
+			timestamp: Date.now()
+		})
+
+		// Start first message on session-1
+		const result1 = await controller.handleMessage(
+			'session-1',
+			'First'
+		)
+		expect(result1.routed).toBe('prompt')
+
+		// Send message to session-2 while agent is busy
+		store.appendEvent('session-2', 'user_message', {
+			role: 'user',
+			content: [
+				{ type: 'text', text: 'Hello from session 2' }
+			],
+			timestamp: Date.now()
+		})
+
+		const result2 = await controller.handleMessage(
+			'session-2',
+			'Hello from session 2'
+		)
+		expect(result2.routed).toBe('queued')
+	})
+
+	test('steer throws for unbound session', () => {
 		expect(() =>
 			controller.steer('nonexistent', 'Hey')
-		).toThrow('Agent not found for session nonexistent')
+		).toThrow('Agent not bound to session nonexistent')
 	})
 
-	test('abort throws for non-existent agent', () => {
+	test('abort throws for unbound session', () => {
 		expect(() => controller.abort('nonexistent')).toThrow(
-			'Agent not found for session nonexistent'
+			'Agent not bound to session nonexistent'
 		)
-	})
-
-	test('evict removes agent from memory', () => {
-		controller.getOrCreate('session-1')
-		controller.evict('session-1')
-
-		// Should create a new agent
-		const newAgent = controller.getOrCreate('session-1')
-		expect(newAgent.state.messages.length).toBe(0)
 	})
 
 	test('watch is idempotent', () => {

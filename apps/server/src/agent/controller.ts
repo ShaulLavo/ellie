@@ -1,11 +1,13 @@
 /**
- * Agent controller — per-session traffic controller for the agent.
+ * Agent controller — single persistent agent with session binding.
  *
- * Combines the responsibilities of AgentManager (agent lifecycle, event
- * persistence) and AgentWatcher (pub/sub observation) into a single class
- * with a promise-chain session lock that serialises access per session.
+ * Maintains a single Agent instance that is bound to the active session.
+ * When a message arrives for a different session while idle, the agent
+ * rebinds by loading that session's history and updating the prompt bundle.
+ * When busy, cross-session messages are queued and processed FIFO after
+ * the current run completes.
  *
- * When a message arrives:
+ * Message routing within a bound session:
  *   - Agent idle  → prompt() starts a new run
  *   - Agent busy  → followUp() queues for automatic pickup by the agent loop
  *   - On agent_end with orphaned follow-ups → continue() re-enters the loop
@@ -24,27 +26,39 @@ import type {
 	RealtimeStore,
 	SessionEvent
 } from '../lib/realtime-store'
+import { buildSystemPrompt } from './system-prompt'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
 export interface AgentControllerOptions {
 	/** TanStack AI adapter for LLM calls */
 	adapter: AnyTextAdapter
-	/** Default system prompt for new agents */
-	systemPrompt?: string
-	/** Additional AgentOptions passed to each new Agent */
+	/** Workspace directory path for system prompt assembly */
+	workspaceDir: string
+	/** Additional AgentOptions passed to the Agent */
 	agentOptions?: Partial<AgentOptions>
+}
+
+// ── Queued cross-session message ─────────────────────────────────────────────
+
+interface QueuedMessage {
+	sessionId: string
+	text: string
 }
 
 // ── Controller ───────────────────────────────────────────────────────────────
 
 export class AgentController {
-	private agents = new Map<string, Agent>()
+	private agent: Agent
+	private boundSessionId: string | null = null
 	private store: RealtimeStore
 	private options: AgentControllerOptions
 
-	/** Per-session promise chain — prevents concurrent routing decisions */
-	private sessionLocks = new Map<string, Promise<void>>()
+	/** Global lock — serialises all routing decisions */
+	private lock: Promise<void> = Promise.resolve()
+
+	/** Cross-session message queue — processed FIFO when agent becomes idle */
+	private crossSessionQueue: QueuedMessage[] = []
 
 	/** Watcher subscriptions (pub/sub unsubscribe callbacks) */
 	private unsubscribers = new Map<string, () => void>()
@@ -55,115 +69,132 @@ export class AgentController {
 	) {
 		this.store = store
 		this.options = options
+
+		const systemPrompt = buildSystemPrompt(
+			options.workspaceDir
+		)
+
+		this.agent = new Agent({
+			...options.agentOptions,
+			adapter: options.adapter,
+			initialState: {
+				...options.agentOptions?.initialState,
+				systemPrompt
+			},
+			onEvent: event => this.handleEvent(event)
+		})
 	}
 
-	// ── Session lock ─────────────────────────────────────────────────────────
+	// ── Lock ─────────────────────────────────────────────────────────────────
 
-	private async withSessionLock(
-		sessionId: string,
+	private async withLock(
 		fn: () => Promise<void>
 	): Promise<void> {
-		const prev =
-			this.sessionLocks.get(sessionId) ?? Promise.resolve()
+		const prev = this.lock
 		const next = prev.catch(() => {}).then(() => fn())
-		this.sessionLocks.set(sessionId, next)
+		this.lock = next
 		try {
 			await next
 		} finally {
-			if (this.sessionLocks.get(sessionId) === next) {
-				this.sessionLocks.delete(sessionId)
+			if (this.lock === next) {
+				this.lock = Promise.resolve()
 			}
 		}
 	}
 
-	// ── Agent lifecycle ──────────────────────────────────────────────────────
+	// ── Session binding ─────────────────────────────────────────────────────
 
 	/**
-	 * Get or create an Agent for a session.
-	 * Creates the session in the store if it doesn't exist.
+	 * Bind the agent to a session by loading its history and
+	 * updating the system prompt.
 	 */
-	getOrCreate(sessionId: string): Agent {
-		let agent = this.agents.get(sessionId)
-		if (agent) return agent
-
+	private bindToSession(sessionId: string): void {
 		this.store.ensureSession(sessionId)
 
-		agent = new Agent({
-			...this.options.agentOptions,
-			adapter: this.options.adapter,
-			initialState: {
-				...this.options.agentOptions?.initialState,
-				systemPrompt: this.options.systemPrompt ?? ''
-			},
-			onEvent: event => this.handleEvent(sessionId, event)
-		})
+		const systemPrompt = buildSystemPrompt(
+			this.options.workspaceDir
+		)
+		const history = this.loadHistory(sessionId)
 
-		this.agents.set(sessionId, agent)
-		return agent
+		console.log(
+			`[agent-controller] binding to session=${sessionId} history=${history.length} messages`
+		)
+
+		this.agent.state.systemPrompt = systemPrompt
+		this.agent.replaceMessages(history)
+		this.boundSessionId = sessionId
 	}
 
 	// ── Message routing (core) ───────────────────────────────────────────────
 
 	/**
-	 * Route a user message to the agent for a session.
+	 * Route a user message to the agent.
 	 *
-	 * If the agent is idle, starts a new run via prompt().
-	 * If the agent is busy, queues via followUp() — the agent loop
-	 * picks it up automatically at the next turn boundary.
+	 * Same-session routing:
+	 *   - Agent idle → prompt()
+	 *   - Agent busy → followUp()
 	 *
-	 * The session lock serialises decisions so rapid messages don't
-	 * race each other.
+	 * Cross-session routing:
+	 *   - Agent idle → rebind + prompt()
+	 *   - Agent busy → queue for later processing
 	 */
 	async handleMessage(
 		sessionId: string,
 		text: string
 	): Promise<{
 		runId: string
-		routed: 'prompt' | 'followUp'
+		routed: 'prompt' | 'followUp' | 'queued'
 	}> {
-		const agent = this.getOrCreate(sessionId)
-
-		// Load history if this is a fresh agent with no messages
-		if (agent.state.messages.length === 0) {
-			const history = this.loadHistory(sessionId)
-			console.log(
-				`[agent-controller] loaded ${history.length} history messages for session=${sessionId}`
-			)
-			if (history.length > 0) {
-				agent.replaceMessages(history)
-			}
-		}
-
-		if (!agent.adapter) {
-			throw new Error('No adapter configured for agent.')
-		}
+		this.store.ensureSession(sessionId)
 
 		const runId = ulid()
-		let routed: 'prompt' | 'followUp' = 'prompt'
+		let routed: 'prompt' | 'followUp' | 'queued' = 'prompt'
 
-		await this.withSessionLock(sessionId, async () => {
-			if (agent.state.isStreaming) {
-				// Agent busy — queue as follow-up
-				console.log(
-					`[agent-controller] agent busy session=${sessionId}, queuing as followUp`
-				)
-				agent.followUp({
-					role: 'user',
-					content: [{ type: 'text', text }],
-					timestamp: Date.now()
-				})
-				routed = 'followUp'
+		await this.withLock(async () => {
+			if (this.agent.state.isStreaming) {
+				if (this.boundSessionId === sessionId) {
+					// Same session, agent busy — queue as follow-up
+					console.log(
+						`[agent-controller] agent busy session=${sessionId}, queuing as followUp`
+					)
+					this.agent.followUp({
+						role: 'user',
+						content: [{ type: 'text', text }],
+						timestamp: Date.now()
+					})
+					routed = 'followUp'
+				} else {
+					// Different session, agent busy — queue for later
+					console.log(
+						`[agent-controller] agent busy on session=${this.boundSessionId}, queuing cross-session message for session=${sessionId}`
+					)
+					this.crossSessionQueue.push({
+						sessionId,
+						text
+					})
+					routed = 'queued'
+				}
 				return
 			}
 
-			// Agent idle — start a new run
+			// Agent idle — bind if needed and start new run
+			if (this.boundSessionId !== sessionId) {
+				this.bindToSession(sessionId)
+			} else if (this.agent.state.messages.length === 0) {
+				// First message on this binding — load history
+				const history = this.loadHistory(sessionId)
+				if (history.length > 0) {
+					this.agent.replaceMessages(history)
+				}
+			}
+
 			console.log(
 				`[agent-controller] agent idle session=${sessionId}, starting prompt runId=${runId}`
 			)
-			agent.runId = runId
+			this.agent.runId = runId
 
 			// Start the prompt (non-blocking — events flow via onEvent)
-			agent.prompt(text).catch(err => {
+			this.agent.prompt(text).catch(err => {
 				console.error(
 					`[agent-controller] prompt FAILED session=${sessionId} runId=${runId}:`,
 					err instanceof Error ? err.message : String(err)
@@ -227,13 +258,13 @@ export class AgentController {
 	 * Queue a steering message for the running agent.
 	 */
 	steer(sessionId: string, text: string): void {
-		const agent = this.agents.get(sessionId)
-		if (!agent)
+		if (this.boundSessionId !== sessionId) {
 			throw new Error(
-				`Agent not found for session ${sessionId}`
+				`Agent not bound to session ${sessionId}`
 			)
+		}
 
-		agent.steer({
+		this.agent.steer({
 			role: 'user',
 			content: [{ type: 'text', text }],
 			timestamp: Date.now()
@@ -244,12 +275,12 @@ export class AgentController {
 	 * Abort the running agent prompt.
 	 */
 	abort(sessionId: string): void {
-		const agent = this.agents.get(sessionId)
-		if (!agent)
+		if (this.boundSessionId !== sessionId) {
 			throw new Error(
-				`Agent not found for session ${sessionId}`
+				`Agent not bound to session ${sessionId}`
 			)
-		agent.abort()
+		}
+		this.agent.abort()
 	}
 
 	// ── Queries ──────────────────────────────────────────────────────────────
@@ -274,24 +305,6 @@ export class AgentController {
 	 */
 	hasSession(sessionId: string): boolean {
 		return this.store.hasSession(sessionId)
-	}
-
-	/**
-	 * Remove an agent from memory (does not delete the session).
-	 * If the agent is actively streaming, eviction is deferred until the run completes.
-	 */
-	evict(sessionId: string): void {
-		const agent = this.agents.get(sessionId)
-		if (agent?.state.isStreaming) {
-			const unsub = agent.subscribe(e => {
-				if (e.type === 'agent_end') {
-					unsub()
-					this.agents.delete(sessionId)
-				}
-			})
-			return
-		}
-		this.agents.delete(sessionId)
 	}
 
 	// ── Internal: watcher message parsing ────────────────────────────────────
@@ -348,12 +361,16 @@ export class AgentController {
 
 	// ── Internal: event persistence ──────────────────────────────────────────
 
-	private handleEvent(
-		sessionId: string,
-		event: AgentEvent
-	): void {
-		const agent = this.agents.get(sessionId)
-		const runId = agent?.runId
+	private handleEvent(event: AgentEvent): void {
+		const sessionId = this.boundSessionId
+		if (!sessionId) {
+			console.warn(
+				`[agent-controller] event received without bound session type=${event.type} — not persisted`
+			)
+			return
+		}
+
+		const runId = this.agent.runId
 
 		const eventSummary = this.summarizeEvent(event)
 		console.log(
@@ -385,7 +402,7 @@ export class AgentController {
 			}
 		}
 
-		// On agent_end, close the run and check for orphaned follow-ups
+		// On agent_end, close the run and process queues
 		if (event.type === 'agent_end') {
 			console.log(
 				`[agent-controller] closing run session=${sessionId} runId=${runId}`
@@ -395,31 +412,25 @@ export class AgentController {
 			} catch {
 				// Already closed — non-fatal
 			}
-			if (agent) {
-				agent.runId = undefined
-			}
+			this.agent.runId = undefined
 
-			// Check for orphaned follow-ups: messages queued after the
-			// agent loop's final getFollowUpMessages() check.
-			// Must defer with queueMicrotask — agent_end fires inside
-			// _runLoop's for-await, before the finally block clears
-			// runId/abortController. The microtask ensures finally runs first.
-			if (agent?.hasQueuedMessages()) {
+			// Check for orphaned follow-ups first (same session)
+			if (this.agent.hasQueuedMessages()) {
 				console.log(
 					`[agent-controller] agent_end with queued messages session=${sessionId}, scheduling continue()`
 				)
 				queueMicrotask(() => {
-					this.withSessionLock(sessionId, async () => {
+					this.withLock(async () => {
 						if (
-							!agent.state.isStreaming &&
-							agent.hasQueuedMessages()
+							!this.agent.state.isStreaming &&
+							this.agent.hasQueuedMessages()
 						) {
 							const newRunId = ulid()
-							agent.runId = newRunId
+							this.agent.runId = newRunId
 							console.log(
 								`[agent-controller] continuing with queued messages session=${sessionId} runId=${newRunId}`
 							)
-							agent.continue().catch(err => {
+							this.agent.continue().catch(err => {
 								console.error(
 									`[agent-controller] continue FAILED session=${sessionId} runId=${newRunId}:`,
 									err instanceof Error
@@ -431,8 +442,32 @@ export class AgentController {
 						}
 					})
 				})
+			} else if (this.crossSessionQueue.length > 0) {
+				// Process cross-session queue FIFO
+				queueMicrotask(() => {
+					this.processCrossSessionQueue()
+				})
 			}
 		}
+	}
+
+	// ── Internal: cross-session queue processing ─────────────────────────────
+
+	private processCrossSessionQueue(): void {
+		const next = this.crossSessionQueue.shift()
+		if (!next) return
+
+		console.log(
+			`[agent-controller] processing cross-session queue: session=${next.sessionId}`
+		)
+		this.handleMessage(next.sessionId, next.text).catch(
+			err => {
+				console.error(
+					`[agent-controller] cross-session handleMessage FAILED session=${next.sessionId}:`,
+					err instanceof Error ? err.message : String(err)
+				)
+			}
+		)
 	}
 
 	// ── Internal: error events ───────────────────────────────────────────────
@@ -448,7 +483,9 @@ export class AgentController {
 			this.store.appendEvent(
 				sessionId,
 				'error',
-				{ message: 'Agent prompt failed unexpectedly' },
+				{
+					message: 'Agent prompt failed unexpectedly'
+				},
 				runId
 			)
 			this.store.closeAgentRun(sessionId, runId)
@@ -481,7 +518,9 @@ export class AgentController {
 				return [
 					{
 						type: 'agent_end',
-						payload: { messages: event.messages }
+						payload: {
+							messages: event.messages
+						}
 					}
 				]
 			case 'turn_start':
