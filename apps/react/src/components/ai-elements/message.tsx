@@ -19,10 +19,6 @@ import {
 	TooltipTrigger
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { cjk } from '@streamdown/cjk'
-import { code } from '@streamdown/code'
-import { math } from '@streamdown/math'
-import { mermaid } from '@streamdown/mermaid'
 import {
 	CaretLeftIcon,
 	CaretRightIcon
@@ -38,6 +34,7 @@ import {
 } from 'react'
 import { Streamdown } from 'streamdown'
 import { useAnimatedText } from '@/hooks/use-animated-text'
+import { streamdownPlugins } from '@/hooks/use-streamdown-plugins'
 
 export type MessageProps =
 	HTMLAttributes<HTMLDivElement> & {
@@ -369,14 +366,6 @@ export const MessageBranchPage = ({
 export type MessageResponseProps = ComponentProps<
 	typeof Streamdown
 >
-
-// Cast needed: @streamdown/code bundles shiki@3.22 types but streamdown uses shiki@3.23
-const streamdownPlugins = {
-	cjk,
-	code,
-	math,
-	mermaid
-} as Parameters<typeof Streamdown>[0]['plugins']
 
 export const MessageResponse = memo(
 	({ className, ...props }: MessageResponseProps) => (

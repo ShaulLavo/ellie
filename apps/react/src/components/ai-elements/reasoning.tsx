@@ -9,10 +9,7 @@ import {
 	CollapsibleTrigger
 } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-import { cjk } from '@streamdown/cjk'
-import { code } from '@streamdown/code'
-import { math } from '@streamdown/math'
-import { mermaid } from '@streamdown/mermaid'
+import { streamdownPlugins } from '@/hooks/use-streamdown-plugins'
 import {
 	Brain as BrainIcon,
 	CaretDown as ChevronDownIcon
@@ -229,14 +226,6 @@ export type ReasoningContentProps = ComponentProps<
 > & {
 	children: string
 }
-
-// Cast needed: @streamdown/code bundles shiki@3.22 types but streamdown uses shiki@3.23
-const streamdownPlugins = {
-	cjk,
-	code,
-	math,
-	mermaid
-} as Parameters<typeof Streamdown>[0]['plugins']
 
 export const ReasoningContent = memo(
 	({
