@@ -23,7 +23,8 @@
 		"generate-models": "bun run scripts/generate-models.ts"
 	},
 	"dependencies": {
-		"@ellie/env": "workspace:*"
+		"@ellie/env": "workspace:*",
+		"@tanstack/ai-anthropic": "^0.5.0"
 	},
 	"devDependencies": {
 		"@repo/typescript-config": "workspace:*",

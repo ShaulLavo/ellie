@@ -2,7 +2,7 @@ pre-commit:
   parallel: false
   commands:
     format:
-      run: bunx oxfmt --check .
+      run: bunx oxfmt --check '.' '!bun.lock'
     typecheck:
       run: bun run check-types
     lint:

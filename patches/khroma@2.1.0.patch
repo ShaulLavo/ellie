@@ -1,0 +1,54 @@
+diff --git a/dist/index.js b/dist/index.js
+index c9da5b3be8731a98c7c2581671b3ad37eb588350..a9ee2daa2092aafec439f338cf4e88ea79e44a6b 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,2 +1,48 @@
++/* IMPORT */
++import hex from './methods/rgba.js';
++import rgb from './methods/rgba.js';
++import rgba from './methods/rgba.js';
++import hsl from './methods/hsla.js';
++import hsla from './methods/hsla.js';
++import toKeyword from './methods/to_keyword.js';
++import toHex from './methods/to_hex.js';
++import toRgba from './methods/to_rgba.js';
++import toHsla from './methods/to_hsla.js';
++import channel from './methods/channel.js';
++import red from './methods/red.js';
++import green from './methods/green.js';
++import blue from './methods/blue.js';
++import hue from './methods/hue.js';
++import saturation from './methods/saturation.js';
++import lightness from './methods/lightness.js';
++import alpha from './methods/alpha.js';
++import opacity from './methods/alpha.js';
++import contrast from './methods/contrast.js';
++import luminance from './methods/luminance.js';
++import isDark from './methods/is_dark.js';
++import isLight from './methods/is_light.js';
++import isTransparent from './methods/is_transparent.js';
++import isValid from './methods/is_valid.js';
++import saturate from './methods/saturate.js';
++import desaturate from './methods/desaturate.js';
++import lighten from './methods/lighten.js';
++import darken from './methods/darken.js';
++import opacify from './methods/opacify.js';
++import fadeIn from './methods/opacify.js';
++import transparentize from './methods/transparentize.js';
++import fadeOut from './methods/transparentize.js';
++import complement from './methods/complement.js';
++import grayscale from './methods/grayscale.js';
++import adjust from './methods/adjust.js';
++import change from './methods/change.js';
++import invert from './methods/invert.js';
++import mix from './methods/mix.js';
++import scale from './methods/scale.js';
+ /* EXPORT */
+-export * from './methods/index.js';
++export {
++hex, rgb, rgba, hsl, hsla,
++toKeyword, toHex, toRgba, toHsla,
++channel, red, green, blue, hue, saturation, lightness, alpha, opacity,
++contrast, luminance, isDark, isLight, isTransparent, isValid,
++saturate, desaturate, lighten, darken, opacify, fadeIn, transparentize, fadeOut, complement, grayscale,
++adjust, change, invert, mix, scale };
