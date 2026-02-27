@@ -6,7 +6,7 @@ import {
 	agentSteerOutputSchema
 } from '@ellie/schemas/agent'
 import { Elysia, sse } from 'elysia'
-import type { AgentManager } from '../agent/manager'
+import type { AgentController } from '../agent/controller'
 import type {
 	RealtimeStore,
 	SessionEvent
@@ -23,7 +23,7 @@ import {
 
 export function createAgentRoutes(
 	store: RealtimeStore,
-	getAgentManager: () => Promise<AgentManager | null>,
+	getAgentController: () => Promise<AgentController | null>,
 	sseState: SseState
 ) {
 	return new Elysia({ prefix: '/agent', tags: ['Agent'] })
@@ -118,8 +118,8 @@ export function createAgentRoutes(
 		.post(
 			'/:sessionId/steer',
 			async ({ params, body, set }) => {
-				const agentManager = await getAgentManager()
-				if (!agentManager) {
+				const controller = await getAgentController()
+				if (!controller) {
 					set.status = 503
 					return {
 						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
@@ -127,7 +127,7 @@ export function createAgentRoutes(
 				}
 
 				const message = parseAgentActionBody(body)
-				agentManager.steer(params.sessionId, message)
+				controller.steer(params.sessionId, message)
 				return { status: `queued` as const }
 			},
 			{
@@ -143,15 +143,15 @@ export function createAgentRoutes(
 		.post(
 			'/:sessionId/abort',
 			async ({ params, set }) => {
-				const agentManager = await getAgentManager()
-				if (!agentManager) {
+				const controller = await getAgentController()
+				if (!controller) {
 					set.status = 503
 					return {
 						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
 					}
 				}
 
-				agentManager.abort(params.sessionId)
+				controller.abort(params.sessionId)
 				return { status: `aborted` as const }
 			},
 			{
@@ -166,8 +166,8 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/history',
 			async ({ params, set }) => {
-				const agentManager = await getAgentManager()
-				if (!agentManager) {
+				const controller = await getAgentController()
+				if (!controller) {
 					set.status = 503
 					return {
 						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
@@ -175,9 +175,7 @@ export function createAgentRoutes(
 				}
 
 				return {
-					messages: agentManager.loadHistory(
-						params.sessionId
-					)
+					messages: controller.loadHistory(params.sessionId)
 				}
 			},
 			{

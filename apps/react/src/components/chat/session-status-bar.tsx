@@ -61,7 +61,9 @@ export function SessionStatusBar({
 				<>
 					<span>
 						{stats.provider ? `${stats.provider}/` : ''}
-						{stats.model ? formatModel(stats.model) : 'unknown'}
+						{stats.model
+							? formatModel(stats.model)
+							: 'unknown'}
 					</span>
 					{DOT}
 				</>

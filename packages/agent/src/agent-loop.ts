@@ -280,7 +280,10 @@ function wrapToolsForTanStack(
 
 			// Check for tool loop before execution
 			if (loopDetector) {
-				const loopCheck = loopDetector.record(tool.name, args)
+				const loopCheck = loopDetector.record(
+					tool.name,
+					args
+				)
 				if (loopCheck.detected) {
 					emit({
 						type: 'tool_loop_detected',
@@ -297,7 +300,9 @@ function wrapToolsForTanStack(
 					})
 
 					const loopResult: AgentToolResult = {
-						content: [{ type: 'text', text: loopCheck.message! }],
+						content: [
+							{ type: 'text', text: loopCheck.message! }
+						],
 						details: {}
 					}
 
@@ -319,8 +324,14 @@ function wrapToolsForTanStack(
 						timestamp: Date.now()
 					}
 					toolResultCollector.push(toolResultMessage)
-					emit({ type: 'message_start', message: toolResultMessage })
-					emit({ type: 'message_end', message: toolResultMessage })
+					emit({
+						type: 'message_start',
+						message: toolResultMessage
+					})
+					emit({
+						type: 'message_end',
+						message: toolResultMessage
+					})
 
 					return loopCheck.message!
 				}
@@ -391,7 +402,11 @@ function wrapToolsForTanStack(
 
 			// Record outcome for loop detection
 			if (loopDetector) {
-				loopDetector.recordOutcome(tool.name, args, result.content)
+				loopDetector.recordOutcome(
+					tool.name,
+					args,
+					result.content
+				)
 			}
 
 			// Create and emit ToolResultMessage for persistence

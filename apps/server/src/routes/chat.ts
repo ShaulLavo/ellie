@@ -4,7 +4,7 @@ import type {
 	RealtimeStore,
 	SessionEvent
 } from '../lib/realtime-store'
-import type { AgentWatcher } from '../agent/watcher'
+import type { AgentController } from '../agent/controller'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
@@ -18,7 +18,7 @@ import {
 export function createChatRoutes(
 	store: RealtimeStore,
 	sseState: SseState,
-	getAgentWatcher?: () => Promise<AgentWatcher | null>
+	getAgentController?: () => Promise<AgentController | null>
 ) {
 	return (
 		new Elysia({ prefix: '/chat', tags: ['Chat'] })
@@ -70,8 +70,8 @@ export function createChatRoutes(
 						`[chat-route] POST /chat/${params.sessionId}/messages role=${input.role ?? 'user'} content=${input.content.slice(0, 100)}`
 					)
 					store.ensureSession(params.sessionId)
-					const agentWatcher = await getAgentWatcher?.()
-					agentWatcher?.watch(params.sessionId)
+					const controller = await getAgentController?.()
+					controller?.watch(params.sessionId)
 					const row = store.appendEvent(
 						params.sessionId,
 						'user_message',

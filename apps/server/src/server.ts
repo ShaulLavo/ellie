@@ -23,8 +23,7 @@ import {
 } from '@tanstack/ai-anthropic'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
-import { AgentManager } from './agent/manager'
-import { AgentWatcher } from './agent/watcher'
+import { AgentController } from './agent/controller'
 import { RealtimeStore } from './lib/realtime-store'
 import { createAgentRoutes } from './routes/agent'
 import { createAuthRoutes } from './routes/auth'
@@ -175,12 +174,11 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 	)
 }
 
-// ── Lazy agent manager / watcher ────────────────────────────────────────────
+// ── Lazy agent controller ────────────────────────────────────────────────────
 // Cached on first access, invalidated when credentials change so routes
 // always use the current adapter without requiring a server restart.
 
-let cachedAgentManager: AgentManager | null | undefined
-let cachedAgentWatcher: AgentWatcher | null | undefined
+let cachedController: AgentController | null | undefined
 
 /**
  * Check if file-based OAuth token is expired/expiring and invalidate cache
@@ -198,38 +196,27 @@ async function ensureTokenFresh(): Promise<void> {
 	}
 }
 
-async function getAgentManager(): Promise<AgentManager | null> {
+async function getAgentController(): Promise<AgentController | null> {
 	await ensureTokenFresh()
-	if (cachedAgentManager !== undefined)
-		return cachedAgentManager
+	if (cachedController !== undefined)
+		return cachedController
 	const adapter = await resolveAdapter()
-	cachedAgentManager = adapter
-		? new AgentManager(store, {
+	cachedController = adapter
+		? new AgentController(store, {
 				adapter,
 				systemPrompt: 'You are a helpful assistant.'
 			})
 		: null
-	return cachedAgentManager
-}
-
-async function getAgentWatcher(): Promise<AgentWatcher | null> {
-	const mgr = await getAgentManager()
-	if (cachedAgentWatcher !== undefined)
-		return cachedAgentWatcher
-	cachedAgentWatcher = mgr
-		? new AgentWatcher(store, mgr)
-		: null
-	return cachedAgentWatcher
+	return cachedController
 }
 
 /** Call after credentials are written/cleared to force re-resolution. */
 function invalidateAgentCache() {
-	cachedAgentManager = undefined
-	cachedAgentWatcher = undefined
+	cachedController = undefined
 }
 
 // Eagerly resolve once at startup so first request doesn't pay the cost
-await getAgentManager()
+await getAgentController()
 
 // ── Hindsight (memory) ────────────────────────────────────────────────────
 // Single default bank is created lazily on first access.
@@ -276,8 +263,12 @@ export const app = new Elysia()
 	)
 	.use(createStatusRoutes(() => sseState.activeClients))
 	.use(createSessionRoutes(store))
-	.use(createChatRoutes(store, sseState, getAgentWatcher))
-	.use(createAgentRoutes(store, getAgentManager, sseState))
+	.use(
+		createChatRoutes(store, sseState, getAgentController)
+	)
+	.use(
+		createAgentRoutes(store, getAgentController, sseState)
+	)
 	.use(
 		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
 	)

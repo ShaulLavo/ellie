@@ -281,7 +281,6 @@ export const TerminalContent = ({
 		useContext(TerminalContext)
 	const containerRef = useRef<HTMLDivElement>(null)
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: output triggers auto-scroll when new content arrives
 	useEffect(() => {
 		if (autoScroll && containerRef.current) {
 			containerRef.current.scrollTop =

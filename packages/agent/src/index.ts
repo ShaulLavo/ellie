@@ -27,7 +27,10 @@ export {
 // Resilience modules
 export { withRetry } from './retry'
 export type { RetryOptions } from './retry'
-export { trimMessages, estimateTokens } from './context-recovery'
+export {
+	trimMessages,
+	estimateTokens
+} from './context-recovery'
 export type { ContextRecoveryOptions } from './context-recovery'
 export { truncateToolResult } from './tool-safety'
 export type { ToolSafetyOptions } from './tool-safety'
