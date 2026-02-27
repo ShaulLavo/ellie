@@ -8,7 +8,10 @@ import {
 import { env } from '@ellie/env/client'
 import { eden } from '../eden'
 import { isMessagePayload, type Message } from './use-chat'
-import type { SessionStats } from '../../components/chat/session-status-bar'
+import {
+	type SessionStats,
+	computeStatsFromMessages
+} from './session-stats'
 
 // ============================================================================
 // Types
@@ -316,47 +319,10 @@ export function useAgentChat(sessionId: string) {
 		}
 	}, [sessionId])
 
-	const sessionStats = useMemo<SessionStats>(() => {
-		let model: string | null = null
-		let provider: string | null = null
-		let promptTokens = 0
-		let completionTokens = 0
-		let totalCost = 0
-		let messageCount = 0
-
-		for (const msg of messages) {
-			if (msg.role === 'toolResult') continue
-			messageCount++
-			if (msg.role !== 'assistant') continue
-
-			// Pick the latest model/provider seen
-			if (typeof msg.model === 'string') model = msg.model
-			if (typeof msg.provider === 'string')
-				provider = msg.provider
-
-			const usage = msg.usage as
-				| {
-						input?: number
-						output?: number
-						cost?: { total?: number }
-				  }
-				| undefined
-			if (usage) {
-				promptTokens += usage.input ?? 0
-				completionTokens += usage.output ?? 0
-				totalCost += usage.cost?.total ?? 0
-			}
-		}
-
-		return {
-			model,
-			provider,
-			messageCount,
-			promptTokens,
-			completionTokens,
-			totalCost
-		}
-	}, [messages])
+	const sessionStats = useMemo<SessionStats>(
+		() => computeStatsFromMessages(messages),
+		[messages]
+	)
 
 	return {
 		messages,

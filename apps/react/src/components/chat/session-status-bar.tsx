@@ -1,13 +1,7 @@
 import { NumberTicker } from '../ui/number-ticker'
+import type { SessionStats } from '../../lib/chat/session-stats'
 
-export interface SessionStats {
-	model: string | null
-	provider: string | null
-	messageCount: number
-	promptTokens: number
-	completionTokens: number
-	totalCost: number
-}
+export type { SessionStats }
 
 function formatModel(model: string): string {
 	const match = model.match(/^claude-(.+?)(-\d{8})?$/)
@@ -63,9 +57,12 @@ export function SessionStatusBar({
 
 	return (
 		<div className="flex items-center justify-center gap-2 py-1.5 text-[10px] font-mono text-muted-foreground select-none tracking-wide">
-			{stats.model && (
+			{(stats.provider || stats.model) && (
 				<>
-					<span>{formatModel(stats.model)}</span>
+					<span>
+						{stats.provider ? `${stats.provider}/` : ''}
+						{stats.model ? formatModel(stats.model) : 'unknown'}
+					</span>
 					{DOT}
 				</>
 			)}

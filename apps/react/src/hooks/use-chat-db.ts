@@ -21,73 +21,23 @@ import {
 	toStored
 } from '../collections/chat-messages'
 import { type EventRow, StreamClient } from '../lib/stream'
-import type { SessionStats } from '../components/chat/session-status-bar'
+import {
+	type SessionStats,
+	EMPTY_STATS,
+	computeStatsFromEvents
+} from '../lib/chat/session-stats'
 
-/** Extract session stats (model, tokens, cost) from raw event rows. */
-function computeStatsFromEvents(
-	events: EventRow[]
-): SessionStats {
-	let model: string | null = null
-	let provider: string | null = null
-	let promptTokens = 0
-	let completionTokens = 0
-	let totalCost = 0
-	let messageCount = 0
+/** Agent lifecycle event types */
+const AGENT_START_TYPES = new Set(['agent_start'])
+const AGENT_END_TYPES = new Set(['agent_end', 'run_closed'])
 
-	for (const row of events) {
-		if (
-			row.type === 'user_message' ||
-			row.type === 'assistant_final'
-		) {
-			messageCount++
-		}
-
-		if (row.type !== 'assistant_final') continue
-
-		const parsed =
-			typeof row.payload === 'string'
-				? (JSON.parse(row.payload) as Record<
-						string,
-						unknown
-					>)
-				: (row.payload as Record<string, unknown>)
-
-		if (typeof parsed.model === 'string')
-			model = parsed.model
-		if (typeof parsed.provider === 'string')
-			provider = parsed.provider
-
-		const usage = parsed.usage as
-			| {
-					input?: number
-					output?: number
-					cost?: { total?: number }
-			  }
-			| undefined
-		if (usage) {
-			promptTokens += usage.input ?? 0
-			completionTokens += usage.output ?? 0
-			totalCost += usage.cost?.total ?? 0
-		}
+function isAgentRunOpen(rows: EventRow[]): boolean {
+	let open = false
+	for (const row of rows) {
+		if (AGENT_START_TYPES.has(row.type)) open = true
+		if (AGENT_END_TYPES.has(row.type)) open = false
 	}
-
-	return {
-		model,
-		provider,
-		messageCount,
-		promptTokens,
-		completionTokens,
-		totalCost
-	}
-}
-
-const EMPTY_STATS: SessionStats = {
-	model: null,
-	provider: null,
-	messageCount: 0,
-	promptTokens: 0,
-	completionTokens: 0,
-	totalCost: 0
+	return open
 }
 
 /** Convert an EventRow from the event store into a ChatMessage. */
@@ -179,6 +129,8 @@ export function useChatDB(sessionId: string) {
 	const [sessionVersion, setSessionVersion] = useState(0)
 	const [sessionStats, setSessionStats] =
 		useState<SessionStats>(EMPTY_STATS)
+	const [isAgentRunning, setIsAgentRunning] =
+		useState(false)
 
 	const streamRef = useRef<StreamClient | null>(null)
 	const isInitialLoadRef = useRef(true)
@@ -243,12 +195,15 @@ export function useChatDB(sessionId: string) {
 		setSessionVersion(v => v + 1)
 		setStreamingMessage(null)
 		setSessionStats(EMPTY_STATS)
+		setIsAgentRunning(false)
 		setError(null)
 	}, [sessionId])
 
 	// ── StreamClient setup ─────────────────────────────────────────────
 	useEffect(() => {
 		isInitialLoadRef.current = true
+		setSessionStats(EMPTY_STATS)
+		setIsAgentRunning(false)
 
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events) {
@@ -279,9 +234,17 @@ export function useChatDB(sessionId: string) {
 
 				// Compute session stats from all events
 				setSessionStats(computeStatsFromEvents(events))
+				setIsAgentRunning(isAgentRunOpen(events))
 			},
 
 			onAppend(event) {
+				// Track agent run lifecycle
+				if (AGENT_START_TYPES.has(event.type)) {
+					setIsAgentRunning(true)
+				} else if (AGENT_END_TYPES.has(event.type)) {
+					setIsAgentRunning(false)
+				}
+
 				// Incrementally update session stats
 				if (
 					event.type === 'user_message' ||
@@ -458,6 +421,7 @@ export function useChatDB(sessionId: string) {
 		connectionState,
 		error,
 		sessionStats,
+		isAgentRunning,
 		sendMessage,
 		clearSession,
 		retry

@@ -219,7 +219,7 @@ export function ChatRoom({
 
 			<SessionStatusBar
 				stats={chat.sessionStats}
-				isAgentRunning={!!chat.streamingMessage}
+				isAgentRunning={chat.isAgentRunning || !!chat.streamingMessage}
 			/>
 		</div>
 	)

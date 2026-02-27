@@ -36,6 +36,7 @@
 	},
 	"overrides": {
 		"@tanstack/db": "0.5.27",
+		"streamdown": "2.3.0",
 		"shiki": "3.23.0",
 		"typescript": "5.9.2"
 	},

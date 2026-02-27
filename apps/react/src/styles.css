@@ -11,11 +11,17 @@
 [data-streamdown='code-block-body'] code span > span {
 	color: var(--sdm-c, inherit);
 }
+[data-streamdown='code-block-body'] code span > span[style*='--sdm-tbg'] {
+	background-color: var(--sdm-tbg, transparent);
+}
 [data-streamdown='code-block-body'] pre {
 	background-color: var(--sdm-bg, inherit);
 }
 .dark [data-streamdown='code-block-body'] code span > span {
 	color: var(--shiki-dark, var(--sdm-c, inherit));
+}
+.dark [data-streamdown='code-block-body'] code span > span[style*='--sdm-tbg'] {
+	background-color: var(--sdm-tbg, transparent);
 }
 .dark [data-streamdown='code-block-body'] pre {
 	background-color: var(
