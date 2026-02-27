@@ -21,6 +21,74 @@ import {
 	toStored
 } from '../collections/chat-messages'
 import { type EventRow, StreamClient } from '../lib/stream'
+import type { SessionStats } from '../components/chat/session-status-bar'
+
+/** Extract session stats (model, tokens, cost) from raw event rows. */
+function computeStatsFromEvents(
+	events: EventRow[]
+): SessionStats {
+	let model: string | null = null
+	let provider: string | null = null
+	let promptTokens = 0
+	let completionTokens = 0
+	let totalCost = 0
+	let messageCount = 0
+
+	for (const row of events) {
+		if (
+			row.type === 'user_message' ||
+			row.type === 'assistant_final'
+		) {
+			messageCount++
+		}
+
+		if (row.type !== 'assistant_final') continue
+
+		const parsed =
+			typeof row.payload === 'string'
+				? (JSON.parse(row.payload) as Record<
+						string,
+						unknown
+					>)
+				: (row.payload as Record<string, unknown>)
+
+		if (typeof parsed.model === 'string')
+			model = parsed.model
+		if (typeof parsed.provider === 'string')
+			provider = parsed.provider
+
+		const usage = parsed.usage as
+			| {
+					input?: number
+					output?: number
+					cost?: { total?: number }
+			  }
+			| undefined
+		if (usage) {
+			promptTokens += usage.input ?? 0
+			completionTokens += usage.output ?? 0
+			totalCost += usage.cost?.total ?? 0
+		}
+	}
+
+	return {
+		model,
+		provider,
+		messageCount,
+		promptTokens,
+		completionTokens,
+		totalCost
+	}
+}
+
+const EMPTY_STATS: SessionStats = {
+	model: null,
+	provider: null,
+	messageCount: 0,
+	promptTokens: 0,
+	completionTokens: 0,
+	totalCost: 0
+}
 
 /** Convert an EventRow from the event store into a ChatMessage. */
 function eventToMessage(row: EventRow): ChatMessage {
@@ -109,6 +177,8 @@ export function useChatDB(sessionId: string) {
 	const [streamingMessage, setStreamingMessage] =
 		useState<ChatMessage | null>(null)
 	const [sessionVersion, setSessionVersion] = useState(0)
+	const [sessionStats, setSessionStats] =
+		useState<SessionStats>(EMPTY_STATS)
 
 	const streamRef = useRef<StreamClient | null>(null)
 	const isInitialLoadRef = useRef(true)
@@ -172,6 +242,7 @@ export function useChatDB(sessionId: string) {
 		destroyChatMessagesCollection(sessionId)
 		setSessionVersion(v => v + 1)
 		setStreamingMessage(null)
+		setSessionStats(EMPTY_STATS)
 		setError(null)
 	}, [sessionId])
 
@@ -205,9 +276,32 @@ export function useChatDB(sessionId: string) {
 				}
 				// Clear any stale streaming state on snapshot
 				setStreamingMessage(null)
+
+				// Compute session stats from all events
+				setSessionStats(computeStatsFromEvents(events))
 			},
 
 			onAppend(event) {
+				// Incrementally update session stats
+				if (
+					event.type === 'user_message' ||
+					event.type === 'assistant_final'
+				) {
+					const delta = computeStatsFromEvents([event])
+					setSessionStats(prev => ({
+						model: delta.model ?? prev.model,
+						provider: delta.provider ?? prev.provider,
+						messageCount:
+							prev.messageCount + delta.messageCount,
+						promptTokens:
+							prev.promptTokens + delta.promptTokens,
+						completionTokens:
+							prev.completionTokens +
+							delta.completionTokens,
+						totalCost: prev.totalCost + delta.totalCost
+					}))
+				}
+
 				// Handle streaming events for live assistant responses
 				if (event.type === 'message_start') {
 					const parsed =
@@ -363,6 +457,7 @@ export function useChatDB(sessionId: string) {
 		streamingMessage,
 		connectionState,
 		error,
+		sessionStats,
 		sendMessage,
 		clearSession,
 		retry
