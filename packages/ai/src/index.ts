@@ -36,11 +36,28 @@ export {
 	mapTanStackUsage
 } from './usage'
 
-// Context overflow detection
+// Context overflow detection (backward compat)
 export {
 	isContextOverflow,
 	getOverflowPatterns
 } from './overflow'
+
+// Error classification & retry support
+export {
+	classifyError,
+	classifyErrorMessage,
+	isRetryable,
+	isRateLimitError,
+	isOverloadedError,
+	isTimeoutError,
+	isAuthError,
+	isBillingError,
+	isFormatError,
+	isTransientHttpError,
+	isContextOverflowError,
+	parseRetryAfter
+} from './errors'
+export type { ErrorClass, ClassifiedError } from './errors'
 
 // Environment API key resolution
 export { getEnvApiKey, hasEnvApiKey } from './env'
@@ -133,7 +150,6 @@ export type {
 	TextAdapter,
 	AnyImageAdapter,
 	ImageAdapter,
-
 	// Tool types
 	ToolDefinition,
 	ToolDefinitionInstance,
@@ -141,14 +157,11 @@ export type {
 	ServerTool,
 	ClientTool,
 	AnyClientTool,
-
 	// Schema
 	SchemaInput,
 	JSONSchema,
-
 	// Adapter extension
 	ExtendedModelDef,
-
 	// Stream processing
 	ChunkStrategy,
 	StreamProcessorOptions,

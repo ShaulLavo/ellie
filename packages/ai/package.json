@@ -10,6 +10,7 @@
 		"./models": "./src/models/index.ts",
 		"./usage": "./src/usage.ts",
 		"./overflow": "./src/overflow.ts",
+		"./errors": "./src/errors.ts",
 		"./env": "./src/env.ts",
 		"./thinking": "./src/thinking.ts",
 		"./ollama": "./src/ollama.ts",
