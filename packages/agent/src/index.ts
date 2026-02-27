@@ -24,6 +24,16 @@ export {
 	toolCallSchema
 } from './schemas'
 
+// Resilience modules
+export { withRetry } from './retry'
+export type { RetryOptions } from './retry'
+export { trimMessages, estimateTokens } from './context-recovery'
+export type { ContextRecoveryOptions } from './context-recovery'
+export { truncateToolResult } from './tool-safety'
+export type { ToolSafetyOptions } from './tool-safety'
+export { createToolLoopDetector } from './tool-loop-detection'
+export type { ToolLoopDetector } from './tool-loop-detection'
+
 // Types
 export type {
 	// Content blocks

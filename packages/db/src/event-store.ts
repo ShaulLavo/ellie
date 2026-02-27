@@ -37,7 +37,11 @@ const EVENT_TYPES = [
 	'message_end',
 	'tool_execution_start',
 	'tool_execution_update',
-	'tool_execution_end'
+	'tool_execution_end',
+	// Resilience events
+	'retry',
+	'context_compacted',
+	'tool_loop_detected'
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]
@@ -166,6 +170,23 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		toolName: v.string(),
 		result: v.unknown(),
 		isError: v.boolean()
+	}),
+	// Resilience events — permissive schemas for operational data
+	retry: v.object({
+		attempt: v.number(),
+		maxAttempts: v.number(),
+		reason: v.string(),
+		delayMs: v.number()
+	}),
+	context_compacted: v.object({
+		removedCount: v.number(),
+		remainingCount: v.number(),
+		estimatedTokens: v.number()
+	}),
+	tool_loop_detected: v.object({
+		pattern: v.string(),
+		toolName: v.string(),
+		message: v.string()
 	})
 }
 

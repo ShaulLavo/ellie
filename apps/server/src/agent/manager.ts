@@ -419,6 +419,44 @@ export class AgentManager {
 				]
 			}
 
+			// Resilience events
+			case 'retry':
+				return [
+					{
+						type: 'retry' as EventType,
+						payload: {
+							attempt: event.attempt,
+							maxAttempts: event.maxAttempts,
+							reason: event.reason,
+							delayMs: event.delayMs
+						}
+					}
+				]
+
+			case 'context_compacted':
+				return [
+					{
+						type: 'context_compacted' as EventType,
+						payload: {
+							removedCount: event.removedCount,
+							remainingCount: event.remainingCount,
+							estimatedTokens: event.estimatedTokens
+						}
+					}
+				]
+
+			case 'tool_loop_detected':
+				return [
+					{
+						type: 'tool_loop_detected' as EventType,
+						payload: {
+							pattern: event.pattern,
+							toolName: event.toolName,
+							message: event.message
+						}
+					}
+				]
+
 			default:
 				return []
 		}
@@ -464,6 +502,12 @@ export class AgentManager {
 				return `type=turn_start`
 			case 'turn_end':
 				return `type=turn_end role=${event.message.role}`
+			case 'retry':
+				return `type=retry attempt=${event.attempt}/${event.maxAttempts} delay=${event.delayMs}ms`
+			case 'context_compacted':
+				return `type=context_compacted removed=${event.removedCount} remaining=${event.remainingCount}`
+			case 'tool_loop_detected':
+				return `type=tool_loop_detected pattern=${event.pattern} tool=${event.toolName}`
 			default:
 				return `type=${event.type}`
 		}

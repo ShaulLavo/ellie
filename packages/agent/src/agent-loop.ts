@@ -27,6 +27,10 @@ import {
 	truncateToolResult,
 	needsTruncation
 } from './tool-safety'
+import {
+	createToolLoopDetector,
+	type ToolLoopDetector
+} from './tool-loop-detection'
 import type {
 	AgentContext,
 	AgentEvent,
@@ -264,7 +268,8 @@ function wrapToolsForTanStack(
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
 	toolResultCollector: ToolResultMessage[],
-	maxToolResultChars?: number
+	maxToolResultChars?: number,
+	loopDetector?: ToolLoopDetector
 ) {
 	return tools.map(tool => ({
 		name: tool.name,
@@ -272,6 +277,54 @@ function wrapToolsForTanStack(
 		inputSchema: tool.parameters,
 		execute: async (args: unknown) => {
 			const toolCallId = tracker.dequeue(tool.name)
+
+			// Check for tool loop before execution
+			if (loopDetector) {
+				const loopCheck = loopDetector.record(tool.name, args)
+				if (loopCheck.detected) {
+					emit({
+						type: 'tool_loop_detected',
+						pattern: loopCheck.pattern!,
+						toolName: tool.name,
+						message: loopCheck.message!
+					})
+
+					emit({
+						type: 'tool_execution_start',
+						toolCallId,
+						toolName: tool.name,
+						args
+					})
+
+					const loopResult: AgentToolResult = {
+						content: [{ type: 'text', text: loopCheck.message! }],
+						details: {}
+					}
+
+					emit({
+						type: 'tool_execution_end',
+						toolCallId,
+						toolName: tool.name,
+						result: loopResult,
+						isError: true
+					})
+
+					const toolResultMessage: ToolResultMessage = {
+						role: 'toolResult',
+						toolCallId,
+						toolName: tool.name,
+						content: loopResult.content,
+						details: loopResult.details,
+						isError: true,
+						timestamp: Date.now()
+					}
+					toolResultCollector.push(toolResultMessage)
+					emit({ type: 'message_start', message: toolResultMessage })
+					emit({ type: 'message_end', message: toolResultMessage })
+
+					return loopCheck.message!
+				}
+			}
 
 			emit({
 				type: 'tool_execution_start',
@@ -336,6 +389,11 @@ function wrapToolsForTanStack(
 				isError
 			})
 
+			// Record outcome for loop detection
+			if (loopDetector) {
+				loopDetector.recordOutcome(tool.name, args, result.content)
+			}
+
 			// Create and emit ToolResultMessage for persistence
 			const toolResultMessage: ToolResultMessage = {
 				role: 'toolResult',
@@ -383,6 +441,11 @@ async function runLoop(
 	emit: EmitFn,
 	streamFn?: StreamFn
 ): Promise<void> {
+	// Create tool loop detector for the entire run
+	const loopDetector = createToolLoopDetector(
+		config.toolLoopDetection
+	)
+
 	let firstTurn = true
 	let pendingMessages: AgentMessage[] =
 		(await config.getSteeringMessages?.()) || []
@@ -417,7 +480,8 @@ async function runLoop(
 			config,
 			signal,
 			emit,
-			streamFn
+			streamFn,
+			loopDetector
 		)
 
 		console.log(
@@ -506,7 +570,8 @@ async function runLoop(
 						currentContext.tools ?? [],
 						signal,
 						emit,
-						config.toolSafety?.maxToolResultChars ?? 50_000
+						config.toolSafety?.maxToolResultChars ?? 50_000,
+						loopDetector
 					)
 					for (const tr of toolResults) {
 						currentContext.messages.push(tr)
@@ -523,7 +588,8 @@ async function runLoop(
 					config,
 					signal,
 					emit,
-					streamFn
+					streamFn,
+					loopDetector
 				)
 				for (const msg of result.messages) {
 					newMessages.push(msg)
@@ -581,9 +647,69 @@ async function executeToolCall(
 	tools: AgentTool[],
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
-	maxToolResultChars?: number
+	maxToolResultChars?: number,
+	loopDetector?: ToolLoopDetector
 ): Promise<ToolResultMessage[]> {
 	const tool = tools.find(t => t.name === toolCall.name)
+
+	// Check for tool loop before execution
+	if (loopDetector) {
+		const loopCheck = loopDetector.record(
+			toolCall.name,
+			toolCall.arguments
+		)
+		if (loopCheck.detected) {
+			emit({
+				type: 'tool_loop_detected',
+				pattern: loopCheck.pattern!,
+				toolName: toolCall.name,
+				message: loopCheck.message!
+			})
+
+			emit({
+				type: 'tool_execution_start',
+				toolCallId: toolCall.id,
+				toolName: toolCall.name,
+				args: toolCall.arguments
+			})
+
+			const loopResult: AgentToolResult = {
+				content: [
+					{ type: 'text', text: loopCheck.message! }
+				],
+				details: {}
+			}
+
+			emit({
+				type: 'tool_execution_end',
+				toolCallId: toolCall.id,
+				toolName: toolCall.name,
+				result: loopResult,
+				isError: true
+			})
+
+			const toolResultMessage: ToolResultMessage = {
+				role: 'toolResult',
+				toolCallId: toolCall.id,
+				toolName: toolCall.name,
+				content: loopResult.content,
+				details: loopResult.details,
+				isError: true,
+				timestamp: Date.now()
+			}
+
+			emit({
+				type: 'message_start',
+				message: toolResultMessage
+			})
+			emit({
+				type: 'message_end',
+				message: toolResultMessage
+			})
+
+			return [toolResultMessage]
+		}
+	}
 
 	emit({
 		type: 'tool_execution_start',
@@ -660,6 +786,15 @@ async function executeToolCall(
 		isError
 	})
 
+	// Record outcome for loop detection
+	if (loopDetector) {
+		loopDetector.recordOutcome(
+			toolCall.name,
+			toolCall.arguments,
+			result.content
+		)
+	}
+
 	const toolResultMessage: ToolResultMessage = {
 		role: 'toolResult',
 		toolCallId: toolCall.id,
@@ -699,7 +834,8 @@ async function processAgentStreamWithRetry(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
-	streamFn?: StreamFn
+	streamFn?: StreamFn,
+	loopDetector?: ToolLoopDetector
 ): Promise<ProcessResult> {
 	const retryConfig = config.retry ?? {}
 	const maxAttempts = retryConfig.maxAttempts ?? 3
@@ -711,7 +847,8 @@ async function processAgentStreamWithRetry(
 			config,
 			signal,
 			emit,
-			streamFn
+			streamFn,
+			loopDetector
 		)
 	}
 
@@ -724,7 +861,8 @@ async function processAgentStreamWithRetry(
 				config,
 				signal,
 				emit,
-				streamFn
+				streamFn,
+				loopDetector
 			)
 
 			// If no error, return successfully
@@ -878,7 +1016,8 @@ async function processAgentStream(
 	config: AgentLoopConfig,
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
-	streamFn?: StreamFn
+	streamFn?: StreamFn,
+	loopDetector?: ToolLoopDetector
 ): Promise<ProcessResult> {
 	// Apply context transform
 	let messages = context.messages
@@ -904,7 +1043,8 @@ async function processAgentStream(
 				signal,
 				emit,
 				toolResultCollector,
-				maxToolResultChars
+				maxToolResultChars,
+				loopDetector
 			)
 		: undefined
 
