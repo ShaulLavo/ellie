@@ -8,6 +8,10 @@ import {
 import { env } from '@ellie/env/client'
 import { eden } from '../eden'
 import { isMessagePayload, type Message } from './use-chat'
+import {
+	type SessionStats,
+	computeStatsFromMessages
+} from './session-stats'
 
 // ============================================================================
 // Types
@@ -315,12 +319,18 @@ export function useAgentChat(sessionId: string) {
 		}
 	}, [sessionId])
 
+	const sessionStats = useMemo<SessionStats>(
+		() => computeStatsFromMessages(messages),
+		[messages]
+	)
+
 	return {
 		messages,
 		isLoading,
 		isSending,
 		isAgentRunning,
 		error,
+		sessionStats,
 		sendMessage,
 		steer,
 		abort

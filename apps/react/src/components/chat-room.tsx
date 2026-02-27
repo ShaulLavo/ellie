@@ -26,6 +26,7 @@ import {
 	AlertCircleIcon
 } from 'lucide-react'
 import type { ConnectionState } from '@ellie/schemas/chat'
+import { SessionStatusBar } from './chat/session-status-bar'
 
 function EmptyState() {
 	return (
@@ -215,6 +216,11 @@ export function ChatRoom({
 					/>
 				</PromptInputProvider>
 			</div>
+
+			<SessionStatusBar
+				stats={chat.sessionStats}
+				isAgentRunning={chat.isAgentRunning || !!chat.streamingMessage}
+			/>
 		</div>
 	)
 }

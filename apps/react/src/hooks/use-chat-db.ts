@@ -21,6 +21,24 @@ import {
 	toStored
 } from '../collections/chat-messages'
 import { type EventRow, StreamClient } from '../lib/stream'
+import {
+	type SessionStats,
+	EMPTY_STATS,
+	computeStatsFromEvents
+} from '../lib/chat/session-stats'
+
+/** Agent lifecycle event types */
+const AGENT_START_TYPES = new Set(['agent_start'])
+const AGENT_END_TYPES = new Set(['agent_end', 'run_closed'])
+
+function isAgentRunOpen(rows: EventRow[]): boolean {
+	let open = false
+	for (const row of rows) {
+		if (AGENT_START_TYPES.has(row.type)) open = true
+		if (AGENT_END_TYPES.has(row.type)) open = false
+	}
+	return open
+}
 
 /** Convert an EventRow from the event store into a ChatMessage. */
 function eventToMessage(row: EventRow): ChatMessage {
@@ -109,6 +127,10 @@ export function useChatDB(sessionId: string) {
 	const [streamingMessage, setStreamingMessage] =
 		useState<ChatMessage | null>(null)
 	const [sessionVersion, setSessionVersion] = useState(0)
+	const [sessionStats, setSessionStats] =
+		useState<SessionStats>(EMPTY_STATS)
+	const [isAgentRunning, setIsAgentRunning] =
+		useState(false)
 
 	const streamRef = useRef<StreamClient | null>(null)
 	const isInitialLoadRef = useRef(true)
@@ -172,12 +194,16 @@ export function useChatDB(sessionId: string) {
 		destroyChatMessagesCollection(sessionId)
 		setSessionVersion(v => v + 1)
 		setStreamingMessage(null)
+		setSessionStats(EMPTY_STATS)
+		setIsAgentRunning(false)
 		setError(null)
 	}, [sessionId])
 
 	// ── StreamClient setup ─────────────────────────────────────────────
 	useEffect(() => {
 		isInitialLoadRef.current = true
+		setSessionStats(EMPTY_STATS)
+		setIsAgentRunning(false)
 
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events) {
@@ -205,15 +231,51 @@ export function useChatDB(sessionId: string) {
 				}
 				// Clear any stale streaming state on snapshot
 				setStreamingMessage(null)
+
+				// Compute session stats from all events
+				setSessionStats(computeStatsFromEvents(events))
+				setIsAgentRunning(isAgentRunOpen(events))
 			},
 
 			onAppend(event) {
+				// Track agent run lifecycle
+				if (AGENT_START_TYPES.has(event.type)) {
+					setIsAgentRunning(true)
+				} else if (AGENT_END_TYPES.has(event.type)) {
+					setIsAgentRunning(false)
+				}
+
+				// Incrementally update session stats
+				if (
+					event.type === 'user_message' ||
+					event.type === 'assistant_final'
+				) {
+					const delta = computeStatsFromEvents([event])
+					setSessionStats(prev => ({
+						model: delta.model ?? prev.model,
+						provider: delta.provider ?? prev.provider,
+						messageCount:
+							prev.messageCount + delta.messageCount,
+						promptTokens:
+							prev.promptTokens + delta.promptTokens,
+						completionTokens:
+							prev.completionTokens +
+							delta.completionTokens,
+						totalCost: prev.totalCost + delta.totalCost
+					}))
+				}
+
 				// Handle streaming events for live assistant responses
 				if (event.type === 'message_start') {
-					const parsed =
-						typeof event.payload === 'string'
-							? JSON.parse(event.payload)
-							: event.payload
+					let parsed: Record<string, unknown>
+					try {
+						parsed =
+							typeof event.payload === 'string'
+								? JSON.parse(event.payload)
+								: event.payload
+					} catch {
+						return
+					}
 					const msg = parsed.message as Record<
 						string,
 						unknown
@@ -231,10 +293,15 @@ export function useChatDB(sessionId: string) {
 				}
 
 				if (event.type === 'message_update') {
-					const parsed =
-						typeof event.payload === 'string'
-							? JSON.parse(event.payload)
-							: event.payload
+					let parsed: Record<string, unknown>
+					try {
+						parsed =
+							typeof event.payload === 'string'
+								? JSON.parse(event.payload)
+								: event.payload
+					} catch {
+						return
+					}
 					const streamEvent = parsed.streamEvent as
 						| Record<string, unknown>
 						| undefined
@@ -363,6 +430,8 @@ export function useChatDB(sessionId: string) {
 		streamingMessage,
 		connectionState,
 		error,
+		sessionStats,
+		isAgentRunning,
 		sendMessage,
 		clearSession,
 		retry

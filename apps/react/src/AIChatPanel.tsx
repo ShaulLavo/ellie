@@ -44,6 +44,7 @@ import {
 } from './components/ai-elements/reasoning'
 import { ToolCard } from './components/ai-elements/tool'
 import { Shimmer } from './components/ai-elements/shimmer'
+import { SessionStatusBar } from './components/chat/session-status-bar'
 import { Separator } from './components/ui/separator'
 import { Spinner } from './components/ui/spinner'
 import {
@@ -307,6 +308,7 @@ export function AIChatPanel({
 		isLoading,
 		isAgentRunning,
 		error,
+		sessionStats,
 		sendMessage,
 		steer,
 		abort
@@ -671,6 +673,12 @@ export function AIChatPanel({
 					</ChatToolbarButton>
 				</ChatToolbarAddon>
 			</ChatToolbar>
+
+			{/* ── Status bar ────────────────────────────────── */}
+			<SessionStatusBar
+				stats={sessionStats}
+				isAgentRunning={isAgentWorking}
+			/>
 		</Chat>
 	)
 }
