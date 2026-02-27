@@ -1,0 +1,10 @@
+{
+	"extends": "@repo/typescript-config/base.json",
+	"compilerOptions": {
+		"types": ["bun-types"],
+		"rootDir": "./src",
+		"outDir": "./dist",
+		"sourceMap": true
+	},
+	"include": ["src"]
+}

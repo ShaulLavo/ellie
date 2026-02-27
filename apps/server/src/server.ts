@@ -13,6 +13,7 @@ import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
 import { Hindsight } from '@ellie/hindsight'
 import { createHindsightApp } from '@ellie/hindsight/server'
+import { createTusApp, FileStore } from '@ellie/tus'
 import { openapi } from '@elysiajs/openapi'
 import { staticPlugin } from '@elysiajs/static'
 import type { AnyTextAdapter } from '@tanstack/ai'
@@ -246,6 +247,12 @@ const hindsight = new Hindsight({
 	...(hindsightAdapter ? { adapter: hindsightAdapter } : {})
 })
 
+// ── Tus uploads ───────────────────────────────────────────────────────────
+const uploadStore = new FileStore({
+	directory: `${DATA_DIR}/uploads`,
+	expirationPeriodInMilliseconds: 24 * 60 * 60 * 1000 // 24h
+})
+
 const sseState: SseState = {
 	activeClients: 0
 }
@@ -285,6 +292,10 @@ export const app = new Elysia()
 					{
 						name: 'Session',
 						description: 'Session management'
+					},
+					{
+						name: 'Uploads',
+						description: 'Tus upload management'
 					}
 				]
 			},
@@ -312,6 +323,12 @@ export const app = new Elysia()
 	)
 	.use(
 		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
+	)
+	.use(
+		createTusApp({
+			datastore: uploadStore,
+			relativeLocation: true
+		})
 	)
 	.use(createHindsightApp(hindsight))
 	.get('/', ({ redirect }) => redirect('/app'))
