@@ -4,10 +4,8 @@ import {
 	CheckIcon,
 	BookOpenIcon
 } from 'lucide-react'
-import type {
-	ChatMessage as ChatMessageType,
-	ContentPart
-} from '@ellie/schemas/chat'
+import type { ContentPart } from '@ellie/schemas/chat'
+import type { StoredChatMessage } from '@/collections/chat-messages'
 import {
 	Message,
 	MessageContent,
@@ -215,8 +213,8 @@ function CopyButton({ text }: { text: string }) {
 	)
 }
 
-function formatTime(date: Date): string {
-	return date.toLocaleTimeString(undefined, {
+function formatTime(iso: string): string {
+	return new Date(iso).toLocaleTimeString(undefined, {
 		hour: '2-digit',
 		minute: '2-digit'
 	})
@@ -227,7 +225,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
 	toolResults,
 	consumedToolCallIds
 }: {
-	message: ChatMessageType
+	message: StoredChatMessage
 	toolResults?: Map<string, ToolResultPart>
 	consumedToolCallIds?: Set<string>
 }) {

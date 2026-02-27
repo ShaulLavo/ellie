@@ -160,7 +160,7 @@ export function ChatRoom({
 	)
 
 	return (
-		<div className="flex h-full flex-col">
+		<div className="flex h-full w-full flex-col">
 			<ConnectionIndicator
 				state={chat.connectionState}
 				error={chat.error}

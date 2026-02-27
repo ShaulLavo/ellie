@@ -4,7 +4,7 @@ import {
 	messagesToTranscript,
 	renderTranscript
 } from '@ellie/schemas/chat'
-import type { ChatMessage } from '@ellie/schemas/chat'
+import type { StoredChatMessage } from '../collections/chat-messages'
 import type { SlashCommand } from '@/components/slash-command-menu'
 import {
 	Trash2Icon,
@@ -16,7 +16,7 @@ import { createElement } from 'react'
 
 interface UseChatCommandsOptions {
 	sessionId: string
-	allMessages: ChatMessage[]
+	allMessages: StoredChatMessage[]
 	onClear?: () => void
 }
 
@@ -30,7 +30,13 @@ export function useChatCommands({
 	const handleDownloadTranscript = useCallback(() => {
 		if (allMessages.length === 0) return
 
-		const transcript = messagesToTranscript(allMessages)
+		// Convert to ChatMessage format lazily (only on download)
+		const chatMessages = allMessages.map(m => ({
+			...m,
+			timestamp: new Date(m.timestamp),
+			line: m.seq
+		}))
+		const transcript = messagesToTranscript(chatMessages)
 		const text = renderTranscript(transcript)
 		const blob = new Blob([text], { type: 'text/plain' })
 		const url = URL.createObjectURL(blob)

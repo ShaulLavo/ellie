@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
-import type {
-	ContentPart,
-	ChatMessage
-} from '@ellie/schemas/chat'
+import type { ContentPart } from '@ellie/schemas/chat'
+import type { StoredChatMessage } from '../collections/chat-messages'
 
 export type ToolResultPart = Extract<
 	ContentPart,
@@ -10,8 +8,8 @@ export type ToolResultPart = Extract<
 >
 
 export function useToolGrouping(
-	messages: ChatMessage[],
-	streamingMessage: ChatMessage | null
+	messages: StoredChatMessage[],
+	streamingMessage: StoredChatMessage | null
 ) {
 	const allMessages = useMemo(
 		() =>

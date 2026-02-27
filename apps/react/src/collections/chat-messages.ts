@@ -1,13 +1,12 @@
 import { createCollection } from '@tanstack/react-db'
 import type {
 	ContentPart,
-	ChatMessage,
 	MessageSender
 } from '@ellie/schemas/chat'
 
 /**
- * Serialize-safe variant of ChatMessage.
- * `timestamp` is stored as ISO string — Date objects don't survive JSON round-trips.
+ * Canonical client-side message type stored in TanStack DB.
+ * Uses ISO string for timestamp (Date objects don't survive structured clone).
  */
 export interface StoredChatMessage {
 	id: string
@@ -19,26 +18,6 @@ export interface StoredChatMessage {
 	isStreaming?: boolean
 	streamGroupId?: string
 	thinking?: string
-}
-
-export function toStored(
-	msg: ChatMessage
-): StoredChatMessage {
-	return {
-		...msg,
-		timestamp: msg.timestamp.toISOString(),
-		seq: msg.line
-	}
-}
-
-export function fromStored(
-	stored: StoredChatMessage
-): ChatMessage {
-	return {
-		...stored,
-		timestamp: new Date(stored.timestamp),
-		line: stored.seq
-	}
 }
 
 /**

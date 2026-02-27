@@ -1,5 +1,4 @@
 import type {
-	ChatMessage,
 	ConnectionState,
 	ContentPart,
 	MessageSender
@@ -8,17 +7,14 @@ import { useLiveQuery } from '@tanstack/react-db'
 import {
 	useCallback,
 	useEffect,
-	useMemo,
 	useRef,
 	useState
 } from 'react'
 import {
 	destroyChatMessagesCollection,
-	fromStored,
 	getChatMessagesCollection,
 	getChatMessagesSyncHandle,
-	type StoredChatMessage,
-	toStored
+	type StoredChatMessage
 } from '../collections/chat-messages'
 import { type EventRow, StreamClient } from '../lib/stream'
 import {
@@ -40,8 +36,8 @@ function isAgentRunOpen(rows: EventRow[]): boolean {
 	return open
 }
 
-/** Convert an EventRow from the event store into a ChatMessage. */
-function eventToMessage(row: EventRow): ChatMessage {
+/** Convert an EventRow into a StoredChatMessage (no Date allocation). */
+function eventToStored(row: EventRow): StoredChatMessage {
 	const parsed =
 		typeof row.payload === 'string'
 			? (JSON.parse(row.payload) as Record<string, unknown>)
@@ -111,10 +107,10 @@ function eventToMessage(row: EventRow): ChatMessage {
 
 	return {
 		id: String(row.id),
-		timestamp: new Date(row.createdAt),
+		timestamp: new Date(row.createdAt).toISOString(),
 		text,
 		parts: filteredParts,
-		line: row.seq,
+		seq: row.seq,
 		sender,
 		thinking
 	}
@@ -125,7 +121,7 @@ export function useChatDB(sessionId: string) {
 		useState<ConnectionState>('disconnected')
 	const [error, setError] = useState<string | null>(null)
 	const [streamingMessage, setStreamingMessage] =
-		useState<ChatMessage | null>(null)
+		useState<StoredChatMessage | null>(null)
 	const [sessionVersion, setSessionVersion] = useState(0)
 	const [sessionStats, setSessionStats] =
 		useState<SessionStats>(EMPTY_STATS)
@@ -150,22 +146,17 @@ export function useChatDB(sessionId: string) {
 		[sessionId, sessionVersion]
 	)
 
-	const messages = useMemo(() => {
-		if (!storedMessages) return []
-		return (storedMessages as StoredChatMessage[]).map(
-			fromStored
-		)
-	}, [storedMessages])
+	const messages = (storedMessages ??
+		[]) as StoredChatMessage[]
 
 	// ── Helpers: push messages via the sync handle ─────────────────────
 	const syncWrite = useCallback(
-		(msgs: ChatMessage[]) => {
+		(msgs: StoredChatMessage[]) => {
 			const sync = getChatMessagesSyncHandle(sessionId)
 			const collection =
 				getChatMessagesCollection(sessionId)
-			const stored = msgs.map(toStored)
 			sync.begin()
-			for (const msg of stored) {
+			for (const msg of msgs) {
 				sync.write(
 					msg,
 					collection.has(msg.id) ? 'update' : 'insert'
@@ -177,12 +168,11 @@ export function useChatDB(sessionId: string) {
 	)
 
 	const syncReplaceAll = useCallback(
-		(msgs: ChatMessage[]) => {
+		(msgs: StoredChatMessage[]) => {
 			const sync = getChatMessagesSyncHandle(sessionId)
-			const stored = msgs.map(toStored)
 			sync.begin()
 			sync.truncate()
-			for (const msg of stored) {
+			for (const msg of msgs) {
 				sync.write(msg, 'insert')
 			}
 			sync.commit()
@@ -217,7 +207,7 @@ export function useChatDB(sessionId: string) {
 						e.type === 'tool_call' ||
 						e.type === 'tool_result'
 				)
-				const msgs = messageEvents.map(eventToMessage)
+				const msgs = messageEvents.map(eventToStored)
 
 				if (isInitialLoadRef.current) {
 					// First connect: full replace
@@ -282,10 +272,12 @@ export function useChatDB(sessionId: string) {
 					>
 					setStreamingMessage({
 						id: `streaming-${event.id}`,
-						timestamp: new Date(event.createdAt),
+						timestamp: new Date(
+							event.createdAt
+						).toISOString(),
 						text: '',
 						parts: [],
-						line: event.seq,
+						seq: event.seq,
 						sender: msg?.role === 'user' ? 'user' : 'agent',
 						isStreaming: true
 					})
@@ -362,7 +354,7 @@ export function useChatDB(sessionId: string) {
 				]
 				if (!renderableTypes.includes(event.type)) return
 
-				const msg = eventToMessage(event)
+				const msg = eventToStored(event)
 				syncWrite([msg])
 			},
 
