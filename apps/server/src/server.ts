@@ -24,6 +24,8 @@ import {
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
 import { AgentController } from './agent/controller'
+import { ensureBootstrapInjected } from './agent/bootstrap'
+import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { createAgentRoutes } from './routes/agent'
 import { createAuthRoutes } from './routes/auth'
@@ -43,11 +45,24 @@ const { DATA_DIR } = env
 
 console.log(`[server] DATA_DIR=${DATA_DIR}`)
 
+function todaySessionId(): string {
+	const now = new Date()
+	const y = now.getFullYear()
+	const m = String(now.getMonth() + 1).padStart(2, '0')
+	const d = String(now.getDate()).padStart(2, '0')
+	return `session-${y}-${m}-${d}`
+}
+
 const eventStore = new EventStore(
 	`${DATA_DIR}/events.db`,
 	`${DATA_DIR}/audit`
 )
-const store = new RealtimeStore(eventStore)
+const initialSessionId = todaySessionId()
+const store = new RealtimeStore(
+	eventStore,
+	initialSessionId
+)
+console.log(`[server] current session=${initialSessionId}`)
 
 // Startup recovery: find stale runs and close them via RealtimeStore
 // so in-memory #closedRuns set is updated for SSE endpoints
@@ -77,6 +92,11 @@ if (staleRuns.length > 0) {
 		`[server] recovered ${staleRuns.length} stale run(s)`
 	)
 }
+
+// ── Workspace seeding ─────────────────────────────────────────────────────────
+const workspaceDir = seedWorkspace(DATA_DIR)
+eventStore.markWorkspaceSeededOnce('main')
+console.log(`[server] workspace=${workspaceDir}`)
 
 const STUDIO_PUBLIC = resolve(
 	import.meta.dir,
@@ -204,7 +224,7 @@ async function getAgentController(): Promise<AgentController | null> {
 	cachedController = adapter
 		? new AgentController(store, {
 				adapter,
-				systemPrompt: 'You are a helpful assistant.'
+				workspaceDir
 			})
 		: null
 	return cachedController
@@ -229,6 +249,16 @@ const hindsight = new Hindsight({
 const sseState: SseState = {
 	activeClients: 0
 }
+
+// ── Session rotation cron ─────────────────────────────────────────────────────
+// Kept outside the Elysia app chain so the croner type doesn't leak into the
+// exported App type (which Eden uses for type-safe client generation).
+import { Cron } from 'croner'
+new Cron('0 0 * * *', () => {
+	const newId = todaySessionId()
+	console.log(`[cron] midnight rotation → ${newId}`)
+	store.rotateSession(newId)
+})
 
 export const app = new Elysia()
 	.use(
@@ -264,7 +294,18 @@ export const app = new Elysia()
 	.use(createStatusRoutes(() => sseState.activeClients))
 	.use(createSessionRoutes(store))
 	.use(
-		createChatRoutes(store, sseState, getAgentController)
+		createChatRoutes(
+			store,
+			sseState,
+			getAgentController,
+			sessionId =>
+				ensureBootstrapInjected({
+					sessionId,
+					store,
+					eventStore,
+					workspaceDir
+				})
+		)
 	)
 	.use(
 		createAgentRoutes(store, getAgentController, sseState)

@@ -14,6 +14,12 @@ type Listener<T> = (event: T) => void
 
 const MAX_CLOSED_RUNS = 10_000
 
+export type RotationEvent = {
+	type: 'rotated'
+	previousSessionId: string
+	newSessionId: string
+}
+
 export class RealtimeStore {
 	readonly #store: EventStore
 	readonly #listeners = new Map<
@@ -21,9 +27,42 @@ export class RealtimeStore {
 		Set<Listener<unknown>>
 	>()
 	readonly #closedRuns = new Set<string>()
+	#currentSessionId: string
 
-	constructor(store: EventStore) {
+	constructor(store: EventStore, initialSessionId: string) {
 		this.#store = store
+		this.#currentSessionId = initialSessionId
+		this.ensureSession(initialSessionId)
+	}
+
+	// ── Current session ───────────────────────────────────────────────
+
+	getCurrentSessionId(): string {
+		return this.#currentSessionId
+	}
+
+	rotateSession(newSessionId: string): void {
+		const previous = this.#currentSessionId
+		if (previous === newSessionId) return
+
+		this.ensureSession(newSessionId)
+		this.#currentSessionId = newSessionId
+
+		console.log(
+			`[realtime-store] session rotated: ${previous} → ${newSessionId}`
+		)
+
+		this.#publish<RotationEvent>('current-session', {
+			type: 'rotated',
+			previousSessionId: previous,
+			newSessionId
+		})
+	}
+
+	subscribeToRotation(
+		listener: Listener<RotationEvent>
+	): () => void {
+		return this.#subscribe('current-session', listener)
 	}
 
 	get eventStore(): EventStore {

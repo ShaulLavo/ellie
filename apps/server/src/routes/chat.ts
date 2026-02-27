@@ -15,10 +15,29 @@ import {
 	type SseState
 } from './common'
 
+export interface ChatRouteDeps {
+	store: RealtimeStore
+	sseState: SseState
+	getAgentController?: () => Promise<AgentController | null>
+	/** Called before the first user message to inject bootstrap events */
+	ensureBootstrap?: (sessionId: string) => void
+}
+
+/** Resolve the virtual 'current' session ID to the actual one. */
+function resolveSessionId(
+	store: RealtimeStore,
+	raw: string
+): string {
+	return raw === 'current'
+		? store.getCurrentSessionId()
+		: raw
+}
+
 export function createChatRoutes(
 	store: RealtimeStore,
 	sseState: SseState,
-	getAgentController?: () => Promise<AgentController | null>
+	getAgentController?: () => Promise<AgentController | null>,
+	ensureBootstrap?: (sessionId: string) => void
 ) {
 	return (
 		new Elysia({ prefix: '/chat', tags: ['Chat'] })
@@ -37,9 +56,12 @@ export function createChatRoutes(
 			.get(
 				'/sessions/:sessionId',
 				({ params, set }) => {
-					const session = store.eventStore.getSession(
+					const sessionId = resolveSessionId(
+						store,
 						params.sessionId
 					)
+					const session =
+						store.eventStore.getSession(sessionId)
 					if (!session) {
 						set.status = 404
 						return { error: 'Session not found' }
@@ -57,7 +79,11 @@ export function createChatRoutes(
 			.get(
 				'/:sessionId/messages',
 				({ params }) => {
-					return store.listAgentMessages(params.sessionId)
+					const sessionId = resolveSessionId(
+						store,
+						params.sessionId
+					)
+					return store.listAgentMessages(sessionId)
 				},
 				{ params: sessionParamsSchema }
 			)
@@ -65,15 +91,20 @@ export function createChatRoutes(
 			.post(
 				'/:sessionId/messages',
 				async ({ params, body }) => {
+					const sessionId = resolveSessionId(
+						store,
+						params.sessionId
+					)
 					const input = normalizeMessageInput(body)
 					console.log(
-						`[chat-route] POST /chat/${params.sessionId}/messages role=${input.role ?? 'user'} content=${input.content.slice(0, 100)}`
+						`[chat-route] POST /chat/${sessionId}/messages role=${input.role ?? 'user'} content=${input.content.slice(0, 100)}`
 					)
-					store.ensureSession(params.sessionId)
+					store.ensureSession(sessionId)
+					ensureBootstrap?.(sessionId)
 					const controller = await getAgentController?.()
-					controller?.watch(params.sessionId)
+					controller?.watch(sessionId)
 					const row = store.appendEvent(
-						params.sessionId,
+						sessionId,
 						'user_message',
 						{
 							role: input.role ?? 'user',
@@ -102,7 +133,11 @@ export function createChatRoutes(
 			.delete(
 				'/:sessionId/messages',
 				({ params }) => {
-					store.deleteSession(params.sessionId)
+					const sessionId = resolveSessionId(
+						store,
+						params.sessionId
+					)
+					store.deleteSession(sessionId)
 					return new Response(null, { status: 204 })
 				},
 				{ params: sessionParamsSchema }
@@ -113,12 +148,16 @@ export function createChatRoutes(
 			.get(
 				'/:sessionId/events',
 				({ params, query }) => {
+					const sessionId = resolveSessionId(
+						store,
+						params.sessionId
+					)
 					const afterSeq = query.afterSeq
 					const limit = query.limit
 						? Number(query.limit)
 						: undefined
 					return store.queryEvents(
-						params.sessionId,
+						sessionId,
 						afterSeq,
 						undefined,
 						limit
@@ -145,21 +184,55 @@ export function createChatRoutes(
 			.get(
 				'/:sessionId/events/sse',
 				({ params, query, request }) => {
+					const isCurrent = params.sessionId === 'current'
+					const sessionId = resolveSessionId(
+						store,
+						params.sessionId
+					)
 					const afterSeq = query.afterSeq
 
 					const existingEvents = store.queryEvents(
-						params.sessionId,
+						sessionId,
 						afterSeq
 					)
 
+					// For 'current' connections, create a combined abort
+					// signal that fires on rotation OR client disconnect.
+					// This wakes toStreamGenerator's blocking wait so the
+					// client reconnects to the new session.
+					let effectiveRequest = request
+					let unsubRotation: (() => void) | undefined
+					if (isCurrent) {
+						const ac = new AbortController()
+						request.signal.addEventListener(
+							'abort',
+							() => ac.abort(),
+							{ once: true }
+						)
+						unsubRotation = store.subscribeToRotation(() =>
+							ac.abort()
+						)
+						effectiveRequest = new Request(request.url, {
+							signal: ac.signal
+						})
+					}
+
 					const stream = toStreamGenerator<SessionEvent>(
-						request,
+						effectiveRequest,
 						sseState,
-						listener =>
-							store.subscribeToSession(
-								params.sessionId,
+						listener => {
+							const unsubSession = store.subscribeToSession(
+								sessionId,
 								listener
-							),
+							)
+							// Bundle rotation cleanup with session
+							// unsubscribe so both are cleaned up by
+							// toStreamGenerator's finally block.
+							return () => {
+								unsubSession()
+								unsubRotation?.()
+							}
+						},
 						event => ({
 							event: 'append',
 							data: event.event
@@ -183,10 +256,12 @@ export function createChatRoutes(
 			.post(
 				'/:sessionId/clear',
 				({ params }) => {
-					store.deleteSession(params.sessionId)
-					const session = store.createSession(
+					const sessionId = resolveSessionId(
+						store,
 						params.sessionId
 					)
+					store.deleteSession(sessionId)
+					const session = store.createSession(sessionId)
 					return {
 						sessionId: session.id,
 						cleared: true

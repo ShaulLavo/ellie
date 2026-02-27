@@ -21,6 +21,16 @@ import {
 	type SseState
 } from './common'
 
+/** Resolve the virtual 'current' session ID to the actual one. */
+function resolveSessionId(
+	store: RealtimeStore,
+	raw: string
+): string {
+	return raw === 'current'
+		? store.getCurrentSessionId()
+		: raw
+}
+
 export function createAgentRoutes(
 	store: RealtimeStore,
 	getAgentController: () => Promise<AgentController | null>,
@@ -30,7 +40,11 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/messages',
 			({ params }) => {
-				return store.listAgentMessages(params.sessionId)
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
+				)
+				return store.listAgentMessages(sessionId)
 			},
 			{
 				params: sessionParamsSchema
@@ -39,9 +53,13 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/sse',
 			({ params, query, request }) => {
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
+				)
 				const afterSeq = query.afterSeq
 				const existingEvents = store.queryEvents(
-					params.sessionId,
+					sessionId,
 					afterSeq
 				)
 
@@ -49,10 +67,7 @@ export function createAgentRoutes(
 					request,
 					sseState,
 					listener =>
-						store.subscribeToSession(
-							params.sessionId,
-							listener
-						),
+						store.subscribeToSession(sessionId, listener),
 					event => ({ event: `append`, data: event.event }),
 					{ event: `snapshot`, data: existingEvents }
 				)
@@ -67,10 +82,11 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/:runId',
 			({ params }) => {
-				return store.queryRunEvents(
-					params.sessionId,
-					params.runId
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
 				)
+				return store.queryRunEvents(sessionId, params.runId)
 			},
 			{
 				params: sessionRunParamsSchema
@@ -79,7 +95,11 @@ export function createAgentRoutes(
 		.get(
 			'/:sessionId/events/:runId/sse',
 			({ params, request }) => {
-				const { sessionId, runId } = params
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
+				)
+				const { runId } = params
 
 				const stream = toStreamGenerator<SessionEvent>(
 					request,
@@ -126,8 +146,12 @@ export function createAgentRoutes(
 					}
 				}
 
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
+				)
 				const message = parseAgentActionBody(body)
-				controller.steer(params.sessionId, message)
+				controller.steer(sessionId, message)
 				return { status: `queued` as const }
 			},
 			{
@@ -151,7 +175,11 @@ export function createAgentRoutes(
 					}
 				}
 
-				controller.abort(params.sessionId)
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
+				)
+				controller.abort(sessionId)
 				return { status: `aborted` as const }
 			},
 			{
@@ -174,8 +202,12 @@ export function createAgentRoutes(
 					}
 				}
 
+				const sessionId = resolveSessionId(
+					store,
+					params.sessionId
+				)
 				return {
-					messages: controller.loadHistory(params.sessionId)
+					messages: controller.loadHistory(sessionId)
 				}
 			},
 			{
