@@ -267,10 +267,15 @@ export function useChatDB(sessionId: string) {
 
 				// Handle streaming events for live assistant responses
 				if (event.type === 'message_start') {
-					const parsed =
-						typeof event.payload === 'string'
-							? JSON.parse(event.payload)
-							: event.payload
+					let parsed: Record<string, unknown>
+					try {
+						parsed =
+							typeof event.payload === 'string'
+								? JSON.parse(event.payload)
+								: event.payload
+					} catch {
+						return
+					}
 					const msg = parsed.message as Record<
 						string,
 						unknown
@@ -288,10 +293,15 @@ export function useChatDB(sessionId: string) {
 				}
 
 				if (event.type === 'message_update') {
-					const parsed =
-						typeof event.payload === 'string'
-							? JSON.parse(event.payload)
-							: event.payload
+					let parsed: Record<string, unknown>
+					try {
+						parsed =
+							typeof event.payload === 'string'
+								? JSON.parse(event.payload)
+								: event.payload
+					} catch {
+						return
+					}
 					const streamEvent = parsed.streamEvent as
 						| Record<string, unknown>
 						| undefined
