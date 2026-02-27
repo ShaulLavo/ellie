@@ -10,8 +10,10 @@ import * as schema from './schema'
 import {
 	sessions,
 	events,
+	agentBootstrapState,
 	type SessionRow,
-	type EventRow
+	type EventRow,
+	type AgentBootstrapStateRow
 } from './schema'
 import type { AgentMessage } from '@ellie/schemas'
 
@@ -417,6 +419,7 @@ export class EventStore {
 			types: [
 				'user_message',
 				'assistant_final',
+				'tool_call',
 				'tool_result'
 			]
 		})
@@ -424,9 +427,47 @@ export class EventStore {
 		const messages: AgentMessage[] = []
 		for (const row of rows) {
 			try {
-				messages.push(
-					JSON.parse(row.payload) as AgentMessage
-				)
+				if (row.type === 'tool_call') {
+					// Map tool_call event to an assistant message with toolCall content
+					const tc = JSON.parse(row.payload) as {
+						id: string
+						name: string
+						arguments: Record<string, unknown>
+					}
+					messages.push({
+						role: 'assistant',
+						content: [
+							{
+								type: 'toolCall',
+								id: tc.id,
+								name: tc.name,
+								arguments: tc.arguments
+							}
+						],
+						provider: 'system',
+						model: 'bootstrap-v1',
+						usage: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							totalTokens: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0
+							}
+						},
+						stopReason: 'toolUse',
+						timestamp: row.createdAt
+					} as AgentMessage)
+				} else {
+					messages.push(
+						JSON.parse(row.payload) as AgentMessage
+					)
+				}
 			} catch (err) {
 				console.warn(
 					`[EventStore] malformed payload in event ${row.id} (seq=${row.seq}):`,
@@ -480,6 +521,118 @@ export class EventStore {
 			sessionId: r.session_id,
 			runId: r.run_id
 		}))
+	}
+
+	// ── Bootstrap state ──────────────────────────────────────────────────
+
+	getBootstrapState(
+		agentId: string
+	): AgentBootstrapStateRow | undefined {
+		return this.db
+			.select()
+			.from(agentBootstrapState)
+			.where(eq(agentBootstrapState.agentId, agentId))
+			.get()
+	}
+
+	markWorkspaceSeededOnce(agentId: string): void {
+		const now = Date.now()
+		const existing = this.getBootstrapState(agentId)
+		if (existing) {
+			if (existing.workspaceSeededAt) return // already seeded
+			this.db
+				.update(agentBootstrapState)
+				.set({
+					workspaceSeededAt: now,
+					status: 'workspace_seeded',
+					updatedAt: now
+				})
+				.where(eq(agentBootstrapState.agentId, agentId))
+				.run()
+		} else {
+			this.db
+				.insert(agentBootstrapState)
+				.values({
+					agentId,
+					status: 'workspace_seeded',
+					workspaceSeededAt: now,
+					updatedAt: now
+				})
+				.run()
+		}
+	}
+
+	/**
+	 * Atomically claim bootstrap injection for a session.
+	 * Returns true if this call won the claim, false if already injected.
+	 */
+	claimBootstrapInjection(
+		agentId: string,
+		sessionId: string
+	): boolean {
+		const now = Date.now()
+		return this.db.transaction(tx => {
+			const row = tx
+				.select()
+				.from(agentBootstrapState)
+				.where(eq(agentBootstrapState.agentId, agentId))
+				.get()
+
+			if (row?.bootstrapInjectedAt) return false
+
+			if (row) {
+				tx.update(agentBootstrapState)
+					.set({
+						bootstrapInjectedAt: now,
+						bootstrapInjectedSessionId: sessionId,
+						status: 'bootstrap_injected',
+						updatedAt: now
+					})
+					.where(eq(agentBootstrapState.agentId, agentId))
+					.run()
+			} else {
+				tx.insert(agentBootstrapState)
+					.values({
+						agentId,
+						status: 'bootstrap_injected',
+						bootstrapInjectedAt: now,
+						bootstrapInjectedSessionId: sessionId,
+						updatedAt: now
+					})
+					.run()
+			}
+
+			return true
+		})
+	}
+
+	markBootstrapError(
+		agentId: string,
+		message: string
+	): void {
+		const now = Date.now()
+		const existing = this.getBootstrapState(agentId)
+		if (existing) {
+			this.db
+				.update(agentBootstrapState)
+				.set({
+					lastError: message,
+					status: 'error',
+					updatedAt: now
+				})
+				.where(eq(agentBootstrapState.agentId, agentId))
+				.run()
+		} else {
+			this.db
+				.insert(agentBootstrapState)
+				.values({
+					agentId,
+					status: 'error',
+					lastError: message,
+					updatedAt: now
+				})
+				.run()
+		}
 	}
 
 	// ── Cleanup ───────────────────────────────────────────────────────────

@@ -15,5 +15,7 @@ export type {
 	SessionRow,
 	NewSessionRow,
 	EventRow,
-	NewEventRow
+	NewEventRow,
+	AgentBootstrapStateRow,
+	NewAgentBootstrapStateRow
 } from './schema'

@@ -55,3 +55,28 @@ export const events = sqliteTable(
 
 export type EventRow = typeof events.$inferSelect
 export type NewEventRow = typeof events.$inferInsert
+
+// -- Agent Bootstrap State ---------------------------------------------------
+
+export const agentBootstrapState = sqliteTable(
+	'agent_bootstrap_state',
+	{
+		agentId: text('agent_id').primaryKey().notNull(),
+		status: text('status').notNull().default('pending'),
+		workspaceSeededAt: integer('workspace_seeded_at'),
+		bootstrapInjectedAt: integer('bootstrap_injected_at'),
+		bootstrapInjectedSessionId: text(
+			'bootstrap_injected_session_id'
+		),
+		onboardingCompletedAt: integer(
+			'onboarding_completed_at'
+		),
+		lastError: text('last_error'),
+		updatedAt: integer('updated_at').notNull()
+	}
+)
+
+export type AgentBootstrapStateRow =
+	typeof agentBootstrapState.$inferSelect
+export type NewAgentBootstrapStateRow =
+	typeof agentBootstrapState.$inferInsert

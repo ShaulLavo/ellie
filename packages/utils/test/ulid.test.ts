@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { ulid } from '../src/ulid'
+import { ulid, createUlid } from '../src/ulid'
 
 describe('ulid', () => {
 	it('returns a 26-character string', () => {
@@ -32,9 +32,48 @@ describe('ulid', () => {
 		expect(id2 > id1).toBe(true)
 	})
 
-	it('survives batch boundary (>8192 IDs)', () => {
-		// Implementation batches 8192 random IDs per crypto.getRandomValues call.
-		// Generating more triggers a buffer refill.
+	it('is monotonic within the same millisecond', () => {
+		const generator = createUlid()
+		const originalNow = Date.now
+		Date.now = () => 1_700_000_000_000
+
+		try {
+			const ids: string[] = []
+			for (let i = 0; i < 300; i++) {
+				ids.push(generator())
+			}
+
+			for (let i = 1; i < ids.length; i++) {
+				expect(ids[i] > ids[i - 1]).toBe(true)
+			}
+		} finally {
+			Date.now = originalNow
+		}
+	})
+
+	it('stays monotonic when system clock moves backwards', () => {
+		const generator = createUlid()
+		const originalNow = Date.now
+		let now = 5_000
+		Date.now = () => now
+
+		try {
+			const id1 = generator()
+			now = 4_999
+			const id2 = generator()
+			now = 4_998
+			const id3 = generator()
+
+			expect(id2 > id1).toBe(true)
+			expect(id3 > id2).toBe(true)
+			expect(id1.slice(0, 10)).toBe(id2.slice(0, 10))
+			expect(id2.slice(0, 10)).toBe(id3.slice(0, 10))
+		} finally {
+			Date.now = originalNow
+		}
+	})
+
+	it('stays unique under high volume (8200 IDs)', () => {
 		const count = 8200
 		const ids = new Set<string>()
 		for (let i = 0; i < count; i++) {

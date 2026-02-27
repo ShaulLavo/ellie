@@ -16,6 +16,17 @@ CREATE TABLE `events` (
   `created_at`  INTEGER NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE `agent_bootstrap_state` (
+  `agent_id`                      TEXT PRIMARY KEY NOT NULL,
+  `status`                        TEXT NOT NULL DEFAULT 'pending',
+  `workspace_seeded_at`           INTEGER,
+  `bootstrap_injected_at`         INTEGER,
+  `bootstrap_injected_session_id` TEXT,
+  `onboarding_completed_at`       INTEGER,
+  `last_error`                    TEXT,
+  `updated_at`                    INTEGER NOT NULL
+);
+--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_events_session_seq`
   ON `events`(`session_id`, `seq`);
 --> statement-breakpoint
