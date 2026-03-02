@@ -1,4 +1,5 @@
 import type { AgentTool } from '@ellie/agent'
+import { ulid } from 'fast-ulid'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 import { executePTC } from '../ptc-host'
@@ -20,6 +21,15 @@ export function createAgentToolBridge(
 	tools: ToolDefinition[]
 	client: ToolClient
 } {
+	// Detect duplicate tool names early
+	const seen = new Set<string>()
+	for (const t of agentTools) {
+		if (seen.has(t.name)) {
+			throw new Error(`Duplicate tool name: ${t.name}`)
+		}
+		seen.add(t.name)
+	}
+
 	const toolMap = new Map<string, AgentTool>(
 		agentTools.map(t => [t.name, t])
 	)
@@ -44,7 +54,7 @@ export function createAgentToolBridge(
 			const parsed = v.parse(tool.parameters, args)
 
 			// Execute tool – we generate a synthetic call ID
-			const callId = `ptc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+			const callId = `ptc-${ulid()}`
 			const result = await tool.execute(callId, parsed)
 
 			return result as unknown as ToolResult

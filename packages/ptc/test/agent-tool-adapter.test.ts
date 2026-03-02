@@ -133,5 +133,19 @@ describe('createAgentToolBridge', () => {
 		expect(
 			tools[0].inputSchema.properties!.greeting
 		).toBeDefined()
+		// "name" is required, "greeting" is optional
+		expect(tools[0].inputSchema.required).toContain('name')
+		expect(tools[0].inputSchema.required).not.toContain(
+			'greeting'
+		)
+	})
+
+	test('throws on duplicate tool names', () => {
+		const tool1 = makeAgentTool({ name: 'dup' })
+		const tool2 = makeAgentTool({ name: 'dup' })
+
+		expect(() =>
+			createAgentToolBridge([tool1, tool2])
+		).toThrow('Duplicate tool name: dup')
 	})
 })

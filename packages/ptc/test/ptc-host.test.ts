@@ -110,7 +110,7 @@ console.log(JSON.stringify({ r1, r2, r3 }));
 		expect(parsed.r3.sum).toBe(6)
 	})
 
-	test('unknown tool returns error to child', async () => {
+	test('undefined tool symbol throws ReferenceError in child', async () => {
 		const code = `
 try {
 	await nonexistent_tool({ x: 1 });
@@ -118,9 +118,7 @@ try {
 	console.log("caught: " + e.message);
 }
 `
-		// The tool "nonexistent_tool" doesn't exist in the SDK,
-		// so this should cause a ReferenceError in the child
-		// which gets caught and printed
+		// nonexistent_tool is not in the SDK → ReferenceError in the child
 		const tools: ToolDefinition[] = []
 		const output = await executePTC(
 			code,
@@ -241,12 +239,23 @@ throw new Error("intentional crash");
 	})
 
 	test('env isolation does not leak host env vars', async () => {
-		const code = `
-const homeVar = process.env.HOME ?? process.env.USERPROFILE ?? "undefined";
-console.log("HOME=" + homeVar);
+		// Use a unique sentinel that cannot be set by default
+		const sentinel = `PTC_TEST_SENTINEL_${Date.now()}`
+		process.env[sentinel] = 'leaked'
+		try {
+			const code = `
+const val = process.env["${sentinel}"] ?? "undefined";
+console.log("SENTINEL=" + val);
 `
-		const output = await executePTC(code, [], echoClient())
-		expect(output.trim()).toBe('HOME=undefined')
+			const output = await executePTC(
+				code,
+				[],
+				echoClient()
+			)
+			expect(output.trim()).toBe('SENTINEL=undefined')
+		} finally {
+			delete process.env[sentinel]
+		}
 	})
 
 	test('no-arg tool call does not deadlock', async () => {

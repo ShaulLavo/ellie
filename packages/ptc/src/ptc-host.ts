@@ -2,6 +2,7 @@ import type { Subprocess } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unlink, writeFile } from 'node:fs/promises'
+import { ulid } from 'fast-ulid'
 import { buildScript } from './ptc-runtime'
 import {
 	PTC_DEFAULTS,
@@ -55,10 +56,7 @@ export async function executePTC(
 
 	// ── 1. Build & write temp script ────────────────────────────────
 	const script = await buildScript(agentCode, tools)
-	const tmpFile = join(
-		opts.tempDir,
-		`ptc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ts`
-	)
+	const tmpFile = join(opts.tempDir, `ptc-${ulid()}.ts`)
 	await writeFile(tmpFile, script, 'utf-8')
 
 	// ── 2. Spawn child ──────────────────────────────────────────────
@@ -86,6 +84,7 @@ export async function executePTC(
 	let outputBytes = 0
 	const outputChunks: string[] = []
 	let stderrBuf = ''
+	let stderrBytes = 0
 	let timedOut = false
 	// Track limit errors so they take priority over SCRIPT_EXIT
 	let limitError: PTCExecutionError | null = null
@@ -104,15 +103,13 @@ export async function executePTC(
 				while (true) {
 					const { done, value } = await stderrReader.read()
 					if (done) break
+					if (stderrBytes >= opts.captureStderrBytes)
+						continue
 					const chunk = stderrDecoder.decode(value, {
 						stream: true
 					})
-					if (stderrBuf.length < opts.captureStderrBytes) {
-						stderrBuf += chunk.slice(
-							0,
-							opts.captureStderrBytes - stderrBuf.length
-						)
-					}
+					stderrBuf += chunk
+					stderrBytes += value.byteLength
 				}
 			} catch {
 				/* stream closed */
@@ -187,6 +184,7 @@ export async function executePTC(
 						result
 					})
 					child.stdin.write(response + '\n')
+					await child.stdin.flush()
 				} catch (err) {
 					const errMsg =
 						err instanceof Error ? err.message : String(err)
@@ -196,6 +194,7 @@ export async function executePTC(
 						error: errMsg
 					})
 					child.stdin.write(response + '\n')
+					await child.stdin.flush()
 				}
 			} else {
 				// Valid JSON but not a tool call → final output

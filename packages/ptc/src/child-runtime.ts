@@ -55,6 +55,13 @@ async function __callTool(
 	args?: Record<string, unknown>
 ): Promise<unknown> {
 	const id = String(++__callCounter)
+	// Register the pending promise BEFORE writing so the response
+	// can never arrive before we're listening for it.
+	const promise = new Promise<unknown>(
+		(resolve, reject) => {
+			__pending.set(id, { resolve, reject })
+		}
+	)
 	const msg = JSON.stringify({
 		__ptc_call__: true,
 		id,
@@ -62,7 +69,5 @@ async function __callTool(
 		args: args ?? {}
 	})
 	await Bun.write(Bun.stdout, msg + '\n')
-	return new Promise<unknown>((resolve, reject) => {
-		__pending.set(id, { resolve, reject })
-	})
+	return promise
 }
