@@ -52,14 +52,14 @@ const __reader = Bun.stdin.stream().getReader()
 
 async function __callTool(
 	name: string,
-	args: Record<string, unknown>
+	args?: Record<string, unknown>
 ): Promise<unknown> {
 	const id = String(++__callCounter)
 	const msg = JSON.stringify({
 		__ptc_call__: true,
 		id,
 		tool: name,
-		args
+		args: args ?? {}
 	})
 	await Bun.write(Bun.stdout, msg + '\n')
 	return new Promise<unknown>((resolve, reject) => {

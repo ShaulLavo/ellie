@@ -15,6 +15,18 @@ async function readRuntime(): Promise<string> {
 	return _runtimeCache
 }
 
+const VALID_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/
+
+/** Check if a string is a valid JS identifier. */
+function isValidIdentifier(name: string): boolean {
+	return VALID_IDENTIFIER.test(name)
+}
+
+/** Escape a string for safe embedding inside a JSDoc comment block. */
+function escapeJSDoc(text: string): string {
+	return text.replace(/\*\//g, '*\\/')
+}
+
 /**
  * Map a JSON Schema type string to a basic TypeScript type annotation.
  * Falls back to `unknown` for anything exotic.
@@ -40,6 +52,11 @@ function jsonSchemaTypeToTS(schema: JsonSchema): string {
 	}
 }
 
+/** Quote a property key if it's not a valid identifier. */
+function safeKey(key: string): string {
+	return isValidIdentifier(key) ? key : JSON.stringify(key)
+}
+
 /** Build a TS type literal for a tool's inputSchema (top-level object). */
 function buildArgsType(schema: JsonSchema): string {
 	const props = schema.properties
@@ -50,7 +67,7 @@ function buildArgsType(schema: JsonSchema): string {
 		([key, propSchema]) => {
 			const opt = required.has(key) ? '' : '?'
 			const tsType = jsonSchemaTypeToTS(propSchema)
-			return `\t${key}${opt}: ${tsType}`
+			return `\t${safeKey(key)}${opt}: ${tsType}`
 		}
 	)
 	return `{\n${fields.join('\n')}\n}`
@@ -59,10 +76,10 @@ function buildArgsType(schema: JsonSchema): string {
 /** Build JSDoc block for a tool wrapper function. */
 function buildJSDoc(tool: ToolDefinition): string {
 	const lines: string[] = ['/**']
-	lines.push(` * ${tool.description}`)
+	lines.push(` * ${escapeJSDoc(tool.description)}`)
 	lines.push(` *`)
 	lines.push(
-		` * Input schema: ${JSON.stringify(tool.inputSchema)}`
+		` * Input schema: ${escapeJSDoc(JSON.stringify(tool.inputSchema))}`
 	)
 	lines.push(` */`)
 	return lines.join('\n')
@@ -77,15 +94,30 @@ function generateToolWrappers(
 	for (const tool of tools) {
 		const argsType = buildArgsType(tool.inputSchema)
 		const jsdoc = buildJSDoc(tool)
+		const nameStr = JSON.stringify(tool.name)
 
-		parts.push(`${jsdoc}
-async function ${tool.name}(args: ${argsType}): Promise<unknown> {
-	return __callTool(${JSON.stringify(tool.name)}, args as Record<string, unknown>);
+		if (isValidIdentifier(tool.name)) {
+			parts.push(`${jsdoc}
+async function ${tool.name}(args: ${argsType} = {} as any): Promise<unknown> {
+	return __callTool(${nameStr}, args ?? {});
 }
 `)
+		} else {
+			// Non-identifier names use a const with bracket notation
+			parts.push(`${jsdoc}
+const ${nameToSafeVar(tool.name)} = async (args: ${argsType} = {} as any): Promise<unknown> => {
+	return __callTool(${nameStr}, args ?? {});
+};
+`)
+		}
 	}
 
 	return parts.join('\n')
+}
+
+/** Convert a non-identifier tool name to a safe variable name. */
+function nameToSafeVar(name: string): string {
+	return '__tool_' + name.replace(/[^a-zA-Z0-9_$]/g, '_')
 }
 
 /**

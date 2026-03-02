@@ -249,6 +249,67 @@ console.log("HOME=" + homeVar);
 		expect(output.trim()).toBe('HOME=undefined')
 	})
 
+	test('no-arg tool call does not deadlock', async () => {
+		const noArgTool: ToolDefinition = {
+			name: 'ping',
+			description: 'Ping with no arguments',
+			inputSchema: { type: 'object' }
+		}
+		const pingClient: ToolClient = {
+			async callTool(): Promise<ToolResult> {
+				return { pong: true }
+			}
+		}
+
+		const code = `
+const result = await ping();
+console.log(JSON.stringify(result));
+`
+		const output = await executePTC(
+			code,
+			[noArgTool],
+			pingClient,
+			{ timeoutMs: 5_000 }
+		)
+		const parsed = JSON.parse(output.trim())
+		expect(parsed.pong).toBe(true)
+	})
+
+	test('non-identifier tool name works end-to-end', async () => {
+		const dashTool: ToolDefinition = {
+			name: 'send-email',
+			description: 'Send email',
+			inputSchema: {
+				type: 'object',
+				properties: { to: { type: 'string' } },
+				required: ['to']
+			}
+		}
+		const client: ToolClient = {
+			async callTool(
+				_name: string,
+				args: Record<string, unknown>
+			): Promise<ToolResult> {
+				return { sent: true, to: args.to }
+			}
+		}
+
+		// Use the safe variable name generated for non-identifier tools
+		const code = `
+const result = await __tool_send_email({ to: "test@example.com" });
+console.log(JSON.stringify(result));
+`
+		const output = await executePTC(
+			code,
+			[dashTool],
+			client,
+			{ timeoutMs: 5_000 }
+		)
+		const parsed = JSON.parse(output.trim())
+		expect(parsed.sent).toBe(true)
+		expect(parsed.to).toBe('test@example.com')
+	})
+
 	test('plain output with no tool calls', async () => {
 		const code = `
 console.log("hello world");

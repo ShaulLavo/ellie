@@ -103,7 +103,7 @@ describe('generateSDK', () => {
 		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain(
-			'async function no_args_tool(args: {})'
+			'async function no_args_tool(args: {} = {} as any)'
 		)
 	})
 
@@ -148,6 +148,89 @@ describe('generateSDK', () => {
 		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain('data: unknown')
+	})
+
+	test('escapes */ in description to prevent JSDoc injection', async () => {
+		const tools: ToolDefinition[] = [
+			{
+				name: 'injected',
+				description: 'ok */ console.log("INJECT") /*',
+				inputSchema: { type: 'object' }
+			}
+		]
+
+		const sdk = await generateSDK(tools)
+
+		// The literal */ should be escaped so it doesn't close the JSDoc
+		expect(sdk).not.toContain('*/ console.log')
+		expect(sdk).toContain('*\\/ console.log')
+		// The wrapper function should still be generated
+		expect(sdk).toContain('async function injected')
+	})
+
+	test('escapes */ in schema JSON to prevent JSDoc injection', async () => {
+		const tools: ToolDefinition[] = [
+			{
+				name: 'schema_inject',
+				description: 'safe',
+				inputSchema: {
+					type: 'object',
+					description: 'has */ in it'
+				}
+			}
+		]
+
+		const sdk = await generateSDK(tools)
+
+		expect(sdk).not.toContain('"has */ in it"')
+		expect(sdk).toContain('*\\/')
+	})
+
+	test('generates safe variable for non-identifier tool names', async () => {
+		const tools: ToolDefinition[] = [
+			{
+				name: 'send-email',
+				description: 'Send an email',
+				inputSchema: {
+					type: 'object',
+					properties: { to: { type: 'string' } },
+					required: ['to']
+				}
+			}
+		]
+
+		const sdk = await generateSDK(tools)
+
+		// Should not use "function send-email" (invalid TS)
+		expect(sdk).not.toContain('function send-email')
+		// Should generate a safe const variable
+		expect(sdk).toContain('__tool_send_email')
+		// Should still pass the real name to __callTool
+		expect(sdk).toContain('"send-email"')
+	})
+
+	test('quotes non-identifier property keys in type literal', async () => {
+		const tools: ToolDefinition[] = [
+			{
+				name: 'test_tool',
+				description: 'Tool with hyphenated keys',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						'user-id': { type: 'string' },
+						normal: { type: 'string' }
+					},
+					required: ['user-id']
+				}
+			}
+		]
+
+		const sdk = await generateSDK(tools)
+
+		// Hyphenated key should be quoted in the type literal
+		expect(sdk).toContain('"user-id": string')
+		// Normal key should not be quoted in the type literal
+		expect(sdk).toContain('\tnormal?: string')
 	})
 
 	test('maps integer type to number', async () => {
