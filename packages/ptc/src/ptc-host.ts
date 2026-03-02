@@ -54,7 +54,7 @@ export async function executePTC(
 	}
 
 	// ── 1. Build & write temp script ────────────────────────────────
-	const script = buildScript(agentCode, tools)
+	const script = await buildScript(agentCode, tools)
 	const tmpFile = join(
 		opts.tempDir,
 		`ptc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ts`

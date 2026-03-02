@@ -3,7 +3,7 @@ import { generateSDK } from '../src/sdk-generator'
 import type { ToolDefinition } from '../src/types'
 
 describe('generateSDK', () => {
-	test('generates wrapper for a tool with required and optional args', () => {
+	test('generates wrapper for a tool with required and optional args', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'read_file',
@@ -25,7 +25,7 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		// Has the infrastructure
 		expect(sdk).toContain('const __pending = new Map')
@@ -41,7 +41,7 @@ describe('generateSDK', () => {
 		expect(sdk).toContain('return __callTool("read_file"')
 	})
 
-	test('generates wrappers for multiple tools', () => {
+	test('generates wrappers for multiple tools', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'tool_a',
@@ -63,7 +63,7 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain('async function tool_a')
 		expect(sdk).toContain('async function tool_b')
@@ -71,7 +71,7 @@ describe('generateSDK', () => {
 		expect(sdk).toContain('y: boolean')
 	})
 
-	test('includes JSDoc with description and schema', () => {
+	test('includes JSDoc with description and schema', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'search',
@@ -84,14 +84,14 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain('/**')
 		expect(sdk).toContain('* Search for items by query')
 		expect(sdk).toContain('* Input schema:')
 	})
 
-	test('handles empty/missing schema properties gracefully', () => {
+	test('handles empty/missing schema properties gracefully', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'no_args_tool',
@@ -100,14 +100,14 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain(
 			'async function no_args_tool(args: {})'
 		)
 	})
 
-	test('handles array type in schema', () => {
+	test('handles array type in schema', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'list_tool',
@@ -125,12 +125,12 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain('items: string[]')
 	})
 
-	test('falls back to unknown for unrecognized types', () => {
+	test('falls back to unknown for unrecognized types', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'exotic_tool',
@@ -145,12 +145,12 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain('data: unknown')
 	})
 
-	test('maps integer type to number', () => {
+	test('maps integer type to number', async () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: 'int_tool',
@@ -165,7 +165,7 @@ describe('generateSDK', () => {
 			}
 		]
 
-		const sdk = generateSDK(tools)
+		const sdk = await generateSDK(tools)
 
 		expect(sdk).toContain('count: number')
 	})

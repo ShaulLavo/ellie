@@ -1,4 +1,19 @@
+import { join } from 'node:path'
 import type { JsonSchema, ToolDefinition } from './types'
+
+const RUNTIME_PATH = join(
+	import.meta.dirname,
+	'child-runtime.ts'
+)
+
+let _runtimeCache: string | null = null
+
+/** Read the child-runtime.ts file (cached after first read). */
+async function readRuntime(): Promise<string> {
+	if (_runtimeCache) return _runtimeCache
+	_runtimeCache = await Bun.file(RUNTIME_PATH).text()
+	return _runtimeCache
+}
 
 /**
  * Map a JSON Schema type string to a basic TypeScript type annotation.
@@ -53,66 +68,12 @@ function buildJSDoc(tool: ToolDefinition): string {
 	return lines.join('\n')
 }
 
-/**
- * Generate a self-contained TypeScript SDK string that the child process
- * evaluates. It provides one async wrapper per tool that communicates
- * with the host over JSONL stdio.
- */
-export function generateSDK(
+/** Generate per-tool async wrapper functions. */
+function generateToolWrappers(
 	tools: ToolDefinition[]
 ): string {
 	const parts: string[] = []
 
-	// ── infrastructure ──────────────────────────────────────────────
-	parts.push(`// PTC child SDK – generated, do not edit
-const __pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
-let __callCounter = 0;
-
-// Background stdin reader – resolves pending tool-result promises.
-const __reader = Bun.stdin.stream().getReader();
-(async () => {
-	const decoder = new TextDecoder();
-	let buffer = '';
-	try {
-		while (true) {
-			const { done, value } = await __reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			let nl: number;
-			while ((nl = buffer.indexOf('\\n')) !== -1) {
-				const line = buffer.slice(0, nl).trim();
-				buffer = buffer.slice(nl + 1);
-				if (!line) continue;
-				try {
-					const msg = JSON.parse(line);
-					if (msg.__ptc_result__ && msg.id) {
-						const p = __pending.get(msg.id);
-						if (p) {
-							__pending.delete(msg.id);
-							if (msg.error !== undefined) {
-								p.reject(new Error(String(msg.error)));
-							} else {
-								p.resolve(msg.result);
-							}
-						}
-					}
-				} catch { /* ignore malformed host lines */ }
-			}
-		}
-	} catch { /* stdin closed */ }
-})();
-
-async function __callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-	const id = String(++__callCounter);
-	const msg = JSON.stringify({ __ptc_call__: true, id, tool: name, args });
-	await Bun.write(Bun.stdout, msg + '\\n');
-	return new Promise<unknown>((resolve, reject) => {
-		__pending.set(id, { resolve, reject });
-	});
-}
-`)
-
-	// ── per-tool wrappers ───────────────────────────────────────────
 	for (const tool of tools) {
 		const argsType = buildArgsType(tool.inputSchema)
 		const jsdoc = buildJSDoc(tool)
@@ -125,4 +86,17 @@ async function ${tool.name}(args: ${argsType}): Promise<unknown> {
 	}
 
 	return parts.join('\n')
+}
+
+/**
+ * Generate a self-contained TypeScript SDK string that the child process
+ * evaluates. It provides one async wrapper per tool that communicates
+ * with the host over JSONL stdio.
+ */
+export async function generateSDK(
+	tools: ToolDefinition[]
+): Promise<string> {
+	const runtime = await readRuntime()
+	const wrappers = generateToolWrappers(tools)
+	return `${runtime}\n${wrappers}`
 }
