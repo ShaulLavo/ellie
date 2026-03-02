@@ -27,6 +27,7 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
+import { createPtcTool } from './tools/ptc-tool'
 import { createWorkspaceTools } from './tools/workspace-tools'
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -74,7 +75,10 @@ export class AgentController {
 		const systemPrompt = buildSystemPrompt(
 			options.workspaceDir
 		)
-		const tools = createWorkspaceTools(options.workspaceDir)
+		const baseTools = createWorkspaceTools(
+			options.workspaceDir
+		)
+		const tools = [...baseTools, createPtcTool(baseTools)]
 
 		this.agent = new Agent({
 			...options.agentOptions,

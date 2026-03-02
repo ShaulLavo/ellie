@@ -137,6 +137,7 @@
         "@ellie/db": "workspace:*",
         "@ellie/env": "workspace:*",
         "@ellie/hindsight": "workspace:*",
+        "@ellie/ptc": "workspace:*",
         "@ellie/schemas": "workspace:*",
         "@ellie/tus": "workspace:*",
         "@ellie/utils": "workspace:*",
