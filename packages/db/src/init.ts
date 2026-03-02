@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
-import { existsSync } from 'fs'
-import { resolve } from 'path'
+import { existsSync, mkdirSync } from 'fs'
+import { dirname, resolve } from 'path'
 
 // ── SQLite Manager ──────────────────────────────────────────────────────────
 
@@ -116,6 +116,7 @@ class SQLiteManager {
 	open(dbPath: string): Database {
 		this.init()
 
+		mkdirSync(dirname(dbPath), { recursive: true })
 		const db = new Database(dbPath)
 		db.run('PRAGMA journal_mode=WAL')
 		db.run('PRAGMA foreign_keys=ON')

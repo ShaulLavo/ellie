@@ -5,6 +5,7 @@ import {
 	index,
 	uniqueIndex
 } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
 
 // -- Sessions -----------------------------------------------------------------
 
@@ -49,7 +50,10 @@ export const events = sqliteTable(
 			table.sessionId,
 			table.runId,
 			table.seq
-		)
+		),
+		uniqueIndex('idx_events_session_dedupe')
+			.on(table.sessionId, table.dedupeKey)
+			.where(sql`dedupe_key IS NOT NULL`)
 	]
 )
 
@@ -80,3 +84,10 @@ export type AgentBootstrapStateRow =
 	typeof agentBootstrapState.$inferSelect
 export type NewAgentBootstrapStateRow =
 	typeof agentBootstrapState.$inferInsert
+
+// -- Key-Value store ----------------------------------------------------------
+
+export const kv = sqliteTable('kv', {
+	key: text('key').primaryKey().notNull(),
+	value: text('value').notNull()
+})

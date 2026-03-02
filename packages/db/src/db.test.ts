@@ -903,4 +903,30 @@ describe('EventStore', () => {
 			expect(result.foreign_keys).toBe(1)
 		})
 	})
+
+	// ── Key-Value store ───────────────────────────────────────────────────
+
+	describe('kv', () => {
+		it('returns undefined for missing key', () => {
+			expect(store.getKv('nope')).toBeUndefined()
+		})
+
+		it('sets and gets a value', () => {
+			store.setKv('foo', 'bar')
+			expect(store.getKv('foo')).toBe('bar')
+		})
+
+		it('overwrites existing value', () => {
+			store.setKv('k', 'v1')
+			store.setKv('k', 'v2')
+			expect(store.getKv('k')).toBe('v2')
+		})
+
+		it('persists across reopen', () => {
+			store.setKv('persist', 'yes')
+			store.close()
+			store = new EventStore(dbPath)
+			expect(store.getKv('persist')).toBe('yes')
+		})
+	})
 })

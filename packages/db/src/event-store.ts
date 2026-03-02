@@ -1,9 +1,21 @@
 import { join } from 'path'
-import { and, asc, eq, gt, inArray } from 'drizzle-orm'
+import {
+	and,
+	asc,
+	eq,
+	gt,
+	inArray,
+	isNotNull,
+	lte,
+	notExists,
+	sql
+} from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import * as v from 'valibot'
 import type { Database } from 'bun:sqlite'
+import { ulid } from 'fast-ulid'
 import { openDatabase } from './init'
 import { AuditLogger } from './audit-log'
 import * as schema from './schema'
@@ -11,6 +23,7 @@ import {
 	sessions,
 	events,
 	agentBootstrapState,
+	kv,
 	type SessionRow,
 	type EventRow,
 	type AgentBootstrapStateRow
@@ -238,13 +251,6 @@ export class EventStore {
 			migrationsFolder: migrationsFolder ?? MIGRATIONS_DIR
 		})
 
-		// Create partial unique index not representable in Drizzle
-		this.sqlite.run(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_events_session_dedupe
-        ON events(session_id, dedupe_key)
-        WHERE dedupe_key IS NOT NULL
-    `)
-
 		this.#audit = auditLogDir
 			? new AuditLogger(auditLogDir)
 			: null
@@ -254,7 +260,7 @@ export class EventStore {
 
 	createSession(id?: string): SessionRow {
 		const now = Date.now()
-		const sessionId = id ?? crypto.randomUUID()
+		const sessionId = id ?? ulid()
 
 		if (id) {
 			const existing = this.getSession(id)
@@ -491,36 +497,39 @@ export class EventStore {
 		maxAgeMs: number
 	): Array<{ sessionId: string; runId: string }> {
 		const cutoff = Date.now() - maxAgeMs
+		const e2 = alias(events, 'e2')
 
-		// Find runs that have an agent_start but no run_closed.
-		// Raw SQL used for NOT EXISTS which Drizzle doesn't support.
-		// Column mapping: events.sessionId → session_id, events.runId → run_id,
-		//   events.type → type, events.createdAt → created_at (see schema.ts)
-		const stale = this.sqlite
-			.query<
-				{ session_id: string; run_id: string },
-				[number]
-			>(
-				`
-        SELECT DISTINCT e.session_id, e.run_id
-        FROM events e
-        WHERE e.run_id IS NOT NULL
-          AND e.type = 'agent_start'
-          AND e.created_at <= ?
-          AND NOT EXISTS (
-            SELECT 1 FROM events e2
-            WHERE e2.session_id = e.session_id
-              AND e2.run_id = e.run_id
-              AND e2.type = 'run_closed'
-          )
-        `
+		const closedRuns = this.db
+			.select({ id: sql`1` })
+			.from(e2)
+			.where(
+				and(
+					eq(e2.sessionId, events.sessionId),
+					eq(e2.runId, events.runId),
+					eq(e2.type, 'run_closed')
+				)
 			)
-			.all(cutoff)
 
-		return stale.map(r => ({
-			sessionId: r.session_id,
-			runId: r.run_id
-		}))
+		const rows = this.db
+			.selectDistinct({
+				sessionId: events.sessionId,
+				runId: events.runId
+			})
+			.from(events)
+			.where(
+				and(
+					isNotNull(events.runId),
+					eq(events.type, 'agent_start'),
+					lte(events.createdAt, cutoff),
+					notExists(closedRuns)
+				)
+			)
+			.all()
+		// isNotNull filter above guarantees runId is non-null
+		return rows as Array<{
+			sessionId: string
+			runId: string
+		}>
 	}
 
 	// ── Bootstrap state ──────────────────────────────────────────────────
@@ -633,6 +642,28 @@ export class EventStore {
 				})
 				.run()
 		}
+	}
+
+	// ── Key-Value store ──────────────────────────────────────────────────
+
+	getKv(key: string): string | undefined {
+		const row = this.db
+			.select()
+			.from(kv)
+			.where(eq(kv.key, key))
+			.get()
+		return row?.value
+	}
+
+	setKv(key: string, value: string): void {
+		this.db
+			.insert(kv)
+			.values({ key, value })
+			.onConflictDoUpdate({
+				target: kv.key,
+				set: { value }
+			})
+			.run()
 	}
 
 	// ── Cleanup ───────────────────────────────────────────────────────────

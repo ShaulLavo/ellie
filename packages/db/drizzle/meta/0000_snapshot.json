@@ -1,9 +1,76 @@
 {
 	"version": "6",
 	"dialect": "sqlite",
-	"id": "6e3d7199-728b-4c57-ab6a-80c0635c453b",
+	"id": "0b5a58d9-ddbc-4a02-8d6b-8e805fdf8933",
 	"prevId": "00000000-0000-0000-0000-000000000000",
 	"tables": {
+		"agent_bootstrap_state": {
+			"name": "agent_bootstrap_state",
+			"columns": {
+				"agent_id": {
+					"name": "agent_id",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"status": {
+					"name": "status",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'pending'"
+				},
+				"workspace_seeded_at": {
+					"name": "workspace_seeded_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"bootstrap_injected_at": {
+					"name": "bootstrap_injected_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"bootstrap_injected_session_id": {
+					"name": "bootstrap_injected_session_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"onboarding_completed_at": {
+					"name": "onboarding_completed_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"last_error": {
+					"name": "last_error",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
 		"events": {
 			"name": "events",
 			"columns": {
@@ -79,6 +146,12 @@
 					"name": "idx_events_session_run_seq",
 					"columns": ["session_id", "run_id", "seq"],
 					"isUnique": false
+				},
+				"idx_events_session_dedupe": {
+					"name": "idx_events_session_dedupe",
+					"columns": ["session_id", "dedupe_key"],
+					"isUnique": true,
+					"where": "dedupe_key IS NOT NULL"
 				}
 			},
 			"foreignKeys": {
@@ -92,6 +165,30 @@
 					"onUpdate": "no action"
 				}
 			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"kv": {
+			"name": "kv",
+			"columns": {
+				"key": {
+					"name": "key",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"value": {
+					"name": "value",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
 			"compositePrimaryKeys": {},
 			"uniqueConstraints": {},
 			"checkConstraints": {}
@@ -127,73 +224,6 @@
 					"notNull": true,
 					"autoincrement": false,
 					"default": 0
-				}
-			},
-			"indexes": {},
-			"foreignKeys": {},
-			"compositePrimaryKeys": {},
-			"uniqueConstraints": {},
-			"checkConstraints": {}
-		},
-		"agent_bootstrap_state": {
-			"name": "agent_bootstrap_state",
-			"columns": {
-				"agent_id": {
-					"name": "agent_id",
-					"type": "text",
-					"primaryKey": true,
-					"notNull": true,
-					"autoincrement": false
-				},
-				"status": {
-					"name": "status",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": true,
-					"autoincrement": false,
-					"default": "'pending'"
-				},
-				"workspace_seeded_at": {
-					"name": "workspace_seeded_at",
-					"type": "integer",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"bootstrap_injected_at": {
-					"name": "bootstrap_injected_at",
-					"type": "integer",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"bootstrap_injected_session_id": {
-					"name": "bootstrap_injected_session_id",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"onboarding_completed_at": {
-					"name": "onboarding_completed_at",
-					"type": "integer",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"last_error": {
-					"name": "last_error",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"updated_at": {
-					"name": "updated_at",
-					"type": "integer",
-					"primaryKey": false,
-					"notNull": true,
-					"autoincrement": false
 				}
 			},
 			"indexes": {},
