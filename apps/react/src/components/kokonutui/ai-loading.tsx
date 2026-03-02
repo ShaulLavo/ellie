@@ -179,6 +179,7 @@ export default function AILoadingState() {
 				number: i + 1
 			})
 		}
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset state on sequence change
 		setVisibleLines(initialLines)
 		setScrollPosition(0)
 	}, [sequenceIndex, currentSequence.lines, totalLines])

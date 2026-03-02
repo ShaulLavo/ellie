@@ -19,6 +19,7 @@ import {
 	XCircleIcon
 } from '@phosphor-icons/react'
 import { isValidElement, useRef, useEffect } from 'react'
+import { useCollapsibleScroll } from '@/hooks/use-collapsible-scroll'
 
 import { CodeBlock } from './code-block'
 import { ShellOutput } from './shell-output'
@@ -244,6 +245,9 @@ export const ToolCard = ({
 				: 'output-available'
 			: 'input-available'
 
+	const contentRef = useRef<HTMLDivElement>(null)
+	useCollapsibleScroll(contentRef)
+
 	return (
 		<Collapsible
 			className={cn('group/tool not-prose mb-0', className)}
@@ -256,7 +260,10 @@ export const ToolCard = ({
 				{getStatusBadge(state)}
 				<CaretDownIcon className="size-4 ml-auto transition-transform group-data-[state=open]/tool:rotate-180" />
 			</CollapsibleTrigger>
-			<CollapsibleContent className="mt-2 pl-6 space-y-3 data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in">
+			<CollapsibleContent
+				ref={contentRef}
+				className="mt-2 pl-6 space-y-3 data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in"
+			>
 				{name === 'shell' && result != null ? (
 					<ShellOutput
 						command={

@@ -14,29 +14,34 @@ import TelephoneIcon from '@/components/ui/telephone-icon'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
+const BAR_COUNT = 48
+
 export default function AI_Voice() {
 	const [submitted, setSubmitted] = useState(false)
 	const [time, setTime] = useState(0)
-	const [isClient, setIsClient] = useState(false)
 	const [isDemo, setIsDemo] = useState(true)
+	const [barHeights] = useState(() =>
+		Array.from(
+			{ length: BAR_COUNT },
+			() => 20 + Math.random() * 80
+		)
+	)
+	const isClient = typeof window !== 'undefined'
 
 	useEffect(() => {
-		setIsClient(true)
-	}, [])
+		if (!submitted) return
 
-	useEffect(() => {
-		let intervalId: ReturnType<typeof setInterval>
-
-		if (submitted) {
-			intervalId = setInterval(() => {
-				setTime(t => t + 1)
-			}, 1000)
-		} else {
-			setTime(0)
-		}
+		const intervalId = setInterval(() => {
+			setTime(t => t + 1)
+		}, 1000)
 
 		return () => clearInterval(intervalId)
 	}, [submitted])
+
+	// Reset time when stopping
+	if (!submitted && time !== 0) {
+		setTime(0)
+	}
 
 	const formatTime = (seconds: number) => {
 		const mins = Math.floor(seconds / 60)
@@ -113,7 +118,7 @@ export default function AI_Voice() {
 				</span>
 
 				<div className="h-4 w-64 flex items-center justify-center gap-0.5">
-					{[...Array(48)].map((_, i) => (
+					{barHeights.map((h, i) => (
 						<div
 							key={i}
 							className={cn(
@@ -125,7 +130,7 @@ export default function AI_Voice() {
 							style={
 								submitted && isClient
 									? {
-											height: `${20 + Math.random() * 80}%`,
+											height: `${h}%`,
 											animationDelay: `${i * 0.05}s`
 										}
 									: undefined

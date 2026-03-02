@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
 	BotIcon,
 	CheckIcon,
@@ -93,9 +93,10 @@ export function AgentSettingsDialog({
 	const [saved, setSaved] = useState(false)
 
 	// Sync local state when agent data arrives
-	useEffect(() => {
-		if (agent?.model) setSelectedModel(agent.model)
-	}, [agent?.model])
+	const agentModel = agent?.model
+	if (agentModel && agentModel !== selectedModel) {
+		setSelectedModel(agentModel)
+	}
 
 	const grouped = groupModels(models)
 	const currentModel = models.find(

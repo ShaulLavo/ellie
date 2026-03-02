@@ -15,6 +15,7 @@
 		"@dnd-kit/core": "^6.3.1",
 		"@ellie/env": "workspace:*",
 		"@ellie/schemas": "workspace:*",
+		"@ellie/utils": "workspace:*",
 		"@elysiajs/eden": "1.4.8",
 		"@floating-ui/react": "",
 		"@fontsource-variable/bricolage-grotesque": "^5.2.10",

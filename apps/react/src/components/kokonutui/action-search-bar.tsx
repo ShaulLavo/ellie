@@ -10,12 +10,7 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import {
-	useState,
-	useEffect,
-	useMemo,
-	useCallback
-} from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
 import { motion, AnimatePresence } from 'motion/react'
 import MagnifierIcon from '@/components/ui/magnifier-icon'
@@ -36,10 +31,6 @@ interface Action {
 	description?: string
 	short?: string
 	end?: string
-}
-
-interface SearchResult {
-	actions: Action[]
 }
 
 const ANIMATION_VARIANTS = {
@@ -137,9 +128,6 @@ function ActionSearchBar({
 	defaultOpen?: boolean
 }) {
 	const [query, setQuery] = useState('')
-	const [result, setResult] = useState<SearchResult | null>(
-		null
-	)
 	const [isFocused, setIsFocused] = useState(defaultOpen)
 	const [_isTyping, setIsTyping] = useState(false)
 	const [selectedAction, setSelectedAction] =
@@ -160,16 +148,10 @@ function ActionSearchBar({
 		})
 	}, [debouncedQuery, actions])
 
-	useEffect(() => {
-		if (!isFocused) {
-			setResult(null)
-			setActiveIndex(-1)
-			return
-		}
-
-		setResult({ actions: filteredActions })
-		setActiveIndex(-1)
-	}, [filteredActions, isFocused])
+	const result = useMemo(
+		() => (isFocused ? { actions: filteredActions } : null),
+		[isFocused, filteredActions]
+	)
 
 	const handleInputChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,7 +194,7 @@ function ActionSearchBar({
 					break
 			}
 		},
-		[result?.actions, activeIndex]
+		[result, activeIndex]
 	)
 
 	const handleActionClick = useCallback(

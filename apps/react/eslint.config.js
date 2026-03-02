@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-	globalIgnores(['dist']),
+	globalIgnores(['dist', 'src/components/animate-ui']),
 	{
 		files: ['**/*.{ts,tsx}'],
 		extends: [
@@ -30,7 +30,7 @@ export default defineConfig([
 		files: [
 			'src/components/ui/**/*.tsx',
 			'src/components/ai-elements/**/*.tsx',
-			'src/hooks/**/*.ts'
+			'src/hooks/**/*.{ts,tsx}'
 		],
 		rules: {
 			'react-refresh/only-export-components': 'off'

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
 	Credenza,
 	CredenzaContent,
@@ -9,19 +9,17 @@ import {
 import { NumberTicker } from '@/components/ui/number-ticker'
 import {
 	InfoIcon,
-	GitBranchIcon,
-	FileTextIcon,
-	HardDriveIcon
+	HashIcon,
+	ClockIcon,
+	ActivityIcon
 } from 'lucide-react'
+import { formatDateTime } from '@ellie/utils'
 
-interface SessionStats {
-	date: string
-	session: number
-	name: string | null
-	entryCount: number
-	branchCount: number
-	leafId: string | null
-	sizeBytes: number
+interface SessionData {
+	id: string
+	createdAt: number
+	updatedAt: number
+	currentSeq: number
 }
 
 interface SessionInfoProps {
@@ -30,37 +28,17 @@ interface SessionInfoProps {
 	getSessionStats: () => Promise<unknown>
 }
 
-function formatSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1024 * 1024)
-		return `${(bytes / 1024).toFixed(1)} KB`
-	return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
 export function SessionInfo({
 	open,
 	onOpenChange,
 	getSessionStats
 }: SessionInfoProps) {
-	const [stats, setStats] = useState<SessionStats | null>(
-		null
-	)
-	const [loading, setLoading] = useState(false)
-
-	useEffect(() => {
-		if (!open) return
-		setLoading(true)
-		;(async () => {
-			try {
-				const data = await getSessionStats()
-				setStats(data as SessionStats)
-			} catch {
-				/* ignore */
-			} finally {
-				setLoading(false)
-			}
-		})()
-	}, [open, getSessionStats])
+	const { data: stats, isLoading: loading } = useQuery({
+		queryKey: ['session-stats'],
+		queryFn: () =>
+			getSessionStats() as Promise<SessionData>,
+		enabled: open
+	})
 
 	return (
 		<Credenza open={open} onOpenChange={onOpenChange}>
@@ -81,75 +59,56 @@ export function SessionInfo({
 
 					{stats && !loading && (
 						<div className="space-y-3 text-[12px]">
-							{stats.name && (
-								<div>
-									<span className="text-muted-foreground">
-										Name
-									</span>
-									<p className="font-medium">
-										{stats.name}
-									</p>
-								</div>
-							)}
+							<div>
+								<span className="text-muted-foreground">
+									ID
+								</span>
+								<p className="font-mono text-[11px] font-medium truncate">
+									{stats.id}
+								</p>
+							</div>
 							<div className="grid grid-cols-2 gap-3">
 								<div className="flex items-center gap-2">
-									<FileTextIcon className="size-3.5 text-muted-foreground" />
+									<ActivityIcon className="size-3.5 text-muted-foreground" />
 									<div>
 										<p className="text-muted-foreground">
-											Entries
+											Events
 										</p>
 										<p className="font-medium">
 											<NumberTicker
-												value={stats.entryCount}
+												value={stats.currentSeq}
 												className="text-inherit"
 											/>
 										</p>
 									</div>
 								</div>
 								<div className="flex items-center gap-2">
-									<GitBranchIcon className="size-3.5 text-muted-foreground" />
+									<ClockIcon className="size-3.5 text-muted-foreground" />
 									<div>
 										<p className="text-muted-foreground">
-											Branches
+											Created
 										</p>
 										<p className="font-medium">
-											<NumberTicker
-												value={stats.branchCount}
-												className="text-inherit"
-											/>
+											{formatDateTime(
+												new Date(stats.createdAt)
+											)}
 										</p>
 									</div>
 								</div>
 								<div className="flex items-center gap-2">
-									<HardDriveIcon className="size-3.5 text-muted-foreground" />
+									<HashIcon className="size-3.5 text-muted-foreground" />
 									<div>
 										<p className="text-muted-foreground">
-											Size
+											Updated
 										</p>
 										<p className="font-medium">
-											{formatSize(stats.sizeBytes)}
+											{formatDateTime(
+												new Date(stats.updatedAt)
+											)}
 										</p>
 									</div>
-								</div>
-								<div>
-									<p className="text-muted-foreground">
-										Date
-									</p>
-									<p className="font-medium">
-										{stats.date}
-									</p>
 								</div>
 							</div>
-							{stats.leafId && (
-								<div>
-									<span className="text-muted-foreground">
-										Active leaf
-									</span>
-									<p className="font-mono text-[10px] text-muted-foreground/70 truncate">
-										{stats.leafId}
-									</p>
-								</div>
-							)}
 						</div>
 					)}
 				</CredenzaBody>

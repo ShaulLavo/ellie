@@ -84,7 +84,7 @@ const FORMAT_PRESETS: Record<
 	relative: { dateStyle: 'medium', timeStyle: 'short' }
 }
 
-export interface ChatEventProps extends React.ComponentProps<'div'> {}
+export type ChatEventProps = React.ComponentProps<'div'>
 
 /**
  * Flex row wrapper for a single message or event. Each event typically
@@ -148,7 +148,8 @@ export function ChatEvent({
 	)
 }
 
-export interface ChatEventAddonProps extends React.ComponentProps<'div'> {}
+export type ChatEventAddonProps =
+	React.ComponentProps<'div'>
 
 /**
  * Fixed-width side column within a `ChatEvent`. Typically holds a
@@ -180,7 +181,7 @@ export function ChatEventAddon({
 	)
 }
 
-export interface ChatEventBodyProps extends React.ComponentProps<'div'> {}
+export type ChatEventBodyProps = React.ComponentProps<'div'>
 
 /**
  * Main content area within a `ChatEvent`. Uses `flex-1` to fill the
@@ -213,7 +214,8 @@ export function ChatEventBody({
 	)
 }
 
-export interface ChatEventContentProps extends React.ComponentProps<'div'> {}
+export type ChatEventContentProps =
+	React.ComponentProps<'div'>
 
 /**
  * Message text container with responsive text sizing via container
@@ -242,7 +244,8 @@ export function ChatEventContent({
 	)
 }
 
-export interface ChatEventTitleProps extends React.ComponentProps<'div'> {}
+export type ChatEventTitleProps =
+	React.ComponentProps<'div'>
 
 /**
  * Row for the sender name and metadata (e.g. timestamp, badges).

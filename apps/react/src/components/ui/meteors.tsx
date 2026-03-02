@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -12,6 +12,30 @@ interface MeteorsProps {
 	className?: string
 }
 
+function generateStyles(
+	count: number,
+	angle: number,
+	minDelay: number,
+	maxDelay: number,
+	minDuration: number,
+	maxDuration: number
+): Array<React.CSSProperties> {
+	return Array.from({ length: count }).map(() => ({
+		'--angle': -angle + 'deg',
+		top: '-5%',
+		left: `calc(0% + ${Math.floor(Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1000))}px)`,
+		animationDelay:
+			Math.random() * (maxDelay - minDelay) +
+			minDelay +
+			's',
+		animationDuration:
+			Math.floor(
+				Math.random() * (maxDuration - minDuration) +
+					minDuration
+			) + 's'
+	}))
+}
+
 export const Meteors = ({
 	number = 20,
 	minDelay = 0.2,
@@ -21,36 +45,16 @@ export const Meteors = ({
 	angle = 215,
 	className
 }: MeteorsProps) => {
-	const [meteorStyles, setMeteorStyles] = useState<
-		Array<React.CSSProperties>
-	>([])
-
-	useEffect(() => {
-		const styles = Array.from({ length: number }).map(
-			() => ({
-				'--angle': -angle + 'deg',
-				top: '-5%',
-				left: `calc(0% + ${Math.floor(Math.random() * window.innerWidth)}px)`,
-				animationDelay:
-					Math.random() * (maxDelay - minDelay) +
-					minDelay +
-					's',
-				animationDuration:
-					Math.floor(
-						Math.random() * (maxDuration - minDuration) +
-							minDuration
-					) + 's'
-			})
+	const [meteorStyles] = useState(() =>
+		generateStyles(
+			number,
+			angle,
+			minDelay,
+			maxDelay,
+			minDuration,
+			maxDuration
 		)
-		setMeteorStyles(styles)
-	}, [
-		number,
-		minDelay,
-		maxDelay,
-		minDuration,
-		maxDuration,
-		angle
-	])
+	)
 
 	return (
 		<>

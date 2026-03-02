@@ -19,9 +19,10 @@ export function useAnimatedText(
 		const prevText = prevTextRef.current
 		if (prevText !== text) {
 			prevTextRef.current = text
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync cursor reset on text change
 			setStartingCursor(
 				text.startsWith(prevText) ? cursor : 0
-			) // eslint-disable-line react-hooks/set-state-in-effect -- intentional: sync cursor reset on text change
+			)
 		}
 	}, [text, cursor])
 

@@ -1,4 +1,5 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useChatDB } from '../hooks/use-chat-db'
 import { useToolGrouping } from '../hooks/use-tool-grouping'
 import { useChatCommands } from '../hooks/use-chat-commands'
@@ -20,15 +21,24 @@ import {
 import { ChatMessageRow } from './chat-message'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import type { SlashCommand } from './slash-command-menu'
+import { eden } from '../lib/eden'
 import {
 	WifiOffIcon,
 	Loader2Icon,
-	AlertCircleIcon
+	AlertCircleIcon,
+	ListIcon,
+	InfoIcon
 } from 'lucide-react'
 import type { ConnectionState } from '@ellie/schemas/chat'
 import { SessionStatusBar } from './chat/session-status-bar'
+import { SessionInfo } from './session-info'
+import { SessionList } from './session-list'
 
-function EmptyState() {
+function EmptyState({
+	needsBootstrap
+}: {
+	needsBootstrap: boolean
+}) {
 	return (
 		<div className="flex size-full flex-col items-center justify-center gap-5 p-8">
 			<div className="relative flex items-center justify-center">
@@ -57,12 +67,25 @@ function EmptyState() {
 				</div>
 			</div>
 			<div className="space-y-1 text-center">
-				<h3 className="font-display text-sm font-semibold tracking-tight text-foreground/80">
-					Start a conversation
-				</h3>
-				<p className="text-[13px] text-muted-foreground/70">
-					Send a message below to begin.
-				</p>
+				{needsBootstrap ? (
+					<>
+						<h3 className="font-display text-sm font-semibold tracking-tight text-foreground/80">
+							Say hi to your agent
+						</h3>
+						<p className="text-[13px] text-muted-foreground/70">
+							Send your first message to get started.
+						</p>
+					</>
+				) : (
+					<>
+						<h3 className="font-display text-sm font-semibold tracking-tight text-foreground/80">
+							Start a conversation
+						</h3>
+						<p className="text-[13px] text-muted-foreground/70">
+							Send a message below to begin.
+						</p>
+					</>
+				)}
 			</div>
 		</div>
 	)
@@ -119,6 +142,17 @@ export function ChatRoom({
 	sessionId: string
 	onClear?: () => void
 }) {
+	const { data: status } = useQuery({
+		queryKey: ['status'],
+		queryFn: () => eden.api.status.get().then(r => r.data)
+	})
+	const needsBootstrap = status?.needsBootstrap ?? false
+
+	const [showSessionList, setShowSessionList] =
+		useState(false)
+	const [showSessionInfo, setShowSessionInfo] =
+		useState(false)
+
 	const chat = useChatDB(sessionId)
 
 	const {
@@ -156,22 +190,63 @@ export function ChatRoom({
 
 			await chat.sendMessage(text)
 		},
-		[commands, chat.sendMessage]
+		[commands, chat]
 	)
 
 	return (
 		<div className="flex h-full w-full flex-col">
+			<div className="flex items-center gap-1 px-5 py-1.5 border-b border-border/60">
+				<button
+					type="button"
+					onClick={() => setShowSessionList(true)}
+					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+				>
+					<ListIcon className="size-3" />
+					Sessions
+				</button>
+				<button
+					type="button"
+					onClick={() => setShowSessionInfo(true)}
+					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+				>
+					<InfoIcon className="size-3" />
+					Info
+				</button>
+			</div>
+
 			<ConnectionIndicator
 				state={chat.connectionState}
 				error={chat.error}
 				onRetry={chat.retry}
 			/>
 
+			<SessionList
+				open={showSessionList}
+				onOpenChange={setShowSessionList}
+				listSessions={() =>
+					eden.chat.sessions.get().then(r => r.data)
+				}
+				onResume={async () => {
+					/* TODO: actually switch sessions */
+				}}
+				currentSessionId={sessionId}
+			/>
+			<SessionInfo
+				open={showSessionInfo}
+				onOpenChange={setShowSessionInfo}
+				getSessionStats={() =>
+					eden.chat
+						.sessions({ sessionId })
+						.get()
+						.then(r => r.data)
+				}
+			/>
+
 			<Conversation className="flex-1">
 				<ConversationContent className="gap-5 px-6 py-5">
 					{chat.messages.length === 0 &&
 					!chat.streamingMessage ? (
-						<EmptyState />
+						<EmptyState needsBootstrap={needsBootstrap} />
 					) : (
 						<>
 							{chat.messages.map(msg =>

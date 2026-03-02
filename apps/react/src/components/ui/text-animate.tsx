@@ -406,6 +406,7 @@ const TextAnimateBase = ({
 
 	return (
 		<AnimatePresence mode="popLayout">
+			{/* eslint-disable-next-line react-hooks/static-components -- MotionComponent uses module-level cache */}
 			<MotionComponent
 				variants={finalVariants.container as Variants}
 				initial="hidden"

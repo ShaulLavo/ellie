@@ -44,18 +44,54 @@ function eventToStored(row: EventRow): StoredChatMessage {
 			: (row.payload as Record<string, unknown>)
 
 	// The payload shape depends on event type
-	const content =
-		typeof parsed.content === 'string' ? parsed.content : ''
-
-	// Extract parts — could be in payload.content as anthropic content blocks
-	// or directly in payload.parts
 	let parts: ContentPart[] = []
-	if (Array.isArray(parsed.content)) {
-		parts = parsed.content as ContentPart[]
-	} else if (Array.isArray(parsed.parts)) {
-		parts = parsed.parts as ContentPart[]
-	} else if (content) {
-		parts = [{ type: 'text', text: content }]
+
+	if (row.type === 'tool_call') {
+		// tool_call payload: {id, name, arguments}
+		parts = [
+			{
+				type: 'tool-call',
+				name: parsed.name as string,
+				args:
+					(parsed.arguments as Record<string, unknown>) ??
+					{},
+				toolCallId: parsed.id as string
+			}
+		]
+	} else if (row.type === 'tool_result') {
+		// tool_result payload: {role, toolCallId, toolName, content, isError, ...}
+		const resultContent = Array.isArray(parsed.content)
+			? (
+					parsed.content as Array<{
+						type: string
+						text?: string
+					}>
+				)
+					.filter(c => c.type === 'text')
+					.map(c => c.text ?? '')
+					.join('')
+			: ''
+		parts = [
+			{
+				type: 'tool-result',
+				toolName: parsed.toolName as string,
+				toolCallId: parsed.toolCallId as string,
+				result: resultContent
+			}
+		]
+	} else {
+		// Standard message events: extract parts from content or parts array
+		const content =
+			typeof parsed.content === 'string'
+				? parsed.content
+				: ''
+		if (Array.isArray(parsed.content)) {
+			parts = parsed.content as ContentPart[]
+		} else if (Array.isArray(parsed.parts)) {
+			parts = parsed.parts as ContentPart[]
+		} else if (content) {
+			parts = [{ type: 'text', text: content }]
+		}
 	}
 
 	const text = parts
@@ -192,6 +228,7 @@ export function useChatDB(sessionId: string) {
 	// ── StreamClient setup ─────────────────────────────────────────────
 	useEffect(() => {
 		isInitialLoadRef.current = true
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset state on sessionId change
 		setSessionStats(EMPTY_STATS)
 		setIsAgentRunning(false)
 

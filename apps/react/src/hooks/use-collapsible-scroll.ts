@@ -2,41 +2,33 @@ import { useEffect } from 'react'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 
 /**
- * Hook to synchronize scroll position with collapsible animation
- * Ensures smooth scroll that matches the visual animation duration
+ * Prevents StickToBottom from auto-scrolling when a collapsible
+ * expands/collapses. Calls stopScroll() on animation start so the
+ * resize observer doesn't yank the user to the bottom.
  */
 export function useCollapsibleScroll(
-	ref: React.RefObject<HTMLElement>
+	ref: React.RefObject<HTMLElement | null>
 ) {
-	const { scrollToBottom } = useStickToBottomContext()
+	const { stopScroll } = useStickToBottomContext()
 
 	useEffect(() => {
 		const element = ref.current
 		if (!element) return
 
-		// Handle animation events
-		const handleAnimationEnd = () => {
-			// When animation completes, ensure we're scrolled to bottom
-			// Use requestAnimationFrame to let browser paint finish first
-			requestAnimationFrame(() => {
-				scrollToBottom({
-					animation: 'smooth',
-					duration: 200
-				})
-			})
+		const handleAnimationStart = () => {
+			stopScroll()
 		}
 
 		element.addEventListener(
-			'animationend',
-			handleAnimationEnd
+			'animationstart',
+			handleAnimationStart
 		)
 
 		return () => {
 			element.removeEventListener(
-				'animationend',
-				handleAnimationEnd
+				'animationstart',
+				handleAnimationStart
 			)
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- ref is a stable RefObject, ref.current shouldn't be a dep
-	}, [scrollToBottom])
+	}, [stopScroll, ref])
 }
