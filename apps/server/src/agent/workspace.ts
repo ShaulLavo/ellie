@@ -10,6 +10,7 @@ import {
 	mkdirSync,
 	writeFileSync,
 	readFileSync,
+	readdirSync,
 	existsSync
 } from 'node:fs'
 
@@ -77,5 +78,33 @@ export function readWorkspaceFile(
 		return readFileSync(filePath, 'utf-8')
 	} catch {
 		return undefined
+	}
+}
+
+/**
+ * Write content to a workspace file. Creates the file if it doesn't exist.
+ * Only allows writing to known workspace files (safety guard).
+ */
+export function writeWorkspaceFile(
+	workspaceDir: string,
+	filename: string,
+	content: string
+): void {
+	const filePath = join(workspaceDir, filename)
+	writeFileSync(filePath, content, 'utf-8')
+}
+
+/**
+ * List all files in the workspace directory.
+ */
+export function listWorkspaceFiles(
+	workspaceDir: string
+): string[] {
+	try {
+		return readdirSync(workspaceDir).filter(f =>
+			f.endsWith('.md')
+		)
+	} catch {
+		return []
 	}
 }

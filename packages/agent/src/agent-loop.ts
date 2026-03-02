@@ -1225,6 +1225,22 @@ async function processAgentStream(
 		`[agent-loop] processAgentStream finalizing after ${chunkCount} chunks, emittedStart=${emittedStart} contentParts=${partial.content.length} stopReason=${partial.stopReason} errorMessage=${partial.errorMessage ?? 'none'}`
 	)
 
+	// Detect empty response — model returned no content (likely a failed
+	// tool-use attempt when no tools are defined in the API request).
+	// Mark as error so the caller/client sees a meaningful failure.
+	if (
+		partial.content.length === 0 &&
+		partial.stopReason !== 'error' &&
+		partial.stopReason !== 'aborted'
+	) {
+		console.warn(
+			`[agent-loop] empty response detected (contentParts=0 stopReason=${partial.stopReason}) — marking as error`
+		)
+		partial.stopReason = 'error'
+		partial.errorMessage =
+			'Model returned an empty response. This can happen when a tool call was attempted but no tools are available.'
+	}
+
 	// Finalize last partial
 	finalizePartial(
 		partial,

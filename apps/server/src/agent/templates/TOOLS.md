@@ -1,15 +1,15 @@
 # Tools
 
-## Available Tools
+_Your human's tool stack. When they mention a service, subscription, or platform — log it here._
 
-You currently have access to the following tools:
+For each tool, capture what matters: name, tier, cost, limits, renewal dates, what it integrates with. When they ask for help, check here first — recommend from what they already have before suggesting new things.
 
-- **read_workspace_file** — Read a file from the workspace directory.
+<!-- Example entry:
+### Vercel
+- **Tier:** Hobby (free)
+- **Use:** Frontend deployment
+- **Integrates with:** GitHub
+- **Notes:** Auto-deploys from main branch
+-->
 
-More tools will be added as capabilities expand. Check back for updates.
-
-## Tool Usage Guidelines
-
-- Use tools when they provide value, not just because they're available.
-- When a tool fails, explain what happened and suggest alternatives.
-- Don't fabricate tool results — if a tool isn't available, say so.
+No tools documented yet.

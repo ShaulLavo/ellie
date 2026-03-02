@@ -21,12 +21,13 @@ import {
 } from '@ellie/agent'
 import type { EventType } from '@ellie/db'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import type {
 	RealtimeStore,
 	SessionEvent
 } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
+import { createWorkspaceTools } from './tools/workspace-tools'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
@@ -73,16 +74,26 @@ export class AgentController {
 		const systemPrompt = buildSystemPrompt(
 			options.workspaceDir
 		)
+		const tools = createWorkspaceTools(options.workspaceDir)
 
 		this.agent = new Agent({
 			...options.agentOptions,
 			adapter: options.adapter,
 			initialState: {
 				...options.agentOptions?.initialState,
-				systemPrompt
+				systemPrompt,
+				tools
 			},
 			onEvent: event => this.handleEvent(event)
 		})
+	}
+
+	// ── Adapter hot-swap ────────────────────────────────────────────────────
+
+	/** Swap the adapter (e.g. after OAuth token refresh) without destroying the agent. */
+	updateAdapter(adapter: AnyTextAdapter): void {
+		this.agent.adapter = adapter
+		this.options = { ...this.options, adapter }
 	}
 
 	// ── Lock ─────────────────────────────────────────────────────────────────

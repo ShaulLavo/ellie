@@ -32,7 +32,8 @@ export const afterSeqQuerySchema = v.object({
 	)
 })
 export const statusSchema = v.object({
-	connectedClients: v.number()
+	connectedClients: v.number(),
+	needsBootstrap: v.boolean()
 })
 export const errorSchema = v.object({ error: v.string() })
 

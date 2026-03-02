@@ -25,7 +25,10 @@ import {
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
 import { AgentController } from './agent/controller'
-import { ensureBootstrapInjected } from './agent/bootstrap'
+import {
+	ensureBootstrapInjected,
+	isBootstrapInjected
+} from './agent/bootstrap'
 import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { createAgentRoutes } from './routes/agent'
@@ -58,7 +61,8 @@ const eventStore = new EventStore(
 	`${DATA_DIR}/events.db`,
 	`${DATA_DIR}/audit`
 )
-const initialSessionId = todaySessionId()
+const initialSessionId =
+	eventStore.getKv('currentSessionId') ?? todaySessionId()
 const store = new RealtimeStore(
 	eventStore,
 	initialSessionId
@@ -202,8 +206,8 @@ async function resolveAdapter(): Promise<AnyTextAdapter | null> {
 let cachedController: AgentController | null | undefined
 
 /**
- * Check if file-based OAuth token is expired/expiring and invalidate cache
- * so resolveAdapter() will run the refresh flow on next access.
+ * If the OAuth token is expired/expiring, refresh it and hot-swap the
+ * adapter on the existing controller — no need to destroy the agent.
  */
 async function ensureTokenFresh(): Promise<void> {
 	const cred = await loadAnthropicCredential(
@@ -213,7 +217,14 @@ async function ensureTokenFresh(): Promise<void> {
 
 	const REFRESH_BUFFER_MS = 5 * 60 * 1000
 	if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
-		invalidateAgentCache()
+		const freshAdapter = await resolveAdapter()
+		if (freshAdapter && cachedController) {
+			cachedController.updateAdapter(freshAdapter)
+		} else {
+			// No adapter or no controller yet — fall through to
+			// getAgentController() which will create one.
+			invalidateAgentCache()
+		}
 	}
 }
 
@@ -302,7 +313,12 @@ export const app = new Elysia()
 			mapJsonSchema: { valibot: toJsonSchema }
 		})
 	)
-	.use(createStatusRoutes(() => sseState.activeClients))
+	.use(
+		createStatusRoutes(
+			() => sseState.activeClients,
+			() => !isBootstrapInjected(eventStore)
+		)
+	)
 	.use(createSessionRoutes(store))
 	.use(
 		createChatRoutes(

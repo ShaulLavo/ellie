@@ -100,9 +100,14 @@ export function createChatRoutes(
 						`[chat-route] POST /chat/${sessionId}/messages role=${input.role ?? 'user'} content=${input.content.slice(0, 100)}`
 					)
 					store.ensureSession(sessionId)
-					ensureBootstrap?.(sessionId)
+
+					// Ensure controller is watching BEFORE appending so the
+					// pub/sub notification is never missed.
 					const controller = await getAgentController?.()
 					controller?.watch(sessionId)
+
+					// Persist user message BEFORE bootstrap so the client
+					// sees the user bubble first, then the synthetic tool call.
 					const row = store.appendEvent(
 						sessionId,
 						'user_message',
@@ -114,6 +119,8 @@ export function createChatRoutes(
 							timestamp: Date.now()
 						}
 					)
+
+					ensureBootstrap?.(sessionId)
 					console.log(
 						`[chat-route] user_message persisted id=${row.id} seq=${row.seq} session=${row.sessionId}`
 					)

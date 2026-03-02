@@ -2,7 +2,8 @@ import { Elysia } from 'elysia'
 import { statusSchema } from './common'
 
 export function createStatusRoutes(
-	getConnectedClients: () => number
+	getConnectedClients: () => number,
+	getNeedsBootstrap: () => boolean
 ) {
 	return new Elysia({
 		prefix: '/api',
@@ -11,7 +12,8 @@ export function createStatusRoutes(
 		'/status',
 		() => {
 			return {
-				connectedClients: getConnectedClients()
+				connectedClients: getConnectedClients(),
+				needsBootstrap: getNeedsBootstrap()
 			}
 		},
 		{
