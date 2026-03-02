@@ -10,7 +10,7 @@
         "@fontsource/geist-mono": "^5.2.7",
         "@fontsource/google-sans-flex": "^5.2.2",
         "@tanstack/ai-ollama": "^0.5.0",
-        "fast-ulid": "^1.0.0",
+        "fast-ulid": "^1.2.1",
       },
       "devDependencies": {
         "@tailwindcss/typography": "^0.5.19",
@@ -260,6 +260,20 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/ptc": {
+      "name": "@ellie/ptc",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/agent": "workspace:*",
+        "@valibot/to-json-schema": "^1.5.0",
+        "fast-ulid": "^1.2.1",
+        "valibot": "^1.2.0",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "typescript": "^5.0.0",
+      },
+    },
     "packages/schemas": {
       "name": "@ellie/schemas",
       "version": "0.1.0",
@@ -425,6 +439,8 @@
     "@ellie/hindsight": ["@ellie/hindsight@workspace:packages/hindsight"],
 
     "@ellie/hindsight-eval": ["@ellie/hindsight-eval@workspace:packages/hindsight-eval"],
+
+    "@ellie/ptc": ["@ellie/ptc@workspace:packages/ptc"],
 
     "@ellie/schemas": ["@ellie/schemas@workspace:packages/schemas"],
 
@@ -1470,7 +1486,7 @@
 
     "fast-levenshtein": ["fast-levenshtein@2.0.6", "", {}, "sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw=="],
 
-    "fast-ulid": ["fast-ulid@1.0.0", "", {}, "sha512-mNSxmObD1ZC2t3gFjhYUEkLLDJnECTQCquuC1Tv219NMW0myV0nvVnNlrt1r4pVEf2/Su3U6S7I4ueJ6HqtXQg=="],
+    "fast-ulid": ["fast-ulid@1.2.1", "", {}, "sha512-XtRcOz9We3ifgh3ispJmNvcXv58+JfB/CCSWVurv2fGh8ai8ku85MnQ5ojurqzUyRKUq3bx8+lvd2gB9V5xlUQ=="],
 
     "fast-uri": ["fast-uri@3.1.0", "", {}, "sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA=="],
 
