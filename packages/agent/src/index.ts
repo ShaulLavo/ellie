@@ -69,5 +69,9 @@ export type {
 	// Loop config
 	StreamCallOptions,
 	StreamFn,
-	AgentLoopConfig
+	AgentLoopConfig,
+
+	// Guardrail policy
+	AgentRuntimeLimits,
+	AgentGuardrailPolicy
 } from './types'

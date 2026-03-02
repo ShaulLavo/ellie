@@ -306,6 +306,26 @@ const toolExecutionEndEventSchema = v.object({
 	isError: v.boolean()
 })
 
+const usageSnapshotSchema = v.object({
+	elapsedMs: v.number(),
+	modelCalls: v.number(),
+	costUsd: v.number()
+})
+
+const limitHitEventSchema = v.object({
+	type: v.literal('limit_hit'),
+	limit: v.picklist([
+		'max_wall_clock_ms',
+		'max_model_calls',
+		'max_cost_usd'
+	]),
+	threshold: v.number(),
+	observed: v.number(),
+	usageSnapshot: usageSnapshotSchema,
+	scope: v.literal('run'),
+	action: v.literal('hard_stop')
+})
+
 /**
  * Schema for any AgentEvent (discriminated on `type`).
  * Used by the agent runtime to type lifecycle events streamed over SSE.
@@ -320,5 +340,6 @@ export const agentEventSchema = v.variant('type', [
 	messageEndEventSchema,
 	toolExecutionStartEventSchema,
 	toolExecutionUpdateEventSchema,
-	toolExecutionEndEventSchema
+	toolExecutionEndEventSchema,
+	limitHitEventSchema
 ])

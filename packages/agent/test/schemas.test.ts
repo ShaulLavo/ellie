@@ -417,4 +417,67 @@ describe('agentEventSchema', () => {
 			v.parse(agentEventSchema, { type: 'invalid_event' })
 		).toThrow()
 	})
+
+	test('round-trips limit_hit event', () => {
+		const event: AgentEvent = {
+			type: 'limit_hit',
+			limit: 'max_model_calls',
+			threshold: 50,
+			observed: 50,
+			usageSnapshot: {
+				elapsedMs: 12345,
+				modelCalls: 50,
+				costUsd: 1.23
+			},
+			scope: 'run',
+			action: 'hard_stop'
+		}
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
+		expect(parsed).toEqual(event)
+	})
+
+	test('round-trips limit_hit with max_wall_clock_ms', () => {
+		const event: AgentEvent = {
+			type: 'limit_hit',
+			limit: 'max_wall_clock_ms',
+			threshold: 60000,
+			observed: 60123,
+			usageSnapshot: {
+				elapsedMs: 60123,
+				modelCalls: 12,
+				costUsd: 0.45
+			},
+			scope: 'run',
+			action: 'hard_stop'
+		}
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
+		expect(parsed).toEqual(event)
+	})
+
+	test('round-trips limit_hit with max_cost_usd', () => {
+		const event: AgentEvent = {
+			type: 'limit_hit',
+			limit: 'max_cost_usd',
+			threshold: 5.0,
+			observed: 5.12,
+			usageSnapshot: {
+				elapsedMs: 30000,
+				modelCalls: 8,
+				costUsd: 5.12
+			},
+			scope: 'run',
+			action: 'hard_stop'
+		}
+		const parsed = v.parse(
+			agentEventSchema,
+			JSON.parse(JSON.stringify(event))
+		)
+		expect(parsed).toEqual(event)
+	})
 })

@@ -36,6 +36,7 @@ import type {
 	AgentEvent,
 	AgentLoopConfig,
 	AgentMessage,
+	AgentRuntimeLimits,
 	AgentTool,
 	AgentToolResult,
 	AssistantMessage,
@@ -44,6 +45,174 @@ import type {
 	ToolResultMessage,
 	StreamFn
 } from './types'
+
+// ============================================================================
+// Runtime guardrail state
+// ============================================================================
+
+interface GuardrailState {
+	startedAtMs: number
+	modelCallCount: number
+	costUsd: number
+	limitTriggered: boolean
+}
+
+function createGuardrailState(): GuardrailState {
+	return {
+		startedAtMs: Date.now(),
+		modelCallCount: 0,
+		costUsd: 0,
+		limitTriggered: false
+	}
+}
+
+/** Returns true if a numeric limit is enabled (positive number). */
+function isLimitEnabled(
+	value: number | undefined
+): value is number {
+	return value !== undefined && value > 0
+}
+
+/** Check all runtime limits and return the first one that is exceeded, or null. */
+function checkLimits(
+	state: GuardrailState,
+	limits: AgentRuntimeLimits | undefined
+): AgentEvent | null {
+	if (!limits || state.limitTriggered) return null
+
+	if (
+		isLimitEnabled(limits.maxModelCalls) &&
+		state.modelCallCount >= limits.maxModelCalls
+	) {
+		state.limitTriggered = true
+		return {
+			type: 'limit_hit',
+			limit: 'max_model_calls',
+			threshold: limits.maxModelCalls,
+			observed: state.modelCallCount,
+			usageSnapshot: {
+				elapsedMs: Date.now() - state.startedAtMs,
+				modelCalls: state.modelCallCount,
+				costUsd: state.costUsd
+			},
+			scope: 'run',
+			action: 'hard_stop'
+		}
+	}
+
+	if (
+		isLimitEnabled(limits.maxCostUsd) &&
+		state.costUsd >= limits.maxCostUsd
+	) {
+		state.limitTriggered = true
+		return {
+			type: 'limit_hit',
+			limit: 'max_cost_usd',
+			threshold: limits.maxCostUsd,
+			observed: state.costUsd,
+			usageSnapshot: {
+				elapsedMs: Date.now() - state.startedAtMs,
+				modelCalls: state.modelCallCount,
+				costUsd: state.costUsd
+			},
+			scope: 'run',
+			action: 'hard_stop'
+		}
+	}
+
+	// Wall-clock is enforced via AbortSignal timeout, but also check here as a fallback
+	if (isLimitEnabled(limits.maxWallClockMs)) {
+		const elapsed = Date.now() - state.startedAtMs
+		if (elapsed >= limits.maxWallClockMs) {
+			state.limitTriggered = true
+			return {
+				type: 'limit_hit',
+				limit: 'max_wall_clock_ms',
+				threshold: limits.maxWallClockMs,
+				observed: elapsed,
+				usageSnapshot: {
+					elapsedMs: elapsed,
+					modelCalls: state.modelCallCount,
+					costUsd: state.costUsd
+				},
+				scope: 'run',
+				action: 'hard_stop'
+			}
+		}
+	}
+
+	return null
+}
+
+/** Build a terminal assistant message for a limit hit. */
+function buildLimitTerminalMessage(
+	limitEvent: Extract<AgentEvent, { type: 'limit_hit' }>,
+	config: AgentLoopConfig,
+	lastAssistantText?: string
+): AssistantMessage {
+	const snap = limitEvent.usageSnapshot
+	let text = `Run stopped: ${limitEvent.limit} limit reached (threshold=${limitEvent.threshold}, observed=${limitEvent.observed}).`
+	text += ` Usage: ${snap.elapsedMs}ms elapsed, ${snap.modelCalls} model calls, $${snap.costUsd.toFixed(4)} cost.`
+	if (lastAssistantText) {
+		const truncated =
+			lastAssistantText.length > 200
+				? lastAssistantText.slice(0, 200) + '…'
+				: lastAssistantText
+		text += ` Last progress: "${truncated}"`
+	}
+	return {
+		role: 'assistant',
+		content: [{ type: 'text', text }],
+		provider: config.model.provider,
+		model: config.model.id,
+		usage: createEmptyUsage(),
+		stopReason: 'error',
+		errorMessage: `guardrail:${limitEvent.limit}`,
+		timestamp: Date.now()
+	}
+}
+
+/** Combine external abort signal with wall-clock timeout if configured. */
+function buildGuardrailSignal(
+	externalSignal: AbortSignal | undefined,
+	limits: AgentRuntimeLimits | undefined
+): {
+	signal: AbortSignal | undefined
+	cleanup?: () => void
+} {
+	if (!isLimitEnabled(limits?.maxWallClockMs)) {
+		return { signal: externalSignal }
+	}
+
+	const timeoutSignal = AbortSignal.timeout(
+		limits!.maxWallClockMs!
+	)
+	if (externalSignal) {
+		return {
+			signal: AbortSignal.any([
+				externalSignal,
+				timeoutSignal
+			])
+		}
+	}
+	return { signal: timeoutSignal }
+}
+
+/** Extract last assistant text from messages for limit terminal summary. */
+function extractLastAssistantText(
+	messages: AgentMessage[]
+): string | undefined {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i]
+		if (msg.role === 'assistant') {
+			return (msg as AssistantMessage).content
+				.filter(c => c.type === 'text')
+				.map(c => ('text' in c ? c.text : ''))
+				.join('')
+		}
+	}
+	return undefined
+}
 
 /**
  * Start an agent loop with new prompt messages.
@@ -461,6 +630,19 @@ async function runLoop(
 		config.toolLoopDetection
 	)
 
+	// Create guardrail runtime state
+	const guardrailState = createGuardrailState()
+	const limits = config.runtimeLimits
+
+	// Build combined signal for wall-clock timeout
+	const { signal: guardedSignal } = buildGuardrailSignal(
+		signal,
+		limits
+	)
+
+	// Use the guarded signal throughout the loop (falls back to original if no wall-clock limit)
+	const effectiveSignal = guardedSignal ?? signal
+
 	let firstTurn = true
 	let pendingMessages: AgentMessage[] =
 		(await config.getSteeringMessages?.()) || []
@@ -484,6 +666,36 @@ async function runLoop(
 			pendingMessages = []
 		}
 
+		// --- Guardrail check: before model call ---
+		const preLimitEvent = checkLimits(
+			guardrailState,
+			limits
+		)
+		if (preLimitEvent) {
+			emit(preLimitEvent)
+			const lastText = extractLastAssistantText(newMessages)
+			const termMsg = buildLimitTerminalMessage(
+				preLimitEvent as Extract<
+					AgentEvent,
+					{ type: 'limit_hit' }
+				>,
+				config,
+				lastText
+			)
+			emit({ type: 'message_start', message: termMsg })
+			emit({ type: 'message_end', message: termMsg })
+			currentContext.messages.push(termMsg)
+			newMessages.push(termMsg)
+			emit({
+				type: 'turn_end',
+				message: termMsg,
+				toolResults: []
+			})
+			emit({ type: 'agent_end', messages: newMessages })
+			stream.end(newMessages)
+			return
+		}
+
 		// Process assistant response (with retry on transient errors)
 		// With chat(): TanStack handles tool loop internally via maxIterations.
 		// With streamFn: we must handle tool execution + re-call manually.
@@ -493,10 +705,11 @@ async function runLoop(
 		let result = await processAgentStreamWithRetry(
 			currentContext,
 			config,
-			signal,
+			effectiveSignal,
 			emit,
 			streamFn,
-			loopDetector
+			loopDetector,
+			guardrailState
 		)
 
 		console.log(
@@ -506,6 +719,39 @@ async function runLoop(
 		// Collect messages from this iteration
 		for (const msg of result.messages) {
 			newMessages.push(msg)
+		}
+
+		// --- Guardrail check: after model call (cost/model-calls may have changed) ---
+		if (!result.abortedOrError) {
+			const postLimitEvent = checkLimits(
+				guardrailState,
+				limits
+			)
+			if (postLimitEvent) {
+				emit(postLimitEvent)
+				const lastText =
+					extractLastAssistantText(newMessages)
+				const termMsg = buildLimitTerminalMessage(
+					postLimitEvent as Extract<
+						AgentEvent,
+						{ type: 'limit_hit' }
+					>,
+					config,
+					lastText
+				)
+				emit({ type: 'message_start', message: termMsg })
+				emit({ type: 'message_end', message: termMsg })
+				currentContext.messages.push(termMsg)
+				newMessages.push(termMsg)
+				emit({
+					type: 'turn_end',
+					message: termMsg,
+					toolResults: []
+				})
+				emit({ type: 'agent_end', messages: newMessages })
+				stream.end(newMessages)
+				return
+			}
 		}
 
 		// When using streamFn, handle tool execution loop manually
@@ -519,6 +765,37 @@ async function runLoop(
 			) {
 				iterations++
 
+				// --- Guardrail check: before tool execution iteration ---
+				const toolIterLimitEvent = checkLimits(
+					guardrailState,
+					limits
+				)
+				if (toolIterLimitEvent) {
+					emit(toolIterLimitEvent)
+					const lastText =
+						extractLastAssistantText(newMessages)
+					const termMsg = buildLimitTerminalMessage(
+						toolIterLimitEvent as Extract<
+							AgentEvent,
+							{ type: 'limit_hit' }
+						>,
+						config,
+						lastText
+					)
+					emit({ type: 'message_start', message: termMsg })
+					emit({ type: 'message_end', message: termMsg })
+					currentContext.messages.push(termMsg)
+					newMessages.push(termMsg)
+					emit({
+						type: 'turn_end',
+						message: termMsg,
+						toolResults: []
+					})
+					emit({ type: 'agent_end', messages: newMessages })
+					stream.end(newMessages)
+					return
+				}
+
 				// Execute tool calls from the assistant message
 				const toolCalls =
 					result.lastAssistant.content.filter(
@@ -526,7 +803,7 @@ async function runLoop(
 					)
 				let steered = false
 				for (let i = 0; i < toolCalls.length; i++) {
-					if (signal?.aborted) break
+					if (effectiveSignal?.aborted) break
 
 					// Check for steering between tool executions
 					const midSteering =
@@ -583,7 +860,7 @@ async function runLoop(
 					const toolResults = await executeToolCall(
 						toolCalls[i],
 						currentContext.tools ?? [],
-						signal,
+						effectiveSignal,
 						emit,
 						config.toolSafety?.maxToolResultChars ?? 50_000,
 						loopDetector
@@ -595,16 +872,48 @@ async function runLoop(
 				}
 				if (steered) break
 
-				if (signal?.aborted) break
+				if (effectiveSignal?.aborted) break
+
+				// --- Guardrail check: before re-call ---
+				const reCallLimitEvent = checkLimits(
+					guardrailState,
+					limits
+				)
+				if (reCallLimitEvent) {
+					emit(reCallLimitEvent)
+					const lastText =
+						extractLastAssistantText(newMessages)
+					const termMsg = buildLimitTerminalMessage(
+						reCallLimitEvent as Extract<
+							AgentEvent,
+							{ type: 'limit_hit' }
+						>,
+						config,
+						lastText
+					)
+					emit({ type: 'message_start', message: termMsg })
+					emit({ type: 'message_end', message: termMsg })
+					currentContext.messages.push(termMsg)
+					newMessages.push(termMsg)
+					emit({
+						type: 'turn_end',
+						message: termMsg,
+						toolResults: []
+					})
+					emit({ type: 'agent_end', messages: newMessages })
+					stream.end(newMessages)
+					return
+				}
 
 				// Re-call the LLM with tool results (with retry)
 				result = await processAgentStreamWithRetry(
 					currentContext,
 					config,
-					signal,
+					effectiveSignal,
 					emit,
 					streamFn,
-					loopDetector
+					loopDetector,
+					guardrailState
 				)
 				for (const msg of result.messages) {
 					newMessages.push(msg)
@@ -613,6 +922,48 @@ async function runLoop(
 		}
 
 		if (result.abortedOrError) {
+			// Check if this was a wall-clock timeout (not user abort)
+			// User abort: the original signal is aborted
+			// Wall-clock timeout: the effective signal is aborted but the original isn't
+			if (
+				result.lastAssistant.stopReason === 'aborted' &&
+				!guardrailState.limitTriggered &&
+				isLimitEnabled(limits?.maxWallClockMs) &&
+				effectiveSignal?.aborted &&
+				!signal?.aborted
+			) {
+				const elapsed =
+					Date.now() - guardrailState.startedAtMs
+				guardrailState.limitTriggered = true
+				const wallClockEvent: AgentEvent = {
+					type: 'limit_hit',
+					limit: 'max_wall_clock_ms',
+					threshold: limits!.maxWallClockMs!,
+					observed: elapsed,
+					usageSnapshot: {
+						elapsedMs: elapsed,
+						modelCalls: guardrailState.modelCallCount,
+						costUsd: guardrailState.costUsd
+					},
+					scope: 'run',
+					action: 'hard_stop'
+				}
+				emit(wallClockEvent)
+				const lastText =
+					extractLastAssistantText(newMessages)
+				const termMsg = buildLimitTerminalMessage(
+					wallClockEvent as Extract<
+						AgentEvent,
+						{ type: 'limit_hit' }
+					>,
+					config,
+					lastText
+				)
+				emit({ type: 'message_start', message: termMsg })
+				emit({ type: 'message_end', message: termMsg })
+				currentContext.messages.push(termMsg)
+				newMessages.push(termMsg)
+			}
 			emit({
 				type: 'turn_end',
 				message: result.lastAssistant,
@@ -850,14 +1201,16 @@ async function processAgentStreamWithRetry(
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
 	streamFn?: StreamFn,
-	loopDetector?: ToolLoopDetector
+	loopDetector?: ToolLoopDetector,
+	guardrailState?: GuardrailState
 ): Promise<ProcessResult> {
 	const retryConfig = config.retry ?? {}
 	const maxAttempts = retryConfig.maxAttempts ?? 3
 
 	// If retry is disabled (maxAttempts=1), call directly
 	if (maxAttempts <= 1) {
-		return processAgentStream(
+		if (guardrailState) guardrailState.modelCallCount++
+		const directResult = await processAgentStream(
 			context,
 			config,
 			signal,
@@ -865,12 +1218,20 @@ async function processAgentStreamWithRetry(
 			streamFn,
 			loopDetector
 		)
+		if (guardrailState) {
+			guardrailState.costUsd +=
+				directResult.lastAssistant.usage?.cost?.total ?? 0
+		}
+		return directResult
 	}
 
 	let lastResult: ProcessResult | undefined
 
 	const result = await withRetry(
 		async () => {
+			// Track model call attempt
+			if (guardrailState) guardrailState.modelCallCount++
+
 			const processResult = await processAgentStream(
 				context,
 				config,
@@ -879,6 +1240,13 @@ async function processAgentStreamWithRetry(
 				streamFn,
 				loopDetector
 			)
+
+			// Accumulate cost from this attempt
+			if (guardrailState) {
+				guardrailState.costUsd +=
+					processResult.lastAssistant.usage?.cost?.total ??
+					0
+			}
 
 			// If no error, return successfully
 			if (!processResult.abortedOrError) {

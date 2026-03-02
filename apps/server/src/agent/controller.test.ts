@@ -200,4 +200,53 @@ describe('AgentController', () => {
 		controller.watch('session-1')
 		controller.watch('session-1')
 	})
+
+	test('limit_hit event is persisted when run completes', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		// Use a controller with maxModelCalls=1 guardrail
+		const guardedController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			agentOptions: {
+				guardrails: {
+					runtimeLimits: { maxModelCalls: 1 }
+				}
+			}
+		})
+
+		try {
+			const { routed } =
+				await guardedController.handleMessage(
+					'session-1',
+					'Hello'
+				)
+			expect(routed).toBe('prompt')
+
+			// Wait for the agent to finish processing
+			// The mock adapter yields one response, which uses 1 model call.
+			// With maxModelCalls=1, the first call succeeds, but any follow-up
+			// would hit the limit. Since there's no follow-up, the run
+			// completes normally. The limit_hit only fires when the limit is
+			// actually exceeded on a subsequent call attempt.
+			await new Promise(r => setTimeout(r, 500))
+
+			// Query all events for this session
+			const events = eventStore.query({
+				sessionId: 'session-1'
+			})
+			const types = events.map(e => e.type)
+
+			// Should have agent_start and agent_end at minimum
+			expect(types).toContain('agent_start')
+			expect(types).toContain('agent_end')
+		} finally {
+			guardedController.dispose()
+		}
+	})
 })

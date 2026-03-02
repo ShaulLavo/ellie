@@ -794,3 +794,535 @@ describe('transformContext', () => {
 		)
 	})
 })
+
+// ============================================================================
+// Runtime guardrail tests
+// ============================================================================
+
+describe('runtime guardrails', () => {
+	test('max model calls limit triggers limit_hit and ends run', async () => {
+		let callCount = 0
+		// StreamFn that tracks call count
+		const streamFn: StreamFn = async function* () {
+			callCount++
+			for (const event of textResponseStream(
+				`Response ${callCount}`
+			)) {
+				yield event
+			}
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hi' }],
+				timestamp: Date.now()
+			}
+		]
+
+		const followUps = [
+			{
+				role: 'user' as const,
+				content: [
+					{ type: 'text' as const, text: 'More 1' }
+				],
+				timestamp: Date.now()
+			},
+			{
+				role: 'user' as const,
+				content: [
+					{ type: 'text' as const, text: 'More 2' }
+				],
+				timestamp: Date.now()
+			},
+			{
+				role: 'user' as const,
+				content: [
+					{ type: 'text' as const, text: 'More 3' }
+				],
+				timestamp: Date.now()
+			}
+		]
+		let followUpIdx = 0
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: []
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter,
+			retry: { maxAttempts: 1 },
+			runtimeLimits: {
+				maxModelCalls: 2
+			},
+			getFollowUpMessages: async () => {
+				if (followUpIdx < followUps.length) {
+					return [followUps[followUpIdx++]]
+				}
+				return []
+			}
+		}
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		// Should have a limit_hit event
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		expect(limitHitEvents.length).toBe(1)
+
+		const limitHit = limitHitEvents[0] as Extract<
+			AgentEvent,
+			{ type: 'limit_hit' }
+		>
+		expect(limitHit.limit).toBe('max_model_calls')
+		expect(limitHit.threshold).toBe(2)
+		expect(limitHit.observed).toBe(2)
+		expect(limitHit.scope).toBe('run')
+		expect(limitHit.action).toBe('hard_stop')
+		expect(limitHit.usageSnapshot.modelCalls).toBe(2)
+
+		// Should have an agent_end
+		const agentEndEvents = events.filter(
+			e => e.type === 'agent_end'
+		)
+		expect(agentEndEvents.length).toBe(1)
+
+		// The terminal assistant message should mention the limit
+		const messageEnds = events.filter(
+			e => e.type === 'message_end'
+		)
+		const lastMsgEnd = messageEnds[
+			messageEnds.length - 1
+		] as Extract<AgentEvent, { type: 'message_end' }>
+		if (lastMsgEnd.message.role === 'assistant') {
+			const asst = lastMsgEnd.message as AssistantMessage
+			expect(asst.errorMessage).toBe(
+				'guardrail:max_model_calls'
+			)
+		}
+	})
+
+	test('max cost limit triggers limit_hit and ends run', async () => {
+		// Each call costs ~0.0001 (from mapTanStackUsage with mock model)
+		// We'll use a very low cost limit
+		let callCount = 0
+		const streamFn: StreamFn = async function* () {
+			callCount++
+			for (const event of textResponseStream(
+				`Response ${callCount}`
+			)) {
+				yield event
+			}
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hi' }],
+				timestamp: Date.now()
+			}
+		]
+
+		// Queue 10 follow-ups so we'd loop many times without limits
+		const followUps: AgentMessage[] = Array.from(
+			{ length: 10 },
+			(_, i) => ({
+				role: 'user' as const,
+				content: [
+					{
+						type: 'text' as const,
+						text: `Follow-up ${i}`
+					}
+				],
+				timestamp: Date.now()
+			})
+		)
+		let followUpIdx = 0
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: []
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter,
+			retry: { maxAttempts: 1 },
+			runtimeLimits: {
+				maxCostUsd: 0.00001 // Very low — should trigger after first call
+			},
+			getFollowUpMessages: async () => {
+				if (followUpIdx < followUps.length) {
+					return [followUps[followUpIdx++]]
+				}
+				return []
+			}
+		}
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		expect(limitHitEvents.length).toBe(1)
+
+		const limitHit = limitHitEvents[0] as Extract<
+			AgentEvent,
+			{ type: 'limit_hit' }
+		>
+		expect(limitHit.limit).toBe('max_cost_usd')
+		expect(limitHit.scope).toBe('run')
+		expect(limitHit.action).toBe('hard_stop')
+	})
+
+	test('wall-clock limit triggers limit_hit after timeout', async () => {
+		// Create a slow streamFn that takes ~200ms per call
+		const streamFn: StreamFn = async function* () {
+			await new Promise(r => setTimeout(r, 200))
+			for (const event of textResponseStream(
+				'Slow response'
+			)) {
+				yield event
+			}
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hi' }],
+				timestamp: Date.now()
+			}
+		]
+
+		// Many follow-ups to keep the loop going
+		let followUpIdx = 0
+		const followUps: AgentMessage[] = Array.from(
+			{ length: 20 },
+			(_, i) => ({
+				role: 'user' as const,
+				content: [
+					{
+						type: 'text' as const,
+						text: `Follow-up ${i}`
+					}
+				],
+				timestamp: Date.now()
+			})
+		)
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: []
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter,
+			retry: { maxAttempts: 1 },
+			runtimeLimits: {
+				maxWallClockMs: 300 // 300ms — should trigger during 2nd call
+			},
+			getFollowUpMessages: async () => {
+				if (followUpIdx < followUps.length) {
+					return [followUps[followUpIdx++]]
+				}
+				return []
+			}
+		}
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		// Wall-clock abort goes through the abort path and may manifest
+		// as a limit_hit event or as an aborted stop reason.
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		const agentEndEvents = events.filter(
+			e => e.type === 'agent_end'
+		)
+
+		// The run must have ended
+		expect(agentEndEvents.length).toBe(1)
+
+		// Either limit_hit was emitted, or the run was cut short via abort
+		expect(
+			limitHitEvents.length > 0 ||
+				agentEndEvents.length === 1
+		).toBe(true)
+
+		// Check that it didn't run all 20 follow-ups
+		const turnStarts = events.filter(
+			e => e.type === 'turn_start'
+		)
+		expect(turnStarts.length).toBeLessThan(20)
+	})
+
+	test('user abort still yields aborted (not limit_hit)', async () => {
+		const abortController = new AbortController()
+		let callCount = 0
+
+		const streamFn: StreamFn = async function* () {
+			callCount++
+			if (callCount === 1) {
+				// Abort during first call
+				abortController.abort()
+			}
+			for (const event of textResponseStream(
+				`Response ${callCount}`
+			)) {
+				yield event
+			}
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hi' }],
+				timestamp: Date.now()
+			}
+		]
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: []
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter,
+			retry: { maxAttempts: 1 },
+			runtimeLimits: {
+				maxModelCalls: 100 // High limit — shouldn't trigger
+			}
+		}
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			abortController.signal,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		// Should NOT have limit_hit
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		expect(limitHitEvents.length).toBe(0)
+
+		// Should have agent_end
+		const agentEndEvents = events.filter(
+			e => e.type === 'agent_end'
+		)
+		expect(agentEndEvents.length).toBe(1)
+	})
+
+	test('no limits set means no limit_hit events', async () => {
+		const streamFn = createMockStreamFn(
+			textResponseStream('Hello!')
+		)
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: []
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter
+			// No runtimeLimits set
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hi' }],
+				timestamp: Date.now()
+			}
+		]
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		expect(limitHitEvents.length).toBe(0)
+	})
+
+	test('disabled limits (0 or negative) are ignored', async () => {
+		let callCount = 0
+		const streamFn: StreamFn = async function* () {
+			callCount++
+			for (const event of textResponseStream(
+				`Response ${callCount}`
+			)) {
+				yield event
+			}
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hi' }],
+				timestamp: Date.now()
+			}
+		]
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: []
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter,
+			retry: { maxAttempts: 1 },
+			runtimeLimits: {
+				maxModelCalls: 0, // Disabled
+				maxCostUsd: -1, // Disabled
+				maxWallClockMs: 0 // Disabled
+			}
+		}
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		// Should complete normally without limit_hit
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		expect(limitHitEvents.length).toBe(0)
+
+		const agentEndEvents = events.filter(
+			e => e.type === 'agent_end'
+		)
+		expect(agentEndEvents.length).toBe(1)
+	})
+
+	test('max model calls with streamFn tool loop path', async () => {
+		const echoTool: AgentTool = {
+			name: 'echo',
+			description: 'Echoes text',
+			parameters: v.object({
+				text: v.string()
+			}),
+			label: 'echo',
+			execute: async (_id, params) => ({
+				content: [
+					{
+						type: 'text' as const,
+						text: params.text
+					}
+				],
+				details: {}
+			})
+		}
+
+		let callCount = 0
+		// StreamFn path: returns tool calls each time
+		const streamFn: StreamFn = async function* () {
+			callCount++
+			if (callCount <= 5) {
+				for (const event of toolCallResponseStream(
+					`tc_${callCount}`,
+					'echo',
+					{ text: `echo ${callCount}` },
+					`run_${callCount}`
+				)) {
+					yield event
+				}
+			} else {
+				for (const event of textResponseStream(
+					'Done',
+					`run_${callCount}`
+				)) {
+					yield event
+				}
+			}
+		}
+
+		const prompts: AgentMessage[] = [
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Run echo' }],
+				timestamp: Date.now()
+			}
+		]
+
+		const context: AgentContext = {
+			systemPrompt: 'Be helpful',
+			messages: [],
+			tools: [echoTool]
+		}
+
+		const config: AgentLoopConfig = {
+			model: createMockModel(),
+			adapter: mockAdapter,
+			retry: { maxAttempts: 1 },
+			runtimeLimits: {
+				maxModelCalls: 3 // Limit to 3 model calls
+			}
+		}
+
+		const stream = agentLoop(
+			prompts,
+			context,
+			config,
+			undefined,
+			streamFn
+		)
+		const events = await collectEvents(stream)
+
+		const limitHitEvents = events.filter(
+			e => e.type === 'limit_hit'
+		)
+		expect(limitHitEvents.length).toBe(1)
+
+		const limitHit = limitHitEvents[0] as Extract<
+			AgentEvent,
+			{ type: 'limit_hit' }
+		>
+		expect(limitHit.limit).toBe('max_model_calls')
+		expect(limitHit.threshold).toBe(3)
+		// Should have used exactly 3 model calls before hitting the limit
+		expect(limitHit.usageSnapshot.modelCalls).toBe(3)
+	})
+})

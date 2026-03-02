@@ -25,6 +25,7 @@ import {
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
 import { AgentController } from './agent/controller'
+import { buildGuardrailPolicy } from './agent/guardrail-policy'
 import {
 	ensureBootstrapInjected,
 	isBootstrapInjected
@@ -233,10 +234,14 @@ async function getAgentController(): Promise<AgentController | null> {
 	if (cachedController !== undefined)
 		return cachedController
 	const adapter = await resolveAdapter()
+	const guardrails = buildGuardrailPolicy(env)
 	cachedController = adapter
 		? new AgentController(store, {
 				adapter,
-				workspaceDir
+				workspaceDir,
+				agentOptions: guardrails
+					? { guardrails }
+					: undefined
 			})
 		: null
 	return cachedController

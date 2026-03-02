@@ -135,6 +135,24 @@ export interface AgentContext {
 }
 
 // ============================================================================
+// Guardrail policy
+// ============================================================================
+
+export interface AgentRuntimeLimits {
+	/** Maximum wall-clock time in milliseconds. Disabled when unset, 0, or negative. */
+	maxWallClockMs?: number
+	/** Maximum model invocation attempts (including retries). Disabled when unset, 0, or negative. */
+	maxModelCalls?: number
+	/** Maximum accumulated USD cost for the run. Disabled when unset, 0, or negative. */
+	maxCostUsd?: number
+}
+
+export interface AgentGuardrailPolicy {
+	/** Runtime hard limits for a single run. */
+	runtimeLimits?: AgentRuntimeLimits
+}
+
+// ============================================================================
 // Stream events (assistant message streaming)
 // ============================================================================
 
@@ -225,6 +243,23 @@ export type AgentEvent =
 			toolName: string
 			message: string
 	  }
+	// --- Guardrail events ---
+	| {
+			type: 'limit_hit'
+			limit:
+				| 'max_wall_clock_ms'
+				| 'max_model_calls'
+				| 'max_cost_usd'
+			threshold: number
+			observed: number
+			usageSnapshot: {
+				elapsedMs: number
+				modelCalls: number
+				costUsd: number
+			}
+			scope: 'run'
+			action: 'hard_stop'
+	  }
 
 // ============================================================================
 // Stream function & loop config
@@ -295,4 +330,7 @@ export interface AgentLoopConfig {
 		historySize?: number
 		requireIdenticalResults?: boolean
 	}
+
+	/** Runtime hard limits for a single run (guardrail policy). */
+	runtimeLimits?: AgentRuntimeLimits
 }
