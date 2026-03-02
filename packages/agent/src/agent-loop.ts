@@ -701,6 +701,9 @@ async function runLoop(
 		}
 
 		// --- Guardrail check: before model call ---
+		// Increment model call count *before* the check so the limit is
+		// evaluated against the upcoming call, not the previous one.
+		guardrailState.modelCallCount++
 		const preLimitEvent = checkLimits(
 			guardrailState,
 			limits
@@ -868,6 +871,8 @@ async function runLoop(
 				if (effectiveSignal?.aborted) break
 
 				// --- Guardrail check: before re-call ---
+				// Increment before check so the limit catches the upcoming call
+				guardrailState.modelCallCount++
 				const reCallLimitEvent = checkLimits(
 					guardrailState,
 					limits
@@ -904,10 +909,11 @@ async function runLoop(
 			// Check if this was a wall-clock timeout (not user abort)
 			// User abort: the original signal is aborted
 			// Wall-clock timeout: the effective signal is aborted but the original isn't
+			const wallClockMs = limits?.maxWallClockMs
 			if (
 				result.lastAssistant.stopReason === 'aborted' &&
 				!guardrailState.limitTriggered &&
-				isLimitEnabled(limits?.maxWallClockMs) &&
+				isLimitEnabled(wallClockMs) &&
 				effectiveSignal?.aborted &&
 				!signal?.aborted
 			) {
@@ -917,7 +923,7 @@ async function runLoop(
 				const wallClockEvent: AgentEvent = {
 					type: 'limit_hit',
 					limit: 'max_wall_clock_ms',
-					threshold: limits!.maxWallClockMs!,
+					threshold: wallClockMs,
 					observed: elapsed,
 					usageSnapshot: {
 						elapsedMs: elapsed,
@@ -927,9 +933,8 @@ async function runLoop(
 					scope: 'run',
 					action: 'hard_stop'
 				}
-				// Use emitLimitHitAndStop for the terminal message sequence,
-				// but the turn_end/agent_end below handle the run closure
-				// since we need to use result.lastAssistant for turn_end.
+				// Emit limit_hit + terminal message + turn_end/agent_end and return,
+				// skipping the normal abort exit to avoid double agent_end/stream.end().
 				emitLimitHitAndStop(
 					wallClockEvent,
 					config,
@@ -1184,8 +1189,8 @@ async function processAgentStreamWithRetry(
 	const maxAttempts = retryConfig.maxAttempts ?? 3
 
 	// If retry is disabled (maxAttempts=1), call directly
+	// Note: the caller already incremented modelCallCount before calling us
 	if (maxAttempts <= 1) {
-		if (guardrailState) guardrailState.modelCallCount++
 		const directResult = await processAgentStream(
 			context,
 			config,
@@ -1204,10 +1209,16 @@ async function processAgentStreamWithRetry(
 
 	let lastResult: ProcessResult | undefined
 
+	let isFirstAttempt = true
+
 	const result = await withRetry(
 		async () => {
-			// Track model call attempt
-			if (guardrailState) guardrailState.modelCallCount++
+			// The first attempt was already counted by the caller.
+			// Only increment for retry attempts (2nd, 3rd, …).
+			if (guardrailState && !isFirstAttempt) {
+				guardrailState.modelCallCount++
+			}
+			isFirstAttempt = false
 
 			const processResult = await processAgentStream(
 				context,
