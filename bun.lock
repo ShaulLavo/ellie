@@ -260,6 +260,19 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/ptc": {
+      "name": "@ellie/ptc",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/agent": "workspace:*",
+        "@valibot/to-json-schema": "^1.5.0",
+        "valibot": "^1.2.0",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "typescript": "^5.0.0",
+      },
+    },
     "packages/schemas": {
       "name": "@ellie/schemas",
       "version": "0.1.0",
@@ -425,6 +438,8 @@
     "@ellie/hindsight": ["@ellie/hindsight@workspace:packages/hindsight"],
 
     "@ellie/hindsight-eval": ["@ellie/hindsight-eval@workspace:packages/hindsight-eval"],
+
+    "@ellie/ptc": ["@ellie/ptc@workspace:packages/ptc"],
 
     "@ellie/schemas": ["@ellie/schemas@workspace:packages/schemas"],
 
