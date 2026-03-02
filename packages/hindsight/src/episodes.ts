@@ -2,7 +2,7 @@
  * Episode management for temporal memory organization.
  */
 
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import {
 	eq,
 	sql,

@@ -6,7 +6,7 @@
  * Feature is optional and default-off.
  */
 
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { eq, and } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'

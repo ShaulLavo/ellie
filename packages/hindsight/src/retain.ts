@@ -1,5 +1,5 @@
 import { chat, streamToText } from '@ellie/ai'
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { createHash } from 'crypto'
 import { and, eq } from 'drizzle-orm'
 import type { AnyTextAdapter } from '@tanstack/ai'

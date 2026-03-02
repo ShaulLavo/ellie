@@ -13,7 +13,7 @@ import {
 	maxIterations,
 	toolDefinition
 } from '@ellie/ai'
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { eq, and, inArray } from 'drizzle-orm'
 import * as v from 'valibot'
 import type { AnyTextAdapter } from '@tanstack/ai'

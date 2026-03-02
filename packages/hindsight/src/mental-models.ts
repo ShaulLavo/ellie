@@ -6,7 +6,7 @@
  * mental models > observations > raw facts.
  */
 
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { eq, and } from 'drizzle-orm'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import type { HindsightDatabase } from './db'

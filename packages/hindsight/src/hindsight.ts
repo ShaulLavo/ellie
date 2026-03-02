@@ -1,4 +1,4 @@
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { eq, and, inArray } from 'drizzle-orm'
 import { groqChat } from '@ellie/ai/openai-compat'
 import type { AnyTextAdapter } from '@tanstack/ai'

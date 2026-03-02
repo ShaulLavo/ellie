@@ -22,7 +22,7 @@ import {
 	beforeEach,
 	afterEach
 } from 'bun:test'
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import {
 	createTestHindsight,
 	createTestBank,

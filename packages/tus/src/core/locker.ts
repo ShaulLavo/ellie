@@ -43,11 +43,19 @@ export class MemoryLocker implements Locker {
 }
 
 class MemoryLock implements Lock {
+	private id: string
+	private locker: MemoryLocker
+	private timeout: number
+
 	constructor(
-		private id: string,
-		private locker: MemoryLocker,
-		private timeout: number = 1000 * 30
-	) {}
+		id: string,
+		locker: MemoryLocker,
+		timeout: number = 1000 * 30
+	) {
+		this.id = id
+		this.locker = locker
+		this.timeout = timeout
+	}
 
 	async lock(
 		stopSignal: AbortSignal,

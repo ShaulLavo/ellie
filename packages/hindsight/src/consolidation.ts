@@ -14,7 +14,7 @@
  */
 
 import { chat, streamToText } from '@ellie/ai'
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import * as v from 'valibot'
 import type { AnyTextAdapter } from '@tanstack/ai'

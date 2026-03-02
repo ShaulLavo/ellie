@@ -2,8 +2,7 @@ type RingBufferProxy<T> = RingBuffer<T> & {
 	[index: number]: T | undefined
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Proxy handler must work with any RingBuffer<T>
-const handler: ProxyHandler<RingBuffer<any>> = {
+const handler: ProxyHandler<RingBuffer<unknown>> = {
 	get(target, prop, receiver) {
 		if (typeof prop === 'string' && prop !== '') {
 			const n = Number(prop)

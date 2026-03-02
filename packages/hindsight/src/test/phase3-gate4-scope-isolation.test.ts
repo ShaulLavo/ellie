@@ -33,7 +33,7 @@ import {
 	type Scope
 } from '../scope'
 import { locationRecord, locationFind } from '../location'
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 
 function insertTestMemory(
 	hdb: HindsightDatabase,

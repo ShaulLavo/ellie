@@ -5,7 +5,7 @@
  * path association strength, and query-signal detection.
  */
 
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import {
 	and,
 	or,

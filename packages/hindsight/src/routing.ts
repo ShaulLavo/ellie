@@ -7,7 +7,7 @@
  * - new_trace:     low similarity or no candidate → normal insert
  */
 
-import { ulid } from '@ellie/utils'
+import { ulid } from 'fast-ulid'
 import { eq, sql } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
