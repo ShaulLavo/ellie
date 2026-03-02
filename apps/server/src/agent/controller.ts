@@ -641,7 +641,7 @@ export class AgentController {
 			case 'retry':
 				return [
 					{
-						type: 'retry' as EventType,
+						type: 'retry',
 						payload: {
 							attempt: event.attempt,
 							maxAttempts: event.maxAttempts,
@@ -654,7 +654,7 @@ export class AgentController {
 			case 'context_compacted':
 				return [
 					{
-						type: 'context_compacted' as EventType,
+						type: 'context_compacted',
 						payload: {
 							removedCount: event.removedCount,
 							remainingCount: event.remainingCount,
@@ -666,7 +666,7 @@ export class AgentController {
 			case 'tool_loop_detected':
 				return [
 					{
-						type: 'tool_loop_detected' as EventType,
+						type: 'tool_loop_detected',
 						payload: {
 							pattern: event.pattern,
 							toolName: event.toolName,
@@ -678,7 +678,7 @@ export class AgentController {
 			case 'limit_hit':
 				return [
 					{
-						type: 'limit_hit' as EventType,
+						type: 'limit_hit',
 						payload: {
 							limit: event.limit,
 							threshold: event.threshold,

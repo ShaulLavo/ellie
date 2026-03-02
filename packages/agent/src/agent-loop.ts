@@ -180,13 +180,12 @@ function buildGuardrailSignal(
 	signal: AbortSignal | undefined
 	cleanup?: () => void
 } {
-	if (!isLimitEnabled(limits?.maxWallClockMs)) {
+	const wallClockMs = limits?.maxWallClockMs
+	if (!isLimitEnabled(wallClockMs)) {
 		return { signal: externalSignal }
 	}
 
-	const timeoutSignal = AbortSignal.timeout(
-		limits!.maxWallClockMs!
-	)
+	const timeoutSignal = AbortSignal.timeout(wallClockMs)
 	if (externalSignal) {
 		return {
 			signal: AbortSignal.any([
@@ -207,11 +206,46 @@ function extractLastAssistantText(
 		if (msg.role === 'assistant') {
 			return (msg as AssistantMessage).content
 				.filter(c => c.type === 'text')
-				.map(c => ('text' in c ? c.text : ''))
+				.map(c => c.text)
 				.join('')
 		}
 	}
 	return undefined
+}
+
+/**
+ * Emit a limit_hit event, build a terminal assistant message, and end the run.
+ * Centralises the exit sequence so every guardrail checkpoint uses the same path.
+ */
+function emitLimitHitAndStop(
+	limitEvent: AgentEvent,
+	config: AgentLoopConfig,
+	currentContext: AgentContext,
+	newMessages: AgentMessage[],
+	emit: EmitFn,
+	stream: EventStream<AgentEvent, AgentMessage[]>
+): void {
+	emit(limitEvent)
+	const lastText = extractLastAssistantText(newMessages)
+	const termMsg = buildLimitTerminalMessage(
+		limitEvent as Extract<
+			AgentEvent,
+			{ type: 'limit_hit' }
+		>,
+		config,
+		lastText
+	)
+	emit({ type: 'message_start', message: termMsg })
+	emit({ type: 'message_end', message: termMsg })
+	currentContext.messages.push(termMsg)
+	newMessages.push(termMsg)
+	emit({
+		type: 'turn_end',
+		message: termMsg,
+		toolResults: []
+	})
+	emit({ type: 'agent_end', messages: newMessages })
+	stream.end(newMessages)
 }
 
 /**
@@ -672,27 +706,14 @@ async function runLoop(
 			limits
 		)
 		if (preLimitEvent) {
-			emit(preLimitEvent)
-			const lastText = extractLastAssistantText(newMessages)
-			const termMsg = buildLimitTerminalMessage(
-				preLimitEvent as Extract<
-					AgentEvent,
-					{ type: 'limit_hit' }
-				>,
+			emitLimitHitAndStop(
+				preLimitEvent,
 				config,
-				lastText
+				currentContext,
+				newMessages,
+				emit,
+				stream
 			)
-			emit({ type: 'message_start', message: termMsg })
-			emit({ type: 'message_end', message: termMsg })
-			currentContext.messages.push(termMsg)
-			newMessages.push(termMsg)
-			emit({
-				type: 'turn_end',
-				message: termMsg,
-				toolResults: []
-			})
-			emit({ type: 'agent_end', messages: newMessages })
-			stream.end(newMessages)
 			return
 		}
 
@@ -728,28 +749,14 @@ async function runLoop(
 				limits
 			)
 			if (postLimitEvent) {
-				emit(postLimitEvent)
-				const lastText =
-					extractLastAssistantText(newMessages)
-				const termMsg = buildLimitTerminalMessage(
-					postLimitEvent as Extract<
-						AgentEvent,
-						{ type: 'limit_hit' }
-					>,
+				emitLimitHitAndStop(
+					postLimitEvent,
 					config,
-					lastText
+					currentContext,
+					newMessages,
+					emit,
+					stream
 				)
-				emit({ type: 'message_start', message: termMsg })
-				emit({ type: 'message_end', message: termMsg })
-				currentContext.messages.push(termMsg)
-				newMessages.push(termMsg)
-				emit({
-					type: 'turn_end',
-					message: termMsg,
-					toolResults: []
-				})
-				emit({ type: 'agent_end', messages: newMessages })
-				stream.end(newMessages)
 				return
 			}
 		}
@@ -771,28 +778,14 @@ async function runLoop(
 					limits
 				)
 				if (toolIterLimitEvent) {
-					emit(toolIterLimitEvent)
-					const lastText =
-						extractLastAssistantText(newMessages)
-					const termMsg = buildLimitTerminalMessage(
-						toolIterLimitEvent as Extract<
-							AgentEvent,
-							{ type: 'limit_hit' }
-						>,
+					emitLimitHitAndStop(
+						toolIterLimitEvent,
 						config,
-						lastText
+						currentContext,
+						newMessages,
+						emit,
+						stream
 					)
-					emit({ type: 'message_start', message: termMsg })
-					emit({ type: 'message_end', message: termMsg })
-					currentContext.messages.push(termMsg)
-					newMessages.push(termMsg)
-					emit({
-						type: 'turn_end',
-						message: termMsg,
-						toolResults: []
-					})
-					emit({ type: 'agent_end', messages: newMessages })
-					stream.end(newMessages)
 					return
 				}
 
@@ -880,28 +873,14 @@ async function runLoop(
 					limits
 				)
 				if (reCallLimitEvent) {
-					emit(reCallLimitEvent)
-					const lastText =
-						extractLastAssistantText(newMessages)
-					const termMsg = buildLimitTerminalMessage(
-						reCallLimitEvent as Extract<
-							AgentEvent,
-							{ type: 'limit_hit' }
-						>,
+					emitLimitHitAndStop(
+						reCallLimitEvent,
 						config,
-						lastText
+						currentContext,
+						newMessages,
+						emit,
+						stream
 					)
-					emit({ type: 'message_start', message: termMsg })
-					emit({ type: 'message_end', message: termMsg })
-					currentContext.messages.push(termMsg)
-					newMessages.push(termMsg)
-					emit({
-						type: 'turn_end',
-						message: termMsg,
-						toolResults: []
-					})
-					emit({ type: 'agent_end', messages: newMessages })
-					stream.end(newMessages)
 					return
 				}
 
@@ -948,21 +927,18 @@ async function runLoop(
 					scope: 'run',
 					action: 'hard_stop'
 				}
-				emit(wallClockEvent)
-				const lastText =
-					extractLastAssistantText(newMessages)
-				const termMsg = buildLimitTerminalMessage(
-					wallClockEvent as Extract<
-						AgentEvent,
-						{ type: 'limit_hit' }
-					>,
+				// Use emitLimitHitAndStop for the terminal message sequence,
+				// but the turn_end/agent_end below handle the run closure
+				// since we need to use result.lastAssistant for turn_end.
+				emitLimitHitAndStop(
+					wallClockEvent,
 					config,
-					lastText
+					currentContext,
+					newMessages,
+					emit,
+					stream
 				)
-				emit({ type: 'message_start', message: termMsg })
-				emit({ type: 'message_end', message: termMsg })
-				currentContext.messages.push(termMsg)
-				newMessages.push(termMsg)
+				return
 			}
 			emit({
 				type: 'turn_end',
@@ -1218,6 +1194,7 @@ async function processAgentStreamWithRetry(
 			streamFn,
 			loopDetector
 		)
+		// Cost-based limit is best-effort: providers that don't report cost will never trigger it
 		if (guardrailState) {
 			guardrailState.costUsd +=
 				directResult.lastAssistant.usage?.cost?.total ?? 0
