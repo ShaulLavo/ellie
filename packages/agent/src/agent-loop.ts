@@ -1381,7 +1381,7 @@ async function processAgentStreamWithRetry(
 		errorPartial.stopReason = 'error'
 		errorPartial.errorMessage = errorMessage
 		return {
-			messages: [errorPartial] as AgentMessage[],
+			messages: [] as AgentMessage[],
 			toolResults: [] as ToolResultMessage[],
 			lastAssistant: errorPartial,
 			abortedOrError: true
