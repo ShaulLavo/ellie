@@ -6,7 +6,7 @@
  * session process.
  *
  * Context contract:
- *   - Only output from print()/commit() enters the model context.
+ *   - Only output from print() enters the model context.
  *   - Raw stdout/stderr is stored as artifacts, NOT injected into
  *     the conversation transcript.
  *   - This prevents context bloat from verbose execution output.
@@ -29,7 +29,7 @@ const sessionExecParams = v.object({
 	code: v.pipe(
 		v.string(),
 		v.description(
-			'TypeScript code to execute in the persistent REPL session. Variables, imports, and functions persist across calls. Use print() or commit() to send output to the conversation — raw console.log() output is stored as artifacts but does NOT appear in conversation context.'
+			'TypeScript code to execute in the persistent REPL session. Variables, imports, and functions persist across calls. Use print() to send output to the conversation — raw console.log() output is stored as artifacts but does NOT appear in conversation context.'
 		)
 	),
 	timeoutMs: v.optional(
@@ -66,7 +66,7 @@ export function createSessionExecTool(
 	return {
 		name: 'session_exec',
 		description:
-			'Execute TypeScript code in a persistent REPL session. Variables, imports, and function definitions persist across calls. Use print() or commit() to send output to the conversation — only committed output appears in tool results. Raw stdout/stderr is stored as artifacts for later inspection. Use this for iterative workflows where you need to build up state across multiple steps.',
+			'Execute TypeScript code in a persistent REPL session. Variables, imports, and function definitions persist across calls. Use print() to send output to the conversation — only printed output appears in tool results. Raw stdout/stderr is stored as artifacts for later inspection. Use this for iterative workflows where you need to build up state across multiple steps.',
 		label: 'Running session code',
 		parameters: sessionExecParams,
 		execute: async (
@@ -90,7 +90,9 @@ export function createSessionExecTool(
 
 				// Lazy-start the REPL on first call (or after teardown)
 				if (!runtime || !runtime.alive) {
-					runtime = new ReplRuntime()
+					runtime = new ReplRuntime(
+						currentSessionId ?? undefined
+					)
 					await runtime.start()
 					boundSessionId = currentSessionId
 				}

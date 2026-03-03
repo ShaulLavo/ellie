@@ -10,6 +10,7 @@ import {
 	mkdir,
 	readFile,
 	writeFile,
+	rename,
 	unlink,
 	access
 } from 'fs/promises'
@@ -36,6 +37,16 @@ export interface Snapshot {
 
 const SNAPSHOT_VERSION = 1
 
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function isEnoent(err: unknown): boolean {
+	return (
+		err !== null &&
+		typeof err === 'object' &&
+		(err as NodeJS.ErrnoException).code === 'ENOENT'
+	)
+}
+
 // ── Snapshot Store ──────────────────────────────────────────────────────
 
 export class SnapshotStore {
@@ -50,7 +61,7 @@ export class SnapshotStore {
 	}
 
 	/**
-	 * Save a snapshot of REPL state.
+	 * Save a snapshot of REPL state (atomic write via temp + rename).
 	 */
 	async save(
 		sessionId: string,
@@ -70,8 +81,24 @@ export class SnapshotStore {
 
 		const snapshot: Snapshot = { metadata, globals }
 		const path = this.#snapshotPath(sessionId)
+		const tmpPath = `${path}.tmp-${process.pid}`
 
-		await writeFile(path, JSON.stringify(snapshot), 'utf-8')
+		try {
+			await writeFile(
+				tmpPath,
+				JSON.stringify(snapshot),
+				'utf-8'
+			)
+			await rename(tmpPath, path)
+		} catch (err) {
+			// Clean up temp file on failure
+			try {
+				await unlink(tmpPath)
+			} catch {
+				// Best-effort cleanup
+			}
+			throw err
+		}
 
 		return metadata
 	}
@@ -93,14 +120,15 @@ export class SnapshotStore {
 		await this.#ready
 		const path = this.#snapshotPath(sessionId)
 
+		let raw: string
 		try {
-			await access(path)
-		} catch {
-			return null
+			raw = await readFile(path, 'utf-8')
+		} catch (err) {
+			if (isEnoent(err)) return null
+			throw err
 		}
 
 		try {
-			const raw = await readFile(path, 'utf-8')
 			const snapshot = JSON.parse(raw) as Snapshot
 
 			// Version check
@@ -134,7 +162,7 @@ export class SnapshotStore {
 			return snapshot
 		} catch (err) {
 			console.error(
-				`[snapshot-store] failed to restore snapshot for session=${sessionId}:`,
+				`[snapshot-store] failed to parse snapshot for session=${sessionId}:`,
 				err instanceof Error ? err.message : String(err)
 			)
 			return null
@@ -142,28 +170,29 @@ export class SnapshotStore {
 	}
 
 	/**
-	 * Delete a snapshot.
+	 * Delete a snapshot. Ignores missing files, propagates other errors.
 	 */
 	async delete(sessionId: string): Promise<void> {
 		await this.#ready
 		const path = this.#snapshotPath(sessionId)
 		try {
 			await unlink(path)
-		} catch {
-			// File doesn't exist — no-op
+		} catch (err) {
+			if (!isEnoent(err)) throw err
 		}
 	}
 
 	/**
-	 * Check if a snapshot exists.
+	 * Check if a snapshot exists. Propagates non-ENOENT errors.
 	 */
 	async has(sessionId: string): Promise<boolean> {
 		await this.#ready
 		try {
 			await access(this.#snapshotPath(sessionId))
 			return true
-		} catch {
-			return false
+		} catch (err) {
+			if (isEnoent(err)) return false
+			throw err
 		}
 	}
 

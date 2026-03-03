@@ -83,7 +83,6 @@ globalThis.print = (...args) => {
   globalThis.${COMMIT_MARKER}.push(text);
   console.log(text);
 };
-globalThis.commit = globalThis.print;
 undefined;
 `
 		await this.#rawEval(bootstrap, 5_000)
@@ -92,7 +91,7 @@ undefined;
 	/**
 	 * Evaluate code in the persistent REPL.
 	 *
-	 * Only output from `print()`/`commit()` calls enters the committed
+	 * Only output from `print()` calls enters the committed
 	 * result. Raw stdout/stderr is captured separately as artifacts.
 	 */
 	async evaluate(
@@ -225,6 +224,7 @@ ${code}
 		const decoder = new TextDecoder()
 		let buffer = ''
 		let sawSentinel = false
+		let streamEnded = false
 		const deadline = Date.now() + timeoutMs
 
 		try {
@@ -248,7 +248,7 @@ ${code}
 				])
 
 				if (result.done && !result.value) {
-					// Timeout
+					// Timeout (setTimeout fired)
 					break
 				}
 
@@ -266,16 +266,27 @@ ${code}
 					break
 				}
 
-				if (result.done) break
+				if (result.done) {
+					streamEnded = true
+					break
+				}
 			}
 		} finally {
 			reader.releaseLock()
 		}
 
-		if (!sawSentinel && Date.now() >= deadline) {
-			throw new Error(
-				`REPL evaluation timed out after ${timeoutMs}ms`
-			)
+		if (!sawSentinel) {
+			if (streamEnded) {
+				this.#alive = false
+				throw new Error(
+					'REPL process exited unexpectedly'
+				)
+			}
+			if (Date.now() >= deadline) {
+				throw new Error(
+					`REPL evaluation timed out after ${timeoutMs}ms`
+				)
+			}
 		}
 
 		return buffer.trim()

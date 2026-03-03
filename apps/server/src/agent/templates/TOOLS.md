@@ -32,7 +32,7 @@ For simple, single-step operations — use them directly:
 
 Run TypeScript in a **sandboxed Bun process**. Ephemeral — no state persists between calls. Use it when a task needs loops, conditionals, or chaining multiple tool calls in a single bounded script.
 
-- Your other tools are available as async functions
+- Direct tools (`read_workspace_file`, `write_workspace_file`, `shell`, `ripgrep`) are available as async functions
 - Use `console.log()` to return output
 - You can `import` any npm package — Bun auto-installs on first use
 
@@ -50,7 +50,7 @@ console.log(format(new Date(), 'yyyy-MM-dd'), memory)
 
 Execute TypeScript in a **persistent REPL session**. Variables, imports, and function definitions survive across consecutive calls.
 
-- Use `print()` or `commit()` to send output to the conversation
+- Use `print()` to send output to the conversation
 - Raw `console.log()` output is stored as artifacts but does NOT appear in conversation context
 - State persists across calls within the same session
 

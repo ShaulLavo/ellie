@@ -497,7 +497,7 @@ export class AgentController {
 				sessionId,
 				'message_update',
 				{ streamEvent: event.streamEvent },
-				this.agent.runId ?? undefined
+				runId ?? undefined
 			)
 			return
 		}
