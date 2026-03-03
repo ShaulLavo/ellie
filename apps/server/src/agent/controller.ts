@@ -34,6 +34,7 @@ import type {
 import { buildSystemPrompt } from './system-prompt'
 import type { MemoryOrchestrator } from './memory-orchestrator'
 import { createToolRegistry } from './tools/capability-registry'
+import { createMemoryAppendDailyTool } from './tools/memory-daily'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,8 @@ export class AgentController {
 	private options: AgentControllerOptions
 	private memory: MemoryOrchestrator | null
 	private baseSystemPrompt: string
+	/** Set of runIds that are enforcement turns (skip re-enforcement) */
+	private enforcementRunIds = new Set<string>()
 
 	/** Global lock — serialises all routing decisions */
 	private lock: Promise<void> = Promise.resolve()
@@ -93,6 +96,9 @@ export class AgentController {
 			dataDir: options.dataDir,
 			getSessionId: () => this.boundSessionId
 		})
+		const memoryTool = createMemoryAppendDailyTool(
+			options.workspaceDir
+		)
 
 		this.agent = new Agent({
 			...options.agentOptions,
@@ -100,7 +106,7 @@ export class AgentController {
 			initialState: {
 				...options.agentOptions?.initialState,
 				systemPrompt,
-				tools: registry.all
+				tools: [...registry.all, memoryTool]
 			},
 			onEvent: event => this.handleEvent(event)
 		})
@@ -452,15 +458,15 @@ export class AgentController {
 		sessionId: string,
 		runId: string,
 		force?: boolean
-	): Promise<void> {
-		if (!this.memory) return
+	): Promise<number> {
+		if (!this.memory) return 0
 
 		try {
 			const result = await this.memory.evaluateRetain(
 				sessionId,
 				force
 			)
-			if (!result) return
+			if (!result) return 0
 
 			// Emit memory_retain event
 			this.store.appendEvent(
@@ -469,13 +475,85 @@ export class AgentController {
 				result as unknown as Record<string, unknown>,
 				runId
 			)
+
+			return result.parts[0]?.factsStored ?? 0
 		} catch (err) {
 			console.error(
 				`[agent-controller] memory retain failed session=${sessionId}:`,
 				err instanceof Error ? err.message : String(err)
 			)
 			// Retain failure is non-fatal — cursor stays put for next attempt
+			return 0
 		}
+	}
+
+	/**
+	 * Run retain and enforce daily memory write if retain found facts
+	 * but the agent didn't call memory_append_daily during this run.
+	 */
+	private async runRetainAndEnforce(
+		sessionId: string,
+		runId: string
+	): Promise<void> {
+		const factsStored = await this.runRetain(
+			sessionId,
+			runId
+		)
+		if (factsStored === 0) return
+
+		// Check if the run contained a memory_append_daily call
+		const runEvents = this.store.queryRunEvents(
+			sessionId,
+			runId
+		)
+
+		const hadDailyWrite = runEvents.some(e => {
+			if (
+				e.type !== 'tool_call' &&
+				e.type !== 'tool_execution_start' &&
+				e.type !== 'tool_execution_end'
+			)
+				return false
+			try {
+				const parsed = JSON.parse(e.payload)
+				return (
+					parsed.toolName === 'memory_append_daily' ||
+					parsed.name === 'memory_append_daily'
+				)
+			} catch {
+				return false
+			}
+		})
+
+		if (hadDailyWrite) return
+
+		// Enforcement: trigger a silent follow-up turn
+		console.log(
+			`[agent-controller] enforcement: retain stored ${factsStored} facts but no memory_append_daily call in run=${runId}, triggering silent memory-flush turn`
+		)
+
+		await this.withLock(async () => {
+			if (this.agent.state.isStreaming) return
+			if (this.boundSessionId !== sessionId) return
+
+			const enforcementRunId = ulid()
+			this.enforcementRunIds.add(enforcementRunId)
+			this.agent.runId = enforcementRunId
+
+			this.agent
+				.prompt(
+					'[SYSTEM] The retain pipeline just stored new facts from this conversation. ' +
+						'You MUST call memory_append_daily now to persist any durable facts ' +
+						'to daily memory. If there is nothing meaningful to persist, ' +
+						'respond with exactly NO_REPLY and nothing else.'
+				)
+				.catch(err => {
+					console.error(
+						`[agent-controller] enforcement turn FAILED session=${sessionId}:`,
+						err instanceof Error ? err.message : String(err)
+					)
+				})
+		})
 	}
 
 	// ── Internal: event persistence ──────────────────────────────────────────
@@ -546,13 +624,31 @@ export class AgentController {
 				// Already closed — non-fatal
 			}
 
-			// Trigger memory retain (non-blocking, fire-and-forget)
-			this.runRetain(sessionId, runId).catch(err => {
-				console.error(
-					`[agent-controller] post-run retain error session=${sessionId}:`,
-					err instanceof Error ? err.message : String(err)
+			// Trigger memory retain, then check for missed daily writes
+			// Skip enforcement for enforcement runs to avoid infinite loops
+			const isEnforcementRun =
+				this.enforcementRunIds.has(runId)
+			if (isEnforcementRun) {
+				this.enforcementRunIds.delete(runId)
+				// Still run retain but skip enforcement check
+				this.runRetain(sessionId, runId).catch(err => {
+					console.error(
+						`[agent-controller] post-enforcement retain error session=${sessionId}:`,
+						err instanceof Error ? err.message : String(err)
+					)
+				})
+			} else {
+				this.runRetainAndEnforce(sessionId, runId).catch(
+					err => {
+						console.error(
+							`[agent-controller] post-run retain+enforce error session=${sessionId}:`,
+							err instanceof Error
+								? err.message
+								: String(err)
+						)
+					}
 				)
-			})
+			}
 
 			// Reset system prompt to base (strip recall context from this run)
 			this.agent.state.systemPrompt = this.baseSystemPrompt
