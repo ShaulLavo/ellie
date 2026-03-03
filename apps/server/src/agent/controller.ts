@@ -28,6 +28,8 @@ import type {
 } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
 import { createPtcTool } from './tools/ptc'
+import { createRipgrepTool } from './tools/ripgrep-tool'
+import { createShellTool } from './tools/shell-tool'
 import { createWorkspaceTools } from './tools/workspace-tools'
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -75,9 +77,11 @@ export class AgentController {
 		const systemPrompt = buildSystemPrompt(
 			options.workspaceDir
 		)
-		const baseTools = createWorkspaceTools(
-			options.workspaceDir
-		)
+		const baseTools = [
+			...createWorkspaceTools(options.workspaceDir),
+			createShellTool(options.workspaceDir),
+			createRipgrepTool(options.workspaceDir)
+		]
 		const tools = [...baseTools, createPtcTool(baseTools)]
 
 		this.agent = new Agent({
