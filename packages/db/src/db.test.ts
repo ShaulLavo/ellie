@@ -929,4 +929,94 @@ describe('EventStore', () => {
 			expect(store.getKv('persist')).toBe('yes')
 		})
 	})
+
+	// ── Guardrail events ─────────────────────────────────────────────────
+
+	describe('limit_hit event', () => {
+		it('appends and queries a limit_hit event', () => {
+			const session = store.createSession()
+			const payload = {
+				limit: 'max_model_calls' as const,
+				threshold: 50,
+				observed: 50,
+				usageSnapshot: {
+					elapsedMs: 12345,
+					modelCalls: 50,
+					costUsd: 1.23
+				},
+				scope: 'run' as const,
+				action: 'hard_stop' as const
+			}
+
+			const event = store.append({
+				sessionId: session.id,
+				type: 'limit_hit',
+				payload,
+				runId: 'run_1'
+			})
+
+			expect(event.type).toBe('limit_hit')
+
+			const parsed = JSON.parse(event.payload)
+			expect(parsed.limit).toBe('max_model_calls')
+			expect(parsed.threshold).toBe(50)
+			expect(parsed.observed).toBe(50)
+			expect(parsed.usageSnapshot.elapsedMs).toBe(12345)
+			expect(parsed.usageSnapshot.modelCalls).toBe(50)
+			expect(parsed.usageSnapshot.costUsd).toBe(1.23)
+			expect(parsed.scope).toBe('run')
+			expect(parsed.action).toBe('hard_stop')
+		})
+
+		it('queries limit_hit by type filter', () => {
+			const session = store.createSession()
+
+			store.append({
+				sessionId: session.id,
+				type: 'agent_start',
+				payload: {}
+			})
+
+			store.append({
+				sessionId: session.id,
+				type: 'limit_hit',
+				payload: {
+					limit: 'max_cost_usd',
+					threshold: 5.0,
+					observed: 5.12,
+					usageSnapshot: {
+						elapsedMs: 30000,
+						modelCalls: 8,
+						costUsd: 5.12
+					},
+					scope: 'run',
+					action: 'hard_stop'
+				}
+			})
+
+			const results = store.query({
+				sessionId: session.id,
+				types: ['limit_hit']
+			})
+
+			expect(results.length).toBe(1)
+			expect(results[0]!.type).toBe('limit_hit')
+		})
+
+		it('rejects invalid limit_hit payload', () => {
+			const session = store.createSession()
+
+			expect(() =>
+				store.append({
+					sessionId: session.id,
+					type: 'limit_hit',
+					payload: {
+						limit: 'invalid_limit',
+						threshold: 50,
+						observed: 50
+					}
+				})
+			).toThrow()
+		})
+	})
 })

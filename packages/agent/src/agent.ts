@@ -15,6 +15,7 @@ import { agentLoop, agentLoopContinue } from './agent-loop'
 import type {
 	AgentContext,
 	AgentEvent,
+	AgentGuardrailPolicy,
 	AgentLoopConfig,
 	AgentMessage,
 	AgentState,
@@ -51,6 +52,9 @@ export interface AgentOptions {
 
 	/** Called for each AgentEvent alongside EventStream.push(). Use for durable persistence. */
 	onEvent?: (event: AgentEvent) => void
+
+	/** Guardrail policy with runtime limits. */
+	guardrails?: AgentGuardrailPolicy
 }
 
 export class Agent {
@@ -68,6 +72,7 @@ export class Agent {
 	private followUpQueueIdx = 0
 	private steeringMode: 'all' | 'one-at-a-time'
 	private followUpMode: 'all' | 'one-at-a-time'
+	private guardrails?: AgentGuardrailPolicy
 	public streamFn?: StreamFn
 	public adapter?: AnyTextAdapter
 	public onEvent?: (event: AgentEvent) => void
@@ -104,6 +109,7 @@ export class Agent {
 		this.streamFn = opts.streamFn
 		this.adapter = opts.adapter
 		this.onEvent = opts.onEvent
+		this.guardrails = opts.guardrails
 	}
 
 	get state(): AgentState {
@@ -406,7 +412,8 @@ export class Agent {
 			},
 			getFollowUpMessages: async () =>
 				this.dequeueFollowUpMessages(),
-			onEvent: this.onEvent
+			onEvent: this.onEvent,
+			runtimeLimits: this.guardrails?.runtimeLimits
 		}
 
 		let partial: AgentMessage | null = null

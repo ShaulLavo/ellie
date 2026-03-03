@@ -56,7 +56,9 @@ const EVENT_TYPES = [
 	// Resilience events
 	'retry',
 	'context_compacted',
-	'tool_loop_detected'
+	'tool_loop_detected',
+	// Guardrail events
+	'limit_hit'
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]
@@ -202,6 +204,23 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		pattern: v.string(),
 		toolName: v.string(),
 		message: v.string()
+	}),
+	// Guardrail events
+	limit_hit: v.object({
+		limit: v.picklist([
+			'max_wall_clock_ms',
+			'max_model_calls',
+			'max_cost_usd'
+		]),
+		threshold: v.number(),
+		observed: v.number(),
+		usageSnapshot: v.object({
+			elapsedMs: v.number(),
+			modelCalls: v.number(),
+			costUsd: v.number()
+		}),
+		scope: v.literal('run'),
+		action: v.literal('hard_stop')
 	})
 }
 

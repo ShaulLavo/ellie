@@ -642,6 +642,58 @@ export class AgentController {
 				]
 			}
 
+			case 'retry':
+				return [
+					{
+						type: 'retry',
+						payload: {
+							attempt: event.attempt,
+							maxAttempts: event.maxAttempts,
+							reason: event.reason,
+							delayMs: event.delayMs
+						}
+					}
+				]
+
+			case 'context_compacted':
+				return [
+					{
+						type: 'context_compacted',
+						payload: {
+							removedCount: event.removedCount,
+							remainingCount: event.remainingCount,
+							estimatedTokens: event.estimatedTokens
+						}
+					}
+				]
+
+			case 'tool_loop_detected':
+				return [
+					{
+						type: 'tool_loop_detected',
+						payload: {
+							pattern: event.pattern,
+							toolName: event.toolName,
+							message: event.message
+						}
+					}
+				]
+
+			case 'limit_hit':
+				return [
+					{
+						type: 'limit_hit',
+						payload: {
+							limit: event.limit,
+							threshold: event.threshold,
+							observed: event.observed,
+							usageSnapshot: event.usageSnapshot,
+							scope: event.scope,
+							action: event.action
+						}
+					}
+				]
+
 			default:
 				return []
 		}

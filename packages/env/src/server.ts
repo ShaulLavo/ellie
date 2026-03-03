@@ -45,7 +45,16 @@ const ServerEnvSchema = v.object({
 	/** Python parity fallback for embedding TEI URL. */
 	HINDSIGHT_API_EMBEDDINGS_TEI_URL: v.optional(v.string()),
 	/** Python parity fallback for reranker TEI URL. */
-	HINDSIGHT_API_RERANKER_TEI_URL: v.optional(v.string())
+	HINDSIGHT_API_RERANKER_TEI_URL: v.optional(v.string()),
+
+	// ── Agent guardrail limits (disabled when unset, empty, 0, or negative) ──
+
+	/** Maximum wall-clock time per agent run in milliseconds. */
+	AGENT_LIMIT_MAX_WALL_CLOCK_MS: v.optional(v.string()),
+	/** Maximum model invocation attempts (including retries) per agent run. */
+	AGENT_LIMIT_MAX_MODEL_CALLS: v.optional(v.string()),
+	/** Maximum accumulated USD cost per agent run. */
+	AGENT_LIMIT_MAX_COST_USD: v.optional(v.string())
 })
 
 // ============================================================================
@@ -82,5 +91,10 @@ export const env: ServerEnv = v.parse(ServerEnvSchema, {
 	HINDSIGHT_API_EMBEDDINGS_TEI_URL:
 		Bun.env.HINDSIGHT_API_EMBEDDINGS_TEI_URL,
 	HINDSIGHT_API_RERANKER_TEI_URL:
-		Bun.env.HINDSIGHT_API_RERANKER_TEI_URL
+		Bun.env.HINDSIGHT_API_RERANKER_TEI_URL,
+	AGENT_LIMIT_MAX_WALL_CLOCK_MS:
+		Bun.env.AGENT_LIMIT_MAX_WALL_CLOCK_MS,
+	AGENT_LIMIT_MAX_MODEL_CALLS:
+		Bun.env.AGENT_LIMIT_MAX_MODEL_CALLS,
+	AGENT_LIMIT_MAX_COST_USD: Bun.env.AGENT_LIMIT_MAX_COST_USD
 })

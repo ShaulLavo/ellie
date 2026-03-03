@@ -306,6 +306,52 @@ const toolExecutionEndEventSchema = v.object({
 	isError: v.boolean()
 })
 
+// --- Resilience event schemas ---
+
+const retryEventSchema = v.object({
+	type: v.literal('retry'),
+	attempt: v.number(),
+	maxAttempts: v.number(),
+	reason: v.string(),
+	delayMs: v.number()
+})
+
+const contextCompactedEventSchema = v.object({
+	type: v.literal('context_compacted'),
+	removedCount: v.number(),
+	remainingCount: v.number(),
+	estimatedTokens: v.number()
+})
+
+const toolLoopDetectedEventSchema = v.object({
+	type: v.literal('tool_loop_detected'),
+	pattern: v.string(),
+	toolName: v.string(),
+	message: v.string()
+})
+
+// --- Guardrail event schemas ---
+
+const usageSnapshotSchema = v.object({
+	elapsedMs: v.number(),
+	modelCalls: v.number(),
+	costUsd: v.number()
+})
+
+const limitHitEventSchema = v.object({
+	type: v.literal('limit_hit'),
+	limit: v.picklist([
+		'max_wall_clock_ms',
+		'max_model_calls',
+		'max_cost_usd'
+	]),
+	threshold: v.number(),
+	observed: v.number(),
+	usageSnapshot: usageSnapshotSchema,
+	scope: v.literal('run'),
+	action: v.literal('hard_stop')
+})
+
 /**
  * Schema for any AgentEvent (discriminated on `type`).
  * Used by the agent runtime to type lifecycle events streamed over SSE.
@@ -320,5 +366,9 @@ export const agentEventSchema = v.variant('type', [
 	messageEndEventSchema,
 	toolExecutionStartEventSchema,
 	toolExecutionUpdateEventSchema,
-	toolExecutionEndEventSchema
+	toolExecutionEndEventSchema,
+	retryEventSchema,
+	contextCompactedEventSchema,
+	toolLoopDetectedEventSchema,
+	limitHitEventSchema
 ])

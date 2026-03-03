@@ -25,42 +25,61 @@ function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'controller-test-'))
 }
 
+/** Standard stream chunks for a simple text response. */
+function mockTextChunks(): StreamChunk[] {
+	return [
+		{
+			type: 'RUN_STARTED',
+			threadId: 't1',
+			runId: 'r1'
+		},
+		{
+			type: 'TEXT_MESSAGE_START',
+			messageId: 'm1'
+		},
+		{
+			type: 'TEXT_MESSAGE_CONTENT',
+			messageId: 'm1',
+			delta: 'Hello from mock!'
+		},
+		{
+			type: 'TEXT_MESSAGE_END',
+			messageId: 'm1'
+		},
+		{
+			type: 'RUN_FINISHED',
+			threadId: 't1',
+			runId: 'r1',
+			finishReason: 'stop',
+			usage: {
+				promptTokens: 10,
+				completionTokens: 5,
+				totalTokens: 15
+			}
+		}
+	] as unknown as StreamChunk[]
+}
+
 /**
  * Create a mock adapter that yields a simple text response.
+ * Implements chatStream (used by TanStack's chat()) properly.
+ * @param chunks   Optional custom chunks to yield.
+ * @param delayMs  Optional delay between chunks (useful for keeping isStreaming true).
  */
-function createMockAdapter(): AnyTextAdapter {
+function createMockAdapter(
+	chunks?: StreamChunk[],
+	delayMs?: number
+): AnyTextAdapter {
+	const data = chunks ?? mockTextChunks()
 	return {
 		name: 'mock',
-		chat: async function* (): AsyncIterable<StreamChunk> {
-			yield {
-				type: 'RUN_STARTED',
-				threadId: 't1',
-				runId: 'r1'
-			} as unknown as StreamChunk
-			yield {
-				type: 'TEXT_MESSAGE_START',
-				messageId: 'm1'
-			} as unknown as StreamChunk
-			yield {
-				type: 'TEXT_MESSAGE_CONTENT',
-				messageId: 'm1',
-				delta: 'Hello from mock!'
-			} as unknown as StreamChunk
-			yield {
-				type: 'TEXT_MESSAGE_END',
-				messageId: 'm1'
-			} as unknown as StreamChunk
-			yield {
-				type: 'RUN_FINISHED',
-				threadId: 't1',
-				runId: 'r1',
-				finishReason: 'stop',
-				usage: {
-					promptTokens: 10,
-					completionTokens: 5,
-					totalTokens: 15
+		chatStream: async function* () {
+			for (const chunk of data) {
+				if (delayMs) {
+					await new Promise(r => setTimeout(r, delayMs))
 				}
-			} as unknown as StreamChunk
+				yield chunk
+			}
 		}
 	} as unknown as AnyTextAdapter
 }
@@ -199,5 +218,120 @@ describe('AgentController', () => {
 		controller.watch('session-1')
 		controller.watch('session-1')
 		controller.watch('session-1')
+	})
+
+	test('guardrails do not crash the normal path when limit is not exceeded', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		// maxModelCalls=10 with a single-response adapter: the first call
+		// uses 1 of the 10 budget, so the limit is never exceeded.
+		const guardedController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			agentOptions: {
+				guardrails: {
+					runtimeLimits: { maxModelCalls: 10 }
+				}
+			}
+		})
+
+		try {
+			const { routed } =
+				await guardedController.handleMessage(
+					'session-1',
+					'Hello'
+				)
+			expect(routed).toBe('prompt')
+
+			await new Promise(r => setTimeout(r, 500))
+
+			const events = eventStore.query({
+				sessionId: 'session-1'
+			})
+			const types = events.map(e => e.type)
+
+			// Run completes normally — no limit_hit since 1 < 10
+			expect(types).toContain('agent_start')
+			expect(types).toContain('agent_end')
+			expect(types).not.toContain('limit_hit')
+		} finally {
+			guardedController.dispose()
+		}
+	})
+
+	test('limit_hit event is persisted when guardrail triggers', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		// Use a slow adapter so the agent is still streaming when we queue
+		// a follow-up. With maxModelCalls=1 and > semantics, the first call
+		// (modelCallCount=1) completes normally; the pre-call checkpoint for
+		// the second call (modelCallCount=2, 2 > 1) triggers limit_hit.
+		const guardedController = new AgentController(store, {
+			adapter: createMockAdapter(undefined, 50),
+			workspaceDir,
+			agentOptions: {
+				guardrails: {
+					runtimeLimits: { maxModelCalls: 1 }
+				}
+			}
+		})
+
+		try {
+			const { routed } =
+				await guardedController.handleMessage(
+					'session-1',
+					'Hello'
+				)
+			expect(routed).toBe('prompt')
+
+			// Queue a follow-up while the agent is still streaming, so
+			// the loop has a reason to continue and hit the limit.
+			await new Promise(r => setTimeout(r, 100))
+			store.appendEvent('session-1', 'user_message', {
+				role: 'user',
+				content: [{ type: 'text', text: 'Follow-up' }],
+				timestamp: Date.now()
+			})
+			await guardedController.handleMessage(
+				'session-1',
+				'Follow-up'
+			)
+
+			await new Promise(r => setTimeout(r, 1500))
+
+			const events = eventStore.query({
+				sessionId: 'session-1'
+			})
+			const types = events.map(e => e.type)
+
+			expect(types).toContain('agent_start')
+			expect(types).toContain('agent_end')
+
+			// The pre-call checkpoint fires before the second model call
+			// because modelCallCount(2) > maxModelCalls(1)
+			expect(types).toContain('limit_hit')
+
+			// Verify the limit_hit payload
+			const limitHitRow = events.find(
+				e => e.type === 'limit_hit'
+			)
+			expect(limitHitRow).toBeDefined()
+			const payload = JSON.parse(
+				limitHitRow!.payload as string
+			) as { limit: string }
+			expect(payload.limit).toBe('max_model_calls')
+		} finally {
+			guardedController.dispose()
+		}
 	})
 })
