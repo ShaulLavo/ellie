@@ -507,19 +507,20 @@ export class AgentController {
 			runId
 		)
 
+		// Check for a successful memory_append_daily call.
+		// We look at tool_execution_end / tool_result which carry isError.
 		const hadDailyWrite = runEvents.some(e => {
 			if (
-				e.type !== 'tool_call' &&
-				e.type !== 'tool_execution_start' &&
-				e.type !== 'tool_execution_end'
+				e.type !== 'tool_execution_end' &&
+				e.type !== 'tool_result'
 			)
 				return false
 			try {
 				const parsed = JSON.parse(e.payload)
-				return (
+				const nameMatch =
 					parsed.toolName === 'memory_append_daily' ||
 					parsed.name === 'memory_append_daily'
-				)
+				return nameMatch && !parsed.isError
 			} catch {
 				return false
 			}
@@ -571,6 +572,8 @@ export class AgentController {
 
 		// Streaming deltas → publish to SSE subscribers only, no DB write / log.
 		if (event.type === 'message_update') {
+			// Skip SSE broadcast for enforcement turns (silent)
+			if (runId && this.enforcementRunIds.has(runId)) return
 			this.store.publishEphemeral(
 				sessionId,
 				'message_update',
@@ -594,6 +597,11 @@ export class AgentController {
 			)
 			return
 		}
+
+		// Enforcement runs are silent — skip DB writes and SSE for all events
+		// except agent_end (needed to trigger cleanup / queue processing)
+		const isEnforcement = this.enforcementRunIds.has(runId)
+		if (isEnforcement && event.type !== 'agent_end') return
 
 		// Map every AgentEvent to one or more DB rows and persist
 		const rows = this.mapEventToDb(event)
