@@ -65,7 +65,7 @@ export class ReplRuntime {
 		this.#proc = Bun.spawn(['bun', 'repl'], {
 			stdin: 'pipe',
 			stdout: 'pipe',
-			stderr: 'pipe',
+			stderr: 'inherit',
 			env: {
 				...process.env,
 				// Inject the commit helper into the REPL environment
@@ -271,7 +271,6 @@ ${code}
 		}
 
 		if (
-			!buffer.includes('') &&
 			Date.now() >= deadline &&
 			!buffer.includes(sentinel.slice(0, 20))
 		) {

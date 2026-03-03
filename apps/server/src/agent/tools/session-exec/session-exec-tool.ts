@@ -88,7 +88,7 @@ export function createSessionExecTool(
 
 				// Store raw output as artifact (not injected into context)
 				if (result.raw) {
-					artifactStore.append(
+					await artifactStore.append(
 						runtime.sessionId,
 						params.code,
 						result.raw

@@ -69,6 +69,8 @@ print(`${filtered.length} active items found`)
 
 **When to use:** iterative exploration, building up analysis state, complex multi-step workflows where you need to inspect intermediate results.
 
+**Session lifecycle:** A session starts automatically on the first `session_exec` call and stays alive for the duration of the agent run. Each evaluation has a default timeout of 30 seconds (configurable via `AGENT_SESSION_EXEC_TIMEOUT_MS`) and output is capped at 256 KB (`AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES`). The session terminates when the agent run ends.
+
 ### Selection guide
 
 | Task                                 | Use            |

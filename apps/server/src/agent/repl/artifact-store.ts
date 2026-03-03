@@ -6,12 +6,7 @@
  * can be inspected on demand.
  */
 
-import {
-	existsSync,
-	mkdirSync,
-	appendFileSync,
-	readFileSync
-} from 'fs'
+import { mkdir, appendFile, readFile, access } from 'fs/promises'
 import { join } from 'path'
 import { ulid } from 'fast-ulid'
 
@@ -31,22 +26,25 @@ export interface Artifact {
 
 export class ArtifactStore {
 	readonly #dir: string
+	#ready: Promise<void>
 
 	constructor(dataDir: string) {
 		this.#dir = join(dataDir, 'repl-artifacts')
-		if (!existsSync(this.#dir)) {
-			mkdirSync(this.#dir, { recursive: true })
-		}
+		this.#ready = mkdir(this.#dir, { recursive: true }).then(
+			() => {}
+		)
 	}
 
 	/**
 	 * Append a raw output artifact for a session.
 	 */
-	append(
+	async append(
 		sessionId: string,
 		code: string,
 		raw: string
-	): Artifact {
+	): Promise<Artifact> {
+		await this.#ready
+
 		const artifact: Artifact = {
 			id: ulid(),
 			sessionId,
@@ -57,7 +55,7 @@ export class ArtifactStore {
 
 		const path = this.#artifactPath(sessionId)
 		const line = JSON.stringify(artifact) + '\n'
-		appendFileSync(path, line, 'utf-8')
+		await appendFile(path, line, 'utf-8')
 
 		return artifact
 	}
@@ -65,12 +63,18 @@ export class ArtifactStore {
 	/**
 	 * Read all artifacts for a session (JSONL format).
 	 */
-	list(sessionId: string): Artifact[] {
+	async list(sessionId: string): Promise<Artifact[]> {
+		await this.#ready
 		const path = this.#artifactPath(sessionId)
-		if (!existsSync(path)) return []
 
 		try {
-			const raw = readFileSync(path, 'utf-8')
+			await access(path)
+		} catch {
+			return []
+		}
+
+		try {
+			const raw = await readFile(path, 'utf-8')
 			return raw
 				.split('\n')
 				.filter(Boolean)

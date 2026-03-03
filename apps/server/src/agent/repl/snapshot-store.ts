@@ -7,13 +7,14 @@
  */
 
 import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	writeFileSync,
-	unlinkSync
-} from 'fs'
+	mkdir,
+	readFile,
+	writeFile,
+	unlink,
+	access
+} from 'fs/promises'
 import { join } from 'path'
+import { createHash } from 'crypto'
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -39,23 +40,26 @@ const SNAPSHOT_VERSION = 1
 
 export class SnapshotStore {
 	readonly #dir: string
+	#ready: Promise<void>
 
 	constructor(dataDir: string) {
 		this.#dir = join(dataDir, 'repl-snapshots')
-		if (!existsSync(this.#dir)) {
-			mkdirSync(this.#dir, { recursive: true })
-		}
+		this.#ready = mkdir(this.#dir, { recursive: true }).then(
+			() => {}
+		)
 	}
 
 	/**
 	 * Save a snapshot of REPL state.
 	 */
-	save(
+	async save(
 		sessionId: string,
 		workspaceDir: string,
 		gitHead: string | null,
 		globals: Record<string, unknown>
-	): SnapshotMetadata {
+	): Promise<SnapshotMetadata> {
+		await this.#ready
+
 		const metadata: SnapshotMetadata = {
 			sessionId,
 			workspaceDir,
@@ -67,7 +71,7 @@ export class SnapshotStore {
 		const snapshot: Snapshot = { metadata, globals }
 		const path = this.#snapshotPath(sessionId)
 
-		writeFileSync(path, JSON.stringify(snapshot), 'utf-8')
+		await writeFile(path, JSON.stringify(snapshot), 'utf-8')
 
 		return metadata
 	}
@@ -81,17 +85,22 @@ export class SnapshotStore {
 	 *   - Git HEAD doesn't match (if both are available).
 	 *   - Snapshot version is incompatible.
 	 */
-	restore(
+	async restore(
 		sessionId: string,
 		workspaceDir: string,
 		gitHead: string | null
-	): Snapshot | null {
+	): Promise<Snapshot | null> {
+		await this.#ready
 		const path = this.#snapshotPath(sessionId)
 
-		if (!existsSync(path)) return null
+		try {
+			await access(path)
+		} catch {
+			return null
+		}
 
 		try {
-			const raw = readFileSync(path, 'utf-8')
+			const raw = await readFile(path, 'utf-8')
 			const snapshot = JSON.parse(raw) as Snapshot
 
 			// Version check
@@ -135,25 +144,46 @@ export class SnapshotStore {
 	/**
 	 * Delete a snapshot.
 	 */
-	delete(sessionId: string): void {
+	async delete(sessionId: string): Promise<void> {
+		await this.#ready
 		const path = this.#snapshotPath(sessionId)
-		if (existsSync(path)) {
-			unlinkSync(path)
+		try {
+			await unlink(path)
+		} catch {
+			// File doesn't exist — no-op
 		}
 	}
 
 	/**
 	 * Check if a snapshot exists.
 	 */
-	has(sessionId: string): boolean {
-		return existsSync(this.#snapshotPath(sessionId))
+	async has(sessionId: string): Promise<boolean> {
+		await this.#ready
+		try {
+			await access(this.#snapshotPath(sessionId))
+			return true
+		} catch {
+			return false
+		}
 	}
 
 	// ── Private ──────────────────────────────────────────────────────────
 
+	/**
+	 * Derive a collision-safe filename from sessionId.
+	 *
+	 * Uses a sanitized prefix for human readability plus a SHA-256
+	 * digest of the full sessionId to prevent collisions from lossy
+	 * character replacement.
+	 */
 	#snapshotPath(sessionId: string): string {
-		// Sanitize sessionId for filesystem use
-		const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')
-		return join(this.#dir, `${safe}.json`)
+		const prefix = sessionId
+			.replace(/[^a-zA-Z0-9_-]/g, '_')
+			.slice(0, 32)
+		const digest = createHash('sha256')
+			.update(sessionId)
+			.digest('hex')
+			.slice(0, 12)
+		return join(this.#dir, `${prefix}-${digest}.json`)
 	}
 }
