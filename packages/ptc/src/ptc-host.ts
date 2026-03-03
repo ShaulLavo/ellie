@@ -62,12 +62,20 @@ export async function executePTC(
 	// ── 2. Spawn child ──────────────────────────────────────────────
 	let child: Subprocess<'pipe', 'pipe', 'pipe'>
 	try {
-		child = Bun.spawn([process.execPath, 'run', tmpFile], {
-			stdin: 'pipe',
-			stdout: 'pipe',
-			stderr: 'pipe',
-			env: {}
-		}) as Subprocess<'pipe', 'pipe', 'pipe'>
+		child = Bun.spawn(
+			[
+				process.execPath,
+				'--install=fallback',
+				'run',
+				tmpFile
+			],
+			{
+				stdin: 'pipe',
+				stdout: 'pipe',
+				stderr: 'pipe',
+				env: {}
+			}
+		) as Subprocess<'pipe', 'pipe', 'pipe'>
 	} catch (err) {
 		await cleanup(tmpFile)
 		throw new PTCExecutionError(
