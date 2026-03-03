@@ -134,10 +134,10 @@
       "dependencies": {
         "@ellie/agent": "workspace:*",
         "@ellie/ai": "workspace:*",
+        "@ellie/code-exec": "workspace:*",
         "@ellie/db": "workspace:*",
         "@ellie/env": "workspace:*",
         "@ellie/hindsight": "workspace:*",
-        "@ellie/ptc": "workspace:*",
         "@ellie/schemas": "workspace:*",
         "@ellie/tus": "workspace:*",
         "@ellie/utils": "workspace:*",
@@ -149,6 +149,7 @@
         "@valibot/to-json-schema": "^1.5.0",
         "croner": "^6.0.7",
         "elysia": "^1.4.25",
+        "fast-ulid": "^1.2.1",
         "valibot": "^1.2.0",
       },
       "devDependencies": {
@@ -193,6 +194,17 @@
       "peerDependencies": {
         "@tanstack/ai": ">=0.5.0",
         "@tanstack/ai-anthropic": ">=0.5.0",
+      },
+    },
+    "packages/code-exec": {
+      "name": "@ellie/code-exec",
+      "version": "0.1.0",
+      "dependencies": {
+        "fast-ulid": "^1.2.1",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "typescript": "^5.0.0",
       },
     },
     "packages/db": {
@@ -255,20 +267,6 @@
       "dependencies": {
         "@ellie/hindsight": "workspace:*",
         "@ellie/utils": "workspace:*",
-      },
-      "devDependencies": {
-        "@repo/typescript-config": "workspace:*",
-        "typescript": "^5.0.0",
-      },
-    },
-    "packages/ptc": {
-      "name": "@ellie/ptc",
-      "version": "0.1.0",
-      "dependencies": {
-        "@ellie/agent": "workspace:*",
-        "@valibot/to-json-schema": "^1.5.0",
-        "fast-ulid": "^1.2.1",
-        "valibot": "^1.2.0",
       },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
@@ -433,6 +431,8 @@
 
     "@ellie/ai": ["@ellie/ai@workspace:packages/ai"],
 
+    "@ellie/code-exec": ["@ellie/code-exec@workspace:packages/code-exec"],
+
     "@ellie/db": ["@ellie/db@workspace:packages/db"],
 
     "@ellie/env": ["@ellie/env@workspace:packages/env"],
@@ -440,8 +440,6 @@
     "@ellie/hindsight": ["@ellie/hindsight@workspace:packages/hindsight"],
 
     "@ellie/hindsight-eval": ["@ellie/hindsight-eval@workspace:packages/hindsight-eval"],
-
-    "@ellie/ptc": ["@ellie/ptc@workspace:packages/ptc"],
 
     "@ellie/schemas": ["@ellie/schemas@workspace:packages/schemas"],
 

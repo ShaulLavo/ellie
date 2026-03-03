@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { executePTC } from '../src/ptc-host'
-import { PTCExecutionError } from '../src/types'
+import { execute } from '../src/executor'
+import { ExecutionError } from '../src/types'
 import type {
 	ToolClient,
 	ToolDefinition,
@@ -58,13 +58,13 @@ function addClient(): ToolClient {
 
 // ── Tests ───────────────────────────────────────────────────────────
 
-describe('executePTC', () => {
+describe('execute', () => {
 	test('single tool call round-trip returns final output', async () => {
 		const code = `
 const result = await echo({ msg: "hello" });
 console.log(JSON.stringify(result));
 `
-		const output = await executePTC(
+		const output = await execute(
 			code,
 			[echoTool],
 			echoClient()
@@ -80,7 +80,7 @@ const r1 = await add({ a: 1, b: 2 });
 const r2 = await add({ a: 10, b: 20 });
 console.log(JSON.stringify({ first: r1, second: r2 }));
 `
-		const output = await executePTC(
+		const output = await execute(
 			code,
 			[addTool],
 			addClient()
@@ -99,7 +99,7 @@ const [r1, r2, r3] = await Promise.all([
 ]);
 console.log(JSON.stringify({ r1, r2, r3 }));
 `
-		const output = await executePTC(
+		const output = await execute(
 			code,
 			[addTool],
 			addClient()
@@ -120,11 +120,7 @@ try {
 `
 		// nonexistent_tool is not in the SDK → ReferenceError in the child
 		const tools: ToolDefinition[] = []
-		const output = await executePTC(
-			code,
-			tools,
-			echoClient()
-		)
+		const output = await execute(code, tools, echoClient())
 		expect(output).toContain('caught')
 	})
 
@@ -143,7 +139,7 @@ try {
 	console.log("tool_error: " + e.message);
 }
 `
-		const output = await executePTC(
+		const output = await execute(
 			code,
 			[echoTool],
 			throwClient
@@ -159,13 +155,13 @@ await new Promise(r => setTimeout(r, 60000));
 console.log("should not reach here");
 `
 		try {
-			await executePTC(code, [], echoClient(), {
+			await execute(code, [], echoClient(), {
 				timeoutMs: 500
 			})
 			expect.unreachable('should have thrown')
 		} catch (e) {
-			expect(e).toBeInstanceOf(PTCExecutionError)
-			expect((e as PTCExecutionError).code).toBe('TIMEOUT')
+			expect(e).toBeInstanceOf(ExecutionError)
+			expect((e as ExecutionError).code).toBe('TIMEOUT')
 		}
 	})
 
@@ -177,14 +173,14 @@ for (let i = 0; i < 100; i++) {
 console.log("done");
 `
 		try {
-			await executePTC(code, [echoTool], echoClient(), {
+			await execute(code, [echoTool], echoClient(), {
 				maxToolCalls: 3,
 				timeoutMs: 10_000
 			})
 			expect.unreachable('should have thrown')
 		} catch (e) {
-			expect(e).toBeInstanceOf(PTCExecutionError)
-			const err = e as PTCExecutionError
+			expect(e).toBeInstanceOf(ExecutionError)
+			const err = e as ExecutionError
 			expect(err.code).toBe('SCRIPT_RUNTIME')
 			expect(err.message).toContain('max tool calls')
 		}
@@ -197,14 +193,14 @@ for (let i = 0; i < 10000; i++) {
 }
 `
 		try {
-			await executePTC(code, [], echoClient(), {
+			await execute(code, [], echoClient(), {
 				maxOutputBytes: 1024,
 				timeoutMs: 10_000
 			})
 			expect.unreachable('should have thrown')
 		} catch (e) {
-			expect(e).toBeInstanceOf(PTCExecutionError)
-			expect((e as PTCExecutionError).code).toBe(
+			expect(e).toBeInstanceOf(ExecutionError)
+			expect((e as ExecutionError).code).toBe(
 				'OUTPUT_LIMIT'
 			)
 		}
@@ -215,7 +211,7 @@ for (let i = 0; i < 10000; i++) {
 console.log(JSON.stringify({ user: "data" }));
 console.log("plain text line");
 `
-		const output = await executePTC(code, [], echoClient())
+		const output = await execute(code, [], echoClient())
 		expect(output).toContain('{"user":"data"}')
 		expect(output).toContain('plain text line')
 	})
@@ -225,11 +221,11 @@ console.log("plain text line");
 throw new Error("intentional crash");
 `
 		try {
-			await executePTC(code, [], echoClient())
+			await execute(code, [], echoClient())
 			expect.unreachable('should have thrown')
 		} catch (e) {
-			expect(e).toBeInstanceOf(PTCExecutionError)
-			const err = e as PTCExecutionError
+			expect(e).toBeInstanceOf(ExecutionError)
+			const err = e as ExecutionError
 			expect(err.code).toBe('SCRIPT_EXIT')
 			expect(err.exitCode).toBe(1)
 			expect(err.stderrSnippet).toContain(
@@ -239,18 +235,14 @@ throw new Error("intentional crash");
 	})
 
 	test('child inherits host env vars', async () => {
-		const sentinel = `PTC_TEST_SENTINEL_${Date.now()}`
+		const sentinel = `CE_TEST_SENTINEL_${Date.now()}`
 		process.env[sentinel] = 'visible'
 		try {
 			const code = `
 const val = process.env["${sentinel}"] ?? "undefined";
 console.log("SENTINEL=" + val);
 `
-			const output = await executePTC(
-				code,
-				[],
-				echoClient()
-			)
+			const output = await execute(code, [], echoClient())
 			expect(output.trim()).toBe('SENTINEL=visible')
 		} finally {
 			delete process.env[sentinel]
@@ -273,7 +265,7 @@ console.log("SENTINEL=" + val);
 const result = await ping();
 console.log(JSON.stringify(result));
 `
-		const output = await executePTC(
+		const output = await execute(
 			code,
 			[noArgTool],
 			pingClient,
@@ -307,12 +299,9 @@ console.log(JSON.stringify(result));
 const result = await __tool_send_email({ to: "test@example.com" });
 console.log(JSON.stringify(result));
 `
-		const output = await executePTC(
-			code,
-			[dashTool],
-			client,
-			{ timeoutMs: 5_000 }
-		)
+		const output = await execute(code, [dashTool], client, {
+			timeoutMs: 5_000
+		})
 		const parsed = JSON.parse(output.trim())
 		expect(parsed.sent).toBe(true)
 		expect(parsed.to).toBe('test@example.com')
@@ -322,7 +311,7 @@ console.log(JSON.stringify(result));
 		const code = `
 console.log("hello world");
 `
-		const output = await executePTC(code, [], echoClient())
+		const output = await execute(code, [], echoClient())
 		expect(output.trim()).toBe('hello world')
 	})
 })

@@ -379,7 +379,9 @@ export const app = new Elysia()
 		if (code === `VALIDATION`) {
 			set.status = 400
 
-			if (request.headers.get(`x-error-detail`) === `summary`) {
+			if (
+				request.headers.get(`x-error-detail`) === `summary`
+			) {
 				const summary = tryValibotSummary(
 					error.validator,
 					error.value

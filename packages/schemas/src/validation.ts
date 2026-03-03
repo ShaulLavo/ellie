@@ -11,7 +11,10 @@ export function tryValibotSummary(
 	value: unknown
 ): string | undefined {
 	try {
-		const result = v.safeParse(validator as GenericSchema, value)
+		const result = v.safeParse(
+			validator as GenericSchema,
+			value
+		)
 		if (!result.success) return v.summarize(result.issues)
 	} catch {
 		// not a valibot schema or other error

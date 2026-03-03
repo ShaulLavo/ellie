@@ -11,10 +11,8 @@ import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import {
-	executePTCFromAgentTools,
-	PTCExecutionError
-} from '@ellie/ptc'
+import { ExecutionError } from '@ellie/code-exec'
+import { executeFromAgentTools } from './bridge'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -90,7 +88,7 @@ export function createPtcTool(
 			}
 
 			try {
-				const output = await executePTCFromAgentTools(
+				const output = await executeFromAgentTools(
 					params.script,
 					baseTools,
 					Object.keys(opts).length > 0 ? opts : undefined
@@ -106,7 +104,7 @@ export function createPtcTool(
 					details: { success: true }
 				}
 			} catch (err) {
-				if (err instanceof PTCExecutionError) {
+				if (err instanceof ExecutionError) {
 					return {
 						content: [
 							{
