@@ -14,6 +14,7 @@ import {
 	retainInputSchema,
 	updateBankInputSchema
 } from '@ellie/schemas/hindsight'
+import { tryValibotSummary } from '@ellie/schemas'
 import type { Hindsight } from '../hindsight'
 import type {
 	BankConfig,
@@ -424,9 +425,21 @@ export function createHindsightApp(hs: Hindsight) {
 
 	return (
 		new Elysia()
-			.onError(({ code, error, set }) => {
+			.onError(({ code, error, set, request }) => {
 				if (code === 'VALIDATION') {
 					set.status = 400
+
+					if (
+						request.headers.get('x-error-detail') ===
+						'summary'
+					) {
+						const summary = tryValibotSummary(
+							error.validator,
+							error.value
+						)
+						if (summary) return { error: summary }
+					}
+
 					return { error: error.message }
 				}
 
