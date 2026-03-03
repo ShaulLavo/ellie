@@ -90,7 +90,8 @@ export class AgentController {
 		this.baseSystemPrompt = systemPrompt
 		const registry = createToolRegistry({
 			workspaceDir: options.workspaceDir,
-			dataDir: options.dataDir
+			dataDir: options.dataDir,
+			getSessionId: () => this.boundSessionId
 		})
 
 		this.agent = new Agent({

@@ -224,6 +224,7 @@ ${code}
 		const reader = this.#proc.stdout.getReader()
 		const decoder = new TextDecoder()
 		let buffer = ''
+		let sawSentinel = false
 		const deadline = Date.now() + timeoutMs
 
 		try {
@@ -261,6 +262,7 @@ ${code}
 					// Remove sentinel line and everything after
 					const idx = buffer.indexOf(sentinel)
 					buffer = buffer.slice(0, idx)
+					sawSentinel = true
 					break
 				}
 
@@ -270,10 +272,7 @@ ${code}
 			reader.releaseLock()
 		}
 
-		if (
-			Date.now() >= deadline &&
-			!buffer.includes(sentinel.slice(0, 20))
-		) {
+		if (!sawSentinel && Date.now() >= deadline) {
 			throw new Error(
 				`REPL evaluation timed out after ${timeoutMs}ms`
 			)

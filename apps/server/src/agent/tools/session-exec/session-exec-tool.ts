@@ -56,9 +56,11 @@ type SessionExecParams = v.InferOutput<
  * consecutive calls.
  */
 export function createSessionExecTool(
-	dataDir: string
+	dataDir: string,
+	getSessionId: () => string | null
 ): AgentTool {
 	let runtime: ReplRuntime | null = null
+	let boundSessionId: string | null = null
 	const artifactStore = new ArtifactStore(dataDir)
 
 	return {
@@ -74,10 +76,23 @@ export function createSessionExecTool(
 			const params = rawParams as SessionExecParams
 
 			try {
-				// Lazy-start the REPL on first call
+				const currentSessionId = getSessionId()
+
+				// Tear down REPL if the agent rebound to a different session
+				if (
+					runtime &&
+					boundSessionId !== null &&
+					currentSessionId !== boundSessionId
+				) {
+					await runtime.teardown()
+					runtime = null
+				}
+
+				// Lazy-start the REPL on first call (or after teardown)
 				if (!runtime || !runtime.alive) {
 					runtime = new ReplRuntime()
 					await runtime.start()
+					boundSessionId = currentSessionId
 				}
 
 				const result: ReplEvalResult =

@@ -24,6 +24,8 @@ export interface ToolRegistryConfig {
 	workspaceDir: string
 	/** Data directory for session artifacts and snapshots. */
 	dataDir: string
+	/** Returns the currently bound session ID (for REPL isolation). */
+	getSessionId: () => string | null
 }
 
 export interface ToolRegistry {
@@ -62,7 +64,7 @@ export function createToolRegistry(
 	]
 
 	const sessionExecTools: AgentTool[] = [
-		createSessionExecTool(config.dataDir)
+		createSessionExecTool(config.dataDir, config.getSessionId)
 	]
 
 	return {
