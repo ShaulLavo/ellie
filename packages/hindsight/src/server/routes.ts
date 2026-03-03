@@ -4,7 +4,6 @@
 
 import { Elysia } from 'elysia'
 import * as v from 'valibot'
-import type { GenericSchema } from 'valibot'
 import {
 	createBankInputSchema,
 	factTypeSchema,
@@ -15,6 +14,7 @@ import {
 	retainInputSchema,
 	updateBankInputSchema
 } from '@ellie/schemas/hindsight'
+import { tryValibotSummary } from '@ellie/schemas'
 import type { Hindsight } from '../hindsight'
 import type {
 	BankConfig,
@@ -433,21 +433,11 @@ export function createHindsightApp(hs: Hindsight) {
 						request.headers.get('x-error-detail') ===
 						'summary'
 					) {
-						try {
-							const result = v.safeParse(
-								error.validator as GenericSchema,
-								error.value
-							)
-							if (!result.success) {
-								return {
-									error: v.summarize(
-										result.issues
-									)
-								}
-							}
-						} catch {
-							// fall through to default message
-						}
+						const summary = tryValibotSummary(
+							error.validator,
+							error.value
+						)
+						if (summary) return { error: summary }
 					}
 
 					return { error: error.message }

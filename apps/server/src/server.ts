@@ -22,9 +22,8 @@ import {
 	anthropicText,
 	createAnthropicChat
 } from '@tanstack/ai-anthropic'
+import { tryValibotSummary } from '@ellie/schemas'
 import { toJsonSchema } from '@valibot/to-json-schema'
-import * as v from 'valibot'
-import type { GenericSchema } from 'valibot'
 import { Elysia } from 'elysia'
 import { AgentController } from './agent/controller'
 import { buildGuardrailPolicy } from './agent/guardrail-policy'
@@ -381,17 +380,11 @@ export const app = new Elysia()
 			set.status = 400
 
 			if (request.headers.get(`x-error-detail`) === `summary`) {
-				try {
-					const result = v.safeParse(
-						error.validator as GenericSchema,
-						error.value
-					)
-					if (!result.success) {
-						return { error: v.summarize(result.issues) }
-					}
-				} catch {
-					// fall through to default message
-				}
+				const summary = tryValibotSummary(
+					error.validator,
+					error.value
+				)
+				if (summary) return { error: summary }
 			}
 
 			return {
