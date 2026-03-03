@@ -58,7 +58,10 @@ const EVENT_TYPES = [
 	'context_compacted',
 	'tool_loop_detected',
 	// Guardrail events
-	'limit_hit'
+	'limit_hit',
+	// Memory events
+	'memory_recall',
+	'memory_retain'
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]
@@ -221,6 +224,48 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		}),
 		scope: v.literal('run'),
 		action: v.literal('hard_stop')
+	}),
+	// Memory events
+	memory_recall: v.object({
+		parts: v.array(
+			v.object({
+				type: v.literal('memory'),
+				text: v.string(),
+				count: v.number(),
+				memories: v.optional(
+					v.array(
+						v.object({
+							text: v.string(),
+							model: v.optional(v.string())
+						})
+					)
+				),
+				duration_ms: v.optional(v.number())
+			})
+		),
+		query: v.string(),
+		bankIds: v.array(v.string()),
+		timestamp: v.number()
+	}),
+	memory_retain: v.object({
+		parts: v.array(
+			v.object({
+				type: v.literal('memory-retain'),
+				factsStored: v.number(),
+				facts: v.array(v.string()),
+				model: v.optional(v.string()),
+				duration_ms: v.optional(v.number())
+			})
+		),
+		trigger: v.picklist([
+			'turn_count',
+			'char_count',
+			'immediate_turn'
+		]),
+		bankIds: v.array(v.string()),
+		seqFrom: v.number(),
+		seqTo: v.number(),
+		timestamp: v.number()
 	})
 }
 
