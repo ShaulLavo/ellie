@@ -4,6 +4,7 @@
 
 import { Elysia } from 'elysia'
 import * as v from 'valibot'
+import type { GenericSchema } from 'valibot'
 import {
 	createBankInputSchema,
 	factTypeSchema,
@@ -424,9 +425,31 @@ export function createHindsightApp(hs: Hindsight) {
 
 	return (
 		new Elysia()
-			.onError(({ code, error, set }) => {
+			.onError(({ code, error, set, request }) => {
 				if (code === 'VALIDATION') {
 					set.status = 400
+
+					if (
+						request.headers.get('x-error-detail') ===
+						'summary'
+					) {
+						try {
+							const result = v.safeParse(
+								error.validator as GenericSchema,
+								error.value
+							)
+							if (!result.success) {
+								return {
+									error: v.summarize(
+										result.issues
+									)
+								}
+							}
+						} catch {
+							// fall through to default message
+						}
+					}
+
 					return { error: error.message }
 				}
 
