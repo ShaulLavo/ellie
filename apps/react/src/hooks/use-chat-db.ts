@@ -79,6 +79,12 @@ function eventToStored(row: EventRow): StoredChatMessage {
 				result: resultContent
 			}
 		]
+	} else if (
+		row.type === 'memory_recall' ||
+		row.type === 'memory_retain'
+	) {
+		// Memory events carry their parts directly in the payload
+		parts = (parsed.parts as ContentPart[]) ?? []
 	} else {
 		// Standard message events: extract parts from content or parts array
 		const content =
@@ -139,6 +145,8 @@ function eventToStored(row: EventRow): StoredChatMessage {
 		sender = 'system'
 	} else if (row.type.startsWith('tool_')) {
 		sender = 'agent'
+	} else if (row.type.startsWith('memory_')) {
+		sender = 'memory'
 	}
 
 	return {
@@ -242,7 +250,9 @@ export function useChatDB(sessionId: string) {
 						e.type === 'assistant_final' ||
 						e.type === 'system_message' ||
 						e.type === 'tool_call' ||
-						e.type === 'tool_result'
+						e.type === 'tool_result' ||
+						e.type === 'memory_recall' ||
+						e.type === 'memory_retain'
 				)
 				const msgs = messageEvents.map(eventToStored)
 
@@ -387,7 +397,9 @@ export function useChatDB(sessionId: string) {
 					'assistant_final',
 					'system_message',
 					'tool_call',
-					'tool_result'
+					'tool_result',
+					'memory_recall',
+					'memory_retain'
 				]
 				if (!renderableTypes.includes(event.type)) return
 

@@ -1019,4 +1019,251 @@ describe('EventStore', () => {
 			).toThrow()
 		})
 	})
+
+	// ── Memory events ───────────────────────────────────────────────────
+
+	describe('memory_recall event', () => {
+		it('appends and queries a memory_recall event', () => {
+			const session = store.createSession()
+			const payload = {
+				parts: [
+					{
+						type: 'memory' as const,
+						text: 'Recalled 3 memories',
+						count: 3,
+						memories: [
+							{ text: 'User prefers dark mode' },
+							{
+								text: 'Project uses TypeScript',
+								model: 'test'
+							},
+							{ text: 'Bun is the runtime' }
+						],
+						duration_ms: 150
+					}
+				],
+				query: 'What are the project preferences?',
+				bankIds: ['bank-1', 'bank-2'],
+				timestamp: Date.now()
+			}
+
+			const event = store.append({
+				sessionId: session.id,
+				type: 'memory_recall',
+				payload,
+				runId: 'run_1'
+			})
+
+			expect(event.type).toBe('memory_recall')
+
+			const parsed = JSON.parse(event.payload)
+			expect(parsed.parts[0].type).toBe('memory')
+			expect(parsed.parts[0].count).toBe(3)
+			expect(parsed.parts[0].memories).toHaveLength(3)
+			expect(parsed.query).toBe(
+				'What are the project preferences?'
+			)
+			expect(parsed.bankIds).toEqual(['bank-1', 'bank-2'])
+		})
+
+		it('queries memory_recall by type filter', () => {
+			const session = store.createSession()
+			store.append({
+				sessionId: session.id,
+				type: 'user_message',
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'hi' }],
+					timestamp: Date.now()
+				}
+			})
+			store.append({
+				sessionId: session.id,
+				type: 'memory_recall',
+				payload: {
+					parts: [
+						{
+							type: 'memory',
+							text: 'No memories',
+							count: 0
+						}
+					],
+					query: 'hi',
+					bankIds: [],
+					timestamp: Date.now()
+				}
+			})
+
+			const results = store.query({
+				sessionId: session.id,
+				types: ['memory_recall']
+			})
+			expect(results).toHaveLength(1)
+			expect(results[0]!.type).toBe('memory_recall')
+		})
+
+		it('rejects invalid memory_recall payload', () => {
+			const session = store.createSession()
+			expect(() =>
+				store.append({
+					sessionId: session.id,
+					type: 'memory_recall',
+					payload: {
+						parts: 'not-an-array',
+						query: 123
+					} as unknown as Record<string, unknown>
+				})
+			).toThrow()
+		})
+	})
+
+	describe('memory_retain event', () => {
+		it('appends and queries a memory_retain event', () => {
+			const session = store.createSession()
+			const payload = {
+				parts: [
+					{
+						type: 'memory-retain' as const,
+						factsStored: 4,
+						facts: [
+							'User likes dark mode',
+							'Project uses Bun',
+							'ElysiaJS for backend',
+							'React for frontend'
+						],
+						model: 'claude-3',
+						duration_ms: 320
+					}
+				],
+				trigger: 'turn_count' as const,
+				bankIds: ['bank-1'],
+				seqFrom: 1,
+				seqTo: 10,
+				timestamp: Date.now()
+			}
+
+			const event = store.append({
+				sessionId: session.id,
+				type: 'memory_retain',
+				payload,
+				runId: 'run_1'
+			})
+
+			expect(event.type).toBe('memory_retain')
+
+			const parsed = JSON.parse(event.payload)
+			expect(parsed.parts[0].type).toBe('memory-retain')
+			expect(parsed.parts[0].factsStored).toBe(4)
+			expect(parsed.parts[0].facts).toHaveLength(4)
+			expect(parsed.trigger).toBe('turn_count')
+			expect(parsed.seqFrom).toBe(1)
+			expect(parsed.seqTo).toBe(10)
+		})
+
+		it('rejects invalid memory_retain trigger', () => {
+			const session = store.createSession()
+			expect(() =>
+				store.append({
+					sessionId: session.id,
+					type: 'memory_retain',
+					payload: {
+						parts: [
+							{
+								type: 'memory-retain',
+								factsStored: 1,
+								facts: ['test']
+							}
+						],
+						trigger: 'invalid_trigger',
+						bankIds: [],
+						seqFrom: 1,
+						seqTo: 2,
+						timestamp: Date.now()
+					}
+				})
+			).toThrow()
+		})
+	})
+
+	describe('getConversationHistory excludes memory events', () => {
+		it('memory_recall and memory_retain are not in conversation history', () => {
+			store.createSession('s1')
+
+			store.append({
+				sessionId: 's1',
+				type: 'user_message',
+				payload: {
+					role: 'user',
+					content: [{ type: 'text', text: 'hello' }],
+					timestamp: 1000
+				}
+			})
+			store.append({
+				sessionId: 's1',
+				type: 'memory_recall',
+				payload: {
+					parts: [
+						{
+							type: 'memory',
+							text: 'Recalled 1 memory',
+							count: 1
+						}
+					],
+					query: 'hello',
+					bankIds: ['bank-1'],
+					timestamp: Date.now()
+				}
+			})
+			store.append({
+				sessionId: 's1',
+				type: 'assistant_final',
+				payload: {
+					role: 'assistant',
+					content: [{ type: 'text', text: 'hi' }],
+					provider: 'anthropic',
+					model: 'test',
+					usage: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 0,
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0
+						}
+					},
+					stopReason: 'stop',
+					timestamp: 2000
+				}
+			})
+			store.append({
+				sessionId: 's1',
+				type: 'memory_retain',
+				payload: {
+					parts: [
+						{
+							type: 'memory-retain',
+							factsStored: 2,
+							facts: ['fact1', 'fact2']
+						}
+					],
+					trigger: 'turn_count',
+					bankIds: ['bank-1'],
+					seqFrom: 1,
+					seqTo: 3,
+					timestamp: Date.now()
+				}
+			})
+
+			const history = store.getConversationHistory('s1')
+			// Only user_message and assistant_final should be present
+			expect(history).toHaveLength(2)
+			expect(history[0]!.role).toBe('user')
+			expect(history[1]!.role).toBe('assistant')
+		})
+	})
 })

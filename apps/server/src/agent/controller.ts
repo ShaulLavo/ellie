@@ -32,6 +32,7 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
+import type { MemoryOrchestrator } from './memory-orchestrator'
 import { createToolRegistry } from './tools/capability-registry'
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -45,6 +46,8 @@ export interface AgentControllerOptions {
 	dataDir: string
 	/** Additional AgentOptions passed to the Agent */
 	agentOptions?: Partial<AgentOptions>
+	/** Memory orchestrator for recall/retain integration */
+	memory?: MemoryOrchestrator
 }
 
 // ── Queued cross-session message ─────────────────────────────────────────────
@@ -61,6 +64,8 @@ export class AgentController {
 	private boundSessionId: string | null = null
 	private store: RealtimeStore
 	private options: AgentControllerOptions
+	private memory: MemoryOrchestrator | null
+	private baseSystemPrompt: string
 
 	/** Global lock — serialises all routing decisions */
 	private lock: Promise<void> = Promise.resolve()
@@ -77,10 +82,12 @@ export class AgentController {
 	) {
 		this.store = store
 		this.options = options
+		this.memory = options.memory ?? null
 
 		const systemPrompt = buildSystemPrompt(
 			options.workspaceDir
 		)
+		this.baseSystemPrompt = systemPrompt
 		const registry = createToolRegistry({
 			workspaceDir: options.workspaceDir,
 			dataDir: options.dataDir
@@ -132,16 +139,13 @@ export class AgentController {
 	private bindToSession(sessionId: string): void {
 		this.store.ensureSession(sessionId)
 
-		const systemPrompt = buildSystemPrompt(
-			this.options.workspaceDir
-		)
 		const history = this.loadHistory(sessionId)
 
 		console.log(
 			`[agent-controller] binding to session=${sessionId} history=${history.length} messages`
 		)
 
-		this.agent.state.systemPrompt = systemPrompt
+		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
 		this.boundSessionId = sessionId
 	}
@@ -213,6 +217,9 @@ export class AgentController {
 				`[agent-controller] agent idle session=${sessionId}, starting prompt runId=${runId}`
 			)
 			this.agent.runId = runId
+
+			// Run memory recall before prompting (non-blocking on failure)
+			await this.runRecall(sessionId, text, runId)
 
 			// Start the prompt (non-blocking — events flow via onEvent)
 			this.agent.prompt(text).catch(err => {
@@ -380,6 +387,96 @@ export class AgentController {
 			})
 	}
 
+	// ── Internal: memory integration ────────────────────────────────────────
+
+	/**
+	 * Run memory recall and inject context into the system prompt.
+	 * If recall fails, log the error and proceed without memory context.
+	 */
+	private async runRecall(
+		sessionId: string,
+		query: string,
+		runId: string
+	): Promise<void> {
+		if (!this.memory) return
+
+		try {
+			const result = await this.memory.recall(query)
+			if (!result) return
+
+			// Emit memory_recall event
+			this.store.appendEvent(
+				sessionId,
+				'memory_recall',
+				result.payload as unknown as Record<
+					string,
+					unknown
+				>,
+				runId
+			)
+
+			// Inject recall context into the system prompt for this run
+			if (result.contextBlock) {
+				this.agent.state.systemPrompt =
+					this.baseSystemPrompt +
+					'\n\n' +
+					result.contextBlock
+			}
+		} catch (err) {
+			console.error(
+				`[agent-controller] memory recall failed session=${sessionId}:`,
+				err instanceof Error ? err.message : String(err)
+			)
+			try {
+				this.store.appendEvent(
+					sessionId,
+					'error',
+					{
+						message: `Memory recall failed: ${err instanceof Error ? err.message : String(err)}`,
+						code: 'memory_recall_failed'
+					},
+					runId
+				)
+			} catch {
+				// Best-effort error event
+			}
+		}
+	}
+
+	/**
+	 * Evaluate and run memory retain after an agent run completes.
+	 * Does not block or affect the agent response.
+	 */
+	private async runRetain(
+		sessionId: string,
+		runId: string,
+		force?: boolean
+	): Promise<void> {
+		if (!this.memory) return
+
+		try {
+			const result = await this.memory.evaluateRetain(
+				sessionId,
+				force
+			)
+			if (!result) return
+
+			// Emit memory_retain event
+			this.store.appendEvent(
+				sessionId,
+				'memory_retain',
+				result as unknown as Record<string, unknown>,
+				runId
+			)
+		} catch (err) {
+			console.error(
+				`[agent-controller] memory retain failed session=${sessionId}:`,
+				err instanceof Error ? err.message : String(err)
+			)
+			// Retain failure is non-fatal — cursor stays put for next attempt
+		}
+	}
+
 	// ── Internal: event persistence ──────────────────────────────────────────
 
 	private handleEvent(event: AgentEvent): void {
@@ -444,6 +541,17 @@ export class AgentController {
 			} catch {
 				// Already closed — non-fatal
 			}
+
+			// Trigger memory retain (non-blocking, fire-and-forget)
+			this.runRetain(sessionId, runId).catch(err => {
+				console.error(
+					`[agent-controller] post-run retain error session=${sessionId}:`,
+					err instanceof Error ? err.message : String(err)
+				)
+			})
+
+			// Reset system prompt to base (strip recall context from this run)
+			this.agent.state.systemPrompt = this.baseSystemPrompt
 			this.agent.runId = undefined
 
 			// Check for orphaned follow-ups first (same session)

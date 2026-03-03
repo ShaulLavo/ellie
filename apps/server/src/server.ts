@@ -26,6 +26,7 @@ import { tryValibotSummary } from '@ellie/schemas'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
 import { AgentController } from './agent/controller'
+import { MemoryOrchestrator } from './agent/memory-orchestrator'
 import { buildGuardrailPolicy } from './agent/guardrail-policy'
 import {
 	ensureBootstrapInjected,
@@ -236,11 +237,19 @@ async function getAgentController(): Promise<AgentController | null> {
 		return cachedController
 	const adapter = await resolveAdapter()
 	const guardrails = buildGuardrailPolicy(env)
+
+	const memory = new MemoryOrchestrator({
+		hindsight,
+		eventStore,
+		workspaceDir
+	})
+
 	cachedController = adapter
 		? new AgentController(store, {
 				adapter,
 				workspaceDir,
 				dataDir: DATA_DIR,
+				memory,
 				agentOptions: guardrails
 					? { guardrails }
 					: undefined
@@ -254,16 +263,18 @@ function invalidateAgentCache() {
 	cachedController = undefined
 }
 
-// Eagerly resolve once at startup so first request doesn't pay the cost
-await getAgentController()
-
 // ── Hindsight (memory) ────────────────────────────────────────────────────
 // Single default bank is created lazily on first access.
+// Must be initialised before getAgentController() so MemoryOrchestrator
+// receives a valid hindsight reference.
 const hindsightAdapter = await resolveAdapter()
 const hindsight = new Hindsight({
 	dbPath: `${DATA_DIR}/hindsight.db`,
 	...(hindsightAdapter ? { adapter: hindsightAdapter } : {})
 })
+
+// Eagerly resolve once at startup so first request doesn't pay the cost
+await getAgentController()
 
 // ── Tus uploads ───────────────────────────────────────────────────────────
 const uploadStore = new FileStore({
