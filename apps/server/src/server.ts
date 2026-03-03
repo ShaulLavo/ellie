@@ -248,6 +248,7 @@ async function getAgentController(): Promise<AgentController | null> {
 		? new AgentController(store, {
 				adapter,
 				workspaceDir,
+				dataDir: DATA_DIR,
 				memory,
 				agentOptions: guardrails
 					? { guardrails }

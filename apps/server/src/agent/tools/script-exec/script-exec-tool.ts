@@ -1,9 +1,12 @@
 /**
- * PTC tool — execute TypeScript scripts in an isolated sandbox.
+ * script_exec tool — execute TypeScript scripts in an isolated sandbox.
  *
- * Gives the agent the ability to write and run multi-step code that
- * chains tool calls, uses loops/conditionals, and produces a final
- * result via console.log().
+ * Ephemeral, one-shot execution. Gives the agent the ability to write
+ * and run multi-step code that chains tool calls, uses loops/conditionals,
+ * and produces a final result via console.log().
+ *
+ * No state persists between calls — each invocation spawns a fresh
+ * sandboxed process.
  */
 
 import * as v from 'valibot'
@@ -16,7 +19,7 @@ import { executeFromAgentTools } from './bridge'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
-const ptcParams = v.object({
+const scriptExecParams = v.object({
 	script: v.pipe(
 		v.string(),
 		v.description(
@@ -49,31 +52,33 @@ const ptcParams = v.object({
 	)
 })
 
-type PtcParams = v.InferOutput<typeof ptcParams>
+type ScriptExecParams = v.InferOutput<
+	typeof scriptExecParams
+>
 
 // ── Factory ─────────────────────────────────────────────────────────────
 
 /**
- * Create the PTC tool bound to a set of base tools.
+ * Create the script_exec tool bound to a set of base tools.
  *
  * The base tools are bridged into the sandbox — the child process
- * can call them as async functions. `run_ptc_script` itself is NOT
+ * can call them as async functions. `script_exec` itself is NOT
  * included in the base tools, preventing recursive self-invocation.
  */
-export function createPtcTool(
+export function createScriptExecTool(
 	baseTools: AgentTool[]
 ): AgentTool {
 	return {
-		name: 'run_ptc_script',
+		name: 'script_exec',
 		description:
-			'Run TypeScript code in a sandboxed process with access to your other tools. Use this for multi-step workflows that need loops, conditionals, or chaining multiple tool calls. Each tool is available as an async function (e.g. `await read_workspace_file({ path: "MEMORY.md" })`). Use console.log() to output the final result.',
+			'Run TypeScript code in a sandboxed process with access to your other tools. Use this for bounded multi-step workflows that need loops, conditionals, or chaining multiple tool calls. Each tool is available as an async function (e.g. `await read_workspace_file({ path: "MEMORY.md" })`). Use console.log() to output the final result. No state persists between calls.',
 		label: 'Running script',
-		parameters: ptcParams,
+		parameters: scriptExecParams,
 		execute: async (
 			_toolCallId,
 			rawParams
 		): Promise<AgentToolResult> => {
-			const params = rawParams as PtcParams
+			const params = rawParams as ScriptExecParams
 
 			const opts = {
 				...(params.timeoutMs !== undefined && {
