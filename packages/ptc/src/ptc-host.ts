@@ -1,4 +1,3 @@
-import type { Subprocess } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unlink, writeFile } from 'node:fs/promises'
@@ -32,8 +31,8 @@ function isToolCall(msg: unknown): msg is ToolCallMessage {
 }
 
 /**
- * Execute agent code in an isolated Bun child process, bridging tool
- * calls over JSONL stdio.
+ * Execute agent code in a Bun child process, bridging tool
+ * calls over IPC.
  */
 export async function executePTC(
 	agentCode: string,
@@ -59,15 +58,73 @@ export async function executePTC(
 	const tmpFile = join(opts.tempDir, `ptc-${ulid()}.ts`)
 	await writeFile(tmpFile, script, 'utf-8')
 
-	// ── 2. Spawn child ──────────────────────────────────────────────
-	let child: Subprocess<'pipe', 'pipe', 'pipe'>
+	// ── 2. Spawn child with IPC ─────────────────────────────────────
+	let toolCallCount = 0
+	let limitError: PTCExecutionError | null = null
+	let timedOut = false
+
+	let proc: ReturnType<typeof Bun.spawn>
 	try {
-		child = Bun.spawn([process.execPath, 'run', tmpFile], {
-			stdin: 'pipe',
-			stdout: 'pipe',
-			stderr: 'pipe',
-			env: {}
-		}) as Subprocess<'pipe', 'pipe', 'pipe'>
+		proc = Bun.spawn(
+			[
+				process.execPath,
+				'--install=fallback',
+				'run',
+				tmpFile
+			],
+			{
+				stdin: 'ignore',
+				stdout: 'pipe',
+				stderr: 'pipe',
+				env: process.env as Record<string, string>,
+				ipc(message) {
+					if (limitError) return
+					if (!isToolCall(message)) return
+
+					toolCallCount++
+					if (toolCallCount > opts.maxToolCalls) {
+						limitError = new PTCExecutionError(
+							'SCRIPT_RUNTIME',
+							`Exceeded max tool calls (${opts.maxToolCalls})`,
+							{
+								toolCallsUsed: toolCallCount
+							}
+						)
+						proc?.kill()
+						return
+					}
+
+					toolClient
+						.callTool(message.tool, message.args)
+						.then(result => {
+							try {
+								proc?.send({
+									__ptc_result__: true,
+									id: message.id,
+									result
+								})
+							} catch {
+								/* child already exited */
+							}
+						})
+						.catch(err => {
+							const errMsg =
+								err instanceof Error
+									? err.message
+									: String(err)
+							try {
+								proc?.send({
+									__ptc_result__: true,
+									id: message.id,
+									error: errMsg
+								})
+							} catch {
+								/* child already exited */
+							}
+						})
+				}
+			}
+		)
 	} catch (err) {
 		await cleanup(tmpFile)
 		throw new PTCExecutionError(
@@ -79,47 +136,20 @@ export async function executePTC(
 		)
 	}
 
-	// ── 3. Run protocol loop ────────────────────────────────────────
-	let toolCallCount = 0
-	let outputBytes = 0
-	const outputChunks: string[] = []
-	let stderrBuf = ''
-	let stderrBytes = 0
-	let timedOut = false
-	// Track limit errors so they take priority over SCRIPT_EXIT
-	let limitError: PTCExecutionError | null = null
-
 	const timer = setTimeout(() => {
 		timedOut = true
-		child.kill()
+		proc.kill()
 	}, opts.timeoutMs)
 
+	// ── 3. Read streams & wait for exit ─────────────────────────────
 	try {
-		// Stderr collector (bounded)
-		const stderrReader = child.stderr.getReader()
-		const stderrDecoder = new TextDecoder()
-		const stderrDrain = (async () => {
-			try {
-				while (true) {
-					const { done, value } = await stderrReader.read()
-					if (done) break
-					if (stderrBytes >= opts.captureStderrBytes)
-						continue
-					const chunk = stderrDecoder.decode(value, {
-						stream: true
-					})
-					stderrBuf += chunk
-					stderrBytes += value.byteLength
-				}
-			} catch {
-				/* stream closed */
-			}
-		})()
-
-		// Stdout protocol reader
-		const stdoutReader = child.stdout.getReader()
+		// Stdout reader (pure output — no protocol mixing)
+		const outputChunks: string[] = []
+		let outputBytes = 0
+		const stdoutReader = (
+			proc.stdout as ReadableStream<Uint8Array>
+		).getReader()
 		const stdoutDecoder = new TextDecoder()
-		let stdoutBuf = ''
 
 		const stdoutDrain = (async () => {
 			try {
@@ -127,100 +157,54 @@ export async function executePTC(
 					if (limitError) break
 					const { done, value } = await stdoutReader.read()
 					if (done) break
-					stdoutBuf += stdoutDecoder.decode(value, {
-						stream: true
-					})
-
-					let nl: number
-					while ((nl = stdoutBuf.indexOf('\n')) !== -1) {
-						const line = stdoutBuf.slice(0, nl)
-						stdoutBuf = stdoutBuf.slice(nl + 1)
-						await processLine(line)
-						if (limitError) return
+					outputBytes += value.byteLength
+					if (outputBytes > opts.maxOutputBytes) {
+						limitError = new PTCExecutionError(
+							'OUTPUT_LIMIT',
+							`Output exceeded ${opts.maxOutputBytes} bytes`,
+							{ outputBytes }
+						)
+						proc.kill()
+						break
 					}
-				}
-				// Flush remaining partial line
-				if (!limitError && stdoutBuf.trim()) {
-					await processLine(stdoutBuf)
+					outputChunks.push(
+						stdoutDecoder.decode(value, {
+							stream: true
+						})
+					)
 				}
 			} catch {
 				/* stream closed */
 			}
 		})()
 
-		async function processLine(line: string) {
-			const trimmed = line.trim()
-			if (!trimmed) return
+		// Stderr collector (bounded)
+		let stderrBuf = ''
+		let stderrBytes = 0
+		const stderrReader = (
+			proc.stderr as ReadableStream<Uint8Array>
+		).getReader()
+		const stderrDecoder = new TextDecoder()
 
-			// Try to parse as protocol message
-			let parsed: unknown
+		const stderrDrain = (async () => {
 			try {
-				parsed = JSON.parse(trimmed)
+				while (true) {
+					const { done, value } = await stderrReader.read()
+					if (done) break
+					if (stderrBytes >= opts.captureStderrBytes)
+						continue
+					stderrBuf += stderrDecoder.decode(value, {
+						stream: true
+					})
+					stderrBytes += value.byteLength
+				}
 			} catch {
-				// Not JSON → treat as final output
-				appendOutput(line)
-				return
+				/* stream closed */
 			}
-
-			if (isToolCall(parsed)) {
-				toolCallCount++
-				if (toolCallCount > opts.maxToolCalls) {
-					limitError = new PTCExecutionError(
-						'SCRIPT_RUNTIME',
-						`Exceeded max tool calls (${opts.maxToolCalls})`,
-						{ toolCallsUsed: toolCallCount }
-					)
-					child.kill()
-					return
-				}
-				try {
-					const result = await toolClient.callTool(
-						parsed.tool,
-						parsed.args
-					)
-					const response = JSON.stringify({
-						__ptc_result__: true,
-						id: parsed.id,
-						result
-					})
-					child.stdin.write(response + '\n')
-					await child.stdin.flush()
-				} catch (err) {
-					const errMsg =
-						err instanceof Error ? err.message : String(err)
-					const response = JSON.stringify({
-						__ptc_result__: true,
-						id: parsed.id,
-						error: errMsg
-					})
-					child.stdin.write(response + '\n')
-					await child.stdin.flush()
-				}
-			} else {
-				// Valid JSON but not a tool call → final output
-				appendOutput(line)
-			}
-		}
-
-		function appendOutput(line: string) {
-			const bytes = new TextEncoder().encode(
-				line + '\n'
-			).length
-			outputBytes += bytes
-			if (outputBytes > opts.maxOutputBytes) {
-				limitError = new PTCExecutionError(
-					'OUTPUT_LIMIT',
-					`Output exceeded ${opts.maxOutputBytes} bytes`,
-					{ outputBytes }
-				)
-				child.kill()
-				return
-			}
-			outputChunks.push(line)
-		}
+		})()
 
 		// Wait for child to exit and streams to drain
-		const exitCode = await child.exited
+		const exitCode = await proc.exited
 		await Promise.all([stdoutDrain, stderrDrain])
 
 		// Priority order: limit errors > timeout > non-zero exit
@@ -251,7 +235,7 @@ export async function executePTC(
 			)
 		}
 
-		return outputChunks.join('\n')
+		return outputChunks.join('').trim()
 	} finally {
 		clearTimeout(timer)
 		await cleanup(tmpFile)
