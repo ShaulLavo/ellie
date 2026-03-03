@@ -54,7 +54,27 @@ const ServerEnvSchema = v.object({
 	/** Maximum model invocation attempts (including retries) per agent run. */
 	AGENT_LIMIT_MAX_MODEL_CALLS: v.optional(v.string()),
 	/** Maximum accumulated USD cost per agent run. */
-	AGENT_LIMIT_MAX_COST_USD: v.optional(v.string())
+	AGENT_LIMIT_MAX_COST_USD: v.optional(v.string()),
+
+	// ── Exec-mode: script_exec limits ──
+
+	/** Maximum wall-clock time per script_exec invocation in milliseconds (default: 30000). */
+	AGENT_SCRIPT_EXEC_TIMEOUT_MS: v.optional(v.string()),
+	/** Maximum tool calls per script_exec invocation (default: 64). */
+	AGENT_SCRIPT_EXEC_MAX_TOOL_CALLS: v.optional(v.string()),
+	/** Maximum output size per script_exec invocation in bytes (default: 262144). */
+	AGENT_SCRIPT_EXEC_MAX_OUTPUT_BYTES: v.optional(
+		v.string()
+	),
+
+	// ── Exec-mode: session_exec limits ──
+
+	/** Maximum wall-clock time per session_exec evaluation in milliseconds (default: 30000). */
+	AGENT_SESSION_EXEC_TIMEOUT_MS: v.optional(v.string()),
+	/** Maximum raw output size per session_exec evaluation in bytes (default: 262144). */
+	AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES: v.optional(
+		v.string()
+	)
 })
 
 // ============================================================================
@@ -96,5 +116,16 @@ export const env: ServerEnv = v.parse(ServerEnvSchema, {
 		Bun.env.AGENT_LIMIT_MAX_WALL_CLOCK_MS,
 	AGENT_LIMIT_MAX_MODEL_CALLS:
 		Bun.env.AGENT_LIMIT_MAX_MODEL_CALLS,
-	AGENT_LIMIT_MAX_COST_USD: Bun.env.AGENT_LIMIT_MAX_COST_USD
+	AGENT_LIMIT_MAX_COST_USD:
+		Bun.env.AGENT_LIMIT_MAX_COST_USD,
+	AGENT_SCRIPT_EXEC_TIMEOUT_MS:
+		Bun.env.AGENT_SCRIPT_EXEC_TIMEOUT_MS,
+	AGENT_SCRIPT_EXEC_MAX_TOOL_CALLS:
+		Bun.env.AGENT_SCRIPT_EXEC_MAX_TOOL_CALLS,
+	AGENT_SCRIPT_EXEC_MAX_OUTPUT_BYTES:
+		Bun.env.AGENT_SCRIPT_EXEC_MAX_OUTPUT_BYTES,
+	AGENT_SESSION_EXEC_TIMEOUT_MS:
+		Bun.env.AGENT_SESSION_EXEC_TIMEOUT_MS,
+	AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES:
+		Bun.env.AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES
 })

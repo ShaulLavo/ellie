@@ -11,6 +11,11 @@
  *   - Agent idle  → prompt() starts a new run
  *   - Agent busy  → followUp() queues for automatic pickup by the agent loop
  *   - On agent_end with orphaned follow-ups → continue() re-enters the loop
+ *
+ * Tool surface (exec-mode architecture):
+ *   - basicDirectTools: shell, search, workspace read/write
+ *   - script_exec: ephemeral one-shot TypeScript execution
+ *   - session_exec: persistent REPL session execution
  */
 
 import {
@@ -27,10 +32,7 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
-import { createPtcTool } from './tools/ptc'
-import { createRipgrepTool } from './tools/ripgrep-tool'
-import { createShellTool } from './tools/shell-tool'
-import { createWorkspaceTools } from './tools/workspace-tools'
+import { createToolRegistry } from './tools/capability-registry'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +41,8 @@ export interface AgentControllerOptions {
 	adapter: AnyTextAdapter
 	/** Workspace directory path for system prompt assembly */
 	workspaceDir: string
+	/** Data directory for session artifacts and snapshots */
+	dataDir: string
 	/** Additional AgentOptions passed to the Agent */
 	agentOptions?: Partial<AgentOptions>
 }
@@ -77,12 +81,10 @@ export class AgentController {
 		const systemPrompt = buildSystemPrompt(
 			options.workspaceDir
 		)
-		const baseTools = [
-			...createWorkspaceTools(options.workspaceDir),
-			createShellTool(options.workspaceDir),
-			createRipgrepTool(options.workspaceDir)
-		]
-		const tools = [...baseTools, createPtcTool(baseTools)]
+		const registry = createToolRegistry({
+			workspaceDir: options.workspaceDir,
+			dataDir: options.dataDir
+		})
 
 		this.agent = new Agent({
 			...options.agentOptions,
@@ -90,7 +92,7 @@ export class AgentController {
 			initialState: {
 				...options.agentOptions?.initialState,
 				systemPrompt,
-				tools
+				tools: registry.all
 			},
 			onEvent: event => this.handleEvent(event)
 		})

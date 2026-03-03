@@ -58,7 +58,18 @@ const EVENT_TYPES = [
 	'context_compacted',
 	'tool_loop_detected',
 	// Guardrail events
-	'limit_hit'
+	'limit_hit',
+	// Exec-mode events: script_exec
+	'script_exec_start',
+	'script_exec_end',
+	'script_exec_error',
+	// Exec-mode events: session_exec
+	'session_exec_start',
+	'session_exec_commit',
+	'session_exec_end',
+	'session_exec_snapshot_saved',
+	'session_exec_snapshot_restore_skipped',
+	'session_exec_error'
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]
@@ -221,6 +232,54 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		}),
 		scope: v.literal('run'),
 		action: v.literal('hard_stop')
+	}),
+	// Exec-mode events: script_exec
+	script_exec_start: v.object({
+		toolCallId: v.string(),
+		scriptLength: v.number()
+	}),
+	script_exec_end: v.object({
+		toolCallId: v.string(),
+		success: v.boolean(),
+		elapsedMs: v.number(),
+		outputLength: v.number()
+	}),
+	script_exec_error: v.object({
+		toolCallId: v.string(),
+		code: v.optional(v.string()),
+		message: v.string()
+	}),
+	// Exec-mode events: session_exec
+	session_exec_start: v.object({
+		toolCallId: v.string(),
+		sessionId: v.string(),
+		codeLength: v.number()
+	}),
+	session_exec_commit: v.object({
+		toolCallId: v.string(),
+		sessionId: v.string(),
+		committedLength: v.number()
+	}),
+	session_exec_end: v.object({
+		toolCallId: v.string(),
+		sessionId: v.string(),
+		success: v.boolean(),
+		elapsedMs: v.number(),
+		hasArtifacts: v.boolean()
+	}),
+	session_exec_snapshot_saved: v.object({
+		sessionId: v.string(),
+		workspaceDir: v.string(),
+		gitHead: v.optional(v.nullable(v.string()))
+	}),
+	session_exec_snapshot_restore_skipped: v.object({
+		sessionId: v.string(),
+		reason: v.string()
+	}),
+	session_exec_error: v.object({
+		toolCallId: v.string(),
+		sessionId: v.optional(v.string()),
+		message: v.string()
 	})
 }
 

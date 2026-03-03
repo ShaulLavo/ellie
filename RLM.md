@@ -31,7 +31,7 @@ Ellie already has most of the hard operational pieces:
 
 - agent loop + eventing,
 - shell/search/edit tools,
-- script execution via `run_ptc_script`,
+- script execution via `script_exec`,
 - runtime guardrail layer end-to-end,
 - durable event store/session model.
 
@@ -164,7 +164,7 @@ These are directly relevant to Ellie if we add recursive REPL calls.
 - Shell tool (`Bun.spawn` wrapper).
 - Ripgrep tool.
 - Workspace read/write tools.
-- `run_ptc_script` (sandboxed TypeScript execution over bridged tools).
+- `script_exec` (sandboxed TypeScript execution over bridged tools).
 
 ### Runtime guardrail layer (already production-grade)
 
@@ -186,7 +186,7 @@ End-to-end implemented and tested:
 ## 5.2 What Ellie does not have yet (RLM gap)
 
 1. No persistent REPL namespace across turns.
-   `run_ptc_script` executes a child process per invocation and resets state.
+   `script_exec` executes a child process per invocation and resets state.
 
 2. No print-gated context contract.
    Tool outputs are still returned as text payloads into conversation history (with truncation safety, but still context pollution).
@@ -196,7 +196,7 @@ End-to-end implemented and tested:
 
 4. No first-class recursive sub-call primitive with tree-shared budgets and trace.
 
-5. No explicit REPL-state observability model (`repl_exec`, `repl_snapshot`, etc.).
+5. No explicit REPL-state observability model (`session_exec`, `session_exec_snapshot_saved`, etc.).
 
 ---
 
@@ -284,17 +284,19 @@ For async mode, preserve ypi's good pattern:
 
 ## 7.6 Events and observability additions
 
-Add event types (example):
+Exec-mode event types (implemented):
 
-- `repl_session_restored`
-- `repl_exec_start`
-- `repl_exec_end`
-- `repl_commit`
-- `repl_snapshot_saved`
+- `script_exec_start` / `script_exec_end` / `script_exec_error`
+- `session_exec_start` / `session_exec_commit` / `session_exec_end`
+- `session_exec_snapshot_saved` / `session_exec_snapshot_restore_skipped`
+- `session_exec_error`
+
+Future (recursive delegation, out of scope for current milestone):
+
 - `subagent_spawned`
 - `subagent_completed`
 
-These should coexist with current events (`message_*`, `turn_*`, `limit_hit`).
+These coexist with current events (`message_*`, `turn_*`, `limit_hit`).
 
 ---
 
@@ -302,7 +304,7 @@ These should coexist with current events (`message_*`, `turn_*`, `limit_hit`).
 
 ## Phase 0: Instrumentation-first
 
-- Measure how often `run_ptc_script` is used and output sizes.
+- Measure how often `script_exec` is used and output sizes.
 - Add counters around tool-result context contribution.
 
 ## Phase 1: Persistent REPL runtime service
@@ -398,7 +400,7 @@ This already gives the main RLM behavior change without requiring full recursive
   - `packages/agent/test/agent-loop.test.ts`
   - `apps/server/src/agent/controller.ts`
   - `apps/server/src/agent/guardrail-policy.ts`
-  - `apps/server/src/agent/tools/{shell-tool.ts,ripgrep-tool.ts,workspace-tools.ts,ptc/ptc-tool.ts}`
+  - `apps/server/src/agent/tools/{shell-tool.ts,ripgrep-tool.ts,workspace-tools.ts,script-exec/script-exec-tool.ts,session-exec/session-exec-tool.ts}`
   - `packages/env/src/server.ts`
   - `packages/db/src/event-store.ts`
   - `packages/schemas/src/agent.ts`

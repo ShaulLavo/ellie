@@ -102,7 +102,8 @@ describe('AgentController', () => {
 		workspaceDir = seedWorkspace(tmpDir)
 		controller = new AgentController(store, {
 			adapter: createMockAdapter(),
-			workspaceDir
+			workspaceDir,
+			dataDir: tmpDir
 		})
 	})
 
@@ -233,6 +234,7 @@ describe('AgentController', () => {
 		const guardedController = new AgentController(store, {
 			adapter: createMockAdapter(),
 			workspaceDir,
+			dataDir: tmpDir,
 			agentOptions: {
 				guardrails: {
 					runtimeLimits: { maxModelCalls: 10 }
@@ -279,6 +281,7 @@ describe('AgentController', () => {
 		const guardedController = new AgentController(store, {
 			adapter: createMockAdapter(undefined, 50),
 			workspaceDir,
+			dataDir: tmpDir,
 			agentOptions: {
 				guardrails: {
 					runtimeLimits: { maxModelCalls: 1 }

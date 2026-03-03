@@ -4,7 +4,7 @@ import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import { createPtcTool } from './ptc-tool'
+import { createScriptExecTool } from './script-exec-tool'
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -50,11 +50,13 @@ function makeFailTool(): AgentTool {
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
-describe('createPtcTool', () => {
+describe('createScriptExecTool', () => {
 	test('success: script calls tool and outputs result', async () => {
-		const ptcTool = createPtcTool([makeEchoTool()])
+		const scriptExecTool = createScriptExecTool([
+			makeEchoTool()
+		])
 
-		const result = await ptcTool.execute(
+		const result = await scriptExecTool.execute(
 			'call-1',
 			{
 				script: `
@@ -74,9 +76,9 @@ console.log(JSON.stringify(r));
 	})
 
 	test('success: plain output with no tool calls', async () => {
-		const ptcTool = createPtcTool([])
+		const scriptExecTool = createScriptExecTool([])
 
-		const result = await ptcTool.execute(
+		const result = await scriptExecTool.execute(
 			'call-2',
 			{ script: 'console.log("just text");' },
 			undefined,
@@ -91,9 +93,9 @@ console.log(JSON.stringify(r));
 	})
 
 	test('timeout: returns error details', async () => {
-		const ptcTool = createPtcTool([])
+		const scriptExecTool = createScriptExecTool([])
 
-		const result = await ptcTool.execute(
+		const result = await scriptExecTool.execute(
 			'call-3',
 			{
 				script:
@@ -114,9 +116,11 @@ console.log(JSON.stringify(r));
 	})
 
 	test('tool error: surfaces error in output', async () => {
-		const ptcTool = createPtcTool([makeFailTool()])
+		const scriptExecTool = createScriptExecTool([
+			makeFailTool()
+		])
 
-		const result = await ptcTool.execute(
+		const result = await scriptExecTool.execute(
 			'call-4',
 			{
 				script: `
@@ -139,9 +143,11 @@ try {
 	})
 
 	test('max tool calls: returns limit error', async () => {
-		const ptcTool = createPtcTool([makeEchoTool()])
+		const scriptExecTool = createScriptExecTool([
+			makeEchoTool()
+		])
 
-		const result = await ptcTool.execute(
+		const result = await scriptExecTool.execute(
 			'call-5',
 			{
 				script: `
