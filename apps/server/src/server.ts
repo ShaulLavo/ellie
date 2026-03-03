@@ -262,16 +262,18 @@ function invalidateAgentCache() {
 	cachedController = undefined
 }
 
-// Eagerly resolve once at startup so first request doesn't pay the cost
-await getAgentController()
-
 // ── Hindsight (memory) ────────────────────────────────────────────────────
 // Single default bank is created lazily on first access.
+// Must be initialised before getAgentController() so MemoryOrchestrator
+// receives a valid hindsight reference.
 const hindsightAdapter = await resolveAdapter()
 const hindsight = new Hindsight({
 	dbPath: `${DATA_DIR}/hindsight.db`,
 	...(hindsightAdapter ? { adapter: hindsightAdapter } : {})
 })
+
+// Eagerly resolve once at startup so first request doesn't pay the cost
+await getAgentController()
 
 // ── Tus uploads ───────────────────────────────────────────────────────────
 const uploadStore = new FileStore({
