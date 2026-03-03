@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
-import { createAgentToolBridge } from '../src/adapters/agent-tool'
+import { createAgentToolBridge } from './bridge'
 import type {
 	AgentTool,
 	AgentToolResult
@@ -19,13 +19,18 @@ function makeAgentTool(
 			name: v.string()
 		}),
 		execute: async (
-			_callId: string,
-			params: { name: string }
+			_callId,
+			params
 		): Promise<AgentToolResult> => ({
 			content: [
-				{ type: 'text', text: `Hello, ${params.name}!` }
+				{
+					type: 'text',
+					text: `Hello, ${(params as { name: string }).name}!`
+				}
 			],
-			details: { greeted: params.name }
+			details: {
+				greeted: (params as { name: string }).name
+			}
 		}),
 		...overrides
 	}
@@ -65,7 +70,7 @@ describe('createAgentToolBridge', () => {
 		})
 
 		expect(result).toBeDefined()
-		const typed = result as AgentToolResult
+		const typed = result as unknown as AgentToolResult
 		expect(typed.content).toHaveLength(1)
 		expect(typed.content[0].type).toBe('text')
 		expect(
@@ -109,7 +114,7 @@ describe('createAgentToolBridge', () => {
 
 		const result = (await client.callTool('greet', {
 			name: 'Test'
-		})) as AgentToolResult
+		})) as unknown as AgentToolResult
 		expect(result.content).toHaveLength(2)
 		expect(result.details).toEqual({
 			multi: true,

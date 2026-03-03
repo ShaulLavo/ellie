@@ -1,4 +1,4 @@
-// PTC child SDK runtime – this file is read as a string and injected
+// Code-exec child runtime – this file is read as a string and injected
 // into generated child scripts. It must be self-contained.
 //
 // DO NOT import this file. It is read via Bun.file() at generation time.
@@ -12,25 +12,24 @@ const __pending = new Map<
 >()
 let __callCounter = 0
 
-interface __PtcResult {
-	__ptc_result__: true
+interface __ExecResult {
+	__ce_result__: true
 	id: string
 	result?: unknown
 	error?: unknown
 }
 
-function __isPtcResult(msg: unknown): msg is __PtcResult {
+function __isExecResult(msg: unknown): msg is __ExecResult {
 	if (typeof msg !== 'object' || msg === null) return false
 	const obj = msg as Record<string, unknown>
 	return (
-		obj.__ptc_result__ === true &&
-		typeof obj.id === 'string'
+		obj.__ce_result__ === true && typeof obj.id === 'string'
 	)
 }
 
 // IPC message handler – resolves pending tool-result promises.
 process.on('message', (msg: unknown) => {
-	if (!__isPtcResult(msg)) return
+	if (!__isExecResult(msg)) return
 	const p = __pending.get(msg.id)
 	if (p) {
 		__pending.delete(msg.id)
@@ -55,7 +54,7 @@ async function __callTool(
 		}
 	)
 	process.send!({
-		__ptc_call__: true,
+		__ce_call__: true,
 		id,
 		tool: name,
 		args: args ?? {}

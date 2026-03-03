@@ -2,18 +2,18 @@ import type { AgentTool } from '@ellie/agent'
 import { ulid } from 'fast-ulid'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
-import { executePTC } from '../ptc-host'
+import { execute } from '@ellie/code-exec'
 import type {
-	ExecutePTCOptions,
+	ExecuteOptions,
 	JsonSchema,
 	ToolClient,
 	ToolDefinition,
 	ToolResult
-} from '../types'
+} from '@ellie/code-exec'
 
 /**
  * Convert an AgentTool[] into generic ToolDefinition[] + ToolClient
- * so they can be used with `executePTC`.
+ * so they can be used with `execute`.
  */
 export function createAgentToolBridge(
 	agentTools: AgentTool[]
@@ -54,7 +54,7 @@ export function createAgentToolBridge(
 			const parsed = v.parse(tool.parameters, args)
 
 			// Execute tool – we generate a synthetic call ID
-			const callId = `ptc-${ulid()}`
+			const callId = `ce-${ulid()}`
 			const result = await tool.execute(callId, parsed)
 
 			return result as unknown as ToolResult
@@ -65,15 +65,15 @@ export function createAgentToolBridge(
 }
 
 /**
- * Convenience: run agent code with AgentTool[] directly, handling
+ * Convenience: run code with AgentTool[] directly, handling
  * the bridge internally.
  */
-export async function executePTCFromAgentTools(
-	agentCode: string,
+export async function executeFromAgentTools(
+	code: string,
 	agentTools: AgentTool[],
-	options?: ExecutePTCOptions
+	options?: ExecuteOptions
 ): Promise<string> {
 	const { tools, client } =
 		createAgentToolBridge(agentTools)
-	return executePTC(agentCode, tools, client, options)
+	return execute(code, tools, client, options)
 }

@@ -29,8 +29,8 @@ export interface ToolClient {
 	): Promise<ToolResult>
 }
 
-/** Options controlling PTC execution limits. */
-export interface ExecutePTCOptions {
+/** Options controlling execution limits. */
+export interface ExecuteOptions {
 	/** Kill child after this many ms. @default 30_000 */
 	timeoutMs?: number
 	/** Max tool round-trips before aborting. @default 64 */
@@ -43,14 +43,14 @@ export interface ExecutePTCOptions {
 	tempDir?: string
 }
 
-export const PTC_DEFAULTS = {
+export const DEFAULTS = {
 	timeoutMs: 30_000,
 	maxToolCalls: 64,
 	maxOutputBytes: 262_144,
 	captureStderrBytes: 65_536
 } as const
 
-export type PTCErrorCode =
+export type ErrorCode =
 	| 'TIMEOUT'
 	| 'SCRIPT_EXIT'
 	| 'SCRIPT_RUNTIME'
@@ -58,15 +58,15 @@ export type PTCErrorCode =
 	| 'SPAWN_FAILED'
 	| 'PROTOCOL_ERROR'
 
-export class PTCExecutionError extends Error {
-	readonly code: PTCErrorCode
+export class ExecutionError extends Error {
+	readonly code: ErrorCode
 	readonly exitCode?: number
 	readonly stderrSnippet?: string
 	readonly toolCallsUsed?: number
 	readonly outputBytes?: number
 
 	constructor(
-		code: PTCErrorCode,
+		code: ErrorCode,
 		message: string,
 		opts?: {
 			exitCode?: number
@@ -77,7 +77,7 @@ export class PTCExecutionError extends Error {
 		}
 	) {
 		super(message, { cause: opts?.cause })
-		this.name = 'PTCExecutionError'
+		this.name = 'ExecutionError'
 		this.code = code
 		this.exitCode = opts?.exitCode
 		this.stderrSnippet = opts?.stderrSnippet

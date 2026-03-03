@@ -2,17 +2,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unlink, writeFile } from 'node:fs/promises'
 import { ulid } from 'fast-ulid'
-import { buildScript } from './ptc-runtime'
+import { buildScript } from './script-builder'
 import {
-	PTC_DEFAULTS,
-	PTCExecutionError,
-	type ExecutePTCOptions,
+	DEFAULTS,
+	ExecutionError,
+	type ExecuteOptions,
 	type ToolClient,
 	type ToolDefinition
 } from './types'
 
 interface ToolCallMessage {
-	__ptc_call__: true
+	__ce_call__: true
 	id: string
 	tool: string
 	args: Record<string, unknown>
@@ -22,7 +22,7 @@ function isToolCall(msg: unknown): msg is ToolCallMessage {
 	if (typeof msg !== 'object' || msg === null) return false
 	const obj = msg as Record<string, unknown>
 	return (
-		obj.__ptc_call__ === true &&
+		obj.__ce_call__ === true &&
 		typeof obj.id === 'string' &&
 		typeof obj.tool === 'string' &&
 		typeof obj.args === 'object' &&
@@ -31,39 +31,45 @@ function isToolCall(msg: unknown): msg is ToolCallMessage {
 }
 
 /**
- * Execute agent code in a Bun child process, bridging tool
+ * Execute user code in a Bun child process, bridging tool
  * calls over IPC.
  */
-export async function executePTC(
-	agentCode: string,
+export async function execute(
+	userCode: string,
 	tools: ToolDefinition[],
 	toolClient: ToolClient,
-	options?: ExecutePTCOptions
+	options?: ExecuteOptions
 ): Promise<string> {
 	const opts = {
-		timeoutMs: options?.timeoutMs ?? PTC_DEFAULTS.timeoutMs,
+		timeoutMs: options?.timeoutMs ?? DEFAULTS.timeoutMs,
 		maxToolCalls:
-			options?.maxToolCalls ?? PTC_DEFAULTS.maxToolCalls,
+			options?.maxToolCalls ?? DEFAULTS.maxToolCalls,
 		maxOutputBytes:
-			options?.maxOutputBytes ??
-			PTC_DEFAULTS.maxOutputBytes,
+			options?.maxOutputBytes ?? DEFAULTS.maxOutputBytes,
 		captureStderrBytes:
 			options?.captureStderrBytes ??
-			PTC_DEFAULTS.captureStderrBytes,
+			DEFAULTS.captureStderrBytes,
 		tempDir: options?.tempDir ?? tmpdir()
 	}
 
 	// ── 1. Build & write temp script ────────────────────────────────
-	const script = await buildScript(agentCode, tools)
-	const tmpFile = join(opts.tempDir, `ptc-${ulid()}.ts`)
+	const script = await buildScript(userCode, tools)
+	const tmpFile = join(opts.tempDir, `ce-${ulid()}.ts`)
 	await writeFile(tmpFile, script, 'utf-8')
 
 	// ── 2. Spawn child with IPC ─────────────────────────────────────
 	let toolCallCount = 0
-	let limitError: PTCExecutionError | null = null
+	let limitError: ExecutionError | null = null
 	let timedOut = false
 
-	let proc: ReturnType<typeof Bun.spawn>
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Bun.spawn generics vary by stdio config
+	let proc: {
+		kill(): void
+		send(msg: unknown): void
+		stdout: unknown
+		stderr: unknown
+		exited: Promise<number | null>
+	}
 	try {
 		proc = Bun.spawn(
 			[
@@ -83,7 +89,7 @@ export async function executePTC(
 
 					toolCallCount++
 					if (toolCallCount > opts.maxToolCalls) {
-						limitError = new PTCExecutionError(
+						limitError = new ExecutionError(
 							'SCRIPT_RUNTIME',
 							`Exceeded max tool calls (${opts.maxToolCalls})`,
 							{
@@ -99,7 +105,7 @@ export async function executePTC(
 						.then(result => {
 							try {
 								proc?.send({
-									__ptc_result__: true,
+									__ce_result__: true,
 									id: message.id,
 									result
 								})
@@ -114,7 +120,7 @@ export async function executePTC(
 									: String(err)
 							try {
 								proc?.send({
-									__ptc_result__: true,
+									__ce_result__: true,
 									id: message.id,
 									error: errMsg
 								})
@@ -127,7 +133,7 @@ export async function executePTC(
 		)
 	} catch (err) {
 		await cleanup(tmpFile)
-		throw new PTCExecutionError(
+		throw new ExecutionError(
 			'SPAWN_FAILED',
 			'Failed to spawn child process',
 			{
@@ -159,7 +165,7 @@ export async function executePTC(
 					if (done) break
 					outputBytes += value.byteLength
 					if (outputBytes > opts.maxOutputBytes) {
-						limitError = new PTCExecutionError(
+						limitError = new ExecutionError(
 							'OUTPUT_LIMIT',
 							`Output exceeded ${opts.maxOutputBytes} bytes`,
 							{ outputBytes }
@@ -213,7 +219,7 @@ export async function executePTC(
 		}
 
 		if (timedOut) {
-			throw new PTCExecutionError(
+			throw new ExecutionError(
 				'TIMEOUT',
 				`Child exceeded ${opts.timeoutMs}ms timeout`,
 				{
@@ -224,7 +230,7 @@ export async function executePTC(
 		}
 
 		if (exitCode !== 0) {
-			throw new PTCExecutionError(
+			throw new ExecutionError(
 				'SCRIPT_EXIT',
 				`Child exited with code ${exitCode}`,
 				{

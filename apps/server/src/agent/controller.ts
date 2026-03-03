@@ -27,7 +27,7 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
-import { createPtcTool } from './tools/ptc-tool'
+import { createPtcTool } from './tools/ptc'
 import { createWorkspaceTools } from './tools/workspace-tools'
 
 // ── Config ───────────────────────────────────────────────────────────────────

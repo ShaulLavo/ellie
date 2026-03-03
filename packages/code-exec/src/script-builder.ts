@@ -52,12 +52,12 @@ function generateToolWrappers(
 
 /**
  * Build a complete self-contained script string that:
- * 1. Includes the runtime preamble (stdin reader + __callTool).
+ * 1. Includes the runtime preamble (IPC handler + __callTool).
  * 2. Includes simple tool wrapper functions.
- * 3. Wraps the agent code in an async IIFE with auto-termination.
+ * 3. Wraps the user code in an async IIFE with auto-termination.
  */
 export async function buildScript(
-	agentCode: string,
+	userCode: string,
 	tools: ToolDefinition[]
 ): Promise<string> {
 	const [runtime, wrapper] = await Promise.all([
@@ -66,7 +66,7 @@ export async function buildScript(
 	])
 
 	const wrappers = generateToolWrappers(tools)
-	const indented = indentBlock(agentCode, 2)
+	const indented = indentBlock(userCode, 2)
 	const script = wrapper.replace(
 		'// {{AGENT_CODE}}',
 		indented

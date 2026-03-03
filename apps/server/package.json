@@ -15,10 +15,10 @@
 	"dependencies": {
 		"@ellie/agent": "workspace:*",
 		"@ellie/ai": "workspace:*",
+		"@ellie/code-exec": "workspace:*",
 		"@ellie/db": "workspace:*",
 		"@ellie/env": "workspace:*",
 		"@ellie/hindsight": "workspace:*",
-		"@ellie/ptc": "workspace:*",
 		"@ellie/schemas": "workspace:*",
 		"@ellie/tus": "workspace:*",
 		"@ellie/utils": "workspace:*",
@@ -30,6 +30,7 @@
 		"@valibot/to-json-schema": "^1.5.0",
 		"croner": "^6.0.7",
 		"elysia": "^1.4.25",
+		"fast-ulid": "^1.2.1",
 		"valibot": "^1.2.0"
 	},
 	"devDependencies": {

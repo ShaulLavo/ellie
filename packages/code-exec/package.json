@@ -1,5 +1,5 @@
 {
-	"name": "@ellie/ptc",
+	"name": "@ellie/code-exec",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
@@ -13,10 +13,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@ellie/agent": "workspace:*",
-		"@valibot/to-json-schema": "^1.5.0",
-		"fast-ulid": "^1.2.1",
-		"valibot": "^1.2.0"
+		"fast-ulid": "^1.2.1"
 	},
 	"devDependencies": {
 		"@repo/typescript-config": "workspace:*",
