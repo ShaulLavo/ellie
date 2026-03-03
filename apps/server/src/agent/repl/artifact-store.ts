@@ -31,13 +31,13 @@ export interface Artifact {
 
 export class ArtifactStore {
 	readonly #dir: string
-	#ready: Promise<void>
 
 	constructor(dataDir: string) {
 		this.#dir = join(dataDir, 'repl-artifacts')
-		this.#ready = mkdir(this.#dir, {
-			recursive: true
-		}).then(() => {})
+	}
+
+	async #ensureDir(): Promise<void> {
+		await mkdir(this.#dir, { recursive: true })
 	}
 
 	/**
@@ -48,7 +48,7 @@ export class ArtifactStore {
 		code: string,
 		raw: string
 	): Promise<Artifact> {
-		await this.#ready
+		await this.#ensureDir()
 
 		const artifact: Artifact = {
 			id: ulid(),
@@ -69,7 +69,7 @@ export class ArtifactStore {
 	 * Read all artifacts for a session (JSONL format).
 	 */
 	async list(sessionId: string): Promise<Artifact[]> {
-		await this.#ready
+		await this.#ensureDir()
 		const path = this.#artifactPath(sessionId)
 
 		try {

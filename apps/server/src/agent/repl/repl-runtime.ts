@@ -49,7 +49,17 @@ export class ReplRuntime {
 	readonly sessionId: string
 	readonly #createdAt: number
 
-	#proc: ReturnType<typeof Bun.spawn> | null = null
+	// Bun.spawn generics vary by stdio config — define the shape we need
+	#proc: {
+		pid: number
+		stdin: {
+			write(data: string | Uint8Array): number
+			flush(): void
+		}
+		stdout: ReadableStream<Uint8Array>
+		kill(): void
+		exited: Promise<number | null>
+	} | null = null
 	#lastEvalAt: number | null = null
 	#alive = false
 

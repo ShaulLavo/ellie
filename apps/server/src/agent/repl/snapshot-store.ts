@@ -51,13 +51,13 @@ function isEnoent(err: unknown): boolean {
 
 export class SnapshotStore {
 	readonly #dir: string
-	#ready: Promise<void>
 
 	constructor(dataDir: string) {
 		this.#dir = join(dataDir, 'repl-snapshots')
-		this.#ready = mkdir(this.#dir, {
-			recursive: true
-		}).then(() => {})
+	}
+
+	async #ensureDir(): Promise<void> {
+		await mkdir(this.#dir, { recursive: true })
 	}
 
 	/**
@@ -69,7 +69,7 @@ export class SnapshotStore {
 		gitHead: string | null,
 		globals: Record<string, unknown>
 	): Promise<SnapshotMetadata> {
-		await this.#ready
+		await this.#ensureDir()
 
 		const metadata: SnapshotMetadata = {
 			sessionId,
@@ -117,7 +117,7 @@ export class SnapshotStore {
 		workspaceDir: string,
 		gitHead: string | null
 	): Promise<Snapshot | null> {
-		await this.#ready
+		await this.#ensureDir()
 		const path = this.#snapshotPath(sessionId)
 
 		let raw: string
@@ -173,7 +173,7 @@ export class SnapshotStore {
 	 * Delete a snapshot. Ignores missing files, propagates other errors.
 	 */
 	async delete(sessionId: string): Promise<void> {
-		await this.#ready
+		await this.#ensureDir()
 		const path = this.#snapshotPath(sessionId)
 		try {
 			await unlink(path)
@@ -186,7 +186,7 @@ export class SnapshotStore {
 	 * Check if a snapshot exists. Propagates non-ENOENT errors.
 	 */
 	async has(sessionId: string): Promise<boolean> {
-		await this.#ready
+		await this.#ensureDir()
 		try {
 			await access(this.#snapshotPath(sessionId))
 			return true
