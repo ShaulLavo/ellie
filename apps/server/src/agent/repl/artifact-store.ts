@@ -6,7 +6,12 @@
  * can be inspected on demand.
  */
 
-import { mkdir, appendFile, readFile, access } from 'fs/promises'
+import {
+	mkdir,
+	appendFile,
+	readFile,
+	access
+} from 'fs/promises'
 import { join } from 'path'
 import { ulid } from 'fast-ulid'
 
@@ -30,9 +35,9 @@ export class ArtifactStore {
 
 	constructor(dataDir: string) {
 		this.#dir = join(dataDir, 'repl-artifacts')
-		this.#ready = mkdir(this.#dir, { recursive: true }).then(
-			() => {}
-		)
+		this.#ready = mkdir(this.#dir, {
+			recursive: true
+		}).then(() => {})
 	}
 
 	/**

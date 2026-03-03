@@ -29,7 +29,8 @@ export { withRetry } from './retry'
 export type { RetryOptions } from './retry'
 export {
 	trimMessages,
-	estimateTokens
+	estimateTokens,
+	removeOrphans
 } from './context-recovery'
 export type { ContextRecoveryOptions } from './context-recovery'
 export { truncateToolResult } from './tool-safety'

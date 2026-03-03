@@ -64,7 +64,10 @@ export function createToolRegistry(
 	]
 
 	const sessionExecTools: AgentTool[] = [
-		createSessionExecTool(config.dataDir, config.getSessionId)
+		createSessionExecTool(
+			config.dataDir,
+			config.getSessionId
+		)
 	]
 
 	return {

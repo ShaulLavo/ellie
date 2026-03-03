@@ -55,9 +55,9 @@ export class SnapshotStore {
 
 	constructor(dataDir: string) {
 		this.#dir = join(dataDir, 'repl-snapshots')
-		this.#ready = mkdir(this.#dir, { recursive: true }).then(
-			() => {}
-		)
+		this.#ready = mkdir(this.#dir, {
+			recursive: true
+		}).then(() => {})
 	}
 
 	/**

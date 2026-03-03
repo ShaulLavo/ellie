@@ -22,7 +22,10 @@ import * as v from 'valibot'
 import { EventStream } from './event-stream'
 import { toModelMessages } from './messages'
 import { withRetry } from './retry'
-import { trimMessages } from './context-recovery'
+import {
+	trimMessages,
+	removeOrphans
+} from './context-recovery'
 import {
 	truncateToolResult,
 	needsTruncation
@@ -1293,14 +1296,27 @@ async function processAgentStreamWithRetry(
 
 			// --- Retryable error: prepare for retry ---
 
-			// Pop the error assistant message from context
+			// Pop the error assistant message AND its tool results from context
 			// (zclaw's history_rollback pattern — don't let the LLM see its own error)
 			const errorAssistant = processResult.lastAssistant
-			const contextIdx =
-				context.messages.indexOf(errorAssistant)
-			if (contextIdx !== -1) {
-				context.messages.splice(contextIdx, 1)
-			}
+			const errorToolCallIds = new Set(
+				errorAssistant.content
+					.filter(b => b.type === 'toolCall')
+					.map(
+						b => (b as { type: 'toolCall'; id: string }).id
+					)
+			)
+			// Remove both the error assistant and its orphaned tool results
+			context.messages = context.messages.filter(
+				m =>
+					m !== errorAssistant &&
+					!(
+						m.role === 'toolResult' &&
+						errorToolCallIds.has(
+							(m as ToolResultMessage).toolCallId
+						)
+					)
+			)
 
 			// If recovery needed (context_overflow), trim context first
 			if (classified.requiresRecovery) {
@@ -1423,6 +1439,10 @@ async function processAgentStream(
 			signal
 		)
 	}
+
+	// Sanitize orphaned tool results/calls before sending to API.
+	// Orphans can appear after error-retry rollbacks or process crashes.
+	messages = removeOrphans(messages)
 
 	// Convert to LLM-compatible messages
 	const llmMessages = toModelMessages(messages)

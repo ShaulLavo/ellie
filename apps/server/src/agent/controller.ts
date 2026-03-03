@@ -496,7 +496,10 @@ export class AgentController {
 			this.store.publishEphemeral(
 				sessionId,
 				'message_update',
-				{ streamEvent: event.streamEvent },
+				{
+					streamEvent: event.streamEvent,
+					message: event.message
+				},
 				runId ?? undefined
 			)
 			return

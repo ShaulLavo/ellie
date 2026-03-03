@@ -230,12 +230,18 @@ function AssistantMessageContent({
 	msg: Message
 	toolResultMap: Map<string, ToolResultInfo>
 }) {
-	// Error messages: show the error text prominently
+	// Error messages: show in a styled error block
 	if (msg.stopReason === 'error') {
+		const errorText = getErrorText(msg.errorMessage)
 		return (
-			<p className="text-destructive">
-				{getErrorText(msg.errorMessage)}
-			</p>
+			<div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+				<div className="flex items-center gap-2 mb-1.5 font-medium text-destructive">
+					<span>Error</span>
+				</div>
+				<pre className="whitespace-pre-wrap break-words font-mono text-xs text-destructive/90 bg-destructive/5 rounded p-2 overflow-x-auto">
+					{errorText}
+				</pre>
+			</div>
 		)
 	}
 
@@ -466,9 +472,14 @@ export function AIChatPanel({
 				onCopy={handleMessagesCopy}
 			>
 				{error && (
-					<p className="mx-4 my-2 text-xs text-destructive">
-						{error.message}
-					</p>
+					<div className="mx-4 my-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+						<div className="flex items-center gap-2 mb-1.5 font-medium text-destructive">
+							Connection Error
+						</div>
+						<pre className="whitespace-pre-wrap break-words font-mono text-xs text-destructive/90 bg-destructive/5 rounded p-2 overflow-x-auto">
+							{error.message}
+						</pre>
+					</div>
 				)}
 
 				{!isLoading && messages.length === 0 && (

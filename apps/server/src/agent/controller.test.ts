@@ -336,6 +336,7 @@ describe('AgentController', () => {
 		const memoryController = new AgentController(store, {
 			adapter: createMockAdapter(),
 			workspaceDir,
+			dataDir: tmpDir,
 			memory: createMockMemory()
 		})
 
@@ -377,6 +378,7 @@ describe('AgentController', () => {
 		const memoryController = new AgentController(store, {
 			adapter: createMockAdapter(),
 			workspaceDir,
+			dataDir: tmpDir,
 			memory: createMockMemory()
 		})
 
@@ -416,6 +418,7 @@ describe('AgentController', () => {
 		const memoryController = new AgentController(store, {
 			adapter: createMockAdapter(),
 			workspaceDir,
+			dataDir: tmpDir,
 			memory: createMockMemory()
 		})
 

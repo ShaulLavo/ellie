@@ -249,7 +249,7 @@ export function isApproachingLimit(
  * no longer in the message array, and orphaned assistant messages that
  * have tool calls with no corresponding tool results.
  */
-function removeOrphans(
+export function removeOrphans(
 	messages: AgentMessage[]
 ): AgentMessage[] {
 	// Collect all toolCall IDs from assistant messages
@@ -273,22 +273,23 @@ function removeOrphans(
 		}
 	}
 
-	return messages.filter(msg => {
+	const result: AgentMessage[] = []
+	for (const msg of messages) {
 		// Remove toolResult messages that reference missing tool calls
 		if (msg.role === 'toolResult') {
 			const toolMsg = msg as ToolResultMessage
-			return toolCallIds.has(toolMsg.toolCallId)
+			if (!toolCallIds.has(toolMsg.toolCallId)) continue
+			result.push(msg)
+			continue
 		}
 
-		// Remove assistant messages that have tool calls with no results
-		// (incomplete tool call/result pairs at the trim boundary)
+		// Handle assistant messages with orphaned tool calls
 		if (msg.role === 'assistant') {
 			const assistantMsg = msg as AssistantMessage
 			const hasToolCalls = assistantMsg.content.some(
 				b => b.type === 'toolCall'
 			)
 			if (hasToolCalls) {
-				// Check if ALL tool calls have corresponding results
 				const allHaveResults = assistantMsg.content
 					.filter(b => b.type === 'toolCall')
 					.every(b =>
@@ -296,14 +297,34 @@ function removeOrphans(
 							(b as { type: 'toolCall'; id: string }).id
 						)
 					)
-				// Keep the message if it has text content even without tool results
-				const hasTextContent = assistantMsg.content.some(
-					b => b.type === 'text' && b.text.trim().length > 0
-				)
-				return allHaveResults || hasTextContent
+				if (!allHaveResults) {
+					// Strip orphaned tool calls but keep text/thinking content
+					const nonToolContent =
+						assistantMsg.content.filter(
+							b => b.type !== 'toolCall'
+						)
+					const hasTextContent = nonToolContent.some(
+						b =>
+							b.type === 'text' && b.text.trim().length > 0
+					)
+					if (hasTextContent) {
+						// Keep the message but without orphaned tool calls
+						result.push({
+							...assistantMsg,
+							content: nonToolContent,
+							stopReason:
+								assistantMsg.stopReason === 'toolUse'
+									? 'stop'
+									: assistantMsg.stopReason
+						} as AssistantMessage)
+					}
+					// else: no text content and no valid tool calls → drop entirely
+					continue
+				}
 			}
 		}
 
-		return true
-	})
+		result.push(msg)
+	}
+	return result
 }

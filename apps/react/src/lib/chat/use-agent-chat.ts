@@ -58,9 +58,6 @@ function eventToMessage(
 		row.type === 'tool_result'
 	) {
 		if (isMessagePayload(payload)) {
-			console.log(
-				`[useAgentChat] eventToMessage id=${row.id} seq=${row.seq} type=${row.type} role=${payload.role} stopReason=${payload.stopReason ?? 'none'} errorMessage=${typeof payload.errorMessage === 'string' ? payload.errorMessage.slice(0, 100) : 'none'} contentLength=${Array.isArray(payload.content) ? payload.content.length : 0}`
-			)
 			return payload
 		}
 		console.warn(
@@ -68,6 +65,23 @@ function eventToMessage(
 			payload
 		)
 		return null
+	}
+	return null
+}
+
+/**
+ * Extract the streaming message snapshot from a message_update event.
+ */
+function getStreamingMessage(
+	row: EventRow
+): AgentMessage | null {
+	if (row.type !== 'message_update') return null
+	const payload = parsePayload(row)
+	const msg = payload.message as
+		| Record<string, unknown>
+		| undefined
+	if (msg && isMessagePayload(msg)) {
+		return msg
 	}
 	return null
 }
@@ -122,6 +136,8 @@ export function useAgentChat(sessionId: string) {
 		[]
 	)
 	const lastSeqRef = useRef(0)
+	/** Tracks whether we have a streaming assistant message appended */
+	const streamingRef = useRef(false)
 
 	const [isSending, setIsSending] = useState(false)
 
@@ -181,30 +197,50 @@ export function useAgentChat(sessionId: string) {
 		const onAppend = (event: MessageEvent) => {
 			try {
 				const row = JSON.parse(event.data) as EventRow
-				console.log(
-					`[useAgentChat] append received id=${row.id} seq=${row.seq} type=${row.type} session=${sessionId}`
-				)
 				if (row.seq > lastSeqRef.current)
 					lastSeqRef.current = row.seq
 
 				// Track agent run lifecycle
 				if (AGENT_START_TYPES.has(row.type)) {
 					setIsAgentRunning(true)
+					streamingRef.current = false
 				} else if (AGENT_END_TYPES.has(row.type)) {
 					setIsAgentRunning(false)
+					streamingRef.current = false
+				}
+
+				// Handle streaming updates — upsert the in-progress assistant message
+				const streamMsg = getStreamingMessage(row)
+				if (streamMsg) {
+					if (!streamingRef.current) {
+						// First streaming chunk — append new message
+						streamingRef.current = true
+						setMessages(current => [...current, streamMsg])
+					} else {
+						// Subsequent chunks — replace the last message
+						setMessages(current => [
+							...current.slice(0, -1),
+							streamMsg
+						])
+					}
+					return
 				}
 
 				const msg = eventToMessage(row)
 				if (msg) {
-					console.log(
-						`[useAgentChat] appending message role=${msg.role} stopReason=${msg.stopReason ?? 'none'}`
-					)
-					// Events arrive in monotonic seq order over SSE — just append
-					setMessages(current => [...current, msg])
-				} else {
-					console.log(
-						`[useAgentChat] append skipped — eventToMessage returned null for type=${row.type}`
-					)
+					if (
+						row.type === 'assistant_final' &&
+						streamingRef.current
+					) {
+						// Replace the streaming message with the final version
+						streamingRef.current = false
+						setMessages(current => [
+							...current.slice(0, -1),
+							msg
+						])
+					} else {
+						setMessages(current => [...current, msg])
+					}
 				}
 			} catch (err) {
 				console.warn(

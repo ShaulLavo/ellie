@@ -278,9 +278,7 @@ ${code}
 		if (!sawSentinel) {
 			if (streamEnded) {
 				this.#alive = false
-				throw new Error(
-					'REPL process exited unexpectedly'
-				)
+				throw new Error('REPL process exited unexpectedly')
 			}
 			if (Date.now() >= deadline) {
 				throw new Error(

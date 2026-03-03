@@ -604,7 +604,7 @@ export class EventStore {
 				)
 			}
 		}
-		return messages
+		return reorderToolResults(messages)
 	}
 
 	// ── Stale run recovery ────────────────────────────────────────────────
@@ -795,4 +795,96 @@ export class EventStore {
 		this.#audit?.close()
 		this.sqlite.close()
 	}
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Reorder messages so each toolResult comes after its parent assistant message.
+ *
+ * During a TanStack multi-turn run, tool_execution_end events (→ tool_result)
+ * are persisted before message_end (→ assistant_final) because tools execute
+ * during the stream while the assistant message finalizes after. Loading by
+ * seq gives [toolResult, assistant] — but the API expects [assistant, toolResult].
+ */
+function reorderToolResults(
+	messages: AgentMessage[]
+): AgentMessage[] {
+	// Collect all toolCall IDs from assistant messages and their indices
+	const toolCallToIdx = new Map<string, number>()
+	for (let i = 0; i < messages.length; i++) {
+		const msg = messages[i]
+		if (msg.role === 'assistant') {
+			for (const block of msg.content) {
+				if (block.type === 'toolCall') {
+					toolCallToIdx.set(
+						(
+							block as {
+								type: 'toolCall'
+								id: string
+							}
+						).id,
+						i
+					)
+				}
+			}
+		}
+	}
+
+	const result: AgentMessage[] = []
+	const deferred: AgentMessage[] = []
+
+	// Track which toolCallIds we've seen assistant messages for
+	const seenToolCallIds = new Set<string>()
+
+	for (const msg of messages) {
+		if (msg.role === 'assistant') {
+			result.push(msg)
+			for (const block of msg.content) {
+				if (block.type === 'toolCall') {
+					seenToolCallIds.add(
+						(
+							block as {
+								type: 'toolCall'
+								id: string
+							}
+						).id
+					)
+				}
+			}
+			// Flush any deferred tool results whose assistant is now seen
+			const stillDeferred: AgentMessage[] = []
+			for (const d of deferred) {
+				if (
+					d.role === 'toolResult' &&
+					seenToolCallIds.has(
+						(d as { toolCallId: string }).toolCallId
+					)
+				) {
+					result.push(d)
+				} else {
+					stillDeferred.push(d)
+				}
+			}
+			deferred.length = 0
+			deferred.push(...stillDeferred)
+		} else if (msg.role === 'toolResult') {
+			const toolCallId = (msg as { toolCallId: string })
+				.toolCallId
+			if (seenToolCallIds.has(toolCallId)) {
+				// Assistant already seen — correct order
+				result.push(msg)
+			} else {
+				// Assistant not yet seen — defer until we see it
+				deferred.push(msg)
+			}
+		} else {
+			result.push(msg)
+		}
+	}
+
+	// Append any remaining deferred (orphans — shouldn't happen normally)
+	result.push(...deferred)
+
+	return result
 }
