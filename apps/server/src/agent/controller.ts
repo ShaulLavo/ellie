@@ -391,6 +391,17 @@ export class AgentController {
 
 		const runId = this.agent.runId
 
+		// Streaming deltas → publish to SSE subscribers only, no DB write / log.
+		if (event.type === 'message_update') {
+			this.store.publishEphemeral(
+				sessionId,
+				'message_update',
+				{ streamEvent: event.streamEvent },
+				this.agent.runId ?? undefined
+			)
+			return
+		}
+
 		const eventSummary = this.summarizeEvent(event)
 		console.log(
 			`[agent-controller] event session=${sessionId} runId=${runId ?? 'none'} ${eventSummary}`
@@ -557,16 +568,7 @@ export class AgentController {
 					}
 				]
 
-			case 'message_update':
-				// Store only the delta, not the accumulated partial
-				return [
-					{
-						type: 'message_update',
-						payload: {
-							streamEvent: event.streamEvent
-						}
-					}
-				]
+			// message_update is skipped in handleEvent — never reaches here
 
 			case 'message_end': {
 				const msg = event.message

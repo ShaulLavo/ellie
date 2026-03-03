@@ -106,6 +106,34 @@ export class RealtimeStore {
 		}
 	}
 
+	// ── Ephemeral publish (SSE only, no DB write) ────────────────────────
+
+	/**
+	 * Broadcast an event to SSE subscribers without persisting to the DB.
+	 * Used for high-frequency streaming deltas (message_update) that are
+	 * redundant once the final message_end is persisted.
+	 */
+	publishEphemeral(
+		sessionId: string,
+		type: EventType,
+		payload: Record<string, unknown>,
+		runId?: string
+	): void {
+		this.#publish(`session:${sessionId}`, {
+			type: 'append',
+			event: {
+				id: -1, // ephemeral — not in DB
+				sessionId,
+				seq: -1,
+				runId: runId ?? null,
+				type,
+				payload: JSON.stringify(payload),
+				dedupeKey: null,
+				createdAt: Date.now()
+			}
+		} satisfies SessionEvent)
+	}
+
 	// ── Event append (with live notification) ─────────────────────────────
 
 	appendEvent(
