@@ -9,6 +9,7 @@ import { AgentController } from './controller'
 import { EventStore } from '@ellie/db'
 import { RealtimeStore } from '../lib/realtime-store'
 import { seedWorkspace } from './workspace'
+import type { MemoryOrchestrator } from './memory-orchestrator'
 import type {
 	AnyTextAdapter,
 	StreamChunk
@@ -82,6 +83,64 @@ function createMockAdapter(
 			}
 		}
 	} as unknown as AnyTextAdapter
+}
+
+/**
+ * Create a mock MemoryOrchestrator for testing.
+ */
+function createMockMemory(
+	recallResult?: {
+		payload: Record<string, unknown>
+		contextBlock: string
+	} | null,
+	retainResult?: Record<string, unknown> | null
+): MemoryOrchestrator {
+	return {
+		async recall(_query: string) {
+			return (
+				recallResult ?? {
+					payload: {
+						parts: [
+							{
+								type: 'memory',
+								text: 'Recalled 1 memory',
+								count: 1,
+								memories: [{ text: 'Test memory' }],
+								duration_ms: 50
+							}
+						],
+						query: _query,
+						bankIds: ['bank-1'],
+						timestamp: Date.now()
+					},
+					contextBlock:
+						'<recalled_memories>\n  1. Test memory\n</recalled_memories>'
+				}
+			)
+		},
+		async evaluateRetain(
+			_sessionId: string,
+			_force?: boolean
+		) {
+			return (
+				retainResult ?? {
+					parts: [
+						{
+							type: 'memory-retain',
+							factsStored: 2,
+							facts: ['fact1', 'fact2'],
+							duration_ms: 100
+						}
+					],
+					trigger: 'turn_count',
+					bankIds: ['bank-1'],
+					seqFrom: 1,
+					seqTo: 5,
+					timestamp: Date.now()
+				}
+			)
+		}
+	} as unknown as MemoryOrchestrator
 }
 
 // ============================================================================
@@ -262,6 +321,155 @@ describe('AgentController', () => {
 		} finally {
 			guardedController.dispose()
 		}
+	})
+
+	test('memory_recall event emitted before agent_start', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		const memoryController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			memory: createMockMemory()
+		})
+
+		try {
+			const { routed } =
+				await memoryController.handleMessage(
+					'session-1',
+					'Hello'
+				)
+			expect(routed).toBe('prompt')
+
+			// Wait for agent to complete
+			await new Promise(r => setTimeout(r, 500))
+
+			const events = eventStore.query({
+				sessionId: 'session-1'
+			})
+			const types = events.map(e => e.type)
+
+			// memory_recall should appear before agent_start
+			const recallIdx = types.indexOf('memory_recall')
+			const agentStartIdx = types.indexOf('agent_start')
+
+			expect(recallIdx).toBeGreaterThanOrEqual(0)
+			expect(agentStartIdx).toBeGreaterThan(recallIdx)
+		} finally {
+			memoryController.dispose()
+		}
+	})
+
+	test('memory_retain event emitted after agent_end', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		const memoryController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			memory: createMockMemory()
+		})
+
+		try {
+			await memoryController.handleMessage(
+				'session-1',
+				'Hello'
+			)
+
+			// Wait for agent to complete and retain to fire
+			await new Promise(r => setTimeout(r, 1000))
+
+			const events = eventStore.query({
+				sessionId: 'session-1'
+			})
+			const types = events.map(e => e.type)
+
+			// memory_retain should appear after agent_end
+			const retainIdx = types.indexOf('memory_retain')
+			const agentEndIdx = types.indexOf('agent_end')
+
+			expect(agentEndIdx).toBeGreaterThanOrEqual(0)
+			expect(retainIdx).toBeGreaterThan(agentEndIdx)
+		} finally {
+			memoryController.dispose()
+		}
+	})
+
+	test('memory_recall payload is correctly persisted', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'test query' }],
+			timestamp: Date.now()
+		})
+
+		const memoryController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			memory: createMockMemory()
+		})
+
+		try {
+			await memoryController.handleMessage(
+				'session-1',
+				'test query'
+			)
+
+			await new Promise(r => setTimeout(r, 500))
+
+			const recallEvents = eventStore.query({
+				sessionId: 'session-1',
+				types: ['memory_recall']
+			})
+
+			expect(recallEvents).toHaveLength(1)
+
+			const payload = JSON.parse(
+				recallEvents[0]!.payload as string
+			)
+			expect(payload.parts[0].type).toBe('memory')
+			expect(payload.parts[0].count).toBe(1)
+			expect(payload.query).toBe('test query')
+			expect(payload.bankIds).toContain('bank-1')
+		} finally {
+			memoryController.dispose()
+		}
+	})
+
+	test('controller works normally without memory orchestrator', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		// No memory option
+		const { routed } = await controller.handleMessage(
+			'session-1',
+			'Hello'
+		)
+		expect(routed).toBe('prompt')
+
+		await new Promise(r => setTimeout(r, 500))
+
+		const events = eventStore.query({
+			sessionId: 'session-1'
+		})
+		const types = events.map(e => e.type)
+
+		// No memory events when no orchestrator
+		expect(types).not.toContain('memory_recall')
+		expect(types).not.toContain('memory_retain')
+		expect(types).toContain('agent_start')
 	})
 
 	test('limit_hit event is persisted when guardrail triggers', async () => {
