@@ -82,7 +82,7 @@ function checkLimits(
 
 	if (
 		isLimitEnabled(limits.maxModelCalls) &&
-		state.modelCallCount >= limits.maxModelCalls
+		state.modelCallCount > limits.maxModelCalls
 	) {
 		state.limitTriggered = true
 		return {
@@ -102,7 +102,7 @@ function checkLimits(
 
 	if (
 		isLimitEnabled(limits.maxCostUsd) &&
-		state.costUsd >= limits.maxCostUsd
+		state.costUsd > limits.maxCostUsd
 	) {
 		state.limitTriggered = true
 		return {
@@ -123,7 +123,7 @@ function checkLimits(
 	// Wall-clock is enforced via AbortSignal timeout, but also check here as a fallback
 	if (isLimitEnabled(limits.maxWallClockMs)) {
 		const elapsed = Date.now() - state.startedAtMs
-		if (elapsed >= limits.maxWallClockMs) {
+		if (elapsed > limits.maxWallClockMs) {
 			state.limitTriggered = true
 			return {
 				type: 'limit_hit',
@@ -745,23 +745,21 @@ async function runLoop(
 			newMessages.push(msg)
 		}
 
-		// --- Guardrail check: after model call (cost/model-calls may have changed) ---
-		if (!result.abortedOrError) {
-			const postLimitEvent = checkLimits(
-				guardrailState,
-				limits
+		// --- Guardrail check: after model call (cost may have changed even on error) ---
+		const postLimitEvent = checkLimits(
+			guardrailState,
+			limits
+		)
+		if (postLimitEvent) {
+			emitLimitHitAndStop(
+				postLimitEvent,
+				config,
+				currentContext,
+				newMessages,
+				emit,
+				stream
 			)
-			if (postLimitEvent) {
-				emitLimitHitAndStop(
-					postLimitEvent,
-					config,
-					currentContext,
-					newMessages,
-					emit,
-					stream
-				)
-				return
-			}
+			return
 		}
 
 		// When using streamFn, handle tool execution loop manually
@@ -1219,6 +1217,33 @@ async function processAgentStreamWithRetry(
 				guardrailState.modelCallCount++
 			}
 			isFirstAttempt = false
+
+			// Guard: if limits are already exceeded (from cost/calls accumulated
+			// during earlier attempts), bail out without making another model call.
+			// We check the raw conditions here instead of calling checkLimits()
+			// so the caller's unconditional post-call checkLimits() can properly
+			// emit the limit_hit event with full context.
+			if (guardrailState && config.runtimeLimits) {
+				const lim = config.runtimeLimits
+				const s = guardrailState
+				const exceeded =
+					(isLimitEnabled(lim.maxModelCalls) &&
+						s.modelCallCount > lim.maxModelCalls) ||
+					(isLimitEnabled(lim.maxCostUsd) &&
+						s.costUsd > lim.maxCostUsd)
+				if (exceeded) {
+					const errorPartial = createPartial(config)
+					errorPartial.stopReason = 'error'
+					errorPartial.errorMessage =
+						'guardrail:limit_exceeded'
+					return {
+						messages: [errorPartial] as AgentMessage[],
+						toolResults: [] as ToolResultMessage[],
+						lastAssistant: errorPartial,
+						abortedOrError: true
+					} satisfies ProcessResult
+				}
+			}
 
 			const processResult = await processAgentStream(
 				context,

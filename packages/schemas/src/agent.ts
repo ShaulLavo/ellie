@@ -306,6 +306,32 @@ const toolExecutionEndEventSchema = v.object({
 	isError: v.boolean()
 })
 
+// --- Resilience event schemas ---
+
+const retryEventSchema = v.object({
+	type: v.literal('retry'),
+	attempt: v.number(),
+	maxAttempts: v.number(),
+	reason: v.string(),
+	delayMs: v.number()
+})
+
+const contextCompactedEventSchema = v.object({
+	type: v.literal('context_compacted'),
+	removedCount: v.number(),
+	remainingCount: v.number(),
+	estimatedTokens: v.number()
+})
+
+const toolLoopDetectedEventSchema = v.object({
+	type: v.literal('tool_loop_detected'),
+	pattern: v.string(),
+	toolName: v.string(),
+	message: v.string()
+})
+
+// --- Guardrail event schemas ---
+
 const usageSnapshotSchema = v.object({
 	elapsedMs: v.number(),
 	modelCalls: v.number(),
@@ -341,5 +367,8 @@ export const agentEventSchema = v.variant('type', [
 	toolExecutionStartEventSchema,
 	toolExecutionUpdateEventSchema,
 	toolExecutionEndEventSchema,
+	retryEventSchema,
+	contextCompactedEventSchema,
+	toolLoopDetectedEventSchema,
 	limitHitEventSchema
 ])

@@ -63,15 +63,21 @@ function mockTextChunks(): StreamChunk[] {
 /**
  * Create a mock adapter that yields a simple text response.
  * Implements chatStream (used by TanStack's chat()) properly.
+ * @param chunks   Optional custom chunks to yield.
+ * @param delayMs  Optional delay between chunks (useful for keeping isStreaming true).
  */
 function createMockAdapter(
-	chunks?: StreamChunk[]
+	chunks?: StreamChunk[],
+	delayMs?: number
 ): AnyTextAdapter {
 	const data = chunks ?? mockTextChunks()
 	return {
 		name: 'mock',
 		chatStream: async function* () {
 			for (const chunk of data) {
+				if (delayMs) {
+					await new Promise(r => setTimeout(r, delayMs))
+				}
 				yield chunk
 			}
 		}
@@ -266,11 +272,12 @@ describe('AgentController', () => {
 			timestamp: Date.now()
 		})
 
-		// With maxModelCalls=1, the first call uses the budget (count=1 >= 1).
-		// The post-call checkpoint triggers limit_hit before a follow-up
-		// turn can start.
+		// Use a slow adapter so the agent is still streaming when we queue
+		// a follow-up. With maxModelCalls=1 and > semantics, the first call
+		// (modelCallCount=1) completes normally; the pre-call checkpoint for
+		// the second call (modelCallCount=2, 2 > 1) triggers limit_hit.
 		const guardedController = new AgentController(store, {
-			adapter: createMockAdapter(),
+			adapter: createMockAdapter(undefined, 50),
 			workspaceDir,
 			agentOptions: {
 				guardrails: {
@@ -287,11 +294,20 @@ describe('AgentController', () => {
 				)
 			expect(routed).toBe('prompt')
 
-			// Queue a follow-up while the agent is processing, so the loop
-			// has a reason to continue past the first call and hit the limit.
-			await new Promise(r => setTimeout(r, 50))
+			// Queue a follow-up while the agent is still streaming, so
+			// the loop has a reason to continue and hit the limit.
+			await new Promise(r => setTimeout(r, 100))
+			store.appendEvent('session-1', 'user_message', {
+				role: 'user',
+				content: [{ type: 'text', text: 'Follow-up' }],
+				timestamp: Date.now()
+			})
+			await guardedController.handleMessage(
+				'session-1',
+				'Follow-up'
+			)
 
-			await new Promise(r => setTimeout(r, 1000))
+			await new Promise(r => setTimeout(r, 1500))
 
 			const events = eventStore.query({
 				sessionId: 'session-1'
@@ -301,8 +317,8 @@ describe('AgentController', () => {
 			expect(types).toContain('agent_start')
 			expect(types).toContain('agent_end')
 
-			// The post-call checkpoint fires after the first model call
-			// because modelCallCount(1) >= maxModelCalls(1)
+			// The pre-call checkpoint fires before the second model call
+			// because modelCallCount(2) > maxModelCalls(1)
 			expect(types).toContain('limit_hit')
 
 			// Verify the limit_hit payload

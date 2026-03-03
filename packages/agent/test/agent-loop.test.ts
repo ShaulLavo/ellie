@@ -886,10 +886,12 @@ describe('runtime guardrails', () => {
 		>
 		expect(limitHit.limit).toBe('max_model_calls')
 		expect(limitHit.threshold).toBe(2)
-		expect(limitHit.observed).toBe(2)
+		// With > semantics: 2 calls complete, then the pre-call increment
+		// for the 3rd call pushes modelCallCount to 3 which exceeds the limit.
+		expect(limitHit.observed).toBe(3)
 		expect(limitHit.scope).toBe('run')
 		expect(limitHit.action).toBe('hard_stop')
-		expect(limitHit.usageSnapshot.modelCalls).toBe(2)
+		expect(limitHit.usageSnapshot.modelCalls).toBe(3)
 
 		// Should have an agent_end
 		const agentEndEvents = events.filter(
@@ -1068,11 +1070,8 @@ describe('runtime guardrails', () => {
 		// The run must have ended
 		expect(agentEndEvents.length).toBe(1)
 
-		// Either limit_hit was emitted, or the run was cut short via abort
-		expect(
-			limitHitEvents.length > 0 ||
-				agentEndEvents.length === 1
-		).toBe(true)
+		// The wall-clock limit should have triggered a limit_hit event
+		expect(limitHitEvents.length).toBeGreaterThan(0)
 
 		// Check that it didn't run all 20 follow-ups
 		const turnStarts = events.filter(
@@ -1322,7 +1321,8 @@ describe('runtime guardrails', () => {
 		>
 		expect(limitHit.limit).toBe('max_model_calls')
 		expect(limitHit.threshold).toBe(3)
-		// Should have used exactly 3 model calls before hitting the limit
-		expect(limitHit.usageSnapshot.modelCalls).toBe(3)
+		// With > semantics: 3 calls complete, then the pre-call increment
+		// for the 4th pushes modelCallCount to 4 which exceeds the limit.
+		expect(limitHit.usageSnapshot.modelCalls).toBe(4)
 	})
 })

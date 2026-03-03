@@ -16,7 +16,7 @@ function parsePositiveNumber(
 ): number | undefined {
 	if (raw === undefined || raw === '') return undefined
 	const n = Number(raw)
-	if (Number.isNaN(n)) {
+	if (!Number.isFinite(n)) {
 		console.warn(
 			`[guardrail-policy] invalid numeric value for ${label}: "${raw}" — disabled`
 		)
