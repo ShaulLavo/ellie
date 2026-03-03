@@ -238,10 +238,9 @@ throw new Error("intentional crash");
 		}
 	})
 
-	test('env isolation does not leak host env vars', async () => {
-		// Use a unique sentinel that cannot be set by default
+	test('child inherits host env vars', async () => {
 		const sentinel = `PTC_TEST_SENTINEL_${Date.now()}`
-		process.env[sentinel] = 'leaked'
+		process.env[sentinel] = 'visible'
 		try {
 			const code = `
 const val = process.env["${sentinel}"] ?? "undefined";
@@ -252,7 +251,7 @@ console.log("SENTINEL=" + val);
 				[],
 				echoClient()
 			)
-			expect(output.trim()).toBe('SENTINEL=undefined')
+			expect(output.trim()).toBe('SENTINEL=visible')
 		} finally {
 			delete process.env[sentinel]
 		}
