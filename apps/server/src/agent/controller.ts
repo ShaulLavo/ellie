@@ -106,6 +106,7 @@ export class AgentController {
 			initialState: {
 				...options.agentOptions?.initialState,
 				systemPrompt,
+				thinkingLevel: 'low',
 				tools: [...registry.all, memoryTool]
 			},
 			onEvent: event => this.handleEvent(event)
@@ -148,10 +149,6 @@ export class AgentController {
 
 		const history = this.loadHistory(sessionId)
 
-		console.log(
-			`[agent-controller] binding to session=${sessionId} history=${history.length} messages`
-		)
-
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
 		this.boundSessionId = sessionId
@@ -186,9 +183,6 @@ export class AgentController {
 			if (this.agent.state.isStreaming) {
 				if (this.boundSessionId === sessionId) {
 					// Same session, agent busy — queue as follow-up
-					console.log(
-						`[agent-controller] agent busy session=${sessionId}, queuing as followUp`
-					)
 					this.agent.followUp({
 						role: 'user',
 						content: [{ type: 'text', text }],
@@ -197,9 +191,6 @@ export class AgentController {
 					routed = 'followUp'
 				} else {
 					// Different session, agent busy — queue for later
-					console.log(
-						`[agent-controller] agent busy on session=${this.boundSessionId}, queuing cross-session message for session=${sessionId}`
-					)
 					this.crossSessionQueue.push({
 						sessionId,
 						text
@@ -220,9 +211,6 @@ export class AgentController {
 				}
 			}
 
-			console.log(
-				`[agent-controller] agent idle session=${sessionId}, starting prompt runId=${runId}`
-			)
 			this.agent.runId = runId
 
 			// Run memory recall before prompting (non-blocking on failure)
@@ -252,9 +240,6 @@ export class AgentController {
 	watch(sessionId: string): void {
 		if (this.unsubscribers.has(sessionId)) return
 
-		console.log(
-			`[agent-controller] watching session=${sessionId}`
-		)
 		const unsub = this.store.subscribeToSession(
 			sessionId,
 			(event: SessionEvent) => {
@@ -377,21 +362,12 @@ export class AgentController {
 			return
 		}
 
-		console.log(
-			`[agent-controller] dispatching handleMessage session=${sessionId} text=${text.slice(0, 100)}`
-		)
-		this.handleMessage(sessionId, text)
-			.then(({ runId, routed }) => {
-				console.log(
-					`[agent-controller] handleMessage completed session=${sessionId} runId=${runId} routed=${routed}`
-				)
-			})
-			.catch(err => {
-				console.error(
-					`[agent-controller] handleMessage FAILED session=${sessionId}:`,
-					err instanceof Error ? err.message : String(err)
-				)
-			})
+		this.handleMessage(sessionId, text).catch(err => {
+			console.error(
+				`[agent-controller] handleMessage FAILED session=${sessionId}:`,
+				err instanceof Error ? err.message : String(err)
+			)
+		})
 	}
 
 	// ── Internal: memory integration ────────────────────────────────────────
@@ -529,10 +505,6 @@ export class AgentController {
 		if (hadDailyWrite) return
 
 		// Enforcement: trigger a silent follow-up turn
-		console.log(
-			`[agent-controller] enforcement: retain stored ${factsStored} facts but no memory_append_daily call in run=${runId}, triggering silent memory-flush turn`
-		)
-
 		await this.withLock(async () => {
 			if (this.agent.state.isStreaming) return
 			if (this.boundSessionId !== sessionId) return
@@ -586,11 +558,6 @@ export class AgentController {
 			return
 		}
 
-		const eventSummary = this.summarizeEvent(event)
-		console.log(
-			`[agent-controller] event session=${sessionId} runId=${runId ?? 'none'} ${eventSummary}`
-		)
-
 		if (!runId) {
 			console.warn(
 				`[agent-controller] event received without runId session=${sessionId} type=${event.type} — not persisted`
@@ -623,9 +590,6 @@ export class AgentController {
 
 		// On agent_end, close the run and process queues
 		if (event.type === 'agent_end') {
-			console.log(
-				`[agent-controller] closing run session=${sessionId} runId=${runId}`
-			)
 			try {
 				this.store.closeAgentRun(sessionId, runId)
 			} catch {
@@ -664,9 +628,6 @@ export class AgentController {
 
 			// Check for orphaned follow-ups first (same session)
 			if (this.agent.hasQueuedMessages()) {
-				console.log(
-					`[agent-controller] agent_end with queued messages session=${sessionId}, scheduling continue()`
-				)
 				queueMicrotask(() => {
 					this.withLock(async () => {
 						if (
@@ -675,9 +636,6 @@ export class AgentController {
 						) {
 							const newRunId = ulid()
 							this.agent.runId = newRunId
-							console.log(
-								`[agent-controller] continuing with queued messages session=${sessionId} runId=${newRunId}`
-							)
 							this.agent.continue().catch(err => {
 								console.error(
 									`[agent-controller] continue FAILED session=${sessionId} runId=${newRunId}:`,
@@ -705,9 +663,6 @@ export class AgentController {
 		const next = this.crossSessionQueue.shift()
 		if (!next) return
 
-		console.log(
-			`[agent-controller] processing cross-session queue: session=${next.sessionId}`
-		)
 		this.handleMessage(next.sessionId, next.text).catch(
 			err => {
 				console.error(
@@ -801,7 +756,12 @@ export class AgentController {
 				]
 
 				// Dual-write: also persist as assistant_final for backward compat
-				if (msg.role === 'assistant') {
+				// Skip empty assistant messages (artifacts from multi-turn finalization)
+				if (
+					msg.role === 'assistant' &&
+					Array.isArray(msg.content) &&
+					msg.content.length > 0
+				) {
 					rows.push({
 						type: 'assistant_final',
 						payload: msg as unknown as Record<
@@ -920,51 +880,6 @@ export class AgentController {
 
 			default:
 				return []
-		}
-	}
-
-	private summarizeEvent(event: AgentEvent): string {
-		switch (event.type) {
-			case 'message_end': {
-				const msg = event.message
-				const role = msg.role
-				if (role === 'assistant') {
-					const asst = msg as unknown as Record<
-						string,
-						unknown
-					>
-					const contentLen = Array.isArray(asst.content)
-						? asst.content.length
-						: 0
-					const textParts = Array.isArray(asst.content)
-						? (
-								asst.content as Array<{
-									type: string
-									text?: string
-								}>
-							)
-								.filter(c => c.type === 'text')
-								.map(c => c.text ?? '')
-						: []
-					const textPreview = textParts
-						.join('')
-						.slice(0, 80)
-					return `type=message_end role=assistant contentParts=${contentLen} stopReason=${asst.stopReason ?? 'unknown'} errorMessage=${asst.errorMessage ?? 'none'} text="${textPreview}"`
-				}
-				return `type=message_end role=${role}`
-			}
-			case 'agent_end':
-				return `type=agent_end messages=${event.messages?.length ?? 0}`
-			case 'message_start':
-				return `type=message_start role=${event.message.role}`
-			case 'message_update':
-				return `type=message_update role=${event.message.role}`
-			case 'turn_start':
-				return `type=turn_start`
-			case 'turn_end':
-				return `type=turn_end role=${event.message.role}`
-			default:
-				return `type=${event.type}`
 		}
 	}
 }

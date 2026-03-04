@@ -66,6 +66,22 @@ function eventToMessage(
 		)
 		return null
 	}
+
+	// Surface DB-level error events as visible assistant error messages
+	if (row.type === 'error') {
+		const errorText =
+			typeof payload.message === 'string'
+				? payload.message
+				: 'An unexpected error occurred'
+		return {
+			role: 'assistant',
+			content: [{ type: 'text', text: errorText }],
+			stopReason: 'error',
+			errorMessage: errorText,
+			timestamp: row.createdAt ?? Date.now()
+		} as AgentMessage
+	}
+
 	return null
 }
 
@@ -165,9 +181,6 @@ export function useAgentChat(sessionId: string) {
 			try {
 				const rows = JSON.parse(event.data) as EventRow[]
 				hasSnapshot = true
-				console.log(
-					`[useAgentChat] snapshot received rows=${rows.length} session=${sessionId}`
-				)
 
 				for (const row of rows) {
 					if (row.seq > lastSeqRef.current)
@@ -179,9 +192,6 @@ export function useAgentChat(sessionId: string) {
 					const msg = eventToMessage(row)
 					if (msg) msgs.push(msg)
 				}
-				console.log(
-					`[useAgentChat] snapshot parsed messages=${msgs.length} (from ${rows.length} rows)`
-				)
 				setMessages(sortMessages(msgs))
 				setIsAgentRunning(isAgentRunOpen(rows))
 				setIsLoading(false)
@@ -274,9 +284,6 @@ export function useAgentChat(sessionId: string) {
 		async (text: string) => {
 			const trimmed = text.trim()
 			if (!trimmed) return
-			console.log(
-				`[useAgentChat] sendMessage content=${trimmed.slice(0, 100)} session=${sessionId}`
-			)
 			setIsSending(true)
 			try {
 				const { error: chatError } = await eden
@@ -290,9 +297,6 @@ export function useAgentChat(sessionId: string) {
 						`POST /chat/${sessionId}/messages failed`
 					)
 				}
-				console.log(
-					`[useAgentChat] sendMessage success session=${sessionId}`
-				)
 			} catch (err) {
 				console.error(
 					`[useAgentChat] Failed to send message:`,
