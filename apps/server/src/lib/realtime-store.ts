@@ -50,10 +50,6 @@ export class RealtimeStore {
 		this.#currentSessionId = newSessionId
 		this.#store.setKv('currentSessionId', newSessionId)
 
-		console.log(
-			`[realtime-store] session rotated: ${previous} → ${newSessionId}`
-		)
-
 		this.#publish<RotationEvent>('current-session', {
 			type: 'rotated',
 			previousSessionId: previous,

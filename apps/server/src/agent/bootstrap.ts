@@ -40,10 +40,6 @@ export function ensureBootstrapInjected(opts: {
 	)
 	if (!claimed) return false
 
-	console.log(
-		`[bootstrap] injecting synthetic bootstrap into session=${sessionId}`
-	)
-
 	const bootstrapContent = readWorkspaceFile(
 		workspaceDir,
 		'BOOTSTRAP.md'
@@ -94,9 +90,6 @@ export function ensureBootstrapInjected(opts: {
 			'bootstrap:v1:tool_result'
 		)
 
-		console.log(
-			`[bootstrap] synthetic bootstrap injected into session=${sessionId}`
-		)
 		return true
 	} catch (err) {
 		const msg =

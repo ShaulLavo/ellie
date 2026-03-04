@@ -42,6 +42,10 @@ export class AuditLogger {
 				`${JSON.stringify(entry)}\n`
 			)
 			this.#logFile!.append(bytes)
+			console.log(
+				`[audit-log] ${entry.type} session=${entry.sessionId}${entry.runId ? ` run=${entry.runId}` : ''} seq=${entry.seq ?? '-'}`,
+				JSON.stringify(entry.payload, null, 2)
+			)
 		} catch (err) {
 			console.error('[audit-log] write failed:', err)
 		}

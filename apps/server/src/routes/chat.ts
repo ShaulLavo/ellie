@@ -96,9 +96,6 @@ export function createChatRoutes(
 						params.sessionId
 					)
 					const input = normalizeMessageInput(body)
-					console.log(
-						`[chat-route] POST /chat/${sessionId}/messages role=${input.role ?? 'user'} content=${input.content.slice(0, 100)}`
-					)
 					store.ensureSession(sessionId)
 
 					// Ensure controller is watching BEFORE appending so the
@@ -121,9 +118,6 @@ export function createChatRoutes(
 					)
 
 					ensureBootstrap?.(sessionId)
-					console.log(
-						`[chat-route] user_message persisted id=${row.id} seq=${row.seq} session=${row.sessionId}`
-					)
 					return {
 						id: row.id,
 						seq: row.seq,
