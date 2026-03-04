@@ -50,22 +50,30 @@ console.log(format(new Date(), 'yyyy-MM-dd'), memory)
 
 Execute TypeScript in a **persistent REPL session**. Variables, imports, and function definitions survive across consecutive calls.
 
-- Use `print()` to send output to the conversation
+- Direct tools (`read_workspace_file`, `write_workspace_file`, `shell`, `ripgrep`) are available as async functions — same as `script_exec`
+- Use `print()` to send output to the conversation — **this is required**
 - Raw `console.log()` output is stored as artifacts but does NOT appear in conversation context
 - State persists across calls within the same session
+- You can `import` any npm package — Bun auto-installs on first use
 
 ```ts
-// Call 1: set up data
+// Call 1: load and parse data
 const data = await read_workspace_file({
 	path: 'data.json'
 })
 const parsed = JSON.parse(data)
 print(`Loaded ${parsed.items.length} items`)
 
-// Call 2: work with persisted state
+// Call 2: work with persisted state (variables survive!)
 const filtered = parsed.items.filter(i => i.active)
 print(`${filtered.length} active items found`)
+
+// Call 3: run a shell command and inspect output
+const result = await shell({ command: 'ls -la' })
+print(result.content[0].text)
 ```
+
+**Key difference from `script_exec`:** State persists across calls. Use `print()` instead of `console.log()` for output.
 
 **When to use:** iterative exploration, building up analysis state, complex multi-step workflows where you need to inspect intermediate results.
 

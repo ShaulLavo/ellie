@@ -11,4 +11,7 @@ export { DEFAULTS, ExecutionError } from './types'
 
 // Core
 export { execute } from './executor'
-export { buildScript } from './script-builder'
+export {
+	buildScript,
+	buildReplBootstrap
+} from './script-builder'

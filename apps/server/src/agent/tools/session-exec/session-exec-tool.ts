@@ -10,6 +10,11 @@
  *   - Raw stdout/stderr is stored as artifacts, NOT injected into
  *     the conversation transcript.
  *   - This prevents context bloat from verbose execution output.
+ *
+ * Tool access:
+ *   When baseTools are provided, they are bridged into the REPL
+ *   subprocess via IPC — callable as async functions by name
+ *   (same as script_exec).
  */
 
 import * as v from 'valibot'
@@ -19,9 +24,11 @@ import type {
 } from '@ellie/agent'
 import {
 	ReplRuntime,
-	type ReplEvalResult
+	type ReplEvalResult,
+	type ReplToolConfig
 } from '../../repl/repl-runtime'
 import { ArtifactStore } from '../../repl/artifact-store'
+import { createAgentToolBridge } from '../script-exec/bridge'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -29,7 +36,7 @@ const sessionExecParams = v.object({
 	code: v.pipe(
 		v.string(),
 		v.description(
-			'TypeScript code to execute in the persistent REPL session. Variables, imports, and functions persist across calls. Use print() to send output to the conversation — raw console.log() output is stored as artifacts but does NOT appear in conversation context.'
+			'TypeScript code to execute in the persistent REPL session. Variables, imports, and functions persist across calls. Tools (read_workspace_file, write_workspace_file, shell, ripgrep) are available as async functions. Use print() to send output to the conversation — raw console.log() output is stored as artifacts but does NOT appear in conversation context.'
 		)
 	),
 	timeoutMs: v.optional(
@@ -54,19 +61,33 @@ type SessionExecParams = v.InferOutput<
  * The REPL process is lazily started on first invocation and kept
  * alive for the duration of the session. State persists between
  * consecutive calls.
+ *
+ * When baseTools are provided, they are bridged into the REPL via
+ * IPC — the child process can call them as async functions.
  */
 export function createSessionExecTool(
 	dataDir: string,
-	getSessionId: () => string | null
+	getSessionId: () => string | null,
+	baseTools?: AgentTool[]
 ): AgentTool {
 	let runtime: ReplRuntime | null = null
 	let boundSessionId: string | null = null
 	const artifactStore = new ArtifactStore(dataDir)
 
+	// Build IPC tool bridge once (if tools provided)
+	let toolConfig: ReplToolConfig | undefined
+	if (baseTools && baseTools.length > 0) {
+		const bridge = createAgentToolBridge(baseTools)
+		toolConfig = {
+			tools: bridge.tools,
+			client: bridge.client
+		}
+	}
+
 	return {
 		name: 'session_exec',
 		description:
-			'Execute TypeScript code in a persistent REPL session. Variables, imports, and function definitions persist across calls. Use print() to send output to the conversation — only printed output appears in tool results. Raw stdout/stderr is stored as artifacts for later inspection. Use this for iterative workflows where you need to build up state across multiple steps.',
+			'Execute TypeScript code in a persistent REPL session. Variables, imports, and function definitions persist across calls. Tools are available as async functions: read_workspace_file({ path }), write_workspace_file({ path, content }), shell({ command }), ripgrep({ pattern }). Use print() to send output to the conversation — only printed output appears in tool results. Raw stdout/stderr is stored as artifacts for later inspection. Example: `const f = await read_workspace_file({ path: "data.json" }); print(f)`',
 		label: 'Running session code',
 		parameters: sessionExecParams,
 		execute: async (
@@ -91,7 +112,8 @@ export function createSessionExecTool(
 				// Lazy-start the REPL on first call (or after teardown)
 				if (!runtime || !runtime.alive) {
 					runtime = new ReplRuntime(
-						currentSessionId ?? undefined
+						currentSessionId ?? undefined,
+						toolConfig
 					)
 					await runtime.start()
 					boundSessionId = currentSessionId

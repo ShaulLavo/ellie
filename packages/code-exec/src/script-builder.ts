@@ -10,13 +10,24 @@ const WRAPPER_PATH = join(
 	'child-wrapper.ts'
 )
 
+const transpiler = new Bun.Transpiler({ loader: 'ts' })
+
 let _runtimeCache: string | null = null
+let _runtimeJsCache: string | null = null
 let _wrapperCache: string | null = null
 
 async function readRuntime(): Promise<string> {
 	if (_runtimeCache) return _runtimeCache
 	_runtimeCache = await Bun.file(RUNTIME_PATH).text()
 	return _runtimeCache
+}
+
+/** Transpile child-runtime.ts → JS for injection into `bun repl` via stdin. */
+async function readRuntimeJs(): Promise<string> {
+	if (_runtimeJsCache) return _runtimeJsCache
+	const ts = await readRuntime()
+	_runtimeJsCache = transpiler.transformSync(ts)
+	return _runtimeJsCache
 }
 
 async function readWrapper(): Promise<string> {
@@ -73,6 +84,23 @@ export async function buildScript(
 	)
 
 	return `${runtime}\n${wrappers}\n${script}`
+}
+
+/**
+ * Build the IPC runtime preamble + tool wrapper functions for a
+ * persistent REPL session.  Unlike `buildScript`, this does NOT
+ * include the child-wrapper IIFE — the code is injected into an
+ * already-running `bun repl` via stdin.
+ *
+ * Uses Bun.Transpiler to strip TS from child-runtime.ts so the
+ * REPL doesn't mis-parse TS generics as comparison operators.
+ */
+export async function buildReplBootstrap(
+	tools: ToolDefinition[]
+): Promise<string> {
+	const runtime = await readRuntimeJs()
+	const wrappers = generateToolWrappers(tools)
+	return `${runtime}\n${wrappers}\nundefined;\n`
 }
 
 /** Indent every line of a code block by the given number of tabs. */
