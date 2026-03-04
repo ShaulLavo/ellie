@@ -13,6 +13,7 @@ import type { AgentTool } from '@ellie/agent'
 import { createWorkspaceTools } from './workspace-tools'
 import { createShellTool } from './shell-tool'
 import { createRipgrepTool } from './ripgrep-tool'
+import { createWebFetchTool } from './web-fetch-tool'
 import {
 	createSessionExecTool,
 	createExecTool
@@ -54,7 +55,8 @@ export function createToolRegistry(
 	const basicDirectTools: AgentTool[] = [
 		...createWorkspaceTools(config.workspaceDir),
 		createShellTool(config.workspaceDir),
-		createRipgrepTool(config.workspaceDir)
+		createRipgrepTool(config.workspaceDir),
+		createWebFetchTool()
 	]
 
 	const execTools: AgentTool[] = [
