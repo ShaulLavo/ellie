@@ -842,6 +842,18 @@ export class AgentController {
 							toolName: event.toolName,
 							args: event.args
 						}
+					},
+					// Dual-write: tool_call so the client can show
+					// the tool in loading state before the result arrives
+					{
+						type: 'tool_call',
+						payload: {
+							id: event.toolCallId,
+							name: event.toolName,
+							arguments:
+								(event.args as Record<string, unknown>) ??
+								{}
+						}
 					}
 				]
 
