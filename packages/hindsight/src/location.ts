@@ -255,50 +255,13 @@ export function locationFind(
 		.all()
 
 	if (pathRows.length === 0 && input.query) {
-		// Fall back to signal detection from query
-		const signals = detectLocationSignals(input.query)
-		if (signals.length > 0) {
-			const normalizedSignals = signals.map(normalizePath)
-			const signalConditions = [
-				eq(hdb.schema.locationPaths.bankId, bankId)
-			]
-			if (input.scope?.profile) {
-				signalConditions.push(
-					eq(
-						hdb.schema.locationPaths.profile,
-						input.scope.profile
-					)
-				)
-			}
-			if (input.scope?.project) {
-				signalConditions.push(
-					eq(
-						hdb.schema.locationPaths.project,
-						input.scope.project
-					)
-				)
-			}
-
-			const allMatches: LocationHit[] = []
-			for (const norm of normalizedSignals) {
-				const matches = hdb.db
-					.select()
-					.from(hdb.schema.locationPaths)
-					.where(
-						and(
-							...signalConditions,
-							sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%' + norm + '%'}`
-						)
-					)
-					.limit(limit)
-					.all()
-				for (const row of matches) {
-					allMatches.push(pathRowToHit(hdb, bankId, row))
-				}
-			}
-			return allMatches.slice(0, limit)
-		}
-		return []
+		return findBySignalFallback(
+			hdb,
+			bankId,
+			input.query,
+			input.scope,
+			limit
+		)
 	}
 
 	return pathRows.map(row => pathRowToHit(hdb, bankId, row))
@@ -599,58 +562,13 @@ export function computeLocationBoost(
 	const familiarityBoost = 0.1 * maxFamiliarityNorm
 
 	// 3. coAccessBoost: from hs_location_associations
-	let maxCoNorm = 0
-	if (maxStrengthForQueryPaths > 0) {
-		const candidatePathArray = [...candidatePathIds]
-		if (candidatePathArray.length > 0) {
-			const queryPathArray = [...queryPathIds]
-			// Check both directions since canonical ordering may put query path as either source or related
-			const assocs = hdb.db
-				.select()
-				.from(hdb.schema.locationAssociations)
-				.where(
-					and(
-						eq(
-							hdb.schema.locationAssociations.bankId,
-							bankId
-						),
-						or(
-							and(
-								inArray(
-									hdb.schema.locationAssociations
-										.sourcePathId,
-									queryPathArray
-								),
-								inArray(
-									hdb.schema.locationAssociations
-										.relatedPathId,
-									candidatePathArray
-								)
-							),
-							and(
-								inArray(
-									hdb.schema.locationAssociations
-										.sourcePathId,
-									candidatePathArray
-								),
-								inArray(
-									hdb.schema.locationAssociations
-										.relatedPathId,
-									queryPathArray
-								)
-							)
-						)
-					)
-				)
-				.all()
-
-			for (const assoc of assocs) {
-				const coNorm =
-					assoc.strength / maxStrengthForQueryPaths
-				if (coNorm > maxCoNorm) maxCoNorm = coNorm
-			}
-		}
-	}
+	const maxCoNorm = computeMaxCoAccessNorm(
+		hdb,
+		bankId,
+		candidatePathIds,
+		queryPathIds,
+		maxStrengthForQueryPaths
+	)
 	const coAccessBoost = 0.08 * maxCoNorm
 
 	return directPathBoost + familiarityBoost + coAccessBoost
@@ -695,6 +613,104 @@ export function getMaxStrengthForPaths(
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────────
+
+function computeMaxCoAccessNorm(
+	hdb: HindsightDatabase,
+	bankId: string,
+	candidatePathIds: Set<string>,
+	queryPathIds: Set<string>,
+	maxStrengthForQueryPaths: number
+): number {
+	if (maxStrengthForQueryPaths <= 0) return 0
+	const candidatePathArray = [...candidatePathIds]
+	if (candidatePathArray.length === 0) return 0
+
+	const queryPathArray = [...queryPathIds]
+	// Check both directions since canonical ordering may put query path as either source or related
+	const assocs = hdb.db
+		.select()
+		.from(hdb.schema.locationAssociations)
+		.where(
+			and(
+				eq(hdb.schema.locationAssociations.bankId, bankId),
+				or(
+					and(
+						inArray(
+							hdb.schema.locationAssociations.sourcePathId,
+							queryPathArray
+						),
+						inArray(
+							hdb.schema.locationAssociations.relatedPathId,
+							candidatePathArray
+						)
+					),
+					and(
+						inArray(
+							hdb.schema.locationAssociations.sourcePathId,
+							candidatePathArray
+						),
+						inArray(
+							hdb.schema.locationAssociations.relatedPathId,
+							queryPathArray
+						)
+					)
+				)
+			)
+		)
+		.all()
+
+	let maxCoNorm = 0
+	for (const assoc of assocs) {
+		const coNorm = assoc.strength / maxStrengthForQueryPaths
+		if (coNorm > maxCoNorm) maxCoNorm = coNorm
+	}
+	return maxCoNorm
+}
+
+function findBySignalFallback(
+	hdb: HindsightDatabase,
+	bankId: string,
+	query: string,
+	scope: { profile?: string; project?: string } | undefined,
+	limit: number
+): LocationHit[] {
+	const signals = detectLocationSignals(query)
+	if (signals.length === 0) return []
+
+	const normalizedSignals = signals.map(normalizePath)
+	const signalConditions = [
+		eq(hdb.schema.locationPaths.bankId, bankId)
+	]
+	if (scope?.profile) {
+		signalConditions.push(
+			eq(hdb.schema.locationPaths.profile, scope.profile)
+		)
+	}
+	if (scope?.project) {
+		signalConditions.push(
+			eq(hdb.schema.locationPaths.project, scope.project)
+		)
+	}
+
+	const allMatches: LocationHit[] = []
+	for (const norm of normalizedSignals) {
+		const matches = hdb.db
+			.select()
+			.from(hdb.schema.locationPaths)
+			.where(
+				and(
+					...signalConditions,
+					sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%' + norm + '%'}`
+				)
+			)
+			.limit(limit)
+			.all()
+		for (const row of matches) {
+			allMatches.push(pathRowToHit(hdb, bankId, row))
+		}
+	}
+	return allMatches.slice(0, limit)
+}
 
 function pathRowToHit(
 	hdb: HindsightDatabase,

@@ -198,23 +198,13 @@ export async function mpfpTraverseAsync(
 
 		const nextFrontier = new Map<string, number>()
 		for (const [nodeId, mass] of frontier.entries()) {
-			if (mass < effective.threshold) continue
-
-			const retained = effective.alpha * mass
-			scores.set(
-				nodeId,
-				(scores.get(nodeId) ?? 0) + retained
-			)
-
-			const spill = (1 - effective.alpha) * mass
-			if (spill < effective.threshold) continue
-
-			propagateMass(
+			depositAndPropagate(
 				cache,
 				edgeType,
 				nodeId,
-				spill,
+				mass,
 				effective,
+				scores,
 				nextFrontier
 			)
 		}
@@ -231,6 +221,33 @@ export async function mpfpTraverseAsync(
 		pattern,
 		scores: Object.fromEntries(scores.entries())
 	}
+}
+
+function depositAndPropagate(
+	cache: EdgeCache,
+	edgeType: MpfpEdgeType,
+	nodeId: string,
+	mass: number,
+	config: MpfpConfig,
+	scores: Map<string, number>,
+	nextFrontier: Map<string, number>
+): void {
+	if (mass < config.threshold) return
+
+	const retained = config.alpha * mass
+	scores.set(nodeId, (scores.get(nodeId) ?? 0) + retained)
+
+	const spill = (1 - config.alpha) * mass
+	if (spill < config.threshold) return
+
+	propagateMass(
+		cache,
+		edgeType,
+		nodeId,
+		spill,
+		config,
+		nextFrontier
+	)
 }
 
 function propagateMass(

@@ -160,9 +160,7 @@ export async function runRollingIngest(
 
 			const ids =
 				memoryIdsByCluster.get(event.clusterId) ?? []
-			for (const mem of result.memories) {
-				ids.push(mem.id)
-			}
+			ids.push(...result.memories.map(mem => mem.id))
 			memoryIdsByCluster.set(event.clusterId, ids)
 		}
 

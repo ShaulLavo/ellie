@@ -80,14 +80,11 @@ function scoreFollowUpRecall(
 	}
 }
 
-function scoreTemporalNarrative(
-	evalCase: EvalCase,
+/** Count correctly ordered hint pairs among candidates. */
+function computeOrderingAccuracy(
+	orderedHints: string[],
 	candidates: RecallCandidate[]
-): Record<string, number> {
-	const orderedHints = evalCase.expected.orderedHints ?? []
-	const mustInclude = evalCase.expected.mustInclude ?? []
-
-	// Ordering accuracy: fraction of hint pairs in correct relative order
+): number {
 	let correctPairs = 0
 	let totalPairs = 0
 	for (let i = 0; i < orderedHints.length; i++) {
@@ -104,8 +101,20 @@ function scoreTemporalNarrative(
 			}
 		}
 	}
-	const orderingAccuracy =
-		totalPairs > 0 ? correctPairs / totalPairs : 1.0
+	return totalPairs > 0 ? correctPairs / totalPairs : 1.0
+}
+
+function scoreTemporalNarrative(
+	evalCase: EvalCase,
+	candidates: RecallCandidate[]
+): Record<string, number> {
+	const orderedHints = evalCase.expected.orderedHints ?? []
+	const mustInclude = evalCase.expected.mustInclude ?? []
+
+	const orderingAccuracy = computeOrderingAccuracy(
+		orderedHints,
+		candidates
+	)
 
 	// Predecessor hit rate: for each hint at position i>0, check that
 	// hint[i-1] appears at a LOWER rank (earlier in candidates) than hint[i]

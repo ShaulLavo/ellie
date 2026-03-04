@@ -166,32 +166,38 @@ export class FileStore extends DataStore {
 		await this.configstore.set(id, file)
 	}
 
-	async deleteExpired(): Promise<number> {
-		const now = new Date()
-		const toDelete: Promise<void>[] = []
+	/** Check whether a single upload has exceeded its expiration window. */
+	private isUploadExpired(
+		info: Upload | undefined,
+		now: Date
+	): boolean {
+		if (!info) return false
+		if (!('creation_date' in info)) return false
+		if (this.getExpiration() <= 0) return false
+		if (info.size === info.offset) return false
+		if (!info.creation_date) return false
 
+		const creation = new Date(info.creation_date)
+		const expires = new Date(
+			creation.getTime() + this.getExpiration()
+		)
+		return now > expires
+	}
+
+	async deleteExpired(): Promise<number> {
 		if (!this.configstore.list) {
 			throw ERRORS.UNSUPPORTED_EXPIRATION_EXTENSION
 		}
 
+		const now = new Date()
+		const toDelete: Promise<void>[] = []
 		const uploadKeys = await this.configstore.list()
+
 		for (const file_id of uploadKeys) {
 			try {
 				const info = await this.configstore.get(file_id)
-				if (
-					info &&
-					'creation_date' in info &&
-					this.getExpiration() > 0 &&
-					info.size !== info.offset &&
-					info.creation_date
-				) {
-					const creation = new Date(info.creation_date)
-					const expires = new Date(
-						creation.getTime() + this.getExpiration()
-					)
-					if (now > expires) {
-						toDelete.push(this.remove(file_id))
-					}
+				if (this.isUploadExpired(info, now)) {
+					toDelete.push(this.remove(file_id))
 				}
 			} catch (error) {
 				if (error !== ERRORS.FILE_NO_LONGER_EXISTS) {

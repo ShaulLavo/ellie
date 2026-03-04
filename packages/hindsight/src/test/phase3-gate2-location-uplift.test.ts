@@ -60,6 +60,16 @@ function insertTestMemory(
 	return id
 }
 
+function collectPathIds(
+	signalMap: Map<string, string[]>
+): Set<string> {
+	const ids = new Set<string>()
+	for (const pathIds of signalMap.values()) {
+		for (const id of pathIds) ids.add(id)
+	}
+	return ids
+}
+
 let t: TestHindsight
 let bankId: string
 
@@ -238,10 +248,7 @@ describe('Gate 2: Location P@5 Uplift', () => {
 				bankId,
 				signals
 			)
-			const queryPathIds = new Set<string>()
-			for (const ids of signalMap.values()) {
-				for (const id of ids) queryPathIds.add(id)
-			}
+			const queryPathIds = collectPathIds(signalMap)
 
 			const maxStrength = getMaxStrengthForPaths(
 				hdb,

@@ -156,102 +156,19 @@ export async function consolidate(
 	const allTags = new Set<string>()
 
 	for (const memory of unconsolidated) {
-		const now = Date.now()
-
-		// Parse memory tags for tracking (safe fallback on corrupt data)
-		let memoryTags: string[] = []
-		try {
-			memoryTags = memory.tags
-				? JSON.parse(memory.tags)
-				: []
-		} catch {
-			// malformed JSON → treat as untagged
-		}
+		const memoryTags = parseMemoryTags(memory.tags)
 		for (const tag of memoryTags) allTags.add(tag)
 
 		try {
-			// 1. Find related observations via semantic search
-			// SECURITY: Pass memory tags for all_strict filtering to prevent cross-tenant leakage
-			const relatedObs = await findRelatedObservations(
+			await consolidateOneMemory(
 				hdb,
 				memoryVec,
-				bankId,
-				memory.content,
-				memoryTags.length > 0 ? memoryTags : undefined
-			)
-
-			// 2. Single LLM call to decide actions
-			const actions = await consolidateWithLLM(
 				adapter,
+				bankId,
 				memory,
-				relatedObs
+				memoryTags,
+				result
 			)
-
-			if (actions.length === 0) {
-				result.skipped++
-			}
-
-			// 3. Execute actions
-			for (const action of actions) {
-				if (action.action === 'skip') {
-					result.skipped++
-					continue
-				}
-
-				if (action.action === 'create') {
-					const createResult = await executeCreateAction(
-						hdb,
-						memoryVec,
-						bankId,
-						memory,
-						action
-					)
-					if (createResult === 'skipped') {
-						result.skipped++
-						continue
-					}
-					result.observationsCreated++
-					continue
-				}
-
-				if (action.action === 'update') {
-					const updateResult = await executeUpdateAction(
-						hdb,
-						memoryVec,
-						bankId,
-						memory,
-						action
-					)
-					if (updateResult === 'skipped') {
-						result.skipped++
-						continue
-					}
-					result.observationsUpdated++
-					continue
-				}
-
-				const mergeResult = await executeMergeAction(
-					hdb,
-					memoryVec,
-					bankId,
-					memory,
-					action
-				)
-				if (mergeResult === 'skipped') {
-					result.skipped++
-					continue
-				}
-				result.observationsMerged++
-			}
-
-			// 4. Mark memory as consolidated only on success
-			hdb.db
-				.update(schema.memoryUnits)
-				.set({ consolidatedAt: now })
-				.where(eq(schema.memoryUnits.id, memory.id))
-				.run()
-
-			result.memoriesProcessed++
 		} catch {
 			// Swallow per-memory errors — don't block the whole batch.
 			// Memory is NOT marked consolidated so it will be retried next run.
@@ -274,6 +191,130 @@ export async function consolidate(
 	}
 
 	return result
+}
+
+// ── Per-memory consolidation helpers ─────────────────────────────────────
+
+/** Safely parse memory tags from JSON, returning [] on malformed data. */
+function parseMemoryTags(
+	tagsJson: string | null
+): string[] {
+	if (!tagsJson) return []
+	try {
+		return JSON.parse(tagsJson) as string[]
+	} catch {
+		return []
+	}
+}
+
+/** Consolidate a single memory: find related, call LLM, execute actions, mark done. */
+async function consolidateOneMemory(
+	hdb: HindsightDatabase,
+	memoryVec: EmbeddingStore,
+	adapter: AnyTextAdapter,
+	bankId: string,
+	memory: typeof import('./schema').memoryUnits.$inferSelect,
+	memoryTags: string[],
+	result: ConsolidateResult
+): Promise<void> {
+	const now = Date.now()
+	const { schema } = hdb
+
+	// 1. Find related observations via semantic search
+	// SECURITY: Pass memory tags for all_strict filtering to prevent cross-tenant leakage
+	const relatedObs = await findRelatedObservations(
+		hdb,
+		memoryVec,
+		bankId,
+		memory.content,
+		memoryTags.length > 0 ? memoryTags : undefined
+	)
+
+	// 2. Single LLM call to decide actions
+	const actions = await consolidateWithLLM(
+		adapter,
+		memory,
+		relatedObs
+	)
+
+	if (actions.length === 0) {
+		result.skipped++
+	}
+
+	// 3. Execute actions
+	for (const action of actions) {
+		await applyConsolidationAction(
+			hdb,
+			memoryVec,
+			bankId,
+			memory,
+			action,
+			result
+		)
+	}
+
+	// 4. Mark memory as consolidated only on success
+	hdb.db
+		.update(schema.memoryUnits)
+		.set({ consolidatedAt: now })
+		.where(eq(schema.memoryUnits.id, memory.id))
+		.run()
+
+	result.memoriesProcessed++
+}
+
+/** Execute a single consolidation action and update the result counters. */
+async function applyConsolidationAction(
+	hdb: HindsightDatabase,
+	memoryVec: EmbeddingStore,
+	bankId: string,
+	memory: typeof import('./schema').memoryUnits.$inferSelect,
+	action: ConsolidationAction,
+	result: ConsolidateResult
+): Promise<void> {
+	if (action.action === 'skip') {
+		result.skipped++
+		return
+	}
+
+	if (action.action === 'create') {
+		const createResult = await executeCreateAction(
+			hdb,
+			memoryVec,
+			bankId,
+			memory,
+			action
+		)
+		createResult === 'skipped'
+			? result.skipped++
+			: result.observationsCreated++
+		return
+	}
+
+	if (action.action === 'update') {
+		const updateResult = await executeUpdateAction(
+			hdb,
+			memoryVec,
+			bankId,
+			memory,
+			action
+		)
+		updateResult === 'skipped'
+			? result.skipped++
+			: result.observationsUpdated++
+		return
+	}
+
+	const mergeResult = await executeMergeAction(
+		hdb,
+		memoryVec,
+		bankId,
+		memory,
+		action
+	)
+	mergeResult === 'skipped'
+		? result.skipped++
+		: result.observationsMerged++
 }
 
 // ── Find related observations ───────────────────────────────────────────
@@ -317,44 +358,62 @@ async function findRelatedObservations(
 		const similarity = 1 - hit.distance
 		if (similarity < 0.5) continue // low threshold — LLM decides relevance
 
-		const row = hdb.db
-			.select()
-			.from(hdb.schema.memoryUnits)
-			.where(
-				and(
-					eq(hdb.schema.memoryUnits.id, hit.id),
-					eq(hdb.schema.memoryUnits.bankId, bankId),
-					eq(hdb.schema.memoryUnits.factType, 'observation')
-				)
-			)
-			.get()
-
-		if (!row) continue
-
-		// SECURITY: Filter by tags to prevent cross-tenant observation leakage
-		if (tags?.length) {
-			const obsTags: string[] = row.tags
-				? JSON.parse(row.tags)
-				: []
-			if (!matchesTags(obsTags, tags, tagsMatch)) continue
-		}
-
-		const sourceMemoryIds: string[] = row.sourceMemoryIds
-			? JSON.parse(row.sourceMemoryIds)
-			: []
-
-		observations.push({
-			id: row.id,
-			content: row.content,
-			proofCount: row.proofCount,
-			sourceCount: sourceMemoryIds.length,
-			occurredStart: getOccurredStart(row),
-			occurredEnd: getOccurredEnd(row),
-			mentionedAt: row.mentionedAt
-		})
+		const obs = resolveObservationHit(
+			hdb,
+			bankId,
+			hit.id,
+			tags,
+			tagsMatch
+		)
+		if (obs) observations.push(obs)
 	}
 
 	return observations
+}
+
+/** Resolve a single vector-search hit into a RelatedObservation, or null if filtered out. */
+function resolveObservationHit(
+	hdb: HindsightDatabase,
+	bankId: string,
+	hitId: string,
+	tags: string[] | undefined,
+	tagsMatch: TagsMatch
+): RelatedObservation | null {
+	const row = hdb.db
+		.select()
+		.from(hdb.schema.memoryUnits)
+		.where(
+			and(
+				eq(hdb.schema.memoryUnits.id, hitId),
+				eq(hdb.schema.memoryUnits.bankId, bankId),
+				eq(hdb.schema.memoryUnits.factType, 'observation')
+			)
+		)
+		.get()
+
+	if (!row) return null
+
+	// SECURITY: Filter by tags to prevent cross-tenant observation leakage
+	if (tags?.length) {
+		const obsTags: string[] = row.tags
+			? JSON.parse(row.tags)
+			: []
+		if (!matchesTags(obsTags, tags, tagsMatch)) return null
+	}
+
+	const sourceMemoryIds: string[] = row.sourceMemoryIds
+		? JSON.parse(row.sourceMemoryIds)
+		: []
+
+	return {
+		id: row.id,
+		content: row.content,
+		proofCount: row.proofCount,
+		sourceCount: sourceMemoryIds.length,
+		occurredStart: getOccurredStart(row),
+		occurredEnd: getOccurredEnd(row),
+		mentionedAt: row.mentionedAt
+	}
 }
 
 // ── LLM consolidation call ──────────────────────────────────────────────
@@ -412,60 +471,55 @@ function normalizeConsolidationActions(
 
 	const actions: ConsolidationAction[] = []
 	for (const candidate of raw) {
-		if (!candidate || typeof candidate !== 'object')
-			continue
-		const record = candidate as Record<string, unknown>
-		const action = asString(record.action)
-		if (!action) continue
+		const action = normalizeOneAction(candidate)
+		if (action) actions.push(action)
+	}
+	return actions
+}
 
-		if (action === 'skip') {
-			actions.push({
-				action: 'skip',
-				reason: asString(record.reason)
-			})
-			continue
-		}
+/** Normalize a single raw candidate into a ConsolidationAction, or null if invalid. */
+function normalizeOneAction(
+	candidate: unknown
+): ConsolidationAction | null {
+	if (!candidate || typeof candidate !== 'object')
+		return null
+	const record = candidate as Record<string, unknown>
+	const action = asString(record.action)
+	if (!action) return null
 
-		const text = asString(record.text)
-		if (!text) continue
-		const reason = asString(record.reason) ?? ''
-
-		if (action === 'create') {
-			actions.push({ action: 'create', text, reason })
-			continue
-		}
-
-		if (action === 'update') {
-			const observationId = asString(
-				record.observationId ?? record.learning_id
-			)
-			if (!observationId) continue
-			actions.push({
-				action: 'update',
-				observationId,
-				text,
-				reason
-			})
-			continue
-		}
-
-		if (action === 'merge') {
-			const observationIds = asStringArray(
-				record.observationIds ??
-					record.learning_ids ??
-					record.observation_ids
-			)
-			if (observationIds.length < 2) continue
-			actions.push({
-				action: 'merge',
-				observationIds,
-				text,
-				reason
-			})
+	if (action === 'skip') {
+		return {
+			action: 'skip',
+			reason: asString(record.reason)
 		}
 	}
 
-	return actions
+	const text = asString(record.text)
+	if (!text) return null
+	const reason = asString(record.reason) ?? ''
+
+	if (action === 'create')
+		return { action: 'create', text, reason }
+
+	if (action === 'update') {
+		const observationId = asString(
+			record.observationId ?? record.learning_id
+		)
+		if (!observationId) return null
+		return { action: 'update', observationId, text, reason }
+	}
+
+	if (action === 'merge') {
+		const observationIds = asStringArray(
+			record.observationIds ??
+				record.learning_ids ??
+				record.observation_ids
+		)
+		if (observationIds.length < 2) return null
+		return { action: 'merge', observationIds, text, reason }
+	}
+
+	return null
 }
 
 function asString(value: unknown): string | undefined {

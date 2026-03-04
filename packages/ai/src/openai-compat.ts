@@ -211,96 +211,15 @@ export class OpenAICompatTextAdapter<
 				const lines = buffer.split('\n')
 				buffer = lines.pop() ?? ''
 
-				for (const line of lines) {
-					const trimmed = line.trim()
-					if (!trimmed || trimmed.startsWith(':')) continue
-					if (trimmed === 'data: [DONE]') continue
-					if (!trimmed.startsWith('data: ')) continue
-
-					const jsonStr = trimmed.slice(6)
-					let chunk: OpenAIStreamChunk
-					try {
-						chunk = JSON.parse(jsonStr)
-					} catch {
-						continue
-					}
-
-					if (!chunk.choices) continue
-					for (const choice of chunk.choices) {
-						const delta = choice.delta
-
-						// Text content
-						if (delta.content) {
-							yield {
-								type: 'TEXT_MESSAGE_CONTENT',
-								messageId,
-								delta: delta.content
-							} as StreamChunk
+				for (const chunk of this.parseSSEChunks(lines)) {
+					yield* this.processStreamChunk(
+						chunk,
+						pendingToolCalls,
+						messageId,
+						(reason: string) => {
+							lastFinishReason = reason
 						}
-
-						// Tool calls
-						if (delta.tool_calls) {
-							for (const tc of delta.tool_calls) {
-								if (tc.id) {
-									// New tool call starting
-									const initialArgs =
-										tc.function?.arguments ?? ''
-									pendingToolCalls.set(tc.index, {
-										id: tc.id,
-										name: tc.function?.name ?? '',
-										args: initialArgs
-									})
-									yield {
-										type: 'TOOL_CALL_START',
-										toolCallId: tc.id,
-										toolName: tc.function?.name ?? ''
-									} as StreamChunk
-									// Some providers (e.g. Groq) include arguments in the first
-									// chunk alongside the tool call ID. Emit them immediately so
-									// TanStack AI's ToolCallManager accumulates them.
-									if (initialArgs) {
-										yield {
-											type: 'TOOL_CALL_ARGS',
-											toolCallId: tc.id,
-											delta: initialArgs
-										} as StreamChunk
-									}
-								} else {
-									// Continuing existing tool call
-									const pending = pendingToolCalls.get(
-										tc.index
-									)
-									if (pending && tc.function?.arguments) {
-										pending.args += tc.function.arguments
-										yield {
-											type: 'TOOL_CALL_ARGS',
-											toolCallId: pending.id,
-											delta: tc.function.arguments
-										} as StreamChunk
-									}
-								}
-							}
-						}
-
-						// Track finish reason for RUN_FINISHED event
-						if (choice.finish_reason) {
-							lastFinishReason = choice.finish_reason
-						}
-
-						// Finish reason — end any pending tool calls
-						if (
-							choice.finish_reason === 'tool_calls' ||
-							choice.finish_reason === 'stop'
-						) {
-							for (const [, pending] of pendingToolCalls) {
-								yield {
-									type: 'TOOL_CALL_END',
-									toolCallId: pending.id
-								} as StreamChunk
-							}
-							pendingToolCalls.clear()
-						}
-					}
+					)
 				}
 			}
 		} finally {
@@ -401,7 +320,140 @@ export class OpenAICompatTextAdapter<
 		}
 	}
 
-	// ── helpers ─────────────────────────────────────────────────────────────
+	// ── stream helpers ───────────────────────────────────────────────────────
+
+	/** Parse SSE lines into OpenAI stream chunks, skipping non-data lines. */
+	private *parseSSEChunks(
+		lines: string[]
+	): Iterable<OpenAIStreamChunk> {
+		for (const line of lines) {
+			const trimmed = line.trim()
+			if (!trimmed || trimmed.startsWith(':')) continue
+			if (trimmed === 'data: [DONE]') continue
+			if (!trimmed.startsWith('data: ')) continue
+
+			const jsonStr = trimmed.slice(6)
+			let chunk: OpenAIStreamChunk
+			try {
+				chunk = JSON.parse(jsonStr)
+			} catch {
+				continue
+			}
+
+			if (!chunk.choices) continue
+			yield chunk
+		}
+	}
+
+	/** Process a single SSE chunk, yielding StreamChunks for each choice delta. */
+	private async *processStreamChunk(
+		chunk: OpenAIStreamChunk,
+		pendingToolCalls: Map<
+			number,
+			{ id: string; name: string; args: string }
+		>,
+		messageId: string,
+		setFinishReason: (reason: string) => void
+	): AsyncIterable<StreamChunk> {
+		for (const choice of chunk.choices) {
+			yield* this.processChoiceDelta(
+				choice,
+				pendingToolCalls,
+				messageId
+			)
+
+			if (choice.finish_reason) {
+				setFinishReason(choice.finish_reason)
+			}
+
+			if (
+				choice.finish_reason === 'tool_calls' ||
+				choice.finish_reason === 'stop'
+			) {
+				for (const [, pending] of pendingToolCalls) {
+					yield {
+						type: 'TOOL_CALL_END',
+						toolCallId: pending.id
+					} as StreamChunk
+				}
+				pendingToolCalls.clear()
+			}
+		}
+	}
+
+	/** Process a single choice delta, yielding text and tool call events. */
+	private async *processChoiceDelta(
+		choice: OpenAIStreamChoice,
+		pendingToolCalls: Map<
+			number,
+			{ id: string; name: string; args: string }
+		>,
+		messageId: string
+	): AsyncIterable<StreamChunk> {
+		const delta = choice.delta
+
+		if (delta.content) {
+			yield {
+				type: 'TEXT_MESSAGE_CONTENT',
+				messageId,
+				delta: delta.content
+			} as StreamChunk
+		}
+
+		if (!delta.tool_calls) return
+
+		for (const tc of delta.tool_calls) {
+			yield* this.processToolCallDelta(tc, pendingToolCalls)
+		}
+	}
+
+	/** Process a single tool call delta, yielding start/args events. */
+	private async *processToolCallDelta(
+		tc: NonNullable<OpenAIDelta['tool_calls']>[number],
+		pendingToolCalls: Map<
+			number,
+			{ id: string; name: string; args: string }
+		>
+	): AsyncIterable<StreamChunk> {
+		// New tool call starting
+		if (tc.id) {
+			const initialArgs = tc.function?.arguments ?? ''
+			pendingToolCalls.set(tc.index, {
+				id: tc.id,
+				name: tc.function?.name ?? '',
+				args: initialArgs
+			})
+			yield {
+				type: 'TOOL_CALL_START',
+				toolCallId: tc.id,
+				toolName: tc.function?.name ?? ''
+			} as StreamChunk
+			// Some providers (e.g. Groq) include arguments in the first
+			// chunk alongside the tool call ID. Emit them immediately so
+			// TanStack AI's ToolCallManager accumulates them.
+			if (initialArgs) {
+				yield {
+					type: 'TOOL_CALL_ARGS',
+					toolCallId: tc.id,
+					delta: initialArgs
+				} as StreamChunk
+			}
+			return
+		}
+
+		// Continuing existing tool call
+		const pending = pendingToolCalls.get(tc.index)
+		if (!pending || !tc.function?.arguments) return
+
+		pending.args += tc.function.arguments
+		yield {
+			type: 'TOOL_CALL_ARGS',
+			toolCallId: pending.id,
+			delta: tc.function.arguments
+		} as StreamChunk
+	}
+
+	// ── message formatting helpers ──────────────────────────────────────────
 
 	private formatMessages(
 		options: TextOptions<Record<string, unknown>>
@@ -419,89 +471,117 @@ export class OpenAICompatTextAdapter<
 			})
 		}
 
-		// Messages
-		if (options.messages) {
-			for (const msg of options.messages) {
-				const m = msg as unknown as Record<string, unknown>
-				const role = m.role as string
-				if (role === 'user') {
-					result.push({
-						role: 'user',
-						content: this.extractTextContent(m)
-					})
-				} else if (role === 'assistant') {
-					// TanStack AI stores tool calls in `toolCalls` field (array of ToolCall objects)
-					const tcArray = m.toolCalls as
-						| Array<Record<string, unknown>>
-						| undefined
-					if (tcArray && tcArray.length > 0) {
-						result.push({
-							role: 'assistant',
-							content: (m.content as string | null) ?? null,
-							tool_calls: tcArray.map(tc => {
-								const fn = tc.function as
-									| Record<string, unknown>
-									| undefined
-								return {
-									id: (tc.id as string) ?? '',
-									type: 'function' as const,
-									function: {
-										name: (fn?.name as string) ?? '',
-										arguments:
-											typeof fn?.arguments === 'string'
-												? fn.arguments
-												: JSON.stringify(
-														fn?.arguments ?? {}
-													)
-									}
-								}
-							})
-						})
-					} else {
-						// Check for tool calls in parts (UIMessage format)
-						const parts = m.parts as
-							| Array<Record<string, unknown>>
-							| undefined
-						const toolCallParts = parts?.filter(
-							p => p.type === 'tool-call'
-						)
-						if (toolCallParts && toolCallParts.length > 0) {
-							result.push({
-								role: 'assistant',
-								content: null,
-								tool_calls: toolCallParts.map(tc => ({
-									id: tc.toolCallId as string,
-									type: 'function' as const,
-									function: {
-										name: tc.toolName as string,
-										arguments:
-											typeof tc.args === 'string'
-												? tc.args
-												: JSON.stringify(tc.args)
-									}
-								}))
-							})
-						} else {
-							result.push({
-								role: 'assistant',
-								content: this.extractTextContent(m)
-							})
-						}
-					}
-				} else if (role === 'tool') {
-					result.push({
-						role: 'tool',
-						content:
-							typeof m.content === 'string'
-								? m.content
-								: JSON.stringify(m.content),
-						tool_call_id: m.toolCallId as string
-					})
-				}
+		if (!options.messages) return result
+
+		for (const msg of options.messages) {
+			const m = msg as unknown as Record<string, unknown>
+			const role = m.role as string
+			if (role === 'user') {
+				result.push({
+					role: 'user',
+					content: this.extractTextContent(m)
+				})
+			} else if (role === 'assistant') {
+				result.push(this.formatAssistantMessage(m))
+			} else if (role === 'tool') {
+				result.push({
+					role: 'tool',
+					content:
+						typeof m.content === 'string'
+							? m.content
+							: JSON.stringify(m.content),
+					tool_call_id: m.toolCallId as string
+				})
 			}
 		}
 
 		return result
+	}
+
+	/** Format an assistant message, handling toolCalls and parts formats. */
+	private formatAssistantMessage(
+		m: Record<string, unknown>
+	): OpenAIMessage {
+		// TanStack AI stores tool calls in `toolCalls` field (array of ToolCall objects)
+		const tcArray = m.toolCalls as
+			| Array<Record<string, unknown>>
+			| undefined
+		if (tcArray && tcArray.length > 0) {
+			return {
+				role: 'assistant',
+				content: (m.content as string | null) ?? null,
+				tool_calls: tcArray.map(tc =>
+					this.formatToolCall(tc)
+				)
+			}
+		}
+
+		// Check for tool calls in parts (UIMessage format)
+		const parts = m.parts as
+			| Array<Record<string, unknown>>
+			| undefined
+		const toolCallParts = parts?.filter(
+			p => p.type === 'tool-call'
+		)
+		if (toolCallParts && toolCallParts.length > 0) {
+			return {
+				role: 'assistant',
+				content: null,
+				tool_calls: toolCallParts.map(tc =>
+					this.formatToolCallFromPart(tc)
+				)
+			}
+		}
+
+		return {
+			role: 'assistant',
+			content: this.extractTextContent(m)
+		}
+	}
+
+	/** Format a single tool call from TanStack AI's ToolCall format. */
+	private formatToolCall(
+		tc: Record<string, unknown>
+	): OpenAIMessage['tool_calls'] extends
+		| (infer T)[]
+		| undefined
+		? T
+		: never {
+		const fn = tc.function as
+			| Record<string, unknown>
+			| undefined
+		return {
+			id: (tc.id as string) ?? '',
+			type: 'function' as const,
+			function: {
+				name: (fn?.name as string) ?? '',
+				arguments:
+					typeof fn?.arguments === 'string'
+						? fn.arguments
+						: JSON.stringify(fn?.arguments ?? {})
+			}
+		}
+	}
+
+	/** Format a single tool call from UIMessage parts format. */
+	private formatToolCallFromPart(
+		tc: Record<string, unknown>
+	): OpenAIMessage['tool_calls'] extends
+		| (infer T)[]
+		| undefined
+		? T
+		: never {
+		return {
+			id: tc.toolCallId as string,
+			type: 'function' as const,
+			function: {
+				name: tc.toolName as string,
+				arguments:
+					typeof tc.args === 'string'
+						? tc.args
+						: JSON.stringify(tc.args)
+			}
+		}
 	}
 
 	private extractTextContent(

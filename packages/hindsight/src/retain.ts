@@ -48,6 +48,7 @@ import {
 	recordEpisodeEvent
 } from './episodes'
 import type { RouteDecision, RetainRoute } from './types'
+import type { EntityRow } from './schema'
 import { generateGistWithLLM } from './gist'
 import { generateFallbackGist } from './context-pack'
 
@@ -185,6 +186,18 @@ interface ExpandedBatchContent {
 	profile: string | null
 	project: string | null
 	session: string | null
+}
+
+interface AppliedDecision {
+	memoryId: string
+	route: RetainRoute
+	originalIndex: number
+	flatIndex: number
+	eventTime: number
+	profile: string | null
+	project: string | null
+	session: string | null
+	sourceText: string
 }
 
 interface EntityPlan {
@@ -647,6 +660,79 @@ function runInTransaction(
 	}
 }
 
+async function applyDecisionAction(
+	hdb: HindsightDatabase,
+	memoryVec: EmbeddingStore,
+	bankId: string,
+	decision: RouteDecision,
+	item: PreparedExtractedFact,
+	flatIndex: number,
+	eventTime: number,
+	now: number
+): Promise<AppliedDecision | null> {
+	if (
+		decision.route === 'reinforce' &&
+		decision.candidateMemoryId
+	) {
+		runInTransaction(hdb, () => {
+			applyReinforce(hdb, decision.candidateMemoryId!, now)
+			logDecision(
+				hdb,
+				bankId,
+				decision,
+				decision.candidateMemoryId!,
+				now
+			)
+		})
+		return {
+			memoryId: decision.candidateMemoryId,
+			route: 'reinforce',
+			originalIndex: item.originalIndex,
+			flatIndex,
+			eventTime,
+			profile: item.profile,
+			project: item.project,
+			session: item.session,
+			sourceText: item.fact.content
+		}
+	}
+	if (
+		decision.route === 'reconsolidate' &&
+		decision.candidateMemoryId
+	) {
+		await applyReconsolidate(
+			hdb,
+			memoryVec,
+			decision.candidateMemoryId,
+			item.fact.content,
+			item.fact.entities,
+			`Reconsolidated: score=${decision.candidateScore?.toFixed(3)}`,
+			now
+		)
+		runInTransaction(hdb, () => {
+			logDecision(
+				hdb,
+				bankId,
+				decision,
+				decision.candidateMemoryId!,
+				now
+			)
+		})
+		return {
+			memoryId: decision.candidateMemoryId,
+			route: 'reconsolidate',
+			originalIndex: item.originalIndex,
+			flatIndex,
+			eventTime,
+			profile: item.profile,
+			project: item.project,
+			session: item.session,
+			sourceText: item.fact.content
+		}
+	}
+	return null
+}
+
 function chunkTranscriptTurns(
 	turns: TranscriptTurn[]
 ): string[] {
@@ -791,6 +877,111 @@ function upsertChunks(
 	}
 }
 
+function processEntityForPlan(
+	ent: ExtractedEntity,
+	nearbyNames: string[],
+	bankId: string,
+	now: number,
+	entityMap: Map<string, Entity>,
+	entityById: Map<string, Entity>,
+	newEntityById: Map<
+		string,
+		EntityPlan['newEntities'][number]
+	>,
+	existingMentionDeltas: Map<string, number>,
+	newEntities: EntityPlan['newEntities'],
+	existingEntities: EntityRow[],
+	cooccurrences: Map<string, Set<string>>
+): void {
+	const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+	const seen = entityMap.get(key)
+	if (seen) {
+		const pending = newEntityById.get(seen.id)
+		if (pending) {
+			pending.mentionCount += 1
+			return
+		}
+		existingMentionDeltas.set(
+			seen.id,
+			(existingMentionDeltas.get(seen.id) ?? 0) + 1
+		)
+		return
+	}
+
+	const resolved = resolveEntity(
+		ent.name,
+		ent.entityType,
+		existingEntities,
+		cooccurrences,
+		nearbyNames.filter(name => name !== ent.name),
+		now
+	)
+	const exactMatch = existingEntities.find(
+		row =>
+			row.name.toLowerCase() === ent.name.toLowerCase() &&
+			row.entityType === ent.entityType
+	)
+
+	if (resolved || exactMatch) {
+		const row =
+			(resolved
+				? existingEntities.find(
+						entity => entity.id === resolved.entityId
+					)
+				: exactMatch) ?? null
+		if (!row) return
+
+		const entity = rowToEntity({
+			...row,
+			lastUpdated: now
+		})
+		entityMap.set(key, entity)
+		entityById.set(entity.id, entity)
+		existingMentionDeltas.set(
+			entity.id,
+			(existingMentionDeltas.get(entity.id) ?? 0) + 1
+		)
+		return
+	}
+
+	const entityId = ulid()
+	const pendingEntity: EntityPlan['newEntities'][number] = {
+		id: entityId,
+		bankId,
+		name: ent.name,
+		entityType: ent.entityType as EntityType,
+		mentionCount: 1,
+		firstSeen: now,
+		lastUpdated: now
+	}
+	newEntities.push(pendingEntity)
+	newEntityById.set(entityId, pendingEntity)
+
+	const entity: Entity = {
+		id: entityId,
+		bankId,
+		name: ent.name,
+		entityType: ent.entityType as EntityType,
+		description: null,
+		metadata: null,
+		firstSeen: now,
+		lastUpdated: now
+	}
+	entityMap.set(key, entity)
+	entityById.set(entity.id, entity)
+	existingEntities.push({
+		id: entityId,
+		bankId,
+		name: ent.name,
+		entityType: ent.entityType,
+		description: null,
+		metadata: null,
+		mentionCount: pendingEntity.mentionCount,
+		firstSeen: now,
+		lastUpdated: now
+	})
+}
+
 function planEntities(
 	hdb: HindsightDatabase,
 	bankId: string,
@@ -818,95 +1009,19 @@ function planEntities(
 			entity => entity.name
 		)
 		for (const ent of item.fact.entities) {
-			const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-			const seen = entityMap.get(key)
-			if (seen) {
-				const pending = newEntityById.get(seen.id)
-				if (pending) {
-					pending.mentionCount += 1
-					continue
-				}
-				existingMentionDeltas.set(
-					seen.id,
-					(existingMentionDeltas.get(seen.id) ?? 0) + 1
-				)
-				continue
-			}
-
-			const resolved = resolveEntity(
-				ent.name,
-				ent.entityType,
+			processEntityForPlan(
+				ent,
+				nearbyNames,
+				bankId,
+				now,
+				entityMap,
+				entityById,
+				newEntityById,
+				existingMentionDeltas,
+				newEntities,
 				existingEntities,
-				cooccurrences,
-				nearbyNames.filter(name => name !== ent.name),
-				now
+				cooccurrences
 			)
-			const exactMatch = existingEntities.find(
-				row =>
-					row.name.toLowerCase() ===
-						ent.name.toLowerCase() &&
-					row.entityType === ent.entityType
-			)
-
-			if (resolved || exactMatch) {
-				const row =
-					(resolved
-						? existingEntities.find(
-								entity => entity.id === resolved.entityId
-							)
-						: exactMatch) ?? null
-				if (!row) continue
-
-				const entity = rowToEntity({
-					...row,
-					lastUpdated: now
-				})
-				entityMap.set(key, entity)
-				entityById.set(entity.id, entity)
-				existingMentionDeltas.set(
-					entity.id,
-					(existingMentionDeltas.get(entity.id) ?? 0) + 1
-				)
-				continue
-			}
-
-			const entityId = ulid()
-			const pendingEntity: EntityPlan['newEntities'][number] =
-				{
-					id: entityId,
-					bankId,
-					name: ent.name,
-					entityType: ent.entityType as EntityType,
-					mentionCount: 1,
-					firstSeen: now,
-					lastUpdated: now
-				}
-			newEntities.push(pendingEntity)
-			newEntityById.set(entityId, pendingEntity)
-
-			const entity: Entity = {
-				id: entityId,
-				bankId,
-				name: ent.name,
-				entityType: ent.entityType as EntityType,
-				description: null,
-				metadata: null,
-				firstSeen: now,
-				lastUpdated: now
-			}
-			entityMap.set(key, entity)
-			entityById.set(entity.id, entity)
-			existingEntities.push({
-				id: entityId,
-				bankId,
-				name: ent.name,
-				entityType: ent.entityType,
-				description: null,
-				metadata: null,
-				mentionCount: pendingEntity.mentionCount,
-				firstSeen: now,
-				lastUpdated: now
-			})
 		}
 	}
 
@@ -1433,13 +1548,12 @@ export async function retain(
 		for (const ent of fact.entities) {
 			const key = `${ent.name.toLowerCase()}:${ent.entityType}`
 			const entity = entityMap.get(key)
-			if (entity) {
-				hdb.db
-					.insert(schema.memoryEntities)
-					.values({ memoryId, entityId: entity.id })
-					.run()
-				linkedEntityIds.push(entity.id)
-			}
+			if (!entity) continue
+			hdb.db
+				.insert(schema.memoryEntities)
+				.values({ memoryId, entityId: entity.id })
+				.run()
+			linkedEntityIds.push(entity.id)
 		}
 
 		// Update co-occurrence table for all entity pairs linked to this memory
@@ -1722,6 +1836,28 @@ type MemoryRecordList = Array<{
  *
  * Extracted from the `retainBatch` inner loop for readability.
  */
+
+function resolveLinkedEntities(
+	entities: ExtractedEntity[],
+	entityMap: Map<string, Entity>,
+	entityIdSet: Set<string>
+): {
+	linkedEntityIds: string[]
+	linkedEntityNames: Set<string>
+} {
+	const linkedEntityIds: string[] = []
+	const linkedEntityNames = new Set<string>()
+	for (const ent of entities) {
+		const key = `${ent.name.toLowerCase()}:${ent.entityType}`
+		const entity = entityMap.get(key)
+		if (!entity) continue
+		linkedEntityIds.push(entity.id)
+		linkedEntityNames.add(ent.name.toLowerCase())
+		entityIdSet.add(entity.id)
+	}
+	return { linkedEntityIds, linkedEntityNames }
+}
+
 async function processNewTraceMemories(ctx: {
 	hdb: HindsightDatabase
 	bankId: string
@@ -1854,16 +1990,12 @@ async function processNewTraceMemories(ctx: {
 			updatedAt: now
 		}
 
-		const linkedEntityIds: string[] = []
-		const linkedEntityNames = new Set<string>()
-		for (const ent of item.fact.entities) {
-			const key = `${ent.name.toLowerCase()}:${ent.entityType}`
-			const entity = entityPlan.entityMap.get(key)
-			if (!entity) continue
-			linkedEntityIds.push(entity.id)
-			linkedEntityNames.add(ent.name.toLowerCase())
-			entityIdsByResult[item.originalIndex]!.add(entity.id)
-		}
+		const { linkedEntityIds, linkedEntityNames } =
+			resolveLinkedEntities(
+				item.fact.entities,
+				entityPlan.entityMap,
+				entityIdsByResult[item.originalIndex]!
+			)
 
 		memoryEntityIds.set(memoryId, linkedEntityIds)
 		memoryEntityNames.set(memoryId, linkedEntityNames)
@@ -2190,17 +2322,7 @@ export async function retainBatch(
 
 		// ── Route each fact via reconsolidation engine ──
 		const batchDecisions: RouteDecision[] = []
-		const batchAppliedMemoryIds: Array<{
-			memoryId: string
-			route: RetainRoute
-			originalIndex: number
-			flatIndex: number
-			eventTime: number
-			profile: string | null
-			project: string | null
-			session: string | null
-			sourceText: string
-		}> = []
+		const batchAppliedMemoryIds: AppliedDecision[] = []
 
 		for (let i = 0; i < flattened.length; i++) {
 			if (dedupThreshold <= 0) {
@@ -2242,69 +2364,17 @@ export async function retainBatch(
 			const decision = batchDecisions[i]!
 			const item = flattened[i]!
 			const eventTime = item.eventDateMs + i
-			if (
-				decision.route === 'reinforce' &&
-				decision.candidateMemoryId
-			) {
-				runInTransaction(hdb, () => {
-					applyReinforce(
-						hdb,
-						decision.candidateMemoryId!,
-						now
-					)
-					logDecision(
-						hdb,
-						bankId,
-						decision,
-						decision.candidateMemoryId!,
-						now
-					)
-				})
-				batchAppliedMemoryIds.push({
-					memoryId: decision.candidateMemoryId,
-					route: 'reinforce',
-					originalIndex: item.originalIndex,
-					flatIndex: i,
-					eventTime,
-					profile: item.profile,
-					project: item.project,
-					session: item.session,
-					sourceText: item.fact.content
-				})
-			} else if (
-				decision.route === 'reconsolidate' &&
-				decision.candidateMemoryId
-			) {
-				await applyReconsolidate(
-					hdb,
-					memoryVec,
-					decision.candidateMemoryId,
-					item.fact.content,
-					item.fact.entities,
-					`Reconsolidated: score=${decision.candidateScore?.toFixed(3)}`,
-					now
-				)
-				runInTransaction(hdb, () => {
-					logDecision(
-						hdb,
-						bankId,
-						decision,
-						decision.candidateMemoryId!,
-						now
-					)
-				})
-				batchAppliedMemoryIds.push({
-					memoryId: decision.candidateMemoryId,
-					route: 'reconsolidate',
-					originalIndex: item.originalIndex,
-					flatIndex: i,
-					eventTime,
-					profile: item.profile,
-					project: item.project,
-					session: item.session,
-					sourceText: item.fact.content
-				})
-			}
+			const applied = await applyDecisionAction(
+				hdb,
+				memoryVec,
+				bankId,
+				decision,
+				item,
+				i,
+				eventTime,
+				now
+			)
+			if (applied) batchAppliedMemoryIds.push(applied)
 		}
 
 		// Filter to only new_trace facts for the insert pipeline
@@ -2454,6 +2524,52 @@ export async function retainBatch(
 const SEMANTIC_LINK_THRESHOLD = 0.7
 const SEMANTIC_LINK_TOP_K = 5
 
+function insertEntityLinksForSource(
+	hdb: HindsightDatabase,
+	bankId: string,
+	sourceId: string,
+	sourceEntities: Set<string>,
+	memoryIds: string[],
+	memoryEntityNames: Map<string, Set<string>>,
+	startIndex: number,
+	createdAt: number,
+	output: RetainResult['links']
+): void {
+	for (let j = startIndex; j < memoryIds.length; j++) {
+		const targetId = memoryIds[j]!
+		const targetEntities =
+			memoryEntityNames.get(targetId) ?? new Set<string>()
+		const shared = [...sourceEntities].filter(name =>
+			targetEntities.has(name)
+		)
+		if (shared.length === 0) continue
+
+		const weight =
+			shared.length /
+			Math.max(sourceEntities.size, targetEntities.size, 1)
+
+		hdb.db
+			.insert(hdb.schema.memoryLinks)
+			.values({
+				id: ulid(),
+				bankId,
+				sourceId,
+				targetId,
+				linkType: 'entity',
+				weight,
+				createdAt
+			})
+			.onConflictDoNothing()
+			.run()
+
+		output.push({
+			sourceId,
+			targetId,
+			linkType: 'entity'
+		})
+	}
+}
+
 function createEntityLinksFromMemories(
 	hdb: HindsightDatabase,
 	bankId: string,
@@ -2466,43 +2582,17 @@ function createEntityLinksFromMemories(
 		const sourceId = memoryIds[i]!
 		const sourceEntities =
 			memoryEntityNames.get(sourceId) ?? new Set<string>()
-		for (let j = i + 1; j < memoryIds.length; j++) {
-			const targetId = memoryIds[j]!
-			const targetEntities =
-				memoryEntityNames.get(targetId) ?? new Set<string>()
-			const shared = [...sourceEntities].filter(name =>
-				targetEntities.has(name)
-			)
-			if (shared.length === 0) continue
-
-			const weight =
-				shared.length /
-				Math.max(
-					sourceEntities.size,
-					targetEntities.size,
-					1
-				)
-
-			hdb.db
-				.insert(hdb.schema.memoryLinks)
-				.values({
-					id: ulid(),
-					bankId,
-					sourceId,
-					targetId,
-					linkType: 'entity',
-					weight,
-					createdAt
-				})
-				.onConflictDoNothing()
-				.run()
-
-			output.push({
-				sourceId,
-				targetId,
-				linkType: 'entity'
-			})
-		}
+		insertEntityLinksForSource(
+			hdb,
+			bankId,
+			sourceId,
+			sourceEntities,
+			memoryIds,
+			memoryEntityNames,
+			i + 1,
+			createdAt,
+			output
+		)
 	}
 }
 
@@ -2620,45 +2710,67 @@ function createTemporalLinksFromMemories(
 		)
 		if (sourceAnchor == null) continue
 
-		for (let j = i + 1; j < newMemories.length; j++) {
-			const target = newMemories[j]!
-			const targetAnchor = getTemporalAnchor(
-				target.eventDate,
-				target.occurredStart,
-				target.occurredEnd,
-				target.mentionedAt,
-				target.createdAt
-			)
-			if (targetAnchor == null) continue
+		linkWithinBatchTemporal(
+			hdb,
+			bankId,
+			source,
+			sourceAnchor,
+			newMemories,
+			i + 1,
+			windowMs,
+			createdAt,
+			output
+		)
+	}
+}
 
-			const distanceMs = Math.abs(
-				sourceAnchor - targetAnchor
-			)
-			if (distanceMs > windowMs) continue
-			const weight = computeTemporalWeight(
-				distanceMs,
-				windowMs
-			)
+function linkWithinBatchTemporal(
+	hdb: HindsightDatabase,
+	bankId: string,
+	source: MemoryUnit,
+	sourceAnchor: number,
+	newMemories: MemoryUnit[],
+	startIndex: number,
+	windowMs: number,
+	createdAt: number,
+	output: RetainResult['links']
+): void {
+	for (let j = startIndex; j < newMemories.length; j++) {
+		const target = newMemories[j]!
+		const targetAnchor = getTemporalAnchor(
+			target.eventDate,
+			target.occurredStart,
+			target.occurredEnd,
+			target.mentionedAt,
+			target.createdAt
+		)
+		if (targetAnchor == null) continue
 
-			insertTemporalLinkIfMissing(
-				hdb,
-				bankId,
-				source.id,
-				target.id,
-				weight,
-				createdAt,
-				output
-			)
-			insertTemporalLinkIfMissing(
-				hdb,
-				bankId,
-				target.id,
-				source.id,
-				weight,
-				createdAt,
-				output
-			)
-		}
+		const distanceMs = Math.abs(sourceAnchor - targetAnchor)
+		if (distanceMs > windowMs) continue
+		const weight = computeTemporalWeight(
+			distanceMs,
+			windowMs
+		)
+
+		insertTemporalLinkIfMissing(
+			hdb,
+			bankId,
+			source.id,
+			target.id,
+			weight,
+			createdAt,
+			output
+		)
+		insertTemporalLinkIfMissing(
+			hdb,
+			bankId,
+			target.id,
+			source.id,
+			weight,
+			createdAt,
+			output
+		)
 	}
 }
 
@@ -2757,6 +2869,31 @@ function insertCausalRelations(
 	}
 }
 
+function insertCausalLinksForGroup(
+	hdb: HindsightDatabase,
+	bankId: string,
+	groupFacts: PreparedExtractedFact[],
+	groupMemoryIds: string[],
+	createdAt: number,
+	output: RetainResult['links']
+): void {
+	for (let i = 0; i < groupFacts.length; i++) {
+		const sourceId = groupMemoryIds[i]
+		const fact = groupFacts[i]
+		if (!sourceId || !fact) continue
+		insertCausalRelations(
+			hdb,
+			bankId,
+			sourceId,
+			i,
+			groupMemoryIds,
+			fact.fact.causalRelations ?? [],
+			createdAt,
+			output
+		)
+	}
+}
+
 function createCausalLinksFromGroups(
 	hdb: HindsightDatabase,
 	bankId: string,
@@ -2781,21 +2918,14 @@ function createCausalLinksFromGroups(
 	] of factsByGroup.entries()) {
 		const groupMemoryIds =
 			memoryIdsByGroup.get(groupIndex) ?? []
-		for (let i = 0; i < groupFacts.length; i++) {
-			const sourceId = groupMemoryIds[i]
-			const fact = groupFacts[i]
-			if (!sourceId || !fact) continue
-			insertCausalRelations(
-				hdb,
-				bankId,
-				sourceId,
-				i,
-				groupMemoryIds,
-				fact.fact.causalRelations ?? [],
-				createdAt,
-				output
-			)
-		}
+		insertCausalLinksForGroup(
+			hdb,
+			bankId,
+			groupFacts,
+			groupMemoryIds,
+			createdAt,
+			output
+		)
 	}
 }
 
@@ -2816,40 +2946,58 @@ function createSemanticLinksFromVectors(
 			memory.vector,
 			SEMANTIC_LINK_TOP_K + 1
 		)
+		insertSemanticHitsForMemory(
+			hdb,
+			bankId,
+			memory.id,
+			hits,
+			newMemoryIds,
+			createdAt,
+			output
+		)
+	}
+}
 
-		for (const hit of hits) {
-			if (hit.id === memory.id || newMemoryIds.has(hit.id))
-				continue
-			const similarity = 1 - hit.distance
-			if (similarity < SEMANTIC_LINK_THRESHOLD) continue
+function insertSemanticHitsForMemory(
+	hdb: HindsightDatabase,
+	bankId: string,
+	memoryId: string,
+	hits: Array<{ id: string; distance: number }>,
+	skipIds: Set<string>,
+	createdAt: number,
+	output: RetainResult['links']
+): void {
+	for (const hit of hits) {
+		if (hit.id === memoryId || skipIds.has(hit.id)) continue
+		const similarity = 1 - hit.distance
+		if (similarity < SEMANTIC_LINK_THRESHOLD) continue
 
-			const row = hdb.db
-				.select({ bankId: hdb.schema.memoryUnits.bankId })
-				.from(hdb.schema.memoryUnits)
-				.where(eq(hdb.schema.memoryUnits.id, hit.id))
-				.get()
-			if (row?.bankId !== bankId) continue
+		const row = hdb.db
+			.select({ bankId: hdb.schema.memoryUnits.bankId })
+			.from(hdb.schema.memoryUnits)
+			.where(eq(hdb.schema.memoryUnits.id, hit.id))
+			.get()
+		if (row?.bankId !== bankId) continue
 
-			hdb.db
-				.insert(hdb.schema.memoryLinks)
-				.values({
-					id: ulid(),
-					bankId,
-					sourceId: memory.id,
-					targetId: hit.id,
-					linkType: 'semantic',
-					weight: similarity,
-					createdAt
-				})
-				.onConflictDoNothing()
-				.run()
-
-			output.push({
-				sourceId: memory.id,
+		hdb.db
+			.insert(hdb.schema.memoryLinks)
+			.values({
+				id: ulid(),
+				bankId,
+				sourceId: memoryId,
 				targetId: hit.id,
-				linkType: 'semantic'
+				linkType: 'semantic',
+				weight: similarity,
+				createdAt
 			})
-		}
+			.onConflictDoNothing()
+			.run()
+
+		output.push({
+			sourceId: memoryId,
+			targetId: hit.id,
+			linkType: 'semantic'
+		})
 	}
 }
 
@@ -2862,6 +3010,49 @@ function addUniqueLink(
 	if (linkKeys.has(key)) return
 	linkKeys.add(key)
 	result.links.push(link)
+}
+
+function insertSemanticLinksFromHits(
+	hdb: HindsightDatabase,
+	bankId: string,
+	memoryId: string,
+	hits: Array<{ id: string; distance: number }>,
+	skipIds: Set<string>,
+	links: RetainResult['links']
+): void {
+	for (const hit of hits) {
+		if (hit.id === memoryId || skipIds.has(hit.id)) continue
+
+		const similarity = 1 - hit.distance
+		if (similarity < SEMANTIC_LINK_THRESHOLD) continue
+
+		const memRow = hdb.db
+			.select({ bankId: hdb.schema.memoryUnits.bankId })
+			.from(hdb.schema.memoryUnits)
+			.where(eq(hdb.schema.memoryUnits.id, hit.id))
+			.get()
+		if (memRow?.bankId !== bankId) continue
+
+		hdb.db
+			.insert(hdb.schema.memoryLinks)
+			.values({
+				id: ulid(),
+				bankId,
+				sourceId: memoryId,
+				targetId: hit.id,
+				linkType: 'semantic',
+				weight: similarity,
+				createdAt: Date.now()
+			})
+			.onConflictDoNothing()
+			.run()
+
+		links.push({
+			sourceId: memoryId,
+			targetId: hit.id,
+			linkType: 'semantic' as LinkType
+		})
+	}
 }
 
 async function createSemanticLinks(
@@ -2885,43 +3076,14 @@ async function createSemanticLinks(
 			row.content,
 			SEMANTIC_LINK_TOP_K + 1
 		)
-
-		for (const hit of hits) {
-			// Skip self and other new memories (entity links already cover within-batch)
-			if (hit.id === memoryId || newIdSet.has(hit.id))
-				continue
-
-			const similarity = 1 - hit.distance
-			if (similarity < SEMANTIC_LINK_THRESHOLD) continue
-
-			// Verify same bank
-			const memRow = hdb.db
-				.select({ bankId: hdb.schema.memoryUnits.bankId })
-				.from(hdb.schema.memoryUnits)
-				.where(eq(hdb.schema.memoryUnits.id, hit.id))
-				.get()
-			if (memRow?.bankId !== bankId) continue
-
-			hdb.db
-				.insert(hdb.schema.memoryLinks)
-				.values({
-					id: ulid(),
-					bankId,
-					sourceId: memoryId,
-					targetId: hit.id,
-					linkType: 'semantic',
-					weight: similarity,
-					createdAt: Date.now()
-				})
-				.onConflictDoNothing()
-				.run()
-
-			links.push({
-				sourceId: memoryId,
-				targetId: hit.id,
-				linkType: 'semantic' as LinkType
-			})
-		}
+		insertSemanticLinksFromHits(
+			hdb,
+			bankId,
+			memoryId,
+			hits,
+			newIdSet,
+			links
+		)
 	}
 
 	return links

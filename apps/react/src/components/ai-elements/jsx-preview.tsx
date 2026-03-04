@@ -76,6 +76,15 @@ const matchJsxTag = (code: string) => {
 	}
 }
 
+function updateTagStack(
+	stack: string[],
+	tagName: string,
+	type: 'self-closing' | 'closing' | 'opening'
+) {
+	if (type === 'opening') stack.push(tagName)
+	else if (type === 'closing') stack.pop()
+}
+
 const completeJsxTag = (code: string) => {
 	const stack: string[] = []
 	let result = ''
@@ -96,12 +105,7 @@ const completeJsxTag = (code: string) => {
 			currentPosition + endIndex
 		)
 
-		if (type === 'opening') {
-			stack.push(tagName)
-		} else if (type === 'closing') {
-			stack.pop()
-		}
-
+		updateTagStack(stack, tagName, type)
 		currentPosition += endIndex
 	}
 

@@ -23,12 +23,9 @@ export function useToolGrouping(
 		const map = new Map<string, ToolResultPart>()
 		for (const msg of allMessages) {
 			for (const part of msg.parts) {
-				if (
-					part.type === 'tool-result' &&
-					part.toolCallId
-				) {
-					map.set(part.toolCallId, part)
-				}
+				if (part.type !== 'tool-result' || !part.toolCallId)
+					continue
+				map.set(part.toolCallId, part)
 			}
 		}
 		return map
@@ -38,13 +35,10 @@ export function useToolGrouping(
 		const set = new Set<string>()
 		for (const msg of allMessages) {
 			for (const part of msg.parts) {
-				if (
-					part.type === 'tool-call' &&
-					part.toolCallId &&
-					toolResults.has(part.toolCallId)
-				) {
-					set.add(part.toolCallId)
-				}
+				if (part.type !== 'tool-call' || !part.toolCallId)
+					continue
+				if (!toolResults.has(part.toolCallId)) continue
+				set.add(part.toolCallId)
 			}
 		}
 		return set
@@ -53,17 +47,17 @@ export function useToolGrouping(
 	const hiddenMessageIds = useMemo(() => {
 		const set = new Set<string>()
 		for (const msg of allMessages) {
-			const isToolResultOnly =
-				msg.parts.length === 1 &&
-				msg.parts[0].type === 'tool-result'
-			if (isToolResultOnly) {
-				const part = msg.parts[0] as ToolResultPart
-				if (
-					part.toolCallId &&
-					consumedToolCallIds.has(part.toolCallId)
-				) {
-					set.add(msg.id)
-				}
+			if (
+				msg.parts.length !== 1 ||
+				msg.parts[0].type !== 'tool-result'
+			)
+				continue
+			const part = msg.parts[0] as ToolResultPart
+			if (
+				part.toolCallId &&
+				consumedToolCallIds.has(part.toolCallId)
+			) {
+				set.add(msg.id)
 			}
 		}
 		return set

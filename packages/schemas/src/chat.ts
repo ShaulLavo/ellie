@@ -268,6 +268,13 @@ function formatArgs(args: Record<string, unknown>): string {
 		.join('\n')
 }
 
+function resolvePartType(parts: ContentPart[]): string {
+	const partTypes = new Set(parts.map(p => p.type))
+	if (partTypes.size === 1) return [...partTypes][0]
+	if (partTypes.size > 1) return 'mixed'
+	return 'text'
+}
+
 export function messagesToTranscript(
 	messages: ChatMessage[]
 ): Transcript {
@@ -283,13 +290,7 @@ export function messagesToTranscript(
 			.filter(Boolean)
 			.join('\n')
 
-		const partTypes = new Set(msg.parts.map(p => p.type))
-		let type = 'text'
-		if (partTypes.size === 1) {
-			type = [...partTypes][0]
-		} else if (partTypes.size > 1) {
-			type = 'mixed'
-		}
+		const type = resolvePartType(msg.parts)
 
 		entries.push({
 			id: msg.id,

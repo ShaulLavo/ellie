@@ -3,6 +3,39 @@ import type { TagsMatch } from '../types'
 import type { RetrievalHit } from './semantic'
 
 /**
+ * Build the SQL condition and params for tag pre-filtering.
+ */
+function buildTagCondition(
+	tags: string[],
+	tagsMatch: TagsMatch | undefined
+): { condition: string; params: (string | number)[] } {
+	const mode = tagsMatch ?? 'any'
+	const tagPlaceholders = tags.map(() => '?').join(', ')
+
+	let condition: string
+	if (mode === 'any') {
+		condition = `(tags IS NULL OR EXISTS (
+          SELECT 1 FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
+        ))`
+	} else if (mode === 'all') {
+		condition = `(tags IS NULL OR (
+          SELECT COUNT(DISTINCT je.value) FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
+        ) = ${tags.length})`
+	} else if (mode === 'any_strict') {
+		condition = `(tags IS NOT NULL AND EXISTS (
+          SELECT 1 FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
+        ))`
+	} else {
+		// all_strict
+		condition = `(tags IS NOT NULL AND (
+          SELECT COUNT(DISTINCT je.value) FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
+        ) = ${tags.length})`
+	}
+
+	return { condition, params: [...tags] }
+}
+
+/**
  * Time-range retrieval: find memories whose temporal validity overlaps a range.
  *
  * Python parity overlap condition:
@@ -67,37 +100,9 @@ export function searchTemporal(
 
 	// Tag pre-filtering
 	if (tags && tags.length > 0) {
-		const mode = tagsMatch ?? 'any'
-		const tagPlaceholders = tags.map(() => '?').join(', ')
-
-		if (mode === 'any') {
-			conditions.push(
-				`(tags IS NULL OR EXISTS (
-          SELECT 1 FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ))`
-			)
-		} else if (mode === 'all') {
-			conditions.push(
-				`(tags IS NULL OR (
-          SELECT COUNT(DISTINCT je.value) FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ) = ${tags.length})`
-			)
-		} else if (mode === 'any_strict') {
-			conditions.push(
-				`(tags IS NOT NULL AND EXISTS (
-          SELECT 1 FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ))`
-			)
-		} else {
-			// all_strict
-			conditions.push(
-				`(tags IS NOT NULL AND (
-          SELECT COUNT(DISTINCT je.value) FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ) = ${tags.length})`
-			)
-		}
-
-		params.push(...tags)
+		const tagFilter = buildTagCondition(tags, tagsMatch)
+		conditions.push(tagFilter.condition)
+		params.push(...tagFilter.params)
 	}
 
 	const rows = hdb.sqlite

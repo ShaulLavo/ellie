@@ -725,12 +725,9 @@ export const PromptInput = ({
 
 	useEffect(
 		() => () => {
-			if (!usingProvider) {
-				for (const f of filesRef.current) {
-					if (f.url) {
-						URL.revokeObjectURL(f.url)
-					}
-				}
+			if (usingProvider) return
+			for (const f of filesRef.current) {
+				if (f.url) URL.revokeObjectURL(f.url)
 			}
 		},
 		[usingProvider]
@@ -834,20 +831,15 @@ export const PromptInput = ({
 					if (result instanceof Promise) {
 						try {
 							await result
-							clear()
-							if (controller) {
-								controller.textInput.clear()
-							}
 						} catch {
 							// Don't clear on error - user may want to retry
-						}
-					} else {
-						// Sync function completed without throwing, clear inputs
-						clear()
-						if (controller) {
-							controller.textInput.clear()
+							return
 						}
 					}
+
+					// Sync completed without throwing, or async resolved — clear inputs
+					clear()
+					controller?.textInput.clear()
 				} catch {
 					// Don't clear on error - user may want to retry
 				}
@@ -982,12 +974,9 @@ export const PromptInputTextarea = ({
 				const files: File[] = []
 
 				for (const item of items) {
-					if (item.kind === 'file') {
-						const file = item.getAsFile()
-						if (file) {
-							files.push(file)
-						}
-					}
+					if (item.kind !== 'file') continue
+					const file = item.getAsFile()
+					if (file) files.push(file)
 				}
 
 				if (files.length > 0) {
@@ -1232,12 +1221,12 @@ export const PromptInputSubmit = ({
 
 	const handleClick: typeof onClick = useCallback(
 		e => {
-			if (isGenerating && onStop) {
-				e.preventDefault()
-				onStop()
+			if (!isGenerating || !onStop) {
+				onClick?.(e)
 				return
 			}
-			onClick?.(e)
+			e.preventDefault()
+			onStop()
 		},
 		[isGenerating, onStop, onClick]
 	)

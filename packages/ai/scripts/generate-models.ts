@@ -29,6 +29,47 @@ interface ModelsDevModel {
 	}
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toOpenRouterModel(model: any): Model | null {
+	if (!model.supported_parameters?.includes('tools'))
+		return null
+
+	const input: ('text' | 'image')[] = ['text']
+	if (model.architecture?.modality?.includes('image')) {
+		input.push('image')
+	}
+
+	const inputCost =
+		parseFloat(model.pricing?.prompt || '0') * 1_000_000
+	const outputCost =
+		parseFloat(model.pricing?.completion || '0') * 1_000_000
+	const cacheReadCost =
+		parseFloat(model.pricing?.input_cache_read || '0') *
+		1_000_000
+	const cacheWriteCost =
+		parseFloat(model.pricing?.input_cache_write || '0') *
+		1_000_000
+
+	return {
+		id: model.id,
+		name: model.name,
+		provider: 'openrouter',
+		reasoning:
+			model.supported_parameters?.includes('reasoning') ||
+			false,
+		input,
+		cost: {
+			input: inputCost,
+			output: outputCost,
+			cacheRead: cacheReadCost,
+			cacheWrite: cacheWriteCost
+		},
+		contextWindow: model.context_length || 4096,
+		maxTokens:
+			model.top_provider?.max_completion_tokens || 4096
+	}
+}
+
 async function fetchOpenRouterModels(): Promise<Model[]> {
 	try {
 		console.log('Fetching models from OpenRouter API...')
@@ -40,46 +81,8 @@ async function fetchOpenRouterModels(): Promise<Model[]> {
 		const models: Model[] = []
 
 		for (const model of data.data) {
-			if (!model.supported_parameters?.includes('tools'))
-				continue
-
-			const input: ('text' | 'image')[] = ['text']
-			if (model.architecture?.modality?.includes('image')) {
-				input.push('image')
-			}
-
-			const inputCost =
-				parseFloat(model.pricing?.prompt || '0') * 1_000_000
-			const outputCost =
-				parseFloat(model.pricing?.completion || '0') *
-				1_000_000
-			const cacheReadCost =
-				parseFloat(model.pricing?.input_cache_read || '0') *
-				1_000_000
-			const cacheWriteCost =
-				parseFloat(
-					model.pricing?.input_cache_write || '0'
-				) * 1_000_000
-
-			models.push({
-				id: model.id,
-				name: model.name,
-				provider: 'openrouter',
-				reasoning:
-					model.supported_parameters?.includes(
-						'reasoning'
-					) || false,
-				input,
-				cost: {
-					input: inputCost,
-					output: outputCost,
-					cacheRead: cacheReadCost,
-					cacheWrite: cacheWriteCost
-				},
-				contextWindow: model.context_length || 4096,
-				maxTokens:
-					model.top_provider?.max_completion_tokens || 4096
-			})
+			const converted = toOpenRouterModel(model)
+			if (converted) models.push(converted)
 		}
 
 		console.log(
@@ -95,6 +98,54 @@ async function fetchOpenRouterModels(): Promise<Model[]> {
 	}
 }
 
+function toModel(
+	modelId: string,
+	m: ModelsDevModel,
+	provider: string
+): Model | null {
+	if (m.tool_call !== true) return null
+
+	return {
+		id: modelId,
+		name: m.name || modelId,
+		provider,
+		reasoning: m.reasoning === true,
+		input: m.modalities?.input?.includes('image')
+			? ['text', 'image']
+			: ['text'],
+		cost: {
+			input: m.cost?.input || 0,
+			output: m.cost?.output || 0,
+			cacheRead: m.cost?.cache_read || 0,
+			cacheWrite: m.cost?.cache_write || 0
+		},
+		contextWindow: m.limit?.context || 4096,
+		maxTokens: m.limit?.output || 4096
+	}
+}
+
+function collectProviderModels(
+	providerData:
+		| { models?: Record<string, unknown> }
+		| undefined,
+	provider: string
+): Model[] {
+	if (!providerData?.models) return []
+
+	const models: Model[] = []
+	for (const [modelId, model] of Object.entries(
+		providerData.models
+	)) {
+		const result = toModel(
+			modelId,
+			model as ModelsDevModel,
+			provider
+		)
+		if (result) models.push(result)
+	}
+	return models
+}
+
 async function loadModelsDevData(): Promise<Model[]> {
 	try {
 		console.log('Fetching models from models.dev API...')
@@ -103,63 +154,10 @@ async function loadModelsDevData(): Promise<Model[]> {
 		)
 		const data = await response.json()
 
-		const models: Model[] = []
-
-		// Process Anthropic models
-		if (data.anthropic?.models) {
-			for (const [modelId, model] of Object.entries(
-				data.anthropic.models
-			)) {
-				const m = model as ModelsDevModel
-				if (m.tool_call !== true) continue
-
-				models.push({
-					id: modelId,
-					name: m.name || modelId,
-					provider: 'anthropic',
-					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes('image')
-						? ['text', 'image']
-						: ['text'],
-					cost: {
-						input: m.cost?.input || 0,
-						output: m.cost?.output || 0,
-						cacheRead: m.cost?.cache_read || 0,
-						cacheWrite: m.cost?.cache_write || 0
-					},
-					contextWindow: m.limit?.context || 4096,
-					maxTokens: m.limit?.output || 4096
-				})
-			}
-		}
-
-		// Process OpenAI models
-		if (data.openai?.models) {
-			for (const [modelId, model] of Object.entries(
-				data.openai.models
-			)) {
-				const m = model as ModelsDevModel
-				if (m.tool_call !== true) continue
-
-				models.push({
-					id: modelId,
-					name: m.name || modelId,
-					provider: 'openai',
-					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes('image')
-						? ['text', 'image']
-						: ['text'],
-					cost: {
-						input: m.cost?.input || 0,
-						output: m.cost?.output || 0,
-						cacheRead: m.cost?.cache_read || 0,
-						cacheWrite: m.cost?.cache_write || 0
-					},
-					contextWindow: m.limit?.context || 4096,
-					maxTokens: m.limit?.output || 4096
-				})
-			}
-		}
+		const models: Model[] = [
+			...collectProviderModels(data.anthropic, 'anthropic'),
+			...collectProviderModels(data.openai, 'openai')
+		]
 
 		console.log(
 			`Loaded ${models.length} tool-capable models from models.dev`

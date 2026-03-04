@@ -20,18 +20,7 @@ export function reciprocalRankFusion(
 	for (const results of resultSets) {
 		for (let rank = 0; rank < results.length; rank++) {
 			const hit = results[rank]!
-			const rrfScore = 1 / (K + rank + 1)
-
-			const existing = fused.get(hit.id)
-			if (existing) {
-				existing.score += rrfScore
-				existing.sources.add(hit.source)
-			} else {
-				fused.set(hit.id, {
-					score: rrfScore,
-					sources: new Set([hit.source])
-				})
-			}
+			accumulateRrfScore(fused, hit, rank)
 		}
 	}
 
@@ -43,4 +32,25 @@ export function reciprocalRankFusion(
 		}))
 		.sort((a, b) => b.score - a.score)
 		.slice(0, limit)
+}
+
+function accumulateRrfScore(
+	fused: Map<
+		string,
+		{ score: number; sources: Set<string> }
+	>,
+	hit: RetrievalHit,
+	rank: number
+): void {
+	const rrfScore = 1 / (K + rank + 1)
+	const existing = fused.get(hit.id)
+	if (existing) {
+		existing.score += rrfScore
+		existing.sources.add(hit.source)
+	} else {
+		fused.set(hit.id, {
+			score: rrfScore,
+			sources: new Set([hit.source])
+		})
+	}
 }

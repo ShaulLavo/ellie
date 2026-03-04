@@ -38,7 +38,9 @@ Execute TypeScript in a **fresh isolated environment**. No state persists betwee
 - You can `import` any npm package — Bun auto-installs on first use
 
 ```ts
-const files = await shell({ command: 'find . -name "*.ts" -maxdepth 2' })
+const files = await shell({
+	command: 'find . -name "*.ts" -maxdepth 2'
+})
 const count = files.trim().split('\n').length
 print(`Found ${count} TypeScript files`)
 ```

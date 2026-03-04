@@ -84,6 +84,16 @@ function sortMessages(messages: Message[]): Message[] {
 	)
 }
 
+/** Update seq cursor to the highest value seen in a batch of rows. */
+function trackMaxSeq(
+	rows: EventRow[],
+	seqRef: React.MutableRefObject<number>
+): void {
+	for (const row of rows) {
+		if (row.seq > seqRef.current) seqRef.current = row.seq
+	}
+}
+
 // ============================================================================
 // Hook
 // ============================================================================
@@ -126,11 +136,7 @@ export function useChat(sessionId: string) {
 				const rows = JSON.parse(event.data) as EventRow[]
 				hasSnapshot = true
 
-				// Track highest seq
-				for (const row of rows) {
-					if (row.seq > lastSeqRef.current)
-						lastSeqRef.current = row.seq
-				}
+				trackMaxSeq(rows, lastSeqRef)
 
 				// Extract messages from events
 				const msgs: Message[] = []

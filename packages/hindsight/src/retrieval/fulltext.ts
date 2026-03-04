@@ -54,30 +54,7 @@ export function searchFulltext(
 
 	// With tag filtering — JOIN FTS5 results with memory_units and use json_each
 	const mode = tagsMatch ?? 'any'
-	const tagPlaceholders = tags.map(() => '?').join(', ')
-
-	let tagCondition: string
-	if (mode === 'any') {
-		// Has any matching tag OR is untagged
-		tagCondition = `(mu.tags IS NULL OR EXISTS (
-      SELECT 1 FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
-    ))`
-	} else if (mode === 'all') {
-		// Has ALL filter tags OR is untagged
-		tagCondition = `(mu.tags IS NULL OR (
-      SELECT COUNT(DISTINCT je.value) FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
-    ) = ${tags.length})`
-	} else if (mode === 'any_strict') {
-		// Has any matching tag (excludes untagged)
-		tagCondition = `(mu.tags IS NOT NULL AND EXISTS (
-      SELECT 1 FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
-    ))`
-	} else {
-		// all_strict: has ALL filter tags (excludes untagged)
-		tagCondition = `(mu.tags IS NOT NULL AND (
-      SELECT COUNT(DISTINCT je.value) FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
-    ) = ${tags.length})`
-	}
+	const tagCondition = buildTagCondition(mode, tags)
 
 	const results = hdb.sqlite
 		.prepare(
@@ -98,6 +75,33 @@ export function searchFulltext(
 	}>
 
 	return normalizeRanks(results)
+}
+
+function buildTagCondition(
+	mode: TagsMatch,
+	tags: string[]
+): string {
+	const tagPlaceholders = tags.map(() => '?').join(', ')
+
+	if (mode === 'any') {
+		return `(mu.tags IS NULL OR EXISTS (
+      SELECT 1 FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
+    ))`
+	}
+	if (mode === 'all') {
+		return `(mu.tags IS NULL OR (
+      SELECT COUNT(DISTINCT je.value) FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
+    ) = ${tags.length})`
+	}
+	if (mode === 'any_strict') {
+		return `(mu.tags IS NOT NULL AND EXISTS (
+      SELECT 1 FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
+    ))`
+	}
+	// all_strict: has ALL filter tags (excludes untagged)
+	return `(mu.tags IS NOT NULL AND (
+      SELECT COUNT(DISTINCT je.value) FROM json_each(mu.tags) je WHERE je.value IN (${tagPlaceholders})
+    ) = ${tags.length})`
 }
 
 function normalizeRanks(

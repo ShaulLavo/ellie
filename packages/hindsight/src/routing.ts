@@ -62,6 +62,36 @@ function normalizeValue(s: string): string {
 	return normalized
 }
 
+function resolveEntityId(
+	hdb: HindsightDatabase,
+	entity: { name: string; entityType: string },
+	bankId: string,
+	now: number,
+	entityKeyToId: Map<string, string>
+): string {
+	const key = `${normalizeValue(entity.name)}|${normalizeValue(entity.entityType)}`
+	const existing = entityKeyToId.get(key)
+	if (existing) return existing
+
+	const entityId = ulid()
+	hdb.db
+		.insert(hdb.schema.entities)
+		.values({
+			id: entityId,
+			bankId,
+			name: entity.name,
+			entityType: entity.entityType,
+			description: null,
+			metadata: null,
+			mentionCount: 1,
+			firstSeen: now,
+			lastUpdated: now
+		})
+		.run()
+	entityKeyToId.set(key, entityId)
+	return entityId
+}
+
 // ── Core Classification ─────────────────────────────────────────────────────
 
 export function classifyRoute(
@@ -461,26 +491,13 @@ export async function applyReconsolidate(
 			.run()
 
 		for (const entity of mergedByName.values()) {
-			const key = `${normalizeValue(entity.name)}|${normalizeValue(entity.entityType)}`
-			let entityId = entityKeyToId.get(key)
-			if (!entityId) {
-				entityId = ulid()
-				hdb.db
-					.insert(hdb.schema.entities)
-					.values({
-						id: entityId,
-						bankId: current.bankId,
-						name: entity.name,
-						entityType: entity.entityType,
-						description: null,
-						metadata: null,
-						mentionCount: 1,
-						firstSeen: now,
-						lastUpdated: now
-					})
-					.run()
-				entityKeyToId.set(key, entityId)
-			}
+			const entityId = resolveEntityId(
+				hdb,
+				entity,
+				current.bankId,
+				now,
+				entityKeyToId
+			)
 			mergedEntityIds.push(entityId)
 		}
 

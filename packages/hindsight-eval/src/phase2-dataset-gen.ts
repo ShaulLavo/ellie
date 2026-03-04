@@ -283,6 +283,51 @@ export function generateRollingIngestDataset(
  * @param totalEvents - Total event count for valid ID range
  * @param seed - PRNG seed for reproducibility
  */
+/** Generate a raw index offset based on direction. */
+function generateExpectedIndex(
+	anchorIdx: number,
+	direction: 'before' | 'after' | 'both',
+	random: () => number
+): number {
+	if (direction === 'before') {
+		return anchorIdx - Math.floor(random() * 5) - 1
+	}
+	if (direction === 'after') {
+		return anchorIdx + Math.floor(random() * 5) + 1
+	}
+	// direction === 'both'
+	return random() < 0.5
+		? anchorIdx - Math.floor(random() * 3) - 1
+		: anchorIdx + Math.floor(random() * 3) + 1
+}
+
+/** Build a de-duplicated, sorted list of expected event indices around an anchor. */
+function buildExpectedIndices(
+	anchorIdx: number,
+	numExpected: number,
+	direction: 'before' | 'after' | 'both',
+	totalEvents: number,
+	random: () => number
+): number[] {
+	const expectedIndices: number[] = []
+	for (let j = 0; j < numExpected; j++) {
+		const idx = Math.max(
+			0,
+			Math.min(
+				totalEvents - 1,
+				generateExpectedIndex(anchorIdx, direction, random)
+			)
+		)
+		if (
+			!expectedIndices.includes(idx) &&
+			idx !== anchorIdx
+		) {
+			expectedIndices.push(idx)
+		}
+	}
+	return expectedIndices.sort((a, b) => a - b)
+}
+
 export function generateTemporalNarrativeDataset(
 	count: number = 200,
 	totalEvents: number = 800,
@@ -292,13 +337,9 @@ export function generateTemporalNarrativeDataset(
 	const questions: TemporalNarrativeQuestion[] = []
 
 	for (let i = 0; i < count; i++) {
-		// Pick an anchor event somewhere in the middle
 		const anchorIdx =
 			Math.floor(random() * (totalEvents - 10)) + 5
-
-		// Pick 2-5 expected events around the anchor
 		const numExpected = Math.floor(random() * 4) + 2
-		const expectedIndices: number[] = []
 
 		const dirRoll = random()
 		const direction: 'before' | 'after' | 'both' =
@@ -308,31 +349,13 @@ export function generateTemporalNarrativeDataset(
 					? 'after'
 					: 'both'
 
-		for (let j = 0; j < numExpected; j++) {
-			let idx: number
-			if (direction === 'before') {
-				idx = anchorIdx - Math.floor(random() * 5) - 1
-			} else if (direction === 'after') {
-				idx = anchorIdx + Math.floor(random() * 5) + 1
-			} else {
-				idx =
-					random() < 0.5
-						? anchorIdx - Math.floor(random() * 3) - 1
-						: anchorIdx + Math.floor(random() * 3) + 1
-			}
-
-			idx = Math.max(0, Math.min(totalEvents - 1, idx))
-
-			if (
-				!expectedIndices.includes(idx) &&
-				idx !== anchorIdx
-			) {
-				expectedIndices.push(idx)
-			}
-		}
-
-		// Sort expected indices for correct temporal ordering
-		expectedIndices.sort((a, b) => a - b)
+		const expectedIndices = buildExpectedIndices(
+			anchorIdx,
+			numExpected,
+			direction,
+			totalEvents,
+			random
+		)
 
 		questions.push({
 			questionId: `q-${i.toString().padStart(4, '0')}`,

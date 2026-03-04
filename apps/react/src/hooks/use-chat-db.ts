@@ -37,6 +37,98 @@ function isAgentRunOpen(rows: EventRow[]): boolean {
 	return open
 }
 
+/** Extract content parts from a tool_call event payload. */
+function extractToolCallParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	return [
+		{
+			type: 'tool-call',
+			name: parsed.name as string,
+			args:
+				(parsed.arguments as Record<string, unknown>) ?? {},
+			toolCallId: parsed.id as string
+		}
+	]
+}
+
+/** Extract content parts from a tool_result event payload. */
+function extractToolResultParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	const resultContent = Array.isArray(parsed.content)
+		? (
+				parsed.content as Array<{
+					type: string
+					text?: string
+				}>
+			)
+				.filter(c => c.type === 'text')
+				.map(c => c.text ?? '')
+				.join('')
+		: ''
+	return [
+		{
+			type: 'tool-result',
+			toolName: parsed.toolName as string,
+			toolCallId: parsed.toolCallId as string,
+			result: resultContent
+		}
+	]
+}
+
+/** Extract content parts from memory_recall / memory_retain event payloads. */
+function extractMemoryParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	return (parsed.parts as ContentPart[]) ?? []
+}
+
+/** Extract content parts from an error event payload. */
+function extractErrorParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	const errorText =
+		typeof parsed.message === 'string'
+			? parsed.message
+			: 'An unexpected error occurred'
+	return [{ type: 'text', text: errorText }]
+}
+
+/** Extract content parts from standard message event payloads (user_message, assistant_final, etc.). */
+function extractMessageParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	if (Array.isArray(parsed.content)) {
+		return parsed.content as ContentPart[]
+	}
+	if (Array.isArray(parsed.parts)) {
+		return parsed.parts as ContentPart[]
+	}
+	if (
+		typeof parsed.content === 'string' &&
+		parsed.content
+	) {
+		return [{ type: 'text', text: parsed.content }]
+	}
+
+	// Surface API errors: when assistant_final has stopReason 'error'
+	// but empty content, synthesize a text part from errorMessage
+	if (
+		parsed.stopReason === 'error' &&
+		typeof parsed.errorMessage === 'string'
+	) {
+		return [
+			{
+				type: 'text',
+				text: `Error: ${parsed.errorMessage}`
+			}
+		]
+	}
+
+	return []
+}
+
 /** Convert an EventRow into a StoredChatMessage (no Date allocation). */
 function eventToStored(row: EventRow): StoredChatMessage {
 	const parsed =
@@ -44,83 +136,21 @@ function eventToStored(row: EventRow): StoredChatMessage {
 			? (JSON.parse(row.payload) as Record<string, unknown>)
 			: (row.payload as Record<string, unknown>)
 
-	// The payload shape depends on event type
-	let parts: ContentPart[] = []
-
+	// Dispatch to the right helper based on event type
+	let parts: ContentPart[]
 	if (row.type === 'tool_call') {
-		// tool_call payload: {id, name, arguments}
-		parts = [
-			{
-				type: 'tool-call',
-				name: parsed.name as string,
-				args:
-					(parsed.arguments as Record<string, unknown>) ??
-					{},
-				toolCallId: parsed.id as string
-			}
-		]
+		parts = extractToolCallParts(parsed)
 	} else if (row.type === 'tool_result') {
-		// tool_result payload: {role, toolCallId, toolName, content, isError, ...}
-		const resultContent = Array.isArray(parsed.content)
-			? (
-					parsed.content as Array<{
-						type: string
-						text?: string
-					}>
-				)
-					.filter(c => c.type === 'text')
-					.map(c => c.text ?? '')
-					.join('')
-			: ''
-		parts = [
-			{
-				type: 'tool-result',
-				toolName: parsed.toolName as string,
-				toolCallId: parsed.toolCallId as string,
-				result: resultContent
-			}
-		]
+		parts = extractToolResultParts(parsed)
 	} else if (
 		row.type === 'memory_recall' ||
 		row.type === 'memory_retain'
 	) {
-		// Memory events carry their parts directly in the payload
-		parts = (parsed.parts as ContentPart[]) ?? []
+		parts = extractMemoryParts(parsed)
 	} else if (row.type === 'error') {
-		// Error events carry message in payload.message
-		const errorText =
-			typeof parsed.message === 'string'
-				? parsed.message
-				: 'An unexpected error occurred'
-		parts = [{ type: 'text', text: errorText }]
+		parts = extractErrorParts(parsed)
 	} else {
-		// Standard message events: extract parts from content or parts array
-		const content =
-			typeof parsed.content === 'string'
-				? parsed.content
-				: ''
-		if (Array.isArray(parsed.content)) {
-			parts = parsed.content as ContentPart[]
-		} else if (Array.isArray(parsed.parts)) {
-			parts = parsed.parts as ContentPart[]
-		} else if (content) {
-			parts = [{ type: 'text', text: content }]
-		}
-
-		// Surface API errors: when assistant_final has stopReason 'error'
-		// but empty content, synthesize a text part from errorMessage
-		if (
-			parts.length === 0 &&
-			parsed.stopReason === 'error' &&
-			typeof parsed.errorMessage === 'string'
-		) {
-			parts = [
-				{
-					type: 'text',
-					text: `Error: ${parsed.errorMessage}`
-				}
-			]
-		}
+		parts = extractMessageParts(parsed)
 	}
 
 	const text = parts

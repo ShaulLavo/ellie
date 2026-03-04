@@ -169,6 +169,26 @@ export class TusServer {
 		return this.store
 	}
 
+	/**
+	 * Collect header names that fail tus validation.
+	 * Content-Type is skipped for non-PATCH methods.
+	 */
+	private findInvalidHeaders(req: Request): string[] {
+		const invalid: string[] = []
+		for (const [name, value] of req.headers.entries()) {
+			if (
+				name.toLowerCase() === 'content-type' &&
+				req.method !== 'PATCH'
+			) {
+				continue
+			}
+			if (!validateHeader(name, value)) {
+				invalid.push(name)
+			}
+		}
+		return invalid
+	}
+
 	async handle(req: Request): Promise<Response> {
 		const context = this.createContext()
 		const headers = new Headers()
@@ -212,18 +232,7 @@ export class TusServer {
 
 			// Validate tus headers
 			if (req.method !== 'OPTIONS') {
-				const invalidHeaders: string[] = []
-				for (const [name, value] of req.headers.entries()) {
-					if (
-						name.toLowerCase() === 'content-type' &&
-						req.method !== 'PATCH'
-					) {
-						continue
-					}
-					if (!validateHeader(name, value)) {
-						invalidHeaders.push(name)
-					}
-				}
+				const invalidHeaders = this.findInvalidHeaders(req)
 				if (invalidHeaders.length > 0) {
 					return this.writeResponse(
 						context,
@@ -614,26 +623,12 @@ export class TusServer {
 			}
 
 			// Deferred length declaration
-			const upload_length = req.headers.get('upload-length')
-			if (upload_length !== null) {
-				const size = Number.parseInt(upload_length, 10)
-				if (
-					!this.store.hasExtension('creation-defer-length')
-				) {
-					throw ERRORS.UNSUPPORTED_CREATION_DEFER_LENGTH_EXTENSION
-				}
-				if (upload.size !== undefined) {
-					throw ERRORS.INVALID_LENGTH
-				}
-				if (size < upload.offset) {
-					throw ERRORS.INVALID_LENGTH
-				}
-				if (maxFileSize > 0 && size > maxFileSize) {
-					throw ERRORS.ERR_MAX_SIZE_EXCEEDED
-				}
-				await this.store.declareUploadLength(id, size)
-				upload.size = size
-			}
+			await this.handleDeferredLength(
+				req,
+				id,
+				upload,
+				maxFileSize
+			)
 
 			const maxBodySize = this.calculateMaxBodySize(
 				req,
@@ -727,6 +722,32 @@ export class TusServer {
 	}
 
 	// ── Internal Helpers ────────────────────────────────────────────────────
+
+	private async handleDeferredLength(
+		req: Request,
+		id: string,
+		upload: Upload,
+		maxFileSize: number
+	): Promise<void> {
+		const upload_length = req.headers.get('upload-length')
+		if (upload_length === null) return
+
+		const size = Number.parseInt(upload_length, 10)
+		if (!this.store.hasExtension('creation-defer-length')) {
+			throw ERRORS.UNSUPPORTED_CREATION_DEFER_LENGTH_EXTENSION
+		}
+		if (upload.size !== undefined) {
+			throw ERRORS.INVALID_LENGTH
+		}
+		if (size < upload.offset) {
+			throw ERRORS.INVALID_LENGTH
+		}
+		if (maxFileSize > 0 && size > maxFileSize) {
+			throw ERRORS.ERR_MAX_SIZE_EXCEEDED
+		}
+		await this.store.declareUploadLength(id, size)
+		upload.size = size
+	}
 
 	private getFileIdFromRequest(
 		req: Request

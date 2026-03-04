@@ -125,14 +125,15 @@ export class WorkingMemoryStore {
 		)
 
 		// Lazy cleanup: update store if we filtered out expired entries
-		if (active.length !== entries.length) {
-			if (active.length === 0) {
-				sessions.delete(sessionId)
-				if (sessions.size === 0) this.store.delete(bankId)
-			} else {
-				sessions.set(sessionId, active)
-			}
+		if (active.length === entries.length) return active
+
+		if (active.length > 0) {
+			sessions.set(sessionId, active)
+			return active
 		}
+
+		sessions.delete(sessionId)
+		if (sessions.size === 0) this.store.delete(bankId)
 
 		return active
 	}

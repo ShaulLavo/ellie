@@ -590,58 +590,8 @@ export class EventStore {
 		const messages: AgentMessage[] = []
 		for (const row of rows) {
 			try {
-				if (row.type === 'tool_call') {
-					// Map tool_call event to an assistant message with toolCall content
-					const tc = JSON.parse(row.payload) as {
-						id: string
-						name: string
-						arguments: Record<string, unknown>
-					}
-					messages.push({
-						role: 'assistant',
-						content: [
-							{
-								type: 'toolCall',
-								id: tc.id,
-								name: tc.name,
-								arguments: tc.arguments
-							}
-						],
-						provider: 'system',
-						model: 'bootstrap-v1',
-						usage: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							totalTokens: 0,
-							cost: {
-								input: 0,
-								output: 0,
-								cacheRead: 0,
-								cacheWrite: 0,
-								total: 0
-							}
-						},
-						stopReason: 'toolUse',
-						timestamp: row.createdAt
-					} as AgentMessage)
-				} else {
-					const msg = JSON.parse(
-						row.payload
-					) as AgentMessage
-					// Skip empty assistant messages — these are artifacts
-					// from multi-turn finalization that break tool_use ↔
-					// tool_result pairing required by the Anthropic API.
-					if (
-						msg.role === 'assistant' &&
-						Array.isArray(msg.content) &&
-						msg.content.length === 0
-					) {
-						continue
-					}
-					messages.push(msg)
-				}
+				const msg = parseEventRow(row)
+				if (msg) messages.push(msg)
 			} catch (err) {
 				console.warn(
 					`[EventStore] malformed payload in event ${row.id} (seq=${row.seq}):`,
@@ -845,6 +795,61 @@ export class EventStore {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Parse an event row into an AgentMessage, or return null to skip it.
+ */
+function parseEventRow(row: EventRow): AgentMessage | null {
+	if (row.type === 'tool_call') {
+		const tc = JSON.parse(row.payload) as {
+			id: string
+			name: string
+			arguments: Record<string, unknown>
+		}
+		return {
+			role: 'assistant',
+			content: [
+				{
+					type: 'toolCall',
+					id: tc.id,
+					name: tc.name,
+					arguments: tc.arguments
+				}
+			],
+			provider: 'system',
+			model: 'bootstrap-v1',
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0
+				}
+			},
+			stopReason: 'toolUse',
+			timestamp: row.createdAt
+		} as AgentMessage
+	}
+
+	const msg = JSON.parse(row.payload) as AgentMessage
+	// Skip empty assistant messages — these are artifacts
+	// from multi-turn finalization that break tool_use ↔
+	// tool_result pairing required by the Anthropic API.
+	if (
+		msg.role === 'assistant' &&
+		Array.isArray(msg.content) &&
+		msg.content.length === 0
+	) {
+		return null
+	}
+	return msg
+}
+
+/**
  * Reorder messages so each toolResult comes after its parent assistant message.
  *
  * During a TanStack multi-turn run, tool_execution_end events (→ tool_result)
@@ -852,6 +857,19 @@ export class EventStore {
  * during the stream while the assistant message finalizes after. Loading by
  * seq gives [toolResult, assistant] — but the API expects [assistant, toolResult].
  */
+/** Extract toolCall IDs from an assistant message's content blocks. */
+function extractToolCallIds(msg: AgentMessage): string[] {
+	const ids: string[] = []
+	for (const block of msg.content) {
+		if (block.type === 'toolCall') {
+			ids.push(
+				(block as { type: 'toolCall'; id: string }).id
+			)
+		}
+	}
+	return ids
+}
+
 function reorderToolResults(
 	messages: AgentMessage[]
 ): AgentMessage[] {
@@ -859,20 +877,9 @@ function reorderToolResults(
 	const toolCallToIdx = new Map<string, number>()
 	for (let i = 0; i < messages.length; i++) {
 		const msg = messages[i]
-		if (msg.role === 'assistant') {
-			for (const block of msg.content) {
-				if (block.type === 'toolCall') {
-					toolCallToIdx.set(
-						(
-							block as {
-								type: 'toolCall'
-								id: string
-							}
-						).id,
-						i
-					)
-				}
-			}
+		if (msg.role !== 'assistant') continue
+		for (const id of extractToolCallIds(msg)) {
+			toolCallToIdx.set(id, i)
 		}
 	}
 
@@ -885,42 +892,17 @@ function reorderToolResults(
 	for (const msg of messages) {
 		if (msg.role === 'assistant') {
 			result.push(msg)
-			for (const block of msg.content) {
-				if (block.type === 'toolCall') {
-					seenToolCallIds.add(
-						(
-							block as {
-								type: 'toolCall'
-								id: string
-							}
-						).id
-					)
-				}
+			for (const id of extractToolCallIds(msg)) {
+				seenToolCallIds.add(id)
 			}
 			// Flush any deferred tool results whose assistant is now seen
-			const stillDeferred: AgentMessage[] = []
-			for (const d of deferred) {
-				if (
-					d.role === 'toolResult' &&
-					seenToolCallIds.has(
-						(d as { toolCallId: string }).toolCallId
-					)
-				) {
-					result.push(d)
-				} else {
-					stillDeferred.push(d)
-				}
-			}
-			deferred.length = 0
-			deferred.push(...stillDeferred)
+			flushDeferred(deferred, seenToolCallIds, result)
 		} else if (msg.role === 'toolResult') {
 			const toolCallId = (msg as { toolCallId: string })
 				.toolCallId
 			if (seenToolCallIds.has(toolCallId)) {
-				// Assistant already seen — correct order
 				result.push(msg)
 			} else {
-				// Assistant not yet seen — defer until we see it
 				deferred.push(msg)
 			}
 		} else {
@@ -932,4 +914,27 @@ function reorderToolResults(
 	result.push(...deferred)
 
 	return result
+}
+
+/** Move deferred tool results whose assistant has been seen into result. */
+function flushDeferred(
+	deferred: AgentMessage[],
+	seenToolCallIds: Set<string>,
+	result: AgentMessage[]
+): void {
+	const stillDeferred: AgentMessage[] = []
+	for (const d of deferred) {
+		const isReady =
+			d.role === 'toolResult' &&
+			seenToolCallIds.has(
+				(d as { toolCallId: string }).toolCallId
+			)
+		if (isReady) {
+			result.push(d)
+		} else {
+			stillDeferred.push(d)
+		}
+	}
+	deferred.length = 0
+	deferred.push(...stillDeferred)
 }

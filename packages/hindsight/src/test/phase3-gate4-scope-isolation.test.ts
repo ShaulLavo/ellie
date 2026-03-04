@@ -65,6 +65,67 @@ function insertTestMemory(
 	return id
 }
 
+/**
+ * Generate all cross-project scope pairs where memScope !== queryScope.
+ * Used to verify zero bleed rate across project/profile combinations.
+ */
+function generateCrossProjectPairs(
+	profiles: string[],
+	projects: string[]
+): Array<{
+	memScope: { profile: string; project: string }
+	queryScope: Scope
+}> {
+	const pairs: Array<{
+		memScope: { profile: string; project: string }
+		queryScope: Scope
+	}> = []
+
+	for (const memProfile of profiles) {
+		for (const memProject of projects) {
+			appendMismatchedPairs(
+				pairs,
+				memProfile,
+				memProject,
+				profiles,
+				projects
+			)
+		}
+	}
+	return pairs
+}
+
+function appendMismatchedPairs(
+	pairs: Array<{
+		memScope: { profile: string; project: string }
+		queryScope: Scope
+	}>,
+	memProfile: string,
+	memProject: string,
+	profiles: string[],
+	projects: string[]
+): void {
+	for (const queryProfile of profiles) {
+		for (const queryProject of projects) {
+			if (
+				memProject !== queryProject ||
+				memProfile !== queryProfile
+			) {
+				pairs.push({
+					memScope: {
+						profile: memProfile,
+						project: memProject
+					},
+					queryScope: {
+						profile: queryProfile,
+						project: queryProject
+					}
+				})
+			}
+		}
+	}
+}
+
 let t: TestHindsight
 let bankId: string
 
@@ -190,15 +251,15 @@ describe('Gate 4: Scope Isolation', () => {
 					filterScope,
 					'strict'
 				)
-				if (matches) {
-					totalHits++
-					// Check if this is actually from a different project
-					if (
-						mem.project !== 'proj-a' ||
-						mem.profile !== 'alice'
-					) {
-						crossProjectHits++
-					}
+				if (!matches) continue
+
+				totalHits++
+				// Check if this is actually from a different project
+				if (
+					mem.project !== 'proj-a' ||
+					mem.profile !== 'alice'
+				) {
+					crossProjectHits++
 				}
 			}
 
@@ -218,35 +279,10 @@ describe('Gate 4: Scope Isolation', () => {
 			]
 			const profiles = ['alice', 'bob']
 
-			// Generate cross-project pairs
-			const pairs: Array<{
-				memScope: { profile: string; project: string }
-				queryScope: Scope
-			}> = []
-
-			for (const memProfile of profiles) {
-				for (const memProject of projects) {
-					for (const queryProfile of profiles) {
-						for (const queryProject of projects) {
-							if (
-								memProject !== queryProject ||
-								memProfile !== queryProfile
-							) {
-								pairs.push({
-									memScope: {
-										profile: memProfile,
-										project: memProject
-									},
-									queryScope: {
-										profile: queryProfile,
-										project: queryProject
-									}
-								})
-							}
-						}
-					}
-				}
-			}
+			const pairs = generateCrossProjectPairs(
+				profiles,
+				projects
+			)
 
 			// Verify: no cross-project match in strict mode
 			let crossProjectHits = 0

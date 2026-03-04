@@ -40,22 +40,26 @@ func main() {
 	case "start":
 		cmdStart()
 	case "auth":
-		if len(args) >= 2 {
-			switch args[1] {
-			case "status":
-				cmdAuthStatus()
-			case "clear":
-				cmdAuthClear()
-			default:
-				fmt.Fprintf(os.Stderr, "Unknown auth command: %s\n", args[1])
-				printUsage()
-				os.Exit(1)
-			}
-		} else {
-			cmdAuth()
-		}
+		runAuth(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+func runAuth(args []string) {
+	if len(args) == 0 {
+		cmdAuth()
+		return
+	}
+	switch args[0] {
+	case "status":
+		cmdAuthStatus()
+	case "clear":
+		cmdAuthClear()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown auth command: %s\n", args[0])
 		printUsage()
 		os.Exit(1)
 	}

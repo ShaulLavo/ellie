@@ -423,44 +423,16 @@ export async function recall(
 				normalizeRrf(candidate.score, rrfMin, rrfRange)
 		)
 		if (rerank) {
-			const candidatesWithContent = fused.filter(
-				candidate => {
-					const row = memoryRowById.get(candidate.id)
-					return (
-						typeof row?.content === 'string' &&
-						row.content.length > 0
-					)
-				}
+			const reranked = await applyHybridRerank(
+				rerank,
+				query,
+				fused,
+				memoryRowById
 			)
-			if (candidatesWithContent.length > 0) {
-				const docs = candidatesWithContent.map(
-					candidate =>
-						memoryRowById.get(candidate.id)!.content
-				)
-				const scores = await rerank(query, docs)
-				if (
-					scores.length !== candidatesWithContent.length
-				) {
-					throw new Error(
-						`Rerank score count mismatch: expected ${candidatesWithContent.length}, got ${scores.length}`
-					)
-				}
-				const scoreById = new Map<string, number>()
-				for (
-					let i = 0;
-					i < candidatesWithContent.length;
-					i++
-				) {
-					scoreById.set(
-						candidatesWithContent[i]!.id,
-						scores[i]!
-					)
-				}
-				crossEncoderRawScores = fused.map(
-					candidate => scoreById.get(candidate.id) ?? 0
-				)
+			if (reranked) {
+				crossEncoderRawScores = reranked.rawScores
 				crossEncoderNormalizedScores =
-					crossEncoderRawScores.map(sigmoid)
+					reranked.normalizedScores
 			}
 		}
 
@@ -1020,6 +992,53 @@ function normalizeRrf(
 	return clamp((score - min) / range, 0, 1)
 }
 
+async function applyHybridRerank(
+	rerank: RerankFunction,
+	query: string,
+	fused: Array<{
+		id: string
+		score: number
+		sources: string[]
+	}>,
+	memoryRowById: Map<
+		string,
+		typeof import('./schema').memoryUnits.$inferSelect
+	>
+): Promise<{
+	rawScores: number[]
+	normalizedScores: number[]
+} | null> {
+	const candidatesWithContent = fused.filter(candidate => {
+		const row = memoryRowById.get(candidate.id)
+		return (
+			typeof row?.content === 'string' &&
+			row.content.length > 0
+		)
+	})
+	if (candidatesWithContent.length === 0) return null
+
+	const docs = candidatesWithContent.map(
+		candidate => memoryRowById.get(candidate.id)!.content
+	)
+	const scores = await rerank(query, docs)
+	if (scores.length !== candidatesWithContent.length) {
+		throw new Error(
+			`Rerank score count mismatch: expected ${candidatesWithContent.length}, got ${scores.length}`
+		)
+	}
+	const scoreById = new Map<string, number>()
+	for (let i = 0; i < candidatesWithContent.length; i++) {
+		scoreById.set(candidatesWithContent[i]!.id, scores[i]!)
+	}
+	const rawScores = fused.map(
+		candidate => scoreById.get(candidate.id) ?? 0
+	)
+	return {
+		rawScores,
+		normalizedScores: rawScores.map(sigmoid)
+	}
+}
+
 function sigmoid(score: number): number {
 	return 1 / (1 + Math.exp(-score))
 }
@@ -1137,35 +1156,16 @@ function buildChunkPayload(
 		const memoryId = memoryIdByChunkId.get(chunkId)
 		if (!memoryId) continue
 
-		const chunkContent = row.content
-		const chunkTokens = estimateTokens(chunkContent)
-		if (usedTokens + chunkTokens > maxChunkTokens) {
-			const remaining = maxChunkTokens - usedTokens
-			if (remaining <= 0) break
-			const truncated = truncateToApproxTokens(
-				chunkContent,
-				remaining
-			)
-			payload[chunkId] = {
-				chunkId,
-				memoryId,
-				documentId: row.documentId,
-				chunkIndex: row.chunkIndex,
-				content: truncated,
-				truncated: true
-			}
-			break
-		}
-
-		usedTokens += chunkTokens
-		payload[chunkId] = {
+		const result = addChunkToPayload(
+			payload,
 			chunkId,
 			memoryId,
-			documentId: row.documentId,
-			chunkIndex: row.chunkIndex,
-			content: chunkContent,
-			truncated: false
-		}
+			row,
+			usedTokens,
+			maxChunkTokens
+		)
+		if (result.done) break
+		usedTokens = result.usedTokens
 	}
 
 	for (const scored of memories) {
@@ -1192,6 +1192,53 @@ function buildChunkPayload(
 	}
 
 	return payload
+}
+
+function addChunkToPayload(
+	payload: Record<string, RecallChunk>,
+	chunkId: string,
+	memoryId: string,
+	row: {
+		documentId: string | null
+		chunkIndex: number | null
+		content: string
+	},
+	usedTokens: number,
+	maxChunkTokens: number
+): { done: boolean; usedTokens: number } {
+	const chunkContent = row.content
+	const chunkTokens = estimateTokens(chunkContent)
+	if (usedTokens + chunkTokens <= maxChunkTokens) {
+		payload[chunkId] = {
+			chunkId,
+			memoryId,
+			documentId: row.documentId,
+			chunkIndex: row.chunkIndex,
+			content: chunkContent,
+			truncated: false
+		}
+		return {
+			done: false,
+			usedTokens: usedTokens + chunkTokens
+		}
+	}
+
+	const remaining = maxChunkTokens - usedTokens
+	if (remaining <= 0) return { done: true, usedTokens }
+
+	const truncated = truncateToApproxTokens(
+		chunkContent,
+		remaining
+	)
+	payload[chunkId] = {
+		chunkId,
+		memoryId,
+		documentId: row.documentId,
+		chunkIndex: row.chunkIndex,
+		content: truncated,
+		truncated: true
+	}
+	return { done: true, usedTokens: usedTokens + remaining }
 }
 
 function truncateToApproxTokens(

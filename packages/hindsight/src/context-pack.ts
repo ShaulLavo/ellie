@@ -173,62 +173,24 @@ export function packContext(
 	const allocatedIds = new Set<string>()
 
 	if (gistRemaining > 0 && skippedForBackfill.length > 0) {
-		// Use extra gist budget for full backfill of skipped items
-		let extraBudget = gistRemaining
-		for (const c of skippedForBackfill) {
-			const fullTokens = estimateTokens(c.content)
-			if (fullTokens <= extraBudget) {
-				fullBackfillSlots.push({
-					id: c.id,
-					text: c.content,
-					mode: 'full',
-					score: c.score,
-					tokens: fullTokens
-				})
-				fullUsed += fullTokens
-				extraBudget -= fullTokens
-				allocatedIds.add(c.id)
-			} else {
-				// Try gist instead
-				const gistText =
-					c.gist ?? generateFallbackGist(c.content)
-				const gistTokens = estimateTokens(gistText)
-				if (gistTokens <= extraBudget) {
-					gistSlots.push({
-						id: c.id,
-						text: gistText,
-						mode: 'gist',
-						score: c.score,
-						tokens: gistTokens
-					})
-					gistUsed += gistTokens
-					extraBudget -= gistTokens
-					allocatedIds.add(c.id)
-				}
-			}
-		}
+		const spent = reallocateGistBudget(
+			skippedForBackfill,
+			gistRemaining,
+			fullBackfillSlots,
+			gistSlots,
+			allocatedIds
+		)
+		fullUsed += spent.fullUsed
+		gistUsed += spent.gistUsed
 	}
 
 	if (fullRemaining > 0 && skippedForBackfill.length > 0) {
-		// Use extra full budget for remaining skipped items
-		let extraBudget = fullRemaining
-		for (const c of skippedForBackfill) {
-			if (allocatedIds.has(c.id)) continue
-			const gistText =
-				c.gist ?? generateFallbackGist(c.content)
-			const gistTokens = estimateTokens(gistText)
-			if (gistTokens <= extraBudget) {
-				gistSlots.push({
-					id: c.id,
-					text: gistText,
-					mode: 'gist',
-					score: c.score,
-					tokens: gistTokens
-				})
-				gistUsed += gistTokens
-				extraBudget -= gistTokens
-			}
-		}
+		gistUsed += reallocateFullBudget(
+			skippedForBackfill,
+			fullRemaining,
+			gistSlots,
+			allocatedIds
+		)
 	}
 
 	// Merge gist and full backfill slots (maintain score order)
@@ -248,6 +210,90 @@ export function packContext(
 		totalTokensUsed: totalUsed,
 		budgetRemaining: Math.max(0, tokenBudget - totalUsed)
 	}
+}
+
+// ── Budget reallocation helpers ──────────────────────────────────────────────
+
+/**
+ * Use leftover gist budget to allocate skipped items as full or gist.
+ * Returns how many full and gist tokens were consumed.
+ */
+function reallocateGistBudget(
+	skipped: PackCandidate[],
+	extraBudget: number,
+	fullBackfillSlots: PackedMemory[],
+	gistSlots: PackedMemory[],
+	allocatedIds: Set<string>
+): { fullUsed: number; gistUsed: number } {
+	let remaining = extraBudget
+	let fullUsed = 0
+	let gistUsed = 0
+
+	for (const c of skipped) {
+		const fullTokens = estimateTokens(c.content)
+		if (fullTokens <= remaining) {
+			fullBackfillSlots.push({
+				id: c.id,
+				text: c.content,
+				mode: 'full',
+				score: c.score,
+				tokens: fullTokens
+			})
+			fullUsed += fullTokens
+			remaining -= fullTokens
+			allocatedIds.add(c.id)
+			continue
+		}
+		// Try gist instead
+		const gistText =
+			c.gist ?? generateFallbackGist(c.content)
+		const gistTokens = estimateTokens(gistText)
+		if (gistTokens <= remaining) {
+			gistSlots.push({
+				id: c.id,
+				text: gistText,
+				mode: 'gist',
+				score: c.score,
+				tokens: gistTokens
+			})
+			gistUsed += gistTokens
+			remaining -= gistTokens
+			allocatedIds.add(c.id)
+		}
+	}
+	return { fullUsed, gistUsed }
+}
+
+/**
+ * Use leftover full budget for remaining skipped items (gist mode only).
+ * Returns how many gist tokens were consumed.
+ */
+function reallocateFullBudget(
+	skipped: PackCandidate[],
+	extraBudget: number,
+	gistSlots: PackedMemory[],
+	allocatedIds: Set<string>
+): number {
+	let remaining = extraBudget
+	let gistUsed = 0
+
+	for (const c of skipped) {
+		if (allocatedIds.has(c.id)) continue
+		const gistText =
+			c.gist ?? generateFallbackGist(c.content)
+		const gistTokens = estimateTokens(gistText)
+		if (gistTokens > remaining) continue
+		gistSlots.push({
+			id: c.id,
+			text: gistText,
+			mode: 'gist',
+			score: c.score,
+			tokens: gistTokens
+		})
+		gistUsed += gistTokens
+		remaining -= gistTokens
+	}
+	return gistUsed
 }
 
 // ── Gist fallback ───────────────────────────────────────────────────────────

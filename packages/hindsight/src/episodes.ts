@@ -35,6 +35,12 @@ const BOUNDARY_PHRASES: RegExp[] = [
 	/\bdone with\b/i
 ]
 
+function matchesBoundaryPhrase(content: string): boolean {
+	return BOUNDARY_PHRASES.some(pattern =>
+		pattern.test(content)
+	)
+}
+
 interface CursorPayload {
 	t: number
 	id: string
@@ -170,12 +176,8 @@ export function detectBoundary(
 		return { needsNew: true, reason: 'initial' }
 	}
 
-	if (content) {
-		for (const pattern of BOUNDARY_PHRASES) {
-			if (pattern.test(content)) {
-				return { needsNew: true, reason: 'phrase_boundary' }
-			}
-		}
+	if (content && matchesBoundaryPhrase(content)) {
+		return { needsNew: true, reason: 'phrase_boundary' }
 	}
 
 	if (

@@ -28,6 +28,23 @@ const defaults = {
 	>
 >
 
+function abortableDelay(
+	ms: number,
+	signal?: AbortSignal
+): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		const timer = setTimeout(resolve, ms)
+		signal?.addEventListener(
+			'abort',
+			() => {
+				clearTimeout(timer)
+				reject(signal.reason)
+			},
+			{ once: true }
+		)
+	})
+}
+
 /**
  * Retry an async function with exponential backoff and full jitter.
  *
@@ -62,18 +79,7 @@ export async function withRetry<T>(
 			const jitter = Math.random() * delay
 			const waitMs = Math.min(jitter, maxDelay)
 
-			await new Promise<void>((resolve, reject) => {
-				const timer = setTimeout(resolve, waitMs)
-
-				signal?.addEventListener(
-					'abort',
-					() => {
-						clearTimeout(timer)
-						reject(signal.reason)
-					},
-					{ once: true }
-				)
-			})
+			await abortableDelay(waitMs, signal)
 
 			delay = Math.min(delay * multiplier, maxDelay)
 		}

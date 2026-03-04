@@ -120,31 +120,11 @@ export function computeTemporalLinks(
 			normalizedUnitDate + windowMs
 		)
 
-		const matchingNeighbors: Array<{
-			id: string
-			eventDate: number
-		}> = []
-		for (const candidate of candidates) {
-			const normalizedCandidateDate = normalizeTemporalDate(
-				candidate.eventDate
-			)
-			if (normalizedCandidateDate == null) continue
-			if (
-				normalizedCandidateDate < timeLower ||
-				normalizedCandidateDate > timeUpper
-			) {
-				continue
-			}
-			matchingNeighbors.push({
-				id: String(candidate.id),
-				eventDate: normalizedCandidateDate
-			})
-			if (
-				matchingNeighbors.length >=
-				TEMPORAL_LINK_MAX_NEIGHBORS
-			)
-				break
-		}
+		const matchingNeighbors = collectTemporalNeighbors(
+			candidates,
+			timeLower,
+			timeUpper
+		)
 
 		for (const neighbor of matchingNeighbors) {
 			const distanceMs = Math.abs(
@@ -165,4 +145,37 @@ export function computeTemporalLinks(
 	}
 
 	return links
+}
+
+function collectTemporalNeighbors(
+	candidates: TemporalCandidate[],
+	timeLower: number,
+	timeUpper: number
+): Array<{ id: string; eventDate: number }> {
+	const matchingNeighbors: Array<{
+		id: string
+		eventDate: number
+	}> = []
+	for (const candidate of candidates) {
+		const normalizedCandidateDate = normalizeTemporalDate(
+			candidate.eventDate
+		)
+		if (normalizedCandidateDate == null) continue
+		if (
+			normalizedCandidateDate < timeLower ||
+			normalizedCandidateDate > timeUpper
+		) {
+			continue
+		}
+		matchingNeighbors.push({
+			id: String(candidate.id),
+			eventDate: normalizedCandidateDate
+		})
+		if (
+			matchingNeighbors.length >=
+			TEMPORAL_LINK_MAX_NEIGHBORS
+		)
+			break
+	}
+	return matchingNeighbors
 }

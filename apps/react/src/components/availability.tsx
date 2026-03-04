@@ -72,6 +72,33 @@ const formatDisplayTime = (
 // Helper to generate a simple unique ID (not crypto secure but sufficient for UI)
 const generateId = () => nanoid()
 
+/** Clamp a resize drag to the given bounds, returning adjusted start/end. */
+function clampResizeEdge(
+	edge: 'top' | 'bottom',
+	initialStart: number,
+	initialEnd: number,
+	deltaMinutes: number,
+	minStart: number,
+	maxEnd: number,
+	timeIncrements: number
+) {
+	let newStart = initialStart
+	let newEnd = initialEnd
+
+	if (edge === 'top') {
+		newStart += deltaMinutes
+		if (newStart < minStart) newStart = minStart
+		if (newStart >= newEnd - timeIncrements)
+			newStart = newEnd - timeIncrements
+	} else {
+		newEnd += deltaMinutes
+		if (newEnd > maxEnd) newEnd = maxEnd
+		if (newEnd <= newStart + timeIncrements)
+			newEnd = newStart + timeIncrements
+	}
+	return { newStart, newEnd }
+}
+
 const DAYS = [
 	'Sunday',
 	'Monday',
@@ -1116,27 +1143,21 @@ function DraggableTimeSpan({
 
 			if (deltaMinutes === 0) return
 
-			let newStart = initialStart
-			let newEnd = initialEnd
-
-			if (edge === 'top') {
-				newStart += deltaMinutes
-				// For resize we still want clamping to neighbors
-				if (newStart < minStart) newStart = minStart
-				if (newStart >= newEnd - timeIncrements)
-					newStart = newEnd - timeIncrements
-			} else {
-				newEnd += deltaMinutes
-				if (newEnd > maxEnd) newEnd = maxEnd
-				if (newEnd <= newStart + timeIncrements)
-					newEnd = newStart + timeIncrements
-			}
+			const clamped = clampResizeEdge(
+				edge,
+				initialStart,
+				initialEnd,
+				deltaMinutes,
+				minStart,
+				maxEnd,
+				timeIncrements
+			)
 
 			// During drag: don't merge (isComplete = false)
 			onResize(
 				span.id,
-				minutesToTime(newStart),
-				minutesToTime(newEnd),
+				minutesToTime(clamped.newStart),
+				minutesToTime(clamped.newEnd),
 				false
 			)
 		}
@@ -1156,25 +1177,20 @@ function DraggableTimeSpan({
 						deltaY / pixelsPerMinute / timeIncrements
 					) * timeIncrements
 
-				let newStart = initialStart
-				let newEnd = initialEnd
-
-				if (edge === 'top') {
-					newStart += deltaMinutes
-					if (newStart < minStart) newStart = minStart
-					if (newStart >= newEnd - timeIncrements)
-						newStart = newEnd - timeIncrements
-				} else {
-					newEnd += deltaMinutes
-					if (newEnd > maxEnd) newEnd = maxEnd
-					if (newEnd <= newStart + timeIncrements)
-						newEnd = newStart + timeIncrements
-				}
+				const clamped = clampResizeEdge(
+					edge,
+					initialStart,
+					initialEnd,
+					deltaMinutes,
+					minStart,
+					maxEnd,
+					timeIncrements
+				)
 
 				onResize(
 					span.id,
-					minutesToTime(newStart),
-					minutesToTime(newEnd),
+					minutesToTime(clamped.newStart),
+					minutesToTime(clamped.newEnd),
 					true
 				)
 			}

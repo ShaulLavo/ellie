@@ -1138,42 +1138,13 @@ Instructions:
 			await this.runBeforeOperationHooks(hookContext)
 
 			if (dedupeByBank) {
-				const existing = this.hdb.db
-					.select({
-						operationId:
-							this.hdb.schema.asyncOperations.operationId
-					})
-					.from(this.hdb.schema.asyncOperations)
-					.where(
-						and(
-							eq(
-								this.hdb.schema.asyncOperations.bankId,
-								bankId
-							),
-							eq(
-								this.hdb.schema.asyncOperations
-									.operationType,
-								operationType
-							),
-							eq(
-								this.hdb.schema.asyncOperations.status,
-								'pending'
-							)
-						)
+				const dedupResult =
+					await this.tryDeduplicateOperation(
+						bankId,
+						operationType,
+						hookContext
 					)
-					.get()
-				if (existing) {
-					const dedupResult = {
-						operationId: existing.operationId,
-						deduplicated: true
-					}
-					await this.runAfterOperationHooks({
-						...hookContext,
-						success: true,
-						result: dedupResult
-					})
-					return dedupResult
-				}
+				if (dedupResult) return dedupResult
 			}
 
 			const operationId = ulid()
@@ -1227,6 +1198,48 @@ Instructions:
 			})
 			throw error
 		}
+	}
+
+	private async tryDeduplicateOperation(
+		bankId: string,
+		operationType: AsyncOperationType,
+		hookContext: HindsightOperationContext
+	): Promise<SubmitAsyncOperationResult | null> {
+		const existing = this.hdb.db
+			.select({
+				operationId:
+					this.hdb.schema.asyncOperations.operationId
+			})
+			.from(this.hdb.schema.asyncOperations)
+			.where(
+				and(
+					eq(
+						this.hdb.schema.asyncOperations.bankId,
+						bankId
+					),
+					eq(
+						this.hdb.schema.asyncOperations.operationType,
+						operationType
+					),
+					eq(
+						this.hdb.schema.asyncOperations.status,
+						'pending'
+					)
+				)
+			)
+			.get()
+		if (!existing) return null
+
+		const dedupResult = {
+			operationId: existing.operationId,
+			deduplicated: true
+		}
+		await this.runAfterOperationHooks({
+			...hookContext,
+			success: true,
+			result: dedupResult
+		})
+		return dedupResult
 	}
 
 	// ── Mental models ─────────────────────────────────────────────────
@@ -2246,29 +2259,12 @@ Instructions:
 
 		const copiedLinks: GraphEdge[] = []
 		for (const link of directLinks) {
-			const fromObs =
-				sourceToObservations.get(link.sourceId) ?? []
-			const toObs =
-				sourceToObservations.get(link.targetId) ?? []
-
-			for (const obsId of fromObs) {
-				if (!visibleNodeIds.has(link.targetId)) continue
-				copiedLinks.push({
-					sourceId: obsId,
-					targetId: link.targetId,
-					linkType: link.linkType as GraphEdge['linkType'],
-					weight: link.weight
-				})
-			}
-			for (const obsId of toObs) {
-				if (!visibleNodeIds.has(link.sourceId)) continue
-				copiedLinks.push({
-					sourceId: link.sourceId,
-					targetId: obsId,
-					linkType: link.linkType as GraphEdge['linkType'],
-					weight: link.weight
-				})
-			}
+			this.copyObservationLinks(
+				link,
+				sourceToObservations,
+				visibleNodeIds,
+				copiedLinks
+			)
 		}
 
 		const edges: GraphEdge[] = dedupeGraphEdges([
@@ -2286,6 +2282,42 @@ Instructions:
 			edges,
 			totalUnits: rows.length,
 			limit
+		}
+	}
+
+	private copyObservationLinks(
+		link: {
+			sourceId: string
+			targetId: string
+			linkType: string
+			weight: number
+		},
+		sourceToObservations: Map<string, string[]>,
+		visibleNodeIds: Set<string>,
+		copiedLinks: GraphEdge[]
+	): void {
+		const fromObs =
+			sourceToObservations.get(link.sourceId) ?? []
+		const toObs =
+			sourceToObservations.get(link.targetId) ?? []
+
+		for (const obsId of fromObs) {
+			if (!visibleNodeIds.has(link.targetId)) continue
+			copiedLinks.push({
+				sourceId: obsId,
+				targetId: link.targetId,
+				linkType: link.linkType as GraphEdge['linkType'],
+				weight: link.weight
+			})
+		}
+		for (const obsId of toObs) {
+			if (!visibleNodeIds.has(link.sourceId)) continue
+			copiedLinks.push({
+				sourceId: link.sourceId,
+				targetId: obsId,
+				linkType: link.linkType as GraphEdge['linkType'],
+				weight: link.weight
+			})
 		}
 	}
 

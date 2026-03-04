@@ -279,21 +279,23 @@ export const SpeechInput = ({
 				})
 
 				if (
-					audioBlob.size > 0 &&
-					onAudioRecordedRef.current
+					audioBlob.size === 0 ||
+					!onAudioRecordedRef.current
 				) {
-					setIsProcessing(true)
-					try {
-						const transcript =
-							await onAudioRecordedRef.current(audioBlob)
-						if (transcript) {
-							onTranscriptionChangeRef.current?.(transcript)
-						}
-					} catch {
-						// Error handling delegated to the onAudioRecorded caller
-					} finally {
-						setIsProcessing(false)
+					return
+				}
+
+				setIsProcessing(true)
+				try {
+					const transcript =
+						await onAudioRecordedRef.current(audioBlob)
+					if (transcript) {
+						onTranscriptionChangeRef.current?.(transcript)
 					}
+				} catch {
+					// Error handling delegated to the onAudioRecorded caller
+				} finally {
+					setIsProcessing(false)
 				}
 			}
 
@@ -338,7 +340,9 @@ export const SpeechInput = ({
 			} else {
 				recognitionRef.current.start()
 			}
-		} else if (mode === 'media-recorder') {
+			return
+		}
+		if (mode === 'media-recorder') {
 			if (isListening) {
 				stopMediaRecorder()
 			} else {

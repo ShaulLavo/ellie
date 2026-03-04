@@ -110,6 +110,16 @@ function sortMessages(
 	)
 }
 
+/** Update seq cursor to the highest value seen in a batch of rows. */
+function trackMaxSeq(
+	rows: EventRow[],
+	seqRef: React.MutableRefObject<number>
+): void {
+	for (const row of rows) {
+		if (row.seq > seqRef.current) seqRef.current = row.seq
+	}
+}
+
 /** Agent lifecycle event types */
 const AGENT_START_TYPES = new Set(['agent_start'])
 const AGENT_END_TYPES = new Set(['agent_end', 'run_closed'])
@@ -182,10 +192,7 @@ export function useAgentChat(sessionId: string) {
 				const rows = JSON.parse(event.data) as EventRow[]
 				hasSnapshot = true
 
-				for (const row of rows) {
-					if (row.seq > lastSeqRef.current)
-						lastSeqRef.current = row.seq
-				}
+				trackMaxSeq(rows, lastSeqRef)
 
 				const msgs: AgentMessage[] = []
 				for (const row of rows) {
@@ -201,6 +208,41 @@ export function useAgentChat(sessionId: string) {
 					'[useAgentChat] failed to parse snapshot:',
 					err
 				)
+			}
+		}
+
+		const applyStreamingUpdate = (
+			streamMsg: AgentMessage
+		) => {
+			if (!streamingRef.current) {
+				// First streaming chunk — append new message
+				streamingRef.current = true
+				setMessages(current => [...current, streamMsg])
+			} else {
+				// Subsequent chunks — replace the last message
+				setMessages(current => [
+					...current.slice(0, -1),
+					streamMsg
+				])
+			}
+		}
+
+		const applyFinalMessage = (
+			row: EventRow,
+			msg: AgentMessage
+		) => {
+			if (
+				row.type === 'assistant_final' &&
+				streamingRef.current
+			) {
+				// Replace the streaming message with the final version
+				streamingRef.current = false
+				setMessages(current => [
+					...current.slice(0, -1),
+					msg
+				])
+			} else {
+				setMessages(current => [...current, msg])
 			}
 		}
 
@@ -222,36 +264,12 @@ export function useAgentChat(sessionId: string) {
 				// Handle streaming updates — upsert the in-progress assistant message
 				const streamMsg = getStreamingMessage(row)
 				if (streamMsg) {
-					if (!streamingRef.current) {
-						// First streaming chunk — append new message
-						streamingRef.current = true
-						setMessages(current => [...current, streamMsg])
-					} else {
-						// Subsequent chunks — replace the last message
-						setMessages(current => [
-							...current.slice(0, -1),
-							streamMsg
-						])
-					}
+					applyStreamingUpdate(streamMsg)
 					return
 				}
 
 				const msg = eventToMessage(row)
-				if (msg) {
-					if (
-						row.type === 'assistant_final' &&
-						streamingRef.current
-					) {
-						// Replace the streaming message with the final version
-						streamingRef.current = false
-						setMessages(current => [
-							...current.slice(0, -1),
-							msg
-						])
-					} else {
-						setMessages(current => [...current, msg])
-					}
-				}
+				if (msg) applyFinalMessage(row, msg)
 			} catch (err) {
 				console.warn(
 					'[useAgentChat] failed to parse event:',

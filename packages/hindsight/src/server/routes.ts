@@ -392,6 +392,18 @@ export function createHindsightHandlers(
 	}
 }
 
+function resolveValidationSummary(
+	error: { validator: unknown; value: unknown },
+	request: Request
+): string | undefined {
+	if (request.headers.get('x-error-detail') !== 'summary')
+		return undefined
+	return (
+		tryValibotSummary(error.validator, error.value) ??
+		undefined
+	)
+}
+
 function errorStatus(error: unknown): number {
 	if (error instanceof SyntaxError) return 400
 	const message =
@@ -426,29 +438,21 @@ export function createHindsightApp(hs: Hindsight) {
 	return (
 		new Elysia()
 			.onError(({ code, error, set, request }) => {
-				if (code === 'VALIDATION') {
-					set.status = 400
-
-					if (
-						request.headers.get('x-error-detail') ===
-						'summary'
-					) {
-						const summary = tryValibotSummary(
-							error.validator,
-							error.value
-						)
-						if (summary) return { error: summary }
-					}
-
-					return { error: error.message }
+				if (code !== 'VALIDATION') {
+					const message =
+						error instanceof Error
+							? error.message
+							: String(error)
+					set.status = errorStatus(error)
+					return { error: message }
 				}
 
-				const message =
-					error instanceof Error
-						? error.message
-						: String(error)
-				set.status = errorStatus(error)
-				return { error: message }
+				set.status = 400
+				const summary = resolveValidationSummary(
+					error,
+					request
+				)
+				return { error: summary ?? error.message }
 			})
 			.post(
 				'/banks',

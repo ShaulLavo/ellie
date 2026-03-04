@@ -113,30 +113,21 @@ const Tree = forwardRef<HTMLDivElement, TreeViewProps>(
 						currentElement.id
 					]
 					if (currentElement.id === selectId) {
-						if (isSelectable) {
-							setExpandedItems(prev => [
-								...(prev ?? []),
-								...newPath
-							])
-						} else {
-							if (newPath.includes(currentElement.id)) {
-								newPath.pop()
-								setExpandedItems(prev => [
-									...(prev ?? []),
-									...newPath
-								])
-							}
-						}
+						// Non-selectable nodes that appear in the path: expand without themselves
+						if (!isSelectable) newPath.pop()
+						setExpandedItems(prev => [
+							...(prev ?? []),
+							...newPath
+						])
 						return
 					}
 					if (
-						isSelectable &&
-						currentElement.children &&
-						currentElement.children.length > 0
-					) {
-						currentElement.children.forEach(child => {
-							findParent(child, newPath)
-						})
+						!isSelectable ||
+						!currentElement.children?.length
+					)
+						return
+					for (const child of currentElement.children) {
+						findParent(child, newPath)
 					}
 				}
 				elements.forEach(element => {

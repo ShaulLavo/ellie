@@ -69,24 +69,28 @@ const SESSION_LABEL: Record<string, string> = {
 	'session-1': 'Ellie'
 }
 
+/** Try to extract an error message from a JSON body embedded in a string. */
+function tryParseJsonError(
+	raw: string
+): string | undefined {
+	const jsonStart = raw.indexOf('{')
+	if (jsonStart === -1) return undefined
+	try {
+		const parsed = JSON.parse(raw.slice(jsonStart)) as {
+			error?: { message?: string }
+		}
+		return parsed?.error?.message ?? undefined
+	} catch {
+		return undefined
+	}
+}
+
 /** Extract a human-readable error string from a raw errorMessage. */
 function getErrorText(raw: unknown): string {
 	if (typeof raw !== 'string' || !raw)
 		return 'An error occurred'
 	// Try to parse JSON error bodies like "401 {\"type\":\"error\",...}"
-	const jsonStart = raw.indexOf('{')
-	if (jsonStart !== -1) {
-		try {
-			const parsed = JSON.parse(raw.slice(jsonStart)) as {
-				error?: { message?: string }
-			}
-			if (parsed?.error?.message)
-				return parsed.error.message
-		} catch {
-			// fall through
-		}
-	}
-	return raw
+	return tryParseJsonError(raw) ?? raw
 }
 
 /** Extract text content from a Message's content array. */

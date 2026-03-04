@@ -187,6 +187,39 @@ export async function loadGroqCredential(
 }
 
 /**
+ * Read and validate an existing credential map file.
+ * Returns the parsed map, or an error result if the file is invalid.
+ */
+async function readExistingCredentialMap(
+	path: string
+): Promise<
+	| { ok: true; map: CredentialMap }
+	| { ok: false; error: string }
+> {
+	const file = Bun.file(path)
+	if (!(await file.exists())) return { ok: true, map: {} }
+
+	try {
+		const raw = await file.text()
+		const parsed = JSON.parse(raw)
+		if (typeof parsed !== 'object' || parsed === null) {
+			return {
+				ok: false,
+				error:
+					'Credentials file is not a valid JSON object. Fix or delete the file manually.'
+			}
+		}
+		return { ok: true, map: parsed as CredentialMap }
+	} catch {
+		return {
+			ok: false,
+			error:
+				'Credentials file contains invalid JSON. Fix or delete the file manually.'
+		}
+	}
+}
+
+/**
  * Set the groq credential in the credential map file.
  * Preserves all other provider entries.
  */
@@ -194,30 +227,10 @@ export async function setGroqCredential(
 	path: string,
 	credential: GroqCredential
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-	const file = Bun.file(path)
-	let map: CredentialMap = {}
+	const result = await readExistingCredentialMap(path)
+	if (!result.ok) return result
 
-	if (await file.exists()) {
-		try {
-			const raw = await file.text()
-			const parsed = JSON.parse(raw)
-			if (typeof parsed !== 'object' || parsed === null) {
-				return {
-					ok: false,
-					error:
-						'Credentials file is not a valid JSON object. Fix or delete the file manually.'
-				}
-			}
-			map = parsed as CredentialMap
-		} catch {
-			return {
-				ok: false,
-				error:
-					'Credentials file contains invalid JSON. Fix or delete the file manually.'
-			}
-		}
-	}
-
+	const map = result.map
 	map.groq = credential
 	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
 	try {
@@ -279,30 +292,10 @@ export async function setAnthropicCredential(
 	path: string,
 	credential: AnthropicCredential
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-	const file = Bun.file(path)
-	let map: CredentialMap = {}
+	const result = await readExistingCredentialMap(path)
+	if (!result.ok) return result
 
-	if (await file.exists()) {
-		try {
-			const raw = await file.text()
-			const parsed = JSON.parse(raw)
-			if (typeof parsed !== 'object' || parsed === null) {
-				return {
-					ok: false,
-					error:
-						'Credentials file is not a valid JSON object. Fix or delete the file manually.'
-				}
-			}
-			map = parsed as CredentialMap
-		} catch {
-			return {
-				ok: false,
-				error:
-					'Credentials file contains invalid JSON. Fix or delete the file manually.'
-			}
-		}
-	}
-
+	const map = result.map
 	map.anthropic = credential
 	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
 	try {

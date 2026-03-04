@@ -203,6 +203,51 @@ function averageMetrics(
 	return avg
 }
 
+function formatCaseDetail(
+	c: EvalCaseResult,
+	lines: string[]
+): void {
+	lines.push(`### ${c.caseId} (${c.scenario})`)
+	lines.push('')
+	lines.push(`**Query:** ${c.query}`)
+	lines.push(`**Duration:** ${c.durationMs}ms`)
+	lines.push(`**Candidates:** ${c.candidates.length}`)
+	lines.push('')
+
+	if (c.candidates.length > 0) {
+		formatCandidateTable(c.candidates.slice(0, 10), lines)
+	}
+
+	lines.push('**Metrics:**')
+	lines.push('')
+	for (const [key, value] of Object.entries(c.metrics)) {
+		lines.push(`- ${key}: ${(value * 100).toFixed(1)}%`)
+	}
+	lines.push('')
+}
+
+function formatCandidateTable(
+	candidates: EvalCaseResult['candidates'],
+	lines: string[]
+): void {
+	lines.push(
+		'| Rank | Score | Content (truncated) | Sources |'
+	)
+	lines.push(
+		'|------|-------|---------------------|---------|'
+	)
+	for (const candidate of candidates) {
+		const truncated =
+			candidate.content.length > 60
+				? candidate.content.slice(0, 60) + '...'
+				: candidate.content
+		lines.push(
+			`| ${candidate.rank} | ${candidate.score.toFixed(4)} | ${truncated} | ${candidate.sources.join(', ')} |`
+		)
+	}
+	lines.push('')
+}
+
 // ── Markdown report ───────────────────────────────────────────────────────
 
 /**
@@ -291,38 +336,7 @@ export function formatMarkdownReport(
 	lines.push('')
 
 	for (const c of report.cases) {
-		lines.push(`### ${c.caseId} (${c.scenario})`)
-		lines.push('')
-		lines.push(`**Query:** ${c.query}`)
-		lines.push(`**Duration:** ${c.durationMs}ms`)
-		lines.push(`**Candidates:** ${c.candidates.length}`)
-		lines.push('')
-
-		if (c.candidates.length > 0) {
-			lines.push(
-				'| Rank | Score | Content (truncated) | Sources |'
-			)
-			lines.push(
-				'|------|-------|---------------------|---------|'
-			)
-			for (const candidate of c.candidates.slice(0, 10)) {
-				const truncated =
-					candidate.content.length > 60
-						? candidate.content.slice(0, 60) + '...'
-						: candidate.content
-				lines.push(
-					`| ${candidate.rank} | ${candidate.score.toFixed(4)} | ${truncated} | ${candidate.sources.join(', ')} |`
-				)
-			}
-			lines.push('')
-		}
-
-		lines.push('**Metrics:**')
-		lines.push('')
-		for (const [key, value] of Object.entries(c.metrics)) {
-			lines.push(`- ${key}: ${(value * 100).toFixed(1)}%`)
-		}
-		lines.push('')
+		formatCaseDetail(c, lines)
 	}
 
 	return lines.join('\n')

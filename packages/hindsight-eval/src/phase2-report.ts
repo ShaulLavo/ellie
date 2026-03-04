@@ -14,6 +14,20 @@ import type {
 	Phase2ComparisonReport
 } from './phase2-types'
 
+function formatFailureDetails(
+	failure: GateResult,
+	lines: string[]
+): void {
+	lines.push(
+		`- **${failure.gate}**: ${failure.description}`
+	)
+	for (const [key, value] of Object.entries(
+		failure.details
+	)) {
+		lines.push(`  - ${key}: ${JSON.stringify(value)}`)
+	}
+}
+
 // ── JSON Report Generation ──────────────────────────────────────────────
 
 /** Serialize a verification run to formatted JSON for artifact output. */
@@ -116,14 +130,7 @@ export function generateComparisonReport(
 		lines.push('### Failed Gates')
 		lines.push('')
 		for (const failure of failures) {
-			lines.push(
-				`- **${failure.gate}**: ${failure.description}`
-			)
-			for (const [key, value] of Object.entries(
-				failure.details
-			)) {
-				lines.push(`  - ${key}: ${JSON.stringify(value)}`)
-			}
+			formatFailureDetails(failure, lines)
 		}
 	}
 

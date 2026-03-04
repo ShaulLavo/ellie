@@ -232,6 +232,19 @@ export function getOverflowPatterns(): RegExp[] {
 // Retry-After extraction
 // ============================================================================
 
+/** Parse a retry-after header value (string or number) into milliseconds. */
+function parseRetryHeaderValue(
+	value: unknown
+): number | undefined {
+	if (typeof value === 'number' && value > 0) {
+		return value * 1000
+	}
+	if (typeof value !== 'string') return undefined
+	const seconds = parseFloat(value)
+	if (!isNaN(seconds) && seconds > 0) return seconds * 1000
+	return undefined
+}
+
 /**
  * Extract a Retry-After delay (in ms) from an error object.
  * Handles:
@@ -264,24 +277,11 @@ export function parseRetryAfter(
 	const headers = err.headers as
 		| Record<string, unknown>
 		| undefined
-	if (headers) {
-		const retryHeader =
-			headers['retry-after'] ?? headers['Retry-After']
-		if (typeof retryHeader === 'string') {
-			const seconds = parseFloat(retryHeader)
-			if (!isNaN(seconds) && seconds > 0) {
-				return seconds * 1000
-			}
-		}
-		if (
-			typeof retryHeader === 'number' &&
-			retryHeader > 0
-		) {
-			return retryHeader * 1000
-		}
-	}
+	if (!headers) return undefined
 
-	return undefined
+	const retryHeader =
+		headers['retry-after'] ?? headers['Retry-After']
+	return parseRetryHeaderValue(retryHeader)
 }
 
 // ============================================================================
@@ -325,6 +325,101 @@ export function classifyErrorMessage(
 	return null
 }
 
+/** Extract message, statusCode, and retryAfterMs from an unknown error value. */
+function extractErrorInfo(error: unknown): {
+	message: string
+	statusCode: number | undefined
+	retryAfterMs: number | undefined
+} {
+	if (typeof error === 'string') {
+		return {
+			message: error,
+			statusCode: undefined,
+			retryAfterMs: undefined
+		}
+	}
+
+	if (error instanceof Error) {
+		return extractFromErrorInstance(error)
+	}
+
+	if (error !== null && typeof error === 'object') {
+		return extractFromPlainObject(
+			error as Record<string, unknown>
+		)
+	}
+
+	return {
+		message: String(error),
+		statusCode: undefined,
+		retryAfterMs: undefined
+	}
+}
+
+/** Extract info from an Error instance (including structured SDK errors). */
+function extractFromErrorInstance(error: Error): {
+	message: string
+	statusCode: number | undefined
+	retryAfterMs: number | undefined
+} {
+	let message = error.message
+	const errObj = error as unknown as Record<string, unknown>
+
+	const statusCode = extractStatusCode(errObj)
+
+	// Extract error type from SDK (e.g. error.error.type = "rate_limit_error")
+	const innerError = errObj.error as
+		| Record<string, unknown>
+		| undefined
+	if (innerError && typeof innerError.type === 'string') {
+		message = `${innerError.type}: ${message}`
+	}
+
+	const retryAfterMs = parseRetryAfter(error)
+	return { message, statusCode, retryAfterMs }
+}
+
+/** Extract info from a plain object (non-Error). */
+function extractFromPlainObject(
+	errObj: Record<string, unknown>
+): {
+	message: string
+	statusCode: number | undefined
+	retryAfterMs: number | undefined
+} {
+	const message =
+		typeof errObj.message === 'string'
+			? errObj.message
+			: String(errObj)
+	const statusCode = extractStatusCode(errObj)
+	const retryAfterMs = parseRetryAfter(errObj)
+	return { message, statusCode, retryAfterMs }
+}
+
+/** Extract a numeric status code from an error-like object. */
+function extractStatusCode(
+	errObj: Record<string, unknown>
+): number | undefined {
+	if (typeof errObj.status === 'number')
+		return errObj.status
+	if (typeof errObj.statusCode === 'number')
+		return errObj.statusCode
+	return undefined
+}
+
+/** Classify an HTTP status code into an ErrorClass (or null). */
+function classifyStatusCode(
+	statusCode: number
+): ErrorClass {
+	if (statusCode === 429) return 'rate_limit'
+	if (statusCode === 401 || statusCode === 403)
+		return 'auth'
+	if (statusCode === 402) return 'billing'
+	if (TRANSIENT_HTTP_ERROR_CODES.has(statusCode))
+		return 'transient'
+	return null
+}
+
 /**
  * Classify an error from any source (structured SDK error or string).
  *
@@ -337,73 +432,18 @@ export function classifyErrorMessage(
 export function classifyError(
 	error: unknown
 ): ClassifiedError {
-	let message: string
-	let statusCode: number | undefined
-	let retryAfterMs: number | undefined
-
-	if (typeof error === 'string') {
-		message = error
-	} else if (error instanceof Error) {
-		message = error.message
-
-		// Handle structured SDK errors (Anthropic, OpenAI)
-		const errObj = error as unknown as Record<
-			string,
-			unknown
-		>
-
-		// Extract status code
-		if (typeof errObj.status === 'number') {
-			statusCode = errObj.status
-		} else if (typeof errObj.statusCode === 'number') {
-			statusCode = errObj.statusCode
-		}
-
-		// Extract error type from SDK (e.g. error.error.type = "rate_limit_error")
-		const innerError = errObj.error as
-			| Record<string, unknown>
-			| undefined
-		if (innerError && typeof innerError.type === 'string') {
-			// Prepend the SDK error type for better classification
-			message = `${innerError.type}: ${message}`
-		}
-
-		// Extract retry-after
-		retryAfterMs = parseRetryAfter(error)
-	} else if (error !== null && typeof error === 'object') {
-		const errObj = error as Record<string, unknown>
-		message =
-			typeof errObj.message === 'string'
-				? errObj.message
-				: String(error)
-
-		if (typeof errObj.status === 'number') {
-			statusCode = errObj.status
-		}
-
-		retryAfterMs = parseRetryAfter(error)
-	} else {
-		message = String(error)
-	}
+	const { message, statusCode, retryAfterMs } =
+		extractErrorInfo(error)
 
 	// First try: classify by HTTP status code directly
-	let errorClass: ErrorClass = null
-	if (statusCode !== undefined) {
-		if (statusCode === 429) {
-			errorClass = 'rate_limit'
-		} else if (statusCode === 401 || statusCode === 403) {
-			errorClass = 'auth'
-		} else if (statusCode === 402) {
-			errorClass = 'billing'
-		} else if (TRANSIENT_HTTP_ERROR_CODES.has(statusCode)) {
-			errorClass = 'transient'
-		}
-	}
+	const statusClass =
+		statusCode !== undefined
+			? classifyStatusCode(statusCode)
+			: null
 
 	// Second try: classify by message content
-	if (errorClass === null) {
-		errorClass = classifyErrorMessage(message)
-	}
+	const errorClass =
+		statusClass ?? classifyErrorMessage(message)
 
 	const retryable =
 		errorClass === 'rate_limit' ||

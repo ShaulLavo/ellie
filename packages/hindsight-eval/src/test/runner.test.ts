@@ -3,6 +3,25 @@ import { join } from 'path'
 import { loadFixture, runBaseline } from '../runner'
 import type { EvalRunConfig } from '../types'
 
+function assertStableTieBreaking(
+	candidates: Array<{ score: number; content: string }>
+) {
+	for (let i = 1; i < candidates.length; i++) {
+		const prev = candidates[i - 1]!
+		const curr = candidates[i]!
+
+		if (prev.score === curr.score) {
+			// Same score -> content should be ascending
+			expect(
+				prev.content.localeCompare(curr.content)
+			).toBeLessThanOrEqual(0)
+		} else {
+			// Scores should be descending
+			expect(prev.score).toBeGreaterThanOrEqual(curr.score)
+		}
+	}
+}
+
 const FIXTURE_PATH = join(
 	import.meta.dir,
 	'../../fixtures/assistant-baseline.v1.jsonl'
@@ -118,22 +137,7 @@ describe('runner', () => {
 			const results = await runBaseline({ config })
 
 			for (const result of results) {
-				for (let i = 1; i < result.candidates.length; i++) {
-					const prev = result.candidates[i - 1]!
-					const curr = result.candidates[i]!
-
-					if (prev.score === curr.score) {
-						// Same score → content should be ascending
-						expect(
-							prev.content.localeCompare(curr.content)
-						).toBeLessThanOrEqual(0)
-					} else {
-						// Scores should be descending
-						expect(prev.score).toBeGreaterThanOrEqual(
-							curr.score
-						)
-					}
-				}
+				assertStableTieBreaking(result.candidates)
 			}
 		}, 15_000)
 	})
