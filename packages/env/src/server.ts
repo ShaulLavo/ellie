@@ -1,5 +1,11 @@
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
 import * as v from 'valibot'
+
+/** Monorepo root — three levels up from packages/env/src/ */
+const MONOREPO_ROOT = resolve(
+	dirname(new URL(import.meta.url).pathname),
+	'../../..'
+)
 
 // ============================================================================
 // Schema
@@ -12,10 +18,10 @@ const ServerEnvSchema = v.object({
 		'http://localhost:3000'
 	),
 
-	/** Directory for persistent data storage (resolved to absolute path). */
+	/** Directory for persistent data storage (resolved relative to monorepo root). */
 	DATA_DIR: v.pipe(
 		v.optional(v.string(), './data'),
-		v.transform(p => resolve(p))
+		v.transform(p => resolve(MONOREPO_ROOT, p))
 	),
 
 	/** Anthropic API key (optional — only needed if using Anthropic provider). */

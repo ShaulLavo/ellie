@@ -43,6 +43,7 @@ import { createChatRoutes } from './routes/chat'
 import { errorSchema, type SseState } from './routes/common'
 import { createSessionRoutes } from './routes/session'
 import { createStatusRoutes } from './routes/status'
+import { startTei } from './lib/tei'
 import { createDevRoutes } from './routes/dev'
 
 const parsedUrl = new URL(env.API_BASE_URL)
@@ -172,20 +173,10 @@ async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
 }
 
 async function resolveGroqAdapter(): Promise<AnyTextAdapter | null> {
-	// Env var first
-	if (process.env.GROQ_API_KEY) {
-		return groqChat(
-			'openai/gpt-oss-120b',
-			process.env.GROQ_API_KEY
-		)
-	}
-
-	// File fallback
 	const cred = await loadGroqCredential(CREDENTIALS_PATH)
 	if (cred) {
 		return groqChat('openai/gpt-oss-120b', cred.key)
 	}
-
 	return null
 }
 
@@ -227,7 +218,7 @@ async function getAgentController(): Promise<AgentController | null> {
 	await ensureTokenFresh()
 	if (cachedController !== undefined)
 		return cachedController
-	const adapter = await resolveAdapter()
+	const adapter = await resolveAgentAdapter()
 	const guardrails = buildGuardrailPolicy(env)
 
 	const memory = new MemoryOrchestrator({
@@ -262,11 +253,15 @@ function invalidateAgentCache() {
 	cachedController = undefined
 }
 
+// ── TEI (embeddings & reranking) ──────────────────────────────────────────
+// Must be running before Hindsight is initialised.
+await startTei()
+
 // ── Hindsight (memory) ────────────────────────────────────────────────────
 // Single default bank is created lazily on first access.
 // Must be initialised before getAgentController() so MemoryOrchestrator
 // receives a valid hindsight reference.
-const hindsightAdapter = await resolveAdapter()
+const hindsightAdapter = await resolveGroqAdapter()
 const hindsight = new Hindsight({
 	dbPath: `${DATA_DIR}/hindsight.db`,
 	...(hindsightAdapter ? { adapter: hindsightAdapter } : {})
