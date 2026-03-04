@@ -6,10 +6,9 @@ import type {
 	AgentMessage
 } from '@ellie/db'
 
-export type SessionEvent = {
-	type: 'append'
-	event: EventRow
-}
+export type SessionEvent =
+	| { type: 'append'; event: EventRow }
+	| { type: 'update'; event: EventRow }
 
 type Listener<T> = (event: T) => void
 
@@ -203,6 +202,28 @@ export class RealtimeStore {
 				this.#closedRuns.clear()
 			}
 		}
+
+		return row
+	}
+
+	// ── Event update (in-place, with live notification) ─────────────────
+
+	/**
+	 * Update an existing event row's payload in place and notify subscribers.
+	 * Used for streaming: the row is INSERT'd via appendEvent, then UPDATE'd
+	 * for every delta and at completion.
+	 */
+	updateEvent(
+		id: number,
+		payload: unknown,
+		sessionId: string
+	): EventRow {
+		const row = this.#store.update(id, payload)
+
+		this.#publish(`session:${sessionId}`, {
+			type: 'update',
+			event: row
+		} satisfies SessionEvent)
 
 		return row
 	}

@@ -51,6 +51,27 @@ export function computeStatsFromEvents(
 			messageCount++
 		}
 
+		// New unified type: count completed assistant_message events
+		if (row.type === 'assistant_message') {
+			const parsed = safeParsePayload(row)
+			if (!parsed) continue
+			if (parsed.streaming === true) continue // skip in-flight
+			messageCount++
+			const msg = parsed.message as Record<string, unknown> | undefined
+			if (!msg) continue
+			if (typeof msg.model === 'string') model = msg.model as string
+			if (typeof msg.provider === 'string') provider = msg.provider as string
+			const usage = msg.usage as
+				| { input?: number; output?: number; cost?: { total?: number } }
+				| undefined
+			if (usage) {
+				promptTokens += usage.input ?? 0
+				completionTokens += usage.output ?? 0
+				totalCost += usage.cost?.total ?? 0
+			}
+			continue
+		}
+
 		if (row.type !== 'assistant_final') continue
 
 		const parsed = safeParsePayload(row)

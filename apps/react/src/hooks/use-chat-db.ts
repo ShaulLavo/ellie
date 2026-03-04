@@ -138,7 +138,28 @@ function eventToStored(row: EventRow): StoredChatMessage {
 
 	// Dispatch to the right helper based on event type
 	let parts: ContentPart[]
-	if (row.type === 'tool_call') {
+	if (row.type === 'assistant_message') {
+		// Unified type: message is wrapped in { message, streaming }
+		const msg = parsed.message as Record<string, unknown>
+		parts = extractMessageParts(msg)
+	} else if (row.type === 'tool_execution') {
+		const status = parsed.status as string
+		if (status === 'complete' || status === 'error') {
+			// Show result for completed tools
+			parts = extractToolResultParts({
+				toolName: parsed.toolName,
+				toolCallId: parsed.toolCallId,
+				content: (parsed.result as Record<string, unknown>)?.content
+			})
+		} else {
+			// Show loading state for running tools
+			parts = extractToolCallParts({
+				name: parsed.toolName,
+				arguments: parsed.args,
+				id: parsed.toolCallId
+			})
+		}
+	} else if (row.type === 'tool_call') {
 		parts = extractToolCallParts(parsed)
 	} else if (row.type === 'tool_result') {
 		parts = extractToolResultParts(parsed)
@@ -191,6 +212,7 @@ function eventToStored(row: EventRow): StoredChatMessage {
 	) {
 		sender = 'user'
 	} else if (
+		row.type === 'assistant_message' ||
 		row.type === 'assistant_final' ||
 		parsed.role === 'assistant'
 	) {
@@ -302,6 +324,8 @@ export function useChatDB(sessionId: string) {
 				const messageEvents = events.filter(
 					e =>
 						e.type === 'user_message' ||
+						e.type === 'assistant_message' ||
+						e.type === 'tool_execution' ||
 						e.type === 'assistant_final' ||
 						e.type === 'tool_call' ||
 						e.type === 'tool_result' ||
@@ -322,8 +346,22 @@ export function useChatDB(sessionId: string) {
 						syncWrite(msgs)
 					}
 				}
-				// Clear any stale streaming state on snapshot
-				setStreamingMessage(null)
+
+				// Check for in-flight assistant_message (reconnect during streaming)
+				const streamingEvent = events.find(e => {
+					if (e.type !== 'assistant_message') return false
+					try {
+						const p = typeof e.payload === 'string'
+							? JSON.parse(e.payload) : e.payload
+						return (p as Record<string, unknown>).streaming === true
+					} catch { return false }
+				})
+				if (streamingEvent) {
+					const stored = eventToStored(streamingEvent)
+					setStreamingMessage({ ...stored, isStreaming: true })
+				} else {
+					setStreamingMessage(null)
+				}
 
 				// Compute session stats from all events
 				setSessionStats(computeStatsFromEvents(events))
@@ -338,7 +376,29 @@ export function useChatDB(sessionId: string) {
 					setIsAgentRunning(false)
 				}
 
-				// Incrementally update session stats
+				// New unified type: assistant_message append = start streaming
+				if (event.type === 'assistant_message') {
+					setStreamingMessage({
+						id: String(event.id),
+						timestamp: new Date(event.createdAt).toISOString(),
+						text: '',
+						parts: [],
+						seq: event.seq,
+						sender: 'agent',
+						isStreaming: true
+					})
+					return
+				}
+
+				// New unified type: tool_execution append = tool started
+				if (event.type === 'tool_execution') {
+					const msg = eventToStored(event)
+					if (msg.parts.length === 0 && !msg.text) return
+					syncWrite([msg])
+					return
+				}
+
+				// Incrementally update session stats (legacy path)
 				if (
 					event.type === 'user_message' ||
 					event.type === 'assistant_final'
@@ -358,95 +418,6 @@ export function useChatDB(sessionId: string) {
 					}))
 				}
 
-				// Handle streaming events for live assistant responses
-				if (event.type === 'message_start') {
-					let parsed: Record<string, unknown>
-					try {
-						parsed =
-							typeof event.payload === 'string'
-								? JSON.parse(event.payload)
-								: event.payload
-					} catch {
-						return
-					}
-					const msg = parsed.message as Record<
-						string,
-						unknown
-					>
-					setStreamingMessage({
-						id: `streaming-${event.id}`,
-						timestamp: new Date(
-							event.createdAt
-						).toISOString(),
-						text: '',
-						parts: [],
-						seq: event.seq,
-						sender: msg?.role === 'user' ? 'user' : 'agent',
-						isStreaming: true
-					})
-					return
-				}
-
-				if (event.type === 'message_update') {
-					let parsed: Record<string, unknown>
-					try {
-						parsed =
-							typeof event.payload === 'string'
-								? JSON.parse(event.payload)
-								: event.payload
-					} catch {
-						return
-					}
-					const streamEvent = parsed.streamEvent as
-						| Record<string, unknown>
-						| undefined
-					if (!streamEvent) return
-
-					setStreamingMessage(prev => {
-						if (!prev) return prev
-						const eventType = streamEvent.type as string
-
-						if (
-							eventType === 'text_delta' &&
-							typeof streamEvent.delta === 'string'
-						) {
-							const newText =
-								prev.text + (streamEvent.delta as string)
-							return {
-								...prev,
-								text: newText,
-								parts: [
-									{
-										type: 'text' as const,
-										text: newText
-									}
-								]
-							}
-						}
-
-						if (
-							eventType === 'thinking_delta' &&
-							typeof streamEvent.delta === 'string'
-						) {
-							return {
-								...prev,
-								thinking:
-									(prev.thinking ?? '') +
-									(streamEvent.delta as string)
-							}
-						}
-
-						return prev
-					})
-					return
-				}
-
-				if (event.type === 'message_end') {
-					// message_end carries the final message — let assistant_final handle persistence
-					setStreamingMessage(null)
-					return
-				}
-
 				const renderableTypes: EventType[] = [
 					'user_message',
 					'assistant_final',
@@ -461,6 +432,54 @@ export function useChatDB(sessionId: string) {
 				const msg = eventToStored(event)
 				if (msg.parts.length === 0 && !msg.text) return
 				syncWrite([msg])
+			},
+
+			onUpdate(event) {
+				if (event.type === 'assistant_message') {
+					let parsed: Record<string, unknown>
+					try {
+						parsed = typeof event.payload === 'string'
+							? JSON.parse(event.payload) : event.payload as Record<string, unknown>
+					} catch { return }
+
+					const streaming = parsed.streaming as boolean
+					const stored = eventToStored(event)
+
+					if (streaming) {
+						// Still streaming — update the overlay message
+						setStreamingMessage({
+							...stored,
+							isStreaming: true
+						})
+					} else {
+						// Streaming done — finalize
+						setStreamingMessage(null)
+						syncWrite([stored])
+
+						// Update session stats with the completed message
+						const delta = computeStatsFromEvents([event])
+						setSessionStats(prev => ({
+							model: delta.model ?? prev.model,
+							provider: delta.provider ?? prev.provider,
+							messageCount:
+								prev.messageCount + delta.messageCount,
+							promptTokens:
+								prev.promptTokens + delta.promptTokens,
+							completionTokens:
+								prev.completionTokens +
+								delta.completionTokens,
+							totalCost: prev.totalCost + delta.totalCost
+						}))
+					}
+					return
+				}
+
+				if (event.type === 'tool_execution') {
+					const msg = eventToStored(event)
+					if (msg.parts.length === 0 && !msg.text) return
+					syncWrite([msg])
+					return
+				}
 			},
 
 			onStateChange(state) {

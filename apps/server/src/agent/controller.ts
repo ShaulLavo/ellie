@@ -26,6 +26,7 @@ import {
 } from '@ellie/agent'
 import type { EventType, EventPayloadMap } from '@ellie/db'
 import type { TypedEvent } from '@ellie/schemas/events'
+import type { AssistantMessage } from '@ellie/schemas'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
 import type {
@@ -70,6 +71,11 @@ export class AgentController {
 	private baseSystemPrompt: string
 	/** Set of runIds that are enforcement turns (skip re-enforcement) */
 	private enforcementRunIds = new Set<string>()
+
+	/** Row ID of the in-flight assistant_message being streamed */
+	private currentMessageRowId: number | null = null
+	/** Map of toolCallId → row ID for in-flight tool_execution rows */
+	private currentToolRowIds = new Map<string, number>()
 
 	/** Global lock — serialises all routing decisions */
 	private lock: Promise<void> = Promise.resolve()
@@ -509,8 +515,15 @@ export class AgentController {
 		)
 
 		// Check for a successful memory_append_daily call.
-		// We look at tool_execution_end / tool_result which carry isError.
+		// We check both new (tool_execution) and legacy (tool_execution_end / tool_result) types.
 		const hadDailyWrite = runEvents.some(e => {
+			if (e.type === 'tool_execution') {
+				try {
+					const parsed = JSON.parse(e.payload)
+					return parsed.toolName === 'memory_append_daily' &&
+						parsed.status === 'complete' && !parsed.isError
+				} catch { return false }
+			}
 			if (
 				e.type !== 'tool_execution_end' &&
 				e.type !== 'tool_result'
@@ -593,21 +606,159 @@ export class AgentController {
 
 		const runId = this.agent.runId
 
-		// Streaming deltas → publish to SSE subscribers only, no DB write / log.
-		if (event.type === 'message_update') {
-			// Skip SSE broadcast for enforcement turns (silent)
-			if (runId && this.enforcementRunIds.has(runId)) return
-			this.store.publishEphemeral(
-				sessionId,
-				'message_update',
-				{
-					streamEvent: event.streamEvent,
-					message: event.message
-				},
-				runId ?? undefined
-			)
+		// ── Unified streaming: assistant_message (single row, INSERT then UPDATE) ──
+
+		if (event.type === 'message_start') {
+			if (!runId) return
+			if (this.enforcementRunIds.has(runId)) return
+			// Only persist assistant messages — the agent loop also emits
+			// message_start for user/toolResult prompts which are already
+			// handled separately (user_message events).
+			if (event.message.role !== 'assistant') return
+			try {
+				const row = this.store.appendEvent(
+					sessionId,
+					'assistant_message',
+					{ message: event.message as AssistantMessage, streaming: true },
+					runId
+				)
+				this.currentMessageRowId = row.id
+			} catch (err) {
+				this.trace('controller.persist_failed', {
+					sessionId, runId, dbType: 'assistant_message',
+					message: err instanceof Error ? err.message : String(err)
+				})
+			}
 			return
 		}
+
+		if (event.type === 'message_update') {
+			if (runId && this.enforcementRunIds.has(runId)) return
+			if (event.message.role !== 'assistant') return
+			if (!this.currentMessageRowId) return
+			try {
+				this.store.updateEvent(
+					this.currentMessageRowId,
+					{ message: event.message as AssistantMessage, streaming: true },
+					sessionId
+				)
+			} catch (err) {
+				this.trace('controller.update_failed', {
+					sessionId, runId,
+					dbType: 'assistant_message',
+					message: err instanceof Error ? err.message : String(err)
+				})
+			}
+			return
+		}
+
+		if (event.type === 'message_end') {
+			if (!runId) return
+			if (this.enforcementRunIds.has(runId)) return
+			// Only finalize assistant messages — toolResult message_end events
+			// must not overwrite the assistant_message row.
+			if (event.message.role !== 'assistant') return
+			if (this.currentMessageRowId) {
+				try {
+					this.store.updateEvent(
+						this.currentMessageRowId,
+						{ message: event.message as AssistantMessage, streaming: false },
+						sessionId
+					)
+				} catch (err) {
+					this.trace('controller.update_failed', {
+						sessionId, runId,
+						dbType: 'assistant_message',
+						message: err instanceof Error ? err.message : String(err)
+					})
+				}
+				this.currentMessageRowId = null
+			}
+			return
+		}
+
+		// ── Unified streaming: tool_execution (single row, INSERT then UPDATE) ──
+
+		if (event.type === 'tool_execution_start') {
+			if (!runId) return
+			if (this.enforcementRunIds.has(runId)) return
+			try {
+				const row = this.store.appendEvent(
+					sessionId,
+					'tool_execution',
+					{
+						toolCallId: event.toolCallId,
+						toolName: event.toolName,
+						args: event.args,
+						status: 'running' as const
+					},
+					runId
+				)
+				this.currentToolRowIds.set(event.toolCallId, row.id)
+			} catch (err) {
+				this.trace('controller.persist_failed', {
+					sessionId, runId, dbType: 'tool_execution',
+					message: err instanceof Error ? err.message : String(err)
+				})
+			}
+			return
+		}
+
+		if (event.type === 'tool_execution_update') {
+			if (!runId) return
+			if (this.enforcementRunIds.has(runId)) return
+			const rowId = this.currentToolRowIds.get(event.toolCallId)
+			if (!rowId) return
+			try {
+				this.store.updateEvent(
+					rowId,
+					{
+						toolCallId: event.toolCallId,
+						toolName: event.toolName,
+						args: event.args,
+						result: event.partialResult,
+						status: 'running' as const
+					},
+					sessionId
+				)
+			} catch (err) {
+				this.trace('controller.update_failed', {
+					sessionId, runId, dbType: 'tool_execution',
+					message: err instanceof Error ? err.message : String(err)
+				})
+			}
+			return
+		}
+
+		if (event.type === 'tool_execution_end') {
+			if (!runId) return
+			if (this.enforcementRunIds.has(runId)) return
+			const rowId = this.currentToolRowIds.get(event.toolCallId)
+			if (rowId) {
+				try {
+					this.store.updateEvent(
+						rowId,
+						{
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							result: event.result,
+							isError: event.isError,
+							status: event.isError ? 'error' as const : 'complete' as const
+						},
+						sessionId
+					)
+				} catch (err) {
+					this.trace('controller.update_failed', {
+						sessionId, runId, dbType: 'tool_execution',
+						message: err instanceof Error ? err.message : String(err)
+					})
+				}
+				this.currentToolRowIds.delete(event.toolCallId)
+			}
+			return
+		}
+
+		// ── All other events: legacy append path ──
 
 		if (!runId) {
 			this.trace('controller.event_no_runid', {
@@ -622,9 +773,7 @@ export class AgentController {
 		const isEnforcement = this.enforcementRunIds.has(runId)
 		if (isEnforcement && event.type !== 'agent_end') return
 
-		// Map every AgentEvent to one or more DB rows and persist.
-		// The cast below is safe: TypedEvent guarantees type↔payload
-		// correlation, but TypeScript can't track it across the loop.
+		// Map remaining AgentEvents to DB rows and persist.
 		const rows = this.mapEventToDb(event)
 		for (const row of rows) {
 			try {
@@ -645,8 +794,11 @@ export class AgentController {
 			}
 		}
 
-		// On agent_end, close the run and process queues
+		// On agent_end, close the run, reset streaming state, and process queues
 		if (event.type === 'agent_end') {
+			this.currentMessageRowId = null
+			this.currentToolRowIds.clear()
+
 			try {
 				this.store.closeAgentRun(sessionId, runId)
 			} catch {

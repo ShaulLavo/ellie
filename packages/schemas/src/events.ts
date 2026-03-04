@@ -29,7 +29,27 @@ export interface EventPayloadMap {
 	}
 	tool_result: ToolResultMessage
 
-	// --- Streaming (ephemeral — not persisted) ---
+	// --- Unified streaming events (single row, INSERT then UPDATE) ---
+	assistant_message: {
+		message: AssistantMessage
+		streaming: boolean
+	}
+	tool_execution: {
+		toolCallId: string
+		toolName: string
+		args: unknown
+		result?: {
+			content: Array<
+				| { type: 'text'; text: string }
+				| { type: 'image'; data: string; mimeType: string }
+			>
+			details: unknown
+		}
+		isError?: boolean
+		status: 'running' | 'complete' | 'error'
+	}
+
+	// --- Legacy streaming (kept for reading old data) ---
 	message_start: { message: AgentMessage }
 	message_update: {
 		streamEvent: AssistantStreamEvent

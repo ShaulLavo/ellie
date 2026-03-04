@@ -5,6 +5,7 @@
  *   1. Connect to GET /chat/:sessionId/events/sse?afterSeq=N
  *   2. Receive "snapshot" event with all existing events (after afterSeq)
  *   3. Receive "append" events for new events in real-time
+ *   4. Receive "update" events for in-place row updates (streaming deltas)
  *
  * For REST operations (send message, list sessions, clear), we use eden directly.
  */
@@ -29,6 +30,7 @@ export interface EventRow {
 export interface StreamCallbacks {
 	onSnapshot: (events: EventRow[]) => void
 	onAppend: (event: EventRow) => void
+	onUpdate: (event: EventRow) => void
 	onStateChange: (state: ConnectionState) => void
 	onError: (message: string) => void
 }
@@ -138,6 +140,21 @@ export class StreamClient {
 			} catch (err) {
 				console.error(
 					'[stream] Failed to parse append event:',
+					err
+				)
+			}
+		})
+
+		es.addEventListener('update', event => {
+			try {
+				const ev = JSON.parse(
+					(event as MessageEvent).data
+				) as EventRow
+				// No updateLastSeq — seq was set at INSERT time
+				this.callbacks.onUpdate(ev)
+			} catch (err) {
+				console.error(
+					'[stream] Failed to parse update event:',
 					err
 				)
 			}

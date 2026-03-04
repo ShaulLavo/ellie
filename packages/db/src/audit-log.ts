@@ -61,9 +61,15 @@ export class AuditLogger {
 
 			const prefix =
 				entry.level === 'trace' ? '[trace]' : '[audit-log]'
+			const reason =
+				entry.level === 'trace' &&
+				entry.payload &&
+				typeof entry.payload === 'object' &&
+				'reason' in entry.payload
+					? ` reason=${(entry.payload as Record<string, unknown>).reason}`
+					: ''
 			console.log(
-				`${prefix} ${entry.type} session=${entry.sessionId}${entry.runId ? ` run=${entry.runId}` : ''} seq=${entry.seq ?? '-'}`
-				// JSON.stringify(entry.payload, null, 2)
+				`${prefix} ${entry.type} session=${entry.sessionId}${entry.runId ? ` run=${entry.runId}` : ''} seq=${entry.seq ?? '-'}${reason}`
 			)
 		} catch (err) {
 			console.error('[audit-log] write failed:', err)

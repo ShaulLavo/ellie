@@ -235,7 +235,7 @@ export function createChatRoutes(
 							}
 						},
 						event => ({
-							event: 'append',
+							event: event.type,
 							data: event.event
 						}),
 						{
