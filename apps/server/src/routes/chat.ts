@@ -109,7 +109,7 @@ export function createChatRoutes(
 						sessionId,
 						'user_message',
 						{
-							role: input.role ?? 'user',
+							role: 'user',
 							content: [
 								{ type: 'text', text: input.content }
 							],

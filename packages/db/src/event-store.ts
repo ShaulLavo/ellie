@@ -29,8 +29,12 @@ import {
 	type AgentBootstrapStateRow
 } from './schema'
 import type { AgentMessage } from '@ellie/schemas'
+import type {
+	EventType,
+	EventPayloadMap
+} from '@ellie/schemas/events'
 
-export type { AgentMessage }
+export type { AgentMessage, EventType }
 
 // ── Event types ─────────────────────────────────────────────────────────────
 
@@ -73,9 +77,7 @@ const EVENT_TYPES = [
 	// Memory events
 	'memory_recall',
 	'memory_retain'
-] as const
-
-export type EventType = (typeof EVENT_TYPES)[number]
+] as const satisfies readonly EventType[]
 
 const eventTypeSchema = v.picklist(EVENT_TYPES)
 
@@ -92,7 +94,7 @@ const imageContent = v.object({
 })
 const thinkingContent = v.object({
 	type: v.literal('thinking'),
-	thinking: v.string()
+	text: v.string()
 })
 const toolCallContent = v.object({
 	type: v.literal('toolCall'),
@@ -354,10 +356,12 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 
 // ── Input/output types ──────────────────────────────────────────────────────
 
-export interface AppendInput {
+export interface AppendInput<
+	T extends EventType = EventType
+> {
 	sessionId: string
-	type: EventType
-	payload: Record<string, unknown>
+	type: T
+	payload: EventPayloadMap[T]
 	runId?: string
 	dedupeKey?: string
 }
@@ -452,7 +456,9 @@ export class EventStore {
 
 	// ── Event append ────────────────────────────────────────────────────────
 
-	append(input: AppendInput): EventRow {
+	append<T extends EventType>(
+		input: AppendInput<T>
+	): EventRow {
 		// Validate event type
 		v.parse(eventTypeSchema, input.type)
 

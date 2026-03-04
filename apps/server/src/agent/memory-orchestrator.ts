@@ -11,7 +11,10 @@
  * events — never synthetic tool_call/tool_result.
  */
 
-import type { Hindsight } from '@ellie/hindsight'
+import type {
+	Hindsight,
+	MethodResult
+} from '@ellie/hindsight'
 import type { EventStore } from '@ellie/db'
 import { createHash } from 'crypto'
 
@@ -40,13 +43,7 @@ export interface BankSearchResult {
 	status: 'ok' | 'error' | 'timeout'
 	error?: string
 	memoryCount: number
-	methodResults?: Record<
-		string,
-		{
-			hits: Array<{ id: string; score: number }>
-			error?: string
-		}
-	>
+	methodResults?: Record<string, MethodResult>
 }
 
 export interface MemoryRecallPayload {

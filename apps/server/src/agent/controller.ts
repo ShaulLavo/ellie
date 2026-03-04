@@ -24,7 +24,8 @@ import {
 	type AgentEvent,
 	type AgentMessage
 } from '@ellie/agent'
-import type { EventType } from '@ellie/db'
+import type { EventType, EventPayloadMap } from '@ellie/db'
+import type { TypedEvent } from '@ellie/schemas/events'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
 import type {
@@ -106,7 +107,9 @@ export class AgentController {
 			initialState: {
 				...options.agentOptions?.initialState,
 				systemPrompt,
-				thinkingLevel: 'low',
+				thinkingLevel:
+					options.agentOptions?.initialState
+						?.thinkingLevel ?? 'low',
 				tools: [...registry.all, memoryTool]
 			},
 			onEvent: event => this.handleEvent(event)
@@ -391,10 +394,7 @@ export class AgentController {
 			this.store.appendEvent(
 				sessionId,
 				'memory_recall',
-				result.payload as unknown as Record<
-					string,
-					unknown
-				>,
+				result.payload as EventPayloadMap['memory_recall'],
 				runId
 			)
 
@@ -448,7 +448,7 @@ export class AgentController {
 			this.store.appendEvent(
 				sessionId,
 				'memory_retain',
-				result as unknown as Record<string, unknown>,
+				result as EventPayloadMap['memory_retain'],
 				runId
 			)
 
@@ -570,14 +570,16 @@ export class AgentController {
 		const isEnforcement = this.enforcementRunIds.has(runId)
 		if (isEnforcement && event.type !== 'agent_end') return
 
-		// Map every AgentEvent to one or more DB rows and persist
+		// Map every AgentEvent to one or more DB rows and persist.
+		// The cast below is safe: TypedEvent guarantees type↔payload
+		// correlation, but TypeScript can't track it across the loop.
 		const rows = this.mapEventToDb(event)
 		for (const row of rows) {
 			try {
 				this.store.appendEvent(
 					sessionId,
-					row.type,
-					row.payload,
+					row.type as EventType,
+					row.payload as EventPayloadMap[typeof row.type],
 					runId
 				)
 			} catch (err) {
@@ -710,10 +712,7 @@ export class AgentController {
 	 *   message_end (assistant) → message_end + assistant_final
 	 *   tool_execution_end      → tool_execution_end + tool_result
 	 */
-	private mapEventToDb(event: AgentEvent): Array<{
-		type: EventType
-		payload: Record<string, unknown>
-	}> {
+	private mapEventToDb(event: AgentEvent): TypedEvent[] {
 		switch (event.type) {
 			case 'agent_start':
 				return [{ type: 'agent_start', payload: {} }]
@@ -745,10 +744,7 @@ export class AgentController {
 
 			case 'message_end': {
 				const msg = event.message
-				const rows: Array<{
-					type: EventType
-					payload: Record<string, unknown>
-				}> = [
+				const rows: TypedEvent[] = [
 					{
 						type: 'message_end',
 						payload: { message: msg }
@@ -764,10 +760,7 @@ export class AgentController {
 				) {
 					rows.push({
 						type: 'assistant_final',
-						payload: msg as unknown as Record<
-							string,
-							unknown
-						>
+						payload: msg
 					})
 				}
 

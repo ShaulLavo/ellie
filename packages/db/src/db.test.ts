@@ -277,7 +277,7 @@ describe('EventStore', () => {
 					payload: {
 						role: 'invalid',
 						content: 'not-an-array'
-					} as unknown as Record<string, unknown>
+					} as any
 				})
 			).toThrow()
 		})
@@ -429,7 +429,7 @@ describe('EventStore', () => {
 				store.append({
 					sessionId: 's1',
 					type: 'assistant_delta' as never,
-					payload: { delta: 'some text' }
+					payload: { delta: 'some text' } as never
 				})
 			).toThrow()
 		})
@@ -1010,11 +1010,12 @@ describe('EventStore', () => {
 				store.append({
 					sessionId: session.id,
 					type: 'limit_hit',
+					// Deliberately invalid — testing runtime validation
 					payload: {
-						limit: 'invalid_limit',
+						limit: 'invalid_limit' as never,
 						threshold: 50,
 						observed: 50
-					}
+					} as never
 				})
 			).toThrow()
 		})
@@ -1111,7 +1112,7 @@ describe('EventStore', () => {
 					payload: {
 						parts: 'not-an-array',
 						query: 123
-					} as unknown as Record<string, unknown>
+					} as any
 				})
 			).toThrow()
 		})

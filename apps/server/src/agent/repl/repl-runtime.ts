@@ -199,19 +199,20 @@ export class ReplRuntime {
 
 		// ── Bootstrap phase ──────────────────────────────────
 
-		// 1. IPC runtime + tool wrappers (if tools configured)
-		if (
-			this.#toolConfig &&
-			this.#toolConfig.tools.length > 0
-		) {
-			const ipcBootstrap = await buildReplBootstrap(
-				this.#toolConfig.tools
-			)
-			await this.#rawEval(ipcBootstrap, 10_000)
-		}
+		try {
+			// 1. IPC runtime + tool wrappers (if tools configured)
+			if (
+				this.#toolConfig &&
+				this.#toolConfig.tools.length > 0
+			) {
+				const ipcBootstrap = await buildReplBootstrap(
+					this.#toolConfig.tools
+				)
+				await this.#rawEval(ipcBootstrap, 10_000)
+			}
 
-		// 2. print/commit helper + stderr error capture
-		const printBootstrap = `
+			// 2. print/commit helper + stderr error capture
+			const printBootstrap = `
 globalThis.${COMMIT_MARKER} = [];
 globalThis.__ELLIE_LAST_ERROR__ = null;
 globalThis.print = (...args) => {
@@ -226,7 +227,12 @@ process.stderr.write = function(...args) {
 };
 undefined;
 `
-		await this.#rawEval(printBootstrap, 5_000)
+			await this.#rawEval(printBootstrap, 5_000)
+		} catch (err) {
+			// Bootstrap failed — rollback: kill the process and reset state
+			await this.teardown()
+			throw err
+		}
 	}
 
 	/**
@@ -425,20 +431,24 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 
 			const result = await Promise.race([
 				this.#reader.read(),
-				new Promise<{ done: true; value: undefined }>(
-					resolve =>
-						setTimeout(
-							() =>
-								resolve({
-									done: true,
-									value: undefined
-								}),
-							remaining
-						)
+				new Promise<{
+					done: true
+					value: undefined
+					timeout: true
+				}>(resolve =>
+					setTimeout(
+						() =>
+							resolve({
+								done: true,
+								value: undefined,
+								timeout: true
+							}),
+						remaining
+					)
 				)
 			])
 
-			if (result.done && !result.value) {
+			if ('timeout' in result) {
 				// Timeout (setTimeout fired)
 				break
 			}

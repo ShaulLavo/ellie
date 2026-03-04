@@ -535,7 +535,7 @@ function wrapToolsForTanStack(
 						message: toolResultMessage
 					})
 
-					return loopCheck.message!
+					return { output: loopCheck.message! }
 				}
 			}
 
@@ -1661,6 +1661,11 @@ function finalizePartial(
 			(c.type === 'thinking' && c.text.trim().length > 0)
 	)
 
+	// After stripping, skip if there's no meaningful content
+	if (!emittedStart && partial.content.length === 0) {
+		return
+	}
+
 	if (!emittedStart) {
 		emit({ type: 'message_start', message: { ...partial } })
 	}
@@ -1853,7 +1858,7 @@ function processChunk(
 							tc.arguments = JSON.parse(finalJson)
 						} catch {
 							console.warn(
-								`[agent-loop] TOOL_CALL_END: failed to parse args JSON for ${tc.name}, toolCallId=${chunk.toolCallId}: "${finalJson.slice(0, 200)}"`
+								`[agent-loop] TOOL_CALL_END: failed to parse args JSON for ${tc.name}, toolCallId=${chunk.toolCallId}, payloadLength=${finalJson?.length ?? 0}`
 							)
 							tc.arguments = {}
 						}

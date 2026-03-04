@@ -2,6 +2,7 @@ import type {
 	EventStore,
 	EventRow,
 	EventType,
+	EventPayloadMap,
 	AgentMessage
 } from '@ellie/db'
 
@@ -109,10 +110,10 @@ export class RealtimeStore {
 	 * Used for high-frequency streaming deltas (message_update) that are
 	 * redundant once the final message_end is persisted.
 	 */
-	publishEphemeral(
+	publishEphemeral<T extends EventType>(
 		sessionId: string,
-		type: EventType,
-		payload: Record<string, unknown>,
+		type: T,
+		payload: EventPayloadMap[T],
 		runId?: string
 	): void {
 		this.#publish(`session:${sessionId}`, {
@@ -132,10 +133,10 @@ export class RealtimeStore {
 
 	// ── Event append (with live notification) ─────────────────────────────
 
-	appendEvent(
+	appendEvent<T extends EventType>(
 		sessionId: string,
-		type: EventType,
-		payload: Record<string, unknown>,
+		type: T,
+		payload: EventPayloadMap[T],
 		runId?: string,
 		dedupeKey?: string
 	): EventRow {

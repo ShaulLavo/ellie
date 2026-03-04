@@ -83,6 +83,7 @@ export type {
 	BankStats,
 	RecallTrace,
 	RecallTraceMetric,
+	MethodResult,
 	RecallTraceMethodResult,
 	RecallTraceCandidate,
 	RerankFunction,

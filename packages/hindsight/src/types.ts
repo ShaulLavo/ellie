@@ -351,7 +351,7 @@ export interface RecallResult {
 	trace?: RecallTrace
 	/** Phase 4: Visual memory results (only when includeVisual=true) */
 	visualMemories?: ScoredVisualMemory[]
-	/** Per-method search results (always populated, for audit) */
+	/** Per-method search results (populated when available, for audit) */
 	methodResults?: Record<string, MethodResult>
 }
 

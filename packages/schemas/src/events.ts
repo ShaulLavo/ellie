@@ -115,7 +115,19 @@ export interface EventPayloadMap {
 		parts: ContentPart[]
 		query: string
 		bankIds: string[]
-		searchResults?: unknown[]
+		searchResults?: Array<{
+			bankId: string
+			status: 'ok' | 'error' | 'timeout'
+			error?: string
+			memoryCount: number
+			methodResults?: Record<
+				string,
+				{
+					hits: Array<{ id: string; score: number }>
+					error?: string
+				}
+			>
+		}>
 		timestamp: number
 	}
 	memory_retain: {
