@@ -10,7 +10,11 @@ import {
 	loadAnthropicCredential,
 	setAnthropicCredential,
 	clearAnthropicCredential,
-	type AnthropicCredential
+	type AnthropicCredential,
+	loadGroqCredential,
+	setGroqCredential,
+	clearGroqCredential,
+	type GroqCredential
 } from '@ellie/ai/credentials'
 import {
 	oauthAuthorize,
@@ -29,7 +33,11 @@ import {
 	authOAuthAuthorizeBodySchema,
 	authOAuthAuthorizeResponseSchema,
 	authOAuthExchangeBodySchema,
-	authOAuthExchangeResponseSchema
+	authOAuthExchangeResponseSchema,
+	groqAuthStatusResponseSchema,
+	groqAuthClearResponseSchema,
+	groqAuthApiKeyBodySchema,
+	groqAuthApiKeyResponseSchema
 } from './common'
 
 // ── Localhost guard ──────────────────────────────────────────────────────────
@@ -383,6 +391,164 @@ export function createAuthRoutes(
 					response: {
 						200: authOAuthExchangeResponseSchema,
 						400: errorSchema,
+						403: errorSchema,
+						500: errorSchema
+					}
+				}
+			)
+	)
+}
+
+// ── Groq auth routes ────────────────────────────────────────────────────────
+
+/**
+ * Validate a Groq API key via GET /openai/v1/models.
+ * Returns an error string if invalid, or null if acceptable.
+ */
+async function validateGroqApiKey(
+	key: string
+): Promise<string | null> {
+	try {
+		const res = await fetch(
+			'https://api.groq.com/openai/v1/models',
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${key}`
+				}
+			}
+		)
+		if (res.status === 401) {
+			return 'Invalid API key (401 from Groq)'
+		}
+		return null
+	} catch (err) {
+		console.warn(
+			'[auth] Groq API key validation network error:',
+			err instanceof Error ? err.message : err
+		)
+		return null
+	}
+}
+
+export function createGroqAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return (
+		new Elysia({
+			prefix: '/api/auth/groq',
+			tags: ['Auth']
+		})
+			.onBeforeHandle(({ request, server, set }) => {
+				const ip = server?.requestIP(request)
+				const addr = ip?.address
+				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
+					set.status = 403
+					return {
+						error:
+							'Auth routes are only available from localhost'
+					}
+				}
+			})
+
+			// ── GET /status ────────────────────────────────────────
+			.get(
+				'/status',
+				async () => {
+					const envKey = process.env.GROQ_API_KEY
+					if (envKey) {
+						return {
+							mode: 'api_key' as const,
+							source: 'env_api_key' as const,
+							configured: true,
+							preview: keyPreview(envKey)
+						}
+					}
+
+					const cred =
+						await loadGroqCredential(credentialsPath)
+					if (!cred) {
+						return {
+							mode: null,
+							source: 'none' as const,
+							configured: false
+						}
+					}
+
+					return {
+						mode: 'api_key' as const,
+						source: 'file' as const,
+						configured: true,
+						preview: keyPreview(cred.key)
+					}
+				},
+				{
+					response: {
+						200: groqAuthStatusResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /clear ────────────────────────────────────────
+			.post(
+				'/clear',
+				async () => {
+					const cleared =
+						await clearGroqCredential(credentialsPath)
+					if (cleared) onCredentialChange?.()
+					return { cleared }
+				},
+				{
+					response: {
+						200: groqAuthClearResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /api-key ──────────────────────────────────────
+			.post(
+				'/api-key',
+				async ({ body, set }) => {
+					const { key, validate = true } = body
+
+					if (validate) {
+						const invalid = await validateGroqApiKey(
+							key.trim()
+						)
+						if (invalid) {
+							set.status = 401
+							return { error: invalid }
+						}
+					}
+
+					const cred: GroqCredential = {
+						type: 'api_key',
+						key: key.trim()
+					}
+					const result = await setGroqCredential(
+						credentialsPath,
+						cred
+					)
+					if (!result.ok) {
+						set.status = 500
+						return { error: result.error }
+					}
+
+					onCredentialChange?.()
+					return {
+						ok: true as const,
+						mode: 'api_key' as const
+					}
+				},
+				{
+					body: groqAuthApiKeyBodySchema,
+					response: {
+						200: groqAuthApiKeyResponseSchema,
+						400: errorSchema,
+						401: errorSchema,
 						403: errorSchema,
 						500: errorSchema
 					}

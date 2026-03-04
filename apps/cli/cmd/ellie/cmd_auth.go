@@ -15,7 +15,18 @@ import (
 // ── auth status ──────────────────────────────────────────────────────────────
 
 func cmdAuthStatus() {
-	url := baseURL() + "/api/auth/anthropic/status"
+	fmt.Println()
+	fmt.Println(styleBold.Render("Auth Status"))
+	fmt.Println(strings.Repeat("─", 40))
+
+	printProviderStatus("Anthropic", "/api/auth/anthropic/status")
+	printProviderStatus("Groq", "/api/auth/groq/status")
+
+	fmt.Println()
+}
+
+func printProviderStatus(name string, path string) {
+	url := baseURL() + path
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server at", baseURL())
@@ -44,21 +55,18 @@ func cmdAuthStatus() {
 	}
 
 	fmt.Println()
-	fmt.Println(styleBold.Render("Auth Status"))
-	fmt.Println(strings.Repeat("─", 40))
+	fmt.Println(styleBold.Render("  " + name))
 
 	if !status.Configured || status.Mode == nil {
-		fmt.Println("  No credentials configured.")
-		fmt.Println(styleDim.Render("  Run `ellie auth` to set up authentication."))
-		fmt.Println()
+		fmt.Println("    Not configured")
 		return
 	}
 
-	fmt.Println("  Mode:  ", *status.Mode)
-	fmt.Println("  Source: ", status.Source)
+	fmt.Println("    Mode:   ", *status.Mode)
+	fmt.Println("    Source:  ", status.Source)
 
 	if status.Preview != nil {
-		fmt.Println("  Key:   ", *status.Preview)
+		fmt.Println("    Key:    ", *status.Preview)
 	}
 
 	if status.ExpiresAt != nil {
@@ -67,15 +75,40 @@ func cmdAuthStatus() {
 		if status.Expired != nil && *status.Expired {
 			expStr += " (EXPIRED)"
 		}
-		fmt.Println("  Expires:", expStr)
+		fmt.Println("    Expires:", expStr)
 	}
-	fmt.Println()
 }
 
 // ── auth clear ───────────────────────────────────────────────────────────────
 
 func cmdAuthClear() {
-	url := baseURL() + "/api/auth/anthropic/clear"
+	var target string
+	err := huh.NewSelect[string]().
+		Title("Which provider credentials should be cleared?").
+		Options(
+			huh.NewOption("Anthropic", "anthropic"),
+			huh.NewOption("Groq", "groq"),
+			huh.NewOption("All providers", "all"),
+		).
+		Value(&target).
+		Run()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	switch target {
+	case "anthropic":
+		clearProvider("Anthropic", "/api/auth/anthropic/clear")
+	case "groq":
+		clearProvider("Groq", "/api/auth/groq/clear")
+	case "all":
+		clearProvider("Anthropic", "/api/auth/anthropic/clear")
+		clearProvider("Groq", "/api/auth/groq/clear")
+	}
+}
+
+func clearProvider(name string, path string) {
+	url := baseURL() + path
 	resp, err := httpClient.Post(url, "application/json", nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server at", baseURL())
@@ -98,15 +131,37 @@ func cmdAuthClear() {
 	}
 
 	if result.Cleared {
-		fmt.Println(styleOk.Render("Stored credentials removed."))
+		fmt.Println(styleOk.Render(name + " credentials removed."))
 	} else {
-		fmt.Println("No stored credentials found.")
+		fmt.Println("No stored " + name + " credentials found.")
 	}
 }
 
 // ── auth (interactive wizard) ────────────────────────────────────────────────
 
 func cmdAuth() {
+	var provider string
+	err := huh.NewSelect[string]().
+		Title("Choose a provider to authenticate").
+		Options(
+			huh.NewOption("Anthropic", "anthropic"),
+			huh.NewOption("Groq", "groq"),
+		).
+		Value(&provider).
+		Run()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	switch provider {
+	case "anthropic":
+		authAnthropic()
+	case "groq":
+		authGroq()
+	}
+}
+
+func authAnthropic() {
 	var method string
 	err := huh.NewSelect[string]().
 		Title("How would you like to authenticate with Anthropic?").
@@ -132,6 +187,47 @@ func cmdAuth() {
 	case "token":
 		authToken()
 	}
+}
+
+func authGroq() {
+	var key string
+	err := huh.NewInput().
+		Title("Enter your Groq API key").
+		Placeholder("gsk_...").
+		EchoMode(huh.EchoModePassword).
+		Value(&key).
+		Run()
+	if err != nil || strings.TrimSpace(key) == "" {
+		fmt.Fprintln(os.Stderr, "Cancelled.")
+		os.Exit(1)
+	}
+
+	fmt.Println(styleDim.Render("Validating key..."))
+
+	body, _ := json.Marshal(map[string]any{
+		"key":      strings.TrimSpace(key),
+		"validate": true,
+	})
+
+	resp, err := httpClient.Post(baseURL()+"/api/auth/groq/api-key", "application/json", bytes.NewReader(body))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), "Cannot reach server:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Invalid API key."), "Check the key and try again.")
+		os.Exit(1)
+	}
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), string(respBody))
+		os.Exit(1)
+	}
+
+	fmt.Println(styleOk.Render("Groq API key saved successfully."))
 }
 
 func authApiKey() {

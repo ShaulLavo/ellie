@@ -71,5 +71,5 @@ func printUsage() {
 	fmt.Println("  ellie start           Run production server (requires build)")
 	fmt.Println("  ellie auth            Interactive authentication setup")
 	fmt.Println("  ellie auth status     Show current auth status")
-	fmt.Println("  ellie auth clear      Remove stored Anthropic credentials")
+	fmt.Println("  ellie auth clear      Remove stored credentials (choose provider)")
 }
