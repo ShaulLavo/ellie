@@ -69,28 +69,11 @@ export function estimateTokens(
 	charsPerToken: number = 4
 ): number {
 	// Try to use real token counts from the most recent assistant message
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const msg = messages[i]
-		if (msg.role === 'assistant') {
-			const assistantMsg = msg as AssistantMessage
-			if (
-				assistantMsg.usage &&
-				assistantMsg.usage.input > 0
-			) {
-				// Real API count covers everything up to this message
-				// Estimate any newer messages after it using chars heuristic
-				const realTokens = assistantMsg.usage.input
-				let additionalTokens = 0
-				for (let j = i + 1; j < messages.length; j++) {
-					additionalTokens += estimateMessageTokens(
-						messages[j],
-						charsPerToken
-					)
-				}
-				return realTokens + additionalTokens
-			}
-		}
-	}
+	const realEstimate = estimateFromLastAssistant(
+		messages,
+		charsPerToken
+	)
+	if (realEstimate !== null) return realEstimate
 
 	// Fallback: estimate all messages using chars heuristic
 	let total = 0
@@ -98,6 +81,40 @@ export function estimateTokens(
 		total += estimateMessageTokens(msg, charsPerToken)
 	}
 	return total
+}
+
+/**
+ * Scan backwards for the most recent assistant message with real API
+ * usage.input and return the total token estimate (real + trailing heuristic).
+ * Returns null if no suitable assistant message is found.
+ */
+function estimateFromLastAssistant(
+	messages: AgentMessage[],
+	charsPerToken: number
+): number | null {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i]
+		if (msg.role !== 'assistant') continue
+
+		const assistantMsg = msg as AssistantMessage
+		if (
+			!assistantMsg.usage ||
+			assistantMsg.usage.input <= 0
+		)
+			continue
+
+		// Real API count covers everything up to this message
+		// Estimate any newer messages after it using chars heuristic
+		let additionalTokens = 0
+		for (let j = i + 1; j < messages.length; j++) {
+			additionalTokens += estimateMessageTokens(
+				messages[j],
+				charsPerToken
+			)
+		}
+		return assistantMsg.usage.input + additionalTokens
+	}
+	return null
 }
 
 /**
@@ -295,48 +312,64 @@ export function removeOrphans(
 
 		// Handle assistant messages with orphaned tool calls
 		if (msg.role === 'assistant') {
-			const assistantMsg = msg as AssistantMessage
-			const hasToolCalls = assistantMsg.content.some(
-				b => b.type === 'toolCall'
+			const cleaned = cleanOrphanedAssistant(
+				msg as AssistantMessage,
+				toolResultIds
 			)
-			if (hasToolCalls) {
-				const allHaveResults = assistantMsg.content
-					.filter(b => b.type === 'toolCall')
-					.every(b =>
-						toolResultIds.has(
-							(b as { type: 'toolCall'; id: string }).id
-						)
-					)
-				if (!allHaveResults) {
-					// Strip orphaned tool calls but keep text/thinking content
-					const nonToolContent =
-						assistantMsg.content.filter(
-							b => b.type !== 'toolCall'
-						)
-					const hasTextContent = nonToolContent.some(
-						b =>
-							b.type === 'text' && b.text.trim().length > 0
-					)
-					if (hasTextContent) {
-						// Keep the message but without orphaned tool calls
-						result.push({
-							...assistantMsg,
-							content: nonToolContent,
-							stopReason:
-								assistantMsg.stopReason === 'toolUse'
-									? 'stop'
-									: assistantMsg.stopReason
-						} as AssistantMessage)
-					}
-					// else: no text content and no valid tool calls → drop entirely
-					continue
-				}
+			if (cleaned !== undefined) {
+				if (cleaned !== null) result.push(cleaned)
+				continue
 			}
 		}
 
 		result.push(msg)
 	}
 	return result
+}
+
+/**
+ * Check if an assistant message has orphaned tool calls (tool calls with no
+ * matching tool results). Returns:
+ * - undefined: message is fine, caller should push it as-is
+ * - AssistantMessage: cleaned message with tool calls stripped (has text content)
+ * - null: message should be dropped entirely (no text content, no valid tool calls)
+ */
+function cleanOrphanedAssistant(
+	assistantMsg: AssistantMessage,
+	toolResultIds: Set<string>
+): AssistantMessage | null | undefined {
+	const hasToolCalls = assistantMsg.content.some(
+		b => b.type === 'toolCall'
+	)
+	if (!hasToolCalls) return undefined
+
+	const allHaveResults = assistantMsg.content
+		.filter(b => b.type === 'toolCall')
+		.every(b =>
+			toolResultIds.has(
+				(b as { type: 'toolCall'; id: string }).id
+			)
+		)
+	if (allHaveResults) return undefined
+
+	// Strip orphaned tool calls but keep text/thinking content
+	const nonToolContent = assistantMsg.content.filter(
+		b => b.type !== 'toolCall'
+	)
+	const hasTextContent = nonToolContent.some(
+		b => b.type === 'text' && b.text.trim().length > 0
+	)
+	if (!hasTextContent) return null
+
+	// Keep the message but without orphaned tool calls
+	return {
+		...assistantMsg,
+		content: nonToolContent,
+		stopReason:
+			assistantMsg.stopReason === 'toolUse'
+				? 'stop'
+				: assistantMsg.stopReason
+	} as AssistantMessage
 }
 
 /**
@@ -359,47 +392,24 @@ function reorderToolResults(
 	for (const msg of messages) {
 		if (msg.role === 'assistant') {
 			result.push(msg)
-			for (const block of msg.content) {
-				if (block.type === 'toolCall') {
-					seenToolCallIds.add(
-						(
-							block as {
-								type: 'toolCall'
-								id: string
-							}
-						).id
-					)
-				}
-			}
+			collectToolCallIds(msg, seenToolCallIds)
 			// Flush any deferred tool results whose assistant is now seen
-			const stillDeferred: AgentMessage[] = []
-			for (const d of deferred) {
-				if (
-					d.role === 'toolResult' &&
-					seenToolCallIds.has(
-						(d as ToolResultMessage).toolCallId
-					)
-				) {
-					result.push(d)
-				} else {
-					stillDeferred.push(d)
-				}
-			}
-			deferred.length = 0
-			deferred.push(...stillDeferred)
-		} else if (msg.role === 'toolResult') {
+			flushDeferred(deferred, seenToolCallIds, result)
+			continue
+		}
+
+		if (msg.role === 'toolResult') {
 			const toolCallId = (msg as ToolResultMessage)
 				.toolCallId
 			if (seenToolCallIds.has(toolCallId)) {
-				// Assistant already seen — correct order
 				result.push(msg)
 			} else {
-				// Assistant not yet seen — defer until we see it
 				deferred.push(msg)
 			}
-		} else {
-			result.push(msg)
+			continue
 		}
+
+		result.push(msg)
 	}
 
 	// Drop remaining deferred — these are true orphans with no
@@ -407,4 +417,41 @@ function reorderToolResults(
 	// up anyway, but dropping here prevents positional errors.
 
 	return result
+}
+
+/** Extract all toolCall IDs from an assistant message's content blocks. */
+function collectToolCallIds(
+	msg: AgentMessage,
+	ids: Set<string>
+): void {
+	for (const block of msg.content) {
+		if (block.type !== 'toolCall') continue
+		ids.add((block as { type: 'toolCall'; id: string }).id)
+	}
+}
+
+/**
+ * Move deferred tool results whose parent assistant has been seen
+ * into the result array. Leaves un-matched items in deferred.
+ */
+function flushDeferred(
+	deferred: AgentMessage[],
+	seenToolCallIds: Set<string>,
+	result: AgentMessage[]
+): void {
+	const stillDeferred: AgentMessage[] = []
+	for (const d of deferred) {
+		if (
+			d.role === 'toolResult' &&
+			seenToolCallIds.has(
+				(d as ToolResultMessage).toolCallId
+			)
+		) {
+			result.push(d)
+		} else {
+			stillDeferred.push(d)
+		}
+	}
+	deferred.length = 0
+	deferred.push(...stillDeferred)
 }

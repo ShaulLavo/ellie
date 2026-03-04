@@ -48,6 +48,39 @@ function keyPreview(key: string): string {
 	return `${key.slice(0, 12)}...${key.slice(-4)}`
 }
 
+/**
+ * Validate an Anthropic API key via GET /v1/models.
+ * Returns an error string if invalid, or null if acceptable.
+ */
+async function validateAnthropicApiKey(
+	key: string
+): Promise<string | null> {
+	try {
+		const res = await fetch(
+			'https://api.anthropic.com/v1/models',
+			{
+				method: 'GET',
+				headers: {
+					'x-api-key': key,
+					'anthropic-version': '2023-06-01'
+				}
+			}
+		)
+		if (res.status === 401) {
+			return 'Invalid API key (401 from Anthropic)'
+		}
+		// Any non-401 response is acceptable
+		return null
+	} catch (err) {
+		// Network errors shouldn't block saving
+		console.warn(
+			'[auth] API key validation network error:',
+			err instanceof Error ? err.message : err
+		)
+		return null
+	}
+}
+
 // ── Route factory ────────────────────────────────────────────────────────────
 
 export function createAuthRoutes(
@@ -174,33 +207,12 @@ export function createAuthRoutes(
 					const { key, validate = true } = body
 
 					if (validate) {
-						try {
-							// Use GET /v1/models — free endpoint that returns 401
-							// for invalid keys without consuming billing tokens.
-							const res = await fetch(
-								'https://api.anthropic.com/v1/models',
-								{
-									method: 'GET',
-									headers: {
-										'x-api-key': key.trim(),
-										'anthropic-version': '2023-06-01'
-									}
-								}
-							)
-							if (res.status === 401) {
-								set.status = 401
-								return {
-									error:
-										'Invalid API key (401 from Anthropic)'
-								}
-							}
-							// Any non-401 response is acceptable
-						} catch (err) {
-							// Network errors shouldn't block saving
-							console.warn(
-								'[auth] API key validation network error:',
-								err instanceof Error ? err.message : err
-							)
+						const invalid = await validateAnthropicApiKey(
+							key.trim()
+						)
+						if (invalid) {
+							set.status = 401
+							return { error: invalid }
 						}
 					}
 

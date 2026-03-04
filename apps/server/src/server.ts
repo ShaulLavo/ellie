@@ -106,6 +106,30 @@ const CREDENTIALS_PATH =
 // ── Auth resolution ──────────────────────────────────────────────────────────
 // Priority: Anthropic (env vars > file) → Groq (env var > file)
 
+const REFRESH_BUFFER_MS = 5 * 60 * 1000
+
+/** Refresh an OAuth token if expired/expiring, returning the access token to use. */
+async function refreshOAuthIfNeeded(cred: {
+	access: string
+	refresh: string
+	expires: number
+}): Promise<string> {
+	if (cred.expires - Date.now() >= REFRESH_BUFFER_MS) {
+		return cred.access
+	}
+	const refreshed = await refreshNormalizedOAuthToken(
+		cred.refresh
+	)
+	if (!refreshed) {
+		console.warn(
+			'[server] OAuth token refresh failed, using existing token'
+		)
+		return cred.access
+	}
+	await setAnthropicCredential(CREDENTIALS_PATH, refreshed)
+	return refreshed.access
+}
+
 async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
 	const model = env.ANTHROPIC_MODEL as AnthropicChatModel
 
@@ -132,24 +156,8 @@ async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
 		case 'api_key':
 			return createAnthropicChat(model, cred.key)
 		case 'oauth': {
-			// Auto-refresh if expired or expiring within 5 minutes
-			const REFRESH_BUFFER_MS = 5 * 60 * 1000
-			if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
-				const refreshed = await refreshNormalizedOAuthToken(
-					cred.refresh
-				)
-				if (refreshed) {
-					await setAnthropicCredential(
-						CREDENTIALS_PATH,
-						refreshed
-					)
-					return anthropicOAuth(model, refreshed.access)
-				}
-				console.warn(
-					'[server] OAuth token refresh failed, using existing token'
-				)
-			}
-			return anthropicOAuth(model, cred.access)
+			const token = await refreshOAuthIfNeeded(cred)
+			return anthropicOAuth(model, token)
 		}
 		case 'token':
 			return createAnthropicChat(model, cred.token)
@@ -378,19 +386,13 @@ export const app = new Elysia()
 		if (code === `VALIDATION`) {
 			set.status = 400
 
-			if (
+			const wantsSummary =
 				request.headers.get(`x-error-detail`) === `summary`
-			) {
-				const summary = tryValibotSummary(
-					error.validator,
-					error.value
-				)
-				if (summary) return { error: summary }
-			}
+			const summary =
+				wantsSummary &&
+				tryValibotSummary(error.validator, error.value)
 
-			return {
-				error: error.message
-			}
+			return { error: summary || error.message }
 		}
 
 		const message =

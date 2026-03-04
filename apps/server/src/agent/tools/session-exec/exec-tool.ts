@@ -57,10 +57,7 @@ export function createExecTool(
 			rawParams
 		): Promise<AgentToolResult> => {
 			const params = rawParams as ExecParams
-			const runtime = new ReplRuntime(
-				undefined,
-				baseTools
-			)
+			const runtime = new ReplRuntime(undefined, baseTools)
 
 			try {
 				await runtime.start()

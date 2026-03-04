@@ -154,47 +154,8 @@ export class MemoryOrchestrator {
 		)
 
 		// Collect successful results + per-bank diagnostics
-		const memories: Array<{
-			text: string
-			score: number
-			model?: string
-		}> = []
-		const succeededBankIds: string[] = []
-		const searchResults: BankSearchResult[] = []
-
-		for (let i = 0; i < results.length; i++) {
-			const result = results[i]
-			if (result.status === 'fulfilled' && result.value) {
-				succeededBankIds.push(bankIds[i])
-				const val = result.value
-				for (const mem of val.memories) {
-					memories.push({
-						text: mem.memory.content,
-						score: mem.score ?? 0
-					})
-				}
-				searchResults.push({
-					bankId: bankIds[i],
-					status: 'ok',
-					memoryCount: val.memories.length,
-					methodResults: val.methodResults
-				})
-			} else if (result.status === 'rejected') {
-				const err = result.reason
-				const isTimeout =
-					err instanceof Error &&
-					err.message.startsWith('Timeout')
-				searchResults.push({
-					bankId: bankIds[i],
-					status: isTimeout ? 'timeout' : 'error',
-					error:
-						err instanceof Error
-							? err.message
-							: String(err),
-					memoryCount: 0
-				})
-			}
-		}
+		const { memories, succeededBankIds, searchResults } =
+			collectRecallResults(results, bankIds)
 
 		if (memories.length === 0) {
 			const durationMs = Math.round(
@@ -376,20 +337,7 @@ export class MemoryOrchestrator {
 
 		for (let i = 0; i < results.length; i++) {
 			const result = results[i]
-			if (result.status === 'fulfilled' && result.value) {
-				succeededBankIds.push(bankIds[i])
-				const cursorKey = this.cursorKey(
-					bankIds[i],
-					sessionId
-				)
-				this.eventStore.setKv(cursorKey, String(seqTo))
-				// RetainResult.memories is the array of stored MemoryUnit objects
-				const memories = result.value.memories ?? []
-				totalFacts += memories.length
-				for (const m of memories) {
-					allFacts.push(m.content)
-				}
-			} else if (result.status === 'rejected') {
+			if (result.status === 'rejected') {
 				this.trace('memory.retain_bank_error', {
 					sessionId,
 					bankId: bankIds[i],
@@ -398,6 +346,23 @@ export class MemoryOrchestrator {
 							? result.reason.message
 							: String(result.reason)
 				})
+				continue
+			}
+			if (result.status !== 'fulfilled' || !result.value) {
+				continue
+			}
+
+			succeededBankIds.push(bankIds[i])
+			const cursorKey = this.cursorKey(
+				bankIds[i],
+				sessionId
+			)
+			this.eventStore.setKv(cursorKey, String(seqTo))
+			// RetainResult.memories is the array of stored MemoryUnit objects
+			const memories = result.value.memories ?? []
+			totalFacts += memories.length
+			for (const m of memories) {
+				allFacts.push(m.content)
 			}
 		}
 
@@ -496,39 +461,7 @@ export class MemoryOrchestrator {
 		})
 
 		return rows
-			.map(row => {
-				try {
-					const parsed = JSON.parse(row.payload) as {
-						role?: string
-						content?:
-							| string
-							| Array<{
-									type: string
-									text?: string
-							  }>
-					}
-					const role =
-						row.type === 'user_message'
-							? 'user'
-							: 'assistant'
-					let text = ''
-					if (typeof parsed.content === 'string') {
-						text = parsed.content
-					} else if (Array.isArray(parsed.content)) {
-						text = parsed.content
-							.filter(c => c.type === 'text')
-							.map(c => c.text ?? '')
-							.join('')
-					}
-					return {
-						role: role as 'user' | 'assistant',
-						content: text,
-						seq: row.seq
-					}
-				} catch {
-					return null
-				}
-			})
+			.map(rowToTranscriptTurn)
 			.filter(
 				(t): t is TranscriptTurn =>
 					t !== null && t.content.length > 0
@@ -544,6 +477,112 @@ export class MemoryOrchestrator {
 }
 
 // ── Utility functions ────────────────────────────────────────────────────────
+
+/** Extract text content from a parsed message payload. */
+function extractTextContent(
+	content:
+		| string
+		| Array<{ type: string; text?: string }>
+		| undefined
+): string {
+	if (typeof content === 'string') return content
+	if (Array.isArray(content)) {
+		return content
+			.filter(c => c.type === 'text')
+			.map(c => c.text ?? '')
+			.join('')
+	}
+	return ''
+}
+
+/** Parse an event row into a TranscriptTurn, or null on failure. */
+function rowToTranscriptTurn(row: {
+	type: string
+	payload: string
+	seq: number
+}): TranscriptTurn | null {
+	try {
+		const parsed = JSON.parse(row.payload) as {
+			role?: string
+			content?:
+				| string
+				| Array<{ type: string; text?: string }>
+		}
+		const role =
+			row.type === 'user_message' ? 'user' : 'assistant'
+		return {
+			role: role as 'user' | 'assistant',
+			content: extractTextContent(parsed.content),
+			seq: row.seq
+		}
+	} catch {
+		return null
+	}
+}
+
+/** Collect memories and diagnostics from parallel recall results. */
+function collectRecallResults(
+	results: PromiseSettledResult<unknown>[],
+	bankIds: string[]
+): {
+	memories: Array<{
+		text: string
+		score: number
+		model?: string
+	}>
+	succeededBankIds: string[]
+	searchResults: BankSearchResult[]
+} {
+	const memories: Array<{
+		text: string
+		score: number
+		model?: string
+	}> = []
+	const succeededBankIds: string[] = []
+	const searchResults: BankSearchResult[] = []
+
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i]
+		if (result.status === 'rejected') {
+			const err = result.reason
+			const isTimeout =
+				err instanceof Error &&
+				err.message.startsWith('Timeout')
+			searchResults.push({
+				bankId: bankIds[i],
+				status: isTimeout ? 'timeout' : 'error',
+				error:
+					err instanceof Error ? err.message : String(err),
+				memoryCount: 0
+			})
+			continue
+		}
+		if (!result.value) continue
+
+		succeededBankIds.push(bankIds[i])
+		const val = result.value as {
+			memories: Array<{
+				memory: { content: string }
+				score?: number
+			}>
+			methodResults?: Record<string, MethodResult>
+		}
+		for (const mem of val.memories) {
+			memories.push({
+				text: mem.memory.content,
+				score: mem.score ?? 0
+			})
+		}
+		searchResults.push({
+			bankId: bankIds[i],
+			status: 'ok',
+			memoryCount: val.memories.length,
+			methodResults: val.methodResults
+		})
+	}
+
+	return { memories, succeededBankIds, searchResults }
+}
 
 function hashWorkspace(dir: string): string {
 	return createHash('sha256')

@@ -193,12 +193,11 @@ export async function processAgentStream(
 			) {
 				// TanStack's post-execution event. Tool results already handled by wrapper.
 				// Push tool results into context for next LLM call awareness
-				for (const tr of toolResultCollector) {
-					if (!allMessages.includes(tr)) {
-						context.messages.push(tr)
-						allMessages.push(tr)
-					}
-				}
+				flushToolResults(
+					toolResultCollector,
+					allMessages,
+					context
+				)
 				continue
 			}
 
@@ -312,6 +311,19 @@ function finalizePartial(
 	context.messages.push(partial)
 	allMessages.push(partial)
 	emit({ type: 'message_end', message: partial })
+}
+
+/** Push any new tool results from the collector into context and allMessages. */
+function flushToolResults(
+	toolResultCollector: ToolResultMessage[],
+	allMessages: AgentMessage[],
+	context: AgentContext
+): void {
+	for (const tr of toolResultCollector) {
+		if (allMessages.includes(tr)) continue
+		context.messages.push(tr)
+		allMessages.push(tr)
+	}
 }
 
 /**
@@ -452,74 +464,25 @@ function processChunk(
 		}
 
 		case 'TOOL_CALL_ARGS': {
-			const accum =
-				(partialJsonMap.get(chunk.toolCallId) || '') +
-				chunk.delta
-			partialJsonMap.set(chunk.toolCallId, accum)
-
-			const tcArgIdx = toolCallIndexMap.get(
-				chunk.toolCallId
+			handleToolCallArgs(
+				chunk,
+				partial,
+				emit,
+				partialJsonMap,
+				toolCallIndexMap
 			)
-			if (tcArgIdx !== undefined) {
-				try {
-					const parsed = JSON.parse(accum)
-					const tc = partial.content[tcArgIdx]
-					if (tc && tc.type === 'toolCall') {
-						tc.arguments = parsed
-					}
-				} catch {
-					// Incomplete JSON — keep accumulating
-				}
-				emitUpdate(emit, partial, {
-					type: 'toolcall_delta',
-					contentIndex: tcArgIdx,
-					delta: chunk.delta
-				})
-			}
 			break
 		}
 
 		case 'TOOL_CALL_END': {
-			// Only handle the pre-execution end event (no result field)
-			const tcEndIdx = toolCallIndexMap.get(
-				chunk.toolCallId
+			handleToolCallEnd(
+				chunk,
+				partial,
+				emit,
+				partialJsonMap,
+				toolCallIndexMap,
+				config
 			)
-			if (tcEndIdx !== undefined) {
-				const tc = partial.content[tcEndIdx]
-				if (tc && tc.type === 'toolCall') {
-					if (chunk.input !== undefined) {
-						tc.arguments = chunk.input as Record<
-							string,
-							unknown
-						>
-					} else {
-						const finalJson =
-							partialJsonMap.get(chunk.toolCallId) || '{}'
-						try {
-							tc.arguments = JSON.parse(finalJson)
-						} catch {
-							emitTrace(
-								config,
-								'agent_loop.tool_call_parse_error',
-								{
-									toolName: tc.name,
-									toolCallId: chunk.toolCallId,
-									payloadLength: finalJson?.length ?? 0
-								}
-							)
-							console.warn(
-								`[agent-loop] TOOL_CALL_END: failed to parse args JSON for ${tc.name}, toolCallId=${chunk.toolCallId}, payloadLength=${finalJson?.length ?? 0}`
-							)
-							tc.arguments = {}
-						}
-					}
-				}
-				emitUpdate(emit, partial, {
-					type: 'toolcall_end',
-					contentIndex: tcEndIdx,
-					toolCall: tc as ToolCall
-				})
-			}
 			break
 		}
 
@@ -547,5 +510,89 @@ function processChunk(
 				chunk.error?.message || 'Unknown error'
 			break
 		}
+	}
+}
+
+/** Handle TOOL_CALL_ARGS: accumulate partial JSON, try to parse, emit delta. */
+function handleToolCallArgs(
+	chunk: StreamChunk & { type: 'TOOL_CALL_ARGS' },
+	partial: AssistantMessage,
+	emit: EmitFn,
+	partialJsonMap: Map<string, string>,
+	toolCallIndexMap: Map<string, number>
+): void {
+	const accum =
+		(partialJsonMap.get(chunk.toolCallId) || '') +
+		chunk.delta
+	partialJsonMap.set(chunk.toolCallId, accum)
+
+	const tcArgIdx = toolCallIndexMap.get(chunk.toolCallId)
+	if (tcArgIdx === undefined) return
+
+	try {
+		const parsed = JSON.parse(accum)
+		const tc = partial.content[tcArgIdx]
+		if (tc && tc.type === 'toolCall') {
+			tc.arguments = parsed
+		}
+	} catch {
+		// Incomplete JSON — keep accumulating
+	}
+	emitUpdate(emit, partial, {
+		type: 'toolcall_delta',
+		contentIndex: tcArgIdx,
+		delta: chunk.delta
+	})
+}
+
+/** Handle TOOL_CALL_END: finalize tool call arguments, emit end event. */
+function handleToolCallEnd(
+	chunk: StreamChunk & { type: 'TOOL_CALL_END' },
+	partial: AssistantMessage,
+	emit: EmitFn,
+	partialJsonMap: Map<string, string>,
+	toolCallIndexMap: Map<string, number>,
+	config: AgentLoopConfig
+): void {
+	const tcEndIdx = toolCallIndexMap.get(chunk.toolCallId)
+	if (tcEndIdx === undefined) return
+
+	const tc = partial.content[tcEndIdx]
+	if (tc && tc.type === 'toolCall') {
+		finalizeToolCallArgs(tc, chunk, partialJsonMap, config)
+	}
+	emitUpdate(emit, partial, {
+		type: 'toolcall_end',
+		contentIndex: tcEndIdx,
+		toolCall: tc as ToolCall
+	})
+}
+
+/** Parse and assign final arguments to a tool call content block. */
+function finalizeToolCallArgs(
+	tc: ToolCall,
+	chunk: StreamChunk & { type: 'TOOL_CALL_END' },
+	partialJsonMap: Map<string, string>,
+	config: AgentLoopConfig
+): void {
+	if (chunk.input !== undefined) {
+		tc.arguments = chunk.input as Record<string, unknown>
+		return
+	}
+
+	const finalJson =
+		partialJsonMap.get(chunk.toolCallId) || '{}'
+	try {
+		tc.arguments = JSON.parse(finalJson)
+	} catch {
+		emitTrace(config, 'agent_loop.tool_call_parse_error', {
+			toolName: tc.name,
+			toolCallId: chunk.toolCallId,
+			payloadLength: finalJson?.length ?? 0
+		})
+		console.warn(
+			`[agent-loop] TOOL_CALL_END: failed to parse args JSON for ${tc.name}, toolCallId=${chunk.toolCallId}, payloadLength=${finalJson?.length ?? 0}`
+		)
+		tc.arguments = {}
 	}
 }

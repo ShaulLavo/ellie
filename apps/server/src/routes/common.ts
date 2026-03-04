@@ -175,16 +175,17 @@ export function toStreamGenerator<
 			wake()
 		})
 
+		const waitForItem = () =>
+			new Promise<void>(resolve => {
+				resolver = resolve
+			})
+
 		try {
 			yield sse(snapshotEvent)
 
 			while (!aborted) {
-				if (queue.length === 0) {
-					await new Promise<void>(resolve => {
-						resolver = resolve
-					})
-					continue
-				}
+				if (queue.length === 0) await waitForItem()
+				if (aborted) break
 
 				const next = queue.shift()
 				if (!next) continue

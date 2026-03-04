@@ -12,9 +12,9 @@
  *   - Agent busy  → followUp() queues for automatic pickup by the agent loop
  *   - On agent_end with orphaned follow-ups → continue() re-enters the loop
  *
- * Tool surface (exec-mode architecture):
+ * Tool surface:
  *   - basicDirectTools: shell, search, workspace read/write
- *   - script_exec: ephemeral one-shot TypeScript execution
+ *   - exec: one-shot isolated code execution
  *   - session_exec: persistent REPL session execution
  */
 
@@ -167,6 +167,23 @@ export class AgentController {
 		this.boundSessionId = sessionId
 	}
 
+	/**
+	 * Ensure the agent is bound to the given session and
+	 * has its history loaded. Called when the agent is idle.
+	 */
+	private ensureBinding(sessionId: string): void {
+		if (this.boundSessionId !== sessionId) {
+			this.bindToSession(sessionId)
+			return
+		}
+		if (this.agent.state.messages.length === 0) {
+			// First message on this binding — load history
+			const history = this.loadHistory(sessionId)
+			if (history.length > 0)
+				this.agent.replaceMessages(history)
+		}
+	}
+
 	// ── Message routing (core) ───────────────────────────────────────────────
 
 	/**
@@ -214,15 +231,7 @@ export class AgentController {
 			}
 
 			// Agent idle — bind if needed and start new run
-			if (this.boundSessionId !== sessionId) {
-				this.bindToSession(sessionId)
-			} else if (this.agent.state.messages.length === 0) {
-				// First message on this binding — load history
-				const history = this.loadHistory(sessionId)
-				if (history.length > 0) {
-					this.agent.replaceMessages(history)
-				}
-			}
+			this.ensureBinding(sessionId)
 
 			this.agent.runId = runId
 
@@ -685,28 +694,9 @@ export class AgentController {
 
 			// Check for orphaned follow-ups first (same session)
 			if (this.agent.hasQueuedMessages()) {
-				queueMicrotask(() => {
-					this.withLock(async () => {
-						if (
-							!this.agent.state.isStreaming &&
-							this.agent.hasQueuedMessages()
-						) {
-							const newRunId = ulid()
-							this.agent.runId = newRunId
-							this.agent.continue().catch(err => {
-								this.trace('controller.continue_failed', {
-									sessionId,
-									runId: newRunId,
-									message:
-										err instanceof Error
-											? err.message
-											: String(err)
-								})
-								this.writeErrorEvent(sessionId, newRunId)
-							})
-						}
-					})
-				})
+				queueMicrotask(() =>
+					this.drainQueuedFollowUps(sessionId)
+				)
 			} else if (this.crossSessionQueue.length > 0) {
 				// Process cross-session queue FIFO
 				queueMicrotask(() => {
@@ -717,6 +707,28 @@ export class AgentController {
 	}
 
 	// ── Internal: cross-session queue processing ─────────────────────────────
+
+	private drainQueuedFollowUps(sessionId: string): void {
+		this.withLock(async () => {
+			if (
+				this.agent.state.isStreaming ||
+				!this.agent.hasQueuedMessages()
+			) {
+				return
+			}
+			const newRunId = ulid()
+			this.agent.runId = newRunId
+			this.agent.continue().catch(err => {
+				this.trace('controller.continue_failed', {
+					sessionId,
+					runId: newRunId,
+					message:
+						err instanceof Error ? err.message : String(err)
+				})
+				this.writeErrorEvent(sessionId, newRunId)
+			})
+		})
+	}
 
 	private processCrossSessionQueue(): void {
 		const next = this.crossSessionQueue.shift()

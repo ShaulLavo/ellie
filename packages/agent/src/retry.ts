@@ -130,6 +130,29 @@ export function abortableSleep(
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Extract retryAfterMs from an error object, if present and valid.
+ */
+function extractRetryAfterMs(
+	err: unknown
+): number | undefined {
+	if (
+		!err ||
+		typeof err !== 'object' ||
+		!('retryAfterMs' in err)
+	) {
+		return undefined
+	}
+	const val = (err as Record<string, unknown>).retryAfterMs
+	return typeof val === 'number' && val > 0
+		? val
+		: undefined
+}
+
+// ============================================================================
 // withRetry
 // ============================================================================
 
@@ -185,24 +208,10 @@ export async function withRetry<T>(
 			}
 
 			// Calculate delay for this retry
-			// Extract retryAfterMs if the error has it
-			let retryAfterMs: number | undefined
-			if (
-				err &&
-				typeof err === 'object' &&
-				'retryAfterMs' in err
-			) {
-				const val = (err as Record<string, unknown>)
-					.retryAfterMs
-				if (typeof val === 'number' && val > 0) {
-					retryAfterMs = val
-				}
-			}
-
 			const delayMs = calculateDelay(
 				attempt,
 				opts,
-				retryAfterMs
+				extractRetryAfterMs(err)
 			)
 
 			// Notify caller of retry

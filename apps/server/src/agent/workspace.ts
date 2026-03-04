@@ -16,6 +16,14 @@ import {
 
 const TEMPLATES_DIR = join(import.meta.dir, 'templates')
 
+function isEexistError(err: unknown): boolean {
+	return (
+		err instanceof Error &&
+		'code' in err &&
+		(err as NodeJS.ErrnoException).code === 'EEXIST'
+	)
+}
+
 const TEMPLATE_FILES = [
 	'AGENTS.md',
 	'SOUL.md',
@@ -48,13 +56,7 @@ export function seedWorkspace(dataDir: string): string {
 			// Use wx flag: fail if file already exists (race-safe)
 			writeFileSync(dest, content, { flag: 'wx' })
 		} catch (err) {
-			if (
-				err instanceof Error &&
-				'code' in err &&
-				(err as NodeJS.ErrnoException).code === 'EEXIST'
-			) {
-				continue // Another process created it — fine
-			}
+			if (isEexistError(err)) continue
 			console.error(
 				`[workspace] failed to seed ${filename}:`,
 				err instanceof Error ? err.message : String(err)

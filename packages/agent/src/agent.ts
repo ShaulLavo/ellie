@@ -320,11 +320,9 @@ export class Agent {
 			msgs = input
 		} else if (typeof input === 'string') {
 			const content: Array<TextContent | ImageContent> = [
-				{ type: 'text', text: input }
+				{ type: 'text', text: input },
+				...(images && images.length > 0 ? images : [])
 			]
-			if (images && images.length > 0) {
-				content.push(...images)
-			}
 			msgs = [
 				{
 					role: 'user',
@@ -445,65 +443,13 @@ export class Agent {
 
 			for await (const event of stream) {
 				eventCount++
-
-				switch (event.type) {
-					case 'message_start':
-						partial = event.message
-						this._state.streamMessage = event.message
-						break
-
-					case 'message_update':
-						partial = event.message
-						this._state.streamMessage = event.message
-						break
-
-					case 'message_end':
-						partial = null
-						this._state.streamMessage = null
-						this.appendMessage(event.message)
-						break
-
-					case 'turn_end':
-						if (
-							event.message.role === 'assistant' &&
-							(event.message as AssistantMessage)
-								.errorMessage
-						) {
-							this._state.error = (
-								event.message as AssistantMessage
-							).errorMessage
-						}
-						break
-
-					case 'agent_end':
-						this._state.isStreaming = false
-						this._state.streamMessage = null
-						break
-				}
-
+				partial = this._applyStreamEvent(event, partial)
 				this.emit(event)
 			}
 
 			// Handle any remaining partial message
-			if (
-				partial &&
-				partial.role === 'assistant' &&
-				(partial as AssistantMessage).content.length > 0
-			) {
-				const assistantPartial = partial as AssistantMessage
-				const hasMeaningfulContent =
-					assistantPartial.content.some(
-						c =>
-							(c.type === 'thinking' &&
-								c.text.trim().length > 0) ||
-							(c.type === 'text' &&
-								c.text.trim().length > 0) ||
-							(c.type === 'toolCall' &&
-								c.name.trim().length > 0)
-					)
-				if (hasMeaningfulContent) {
-					this.appendMessage(partial)
-				}
+			if (partial) {
+				this._commitPartialIfMeaningful(partial)
 			}
 		} catch (err: unknown) {
 			const errorMessage =
@@ -561,6 +507,67 @@ export class Agent {
 			this.resolveRunningPrompt?.()
 			this.runningPrompt = undefined
 			this.resolveRunningPrompt = undefined
+		}
+	}
+
+	/**
+	 * Apply a single stream event to the agent state, returning the updated partial message.
+	 */
+	private _applyStreamEvent(
+		event: AgentEvent,
+		partial: AgentMessage | null
+	): AgentMessage | null {
+		switch (event.type) {
+			case 'message_start':
+			case 'message_update':
+				this._state.streamMessage = event.message
+				return event.message
+
+			case 'message_end':
+				this._state.streamMessage = null
+				this.appendMessage(event.message)
+				return null
+
+			case 'turn_end':
+				if (
+					event.message.role === 'assistant' &&
+					(event.message as AssistantMessage).errorMessage
+				) {
+					this._state.error = (
+						event.message as AssistantMessage
+					).errorMessage
+				}
+				return partial
+
+			case 'agent_end':
+				this._state.isStreaming = false
+				this._state.streamMessage = null
+				return partial
+
+			default:
+				return partial
+		}
+	}
+
+	/**
+	 * If partial is a meaningful assistant message, commit it.
+	 */
+	private _commitPartialIfMeaningful(
+		partial: AgentMessage
+	): void {
+		if (partial.role !== 'assistant') return
+		const content = (partial as AssistantMessage).content
+		if (content.length === 0) return
+
+		const hasMeaningfulContent = content.some(
+			c =>
+				(c.type === 'thinking' &&
+					c.text.trim().length > 0) ||
+				(c.type === 'text' && c.text.trim().length > 0) ||
+				(c.type === 'toolCall' && c.name.trim().length > 0)
+		)
+		if (hasMeaningfulContent) {
+			this.appendMessage(partial)
 		}
 	}
 

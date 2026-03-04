@@ -94,31 +94,44 @@ export class EventStream<
 		this.iterating = true
 		try {
 			while (true) {
-				if (this.readIndex < this.queue.length) {
-					const event = this.queue[this.readIndex++]
-					// Compact when >50% consumed and enough items read
-					if (
-						this.readIndex > 64 &&
-						this.readIndex > this.queue.length / 2
-					) {
-						this.queue = this.queue.slice(this.readIndex)
-						this.readIndex = 0
-					}
-					yield event
-				} else if (this.done) {
-					return
-				} else {
-					const value = await new Promise<
-						IteratorResult<T>
-					>(resolve => {
-						this.resolve = resolve
-					})
-					if (value.done) return
-					yield value.value
+				const next = this.dequeueOrWait()
+				if (next !== undefined) {
+					yield next
+					continue
 				}
+				if (this.done) return
+
+				const value = await new Promise<IteratorResult<T>>(
+					resolve => {
+						this.resolve = resolve
+					}
+				)
+				if (value.done) return
+				yield value.value
 			}
 		} finally {
 			this.iterating = false
 		}
+	}
+
+	/**
+	 * Try to read the next event from the queue. Returns the event
+	 * if available (compacting the queue when needed), or undefined
+	 * if the queue is exhausted.
+	 */
+	private dequeueOrWait(): T | undefined {
+		if (this.readIndex >= this.queue.length)
+			return undefined
+
+		const event = this.queue[this.readIndex++]
+		// Compact when >50% consumed and enough items read
+		if (
+			this.readIndex > 64 &&
+			this.readIndex > this.queue.length / 2
+		) {
+			this.queue = this.queue.slice(this.readIndex)
+			this.readIndex = 0
+		}
+		return event
 	}
 }
