@@ -375,10 +375,6 @@ export class Agent {
 			throw new Error('No adapter configured.')
 		}
 
-		console.log(
-			`[agent] _runLoop starting model=${this._state.model.id} provider=${this._state.model.provider} messageCount=${messages?.length ?? 0} historyLength=${this._state.messages.length} tools=${this._state.tools.length}`
-		)
-
 		this.runningPrompt = new Promise<void>(resolve => {
 			this.resolveRunningPrompt = resolve
 		})
@@ -435,16 +431,11 @@ export class Agent {
 						this.streamFn
 					)
 
-			console.log(`[agent] consuming event stream…`)
-
 			for await (const event of stream) {
 				eventCount++
 
 				switch (event.type) {
 					case 'message_start':
-						console.log(
-							`[agent] event #${eventCount} message_start role=${event.message.role}`
-						)
 						partial = event.message
 						this._state.streamMessage = event.message
 						break
@@ -454,32 +445,13 @@ export class Agent {
 						this._state.streamMessage = event.message
 						break
 
-					case 'message_end': {
-						const endMsg = event.message
-						const role = endMsg.role
-						if (role === 'assistant') {
-							const asst = endMsg as AssistantMessage
-							const textParts = asst.content
-								.filter(c => c.type === 'text')
-								.map(c => ('text' in c ? c.text : ''))
-							console.log(
-								`[agent] event #${eventCount} message_end role=assistant stopReason=${asst.stopReason} errorMessage=${asst.errorMessage ?? 'none'} contentParts=${asst.content.length} text="${textParts.join('').slice(0, 80)}"`
-							)
-						} else {
-							console.log(
-								`[agent] event #${eventCount} message_end role=${role}`
-							)
-						}
+					case 'message_end':
 						partial = null
 						this._state.streamMessage = null
 						this.appendMessage(event.message)
 						break
-					}
 
 					case 'turn_end':
-						console.log(
-							`[agent] event #${eventCount} turn_end role=${event.message.role}`
-						)
 						if (
 							event.message.role === 'assistant' &&
 							(event.message as AssistantMessage)
@@ -492,25 +464,13 @@ export class Agent {
 						break
 
 					case 'agent_end':
-						console.log(
-							`[agent] event #${eventCount} agent_end messages=${event.messages?.length ?? 0}`
-						)
 						this._state.isStreaming = false
 						this._state.streamMessage = null
 						break
-
-					default:
-						console.log(
-							`[agent] event #${eventCount} ${event.type}`
-						)
 				}
 
 				this.emit(event)
 			}
-
-			console.log(
-				`[agent] stream consumed totalEvents=${eventCount}`
-			)
 
 			// Handle any remaining partial message
 			if (
@@ -523,21 +483,14 @@ export class Agent {
 					assistantPartial.content.some(
 						c =>
 							(c.type === 'thinking' &&
-								c.thinking.trim().length > 0) ||
+								c.text.trim().length > 0) ||
 							(c.type === 'text' &&
 								c.text.trim().length > 0) ||
 							(c.type === 'toolCall' &&
 								c.name.trim().length > 0)
 					)
 				if (hasMeaningfulContent) {
-					console.log(
-						`[agent] appending remaining partial assistant message`
-					)
 					this.appendMessage(partial)
-				} else {
-					console.log(
-						`[agent] discarding empty partial assistant message`
-					)
 				}
 			}
 		} catch (err: unknown) {
@@ -549,7 +502,7 @@ export class Agent {
 
 			const errorMsg: AgentMessage = {
 				role: 'assistant',
-				content: [{ type: 'text', text: '' }],
+				content: [{ type: 'text', text: errorMessage }],
 				provider: this._state.model.provider,
 				model: this._state.model.id,
 				usage: {
@@ -573,16 +526,22 @@ export class Agent {
 				timestamp: Date.now()
 			}
 
-			console.error(
-				`[agent] emitting error agent_end stopReason=${errorMsg.stopReason} errorMessage=${errorMessage}`
-			)
 			this.appendMessage(errorMsg)
 			this._state.error = errorMessage
+
+			// Emit message_start + message_end so the error flows through
+			// the normal pipeline: controller dual-writes assistant_final,
+			// SSE publishes it, and the frontend displays it.
+			this.emit({
+				type: 'message_start',
+				message: errorMsg
+			})
+			this.emit({
+				type: 'message_end',
+				message: errorMsg
+			})
 			this.emit({ type: 'agent_end', messages: [errorMsg] })
 		} finally {
-			console.log(
-				`[agent] _runLoop finished totalEvents=${eventCount} error=${this._state.error ?? 'none'}`
-			)
 			this._state.isStreaming = false
 			this._state.streamMessage = null
 			this.abortController = undefined

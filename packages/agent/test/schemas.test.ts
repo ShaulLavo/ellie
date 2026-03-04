@@ -83,7 +83,7 @@ describe('agentMessageSchema', () => {
 		const msg: AssistantMessage = {
 			role: 'assistant',
 			content: [
-				{ type: 'thinking', thinking: 'Let me think...' },
+				{ type: 'thinking', text: 'Let me think...' },
 				{ type: 'text', text: "I'll check the weather" },
 				{
 					type: 'toolCall',

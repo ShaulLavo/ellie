@@ -1,9 +1,4 @@
-import type {
-	Model,
-	Usage,
-	ProviderName,
-	ThinkingLevel
-} from '@ellie/ai'
+import type { Model, ThinkingLevel } from '@ellie/ai'
 import type {
 	ModelMessage,
 	StreamChunk,
@@ -13,76 +8,31 @@ import type {
 import type { GenericSchema, InferOutput } from 'valibot'
 
 // ============================================================================
-// Content blocks
+// Schema-derived types (single source of truth: @ellie/schemas/agent)
 // ============================================================================
 
-export interface TextContent {
-	type: 'text'
-	text: string
-}
+export type {
+	TextContent,
+	ThinkingContent,
+	ImageContent,
+	ToolCall,
+	StopReason,
+	UserMessage,
+	AssistantMessage,
+	ToolResultMessage,
+	AgentMessage,
+	AssistantStreamEvent,
+	AgentEvent
+} from '@ellie/schemas/agent'
 
-export interface ThinkingContent {
-	type: 'thinking'
-	thinking: string
-}
+import type {
+	TextContent,
+	ImageContent,
+	AgentMessage,
+	AgentEvent
+} from '@ellie/schemas/agent'
 
-export interface ImageContent {
-	type: 'image'
-	data: string
-	mimeType: string
-}
-
-export interface ToolCall {
-	type: 'toolCall'
-	id: string
-	name: string
-	arguments: Record<string, unknown>
-}
-
-// ============================================================================
-// Messages
-// ============================================================================
-
-export type StopReason =
-	| 'stop'
-	| 'length'
-	| 'toolUse'
-	| 'error'
-	| 'aborted'
-
-export interface UserMessage {
-	role: 'user'
-	content: (TextContent | ImageContent)[]
-	timestamp: number
-}
-
-export interface AssistantMessage {
-	role: 'assistant'
-	content: (TextContent | ThinkingContent | ToolCall)[]
-	provider: ProviderName
-	model: string
-	usage: Usage
-	stopReason: StopReason
-	errorMessage?: string
-	timestamp: number
-}
-
-export interface ToolResultMessage<TDetails = unknown> {
-	role: 'toolResult'
-	toolCallId: string
-	toolName: string
-	content: (TextContent | ImageContent)[]
-	details?: TDetails
-	isError: boolean
-	timestamp: number
-}
-
-export type Message =
-	| UserMessage
-	| AssistantMessage
-	| ToolResultMessage
-
-export type AgentMessage = Message
+export type Message = AgentMessage
 
 // ============================================================================
 // Tools
@@ -151,115 +101,6 @@ export interface AgentGuardrailPolicy {
 	/** Runtime hard limits for a single run. */
 	runtimeLimits?: AgentRuntimeLimits
 }
-
-// ============================================================================
-// Stream events (assistant message streaming)
-// ============================================================================
-
-export type AssistantStreamEvent =
-	| { type: 'text_start'; contentIndex: number }
-	| {
-			type: 'text_delta'
-			contentIndex: number
-			delta: string
-	  }
-	| { type: 'text_end'; contentIndex: number }
-	| { type: 'thinking_start'; contentIndex: number }
-	| {
-			type: 'thinking_delta'
-			contentIndex: number
-			delta: string
-	  }
-	| { type: 'thinking_end'; contentIndex: number }
-	| { type: 'toolcall_start'; contentIndex: number }
-	| {
-			type: 'toolcall_delta'
-			contentIndex: number
-			delta: string
-	  }
-	| {
-			type: 'toolcall_end'
-			contentIndex: number
-			toolCall: ToolCall
-	  }
-
-// ============================================================================
-// Agent events (lifecycle)
-// ============================================================================
-
-export type AgentEvent =
-	| { type: 'agent_start' }
-	| { type: 'agent_end'; messages: AgentMessage[] }
-	| { type: 'turn_start' }
-	| {
-			type: 'turn_end'
-			message: AgentMessage
-			toolResults: ToolResultMessage[]
-	  }
-	| { type: 'message_start'; message: AgentMessage }
-	| {
-			type: 'message_update'
-			message: AgentMessage
-			streamEvent: AssistantStreamEvent
-	  }
-	| { type: 'message_end'; message: AgentMessage }
-	| {
-			type: 'tool_execution_start'
-			toolCallId: string
-			toolName: string
-			args: unknown
-	  }
-	| {
-			type: 'tool_execution_update'
-			toolCallId: string
-			toolName: string
-			args: unknown
-			partialResult: AgentToolResult
-	  }
-	| {
-			type: 'tool_execution_end'
-			toolCallId: string
-			toolName: string
-			result: AgentToolResult
-			isError: boolean
-	  }
-	// --- Resilience events ---
-	| {
-			type: 'retry'
-			attempt: number
-			maxAttempts: number
-			reason: string
-			delayMs: number
-	  }
-	| {
-			type: 'context_compacted'
-			removedCount: number
-			remainingCount: number
-			estimatedTokens: number
-	  }
-	| {
-			type: 'tool_loop_detected'
-			pattern: string
-			toolName: string
-			message: string
-	  }
-	// --- Guardrail events ---
-	| {
-			type: 'limit_hit'
-			limit:
-				| 'max_wall_clock_ms'
-				| 'max_model_calls'
-				| 'max_cost_usd'
-			threshold: number
-			observed: number
-			usageSnapshot: {
-				elapsedMs: number
-				modelCalls: number
-				costUsd: number
-			}
-			scope: 'run'
-			action: 'hard_stop'
-	  }
 
 // ============================================================================
 // Stream function & loop config

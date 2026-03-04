@@ -273,10 +273,6 @@ export function agentLoop(
 				messages: [...context.messages, ...prompts]
 			}
 
-			console.log(
-				`[agent-loop] agentLoop starting prompts=${prompts.length} contextMessages=${context.messages.length}`
-			)
-
 			emit({ type: 'agent_start' })
 			emit({ type: 'turn_start' })
 
@@ -589,9 +585,6 @@ function wrapToolsForTanStack(
 				maxToolResultChars &&
 				needsTruncation(result, maxToolResultChars)
 			) {
-				console.log(
-					`[agent-loop] truncating tool result for "${tool.name}" (exceeded ${maxToolResultChars} chars)`
-				)
 				result = truncateToolResult(
 					result,
 					maxToolResultChars
@@ -635,10 +628,15 @@ function wrapToolsForTanStack(
 				message: toolResultMessage
 			})
 
-			// Return text for TanStack's conversation history
-			return result.content
+			// Return as object for TanStack's conversation history.
+			// IMPORTANT: Must NOT return a plain string — TanStack's
+			// executeToolCalls() does JSON.parse() on string returns,
+			// which would fail on non-JSON tool output (e.g. shell text).
+			// Returning an object bypasses the JSON.parse path entirely.
+			const textResult = result.content
 				.map(c => (c.type === 'text' ? c.text : ''))
 				.join('')
+			return { output: textResult }
 		}
 	}))
 }
@@ -726,9 +724,6 @@ async function runLoop(
 		// Process assistant response (with retry on transient errors)
 		// With chat(): TanStack handles tool loop internally via maxIterations.
 		// With streamFn: we must handle tool execution + re-call manually.
-		console.log(
-			`[agent-loop] runLoop calling processAgentStreamWithRetry contextMessages=${currentContext.messages.length}`
-		)
 		let result = await processAgentStreamWithRetry(
 			currentContext,
 			config,
@@ -737,10 +732,6 @@ async function runLoop(
 			streamFn,
 			loopDetector,
 			guardrailState
-		)
-
-		console.log(
-			`[agent-loop] processAgentStreamWithRetry returned messages=${result.messages.length} abortedOrError=${result.abortedOrError} stopReason=${result.lastAssistant.stopReason} errorMessage=${result.lastAssistant.errorMessage ?? 'none'}`
 		)
 
 		// Collect messages from this iteration
@@ -1120,9 +1111,6 @@ async function executeToolCall(
 		maxToolResultChars &&
 		needsTruncation(result, maxToolResultChars)
 	) {
-		console.log(
-			`[agent-loop] truncating tool result for "${toolCall.name}" (exceeded ${maxToolResultChars} chars)`
-		)
 		result = truncateToolResult(result, maxToolResultChars)
 	}
 
@@ -1284,10 +1272,6 @@ async function processAgentStreamWithRetry(
 				new Error(errorMessage)
 			)
 
-			console.log(
-				`[agent-loop] error classified: class=${classified.errorClass} retryable=${classified.retryable} requiresRecovery=${classified.requiresRecovery} message="${errorMessage.slice(0, 100)}"`
-			)
-
 			// Not retryable — return the error result as-is
 			if (!isRetryable(classified)) {
 				lastResult = processResult
@@ -1342,9 +1326,6 @@ async function processAgentStreamWithRetry(
 						remainingCount: recoveryResult.messages.length,
 						estimatedTokens: recoveryResult.estimatedTokens
 					})
-					console.log(
-						`[agent-loop] context compacted: removed=${recoveryResult.removedCount} remaining=${recoveryResult.messages.length} estimatedTokens=${recoveryResult.estimatedTokens}`
-					)
 				}
 			}
 
@@ -1373,9 +1354,6 @@ async function processAgentStreamWithRetry(
 					err instanceof Error
 						? err.message.slice(0, 200)
 						: String(err)
-				console.log(
-					`[agent-loop] retrying LLM call: attempt=${attempt}/${maxAttempts} delay=${delayMs}ms reason="${reason}"`
-				)
 				emit({
 					type: 'retry',
 					attempt,
@@ -1526,10 +1504,6 @@ async function processAgentStream(
 	const toolCallIndexMap = new Map<string, number>()
 	let chunkCount = 0
 
-	console.log(
-		`[agent-loop] processAgentStream starting model=${config.model.id} llmMessages=${llmMessages.length} tools=${tanStackTools ? 'yes' : 'no'} streamFn=${streamFn ? 'custom' : 'tanstack'}`
-	)
-
 	try {
 		for await (const chunk of streamSource) {
 			chunkCount++
@@ -1542,14 +1516,16 @@ async function processAgentStream(
 			// Detect new LLM turn: RUN_STARTED after a previous turn completed
 			// This happens when TanStack re-calls the LLM after tool execution
 			if (chunk.type === 'RUN_STARTED' && turnCount > 0) {
-				// Finalize previous assistant message
-				finalizePartial(
-					partial,
-					emittedStart,
-					context,
-					allMessages,
-					emit
-				)
+				// Only finalize if the previous partial has meaningful content
+				if (emittedStart || partial.content.length > 0) {
+					finalizePartial(
+						partial,
+						emittedStart,
+						context,
+						allMessages,
+						emit
+					)
+				}
 				// Start fresh partial for new turn
 				partial = createPartial(config)
 				emittedStart = false
@@ -1622,10 +1598,6 @@ async function processAgentStream(
 		cleanupAbortListener?.()
 	}
 
-	console.log(
-		`[agent-loop] processAgentStream finalizing after ${chunkCount} chunks, emittedStart=${emittedStart} contentParts=${partial.content.length} stopReason=${partial.stopReason} errorMessage=${partial.errorMessage ?? 'none'}`
-	)
-
 	// Detect empty response — model returned no content (likely a failed
 	// tool-use attempt when no tools are defined in the API request).
 	// Mark as error so the caller/client sees a meaningful failure.
@@ -1682,13 +1654,11 @@ function finalizePartial(
 	allMessages: AgentMessage[],
 	emit: EmitFn
 ): void {
-	const textParts = partial.content
-		.filter(c => c.type === 'text')
-		.map(c => ('text' in c ? c.text : ''))
-	const textPreview = textParts.join('').slice(0, 80)
-
-	console.log(
-		`[agent-loop] finalizePartial emittedStart=${emittedStart} contentParts=${partial.content.length} stopReason=${partial.stopReason} errorMessage=${partial.errorMessage ?? 'none'} text="${textPreview}"`
+	// Strip empty thinking blocks (created by STEP_STARTED but never populated)
+	partial.content = partial.content.filter(
+		c =>
+			c.type !== 'thinking' ||
+			(c.type === 'thinking' && c.text.trim().length > 0)
 	)
 
 	if (!emittedStart) {
@@ -1779,7 +1749,7 @@ function processChunk(
 			const thinkIdx = partial.content.length
 			partial.content.push({
 				type: 'thinking',
-				thinking: ''
+				text: ''
 			})
 			emitUpdate(emit, partial, {
 				type: 'thinking_start',
@@ -1796,7 +1766,7 @@ function processChunk(
 				lastThinking &&
 				lastThinking.type === 'thinking'
 			) {
-				lastThinking.thinking += chunk.delta
+				lastThinking.text += chunk.delta
 				const idx =
 					partial.content.lastIndexOf(lastThinking)
 				emitUpdate(emit, partial, {
@@ -1882,6 +1852,9 @@ function processChunk(
 						try {
 							tc.arguments = JSON.parse(finalJson)
 						} catch {
+							console.warn(
+								`[agent-loop] TOOL_CALL_END: failed to parse args JSON for ${tc.name}, toolCallId=${chunk.toolCallId}: "${finalJson.slice(0, 200)}"`
+							)
 							tc.arguments = {}
 						}
 					}
