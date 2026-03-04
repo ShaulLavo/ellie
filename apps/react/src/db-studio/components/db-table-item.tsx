@@ -29,17 +29,12 @@ export function DbTableItem({
 	return (
 		<Tooltip>
 			<TooltipTrigger
-				render={
-					<button
-						type="button"
-						onClick={onClick}
-						className={cn(
-							'flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-xs hover:bg-sidebar-accent transition-colors',
-							isActive &&
-								'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-						)}
-					/>
-				}
+				onClick={onClick}
+				className={cn(
+					'flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-xs hover:bg-sidebar-accent transition-colors',
+					isActive &&
+						'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+				)}
 			>
 				<Icon className="size-3 text-muted-foreground shrink-0" />
 				<span className="truncate">{table.name}</span>

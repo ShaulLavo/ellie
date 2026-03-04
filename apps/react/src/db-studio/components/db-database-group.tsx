@@ -30,15 +30,10 @@ export function DbDatabaseGroup({
 	return (
 		<Collapsible defaultOpen={isSelected || undefined}>
 			<CollapsibleTrigger
-				render={
-					<button
-						type="button"
-						className={cn(
-							'flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm hover:bg-sidebar-accent transition-colors group',
-							isSelected && 'bg-sidebar-accent/50'
-						)}
-					/>
-				}
+				className={cn(
+					'flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm hover:bg-sidebar-accent transition-colors group',
+					isSelected && 'bg-sidebar-accent/50'
+				)}
 			>
 				<ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[open]:rotate-90" />
 				<Database className="size-3.5 text-muted-foreground shrink-0" />
