@@ -752,12 +752,17 @@ export class AgentController {
 				]
 
 				// Dual-write: also persist as assistant_final for backward compat
-				// Skip empty assistant messages (artifacts from multi-turn finalization)
-				if (
+				// Skip truly empty assistant messages (artifacts from multi-turn finalization)
+				// but always emit for error/aborted so the client sees the failure
+				const hasContent =
 					msg.role === 'assistant' &&
 					Array.isArray(msg.content) &&
 					msg.content.length > 0
-				) {
+				const isErrorOrAborted =
+					msg.role === 'assistant' &&
+					(msg.stopReason === 'error' ||
+						msg.stopReason === 'aborted')
+				if (hasContent || isErrorOrAborted) {
 					rows.push({
 						type: 'assistant_final',
 						payload: msg

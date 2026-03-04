@@ -86,6 +86,13 @@ function eventToStored(row: EventRow): StoredChatMessage {
 	) {
 		// Memory events carry their parts directly in the payload
 		parts = (parsed.parts as ContentPart[]) ?? []
+	} else if (row.type === 'error') {
+		// Error events carry message in payload.message
+		const errorText =
+			typeof parsed.message === 'string'
+				? parsed.message
+				: 'An unexpected error occurred'
+		parts = [{ type: 'text', text: errorText }]
 	} else {
 		// Standard message events: extract parts from content or parts array
 		const content =
@@ -140,6 +147,8 @@ function eventToStored(row: EventRow): StoredChatMessage {
 		sender = 'agent'
 	} else if (parsed.role === 'system') {
 		sender = 'system'
+	} else if (row.type === 'error') {
+		sender = 'agent'
 	} else if (row.type.startsWith('tool_')) {
 		sender = 'agent'
 	} else if (row.type.startsWith('memory_')) {
@@ -392,7 +401,8 @@ export function useChatDB(sessionId: string) {
 					'tool_call',
 					'tool_result',
 					'memory_recall',
-					'memory_retain'
+					'memory_retain',
+					'error'
 				]
 				if (!renderableTypes.includes(event.type)) return
 

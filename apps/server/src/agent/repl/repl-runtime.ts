@@ -333,6 +333,12 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 				this.#reader.releaseLock()
 				this.#reader = null
 			}
+		} catch {
+			// Reader already released or stream closed
+			this.#reader = null
+		}
+
+		try {
 			this.#proc.kill()
 		} catch {
 			// Already dead
@@ -449,7 +455,14 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 			])
 
 			if ('timeout' in result) {
-				// Timeout (setTimeout fired)
+				// Timeout — release the reader to discard the pending read
+				// so subsequent evaluate() calls get a fresh reader
+				try {
+					this.#reader?.releaseLock()
+				} catch {
+					// Pending read rejects on releaseLock — expected
+				}
+				this.#reader = null
 				break
 			}
 

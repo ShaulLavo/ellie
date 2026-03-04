@@ -1662,7 +1662,12 @@ function finalizePartial(
 	)
 
 	// After stripping, skip if there's no meaningful content
-	if (!emittedStart && partial.content.length === 0) {
+	// (but always persist error/aborted partials so the client sees the error)
+	const hasContent = partial.content.length > 0
+	const isErrorOrAborted =
+		partial.stopReason === 'error' ||
+		partial.stopReason === 'aborted'
+	if (!emittedStart && !hasContent && !isErrorOrAborted) {
 		return
 	}
 
