@@ -11,7 +11,7 @@ import {
 	type ThinkingLevel
 } from '@ellie/ai'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import { agentLoop, agentLoopContinue } from './agent-loop'
+import { agentLoop, agentLoopContinue } from './loop'
 import type {
 	AgentContext,
 	AgentEvent,

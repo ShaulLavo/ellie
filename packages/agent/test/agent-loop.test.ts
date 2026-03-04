@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	agentLoop,
-	agentLoopContinue
-} from '../src/agent-loop'
+import { agentLoop, agentLoopContinue } from '../src/loop'
 import type {
 	AgentContext,
 	AgentEvent,

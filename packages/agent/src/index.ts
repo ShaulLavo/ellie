@@ -3,7 +3,7 @@ export { Agent } from './agent'
 export type { AgentOptions } from './agent'
 
 // Loop functions
-export { agentLoop, agentLoopContinue } from './agent-loop'
+export { agentLoop, agentLoopContinue } from './loop'
 
 // Event stream
 export { EventStream } from './event-stream'
