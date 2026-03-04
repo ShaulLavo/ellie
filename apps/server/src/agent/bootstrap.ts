@@ -2,12 +2,9 @@
  * Bootstrap — ensures the synthetic BOOTSTRAP.md tool-read is injected
  * exactly once per workspace lifetime.
  *
- * On first ever message, injects two synthetic events into the session:
- *   1. tool_call  — assistant requests read_workspace_file(BOOTSTRAP.md)
- *   2. tool_result — contains the BOOTSTRAP.md content
- *
- * These events use dedupeKeys to guarantee exactly-once semantics.
- * The bootstrap state in DB tracks whether injection has occurred
+ * On first ever message, injects a single completed tool_execution event
+ * containing the BOOTSTRAP.md content. Uses a dedupeKey for exactly-once
+ * semantics. The bootstrap state in DB tracks whether injection has occurred
  * globally (not per-session).
  */
 
@@ -56,38 +53,29 @@ export function ensureBootstrapInjected(opts: {
 	}
 
 	try {
-		// 1. Append synthetic tool_call event
+		// Append a single completed tool_execution event
 		store.appendEvent(
 			sessionId,
-			'tool_call',
+			'tool_execution',
 			{
-				id: 'bootstrap-read-v1',
-				name: 'read_workspace_file',
-				arguments: { path: 'BOOTSTRAP.md' }
-			},
-			undefined, // no runId — synthetic
-			'bootstrap:v1:tool_call'
-		)
-
-		// 2. Append synthetic tool_result event
-		store.appendEvent(
-			sessionId,
-			'tool_result',
-			{
-				role: 'toolResult',
 				toolCallId: 'bootstrap-read-v1',
 				toolName: 'read_workspace_file',
-				content: [{ type: 'text', text: bootstrapContent }],
-				details: {
-					synthetic: true,
-					bootstrap: true,
-					path: 'BOOTSTRAP.md'
+				args: { path: 'BOOTSTRAP.md' },
+				result: {
+					content: [
+						{ type: 'text', text: bootstrapContent }
+					],
+					details: {
+						synthetic: true,
+						bootstrap: true,
+						path: 'BOOTSTRAP.md'
+					}
 				},
 				isError: false,
-				timestamp: Date.now()
+				status: 'complete'
 			},
 			undefined, // no runId — synthetic
-			'bootstrap:v1:tool_result'
+			'bootstrap:v2:tool_execution'
 		)
 
 		return true

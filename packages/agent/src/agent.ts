@@ -488,7 +488,7 @@ export class Agent {
 			this._state.error = errorMessage
 
 			// Emit message_start + message_end so the error flows through
-			// the normal pipeline: controller dual-writes assistant_final,
+			// the normal pipeline: controller persists assistant_message,
 			// SSE publishes it, and the frontend displays it.
 			this.emit({
 				type: 'message_start',

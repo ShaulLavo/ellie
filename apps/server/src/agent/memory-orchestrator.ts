@@ -8,7 +8,7 @@
  *      unprocessed transcript events and store them as memories.
  *
  * Memory operations emit first-class `memory_recall` / `memory_retain`
- * events — never synthetic tool_call/tool_result.
+ * events — never synthetic tool_execution rows.
  */
 
 import type {
@@ -453,11 +453,11 @@ export class MemoryOrchestrator {
 		}
 		if (minCursor === Infinity) minCursor = 0
 
-		// Query unprocessed events
+		// Query unprocessed events (unified types only)
 		const rows = this.eventStore.query({
 			sessionId,
 			afterSeq: minCursor,
-			types: ['user_message', 'assistant_final']
+			types: ['user_message', 'assistant_message']
 		})
 
 		return rows
@@ -502,17 +502,35 @@ function rowToTranscriptTurn(row: {
 	seq: number
 }): TranscriptTurn | null {
 	try {
-		const parsed = JSON.parse(row.payload) as {
-			role?: string
-			content?:
-				| string
-				| Array<{ type: string; text?: string }>
+		const parsed = JSON.parse(row.payload) as Record<
+			string,
+			unknown
+		>
+
+		if (row.type === 'assistant_message') {
+			// Skip in-flight streaming messages
+			if (parsed.streaming === true) return null
+			const msg = parsed.message as {
+				content?:
+					| string
+					| Array<{ type: string; text?: string }>
+			}
+			return {
+				role: 'assistant',
+				content: extractTextContent(msg?.content),
+				seq: row.seq
+			}
 		}
-		const role =
-			row.type === 'user_message' ? 'user' : 'assistant'
+
+		// user_message
 		return {
-			role: role as 'user' | 'assistant',
-			content: extractTextContent(parsed.content),
+			role: 'user',
+			content: extractTextContent(
+				parsed.content as
+					| string
+					| Array<{ type: string; text?: string }>
+					| undefined
+			),
 			seq: row.seq
 		}
 	} catch {

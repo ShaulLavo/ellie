@@ -1,21 +1,11 @@
 /**
  * Agent controller — single persistent agent with session binding.
  *
- * Maintains a single Agent instance that is bound to the active session.
- * When a message arrives for a different session while idle, the agent
- * rebinds by loading that session's history and updating the prompt bundle.
- * When busy, cross-session messages are queued and processed FIFO after
- * the current run completes.
- *
- * Message routing within a bound session:
- *   - Agent idle  → prompt() starts a new run
- *   - Agent busy  → followUp() queues for automatic pickup by the agent loop
- *   - On agent_end with orphaned follow-ups → continue() re-enters the loop
- *
- * Tool surface:
- *   - basicDirectTools: shell, search, workspace read/write
- *   - exec: one-shot isolated code execution
- *   - session_exec: persistent REPL session execution
+ * Orchestration facade: manages locking, session binding, message routing,
+ * and agent lifecycle. Delegates to:
+ *   - controller-stream-persistence: unified INSERT/UPDATE for streaming rows
+ *   - controller-event-mapper: pure mapping for non-streaming events
+ *   - controller-memory: recall, retain, and enforcement logic
  */
 
 import {
@@ -25,8 +15,6 @@ import {
 	type AgentMessage
 } from '@ellie/agent'
 import type { EventType, EventPayloadMap } from '@ellie/db'
-import type { TypedEvent } from '@ellie/schemas/events'
-import type { AssistantMessage } from '@ellie/schemas'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../lib/realtime-store'
@@ -34,6 +22,19 @@ import { buildSystemPrompt } from './system-prompt'
 import type { MemoryOrchestrator } from './memory-orchestrator'
 import { createToolRegistry } from './tools/capability-registry'
 import { createMemoryAppendDailyTool } from './tools/memory-daily'
+import { mapAgentEventToDb } from './controller-event-mapper'
+import {
+	runRecall,
+	runRetain,
+	runRetainAndEnforce,
+	type MemoryDeps
+} from './controller-memory'
+import {
+	handleStreamingEvent,
+	createStreamState,
+	resetStreamState,
+	type StreamPersistenceDeps
+} from './controller-stream-persistence'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
@@ -70,10 +71,8 @@ export class AgentController {
 	/** Set of runIds that are enforcement turns (skip re-enforcement) */
 	private enforcementRunIds = new Set<string>()
 
-	/** Row ID of the in-flight assistant_message being streamed */
-	private currentMessageRowId: number | null = null
-	/** Map of toolCallId → row ID for in-flight tool_execution rows */
-	private currentToolRowIds = new Map<string, number>()
+	/** Streaming row state (owned here, passed to stream-persistence) */
+	private streamState = createStreamState()
 
 	/** Global lock — serialises all routing decisions */
 	private lock: Promise<void> = Promise.resolve()
@@ -154,35 +153,20 @@ export class AgentController {
 
 	// ── Session binding ─────────────────────────────────────────────────────
 
-	/**
-	 * Bind the agent to a session by loading its history and
-	 * updating the system prompt.
-	 */
 	private bindToSession(sessionId: string): void {
 		this.store.ensureSession(sessionId)
-
 		const history = this.loadHistory(sessionId)
-
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
 		this.boundSessionId = sessionId
 	}
 
-	/**
-	 * Ensure the agent is bound to the given session and
-	 * has its history loaded. Called when the agent is idle.
-	 *
-	 * Returns true when history was loaded from DB and the agent
-	 * already has the user message in state (caller should use
-	 * continue() instead of prompt() to avoid duplication).
-	 */
 	private ensureBinding(sessionId: string): boolean {
 		if (this.boundSessionId !== sessionId) {
 			this.bindToSession(sessionId)
 			return this.agent.state.messages.length > 0
 		}
 		if (this.agent.state.messages.length === 0) {
-			// First message on this binding — load history
 			const history = this.loadHistory(sessionId)
 			if (history.length > 0) {
 				this.agent.replaceMessages(history)
@@ -194,17 +178,6 @@ export class AgentController {
 
 	// ── Message routing (core) ───────────────────────────────────────────────
 
-	/**
-	 * Route a user message to the agent.
-	 *
-	 * Same-session routing:
-	 *   - Agent idle → prompt()
-	 *   - Agent busy → followUp()
-	 *
-	 * Cross-session routing:
-	 *   - Agent idle → rebind + prompt()
-	 *   - Agent busy → queue for later processing
-	 */
 	async handleMessage(
 		sessionId: string,
 		text: string,
@@ -219,9 +192,9 @@ export class AgentController {
 		let routed: 'prompt' | 'followUp' | 'queued' = 'prompt'
 
 		await this.withLock(async () => {
+			// Agent busy — queue as follow-up or cross-session
 			if (this.agent.state.isStreaming) {
 				if (this.boundSessionId === sessionId) {
-					// Same session, agent busy — queue as follow-up
 					this.agent.followUp({
 						role: 'user',
 						content: [{ type: 'text', text }],
@@ -229,7 +202,6 @@ export class AgentController {
 					})
 					routed = 'followUp'
 				} else {
-					// Different session, agent busy — queue for later
 					this.crossSessionQueue.push({
 						sessionId,
 						text,
@@ -266,12 +238,15 @@ export class AgentController {
 				}
 			}
 
-			// Run memory recall before prompting (non-blocking on failure)
-			await this.runRecall(sessionId, text, runId)
+			// Run memory recall before prompting
+			await runRecall(
+				this.memoryDeps,
+				sessionId,
+				text,
+				runId
+			)
 
 			if (historyLoaded) {
-				// History was loaded from DB — the user message is already
-				// in the agent's state. Use continue() to avoid duplicating it.
 				this.agent.continue().catch(err => {
 					this.trace('controller.continue_failed', {
 						sessionId,
@@ -284,7 +259,6 @@ export class AgentController {
 					this.writeErrorEvent(sessionId, runId)
 				})
 			} else {
-				// No history loaded — add the user message via prompt()
 				this.agent.prompt(text).catch(err => {
 					this.trace('controller.prompt_failed', {
 						sessionId,
@@ -304,16 +278,12 @@ export class AgentController {
 
 	// ── Control passthrough ──────────────────────────────────────────────────
 
-	/**
-	 * Queue a steering message for the running agent.
-	 */
 	steer(sessionId: string, text: string): void {
 		if (this.boundSessionId !== sessionId) {
 			throw new Error(
 				`Agent not bound to session ${sessionId}`
 			)
 		}
-
 		this.agent.steer({
 			role: 'user',
 			content: [{ type: 'text', text }],
@@ -321,9 +291,6 @@ export class AgentController {
 		})
 	}
 
-	/**
-	 * Abort the running agent prompt.
-	 */
 	abort(sessionId: string): void {
 		if (this.boundSessionId !== sessionId) {
 			throw new Error(
@@ -335,207 +302,40 @@ export class AgentController {
 
 	// ── Queries ──────────────────────────────────────────────────────────────
 
-	/**
-	 * Load conversation history from persisted events.
-	 *
-	 * The DB store returns `AgentMessage` from `@ellie/schemas` (where
-	 * `provider` is `string`), but the Agent runtime expects `@ellie/agent`'s
-	 * `AgentMessage` (where `provider` is `ProviderName`).  The data is
-	 * structurally compatible — the DB just stores wider types — so a cast
-	 * at this boundary is safe.
-	 */
 	loadHistory(sessionId: string): AgentMessage[] {
 		return this.store.listAgentMessages(
 			sessionId
 		) as AgentMessage[]
 	}
 
-	/**
-	 * Check if a session exists.
-	 */
 	hasSession(sessionId: string): boolean {
 		return this.store.hasSession(sessionId)
 	}
 
-	// ── Internal: memory integration ────────────────────────────────────────
+	// ── Internal: dependency bundles for extracted modules ────────────────────
 
-	/**
-	 * Run memory recall and inject context into the system prompt.
-	 * If recall fails, log the error and proceed without memory context.
-	 */
-	private async runRecall(
-		sessionId: string,
-		query: string,
-		runId: string
-	): Promise<void> {
-		if (!this.memory) return
-
-		try {
-			const result = await this.memory.recall(query)
-			if (!result) return
-
-			// Emit memory_recall event
-			this.store.appendEvent(
-				sessionId,
-				'memory_recall',
-				result.payload as EventPayloadMap['memory_recall'],
-				runId
-			)
-
-			// Inject recall context into the system prompt for this run
-			if (result.contextBlock) {
-				this.agent.state.systemPrompt =
-					this.baseSystemPrompt +
-					'\n\n' +
-					result.contextBlock
-			}
-		} catch (err) {
-			this.trace('controller.memory_recall_failed', {
-				sessionId,
-				runId,
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
-			try {
-				this.store.appendEvent(
-					sessionId,
-					'error',
-					{
-						message: `Memory recall failed: ${err instanceof Error ? err.message : String(err)}`,
-						code: 'memory_recall_failed'
-					},
-					runId
-				)
-			} catch {
-				// Best-effort error event
-			}
+	private get memoryDeps(): MemoryDeps {
+		return {
+			store: this.store,
+			memory: this.memory,
+			agent: this.agent,
+			baseSystemPrompt: this.baseSystemPrompt,
+			enforcementRunIds: this.enforcementRunIds,
+			trace: (type, payload) => this.trace(type, payload),
+			withLock: fn => this.withLock(fn),
+			getBoundSessionId: () => this.boundSessionId
 		}
 	}
 
-	/**
-	 * Evaluate and run memory retain after an agent run completes.
-	 * Does not block or affect the agent response.
-	 */
-	private async runRetain(
-		sessionId: string,
-		runId: string,
-		force?: boolean
-	): Promise<number> {
-		if (!this.memory) return 0
-
-		try {
-			const result = await this.memory.evaluateRetain(
-				sessionId,
-				force
-			)
-			if (!result) return 0
-
-			// Emit memory_retain event
-			this.store.appendEvent(
-				sessionId,
-				'memory_retain',
-				result as EventPayloadMap['memory_retain'],
-				runId
-			)
-
-			return result.parts[0]?.factsStored ?? 0
-		} catch (err) {
-			this.trace('controller.memory_retain_failed', {
-				sessionId,
-				runId,
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
-			// Retain failure is non-fatal — cursor stays put for next attempt
-			return 0
+	private get streamDeps(): StreamPersistenceDeps {
+		return {
+			store: this.store,
+			trace: (type, payload) => this.trace(type, payload)
 		}
-	}
-
-	/**
-	 * Run retain and enforce daily memory write if retain found facts
-	 * but the agent didn't call memory_append_daily during this run.
-	 */
-	private async runRetainAndEnforce(
-		sessionId: string,
-		runId: string
-	): Promise<void> {
-		const factsStored = await this.runRetain(
-			sessionId,
-			runId
-		)
-		if (factsStored === 0) return
-
-		// Check if the run contained a memory_append_daily call
-		const runEvents = this.store.queryRunEvents(
-			sessionId,
-			runId
-		)
-
-		// Check for a successful memory_append_daily call.
-		// We check both new (tool_execution) and legacy (tool_execution_end / tool_result) types.
-		const hadDailyWrite = runEvents.some(e => {
-			if (e.type === 'tool_execution') {
-				try {
-					const parsed = JSON.parse(e.payload)
-					return (
-						parsed.toolName === 'memory_append_daily' &&
-						parsed.status === 'complete' &&
-						!parsed.isError
-					)
-				} catch {
-					return false
-				}
-			}
-			if (
-				e.type !== 'tool_execution_end' &&
-				e.type !== 'tool_result'
-			)
-				return false
-			try {
-				const parsed = JSON.parse(e.payload)
-				const nameMatch =
-					parsed.toolName === 'memory_append_daily' ||
-					parsed.name === 'memory_append_daily'
-				return nameMatch && !parsed.isError
-			} catch {
-				return false
-			}
-		})
-
-		if (hadDailyWrite) return
-
-		// Enforcement: trigger a silent follow-up turn
-		await this.withLock(async () => {
-			if (this.agent.state.isStreaming) return
-			if (this.boundSessionId !== sessionId) return
-
-			const enforcementRunId = ulid()
-			this.enforcementRunIds.add(enforcementRunId)
-			this.agent.runId = enforcementRunId
-
-			this.agent
-				.prompt(
-					'[SYSTEM] The retain pipeline just stored new facts from this conversation. ' +
-						'You MUST call memory_append_daily now to persist any durable facts ' +
-						'to daily memory. If there is nothing meaningful to persist, ' +
-						'respond with exactly NO_REPLY and nothing else.'
-				)
-				.catch(err => {
-					this.trace('controller.enforcement_failed', {
-						sessionId,
-						runId: enforcementRunId,
-						message:
-							err instanceof Error
-								? err.message
-								: String(err)
-					})
-				})
-		})
 	}
 
 	// ── Internal: trace helper ──────────────────────────────────────────────
 
-	/** Tier 2 trace — JSONL + ephemeral SSE, no SQLite. Best-effort. */
 	private trace(
 		type: string,
 		payload: Record<string, unknown>
@@ -559,7 +359,6 @@ export class AgentController {
 	private handleEvent(event: AgentEvent): void {
 		const sessionId = this.boundSessionId
 		if (!sessionId) {
-			// Can't use this.trace() here — no sessionId to log against
 			console.warn(
 				`[agent-controller] event received without bound session type=${event.type} — not persisted`
 			)
@@ -567,211 +366,35 @@ export class AgentController {
 		}
 
 		const runId = this.agent.runId
-
-		// ── Unified streaming: assistant_message (single row, INSERT then UPDATE) ──
-
-		if (event.type === 'message_start') {
-			if (!runId) return
-			if (this.enforcementRunIds.has(runId)) return
-			// Only persist assistant messages — the agent loop also emits
-			// message_start for user/toolResult prompts which are already
-			// handled separately (user_message events).
-			if (event.message.role !== 'assistant') return
-			try {
-				const row = this.store.appendEvent(
-					sessionId,
-					'assistant_message',
-					{
-						message: event.message as AssistantMessage,
-						streaming: true
-					},
-					runId
-				)
-				this.currentMessageRowId = row.id
-			} catch (err) {
-				this.trace('controller.persist_failed', {
-					sessionId,
-					runId,
-					dbType: 'assistant_message',
-					message:
-						err instanceof Error ? err.message : String(err)
-				})
-			}
-			return
-		}
-
-		if (event.type === 'message_update') {
-			if (runId && this.enforcementRunIds.has(runId)) return
-			if (event.message.role !== 'assistant') return
-			if (!this.currentMessageRowId) return
-			try {
-				this.store.updateEvent(
-					this.currentMessageRowId,
-					{
-						message: event.message as AssistantMessage,
-						streaming: true
-					},
-					sessionId
-				)
-			} catch (err) {
-				this.trace('controller.update_failed', {
-					sessionId,
-					runId,
-					dbType: 'assistant_message',
-					message:
-						err instanceof Error ? err.message : String(err)
-				})
-			}
-			return
-		}
-
-		if (event.type === 'message_end') {
-			if (!runId) return
-			if (this.enforcementRunIds.has(runId)) return
-			// Only finalize assistant messages — toolResult message_end events
-			// must not overwrite the assistant_message row.
-			if (event.message.role !== 'assistant') return
-			if (this.currentMessageRowId) {
-				try {
-					this.store.updateEvent(
-						this.currentMessageRowId,
-						{
-							message: event.message as AssistantMessage,
-							streaming: false
-						},
-						sessionId
-					)
-				} catch (err) {
-					this.trace('controller.update_failed', {
-						sessionId,
-						runId,
-						dbType: 'assistant_message',
-						message:
-							err instanceof Error
-								? err.message
-								: String(err)
-					})
-				}
-				this.currentMessageRowId = null
-			}
-			return
-		}
-
-		// ── Unified streaming: tool_execution (single row, INSERT then UPDATE) ──
-
-		if (event.type === 'tool_execution_start') {
-			if (!runId) return
-			if (this.enforcementRunIds.has(runId)) return
-			try {
-				const row = this.store.appendEvent(
-					sessionId,
-					'tool_execution',
-					{
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						args: event.args,
-						status: 'running' as const
-					},
-					runId
-				)
-				this.currentToolRowIds.set(event.toolCallId, row.id)
-			} catch (err) {
-				this.trace('controller.persist_failed', {
-					sessionId,
-					runId,
-					dbType: 'tool_execution',
-					message:
-						err instanceof Error ? err.message : String(err)
-				})
-			}
-			return
-		}
-
-		if (event.type === 'tool_execution_update') {
-			if (!runId) return
-			if (this.enforcementRunIds.has(runId)) return
-			const rowId = this.currentToolRowIds.get(
-				event.toolCallId
-			)
-			if (!rowId) return
-			try {
-				this.store.updateEvent(
-					rowId,
-					{
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						args: event.args,
-						result: event.partialResult,
-						status: 'running' as const
-					},
-					sessionId
-				)
-			} catch (err) {
-				this.trace('controller.update_failed', {
-					sessionId,
-					runId,
-					dbType: 'tool_execution',
-					message:
-						err instanceof Error ? err.message : String(err)
-				})
-			}
-			return
-		}
-
-		if (event.type === 'tool_execution_end') {
-			if (!runId) return
-			if (this.enforcementRunIds.has(runId)) return
-			const rowId = this.currentToolRowIds.get(
-				event.toolCallId
-			)
-			if (rowId) {
-				try {
-					this.store.updateEvent(
-						rowId,
-						{
-							toolCallId: event.toolCallId,
-							toolName: event.toolName,
-							result: event.result,
-							isError: event.isError,
-							status: event.isError
-								? ('error' as const)
-								: ('complete' as const)
-						},
-						sessionId
-					)
-				} catch (err) {
-					this.trace('controller.update_failed', {
-						sessionId,
-						runId,
-						dbType: 'tool_execution',
-						message:
-							err instanceof Error
-								? err.message
-								: String(err)
-					})
-				}
-				this.currentToolRowIds.delete(event.toolCallId)
-			}
-			return
-		}
-
-		// ── All other events: legacy append path ──
-
 		if (!runId) {
-			this.trace('controller.event_no_runid', {
-				sessionId,
-				eventType: event.type
-			})
+			// agent_end can arrive without a runId after cleanup
+			if (event.type !== 'agent_end') {
+				this.trace('controller.event_no_runid', {
+					sessionId,
+					eventType: event.type
+				})
+			}
 			return
 		}
 
-		// Enforcement runs are silent — skip DB writes and SSE for all events
-		// except agent_end (needed to trigger cleanup / queue processing)
+		// Enforcement runs are silent — skip everything except agent_end
 		const isEnforcement = this.enforcementRunIds.has(runId)
 		if (isEnforcement && event.type !== 'agent_end') return
 
-		// Map remaining AgentEvents to DB rows and persist.
-		const rows = this.mapEventToDb(event)
+		// 1. Try streaming persistence (assistant_message, tool_execution)
+		if (!isEnforcement) {
+			const handled = handleStreamingEvent(
+				this.streamDeps,
+				this.streamState,
+				event,
+				sessionId,
+				runId
+			)
+			if (handled) return
+		}
+
+		// 2. Map non-streaming events to DB rows
+		const rows = mapAgentEventToDb(event)
 		for (const row of rows) {
 			try {
 				this.store.appendEvent(
@@ -791,25 +414,22 @@ export class AgentController {
 			}
 		}
 
-		// On agent_end, close the run, reset streaming state, and process queues
-		if (event.type === 'agent_end') {
-			this.currentMessageRowId = null
-			this.currentToolRowIds.clear()
+		// 3. agent_end lifecycle: close run, memory, queue processing
+		if (event.type !== 'agent_end') return
 
-			try {
-				this.store.closeAgentRun(sessionId, runId)
-			} catch {
-				// Already closed — non-fatal
-			}
+		resetStreamState(this.streamState)
 
-			// Trigger memory retain, then check for missed daily writes
-			// Skip enforcement for enforcement runs to avoid infinite loops
-			const isEnforcementRun =
-				this.enforcementRunIds.has(runId)
-			if (isEnforcementRun) {
-				this.enforcementRunIds.delete(runId)
-				// Still run retain but skip enforcement check
-				this.runRetain(sessionId, runId).catch(err => {
+		try {
+			this.store.closeAgentRun(sessionId, runId)
+		} catch {
+			// Already closed — non-fatal
+		}
+
+		// Memory retain + enforcement
+		if (isEnforcement) {
+			this.enforcementRunIds.delete(runId)
+			runRetain(this.memoryDeps, sessionId, runId).catch(
+				err => {
 					this.trace(
 						'controller.retain_post_enforcement_error',
 						{
@@ -821,37 +441,36 @@ export class AgentController {
 									: String(err)
 						}
 					)
+				}
+			)
+		} else {
+			runRetainAndEnforce(
+				this.memoryDeps,
+				sessionId,
+				runId
+			).catch(err => {
+				this.trace('controller.retain_enforce_error', {
+					sessionId,
+					runId,
+					message:
+						err instanceof Error ? err.message : String(err)
 				})
-			} else {
-				this.runRetainAndEnforce(sessionId, runId).catch(
-					err => {
-						this.trace('controller.retain_enforce_error', {
-							sessionId,
-							runId,
-							message:
-								err instanceof Error
-									? err.message
-									: String(err)
-						})
-					}
-				)
-			}
+			})
+		}
 
-			// Reset system prompt to base (strip recall context from this run)
-			this.agent.state.systemPrompt = this.baseSystemPrompt
-			this.agent.runId = undefined
+		// Reset system prompt and clear runId
+		this.agent.state.systemPrompt = this.baseSystemPrompt
+		this.agent.runId = undefined
 
-			// Check for orphaned follow-ups first (same session)
-			if (this.agent.hasQueuedMessages()) {
-				queueMicrotask(() =>
-					this.drainQueuedFollowUps(sessionId)
-				)
-			} else if (this.crossSessionQueue.length > 0) {
-				// Process cross-session queue FIFO
-				queueMicrotask(() => {
-					this.processCrossSessionQueue()
-				})
-			}
+		// Process queues
+		if (this.agent.hasQueuedMessages()) {
+			queueMicrotask(() =>
+				this.drainQueuedFollowUps(sessionId)
+			)
+		} else if (this.crossSessionQueue.length > 0) {
+			queueMicrotask(() => {
+				this.processCrossSessionQueue()
+			})
 		}
 	}
 
@@ -923,197 +542,6 @@ export class AgentController {
 				message:
 					err instanceof Error ? err.message : String(err)
 			})
-		}
-	}
-
-	// ── Internal: event → DB mapping ─────────────────────────────────────────
-
-	/**
-	 * Map an AgentEvent to one or more DB event rows.
-	 *
-	 * Most events map 1:1. Two exceptions produce dual writes for
-	 * backward compatibility with getConversationHistory():
-	 *   message_end (assistant) → message_end + assistant_final
-	 *   tool_execution_end      → tool_execution_end + tool_result
-	 */
-	private mapEventToDb(event: AgentEvent): TypedEvent[] {
-		switch (event.type) {
-			case 'agent_start':
-				return [{ type: 'agent_start', payload: {} }]
-			case 'agent_end':
-				return [
-					{
-						type: 'agent_end',
-						payload: {
-							messages: event.messages
-						}
-					}
-				]
-			case 'turn_start':
-				return [{ type: 'turn_start', payload: {} }]
-			case 'turn_end':
-				return [{ type: 'turn_end', payload: {} }]
-
-			case 'message_start':
-				return [
-					{
-						type: 'message_start',
-						payload: {
-							message: event.message
-						}
-					}
-				]
-
-			// message_update is skipped in handleEvent — never reaches here
-
-			case 'message_end': {
-				const msg = event.message
-				const rows: TypedEvent[] = [
-					{
-						type: 'message_end',
-						payload: { message: msg }
-					}
-				]
-
-				// Dual-write: also persist as assistant_final for backward compat
-				// Skip truly empty assistant messages (artifacts from multi-turn finalization)
-				// but always emit for error/aborted so the client sees the failure
-				const hasContent =
-					msg.role === 'assistant' &&
-					Array.isArray(msg.content) &&
-					msg.content.length > 0
-				const isErrorOrAborted =
-					msg.role === 'assistant' &&
-					(msg.stopReason === 'error' ||
-						msg.stopReason === 'aborted')
-				if (hasContent || isErrorOrAborted) {
-					rows.push({
-						type: 'assistant_final',
-						payload: msg
-					})
-				}
-
-				return rows
-			}
-
-			case 'tool_execution_start':
-				return [
-					{
-						type: 'tool_execution_start',
-						payload: {
-							toolCallId: event.toolCallId,
-							toolName: event.toolName,
-							args: event.args
-						}
-					},
-					// Dual-write: tool_call so the client can show
-					// the tool in loading state before the result arrives
-					{
-						type: 'tool_call',
-						payload: {
-							id: event.toolCallId,
-							name: event.toolName,
-							arguments:
-								(event.args as Record<string, unknown>) ??
-								{}
-						}
-					}
-				]
-
-			case 'tool_execution_update':
-				return [
-					{
-						type: 'tool_execution_update',
-						payload: {
-							toolCallId: event.toolCallId,
-							toolName: event.toolName,
-							args: event.args,
-							partialResult: event.partialResult
-						}
-					}
-				]
-
-			case 'tool_execution_end': {
-				return [
-					{
-						type: 'tool_execution_end',
-						payload: {
-							toolCallId: event.toolCallId,
-							toolName: event.toolName,
-							result: event.result,
-							isError: event.isError
-						}
-					},
-					// Dual-write: also persist as tool_result for backward compat
-					{
-						type: 'tool_result',
-						payload: {
-							role: 'toolResult',
-							toolCallId: event.toolCallId,
-							toolName: event.toolName,
-							content: event.result.content,
-							details: event.result.details,
-							isError: event.isError,
-							timestamp: Date.now()
-						}
-					}
-				]
-			}
-
-			case 'retry':
-				return [
-					{
-						type: 'retry',
-						payload: {
-							attempt: event.attempt,
-							maxAttempts: event.maxAttempts,
-							reason: event.reason,
-							delayMs: event.delayMs
-						}
-					}
-				]
-
-			case 'context_compacted':
-				return [
-					{
-						type: 'context_compacted',
-						payload: {
-							removedCount: event.removedCount,
-							remainingCount: event.remainingCount,
-							estimatedTokens: event.estimatedTokens
-						}
-					}
-				]
-
-			case 'tool_loop_detected':
-				return [
-					{
-						type: 'tool_loop_detected',
-						payload: {
-							pattern: event.pattern,
-							toolName: event.toolName,
-							message: event.message
-						}
-					}
-				]
-
-			case 'limit_hit':
-				return [
-					{
-						type: 'limit_hit',
-						payload: {
-							limit: event.limit,
-							threshold: event.threshold,
-							observed: event.observed,
-							usageSnapshot: event.usageSnapshot,
-							scope: event.scope,
-							action: event.action
-						}
-					}
-				]
-
-			default:
-				return []
 		}
 	}
 }
