@@ -142,6 +142,12 @@ export interface AgentLoopConfig {
 	/** Called alongside EventStream.push() for each event. Use for durable persistence. Must be synchronous. */
 	onEvent?: (event: AgentEvent) => void
 
+	/** Tier 2 trace callback — JSONL only, no DB write. Best-effort. */
+	onTrace?: (entry: {
+		type: string
+		payload: unknown
+	}) => void
+
 	// --- Resilience config ---
 
 	/** Retry configuration for transient LLM errors. Default: 3 attempts, 1s base, 30s max. */

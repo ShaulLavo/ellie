@@ -59,5 +59,22 @@ async function __callTool(
 		tool: name,
 		args: args ?? {}
 	})
-	return promise
+	const raw = await promise
+	// Unwrap AgentToolResult → text content so callers get the
+	// actual output string instead of the { content, details } envelope.
+	const obj = raw as
+		| Record<string, unknown>
+		| null
+		| undefined
+	if (
+		obj &&
+		typeof obj === 'object' &&
+		'content' in obj &&
+		Array.isArray(obj.content)
+	) {
+		return (obj.content as { text?: string }[])
+			.map(c => (typeof c.text === 'string' ? c.text : ''))
+			.join('')
+	}
+	return raw
 }

@@ -389,6 +389,10 @@ export class EventStore {
 	readonly sqlite: Database
 	readonly #audit: AuditLogger | null
 
+	get auditLogger(): AuditLogger | null {
+		return this.#audit
+	}
+
 	constructor(
 		dbPath: string,
 		auditLogDir?: string,

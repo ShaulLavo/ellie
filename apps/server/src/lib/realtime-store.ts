@@ -21,6 +21,14 @@ export type RotationEvent = {
 	newSessionId: string
 }
 
+export interface TraceEntry {
+	sessionId: string
+	/** Free-form type, e.g. 'memory.recall_start', 'controller.prompt_failed' */
+	type: string
+	runId?: string
+	payload: unknown
+}
+
 export class RealtimeStore {
 	readonly #store: EventStore
 	readonly #listeners = new Map<
@@ -125,6 +133,40 @@ export class RealtimeStore {
 				runId: runId ?? null,
 				type,
 				payload: JSON.stringify(payload),
+				dedupeKey: null,
+				createdAt: Date.now()
+			}
+		} satisfies SessionEvent)
+	}
+
+	// ── Trace (JSONL + ephemeral SSE, no DB) ─────────────────────────────
+
+	/**
+	 * Tier 2: Write a structured trace entry to JSONL and broadcast as
+	 * ephemeral SSE. No SQLite write — keeps the DB lean.
+	 */
+	trace(entry: TraceEntry): void {
+		const audit = this.#store.auditLogger
+		if (audit) {
+			audit.trace({
+				sessionId: entry.sessionId,
+				type: entry.type,
+				runId: entry.runId,
+				payload: entry.payload,
+				ts: Date.now()
+			})
+		}
+
+		// Broadcast as ephemeral SSE so a live logs panel can pick it up
+		this.#publish(`session:${entry.sessionId}`, {
+			type: 'append',
+			event: {
+				id: -1,
+				sessionId: entry.sessionId,
+				seq: -1,
+				runId: entry.runId ?? null,
+				type: entry.type,
+				payload: JSON.stringify(entry.payload),
 				dedupeKey: null,
 				createdAt: Date.now()
 			}

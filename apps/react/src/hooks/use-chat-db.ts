@@ -106,6 +106,21 @@ function eventToStored(row: EventRow): StoredChatMessage {
 		} else if (content) {
 			parts = [{ type: 'text', text: content }]
 		}
+
+		// Surface API errors: when assistant_final has stopReason 'error'
+		// but empty content, synthesize a text part from errorMessage
+		if (
+			parts.length === 0 &&
+			parsed.stopReason === 'error' &&
+			typeof parsed.errorMessage === 'string'
+		) {
+			parts = [
+				{
+					type: 'text',
+					text: `Error: ${parsed.errorMessage}`
+				}
+			]
+		}
 	}
 
 	const text = parts
@@ -129,9 +144,14 @@ function eventToStored(row: EventRow): StoredChatMessage {
 			.map(p => p.text)
 			.join('\n') || undefined
 
-	const filteredParts = thinking
-		? parts.filter(p => p.type !== 'thinking')
-		: parts
+	// Filter out non-renderable blocks:
+	// - thinking: extracted above for separate display
+	// - toolCall: agent-internal camelCase format, already rendered via tool_result events
+	const filteredParts = parts.filter(
+		p =>
+			p.type !== 'thinking' &&
+			(p as Record<string, unknown>).type !== 'toolCall'
+	)
 
 	// Determine sender from event type or payload
 	let sender: MessageSender | undefined
@@ -258,7 +278,9 @@ export function useChatDB(sessionId: string) {
 						e.type === 'memory_recall' ||
 						e.type === 'memory_retain'
 				)
-				const msgs = messageEvents.map(eventToStored)
+				const msgs = messageEvents
+					.map(eventToStored)
+					.filter(m => m.parts.length > 0 || m.text)
 
 				if (isInitialLoadRef.current) {
 					// First connect: full replace
@@ -407,6 +429,7 @@ export function useChatDB(sessionId: string) {
 				if (!renderableTypes.includes(event.type)) return
 
 				const msg = eventToStored(event)
+				if (msg.parts.length === 0 && !msg.text) return
 				syncWrite([msg])
 			},
 

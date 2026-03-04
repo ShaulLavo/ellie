@@ -59,3 +59,4 @@ apps/react/src/output.css
 .claude/worktrees/
 .claude/settings.local.json
 apps/cli/cli
+apps/cli/ellie

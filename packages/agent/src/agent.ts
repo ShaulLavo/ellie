@@ -53,6 +53,12 @@ export interface AgentOptions {
 	/** Called for each AgentEvent alongside EventStream.push(). Use for durable persistence. */
 	onEvent?: (event: AgentEvent) => void
 
+	/** Tier 2 trace callback — JSONL only, no DB write. Best-effort. */
+	onTrace?: (entry: {
+		type: string
+		payload: unknown
+	}) => void
+
 	/** Guardrail policy with runtime limits. */
 	guardrails?: AgentGuardrailPolicy
 }
@@ -76,6 +82,10 @@ export class Agent {
 	public streamFn?: StreamFn
 	public adapter?: AnyTextAdapter
 	public onEvent?: (event: AgentEvent) => void
+	public onTrace?: (entry: {
+		type: string
+		payload: unknown
+	}) => void
 	/** Current run ID. Set by external managers before prompt() and cleared automatically. */
 	public runId?: string
 	private runningPrompt?: Promise<void>
@@ -109,6 +119,7 @@ export class Agent {
 		this.streamFn = opts.streamFn
 		this.adapter = opts.adapter
 		this.onEvent = opts.onEvent
+		this.onTrace = opts.onTrace
 		this.guardrails = opts.guardrails
 	}
 
@@ -409,6 +420,7 @@ export class Agent {
 			getFollowUpMessages: async () =>
 				this.dequeueFollowUpMessages(),
 			onEvent: this.onEvent,
+			onTrace: this.onTrace,
 			runtimeLimits: this.guardrails?.runtimeLimits
 		}
 

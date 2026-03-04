@@ -1,6 +1,8 @@
 import { mkdirSync } from 'fs'
 import { LogFile } from './log'
 
+export type AuditLevel = 'event' | 'trace'
+
 export interface AuditEntry {
 	sessionId: string
 	type: string
@@ -8,10 +10,14 @@ export interface AuditEntry {
 	runId?: string
 	payload: unknown
 	ts: number
+	level: AuditLevel
 }
 
 /**
- * Write-only JSONL audit logger.
+ * Write-only JSONL audit logger with two tiers:
+ *
+ *   - `log()`   — level='event', for canonical business events (also written to SQLite)
+ *   - `trace()` — level='trace', for operational/observability logs (JSONL only)
  *
  * Writes are best-effort — failures are logged to stderr but never thrown.
  * Each day gets its own log file (`audit-YYYY-MM-DD.jsonl`).
@@ -26,7 +32,17 @@ export class AuditLogger {
 		mkdirSync(logDir, { recursive: true })
 	}
 
-	log(entry: AuditEntry): void {
+	/** Tier 1: canonical event (called from EventStore.append after SQLite write). */
+	log(entry: Omit<AuditEntry, 'level'>): void {
+		this.#write({ ...entry, level: 'event' })
+	}
+
+	/** Tier 2: operational trace (JSONL only, no SQLite). */
+	trace(entry: Omit<AuditEntry, 'level'>): void {
+		this.#write({ ...entry, level: 'trace' })
+	}
+
+	#write(entry: AuditEntry): void {
 		try {
 			const day = new Date(entry.ts)
 				.toISOString()
@@ -42,12 +58,13 @@ export class AuditLogger {
 				`${JSON.stringify(entry)}\n`
 			)
 			this.#logFile!.append(bytes)
-			if (process.env.DEBUG_AUDIT_LOG === 'true') {
-				console.log(
-					`[audit-log] ${entry.type} session=${entry.sessionId}${entry.runId ? ` run=${entry.runId}` : ''} seq=${entry.seq ?? '-'}`,
-					JSON.stringify(entry.payload, null, 2)
-				)
-			}
+
+			const prefix =
+				entry.level === 'trace' ? '[trace]' : '[audit-log]'
+			console.log(
+				`${prefix} ${entry.type} session=${entry.sessionId}${entry.runId ? ` run=${entry.runId}` : ''} seq=${entry.seq ?? '-'}`,
+				JSON.stringify(entry.payload, null, 2)
+			)
 		} catch (err) {
 			console.error('[audit-log] write failed:', err)
 		}

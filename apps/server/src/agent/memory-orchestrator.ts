@@ -85,6 +85,11 @@ export interface MemoryOrchestratorConfig {
 	hindsight: Hindsight
 	eventStore: EventStore
 	workspaceDir: string
+	/** Tier 2 trace callback — JSONL only, no DB write. Best-effort. */
+	onTrace?: (entry: {
+		type: string
+		payload: unknown
+	}) => void
 }
 
 // ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -94,12 +99,28 @@ export class MemoryOrchestrator {
 	private readonly eventStore: EventStore
 	private readonly workspaceDir: string
 	private readonly projectBankName: string
+	private readonly onTrace?: (entry: {
+		type: string
+		payload: unknown
+	}) => void
 
 	constructor(config: MemoryOrchestratorConfig) {
 		this.hindsight = config.hindsight
 		this.eventStore = config.eventStore
 		this.workspaceDir = config.workspaceDir
 		this.projectBankName = `ellie-project-${hashWorkspace(config.workspaceDir)}`
+		this.onTrace = config.onTrace
+	}
+
+	private trace(
+		type: string,
+		payload: Record<string, unknown>
+	): void {
+		try {
+			this.onTrace?.({ type, payload })
+		} catch {
+			// best-effort
+		}
 	}
 
 	// ── Recall ──────────────────────────────────────────────────────────────
@@ -117,6 +138,8 @@ export class MemoryOrchestrator {
 	} | null> {
 		const start = performance.now()
 		const bankIds = this.resolveBankIds()
+
+		this.trace('memory.recall_start', { query, bankIds })
 
 		// Recall from all banks in parallel with per-bank timeout
 		const results = await Promise.allSettled(
@@ -177,6 +200,12 @@ export class MemoryOrchestrator {
 			const durationMs = Math.round(
 				performance.now() - start
 			)
+			this.trace('memory.recall_complete', {
+				bankCount: bankIds.length,
+				memoriesFound: 0,
+				durationMs,
+				searchResults
+			})
 			// Return empty recall event (still emit for UI visibility)
 			return {
 				payload: {
@@ -236,6 +265,13 @@ export class MemoryOrchestrator {
 			timestamp: Date.now()
 		}
 
+		this.trace('memory.recall_complete', {
+			bankCount: bankIds.length,
+			memoriesFound: capped.length,
+			durationMs,
+			searchResults
+		})
+
 		return { payload, contextBlock: formattedContext }
 	}
 
@@ -254,7 +290,13 @@ export class MemoryOrchestrator {
 	): Promise<MemoryRetainPayload | null> {
 		const bankIds = this.resolveBankIds()
 		const turns = this.collectUnprocessedTurns(sessionId)
-		if (turns.length === 0) return null
+		if (turns.length === 0) {
+			this.trace('memory.retain_skip', {
+				sessionId,
+				reason: 'no_unprocessed_turns'
+			})
+			return null
+		}
 
 		// Determine trigger
 		const totalChars = turns.reduce(
@@ -280,12 +322,35 @@ export class MemoryOrchestrator {
 		} else if (hasImmediateTurn) {
 			trigger = 'immediate_turn'
 		} else {
+			this.trace('memory.retain_skip', {
+				sessionId,
+				reason: 'thresholds_not_met',
+				turnCount: turns.length,
+				totalChars,
+				maxTurnChars: Math.max(
+					...turns.map(t => t.content.length)
+				),
+				thresholds: {
+					maxTurns: MAX_TURNS_PER_CHUNK,
+					maxChars: MAX_CHARS_PER_CHUNK,
+					immediateTurnChars: IMMEDIATE_TURN_CHARS
+				}
+			})
 			return null // Thresholds not met
 		}
 
 		const start = performance.now()
 		const seqFrom = turns[0].seq
 		const seqTo = lastTurn.seq
+
+		this.trace('memory.retain_start', {
+			sessionId,
+			trigger,
+			turnCount: turns.length,
+			totalChars,
+			seqFrom,
+			seqTo
+		})
 
 		// Build transcript for Hindsight
 		const transcript = turns.map(t => ({
@@ -324,12 +389,38 @@ export class MemoryOrchestrator {
 				for (const m of memories) {
 					allFacts.push(m.content)
 				}
+			} else if (result.status === 'rejected') {
+				this.trace('memory.retain_bank_error', {
+					sessionId,
+					bankId: bankIds[i],
+					error:
+						result.reason instanceof Error
+							? result.reason.message
+							: String(result.reason)
+				})
 			}
 		}
 
-		if (succeededBankIds.length === 0) return null
+		if (succeededBankIds.length === 0) {
+			this.trace('memory.retain_complete', {
+				sessionId,
+				trigger,
+				factsStored: 0,
+				succeededBanks: 0,
+				durationMs: Math.round(performance.now() - start)
+			})
+			return null
+		}
 
 		const durationMs = Math.round(performance.now() - start)
+
+		this.trace('memory.retain_complete', {
+			sessionId,
+			trigger,
+			factsStored: totalFacts,
+			succeededBanks: succeededBankIds.length,
+			durationMs
+		})
 
 		return {
 			parts: [

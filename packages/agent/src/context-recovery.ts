@@ -248,13 +248,23 @@ export function isApproachingLimit(
  * Remove orphaned toolResult messages that reference assistant tool calls
  * no longer in the message array, and orphaned assistant messages that
  * have tool calls with no corresponding tool results.
+ *
+ * Also reorders tool results to appear after their parent assistant message.
+ * This fixes an ordering issue where TanStack's chat() pushes tool results
+ * to context.messages before the assistant turn is finalized, causing
+ * tool_result → assistant ordering that the Anthropic API rejects.
  */
 export function removeOrphans(
 	messages: AgentMessage[]
 ): AgentMessage[] {
+	// ── Phase 1: Reorder tool results after their parent assistant ────
+	const reordered = reorderToolResults(messages)
+
+	// ── Phase 2: Remove orphans ──────────────────────────────────────
+
 	// Collect all toolCall IDs from assistant messages
 	const toolCallIds = new Set<string>()
-	for (const msg of messages) {
+	for (const msg of reordered) {
 		if (msg.role === 'assistant') {
 			for (const block of msg.content) {
 				if (block.type === 'toolCall') {
@@ -266,7 +276,7 @@ export function removeOrphans(
 
 	// Collect all toolResult's toolCallIds
 	const toolResultIds = new Set<string>()
-	for (const msg of messages) {
+	for (const msg of reordered) {
 		if (msg.role === 'toolResult') {
 			const toolMsg = msg as ToolResultMessage
 			toolResultIds.add(toolMsg.toolCallId)
@@ -274,7 +284,7 @@ export function removeOrphans(
 	}
 
 	const result: AgentMessage[] = []
-	for (const msg of messages) {
+	for (const msg of reordered) {
 		// Remove toolResult messages that reference missing tool calls
 		if (msg.role === 'toolResult') {
 			const toolMsg = msg as ToolResultMessage
@@ -326,5 +336,75 @@ export function removeOrphans(
 
 		result.push(msg)
 	}
+	return result
+}
+
+/**
+ * Reorder messages so each toolResult comes after its parent assistant message.
+ *
+ * During TanStack multi-turn runs, tool_execution results are pushed to
+ * context.messages before the assistant turn is finalized (RUN_STARTED
+ * triggers finalizePartial). This produces [toolResult, assistant] ordering
+ * but the API expects [assistant, toolResult]. Orphaned tool results
+ * (no matching assistant) are dropped.
+ */
+function reorderToolResults(
+	messages: AgentMessage[]
+): AgentMessage[] {
+	// Track which toolCallIds have been seen in assistant messages
+	const seenToolCallIds = new Set<string>()
+	const result: AgentMessage[] = []
+	const deferred: AgentMessage[] = []
+
+	for (const msg of messages) {
+		if (msg.role === 'assistant') {
+			result.push(msg)
+			for (const block of msg.content) {
+				if (block.type === 'toolCall') {
+					seenToolCallIds.add(
+						(
+							block as {
+								type: 'toolCall'
+								id: string
+							}
+						).id
+					)
+				}
+			}
+			// Flush any deferred tool results whose assistant is now seen
+			const stillDeferred: AgentMessage[] = []
+			for (const d of deferred) {
+				if (
+					d.role === 'toolResult' &&
+					seenToolCallIds.has(
+						(d as ToolResultMessage).toolCallId
+					)
+				) {
+					result.push(d)
+				} else {
+					stillDeferred.push(d)
+				}
+			}
+			deferred.length = 0
+			deferred.push(...stillDeferred)
+		} else if (msg.role === 'toolResult') {
+			const toolCallId = (msg as ToolResultMessage)
+				.toolCallId
+			if (seenToolCallIds.has(toolCallId)) {
+				// Assistant already seen — correct order
+				result.push(msg)
+			} else {
+				// Assistant not yet seen — defer until we see it
+				deferred.push(msg)
+			}
+		} else {
+			result.push(msg)
+		}
+	}
+
+	// Drop remaining deferred — these are true orphans with no
+	// matching assistant message. removeOrphans will clean them
+	// up anyway, but dropping here prevents positional errors.
+
 	return result
 }

@@ -112,7 +112,17 @@ export class AgentController {
 						?.thinkingLevel ?? 'low',
 				tools: [...registry.all, memoryTool]
 			},
-			onEvent: event => this.handleEvent(event)
+			onEvent: event => this.handleEvent(event),
+			onTrace: entry => {
+				const sessionId = this.boundSessionId
+				if (!sessionId) return
+				this.store.trace({
+					sessionId,
+					type: entry.type,
+					runId: this.agent.runId,
+					payload: entry.payload
+				})
+			}
 		})
 	}
 
@@ -221,10 +231,12 @@ export class AgentController {
 
 			// Start the prompt (non-blocking — events flow via onEvent)
 			this.agent.prompt(text).catch(err => {
-				console.error(
-					`[agent-controller] prompt FAILED session=${sessionId} runId=${runId}:`,
-					err instanceof Error ? err.message : String(err)
-				)
+				this.trace('controller.prompt_failed', {
+					sessionId,
+					runId,
+					message:
+						err instanceof Error ? err.message : String(err)
+				})
 				this.writeErrorEvent(sessionId, runId)
 			})
 		})
@@ -350,26 +362,26 @@ export class AgentController {
 					.map(c => c.text ?? '')
 					.join('') ?? ''
 		} catch (err) {
-			console.error(
-				`[agent-controller] failed to parse payload for session=${sessionId}:`,
-				err instanceof Error ? err.message : String(err),
-				`payload=${payload.slice(0, 200)}`
-			)
+			this.trace('controller.parse_failed', {
+				sessionId,
+				message:
+					err instanceof Error ? err.message : String(err),
+				payloadPreview: payload.slice(0, 200)
+			})
 			return
 		}
 
 		if (!text.trim()) {
-			console.warn(
-				`[agent-controller] empty text after parse for session=${sessionId}, skipping`
-			)
+			this.trace('controller.empty_text', { sessionId })
 			return
 		}
 
 		this.handleMessage(sessionId, text).catch(err => {
-			console.error(
-				`[agent-controller] handleMessage FAILED session=${sessionId}:`,
-				err instanceof Error ? err.message : String(err)
-			)
+			this.trace('controller.handle_message_failed', {
+				sessionId,
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
 		})
 	}
 
@@ -406,10 +418,12 @@ export class AgentController {
 					result.contextBlock
 			}
 		} catch (err) {
-			console.error(
-				`[agent-controller] memory recall failed session=${sessionId}:`,
-				err instanceof Error ? err.message : String(err)
-			)
+			this.trace('controller.memory_recall_failed', {
+				sessionId,
+				runId,
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
 			try {
 				this.store.appendEvent(
 					sessionId,
@@ -454,10 +468,12 @@ export class AgentController {
 
 			return result.parts[0]?.factsStored ?? 0
 		} catch (err) {
-			console.error(
-				`[agent-controller] memory retain failed session=${sessionId}:`,
-				err instanceof Error ? err.message : String(err)
-			)
+			this.trace('controller.memory_retain_failed', {
+				sessionId,
+				runId,
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
 			// Retain failure is non-fatal — cursor stays put for next attempt
 			return 0
 		}
@@ -521,12 +537,37 @@ export class AgentController {
 						'respond with exactly NO_REPLY and nothing else.'
 				)
 				.catch(err => {
-					console.error(
-						`[agent-controller] enforcement turn FAILED session=${sessionId}:`,
-						err instanceof Error ? err.message : String(err)
-					)
+					this.trace('controller.enforcement_failed', {
+						sessionId,
+						runId: enforcementRunId,
+						message:
+							err instanceof Error
+								? err.message
+								: String(err)
+					})
 				})
 		})
+	}
+
+	// ── Internal: trace helper ──────────────────────────────────────────────
+
+	/** Tier 2 trace — JSONL + ephemeral SSE, no SQLite. Best-effort. */
+	private trace(
+		type: string,
+		payload: Record<string, unknown>
+	): void {
+		const sessionId = this.boundSessionId
+		if (!sessionId) return
+		try {
+			this.store.trace({
+				sessionId,
+				type,
+				runId: this.agent.runId,
+				payload
+			})
+		} catch {
+			// trace is best-effort
+		}
 	}
 
 	// ── Internal: event persistence ──────────────────────────────────────────
@@ -534,6 +575,7 @@ export class AgentController {
 	private handleEvent(event: AgentEvent): void {
 		const sessionId = this.boundSessionId
 		if (!sessionId) {
+			// Can't use this.trace() here — no sessionId to log against
 			console.warn(
 				`[agent-controller] event received without bound session type=${event.type} — not persisted`
 			)
@@ -559,9 +601,10 @@ export class AgentController {
 		}
 
 		if (!runId) {
-			console.warn(
-				`[agent-controller] event received without runId session=${sessionId} type=${event.type} — not persisted`
-			)
+			this.trace('controller.event_no_runid', {
+				sessionId,
+				eventType: event.type
+			})
 			return
 		}
 
@@ -583,10 +626,13 @@ export class AgentController {
 					runId
 				)
 			} catch (err) {
-				console.error(
-					`[agent-controller] failed to persist event session=${sessionId} runId=${runId} dbType=${row.type}:`,
-					err instanceof Error ? err.message : String(err)
-				)
+				this.trace('controller.persist_failed', {
+					sessionId,
+					runId,
+					dbType: row.type,
+					message:
+						err instanceof Error ? err.message : String(err)
+				})
 			}
 		}
 
@@ -606,20 +652,29 @@ export class AgentController {
 				this.enforcementRunIds.delete(runId)
 				// Still run retain but skip enforcement check
 				this.runRetain(sessionId, runId).catch(err => {
-					console.error(
-						`[agent-controller] post-enforcement retain error session=${sessionId}:`,
-						err instanceof Error ? err.message : String(err)
+					this.trace(
+						'controller.retain_post_enforcement_error',
+						{
+							sessionId,
+							runId,
+							message:
+								err instanceof Error
+									? err.message
+									: String(err)
+						}
 					)
 				})
 			} else {
 				this.runRetainAndEnforce(sessionId, runId).catch(
 					err => {
-						console.error(
-							`[agent-controller] post-run retain+enforce error session=${sessionId}:`,
-							err instanceof Error
-								? err.message
-								: String(err)
-						)
+						this.trace('controller.retain_enforce_error', {
+							sessionId,
+							runId,
+							message:
+								err instanceof Error
+									? err.message
+									: String(err)
+						})
 					}
 				)
 			}
@@ -639,12 +694,14 @@ export class AgentController {
 							const newRunId = ulid()
 							this.agent.runId = newRunId
 							this.agent.continue().catch(err => {
-								console.error(
-									`[agent-controller] continue FAILED session=${sessionId} runId=${newRunId}:`,
-									err instanceof Error
-										? err.message
-										: String(err)
-								)
+								this.trace('controller.continue_failed', {
+									sessionId,
+									runId: newRunId,
+									message:
+										err instanceof Error
+											? err.message
+											: String(err)
+								})
 								this.writeErrorEvent(sessionId, newRunId)
 							})
 						}
@@ -667,10 +724,11 @@ export class AgentController {
 
 		this.handleMessage(next.sessionId, next.text).catch(
 			err => {
-				console.error(
-					`[agent-controller] cross-session handleMessage FAILED session=${next.sessionId}:`,
-					err instanceof Error ? err.message : String(err)
-				)
+				this.trace('controller.cross_session_failed', {
+					sessionId: next.sessionId,
+					message:
+						err instanceof Error ? err.message : String(err)
+				})
 			}
 		)
 	}
@@ -681,9 +739,10 @@ export class AgentController {
 		sessionId: string,
 		runId: string
 	): void {
-		console.error(
-			`[agent-controller] writing error event session=${sessionId} runId=${runId}`
-		)
+		this.trace('controller.write_error_event', {
+			sessionId,
+			runId
+		})
 		try {
 			this.store.appendEvent(
 				sessionId,
@@ -695,10 +754,12 @@ export class AgentController {
 			)
 			this.store.closeAgentRun(sessionId, runId)
 		} catch (err) {
-			console.error(
-				`[agent-controller] writeErrorEvent failed session=${sessionId} runId=${runId}:`,
-				err instanceof Error ? err.message : String(err)
-			)
+			this.trace('controller.write_error_event_failed', {
+				sessionId,
+				runId,
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
 		}
 	}
 

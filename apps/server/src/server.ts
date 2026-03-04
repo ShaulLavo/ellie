@@ -223,7 +223,14 @@ async function getAgentController(): Promise<AgentController | null> {
 	const memory = new MemoryOrchestrator({
 		hindsight,
 		eventStore,
-		workspaceDir
+		workspaceDir,
+		onTrace: entry => {
+			store.trace({
+				sessionId: store.getCurrentSessionId(),
+				type: entry.type,
+				payload: entry.payload
+			})
+		}
 	})
 
 	cachedController = adapter

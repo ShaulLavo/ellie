@@ -291,6 +291,11 @@ export function agentLoop(
 				streamFn
 			)
 		} catch (err) {
+			emitTrace(config, 'agent_loop.error', {
+				phase: 'agentLoop',
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
 			console.error(
 				`[agent-loop] agentLoop top-level CATCH:`,
 				err instanceof Error ? err.message : String(err)
@@ -350,6 +355,11 @@ export function agentLoopContinue(
 				streamFn
 			)
 		} catch (err) {
+			emitTrace(config, 'agent_loop.error', {
+				phase: 'agentLoopContinue',
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
 			console.error(
 				`[agent-loop] agentLoopContinue top-level CATCH:`,
 				err instanceof Error ? err.message : String(err)
@@ -398,6 +408,19 @@ function createEmitter(
 		} catch (err) {
 			console.error('[agent-loop] onEvent error:', err)
 		}
+	}
+}
+
+/** Best-effort Tier 2 trace — never throws. */
+function emitTrace(
+	config: AgentLoopConfig,
+	type: string,
+	payload: Record<string, unknown>
+): void {
+	try {
+		config.onTrace?.({ type, payload })
+	} catch {
+		// trace is best-effort — swallow to avoid recursion
 	}
 }
 
@@ -1571,7 +1594,8 @@ async function processAgentStream(
 				emittedStart,
 				partialJsonMap,
 				toolCallIndexMap,
-				config.model
+				config.model,
+				config
 			)
 
 			// Update emittedStart after processing
@@ -1591,6 +1615,11 @@ async function processAgentStream(
 			: 'error'
 		partial.errorMessage =
 			err instanceof Error ? err.message : String(err)
+		emitTrace(config, 'agent_loop.stream_error', {
+			chunkCount,
+			stopReason: partial.stopReason,
+			errorMessage: partial.errorMessage
+		})
 		console.error(
 			`[agent-loop] processAgentStream CAUGHT ERROR after ${chunkCount} chunks: stopReason=${partial.stopReason} errorMessage=${partial.errorMessage}`
 		)
@@ -1606,6 +1635,10 @@ async function processAgentStream(
 		partial.stopReason !== 'error' &&
 		partial.stopReason !== 'aborted'
 	) {
+		emitTrace(config, 'agent_loop.empty_response', {
+			stopReason: partial.stopReason,
+			contentParts: 0
+		})
 		console.warn(
 			`[agent-loop] empty response detected (contentParts=0 stopReason=${partial.stopReason}) — marking as error`
 		)
@@ -1690,7 +1723,8 @@ function processChunk(
 	emittedStart: boolean,
 	partialJsonMap: Map<string, string>,
 	toolCallIndexMap: Map<string, number>,
-	model: Model
+	model: Model,
+	config: AgentLoopConfig
 ): void {
 	switch (chunk.type) {
 		case 'RUN_STARTED': {
@@ -1862,6 +1896,15 @@ function processChunk(
 						try {
 							tc.arguments = JSON.parse(finalJson)
 						} catch {
+							emitTrace(
+								config,
+								'agent_loop.tool_call_parse_error',
+								{
+									toolName: tc.name,
+									toolCallId: chunk.toolCallId,
+									payloadLength: finalJson?.length ?? 0
+								}
+							)
 							console.warn(
 								`[agent-loop] TOOL_CALL_END: failed to parse args JSON for ${tc.name}, toolCallId=${chunk.toolCallId}, payloadLength=${finalJson?.length ?? 0}`
 							)
