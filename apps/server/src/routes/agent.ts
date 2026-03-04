@@ -68,7 +68,10 @@ export function createAgentRoutes(
 					sseState,
 					listener =>
 						store.subscribeToSession(sessionId, listener),
-					event => ({ event: event.type, data: event.event }),
+					event => ({
+						event: event.type,
+						data: event.event
+					}),
 					{ event: `snapshot`, data: existingEvents }
 				)
 

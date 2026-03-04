@@ -638,9 +638,13 @@ export class EventStore {
 		for (const row of rows) {
 			if (row.type === 'tool_execution') {
 				try {
-					const d = JSON.parse(row.payload) as { toolCallId: string }
+					const d = JSON.parse(row.payload) as {
+						toolCallId: string
+					}
 					seenToolCallIds.add(d.toolCallId)
-				} catch { /* skip */ }
+				} catch {
+					/* skip */
+				}
 			}
 			if (row.type === 'assistant_message' && row.runId) {
 				seenAssistantRuns.add(row.runId)
@@ -652,14 +656,17 @@ export class EventStore {
 			try {
 				// Skip legacy rows covered by new unified types
 				if (
-					(row.type === 'tool_call' || row.type === 'tool_result') &&
+					(row.type === 'tool_call' ||
+						row.type === 'tool_result') &&
 					isLegacyToolCovered(row, seenToolCallIds)
-				) continue
+				)
+					continue
 				if (
 					row.type === 'assistant_final' &&
 					row.runId &&
 					seenAssistantRuns.has(row.runId)
-				) continue
+				)
+					continue
 
 				const msg = parseEventRow(row)
 				if (msg) messages.push(msg)
@@ -869,9 +876,15 @@ export class EventStore {
  * Parse an event row into an AgentMessage, or return null to skip it.
  */
 /** Check if a legacy tool_call/tool_result row is covered by a new tool_execution row. */
-function isLegacyToolCovered(row: EventRow, seenToolCallIds: Set<string>): boolean {
+function isLegacyToolCovered(
+	row: EventRow,
+	seenToolCallIds: Set<string>
+): boolean {
 	try {
-		const d = JSON.parse(row.payload) as { id?: string; toolCallId?: string }
+		const d = JSON.parse(row.payload) as {
+			id?: string
+			toolCallId?: string
+		}
 		const tcId = d.id ?? d.toolCallId
 		return !!tcId && seenToolCallIds.has(tcId)
 	} catch {
@@ -885,7 +898,10 @@ function isLegacyToolCovered(row: EventRow, seenToolCallIds: Set<string>): boole
 function parseEventRow(row: EventRow): AgentMessage | null {
 	// New unified types
 	if (row.type === 'assistant_message') {
-		const wrapper = JSON.parse(row.payload) as { message: AgentMessage; streaming: boolean }
+		const wrapper = JSON.parse(row.payload) as {
+			message: AgentMessage
+			streaming: boolean
+		}
 		if (wrapper.streaming) return null // Skip in-flight messages
 		return wrapper.message
 	}
@@ -895,7 +911,15 @@ function parseEventRow(row: EventRow): AgentMessage | null {
 			toolCallId: string
 			toolName: string
 			args: unknown
-			result?: { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; details: unknown }
+			result?: {
+				content: Array<{
+					type: string
+					text?: string
+					data?: string
+					mimeType?: string
+				}>
+				details: unknown
+			}
 			isError?: boolean
 			status: string
 		}

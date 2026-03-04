@@ -57,12 +57,20 @@ export function computeStatsFromEvents(
 			if (!parsed) continue
 			if (parsed.streaming === true) continue // skip in-flight
 			messageCount++
-			const msg = parsed.message as Record<string, unknown> | undefined
+			const msg = parsed.message as
+				| Record<string, unknown>
+				| undefined
 			if (!msg) continue
-			if (typeof msg.model === 'string') model = msg.model as string
-			if (typeof msg.provider === 'string') provider = msg.provider as string
+			if (typeof msg.model === 'string')
+				model = msg.model as string
+			if (typeof msg.provider === 'string')
+				provider = msg.provider as string
 			const usage = msg.usage as
-				| { input?: number; output?: number; cost?: { total?: number } }
+				| {
+						input?: number
+						output?: number
+						cost?: { total?: number }
+				  }
 				| undefined
 			if (usage) {
 				promptTokens += usage.input ?? 0

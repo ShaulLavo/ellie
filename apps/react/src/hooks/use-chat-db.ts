@@ -149,7 +149,8 @@ function eventToStored(row: EventRow): StoredChatMessage {
 			parts = extractToolResultParts({
 				toolName: parsed.toolName,
 				toolCallId: parsed.toolCallId,
-				content: (parsed.result as Record<string, unknown>)?.content
+				content: (parsed.result as Record<string, unknown>)
+					?.content
 			})
 		} else {
 			// Show loading state for running tools
@@ -351,14 +352,24 @@ export function useChatDB(sessionId: string) {
 				const streamingEvent = events.find(e => {
 					if (e.type !== 'assistant_message') return false
 					try {
-						const p = typeof e.payload === 'string'
-							? JSON.parse(e.payload) : e.payload
-						return (p as Record<string, unknown>).streaming === true
-					} catch { return false }
+						const p =
+							typeof e.payload === 'string'
+								? JSON.parse(e.payload)
+								: e.payload
+						return (
+							(p as Record<string, unknown>).streaming ===
+							true
+						)
+					} catch {
+						return false
+					}
 				})
 				if (streamingEvent) {
 					const stored = eventToStored(streamingEvent)
-					setStreamingMessage({ ...stored, isStreaming: true })
+					setStreamingMessage({
+						...stored,
+						isStreaming: true
+					})
 				} else {
 					setStreamingMessage(null)
 				}
@@ -380,7 +391,9 @@ export function useChatDB(sessionId: string) {
 				if (event.type === 'assistant_message') {
 					setStreamingMessage({
 						id: String(event.id),
-						timestamp: new Date(event.createdAt).toISOString(),
+						timestamp: new Date(
+							event.createdAt
+						).toISOString(),
 						text: '',
 						parts: [],
 						seq: event.seq,
@@ -438,9 +451,13 @@ export function useChatDB(sessionId: string) {
 				if (event.type === 'assistant_message') {
 					let parsed: Record<string, unknown>
 					try {
-						parsed = typeof event.payload === 'string'
-							? JSON.parse(event.payload) : event.payload as Record<string, unknown>
-					} catch { return }
+						parsed =
+							typeof event.payload === 'string'
+								? JSON.parse(event.payload)
+								: (event.payload as Record<string, unknown>)
+					} catch {
+						return
+					}
 
 					const streaming = parsed.streaming as boolean
 					const stored = eventToStored(event)

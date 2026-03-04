@@ -14,7 +14,8 @@
 		"lint:fix": "oxlint --fix --ignore-path .gitignore apps packages",
 		"format": "oxfmt --write '.' '!bun.lock'",
 		"check-types": "turbo run check-types",
-		"test": "turbo run test"
+		"test": "turbo run test",
+		"studio": "cd packages/db && bunx drizzle-kit studio & cd packages/hindsight && bunx drizzle-kit studio --port 4984 &"
 	},
 	"dependencies": {
 		"@fontsource-variable/geist": "^5.2.8",

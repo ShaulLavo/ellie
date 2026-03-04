@@ -520,9 +520,14 @@ export class AgentController {
 			if (e.type === 'tool_execution') {
 				try {
 					const parsed = JSON.parse(e.payload)
-					return parsed.toolName === 'memory_append_daily' &&
-						parsed.status === 'complete' && !parsed.isError
-				} catch { return false }
+					return (
+						parsed.toolName === 'memory_append_daily' &&
+						parsed.status === 'complete' &&
+						!parsed.isError
+					)
+				} catch {
+					return false
+				}
 			}
 			if (
 				e.type !== 'tool_execution_end' &&
@@ -619,14 +624,20 @@ export class AgentController {
 				const row = this.store.appendEvent(
 					sessionId,
 					'assistant_message',
-					{ message: event.message as AssistantMessage, streaming: true },
+					{
+						message: event.message as AssistantMessage,
+						streaming: true
+					},
 					runId
 				)
 				this.currentMessageRowId = row.id
 			} catch (err) {
 				this.trace('controller.persist_failed', {
-					sessionId, runId, dbType: 'assistant_message',
-					message: err instanceof Error ? err.message : String(err)
+					sessionId,
+					runId,
+					dbType: 'assistant_message',
+					message:
+						err instanceof Error ? err.message : String(err)
 				})
 			}
 			return
@@ -639,14 +650,19 @@ export class AgentController {
 			try {
 				this.store.updateEvent(
 					this.currentMessageRowId,
-					{ message: event.message as AssistantMessage, streaming: true },
+					{
+						message: event.message as AssistantMessage,
+						streaming: true
+					},
 					sessionId
 				)
 			} catch (err) {
 				this.trace('controller.update_failed', {
-					sessionId, runId,
+					sessionId,
+					runId,
 					dbType: 'assistant_message',
-					message: err instanceof Error ? err.message : String(err)
+					message:
+						err instanceof Error ? err.message : String(err)
 				})
 			}
 			return
@@ -662,14 +678,21 @@ export class AgentController {
 				try {
 					this.store.updateEvent(
 						this.currentMessageRowId,
-						{ message: event.message as AssistantMessage, streaming: false },
+						{
+							message: event.message as AssistantMessage,
+							streaming: false
+						},
 						sessionId
 					)
 				} catch (err) {
 					this.trace('controller.update_failed', {
-						sessionId, runId,
+						sessionId,
+						runId,
 						dbType: 'assistant_message',
-						message: err instanceof Error ? err.message : String(err)
+						message:
+							err instanceof Error
+								? err.message
+								: String(err)
 					})
 				}
 				this.currentMessageRowId = null
@@ -697,8 +720,11 @@ export class AgentController {
 				this.currentToolRowIds.set(event.toolCallId, row.id)
 			} catch (err) {
 				this.trace('controller.persist_failed', {
-					sessionId, runId, dbType: 'tool_execution',
-					message: err instanceof Error ? err.message : String(err)
+					sessionId,
+					runId,
+					dbType: 'tool_execution',
+					message:
+						err instanceof Error ? err.message : String(err)
 				})
 			}
 			return
@@ -707,7 +733,9 @@ export class AgentController {
 		if (event.type === 'tool_execution_update') {
 			if (!runId) return
 			if (this.enforcementRunIds.has(runId)) return
-			const rowId = this.currentToolRowIds.get(event.toolCallId)
+			const rowId = this.currentToolRowIds.get(
+				event.toolCallId
+			)
 			if (!rowId) return
 			try {
 				this.store.updateEvent(
@@ -723,8 +751,11 @@ export class AgentController {
 				)
 			} catch (err) {
 				this.trace('controller.update_failed', {
-					sessionId, runId, dbType: 'tool_execution',
-					message: err instanceof Error ? err.message : String(err)
+					sessionId,
+					runId,
+					dbType: 'tool_execution',
+					message:
+						err instanceof Error ? err.message : String(err)
 				})
 			}
 			return
@@ -733,7 +764,9 @@ export class AgentController {
 		if (event.type === 'tool_execution_end') {
 			if (!runId) return
 			if (this.enforcementRunIds.has(runId)) return
-			const rowId = this.currentToolRowIds.get(event.toolCallId)
+			const rowId = this.currentToolRowIds.get(
+				event.toolCallId
+			)
 			if (rowId) {
 				try {
 					this.store.updateEvent(
@@ -743,14 +776,21 @@ export class AgentController {
 							toolName: event.toolName,
 							result: event.result,
 							isError: event.isError,
-							status: event.isError ? 'error' as const : 'complete' as const
+							status: event.isError
+								? ('error' as const)
+								: ('complete' as const)
 						},
 						sessionId
 					)
 				} catch (err) {
 					this.trace('controller.update_failed', {
-						sessionId, runId, dbType: 'tool_execution',
-						message: err instanceof Error ? err.message : String(err)
+						sessionId,
+						runId,
+						dbType: 'tool_execution',
+						message:
+							err instanceof Error
+								? err.message
+								: String(err)
 					})
 				}
 				this.currentToolRowIds.delete(event.toolCallId)
