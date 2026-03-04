@@ -435,8 +435,9 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 			const remaining = deadline - Date.now()
 			if (remaining <= 0) break
 
+			const readPromise = this.#reader.read()
 			const result = await Promise.race([
-				this.#reader.read(),
+				readPromise,
 				new Promise<{
 					done: true
 					value: undefined
@@ -456,11 +457,13 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 
 			if ('timeout' in result) {
 				// Timeout — release the reader to discard the pending read
-				// so subsequent evaluate() calls get a fresh reader
+				// so subsequent evaluate() calls get a fresh reader.
+				// Suppress the rejection from the now-orphaned read promise.
+				readPromise.catch(() => {})
 				try {
 					this.#reader?.releaseLock()
 				} catch {
-					// Pending read rejects on releaseLock — expected
+					// releaseLock may throw if reader is already released
 				}
 				this.#reader = null
 				break
