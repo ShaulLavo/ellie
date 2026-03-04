@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import * as v from 'valibot'
 
 // ============================================================================
@@ -11,8 +12,11 @@ const ServerEnvSchema = v.object({
 		'http://localhost:3000'
 	),
 
-	/** Directory for persistent data storage. */
-	DATA_DIR: v.optional(v.string(), './data'),
+	/** Directory for persistent data storage (resolved to absolute path). */
+	DATA_DIR: v.pipe(
+		v.optional(v.string(), './data'),
+		v.transform(p => resolve(p))
+	),
 
 	/** Anthropic API key (optional — only needed if using Anthropic provider). */
 	ANTHROPIC_API_KEY: v.optional(v.string()),
