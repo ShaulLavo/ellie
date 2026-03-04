@@ -27,7 +27,8 @@ import {
 	Loader2Icon,
 	AlertCircleIcon,
 	ListIcon,
-	InfoIcon
+	InfoIcon,
+	Trash2Icon
 } from 'lucide-react'
 import type { ConnectionState } from '@ellie/schemas/chat'
 import { SessionStatusBar } from './chat/session-status-bar'
@@ -211,6 +212,19 @@ export function ChatRoom({
 				>
 					<InfoIcon className="size-3" />
 					Info
+				</button>
+				<div className="flex-1" />
+				<button
+					type="button"
+					onClick={async () => {
+						await eden.api.dev.reset.post()
+						// Server exits — wait a moment then reload
+						setTimeout(() => window.location.reload(), 1500)
+					}}
+					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10 transition-colors"
+				>
+					<Trash2Icon className="size-3" />
+					Reset
 				</button>
 			</div>
 
