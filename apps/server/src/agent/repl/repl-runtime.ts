@@ -368,7 +368,7 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		}
 
 		const sentinel = `${SENTINEL_PREFIX}${ulid()}`
-		const payload = `${code}\nprocess.stdout.write("${sentinel}\\n");\n`
+		const payload = `${code}\nprocess.stdout.write("\\n${sentinel}\\n");\n`
 
 		this.#proc.stdin.write(payload)
 		this.#proc.stdin.flush()
@@ -419,10 +419,16 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		let streamEnded = false
 		const deadline = Date.now() + timeoutMs
 
-		// Check residual buffer first before reading more
-		if (buffer.includes(sentinel)) {
-			const idx = buffer.indexOf(sentinel)
-			const sentinelLineEnd = buffer.indexOf('\n', idx)
+		// Check residual buffer first before reading more.
+		// Search for \n + sentinel to avoid matching the REPL's
+		// character-by-character echo of the source code.
+		const sentinelNL = '\n' + sentinel
+		if (buffer.includes(sentinelNL)) {
+			const idx = buffer.indexOf(sentinelNL)
+			const sentinelLineEnd = buffer.indexOf(
+				'\n',
+				idx + sentinelNL.length
+			)
 			const before = buffer.slice(0, idx)
 			this.#residualBuffer =
 				sentinelLineEnd !== -1
@@ -475,9 +481,12 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 				})
 			}
 
-			if (buffer.includes(sentinel)) {
-				const idx = buffer.indexOf(sentinel)
-				const sentinelLineEnd = buffer.indexOf('\n', idx)
+			if (buffer.includes(sentinelNL)) {
+				const idx = buffer.indexOf(sentinelNL)
+				const sentinelLineEnd = buffer.indexOf(
+					'\n',
+					idx + sentinelNL.length
+				)
 				const before = buffer.slice(0, idx)
 				// Save anything after the sentinel line
 				// for the next evaluation

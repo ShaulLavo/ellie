@@ -125,14 +125,15 @@ export function createSessionExecTool(
 						params.timeoutMs
 					)
 
-				// Store raw output as artifact (not injected into context)
-				if (result.raw) {
-					await artifactStore.append(
-						runtime.sessionId,
-						params.code,
-						result.raw
-					)
-				}
+				// Always log the full execution trace
+				await artifactStore.append(runtime.sessionId, {
+					code: params.code,
+					committed: result.committed,
+					raw: result.raw,
+					isError: result.isError,
+					errorMessage: result.errorMessage,
+					elapsedMs: result.elapsedMs
+				})
 
 				// Only committed output goes into tool result
 				if (result.isError) {

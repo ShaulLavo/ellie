@@ -21,10 +21,18 @@ export interface Artifact {
 	id: string
 	sessionId: string
 	timestamp: number
+	/** The code that was executed. */
+	code: string
+	/** Committed output (from print() calls). */
+	committed: string
 	/** Raw stdout/stderr from the REPL evaluation. */
 	raw: string
-	/** The code that produced this output. */
-	code: string
+	/** Whether execution produced an error. */
+	isError: boolean
+	/** Error message if isError is true. */
+	errorMessage?: string
+	/** Wall-clock execution time in ms. */
+	elapsedMs: number
 }
 
 // ── Artifact Store ──────────────────────────────────────────────────────
@@ -41,12 +49,11 @@ export class ArtifactStore {
 	}
 
 	/**
-	 * Append a raw output artifact for a session.
+	 * Append a full execution trace for a session.
 	 */
 	async append(
 		sessionId: string,
-		code: string,
-		raw: string
+		entry: Omit<Artifact, 'id' | 'sessionId' | 'timestamp'>
 	): Promise<Artifact> {
 		await this.#ensureDir()
 
@@ -54,8 +61,7 @@ export class ArtifactStore {
 			id: ulid(),
 			sessionId,
 			timestamp: Date.now(),
-			raw,
-			code
+			...entry
 		}
 
 		const path = this.#artifactPath(sessionId)
