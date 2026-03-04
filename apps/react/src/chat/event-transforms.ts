@@ -21,22 +21,59 @@ export function isAgentRunOpen(rows: EventRow[]): boolean {
 	return open
 }
 
-/** Extract content parts from a tool_call event payload. */
-function extractToolCallParts(
+/** Extract content parts from memory_recall / memory_retain event payloads. */
+function extractMemoryParts(
 	parsed: Record<string, unknown>
 ): ContentPart[] {
-	return [
-		{
-			type: 'tool-call',
-			name: parsed.name as string,
-			args:
-				(parsed.arguments as Record<string, unknown>) ?? {},
-			toolCallId: parsed.id as string
-		}
-	]
+	return (parsed.parts as ContentPart[]) ?? []
 }
 
-/** Extract content parts from a tool_result event payload. */
+/** Extract content parts from an error event payload. */
+function extractErrorParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	const errorText =
+		typeof parsed.message === 'string'
+			? parsed.message
+			: 'An unexpected error occurred'
+	return [{ type: 'text', text: errorText }]
+}
+
+/** Extract content parts from standard message event payloads. */
+function extractMessageParts(
+	parsed: Record<string, unknown>
+): ContentPart[] {
+	if (Array.isArray(parsed.content)) {
+		return parsed.content as ContentPart[]
+	}
+	if (Array.isArray(parsed.parts)) {
+		return parsed.parts as ContentPart[]
+	}
+	if (
+		typeof parsed.content === 'string' &&
+		parsed.content
+	) {
+		return [{ type: 'text', text: parsed.content }]
+	}
+
+	// Surface API errors: when assistant has stopReason 'error'
+	// but empty content, synthesize a text part from errorMessage
+	if (
+		parsed.stopReason === 'error' &&
+		typeof parsed.errorMessage === 'string'
+	) {
+		return [
+			{
+				type: 'text',
+				text: `Error: ${parsed.errorMessage}`
+			}
+		]
+	}
+
+	return []
+}
+
+/** Extract content parts from a tool_execution event payload (result view). */
 function extractToolResultParts(
 	parsed: Record<string, unknown>
 ): ContentPart[] {
@@ -61,56 +98,18 @@ function extractToolResultParts(
 	]
 }
 
-/** Extract content parts from memory_recall / memory_retain event payloads. */
-function extractMemoryParts(
+/** Extract content parts from a tool_execution event payload (loading view). */
+function extractToolCallParts(
 	parsed: Record<string, unknown>
 ): ContentPart[] {
-	return (parsed.parts as ContentPart[]) ?? []
-}
-
-/** Extract content parts from an error event payload. */
-function extractErrorParts(
-	parsed: Record<string, unknown>
-): ContentPart[] {
-	const errorText =
-		typeof parsed.message === 'string'
-			? parsed.message
-			: 'An unexpected error occurred'
-	return [{ type: 'text', text: errorText }]
-}
-
-/** Extract content parts from standard message event payloads (user_message, assistant_final, etc.). */
-function extractMessageParts(
-	parsed: Record<string, unknown>
-): ContentPart[] {
-	if (Array.isArray(parsed.content)) {
-		return parsed.content as ContentPart[]
-	}
-	if (Array.isArray(parsed.parts)) {
-		return parsed.parts as ContentPart[]
-	}
-	if (
-		typeof parsed.content === 'string' &&
-		parsed.content
-	) {
-		return [{ type: 'text', text: parsed.content }]
-	}
-
-	// Surface API errors: when assistant_final has stopReason 'error'
-	// but empty content, synthesize a text part from errorMessage
-	if (
-		parsed.stopReason === 'error' &&
-		typeof parsed.errorMessage === 'string'
-	) {
-		return [
-			{
-				type: 'text',
-				text: `Error: ${parsed.errorMessage}`
-			}
-		]
-	}
-
-	return []
+	return [
+		{
+			type: 'tool-call',
+			name: parsed.toolName as string,
+			args: (parsed.args as Record<string, unknown>) ?? {},
+			toolCallId: parsed.toolCallId as string
+		}
+	]
 }
 
 /** Convert an EventRow into a StoredChatMessage (no Date allocation). */
@@ -131,7 +130,6 @@ export function eventToStored(
 	} else if (row.type === 'tool_execution') {
 		const status = parsed.status as string
 		if (status === 'complete' || status === 'error') {
-			// Show result for completed tools
 			parts = extractToolResultParts({
 				toolName: parsed.toolName,
 				toolCallId: parsed.toolCallId,
@@ -139,17 +137,8 @@ export function eventToStored(
 					?.content
 			})
 		} else {
-			// Show loading state for running tools
-			parts = extractToolCallParts({
-				name: parsed.toolName,
-				arguments: parsed.args,
-				id: parsed.toolCallId
-			})
+			parts = extractToolCallParts(parsed)
 		}
-	} else if (row.type === 'tool_call') {
-		parts = extractToolCallParts(parsed)
-	} else if (row.type === 'tool_result') {
-		parts = extractToolResultParts(parsed)
 	} else if (
 		row.type === 'memory_recall' ||
 		row.type === 'memory_retain'
@@ -184,7 +173,7 @@ export function eventToStored(
 
 	// Filter out non-renderable blocks:
 	// - thinking: extracted above for separate display
-	// - toolCall: agent-internal camelCase format, already rendered via tool_result events
+	// - toolCall: agent-internal camelCase format, already rendered via tool_execution events
 	const filteredParts = parts.filter(
 		p =>
 			p.type !== 'thinking' &&
@@ -200,7 +189,6 @@ export function eventToStored(
 		sender = 'user'
 	} else if (
 		row.type === 'assistant_message' ||
-		row.type === 'assistant_final' ||
 		parsed.role === 'assistant'
 	) {
 		sender = 'agent'

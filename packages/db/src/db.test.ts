@@ -337,28 +337,31 @@ describe('EventStore', () => {
 			})
 			store.append({
 				sessionId: 's1',
-				type: 'assistant_final',
+				type: 'assistant_message',
 				payload: {
-					role: 'assistant',
-					content: [{ type: 'text', text: 'hi' }],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
+					message: {
+						role: 'assistant',
+						content: [{ type: 'text', text: 'hi' }],
+						provider: 'anthropic',
+						model: 'test',
+						usage: {
 							input: 0,
 							output: 0,
 							cacheRead: 0,
 							cacheWrite: 0,
-							total: 0
-						}
+							totalTokens: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0
+							}
+						},
+						stopReason: 'stop',
+						timestamp: 2000
 					},
-					stopReason: 'stop',
-					timestamp: 2000
+					streaming: false
 				},
 				runId: 'run-1'
 			})
@@ -388,7 +391,7 @@ describe('EventStore', () => {
 		it('filters by types', () => {
 			const events = store.query({
 				sessionId: 's1',
-				types: ['user_message', 'assistant_final']
+				types: ['user_message', 'assistant_message']
 			})
 			expect(events).toHaveLength(2)
 		})
@@ -438,7 +441,7 @@ describe('EventStore', () => {
 	// ── History reconstruction ────────────────────────────────────────────
 
 	describe('getConversationHistory', () => {
-		it('builds history from user_message, assistant_final, tool_result', () => {
+		it('builds history from user_message, assistant_message, tool_execution', () => {
 			store.createSession('s1')
 
 			store.append({
@@ -457,76 +460,87 @@ describe('EventStore', () => {
 			})
 			store.append({
 				sessionId: 's1',
-				type: 'assistant_final',
+				type: 'assistant_message',
 				payload: {
-					role: 'assistant',
-					content: [
-						{ type: 'text', text: "I'll help" },
-						{
-							type: 'toolCall',
-							id: 'tc1',
-							name: 'search',
-							arguments: { q: 'test' }
-						}
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
+					message: {
+						role: 'assistant',
+						content: [
+							{ type: 'text', text: "I'll help" },
+							{
+								type: 'toolCall',
+								id: 'tc1',
+								name: 'search',
+								arguments: { q: 'test' }
+							}
+						],
+						provider: 'anthropic',
+						model: 'test',
+						usage: {
 							input: 0,
 							output: 0,
 							cacheRead: 0,
 							cacheWrite: 0,
-							total: 0
-						}
+							totalTokens: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0
+							}
+						},
+						stopReason: 'toolUse',
+						timestamp: 2000
 					},
-					stopReason: 'toolUse',
-					timestamp: 2000
+					streaming: false
 				}
 			})
 			store.append({
 				sessionId: 's1',
-				type: 'tool_result',
+				type: 'tool_execution',
 				payload: {
-					role: 'toolResult',
 					toolCallId: 'tc1',
 					toolName: 'search',
-					content: [{ type: 'text', text: 'result data' }],
+					args: { q: 'test' },
+					result: {
+						content: [
+							{ type: 'text', text: 'result data' }
+						],
+						details: {}
+					},
 					isError: false,
-					timestamp: 3000
+					status: 'complete'
 				}
 			})
 			store.append({
 				sessionId: 's1',
-				type: 'assistant_final',
+				type: 'assistant_message',
 				payload: {
-					role: 'assistant',
-					content: [
-						{ type: 'text', text: 'Here are the results' }
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
+					message: {
+						role: 'assistant',
+						content: [
+							{ type: 'text', text: 'Here are the results' }
+						],
+						provider: 'anthropic',
+						model: 'test',
+						usage: {
 							input: 0,
 							output: 0,
 							cacheRead: 0,
 							cacheWrite: 0,
-							total: 0
-						}
+							totalTokens: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0
+							}
+						},
+						stopReason: 'stop',
+						timestamp: 4000
 					},
-					stopReason: 'stop',
-					timestamp: 4000
+					streaming: false
 				}
 			})
 			store.append({
@@ -1217,28 +1231,31 @@ describe('EventStore', () => {
 			})
 			store.append({
 				sessionId: 's1',
-				type: 'assistant_final',
+				type: 'assistant_message',
 				payload: {
-					role: 'assistant',
-					content: [{ type: 'text', text: 'hi' }],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
+					message: {
+						role: 'assistant',
+						content: [{ type: 'text', text: 'hi' }],
+						provider: 'anthropic',
+						model: 'test',
+						usage: {
 							input: 0,
 							output: 0,
 							cacheRead: 0,
 							cacheWrite: 0,
-							total: 0
-						}
+							totalTokens: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0
+							}
+						},
+						stopReason: 'stop',
+						timestamp: 2000
 					},
-					stopReason: 'stop',
-					timestamp: 2000
+					streaming: false
 				}
 			})
 			store.append({
@@ -1261,7 +1278,7 @@ describe('EventStore', () => {
 			})
 
 			const history = store.getConversationHistory('s1')
-			// Only user_message and assistant_final should be present
+			// Only user_message and assistant_message should be present
 			expect(history).toHaveLength(2)
 			expect(history[0]!.role).toBe('user')
 			expect(history[1]!.role).toBe('assistant')

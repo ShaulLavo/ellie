@@ -25,6 +25,16 @@ import {
 } from '../event-transforms'
 import { useChatSync } from './use-chat-sync'
 
+/** Event types that produce renderable chat messages. */
+const RENDERABLE_TYPES: EventType[] = [
+	'user_message',
+	'assistant_message',
+	'tool_execution',
+	'memory_recall',
+	'memory_retain',
+	'error'
+]
+
 export function useChatDB(sessionId: string) {
 	const [connectionState, setConnectionState] =
 		useState<ConnectionState>('disconnected')
@@ -80,27 +90,17 @@ export function useChatDB(sessionId: string) {
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events) {
 				// Filter to only renderable message events
-				const messageEvents = events.filter(
-					e =>
-						e.type === 'user_message' ||
-						e.type === 'assistant_message' ||
-						e.type === 'tool_execution' ||
-						e.type === 'assistant_final' ||
-						e.type === 'tool_call' ||
-						e.type === 'tool_result' ||
-						e.type === 'memory_recall' ||
-						e.type === 'memory_retain'
+				const messageEvents = events.filter(e =>
+					RENDERABLE_TYPES.includes(e.type as EventType)
 				)
 				const msgs = messageEvents
 					.map(eventToStored)
 					.filter(m => m.parts.length > 0 || m.text)
 
 				if (isInitialLoadRef.current) {
-					// First connect: full replace
 					syncReplaceAll(msgs)
 					isInitialLoadRef.current = false
 				} else {
-					// Resync after visibility change: only add new events
 					if (msgs.length > 0) {
 						syncWrite(msgs)
 					}
@@ -145,7 +145,7 @@ export function useChatDB(sessionId: string) {
 					setIsAgentRunning(false)
 				}
 
-				// New unified type: assistant_message append = start streaming
+				// assistant_message append = start streaming
 				if (event.type === 'assistant_message') {
 					setStreamingMessage({
 						id: String(event.id),
@@ -161,7 +161,7 @@ export function useChatDB(sessionId: string) {
 					return
 				}
 
-				// New unified type: tool_execution append = tool started
+				// tool_execution append = tool started
 				if (event.type === 'tool_execution') {
 					const msg = eventToStored(event)
 					if (msg.parts.length === 0 && !msg.text) return
@@ -169,11 +169,8 @@ export function useChatDB(sessionId: string) {
 					return
 				}
 
-				// Incrementally update session stats (legacy path)
-				if (
-					event.type === 'user_message' ||
-					event.type === 'assistant_final'
-				) {
+				// Incrementally update session stats for user messages
+				if (event.type === 'user_message') {
 					const delta = computeStatsFromEvents([event])
 					setSessionStats(prev => ({
 						model: delta.model ?? prev.model,
@@ -189,16 +186,12 @@ export function useChatDB(sessionId: string) {
 					}))
 				}
 
-				const renderableTypes: EventType[] = [
-					'user_message',
-					'assistant_final',
-					'tool_call',
-					'tool_result',
-					'memory_recall',
-					'memory_retain',
-					'error'
-				]
-				if (!renderableTypes.includes(event.type)) return
+				if (
+					!RENDERABLE_TYPES.includes(
+						event.type as EventType
+					)
+				)
+					return
 
 				const msg = eventToStored(event)
 				if (msg.parts.length === 0 && !msg.text) return
@@ -221,7 +214,6 @@ export function useChatDB(sessionId: string) {
 					const stored = eventToStored(event)
 
 					if (streaming) {
-						// Still streaming — update the overlay message
 						setStreamingMessage({
 							...stored,
 							isStreaming: true

@@ -102,7 +102,7 @@ function appendUserMessage(
 	})
 }
 
-function appendAssistantFinal(
+function appendAssistantMessage(
 	store: EventStore,
 	sessionId: string,
 	text: string,
@@ -110,28 +110,31 @@ function appendAssistantFinal(
 ) {
 	return store.append({
 		sessionId,
-		type: 'assistant_final',
+		type: 'assistant_message',
 		payload: {
-			role: 'assistant',
-			content: [{ type: 'text', text }],
-			provider: 'mock',
-			model: 'test',
-			usage: {
-				input: 0,
-				output: 0,
-				cacheRead: 0,
-				cacheWrite: 0,
-				totalTokens: 0,
-				cost: {
+			message: {
+				role: 'assistant',
+				content: [{ type: 'text', text }],
+				provider: 'mock',
+				model: 'test',
+				usage: {
 					input: 0,
 					output: 0,
 					cacheRead: 0,
 					cacheWrite: 0,
-					total: 0
-				}
+					totalTokens: 0,
+					cost: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						total: 0
+					}
+				},
+				stopReason: 'stop',
+				timestamp: Date.now()
 			},
-			stopReason: 'stop',
-			timestamp: Date.now()
+			streaming: false
 		},
 		runId
 	})
@@ -320,7 +323,7 @@ describe('MemoryOrchestrator', () => {
 				MAX_CHARS_PER_CHUNK / 2 + 1
 			)
 			appendUserMessage(eventStore, 's1', longText)
-			appendAssistantFinal(eventStore, 's1', longText)
+			appendAssistantMessage(eventStore, 's1', longText)
 
 			const orch = new MemoryOrchestrator({
 				hindsight: createMockHindsight({

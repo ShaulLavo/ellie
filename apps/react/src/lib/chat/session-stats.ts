@@ -44,14 +44,12 @@ export function computeStatsFromEvents(
 	let messageCount = 0
 
 	for (const row of events) {
-		if (
-			row.type === 'user_message' ||
-			row.type === 'assistant_final'
-		) {
+		if (row.type === 'user_message') {
 			messageCount++
+			continue
 		}
 
-		// New unified type: count completed assistant_message events
+		// Count completed assistant_message events
 		if (row.type === 'assistant_message') {
 			const parsed = safeParsePayload(row)
 			if (!parsed) continue
@@ -78,29 +76,6 @@ export function computeStatsFromEvents(
 				totalCost += usage.cost?.total ?? 0
 			}
 			continue
-		}
-
-		if (row.type !== 'assistant_final') continue
-
-		const parsed = safeParsePayload(row)
-		if (!parsed) continue
-
-		if (typeof parsed.model === 'string')
-			model = parsed.model
-		if (typeof parsed.provider === 'string')
-			provider = parsed.provider
-
-		const usage = parsed.usage as
-			| {
-					input?: number
-					output?: number
-					cost?: { total?: number }
-			  }
-			| undefined
-		if (usage) {
-			promptTokens += usage.input ?? 0
-			completionTokens += usage.output ?? 0
-			totalCost += usage.cost?.total ?? 0
 		}
 	}
 
