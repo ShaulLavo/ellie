@@ -10,6 +10,7 @@
  */
 
 import type { ConnectionState } from '@ellie/schemas/chat'
+import type { EventType } from '@ellie/schemas/events'
 import { env } from '@ellie/env/client'
 import { eden } from './eden'
 
@@ -19,7 +20,7 @@ export interface EventRow {
 	sessionId: string
 	seq: number
 	runId: string | null
-	type: string
+	type: EventType
 	payload: string // JSON string
 	dedupeKey: string | null
 	createdAt: number

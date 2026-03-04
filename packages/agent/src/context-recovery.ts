@@ -118,7 +118,7 @@ export function estimateMessageTokens(
 				chars += block.text.length
 				break
 			case 'thinking':
-				chars += block.thinking.length
+				chars += block.text.length
 				break
 			case 'toolCall':
 				// Tool name + JSON args

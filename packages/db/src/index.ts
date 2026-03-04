@@ -8,6 +8,7 @@ export type {
 	QueryInput,
 	AgentMessage
 } from './event-store'
+export type { EventPayloadMap } from '@ellie/schemas/events'
 export { AuditLogger } from './audit-log'
 export type { AuditEntry } from './audit-log'
 export * as schema from './schema'

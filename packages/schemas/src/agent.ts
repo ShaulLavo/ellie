@@ -17,7 +17,7 @@ export const textContentSchema = v.object({
 
 export const thinkingContentSchema = v.object({
 	type: v.literal('thinking'),
-	thinking: v.string()
+	text: v.string()
 })
 
 export const imageContentSchema = v.object({
@@ -32,6 +32,14 @@ export const toolCallSchema = v.object({
 	name: v.string(),
 	arguments: v.record(v.string(), v.unknown())
 })
+
+export const stopReasonSchema = v.picklist([
+	'stop',
+	'length',
+	'toolUse',
+	'error',
+	'aborted'
+])
 
 // ============================================================================
 // Usage / cost schemas
@@ -81,13 +89,7 @@ export const assistantMessageSchema = v.object({
 	provider: v.string(),
 	model: v.string(),
 	usage: usageSchema,
-	stopReason: v.picklist([
-		'stop',
-		'length',
-		'toolUse',
-		'error',
-		'aborted'
-	]),
+	stopReason: stopReasonSchema,
 	errorMessage: v.optional(v.string()),
 	timestamp: v.number()
 })
@@ -117,8 +119,24 @@ export const agentMessageSchema = v.variant('role', [
 	toolResultMessageSchema
 ])
 
-// ── Inferred types (canonical message types for cross-package use) ──────────
+// ── Inferred types (canonical — all packages derive from these) ─────────────
 
+// Content blocks
+export type TextContent = v.InferOutput<
+	typeof textContentSchema
+>
+export type ThinkingContent = v.InferOutput<
+	typeof thinkingContentSchema
+>
+export type ImageContent = v.InferOutput<
+	typeof imageContentSchema
+>
+export type ToolCall = v.InferOutput<typeof toolCallSchema>
+export type StopReason = v.InferOutput<
+	typeof stopReasonSchema
+>
+
+// Messages
 export type UserMessage = v.InferOutput<
 	typeof userMessageSchema
 >
@@ -372,3 +390,11 @@ export const agentEventSchema = v.variant('type', [
 	toolLoopDetectedEventSchema,
 	limitHitEventSchema
 ])
+
+// Events
+export type AssistantStreamEvent = v.InferOutput<
+	typeof assistantStreamEventSchema
+>
+export type AgentEvent = v.InferOutput<
+	typeof agentEventSchema
+>

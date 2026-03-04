@@ -3,6 +3,7 @@ import type {
 	ContentPart,
 	MessageSender
 } from '@ellie/schemas/chat'
+import type { EventType } from '@ellie/schemas/events'
 import { useLiveQuery } from '@tanstack/react-db'
 import {
 	useCallback,
@@ -85,6 +86,13 @@ function eventToStored(row: EventRow): StoredChatMessage {
 	) {
 		// Memory events carry their parts directly in the payload
 		parts = (parsed.parts as ContentPart[]) ?? []
+	} else if (row.type === 'error') {
+		// Error events carry message in payload.message
+		const errorText =
+			typeof parsed.message === 'string'
+				? parsed.message
+				: 'An unexpected error occurred'
+		parts = [{ type: 'text', text: errorText }]
 	} else {
 		// Standard message events: extract parts from content or parts array
 		const content =
@@ -133,16 +141,14 @@ function eventToStored(row: EventRow): StoredChatMessage {
 	) {
 		sender = 'user'
 	} else if (
-		row.type === 'assistant_message' ||
 		row.type === 'assistant_final' ||
 		parsed.role === 'assistant'
 	) {
 		sender = 'agent'
-	} else if (
-		row.type === 'system_message' ||
-		parsed.role === 'system'
-	) {
+	} else if (parsed.role === 'system') {
 		sender = 'system'
+	} else if (row.type === 'error') {
+		sender = 'agent'
 	} else if (row.type.startsWith('tool_')) {
 		sender = 'agent'
 	} else if (row.type.startsWith('memory_')) {
@@ -246,9 +252,7 @@ export function useChatDB(sessionId: string) {
 				const messageEvents = events.filter(
 					e =>
 						e.type === 'user_message' ||
-						e.type === 'assistant_message' ||
 						e.type === 'assistant_final' ||
-						e.type === 'system_message' ||
 						e.type === 'tool_call' ||
 						e.type === 'tool_result' ||
 						e.type === 'memory_recall' ||
@@ -391,15 +395,14 @@ export function useChatDB(sessionId: string) {
 					return
 				}
 
-				const renderableTypes = [
+				const renderableTypes: EventType[] = [
 					'user_message',
-					'assistant_message',
 					'assistant_final',
-					'system_message',
 					'tool_call',
 					'tool_result',
 					'memory_recall',
-					'memory_retain'
+					'memory_retain',
+					'error'
 				]
 				if (!renderableTypes.includes(event.type)) return
 

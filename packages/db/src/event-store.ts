@@ -29,8 +29,12 @@ import {
 	type AgentBootstrapStateRow
 } from './schema'
 import type { AgentMessage } from '@ellie/schemas'
+import type {
+	EventType,
+	EventPayloadMap
+} from '@ellie/schemas/events'
 
-export type { AgentMessage }
+export type { AgentMessage, EventType }
 
 // ── Event types ─────────────────────────────────────────────────────────────
 
@@ -73,9 +77,7 @@ const EVENT_TYPES = [
 	// Memory events
 	'memory_recall',
 	'memory_retain'
-] as const
-
-export type EventType = (typeof EVENT_TYPES)[number]
+] as const satisfies readonly EventType[]
 
 const eventTypeSchema = v.picklist(EVENT_TYPES)
 
@@ -92,7 +94,7 @@ const imageContent = v.object({
 })
 const thinkingContent = v.object({
 	type: v.literal('thinking'),
-	thinking: v.string()
+	text: v.string()
 })
 const toolCallContent = v.object({
 	type: v.literal('toolCall'),
@@ -304,6 +306,30 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		),
 		query: v.string(),
 		bankIds: v.array(v.string()),
+		searchResults: v.optional(
+			v.array(
+				v.object({
+					bankId: v.string(),
+					status: v.picklist(['ok', 'error', 'timeout']),
+					error: v.optional(v.string()),
+					memoryCount: v.number(),
+					methodResults: v.optional(
+						v.record(
+							v.string(),
+							v.object({
+								hits: v.array(
+									v.object({
+										id: v.string(),
+										score: v.number()
+									})
+								),
+								error: v.optional(v.string())
+							})
+						)
+					)
+				})
+			)
+		),
 		timestamp: v.number()
 	}),
 	memory_retain: v.object({
@@ -330,10 +356,12 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 
 // ── Input/output types ──────────────────────────────────────────────────────
 
-export interface AppendInput {
+export interface AppendInput<
+	T extends EventType = EventType
+> {
 	sessionId: string
-	type: EventType
-	payload: Record<string, unknown>
+	type: T
+	payload: EventPayloadMap[T]
 	runId?: string
 	dedupeKey?: string
 }
@@ -428,7 +456,9 @@ export class EventStore {
 
 	// ── Event append ────────────────────────────────────────────────────────
 
-	append(input: AppendInput): EventRow {
+	append<T extends EventType>(
+		input: AppendInput<T>
+	): EventRow {
 		// Validate event type
 		v.parse(eventTypeSchema, input.type)
 
@@ -593,9 +623,20 @@ export class EventStore {
 						timestamp: row.createdAt
 					} as AgentMessage)
 				} else {
-					messages.push(
-						JSON.parse(row.payload) as AgentMessage
-					)
+					const msg = JSON.parse(
+						row.payload
+					) as AgentMessage
+					// Skip empty assistant messages — these are artifacts
+					// from multi-turn finalization that break tool_use ↔
+					// tool_result pairing required by the Anthropic API.
+					if (
+						msg.role === 'assistant' &&
+						Array.isArray(msg.content) &&
+						msg.content.length === 0
+					) {
+						continue
+					}
+					messages.push(msg)
 				}
 			} catch (err) {
 				console.warn(

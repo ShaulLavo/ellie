@@ -50,8 +50,6 @@ const port =
 			: 80
 const { DATA_DIR } = env
 
-console.log(`[server] DATA_DIR=${DATA_DIR}`)
-
 function todaySessionId(): string {
 	const now = new Date()
 	const y = now.getFullYear()
@@ -70,15 +68,11 @@ const store = new RealtimeStore(
 	eventStore,
 	initialSessionId
 )
-console.log(`[server] current session=${initialSessionId}`)
 
 // Startup recovery: find stale runs and close them via RealtimeStore
 // so in-memory #closedRuns set is updated for SSE endpoints
 const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000) // 5 min
 for (const { sessionId, runId } of staleRuns) {
-	console.log(
-		`[server] recovering stale run: session=${sessionId} run=${runId}`
-	)
 	try {
 		store.appendEvent(
 			sessionId,
@@ -95,16 +89,10 @@ for (const { sessionId, runId } of staleRuns) {
 		)
 	}
 }
-if (staleRuns.length > 0) {
-	console.log(
-		`[server] recovered ${staleRuns.length} stale run(s)`
-	)
-}
 
 // ── Workspace seeding ─────────────────────────────────────────────────────────
 const workspaceDir = seedWorkspace(DATA_DIR)
 eventStore.markWorkspaceSeededOnce('main')
-console.log(`[server] workspace=${workspaceDir}`)
 
 const STUDIO_PUBLIC = resolve(
 	import.meta.dir,
@@ -147,9 +135,6 @@ async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
 			// Auto-refresh if expired or expiring within 5 minutes
 			const REFRESH_BUFFER_MS = 5 * 60 * 1000
 			if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
-				console.log(
-					'[server] OAuth token expired or expiring soon, refreshing…'
-				)
 				const refreshed = await refreshNormalizedOAuthToken(
 					cred.refresh
 				)
@@ -157,9 +142,6 @@ async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
 					await setAnthropicCredential(
 						CREDENTIALS_PATH,
 						refreshed
-					)
-					console.log(
-						'[server] OAuth token refreshed successfully'
 					)
 					return anthropicOAuth(model, refreshed.access)
 				}
@@ -291,9 +273,7 @@ const sseState: SseState = {
 // exported App type (which Eden uses for type-safe client generation).
 import { Cron } from 'croner'
 new Cron('0 0 * * *', () => {
-	const newId = todaySessionId()
-	console.log(`[cron] midnight rotation → ${newId}`)
-	store.rotateSession(newId)
+	store.rotateSession(todaySessionId())
 })
 
 export const app = new Elysia()
@@ -427,7 +407,3 @@ export const app = new Elysia()
 export type App = typeof app
 
 app.listen(port)
-
-console.log(
-	`[server] listening on http://localhost:${port}`
-)

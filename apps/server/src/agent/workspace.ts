@@ -47,7 +47,6 @@ export function seedWorkspace(dataDir: string): string {
 			const content = readFileSync(src, 'utf-8')
 			// Use wx flag: fail if file already exists (race-safe)
 			writeFileSync(dest, content, { flag: 'wx' })
-			console.log(`[workspace] seeded ${filename}`)
 		} catch (err) {
 			if (
 				err instanceof Error &&

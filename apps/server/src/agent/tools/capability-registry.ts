@@ -47,7 +47,8 @@ export interface ToolRegistry {
  * Tool composition:
  *   - script_exec receives basicDirectTools as its sandbox tools
  *     (it can call them as async functions inside the sandbox).
- *   - session_exec runs in its own persistent REPL process.
+ *   - session_exec receives basicDirectTools as IPC-bridged tools
+ *     (same tool access as script_exec, but state persists).
  *   - Neither exec tool includes itself, preventing recursion.
  */
 export function createToolRegistry(
@@ -66,7 +67,8 @@ export function createToolRegistry(
 	const sessionExecTools: AgentTool[] = [
 		createSessionExecTool(
 			config.dataDir,
-			config.getSessionId
+			config.getSessionId,
+			basicDirectTools
 		)
 	]
 

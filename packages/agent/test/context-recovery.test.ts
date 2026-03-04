@@ -137,7 +137,7 @@ describe('estimateMessageTokens', () => {
 		const msg: AssistantMessage = {
 			...makeAssistant('', 0),
 			content: [
-				{ type: 'thinking', thinking: 'x'.repeat(200) },
+				{ type: 'thinking', text: 'x'.repeat(200) },
 				{ type: 'text', text: 'y'.repeat(100) }
 			]
 		}

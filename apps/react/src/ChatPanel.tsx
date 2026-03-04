@@ -180,17 +180,10 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
 
 	const connectedClients = useConnectedClients()
 	const label = SESSION_LABEL[sessionId] ?? sessionId
-	const grouped = useMemo(() => {
-		const g = groupMessages(messages)
-		for (const { msg } of g) {
-			if (msg.role === 'assistant') {
-				console.log(
-					`[ChatPanel] rendering assistant message stopReason=${msg.stopReason ?? 'none'} errorMessage=${typeof msg.errorMessage === 'string' ? msg.errorMessage.slice(0, 100) : 'none'} contentLength=${Array.isArray(msg.content) ? msg.content.length : 0}`
-				)
-			}
-		}
-		return g
-	}, [messages])
+	const grouped = useMemo(
+		() => groupMessages(messages),
+		[messages]
+	)
 	const messageOrder = useMemo(
 		() =>
 			grouped.map((_item, idx) =>
