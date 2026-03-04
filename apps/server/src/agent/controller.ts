@@ -29,10 +29,7 @@ import type { TypedEvent } from '@ellie/schemas/events'
 import type { AssistantMessage } from '@ellie/schemas'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
-import type {
-	RealtimeStore,
-	SessionEvent
-} from '../lib/realtime-store'
+import type { RealtimeStore } from '../lib/realtime-store'
 import { buildSystemPrompt } from './system-prompt'
 import type { MemoryOrchestrator } from './memory-orchestrator'
 import { createToolRegistry } from './tools/capability-registry'
@@ -58,6 +55,7 @@ export interface AgentControllerOptions {
 interface QueuedMessage {
 	sessionId: string
 	text: string
+	userMessageRowId?: number
 }
 
 // ── Controller ───────────────────────────────────────────────────────────────
@@ -82,9 +80,6 @@ export class AgentController {
 
 	/** Cross-session message queue — processed FIFO when agent becomes idle */
 	private crossSessionQueue: QueuedMessage[] = []
-
-	/** Watcher subscriptions (pub/sub unsubscribe callbacks) */
-	private unsubscribers = new Map<string, () => void>()
 
 	constructor(
 		store: RealtimeStore,
@@ -176,18 +171,25 @@ export class AgentController {
 	/**
 	 * Ensure the agent is bound to the given session and
 	 * has its history loaded. Called when the agent is idle.
+	 *
+	 * Returns true when history was loaded from DB and the agent
+	 * already has the user message in state (caller should use
+	 * continue() instead of prompt() to avoid duplication).
 	 */
-	private ensureBinding(sessionId: string): void {
+	private ensureBinding(sessionId: string): boolean {
 		if (this.boundSessionId !== sessionId) {
 			this.bindToSession(sessionId)
-			return
+			return this.agent.state.messages.length > 0
 		}
 		if (this.agent.state.messages.length === 0) {
 			// First message on this binding — load history
 			const history = this.loadHistory(sessionId)
-			if (history.length > 0)
+			if (history.length > 0) {
 				this.agent.replaceMessages(history)
+				return true
+			}
 		}
+		return false
 	}
 
 	// ── Message routing (core) ───────────────────────────────────────────────
@@ -205,7 +207,8 @@ export class AgentController {
 	 */
 	async handleMessage(
 		sessionId: string,
-		text: string
+		text: string,
+		userMessageRowId?: number
 	): Promise<{
 		runId: string
 		routed: 'prompt' | 'followUp' | 'queued'
@@ -229,7 +232,8 @@ export class AgentController {
 					// Different session, agent busy — queue for later
 					this.crossSessionQueue.push({
 						sessionId,
-						text
+						text,
+						userMessageRowId
 					})
 					routed = 'queued'
 				}
@@ -237,69 +241,65 @@ export class AgentController {
 			}
 
 			// Agent idle — bind if needed and start new run
-			this.ensureBinding(sessionId)
+			const historyLoaded = this.ensureBinding(sessionId)
 
 			this.agent.runId = runId
+
+			// Backfill the runId on the already-persisted user_message
+			if (userMessageRowId) {
+				try {
+					this.store.updateEventRunId(
+						userMessageRowId,
+						runId,
+						sessionId
+					)
+				} catch (err) {
+					this.trace('controller.backfill_runid_failed', {
+						sessionId,
+						runId,
+						userMessageRowId,
+						message:
+							err instanceof Error
+								? err.message
+								: String(err)
+					})
+				}
+			}
 
 			// Run memory recall before prompting (non-blocking on failure)
 			await this.runRecall(sessionId, text, runId)
 
-			// Start the prompt (non-blocking — events flow via onEvent)
-			this.agent.prompt(text).catch(err => {
-				this.trace('controller.prompt_failed', {
-					sessionId,
-					runId,
-					message:
-						err instanceof Error ? err.message : String(err)
+			if (historyLoaded) {
+				// History was loaded from DB — the user message is already
+				// in the agent's state. Use continue() to avoid duplicating it.
+				this.agent.continue().catch(err => {
+					this.trace('controller.continue_failed', {
+						sessionId,
+						runId,
+						message:
+							err instanceof Error
+								? err.message
+								: String(err)
+					})
+					this.writeErrorEvent(sessionId, runId)
 				})
-				this.writeErrorEvent(sessionId, runId)
-			})
+			} else {
+				// No history loaded — add the user message via prompt()
+				this.agent.prompt(text).catch(err => {
+					this.trace('controller.prompt_failed', {
+						sessionId,
+						runId,
+						message:
+							err instanceof Error
+								? err.message
+								: String(err)
+					})
+					this.writeErrorEvent(sessionId, runId)
+				})
+			}
 		})
 
 		return { runId, routed }
-	}
-
-	// ── Watcher role ─────────────────────────────────────────────────────────
-
-	/**
-	 * Start watching a session for new user messages.
-	 * Idempotent — safe to call on every message POST.
-	 *
-	 * Uses RealtimeStore's in-memory pub/sub (zero latency, no polling).
-	 */
-	watch(sessionId: string): void {
-		if (this.unsubscribers.has(sessionId)) return
-
-		const unsub = this.store.subscribeToSession(
-			sessionId,
-			(event: SessionEvent) => {
-				if (event.type !== 'append') return
-
-				const row = event.event
-				if (row.type !== 'user_message') return
-
-				// If the message already has a runId it was
-				// persisted externally — skip to avoid double-prompting
-				if (row.runId) return
-
-				this.handleUserMessage(sessionId, row.payload)
-			}
-		)
-		this.unsubscribers.set(sessionId, unsub)
-	}
-
-	/** Stop watching a session. */
-	unwatch(sessionId: string): void {
-		this.unsubscribers.get(sessionId)?.()
-		this.unsubscribers.delete(sessionId)
-	}
-
-	/** Tear down all watchers. */
-	dispose(): void {
-		for (const unsub of this.unsubscribers.values()) {
-			unsub()
-		}
-		this.unsubscribers.clear()
 	}
 
 	// ── Control passthrough ──────────────────────────────────────────────────
@@ -355,49 +355,6 @@ export class AgentController {
 	 */
 	hasSession(sessionId: string): boolean {
 		return this.store.hasSession(sessionId)
-	}
-
-	// ── Internal: watcher message parsing ────────────────────────────────────
-
-	private handleUserMessage(
-		sessionId: string,
-		payload: string
-	): void {
-		let text: string
-		try {
-			const parsed = JSON.parse(payload) as {
-				content?: Array<{
-					type: string
-					text?: string
-				}>
-			}
-			text =
-				parsed.content
-					?.filter(c => c.type === 'text')
-					.map(c => c.text ?? '')
-					.join('') ?? ''
-		} catch (err) {
-			this.trace('controller.parse_failed', {
-				sessionId,
-				message:
-					err instanceof Error ? err.message : String(err),
-				payloadPreview: payload.slice(0, 200)
-			})
-			return
-		}
-
-		if (!text.trim()) {
-			this.trace('controller.empty_text', { sessionId })
-			return
-		}
-
-		this.handleMessage(sessionId, text).catch(err => {
-			this.trace('controller.handle_message_failed', {
-				sessionId,
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
-		})
 	}
 
 	// ── Internal: memory integration ────────────────────────────────────────
@@ -926,15 +883,17 @@ export class AgentController {
 		const next = this.crossSessionQueue.shift()
 		if (!next) return
 
-		this.handleMessage(next.sessionId, next.text).catch(
-			err => {
-				this.trace('controller.cross_session_failed', {
-					sessionId: next.sessionId,
-					message:
-						err instanceof Error ? err.message : String(err)
-				})
-			}
-		)
+		this.handleMessage(
+			next.sessionId,
+			next.text,
+			next.userMessageRowId
+		).catch(err => {
+			this.trace('controller.cross_session_failed', {
+				sessionId: next.sessionId,
+				message:
+					err instanceof Error ? err.message : String(err)
+			})
+		})
 	}
 
 	// ── Internal: error events ───────────────────────────────────────────────

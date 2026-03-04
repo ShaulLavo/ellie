@@ -98,11 +98,6 @@ export function createChatRoutes(
 					const input = normalizeMessageInput(body)
 					store.ensureSession(sessionId)
 
-					// Ensure controller is watching BEFORE appending so the
-					// pub/sub notification is never missed.
-					const controller = await getAgentController?.()
-					controller?.watch(sessionId)
-
 					// Persist user message BEFORE bootstrap so the client
 					// sees the user bubble first, then the synthetic tool call.
 					const row = store.appendEvent(
@@ -118,10 +113,28 @@ export function createChatRoutes(
 					)
 
 					ensureBootstrap?.(sessionId)
+
+					// Route the message directly to the agent controller.
+					// handleMessage backfills the runId on the user_message row.
+					const controller = await getAgentController?.()
+					const result = controller
+						? await controller.handleMessage(
+								sessionId,
+								input.content,
+								row.id
+							)
+						: undefined
+
 					return {
 						id: row.id,
 						seq: row.seq,
-						sessionId: row.sessionId
+						sessionId: row.sessionId,
+						...(result
+							? {
+									runId: result.runId,
+									routed: result.routed
+								}
+							: {})
 					}
 				},
 				{

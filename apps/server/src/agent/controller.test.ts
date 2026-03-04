@@ -167,7 +167,6 @@ describe('AgentController', () => {
 	})
 
 	afterEach(() => {
-		controller.dispose()
 		eventStore.close()
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
@@ -273,11 +272,36 @@ describe('AgentController', () => {
 		)
 	})
 
-	test('watch is idempotent', () => {
-		// Should not throw when called multiple times
-		controller.watch('session-1')
-		controller.watch('session-1')
-		controller.watch('session-1')
+	test('handleMessage backfills runId on user_message row', async () => {
+		store.ensureSession('session-1')
+		const row = store.appendEvent(
+			'session-1',
+			'user_message',
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'Hello' }],
+				timestamp: Date.now()
+			}
+		)
+
+		// Row initially has no runId
+		expect(row.runId).toBeNull()
+
+		const { runId, routed } =
+			await controller.handleMessage(
+				'session-1',
+				'Hello',
+				row.id
+			)
+
+		expect(routed).toBe('prompt')
+
+		// Verify runId was backfilled
+		const events = eventStore.query({
+			sessionId: 'session-1',
+			types: ['user_message']
+		})
+		expect(events[0]!.runId).toBe(runId)
 	})
 
 	test('guardrails do not crash the normal path when limit is not exceeded', async () => {
@@ -321,7 +345,6 @@ describe('AgentController', () => {
 			expect(types).toContain('agent_end')
 			expect(types).not.toContain('limit_hit')
 		} finally {
-			guardedController.dispose()
 		}
 	})
 
@@ -363,7 +386,6 @@ describe('AgentController', () => {
 			expect(recallIdx).toBeGreaterThanOrEqual(0)
 			expect(agentStartIdx).toBeGreaterThan(recallIdx)
 		} finally {
-			memoryController.dispose()
 		}
 	})
 
@@ -403,7 +425,6 @@ describe('AgentController', () => {
 			expect(agentEndIdx).toBeGreaterThanOrEqual(0)
 			expect(retainIdx).toBeGreaterThan(agentEndIdx)
 		} finally {
-			memoryController.dispose()
 		}
 	})
 
@@ -445,7 +466,6 @@ describe('AgentController', () => {
 			expect(payload.query).toBe('test query')
 			expect(payload.bankIds).toContain('bank-1')
 		} finally {
-			memoryController.dispose()
 		}
 	})
 
@@ -545,7 +565,6 @@ describe('AgentController', () => {
 			) as { limit: string }
 			expect(payload.limit).toBe('max_model_calls')
 		} finally {
-			guardedController.dispose()
 		}
 	})
 })
