@@ -134,7 +134,6 @@
       "dependencies": {
         "@ellie/agent": "workspace:*",
         "@ellie/ai": "workspace:*",
-        "@ellie/code-exec": "workspace:*",
         "@ellie/db": "workspace:*",
         "@ellie/env": "workspace:*",
         "@ellie/hindsight": "workspace:*",
@@ -194,17 +193,6 @@
       "peerDependencies": {
         "@tanstack/ai": ">=0.5.0",
         "@tanstack/ai-anthropic": ">=0.5.0",
-      },
-    },
-    "packages/code-exec": {
-      "name": "@ellie/code-exec",
-      "version": "0.1.0",
-      "dependencies": {
-        "fast-ulid": "^1.2.1",
-      },
-      "devDependencies": {
-        "@repo/typescript-config": "workspace:*",
-        "typescript": "^5.0.0",
       },
     },
     "packages/db": {
@@ -430,8 +418,6 @@
     "@ellie/agent": ["@ellie/agent@workspace:packages/agent"],
 
     "@ellie/ai": ["@ellie/ai@workspace:packages/ai"],
-
-    "@ellie/code-exec": ["@ellie/code-exec@workspace:packages/code-exec"],
 
     "@ellie/db": ["@ellie/db@workspace:packages/db"],
 

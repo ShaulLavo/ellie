@@ -5,23 +5,15 @@
  * variables, imports, and function definitions persist across
  * consecutive `evaluate()` calls within the same session.
  *
- * Communication protocol:
- *   1. Write code block to stdin, terminated by a sentinel marker.
- *   2. Read stdout/stderr until sentinel echo appears.
- *   3. Parse structured output (committed text vs raw artifacts).
+ * Communication:
+ *   stdin/stdout sentinel protocol for code evaluation.
+ *   localhost HTTP server for tool calls (fetch-based, no IPC).
  *
- * Tool access (optional):
- *   When constructed with ToolClient + ToolDefinition[], the REPL
- *   subprocess gets IPC-bridged tool functions (same as script_exec).
- *   Tools are callable as `await toolName({ arg: value })`.
+ * On timeout the subprocess is killed and auto-restarts on next call.
  */
 
 import { ulid } from 'fast-ulid'
-import {
-	buildReplBootstrap,
-	type ToolClient,
-	type ToolDefinition
-} from '@ellie/code-exec'
+import type { AgentTool } from '@ellie/agent'
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -46,47 +38,15 @@ export interface ReplSessionInfo {
 	lastEvalAt: number | null
 }
 
-export interface ReplToolConfig {
-	/** Tool definitions for generating wrapper functions. */
-	tools: ToolDefinition[]
-	/** Client that executes tool calls on behalf of the child. */
-	client: ToolClient
-	/** Max number of tool calls per evaluate() (default: 64). */
-	maxToolCalls?: number
-}
-
 // ── Constants ───────────────────────────────────────────────────────────
 
 const SENTINEL_PREFIX = '__ELLIE_REPL_SENTINEL_'
 const COMMIT_MARKER = '__ELLIE_COMMIT__'
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_OUTPUT_BYTES = 262_144
-const DEFAULT_MAX_TOOL_CALLS = 64
 
-// ── IPC protocol (matches child-runtime.ts / executor.ts) ───────────────
+// ── Helpers ─────────────────────────────────────────────────────────────
 
-interface ToolCallMessage {
-	__ce_call__: true
-	id: string
-	tool: string
-	args: Record<string, unknown>
-}
-
-function isToolCall(msg: unknown): msg is ToolCallMessage {
-	if (typeof msg !== 'object' || msg === null) return false
-	const obj = msg as Record<string, unknown>
-	return (
-		obj.__ce_call__ === true &&
-		typeof obj.id === 'string' &&
-		typeof obj.tool === 'string' &&
-		typeof obj.args === 'object' &&
-		obj.args !== null
-	)
-}
-
-// ── REPL Runtime ────────────────────────────────────────────────────────
-
-/** Bun.spawn generics vary by stdio config — define the shape we need. */
 type ReplProc = {
 	pid: number
 	stdin: {
@@ -94,129 +54,73 @@ type ReplProc = {
 		flush(): void
 	}
 	stdout: ReadableStream<Uint8Array>
-	send(msg: unknown): void
 	kill(): void
 	exited: Promise<number | null>
 }
 
-export class ReplRuntime {
-	readonly sessionId: string
-	readonly #createdAt: number
-	readonly #toolConfig: ReplToolConfig | null
-
-	#proc: ReplProc | null = null
-	#lastEvalAt: number | null = null
-	#alive = false
-	#toolCallCount = 0
-	#reader: ReadableStreamDefaultReader<Uint8Array> | null =
-		null
-	#residualBuffer = ''
-	#decoder = new TextDecoder()
-
-	constructor(
-		sessionId?: string,
-		toolConfig?: ReplToolConfig
-	) {
-		this.sessionId = sessionId ?? ulid()
-		this.#createdAt = Date.now()
-		this.#toolConfig = toolConfig ?? null
+/**
+ * Parse a line as a JSON committed-output envelope.
+ * Returns committed text + optional error, or null if not a committed line.
+ */
+function parseCommittedLine(
+	line: string
+): { committed: string; error?: string } | null {
+	let parsed: { __committed?: string[]; __error?: string }
+	try {
+		parsed = JSON.parse(line) as typeof parsed
+	} catch {
+		return null
 	}
+	if (
+		parsed === null ||
+		typeof parsed !== 'object' ||
+		!parsed.__committed ||
+		!Array.isArray(parsed.__committed)
+	) {
+		return null
+	}
+	return {
+		committed: parsed.__committed.join('\n'),
+		error: parsed.__error
+	}
+}
 
-	/** Spawn the Bun REPL subprocess. Idempotent — safe to call if already alive. */
-	async start(): Promise<void> {
-		if (this.#alive && this.#proc) return
+/**
+ * Generate the bootstrap code injected into the REPL via stdin.
+ * Sets up fetch-based tool wrappers + print() helper.
+ */
+function generateBootstrap(
+	tools: AgentTool[],
+	toolUrl: string
+): string {
+	const callTool = `
+async function __callTool(name, args) {
+  const r = await fetch(${JSON.stringify(toolUrl)}, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool: name, args: args ?? {} })
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(String(d.error));
+  const raw = d.result;
+  if (raw && typeof raw === "object" && "content" in raw && Array.isArray(raw.content)) {
+    return raw.content.map(c => typeof c.text === "string" ? c.text : "").join("");
+  }
+  return raw;
+}
+`
+	const wrappers = tools
+		.map(
+			t =>
+				`async function ${t.name}(args) { return __callTool(${JSON.stringify(t.name)}, args) }`
+		)
+		.join('\n')
 
-		const maxToolCalls =
-			this.#toolConfig?.maxToolCalls ??
-			DEFAULT_MAX_TOOL_CALLS
-		const toolClient = this.#toolConfig?.client
-
-		// eslint-disable-next-line prefer-const -- assigned by Bun.spawn, used in ipc closure
-		let proc: ReplProc | null
-
-		proc = Bun.spawn(['bun', 'repl'], {
-			stdin: 'pipe',
-			stdout: 'pipe',
-			stderr: 'inherit',
-			env: {
-				...process.env,
-				NODE_OPTIONS: ''
-			},
-			// IPC handler — bridges tool calls from the child
-			// back to the parent-side ToolClient.
-			ipc: message => {
-				if (!isToolCall(message)) return
-				if (!toolClient) return
-
-				this.#toolCallCount++
-				if (this.#toolCallCount > maxToolCalls) {
-					try {
-						proc!.send({
-							__ce_result__: true,
-							id: message.id,
-							error: `Exceeded max tool calls (${maxToolCalls})`
-						})
-					} catch {
-						/* child exited */
-					}
-					return
-				}
-
-				toolClient
-					.callTool(message.tool, message.args)
-					.then(result => {
-						try {
-							proc!.send({
-								__ce_result__: true,
-								id: message.id,
-								result
-							})
-						} catch {
-							/* child exited */
-						}
-					})
-					.catch(err => {
-						const errMsg =
-							err instanceof Error
-								? err.message
-								: String(err)
-						try {
-							proc!.send({
-								__ce_result__: true,
-								id: message.id,
-								error: errMsg
-							})
-						} catch {
-							/* child exited */
-						}
-					})
-			}
-		}) as unknown as ReplProc | null
-
-		this.#proc = proc
-
-		this.#alive = true
-
-		// ── Bootstrap phase ──────────────────────────────────
-
-		try {
-			// 1. IPC runtime + tool wrappers (if tools configured)
-			if (
-				this.#toolConfig &&
-				this.#toolConfig.tools.length > 0
-			) {
-				const ipcBootstrap = await buildReplBootstrap(
-					this.#toolConfig.tools
-				)
-				await this.#rawEval(ipcBootstrap, 10_000)
-			}
-
-			// 2. print/commit helper + stderr error capture
-			const printBootstrap = `
+	const printHelper = `
 globalThis.${COMMIT_MARKER} = [];
 globalThis.__ELLIE_LAST_ERROR__ = null;
 globalThis.print = (...args) => {
-  const text = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  const text = args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
   globalThis.${COMMIT_MARKER}.push(text);
   console.log(text);
 };
@@ -225,11 +129,96 @@ process.stderr.write = function(...args) {
   globalThis.__ELLIE_LAST_ERROR__ = String(args[0]).trim();
   return __origStderrWrite.apply(process.stderr, args);
 };
-undefined;
 `
-			await this.#rawEval(printBootstrap, 5_000)
+	return `${callTool}\n${wrappers}\n${printHelper}\nundefined;\n`
+}
+
+// ── REPL Runtime ────────────────────────────────────────────────────────
+
+export class ReplRuntime {
+	readonly sessionId: string
+	readonly #createdAt: number
+	readonly #tools: AgentTool[]
+
+	#proc: ReplProc | null = null
+	#server: ReturnType<typeof Bun.serve> | null = null
+	#lastEvalAt: number | null = null
+	#alive = false
+	#reader: ReadableStreamDefaultReader<Uint8Array> | null =
+		null
+	#residualBuffer = ''
+	#decoder = new TextDecoder()
+
+	constructor(sessionId?: string, tools?: AgentTool[]) {
+		this.sessionId = sessionId ?? ulid()
+		this.#createdAt = Date.now()
+		this.#tools = tools ?? []
+	}
+
+	/** Spawn the REPL subprocess + tool server. Idempotent. */
+	async start(): Promise<void> {
+		if (this.#alive && this.#proc) return
+
+		// 1. Start HTTP tool server (if tools provided)
+		let toolUrl = ''
+		if (this.#tools.length > 0) {
+			const toolMap = new Map(
+				this.#tools.map(t => [t.name, t])
+			)
+			this.#server = Bun.serve({
+				port: 0,
+				hostname: '127.0.0.1',
+				fetch: async req => {
+					try {
+						const body = (await req.json()) as {
+							tool: string
+							args: Record<string, unknown>
+						}
+						const tool = toolMap.get(body.tool)
+						if (!tool) {
+							return Response.json({
+								error: `Unknown tool: ${body.tool}`
+							})
+						}
+						const result = await tool.execute(
+							`repl-${ulid()}`,
+							body.args
+						)
+						return Response.json({ result })
+					} catch (err) {
+						const msg =
+							err instanceof Error
+								? err.message
+								: String(err)
+						return Response.json({ error: msg })
+					}
+				}
+			})
+			toolUrl = `http://127.0.0.1:${this.#server.port}`
+		}
+
+		// 2. Spawn REPL (no IPC needed)
+		const proc = Bun.spawn(['bun', 'repl'], {
+			stdin: 'pipe',
+			stdout: 'pipe',
+			stderr: 'inherit',
+			env: {
+				...process.env,
+				NODE_OPTIONS: ''
+			}
+		}) as unknown as ReplProc | null
+
+		this.#proc = proc
+		this.#alive = true
+
+		// 3. Bootstrap: inject tool wrappers + print helper
+		try {
+			const bootstrap = generateBootstrap(
+				this.#tools,
+				toolUrl
+			)
+			await this.#rawEval(bootstrap, 10_000)
 		} catch (err) {
-			// Bootstrap failed — rollback: kill the process and reset state
 			await this.teardown()
 			throw err
 		}
@@ -238,13 +227,8 @@ undefined;
 	/**
 	 * Evaluate code in the persistent REPL.
 	 *
-	 * Only output from `print()` calls enters the committed
-	 * result. Raw stdout/stderr is captured separately as artifacts.
-	 *
-	 * Code is sent directly to the REPL top-level (no IIFE wrapper)
-	 * so variables declared with let/const/var persist across calls.
-	 * If a line throws, the REPL catches it and continues — the
-	 * committed dump and sentinel still execute.
+	 * Only `print()` output enters the committed result.
+	 * Raw stdout/stderr is captured separately as artifacts.
 	 */
 	async evaluate(
 		code: string,
@@ -255,22 +239,10 @@ undefined;
 				'REPL not started. Call start() first.'
 			)
 		}
-		if (!this.#proc.stdin) {
-			throw new Error('REPL stdin not available')
-		}
 
 		const startMs = Date.now()
 		const sentinel = `${SENTINEL_PREFIX}${ulid()}`
 
-		// Reset per-evaluate tool call counter
-		this.#toolCallCount = 0
-
-		// Send code directly to the REPL top level — no IIFE — so
-		// let/const/var declarations persist across evaluate() calls.
-		// The REPL catches per-line errors and continues, so the
-		// committed dump + sentinel always execute.
-		// __ELLIE_LAST_ERROR__ is set by the stderr hook (see bootstrap)
-		// whenever the REPL catches a runtime error.
 		const wrappedCode = `globalThis.${COMMIT_MARKER} = [];
 globalThis.__ELLIE_LAST_ERROR__ = null;
 ${code}
@@ -286,7 +258,6 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 				timeoutMs
 			)
 
-			// Enforce output size cap
 			if (rawOutput.length > MAX_OUTPUT_BYTES) {
 				rawOutput =
 					rawOutput.slice(0, MAX_OUTPUT_BYTES) +
@@ -295,12 +266,10 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 
 			const elapsedMs = Date.now() - startMs
 			this.#lastEvalAt = Date.now()
-
 			return this.#parseOutput(rawOutput, elapsedMs)
 		} catch (err) {
 			const elapsedMs = Date.now() - startMs
 			this.#lastEvalAt = Date.now()
-
 			const msg =
 				err instanceof Error ? err.message : String(err)
 			return {
@@ -324,28 +293,32 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		}
 	}
 
-	/** Kill the subprocess and mark as dead. */
+	/** Kill the subprocess and tool server. */
 	async teardown(): Promise<void> {
-		if (!this.#proc) return
+		if (!this.#proc && !this.#server) return
 
 		try {
-			if (this.#reader) {
-				this.#reader.releaseLock()
-				this.#reader = null
-			}
+			this.#reader?.releaseLock()
 		} catch {
-			// Reader already released or stream closed
-			this.#reader = null
+			/* already released */
 		}
+		this.#reader = null
 
 		try {
-			this.#proc.kill()
+			this.#proc?.kill()
 		} catch {
-			// Already dead
+			/* already dead */
 		}
+		this.#proc = null
+
+		try {
+			this.#server?.stop()
+		} catch {
+			/* already stopped */
+		}
+		this.#server = null
 
 		this.#alive = false
-		this.#proc = null
 		this.#residualBuffer = ''
 	}
 
@@ -356,8 +329,8 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 	// ── Private ──────────────────────────────────────────────────────────
 
 	/**
-	 * Send raw code to the REPL stdin and capture output until sentinel.
-	 * Used for synchronous bootstrap code where sentinel-after is safe.
+	 * Send raw code to stdin and capture output until sentinel.
+	 * Used for bootstrap where sentinel-after is safe.
 	 */
 	async #rawEval(
 		code: string,
@@ -373,29 +346,25 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		this.#proc.stdin.write(payload)
 		this.#proc.stdin.flush()
 
-		// Read stdout until sentinel appears or timeout
 		const output = await this.#readUntilSentinel(
 			sentinel,
 			timeoutMs
 		)
 
-		// Enforce output size cap
 		if (output.length > MAX_OUTPUT_BYTES) {
 			return (
 				output.slice(0, MAX_OUTPUT_BYTES) +
 				'\n...(output truncated)'
 			)
 		}
-
 		return output
 	}
 
 	/**
-	 * Read from stdout until the sentinel line appears.
+	 * Read stdout until the sentinel line appears.
 	 *
-	 * Uses a persistent reader and residual buffer so data produced
-	 * between evaluations (REPL prompts, return-value echoes) doesn't
-	 * bleed into the wrong evaluation's output.
+	 * On timeout: kills the process so session_exec auto-restarts
+	 * on the next call (no corrupted state).
 	 */
 	async #readUntilSentinel(
 		sentinel: string,
@@ -405,13 +374,10 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 			throw new Error('REPL stdout not available')
 		}
 
-		// Reuse persistent reader — creating a new one each time
-		// loses buffered data sitting in the stream.
 		if (!this.#reader) {
 			this.#reader = this.#proc.stdout.getReader()
 		}
 
-		// Start with any leftover data from the previous read
 		let buffer = this.#residualBuffer
 		this.#residualBuffer = ''
 
@@ -419,22 +385,22 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		let streamEnded = false
 		const deadline = Date.now() + timeoutMs
 
-		// Check residual buffer first before reading more.
 		// Search for \n + sentinel to avoid matching the REPL's
-		// character-by-character echo of the source code.
+		// character-by-character echo of source code.
 		const sentinelNL = '\n' + sentinel
+
+		// Check residual buffer first
 		if (buffer.includes(sentinelNL)) {
 			const idx = buffer.indexOf(sentinelNL)
 			const sentinelLineEnd = buffer.indexOf(
 				'\n',
 				idx + sentinelNL.length
 			)
-			const before = buffer.slice(0, idx)
 			this.#residualBuffer =
 				sentinelLineEnd !== -1
 					? buffer.slice(sentinelLineEnd + 1)
 					: ''
-			return before.trim()
+			return buffer.slice(0, idx).trim()
 		}
 
 		while (Date.now() < deadline) {
@@ -462,16 +428,10 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 			])
 
 			if ('timeout' in result) {
-				// Timeout — release the reader to discard the pending read
-				// so subsequent evaluate() calls get a fresh reader.
-				// Suppress the rejection from the now-orphaned read promise.
+				// Kill the process — it's stuck. Session will
+				// auto-restart on next evaluate() call.
 				readPromise.catch(() => {})
-				try {
-					this.#reader?.releaseLock()
-				} catch {
-					// releaseLock may throw if reader is already released
-				}
-				this.#reader = null
+				await this.teardown()
 				break
 			}
 
@@ -487,15 +447,12 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 					'\n',
 					idx + sentinelNL.length
 				)
-				const before = buffer.slice(0, idx)
-				// Save anything after the sentinel line
-				// for the next evaluation
 				this.#residualBuffer =
 					sentinelLineEnd !== -1
 						? buffer.slice(sentinelLineEnd + 1)
 						: ''
 				sawSentinel = true
-				buffer = before
+				buffer = buffer.slice(0, idx)
 				break
 			}
 
@@ -511,7 +468,7 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 				this.#reader = null
 				throw new Error('REPL process exited unexpectedly')
 			}
-			if (Date.now() >= deadline) {
+			if (Date.now() >= deadline || !this.#alive) {
 				throw new Error(
 					`REPL evaluation timed out after ${timeoutMs}ms`
 				)
@@ -521,14 +478,11 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		return buffer.trim()
 	}
 
-	/**
-	 * Parse raw REPL output into committed + raw parts.
-	 */
+	/** Parse raw REPL output into committed + raw parts. */
 	#parseOutput(
 		rawOutput: string,
 		elapsedMs: number
 	): ReplEvalResult {
-		// Look for the JSON committed output at the end
 		const lines = rawOutput.split('\n')
 		let committed = ''
 		let errorMessage: string | undefined
@@ -536,26 +490,16 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 		const rawLines: string[] = []
 
 		for (const line of lines) {
-			try {
-				const parsed = JSON.parse(line) as {
-					__committed?: string[]
-					__error?: string
-				}
-				if (
-					parsed.__committed &&
-					Array.isArray(parsed.__committed)
-				) {
-					committed = parsed.__committed.join('\n')
-					if (parsed.__error) {
-						isError = true
-						errorMessage = parsed.__error
-					}
-					continue
-				}
-			} catch {
-				// Not JSON — treat as raw output
+			const envelope = parseCommittedLine(line)
+			if (!envelope) {
+				rawLines.push(line)
+				continue
 			}
-			rawLines.push(line)
+			committed = envelope.committed
+			if (envelope.error) {
+				isError = true
+				errorMessage = envelope.error
+			}
 		}
 
 		return {

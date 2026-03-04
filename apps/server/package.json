@@ -15,7 +15,6 @@
 	"dependencies": {
 		"@ellie/agent": "workspace:*",
 		"@ellie/ai": "workspace:*",
-		"@ellie/code-exec": "workspace:*",
 		"@ellie/db": "workspace:*",
 		"@ellie/env": "workspace:*",
 		"@ellie/hindsight": "workspace:*",

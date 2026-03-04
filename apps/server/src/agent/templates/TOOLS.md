@@ -28,29 +28,28 @@ For simple, single-step operations — use them directly:
 - `shell` — run shell commands
 - `ripgrep` — search file contents
 
-### `script_exec`
+### `exec`
 
-Run TypeScript in a **sandboxed Bun process**. Ephemeral — no state persists between calls. Use it when a task needs loops, conditionals, or chaining multiple tool calls in a single bounded script.
+Execute TypeScript in a **fresh isolated environment**. No state persists between calls — every invocation is independent.
 
 - Direct tools (`read_workspace_file`, `write_workspace_file`, `shell`, `ripgrep`) are available as async functions
-- Use `console.log()` to return output
+- Use `print()` to send output to the conversation — **this is required**
+- Each call spins up a fresh REPL, runs the code, and tears down
 - You can `import` any npm package — Bun auto-installs on first use
 
 ```ts
-import { format } from 'date-fns'
-const memory = await read_workspace_file({
-	path: 'MEMORY.md'
-})
-console.log(format(new Date(), 'yyyy-MM-dd'), memory)
+const files = await shell({ command: 'find . -name "*.ts" -maxdepth 2' })
+const count = files.trim().split('\n').length
+print(`Found ${count} TypeScript files`)
 ```
 
-**When to use:** bounded multi-step scripts, data transformations, file processing pipelines.
+**When to use:** bounded one-off scripts, quick computations, file transformations, anything that doesn't need state from a previous call.
 
 ### `session_exec`
 
 Execute TypeScript in a **persistent REPL session**. Variables, imports, and function definitions survive across consecutive calls.
 
-- Direct tools (`read_workspace_file`, `write_workspace_file`, `shell`, `ripgrep`) are available as async functions — same as `script_exec`
+- Direct tools (`read_workspace_file`, `write_workspace_file`, `shell`, `ripgrep`) are available as async functions
 - Use `print()` to send output to the conversation — **this is required**
 - Raw `console.log()` output is stored as artifacts but does NOT appear in conversation context
 - State persists across calls within the same session
@@ -70,12 +69,10 @@ print(`${filtered.length} active items found`)
 
 // Call 3: run a shell command and inspect output
 const result = await shell({ command: 'ls -la' })
-print(result.content[0].text)
+print(result)
 ```
 
-**Key difference from `script_exec`:** State persists across calls. Use `print()` instead of `console.log()` for output.
-
-**When to use:** iterative exploration, building up analysis state, complex multi-step workflows where you need to inspect intermediate results.
+**When to use:** iterative exploration, building up analysis state, complex multi-step workflows, loops, conditionals, chaining tool calls, file processing pipelines.
 
 **Session lifecycle:** A session starts automatically on the first `session_exec` call and stays alive for the duration of the agent run. Each evaluation has a default timeout of 30 seconds (configurable via `AGENT_SESSION_EXEC_TIMEOUT_MS`) and output is capped at 256 KB (`AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES`). The session terminates when the agent run ends.
 
@@ -86,8 +83,10 @@ print(result.content[0].text)
 | Read a single file                   | Direct tool    |
 | Run a shell command                  | Direct tool    |
 | Search for a pattern                 | Direct tool    |
-| Process 10 files in a loop           | `script_exec`  |
-| Chain 3 tool calls with conditionals | `script_exec`  |
+| One-off script or computation        | `exec`         |
+| Transform a file with logic          | `exec`         |
+| Process 10 files in a loop           | `session_exec` |
+| Chain 3 tool calls with conditionals | `session_exec` |
 | Iteratively explore a dataset        | `session_exec` |
 | Build up analysis state across steps | `session_exec` |
 | Debug something step by step         | `session_exec` |

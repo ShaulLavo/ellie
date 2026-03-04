@@ -12,9 +12,9 @@
  *   - This prevents context bloat from verbose execution output.
  *
  * Tool access:
- *   When baseTools are provided, they are bridged into the REPL
- *   subprocess via IPC — callable as async functions by name
- *   (same as script_exec).
+ *   When baseTools are provided, they are exposed in the REPL
+ *   via a localhost HTTP server — callable as async functions
+ *   by name (e.g. `await shell({ command: "ls" })`).
  */
 
 import * as v from 'valibot'
@@ -24,11 +24,9 @@ import type {
 } from '@ellie/agent'
 import {
 	ReplRuntime,
-	type ReplEvalResult,
-	type ReplToolConfig
+	type ReplEvalResult
 } from '../../repl/repl-runtime'
 import { ArtifactStore } from '../../repl/artifact-store'
-import { createAgentToolBridge } from '../script-exec/bridge'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -62,8 +60,8 @@ type SessionExecParams = v.InferOutput<
  * alive for the duration of the session. State persists between
  * consecutive calls.
  *
- * When baseTools are provided, they are bridged into the REPL via
- * IPC — the child process can call them as async functions.
+ * When baseTools are provided, they are exposed in the REPL
+ * subprocess via a localhost HTTP server.
  */
 export function createSessionExecTool(
 	dataDir: string,
@@ -73,16 +71,6 @@ export function createSessionExecTool(
 	let runtime: ReplRuntime | null = null
 	let boundSessionId: string | null = null
 	const artifactStore = new ArtifactStore(dataDir)
-
-	// Build IPC tool bridge once (if tools provided)
-	let toolConfig: ReplToolConfig | undefined
-	if (baseTools && baseTools.length > 0) {
-		const bridge = createAgentToolBridge(baseTools)
-		toolConfig = {
-			tools: bridge.tools,
-			client: bridge.client
-		}
-	}
 
 	return {
 		name: 'session_exec',
@@ -109,11 +97,11 @@ export function createSessionExecTool(
 					runtime = null
 				}
 
-				// Lazy-start the REPL on first call (or after teardown)
+				// Lazy-start the REPL on first call (or after teardown/timeout)
 				if (!runtime || !runtime.alive) {
 					runtime = new ReplRuntime(
 						currentSessionId ?? undefined,
-						toolConfig
+						baseTools
 					)
 					await runtime.start()
 					boundSessionId = currentSessionId

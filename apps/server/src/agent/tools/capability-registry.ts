@@ -1,21 +1,22 @@
 /**
- * Capability registry — assembles the exec-mode tool surface.
+ * Capability registry — assembles the tool surface.
  *
  * Organizes tools into three tiers:
- *   1. basicDirectTools  — trivial single-call tools (shell, search, file I/O).
- *   2. scriptExecTools    — bounded ephemeral script execution (script_exec).
- *   3. sessionExecTools   — persistent session execution (session_exec).
+ *   1. basicDirectTools — trivial single-call tools (shell, search, file I/O).
+ *   2. execTools         — one-shot isolated execution (exec) + persistent REPL (session_exec).
  *
  * The controller composes these into the final model-visible tool set:
- *   basicDirectTools + scriptExecTools + sessionExecTools
+ *   basicDirectTools + execTools
  */
 
 import type { AgentTool } from '@ellie/agent'
 import { createWorkspaceTools } from './workspace-tools'
 import { createShellTool } from './shell-tool'
 import { createRipgrepTool } from './ripgrep-tool'
-import { createScriptExecTool } from './script-exec'
-import { createSessionExecTool } from './session-exec'
+import {
+	createSessionExecTool,
+	createExecTool
+} from './session-exec'
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -31,10 +32,8 @@ export interface ToolRegistryConfig {
 export interface ToolRegistry {
 	/** Simple direct tools — shell, search, workspace read/write. */
 	basicDirectTools: AgentTool[]
-	/** Ephemeral script execution tool (script_exec). */
-	scriptExecTools: AgentTool[]
-	/** Persistent session execution tool (session_exec). */
-	sessionExecTools: AgentTool[]
+	/** Code execution tools (exec + session_exec). */
+	execTools: AgentTool[]
 	/** All tools combined for model registration. */
 	all: AgentTool[]
 }
@@ -42,13 +41,11 @@ export interface ToolRegistry {
 // ── Registry factory ────────────────────────────────────────────────────
 
 /**
- * Build the complete tool registry for exec-mode architecture.
+ * Build the complete tool registry.
  *
  * Tool composition:
- *   - script_exec receives basicDirectTools as its sandbox tools
- *     (it can call them as async functions inside the sandbox).
- *   - session_exec receives basicDirectTools as IPC-bridged tools
- *     (same tool access as script_exec, but state persists).
+ *   - exec and session_exec receive basicDirectTools so they are
+ *     available as async functions inside the REPL subprocess.
  *   - Neither exec tool includes itself, preventing recursion.
  */
 export function createToolRegistry(
@@ -60,11 +57,8 @@ export function createToolRegistry(
 		createRipgrepTool(config.workspaceDir)
 	]
 
-	const scriptExecTools: AgentTool[] = [
-		createScriptExecTool(basicDirectTools)
-	]
-
-	const sessionExecTools: AgentTool[] = [
+	const execTools: AgentTool[] = [
+		createExecTool(basicDirectTools),
 		createSessionExecTool(
 			config.dataDir,
 			config.getSessionId,
@@ -74,12 +68,7 @@ export function createToolRegistry(
 
 	return {
 		basicDirectTools,
-		scriptExecTools,
-		sessionExecTools,
-		all: [
-			...basicDirectTools,
-			...scriptExecTools,
-			...sessionExecTools
-		]
+		execTools,
+		all: [...basicDirectTools, ...execTools]
 	}
 }
