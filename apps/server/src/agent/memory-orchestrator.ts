@@ -23,9 +23,9 @@ import { createHash } from 'crypto'
 const GLOBAL_BANK_NAME = 'ellie-global'
 
 /** Max turns before triggering a retain flush. */
-export const MAX_TURNS_PER_CHUNK = 5
+export const MAX_TURNS_PER_CHUNK = 6
 /** Max chars across all pending turns before triggering a retain flush. */
-export const MAX_CHARS_PER_CHUNK = 4000
+export const MAX_CHARS_PER_CHUNK = 6000
 /** A single turn above this char count triggers an immediate retain. */
 export const IMMEDIATE_TURN_CHARS = 1200
 
