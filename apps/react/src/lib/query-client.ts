@@ -1,6 +1,9 @@
 import { QueryClient } from '@tanstack/react-query'
 
-export const queryClient = new QueryClient({
+// Persist across HMR re-evaluations
+export const queryClient: QueryClient = ((
+	globalThis as any
+).__queryClient ??= new QueryClient({
 	defaultOptions: {
 		queries: {
 			gcTime: 1000 * 60 * 60 * 24, // 24 hours
@@ -8,4 +11,4 @@ export const queryClient = new QueryClient({
 			refetchOnWindowFocus: true
 		}
 	}
-})
+}))
