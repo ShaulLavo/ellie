@@ -35,11 +35,15 @@ import {
 import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { createAgentRoutes } from './routes/agent'
-import { createAuthRoutes } from './routes/auth'
+import {
+	createAuthRoutes,
+	createGroqAuthRoutes
+} from './routes/auth'
 import { createChatRoutes } from './routes/chat'
 import { errorSchema, type SseState } from './routes/common'
 import { createSessionRoutes } from './routes/session'
 import { createStatusRoutes } from './routes/status'
+import { createDevRoutes } from './routes/dev'
 
 const parsedUrl = new URL(env.API_BASE_URL)
 const port =
@@ -171,7 +175,7 @@ async function resolveGroqAdapter(): Promise<AnyTextAdapter | null> {
 	// Env var first
 	if (process.env.GROQ_API_KEY) {
 		return groqChat(
-			'qwen/qwen3-32b',
+			'openai/gpt-oss-120b',
 			process.env.GROQ_API_KEY
 		)
 	}
@@ -179,17 +183,15 @@ async function resolveGroqAdapter(): Promise<AnyTextAdapter | null> {
 	// File fallback
 	const cred = await loadGroqCredential(CREDENTIALS_PATH)
 	if (cred) {
-		return groqChat('qwen/qwen3-32b', cred.key)
+		return groqChat('openai/gpt-oss-120b', cred.key)
 	}
 
 	return null
 }
 
-async function resolveAdapter(): Promise<AnyTextAdapter | null> {
-	return (
-		(await resolveAnthropicAdapter()) ??
-		(await resolveGroqAdapter())
-	)
+/** Agent adapter — Anthropic only. */
+async function resolveAgentAdapter(): Promise<AnyTextAdapter | null> {
+	return resolveAnthropicAdapter()
 }
 
 // ── Lazy agent controller ────────────────────────────────────────────────────
@@ -210,7 +212,7 @@ async function ensureTokenFresh(): Promise<void> {
 
 	const REFRESH_BUFFER_MS = 5 * 60 * 1000
 	if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
-		const freshAdapter = await resolveAdapter()
+		const freshAdapter = await resolveAgentAdapter()
 		if (freshAdapter && cachedController) {
 			cachedController.updateAdapter(freshAdapter)
 		} else {
@@ -354,12 +356,19 @@ export const app = new Elysia()
 		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
 	)
 	.use(
+		createGroqAuthRoutes(
+			CREDENTIALS_PATH,
+			invalidateAgentCache
+		)
+	)
+	.use(
 		createTusApp({
 			datastore: uploadStore,
 			relativeLocation: true,
 			maxSize: 500 * 1024 * 1024 // 500 MB
 		})
 	)
+	.use(createDevRoutes(DATA_DIR))
 	.use(createHindsightApp(hindsight))
 	.get('/', ({ redirect }) => redirect('/app'))
 	.use(

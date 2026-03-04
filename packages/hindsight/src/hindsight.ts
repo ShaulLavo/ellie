@@ -155,7 +155,7 @@ export class Hindsight {
 			this._resolvedAdapter =
 				this._configAdapter ??
 				groqChat(
-					'qwen/qwen3-32b',
+					'openai/gpt-oss-120b',
 					process.env.GROQ_API_KEY!
 				)
 		}
