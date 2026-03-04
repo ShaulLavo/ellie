@@ -4,13 +4,16 @@
  * Maps every event type string to its exact payload shape.
  * Used by the EventStore (creation) and the React client (consumption)
  * so TypeScript enforces correct payloads at both ends.
+ *
+ * All persistence uses unified types only:
+ *   - assistant_message (single row, INSERT then UPDATE)
+ *   - tool_execution (single row, INSERT then UPDATE)
+ *   - user_message (append-only)
  */
 
 import type {
 	AgentMessage,
 	AssistantMessage,
-	AssistantStreamEvent,
-	ToolResultMessage,
 	UserMessage
 } from './agent'
 import type { ContentPart } from './chat'
@@ -20,14 +23,6 @@ import type { ContentPart } from './chat'
 export interface EventPayloadMap {
 	// --- Core messages ---
 	user_message: UserMessage
-	assistant_start: { role: 'assistant'; timestamp: number }
-	assistant_final: AssistantMessage
-	tool_call: {
-		id: string
-		name: string
-		arguments: Record<string, unknown>
-	}
-	tool_result: ToolResultMessage
 
 	// --- Unified streaming events (single row, INSERT then UPDATE) ---
 	assistant_message: {
@@ -49,51 +44,12 @@ export interface EventPayloadMap {
 		status: 'running' | 'complete' | 'error'
 	}
 
-	// --- Legacy streaming (kept for reading old data) ---
-	message_start: { message: AgentMessage }
-	message_update: {
-		streamEvent: AssistantStreamEvent
-		message: AgentMessage
-	}
-	message_end: { message: AgentMessage }
-
 	// --- Agent lifecycle ---
 	agent_start: Record<string, never>
 	agent_end: { messages?: AgentMessage[] }
 	turn_start: Record<string, never>
 	turn_end: Record<string, never>
 	run_closed: { reason?: string }
-
-	// --- Tool execution ---
-	tool_execution_start: {
-		toolCallId: string
-		toolName: string
-		args: unknown
-	}
-	tool_execution_update: {
-		toolCallId: string
-		toolName: string
-		args: unknown
-		partialResult: {
-			content: Array<
-				| { type: 'text'; text: string }
-				| { type: 'image'; data: string; mimeType: string }
-			>
-			details: unknown
-		}
-	}
-	tool_execution_end: {
-		toolCallId: string
-		toolName: string
-		result: {
-			content: Array<
-				| { type: 'text'; text: string }
-				| { type: 'image'; data: string; mimeType: string }
-			>
-			details: unknown
-		}
-		isError: boolean
-	}
 
 	// --- Resilience ---
 	retry: {

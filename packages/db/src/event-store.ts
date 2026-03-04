@@ -40,10 +40,6 @@ export type { AgentMessage, EventType }
 
 const EVENT_TYPES = [
 	'user_message',
-	'assistant_start',
-	'assistant_final',
-	'tool_call',
-	'tool_result',
 	'agent_start',
 	'agent_end',
 	'turn_start',
@@ -53,13 +49,6 @@ const EVENT_TYPES = [
 	// Unified streaming events (single row, INSERT then UPDATE)
 	'assistant_message',
 	'tool_execution',
-	// Legacy streaming / lifecycle events (kept for reading old data)
-	'message_start',
-	'message_update',
-	'message_end',
-	'tool_execution_start',
-	'tool_execution_update',
-	'tool_execution_end',
 	// Resilience events
 	'retry',
 	'context_compacted',
@@ -95,33 +84,6 @@ const imageContent = v.object({
 	data: v.string(),
 	mimeType: v.string()
 })
-const thinkingContent = v.object({
-	type: v.literal('thinking'),
-	text: v.string()
-})
-const toolCallContent = v.object({
-	type: v.literal('toolCall'),
-	id: v.string(),
-	name: v.string(),
-	arguments: v.record(v.string(), v.unknown())
-})
-
-const costSchema = v.object({
-	input: v.number(),
-	output: v.number(),
-	cacheRead: v.number(),
-	cacheWrite: v.number(),
-	total: v.number()
-})
-
-const usageSchema = v.object({
-	input: v.number(),
-	output: v.number(),
-	cacheRead: v.number(),
-	cacheWrite: v.number(),
-	totalTokens: v.number(),
-	cost: costSchema
-})
 
 const payloadSchemas: Record<EventType, v.GenericSchema> = {
 	user_message: v.object({
@@ -129,48 +91,6 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		content: v.array(
 			v.variant('type', [textContent, imageContent])
 		),
-		timestamp: v.number()
-	}),
-	assistant_start: v.object({
-		role: v.literal('assistant'),
-		timestamp: v.number()
-	}),
-	assistant_final: v.object({
-		role: v.literal('assistant'),
-		content: v.array(
-			v.variant('type', [
-				textContent,
-				thinkingContent,
-				toolCallContent
-			])
-		),
-		provider: v.string(),
-		model: v.string(),
-		usage: usageSchema,
-		stopReason: v.picklist([
-			'stop',
-			'length',
-			'toolUse',
-			'error',
-			'aborted'
-		]),
-		errorMessage: v.optional(v.string()),
-		timestamp: v.number()
-	}),
-	tool_call: v.object({
-		id: v.string(),
-		name: v.string(),
-		arguments: v.record(v.string(), v.unknown())
-	}),
-	tool_result: v.object({
-		role: v.literal('toolResult'),
-		toolCallId: v.string(),
-		toolName: v.string(),
-		content: v.array(
-			v.variant('type', [textContent, imageContent])
-		),
-		details: v.optional(v.unknown()),
-		isError: v.boolean(),
 		timestamp: v.number()
 	}),
 	agent_start: v.object({}),
@@ -198,27 +118,6 @@ const payloadSchemas: Record<EventType, v.GenericSchema> = {
 		result: v.optional(v.unknown()),
 		isError: v.optional(v.boolean()),
 		status: v.picklist(['running', 'complete', 'error'])
-	}),
-	// Legacy streaming — loose schemas (kept for reading old data)
-	message_start: v.record(v.string(), v.unknown()),
-	message_update: v.record(v.string(), v.unknown()),
-	message_end: v.record(v.string(), v.unknown()),
-	tool_execution_start: v.object({
-		toolCallId: v.string(),
-		toolName: v.string(),
-		args: v.unknown()
-	}),
-	tool_execution_update: v.object({
-		toolCallId: v.string(),
-		toolName: v.string(),
-		args: v.unknown(),
-		partialResult: v.unknown()
-	}),
-	tool_execution_end: v.object({
-		toolCallId: v.string(),
-		toolName: v.string(),
-		result: v.unknown(),
-		isError: v.boolean()
 	}),
 	// Resilience events — permissive schemas for operational data
 	retry: v.object({
@@ -642,52 +541,14 @@ export class EventStore {
 			sessionId,
 			types: [
 				'user_message',
-				// New unified types
 				'assistant_message',
-				'tool_execution',
-				// Legacy types (for existing data)
-				'assistant_final',
-				'tool_call',
-				'tool_result'
+				'tool_execution'
 			]
 		})
-
-		// Deduplicate: new types take precedence over legacy dual-writes
-		const seenToolCallIds = new Set<string>()
-		const seenAssistantRuns = new Set<string>()
-		for (const row of rows) {
-			if (row.type === 'tool_execution') {
-				try {
-					const d = JSON.parse(row.payload) as {
-						toolCallId: string
-					}
-					seenToolCallIds.add(d.toolCallId)
-				} catch {
-					/* skip */
-				}
-			}
-			if (row.type === 'assistant_message' && row.runId) {
-				seenAssistantRuns.add(row.runId)
-			}
-		}
 
 		const messages: AgentMessage[] = []
 		for (const row of rows) {
 			try {
-				// Skip legacy rows covered by new unified types
-				if (
-					(row.type === 'tool_call' ||
-						row.type === 'tool_result') &&
-					isLegacyToolCovered(row, seenToolCallIds)
-				)
-					continue
-				if (
-					row.type === 'assistant_final' &&
-					row.runId &&
-					seenAssistantRuns.has(row.runId)
-				)
-					continue
-
 				const msg = parseEventRow(row)
 				if (msg) messages.push(msg)
 			} catch (err) {
@@ -704,10 +565,6 @@ export class EventStore {
 
 	/**
 	 * Find runs that started but never closed within the given time window.
-	 *
-	 * Note: For large tables, consider adding a composite index:
-	 *   CREATE INDEX idx_events_stale_runs ON events(type, run_id, created_at)
-	 *     WHERE run_id IS NOT NULL;
 	 */
 	findStaleRuns(
 		maxAgeMs: number
@@ -741,7 +598,6 @@ export class EventStore {
 				)
 			)
 			.all()
-		// isNotNull filter above guarantees runId is non-null
 		return rows as Array<{
 			sessionId: string
 			runId: string
@@ -787,10 +643,6 @@ export class EventStore {
 		}
 	}
 
-	/**
-	 * Atomically claim bootstrap injection for a session.
-	 * Returns true if this call won the claim, false if already injected.
-	 */
 	claimBootstrapInjection(
 		agentId: string,
 		sessionId: string
@@ -895,28 +747,7 @@ export class EventStore {
 /**
  * Parse an event row into an AgentMessage, or return null to skip it.
  */
-/** Check if a legacy tool_call/tool_result row is covered by a new tool_execution row. */
-function isLegacyToolCovered(
-	row: EventRow,
-	seenToolCallIds: Set<string>
-): boolean {
-	try {
-		const d = JSON.parse(row.payload) as {
-			id?: string
-			toolCallId?: string
-		}
-		const tcId = d.id ?? d.toolCallId
-		return !!tcId && seenToolCallIds.has(tcId)
-	} catch {
-		return false
-	}
-}
-
-/**
- * Parse an event row into an AgentMessage, or return null to skip it.
- */
 function parseEventRow(row: EventRow): AgentMessage | null {
-	// New unified types
 	if (row.type === 'assistant_message') {
 		const wrapper = JSON.parse(row.payload) as {
 			message: AgentMessage
@@ -944,7 +775,6 @@ function parseEventRow(row: EventRow): AgentMessage | null {
 			status: string
 		}
 		if (data.status === 'running') return null // Skip in-flight tools
-		// Return as toolResult message
 		return {
 			role: 'toolResult',
 			toolCallId: data.toolCallId,
@@ -952,44 +782,6 @@ function parseEventRow(row: EventRow): AgentMessage | null {
 			content: data.result?.content ?? [],
 			details: data.result?.details,
 			isError: data.isError ?? false,
-			timestamp: row.createdAt
-		} as AgentMessage
-	}
-
-	// Legacy types
-	if (row.type === 'tool_call') {
-		const tc = JSON.parse(row.payload) as {
-			id: string
-			name: string
-			arguments: Record<string, unknown>
-		}
-		return {
-			role: 'assistant',
-			content: [
-				{
-					type: 'toolCall',
-					id: tc.id,
-					name: tc.name,
-					arguments: tc.arguments
-				}
-			],
-			provider: 'system',
-			model: 'bootstrap-v1',
-			usage: {
-				input: 0,
-				output: 0,
-				cacheRead: 0,
-				cacheWrite: 0,
-				totalTokens: 0,
-				cost: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-					total: 0
-				}
-			},
-			stopReason: 'toolUse',
 			timestamp: row.createdAt
 		} as AgentMessage
 	}
@@ -1011,12 +803,11 @@ function parseEventRow(row: EventRow): AgentMessage | null {
 /**
  * Reorder messages so each toolResult comes after its parent assistant message.
  *
- * During a TanStack multi-turn run, tool_execution_end events (→ tool_result)
- * are persisted before message_end (→ assistant_final) because tools execute
- * during the stream while the assistant message finalizes after. Loading by
- * seq gives [toolResult, assistant] — but the API expects [assistant, toolResult].
+ * During a multi-turn run, tool_execution events are persisted before the
+ * assistant message finalizes because tools execute during the stream.
+ * Loading by seq gives [toolResult, assistant] — but the API expects
+ * [assistant, toolResult].
  */
-/** Extract toolCall IDs from an assistant message's content blocks. */
 function extractToolCallIds(msg: AgentMessage): string[] {
 	const ids: string[] = []
 	for (const block of msg.content) {
@@ -1032,20 +823,8 @@ function extractToolCallIds(msg: AgentMessage): string[] {
 function reorderToolResults(
 	messages: AgentMessage[]
 ): AgentMessage[] {
-	// Collect all toolCall IDs from assistant messages and their indices
-	const toolCallToIdx = new Map<string, number>()
-	for (let i = 0; i < messages.length; i++) {
-		const msg = messages[i]
-		if (msg.role !== 'assistant') continue
-		for (const id of extractToolCallIds(msg)) {
-			toolCallToIdx.set(id, i)
-		}
-	}
-
 	const result: AgentMessage[] = []
 	const deferred: AgentMessage[] = []
-
-	// Track which toolCallIds we've seen assistant messages for
 	const seenToolCallIds = new Set<string>()
 
 	for (const msg of messages) {
@@ -1054,7 +833,6 @@ function reorderToolResults(
 			for (const id of extractToolCallIds(msg)) {
 				seenToolCallIds.add(id)
 			}
-			// Flush any deferred tool results whose assistant is now seen
 			flushDeferred(deferred, seenToolCallIds, result)
 		} else if (msg.role === 'toolResult') {
 			const toolCallId = (msg as { toolCallId: string })
@@ -1075,7 +853,6 @@ function reorderToolResults(
 	return result
 }
 
-/** Move deferred tool results whose assistant has been seen into result. */
 function flushDeferred(
 	deferred: AgentMessage[],
 	seenToolCallIds: Set<string>,
