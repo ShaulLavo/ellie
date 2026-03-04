@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { ContentPart } from '@ellie/schemas/chat'
-import type { StoredChatMessage } from '../collections/chat-messages'
+import type { StoredChatMessage } from '@/collections/chat-messages'
 
 export type ToolResultPart = Extract<
 	ContentPart,

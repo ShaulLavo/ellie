@@ -4,8 +4,8 @@ import {
 	messagesToTranscript,
 	renderTranscript
 } from '@ellie/schemas/chat'
-import type { StoredChatMessage } from '../collections/chat-messages'
-import type { SlashCommand } from '@/components/slash-command-menu'
+import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { SlashCommand } from '../components/slash-command-menu'
 import {
 	Trash2Icon,
 	ListIcon,

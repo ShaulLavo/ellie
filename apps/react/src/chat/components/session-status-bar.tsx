@@ -1,5 +1,5 @@
-import { NumberTicker } from '../ui/number-ticker'
-import type { SessionStats } from '../../lib/chat/session-stats'
+import { NumberTicker } from '@/components/ui/number-ticker'
+import type { SessionStats } from '@/lib/chat/session-stats'
 
 export type { SessionStats }
 
