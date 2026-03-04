@@ -1,375 +1,89 @@
-import { resolve } from 'node:path'
-import {
-	anthropicOAuth,
-	refreshNormalizedOAuthToken
-} from '@ellie/ai/anthropic-oauth'
-import {
-	loadAnthropicCredential,
-	loadGroqCredential,
-	setAnthropicCredential
-} from '@ellie/ai/credentials'
-import { groqChat } from '@ellie/ai/openai-compat'
-import { EventStore } from '@ellie/db'
-import { env } from '@ellie/env/server'
-import { Hindsight } from '@ellie/hindsight'
 import { createHindsightApp } from '@ellie/hindsight/server'
-import { createTusApp, FileStore } from '@ellie/tus'
+import { createTusApp } from '@ellie/tus'
 import { openapi } from '@elysiajs/openapi'
 import { staticPlugin } from '@elysiajs/static'
-import type { AnyTextAdapter } from '@tanstack/ai'
-import {
-	type AnthropicChatModel,
-	anthropicText,
-	createAnthropicChat
-} from '@tanstack/ai-anthropic'
 import { tryValibotSummary } from '@ellie/schemas'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
-import { AgentController } from './agent/controller'
-import { MemoryOrchestrator } from './agent/memory-orchestrator'
-import { buildGuardrailPolicy } from './agent/guardrail-policy'
-import {
-	ensureBootstrapInjected,
-	isBootstrapInjected
-} from './agent/bootstrap'
-import { seedWorkspace } from './agent/workspace'
-import { RealtimeStore } from './lib/realtime-store'
 import { createAgentRoutes } from './routes/agent'
 import {
 	createAuthRoutes,
 	createGroqAuthRoutes
 } from './routes/auth'
 import { createChatRoutes } from './routes/chat'
-import { errorSchema, type SseState } from './routes/common'
+import { errorSchema } from './routes/common'
 import { createSessionRoutes } from './routes/session'
 import { createStatusRoutes } from './routes/status'
-import { startTei } from './lib/tei'
+import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
+import { API_INFO, API_TAGS } from './consts'
+import { init } from './init'
 
-const parsedUrl = new URL(env.API_BASE_URL)
-const port =
-	parsedUrl.port !== ''
-		? Number(parsedUrl.port)
-		: parsedUrl.protocol === 'https:'
-			? 443
-			: 80
-const { DATA_DIR } = env
-
-function todaySessionId(): string {
-	const now = new Date()
-	const y = now.getFullYear()
-	const m = String(now.getMonth() + 1).padStart(2, '0')
-	const d = String(now.getDate()).padStart(2, '0')
-	return `session-${y}-${m}-${d}`
-}
-
-const eventStore = new EventStore(
-	`${DATA_DIR}/events.db`,
-	`${DATA_DIR}/audit`
-)
-const initialSessionId =
-	eventStore.getKv('currentSessionId') ?? todaySessionId()
-const store = new RealtimeStore(
-	eventStore,
-	initialSessionId
-)
-
-// Startup recovery: find stale runs and close them via RealtimeStore
-// so in-memory #closedRuns set is updated for SSE endpoints
-const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000) // 5 min
-for (const { sessionId, runId } of staleRuns) {
-	try {
-		store.appendEvent(
-			sessionId,
-			'run_closed',
-			{ reason: 'recovered_after_crash' },
-			runId
-		)
-	} catch (err) {
-		console.warn(
-			'[server] failed to recover stale run:',
-			sessionId,
-			runId,
-			err
-		)
-	}
-}
-
-// ── Workspace seeding ─────────────────────────────────────────────────────────
-const workspaceDir = seedWorkspace(DATA_DIR)
-eventStore.markWorkspaceSeededOnce('main')
-
-const STUDIO_PUBLIC = resolve(
-	import.meta.dir,
-	'../../react/public'
-)
-
-const CREDENTIALS_PATH =
-	process.env.CREDENTIALS_PATH ??
-	resolve(import.meta.dir, '../../../.credentials.json')
-
-// ── Auth resolution ──────────────────────────────────────────────────────────
-// Priority: Anthropic (env vars > file) → Groq (env var > file)
-
-const REFRESH_BUFFER_MS = 5 * 60 * 1000
-
-/** Refresh an OAuth token if expired/expiring, returning the access token to use. */
-async function refreshOAuthIfNeeded(cred: {
-	access: string
-	refresh: string
-	expires: number
-}): Promise<string> {
-	if (cred.expires - Date.now() >= REFRESH_BUFFER_MS) {
-		return cred.access
-	}
-	const refreshed = await refreshNormalizedOAuthToken(
-		cred.refresh
-	)
-	if (!refreshed) {
-		console.warn(
-			'[server] OAuth token refresh failed, using existing token'
-		)
-		return cred.access
-	}
-	await setAnthropicCredential(CREDENTIALS_PATH, refreshed)
-	return refreshed.access
-}
-
-async function resolveAnthropicAdapter(): Promise<AnyTextAdapter | null> {
-	const model = env.ANTHROPIC_MODEL as AnthropicChatModel
-
-	// ANTHROPIC_OAUTH_TOKEN and ANTHROPIC_BEARER_TOKEN are intentionally read
-	// from process.env rather than the validated env schema — they are rarely
-	// used override tokens (e.g. for Max plan OAuth) that don't belong in the
-	// standard server config schema.
-	const oauthToken = process.env.ANTHROPIC_OAUTH_TOKEN
-	if (oauthToken) return anthropicOAuth(model, oauthToken)
-
-	const bearerToken = process.env.ANTHROPIC_BEARER_TOKEN
-	if (bearerToken)
-		return createAnthropicChat(model, bearerToken)
-
-	if (env.ANTHROPIC_API_KEY) return anthropicText(model)
-
-	// File fallback
-	const cred = await loadAnthropicCredential(
-		CREDENTIALS_PATH
-	)
-	if (!cred) return null
-
-	switch (cred.type) {
-		case 'api_key':
-			return createAnthropicChat(model, cred.key)
-		case 'oauth': {
-			const token = await refreshOAuthIfNeeded(cred)
-			return anthropicOAuth(model, token)
-		}
-		case 'token':
-			return createAnthropicChat(model, cred.token)
-		default:
-			cred satisfies never
-			return null
-	}
-}
-
-async function resolveGroqAdapter(): Promise<AnyTextAdapter | null> {
-	const cred = await loadGroqCredential(CREDENTIALS_PATH)
-	if (cred) {
-		return groqChat('openai/gpt-oss-120b', cred.key)
-	}
-	return null
-}
-
-/** Agent adapter — Anthropic only. */
-async function resolveAgentAdapter(): Promise<AnyTextAdapter | null> {
-	return resolveAnthropicAdapter()
-}
-
-// ── Lazy agent controller ────────────────────────────────────────────────────
-// Cached on first access, invalidated when credentials change so routes
-// always use the current adapter without requiring a server restart.
-
-let cachedController: AgentController | null | undefined
-
-/**
- * If the OAuth token is expired/expiring, refresh it and hot-swap the
- * adapter on the existing controller — no need to destroy the agent.
- */
-async function ensureTokenFresh(): Promise<void> {
-	const cred = await loadAnthropicCredential(
-		CREDENTIALS_PATH
-	)
-	if (!cred || cred.type !== 'oauth') return
-
-	const REFRESH_BUFFER_MS = 5 * 60 * 1000
-	if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
-		const freshAdapter = await resolveAgentAdapter()
-		if (freshAdapter && cachedController) {
-			cachedController.updateAdapter(freshAdapter)
-		} else {
-			// No adapter or no controller yet — fall through to
-			// getAgentController() which will create one.
-			invalidateAgentCache()
-		}
-	}
-}
-
-async function getAgentController(): Promise<AgentController | null> {
-	await ensureTokenFresh()
-	if (cachedController !== undefined)
-		return cachedController
-	const adapter = await resolveAgentAdapter()
-	const guardrails = buildGuardrailPolicy(env)
-
-	const memory = new MemoryOrchestrator({
-		hindsight,
-		eventStore,
-		workspaceDir,
-		onTrace: entry => {
-			store.trace({
-				sessionId: store.getCurrentSessionId(),
-				type: entry.type,
-				payload: entry.payload
-			})
-		}
-	})
-
-	cachedController = adapter
-		? new AgentController(store, {
-				adapter,
-				workspaceDir,
-				dataDir: DATA_DIR,
-				memory,
-				agentOptions: guardrails
-					? { guardrails }
-					: undefined
-			})
-		: null
-	return cachedController
-}
-
-/** Call after credentials are written/cleared to force re-resolution. */
-function invalidateAgentCache() {
-	cachedController = undefined
-}
-
-// ── TEI (embeddings & reranking) ──────────────────────────────────────────
-// Must be running before Hindsight is initialised.
-await startTei()
-
-// ── Hindsight (memory) ────────────────────────────────────────────────────
-// Single default bank is created lazily on first access.
-// Must be initialised before getAgentController() so MemoryOrchestrator
-// receives a valid hindsight reference.
-const hindsightAdapter = await resolveGroqAdapter()
-const hindsight = new Hindsight({
-	dbPath: `${DATA_DIR}/hindsight.db`,
-	...(hindsightAdapter ? { adapter: hindsightAdapter } : {})
-})
-
-// Eagerly resolve once at startup so first request doesn't pay the cost
-await getAgentController()
-
-// ── Tus uploads ───────────────────────────────────────────────────────────
-const uploadStore = new FileStore({
-	directory: `${DATA_DIR}/uploads`,
-	expirationPeriodInMilliseconds: 24 * 60 * 60 * 1000 // 24h
-})
-
-const sseState: SseState = {
-	activeClients: 0
-}
-
-// ── Session rotation cron ─────────────────────────────────────────────────────
-// Kept outside the Elysia app chain so the croner type doesn't leak into the
-// exported App type (which Eden uses for type-safe client generation).
-import { Cron } from 'croner'
-new Cron('0 0 * * *', () => {
-	store.rotateSession(todaySessionId())
-})
+const ctx = await init()
 
 export const app = new Elysia()
 	.use(
 		openapi({
-			documentation: {
-				info: {
-					title: 'Ellie API',
-					version: '1.0.0'
-				},
-				tags: [
-					{ name: 'Status', description: 'Server status' },
-					{
-						name: 'Chat',
-						description: 'Chat sessions and messages'
-					},
-					{
-						name: 'Agent',
-						description: 'Agent management'
-					},
-					{
-						name: 'Auth',
-						description: 'Anthropic credential management'
-					},
-					{
-						name: 'Session',
-						description: 'Session management'
-					},
-					{
-						name: 'Uploads',
-						description: 'Tus upload management'
-					}
-				]
-			},
+			documentation: { info: API_INFO, tags: [...API_TAGS] },
 			mapJsonSchema: { valibot: toJsonSchema }
 		})
 	)
 	.use(
 		createStatusRoutes(
-			() => sseState.activeClients,
-			() => !isBootstrapInjected(eventStore)
+			() => ctx.sseState.activeClients,
+			() => !ctx.isBootstrapInjected()
 		)
 	)
-	.use(createSessionRoutes(store))
+	.use(createSessionRoutes(ctx.store))
 	.use(
 		createChatRoutes(
-			store,
-			sseState,
-			getAgentController,
-			sessionId =>
-				ensureBootstrapInjected({
-					sessionId,
-					store,
-					eventStore,
-					workspaceDir
-				})
+			ctx.store,
+			ctx.sseState,
+			ctx.getAgentController,
+			ctx.ensureBootstrap
 		)
 	)
 	.use(
-		createAgentRoutes(store, getAgentController, sseState)
+		createAgentRoutes(
+			ctx.store,
+			ctx.getAgentController,
+			ctx.sseState
+		)
 	)
 	.use(
-		createAuthRoutes(CREDENTIALS_PATH, invalidateAgentCache)
+		createAuthRoutes(
+			ctx.CREDENTIALS_PATH,
+			ctx.invalidateAgentCache
+		)
 	)
 	.use(
 		createGroqAuthRoutes(
-			CREDENTIALS_PATH,
-			invalidateAgentCache
+			ctx.CREDENTIALS_PATH,
+			ctx.invalidateAgentCache
 		)
 	)
 	.use(
 		createTusApp({
-			datastore: uploadStore,
+			datastore: ctx.uploadStore,
 			relativeLocation: true,
 			maxSize: 500 * 1024 * 1024 // 500 MB
 		})
 	)
-	.use(createDevRoutes(DATA_DIR))
-	.use(createHindsightApp(hindsight))
+	.use(createDevRoutes(ctx.DATA_DIR))
+	.use(createDbStudioRoutes(ctx.DATA_DIR))
+	.use(createHindsightApp(ctx.hindsight))
 	.get('/', ({ redirect }) => redirect('/app'))
 	.use(
 		await staticPlugin({
-			assets: STUDIO_PUBLIC,
+			assets: ctx.STUDIO_PUBLIC,
 			prefix: `/app`,
+			indexHTML: true
+		})
+	)
+	.use(
+		await staticPlugin({
+			assets: ctx.STUDIO_PUBLIC,
+			prefix: `/db`,
 			indexHTML: true
 		})
 	)
@@ -419,4 +133,4 @@ export const app = new Elysia()
 
 export type App = typeof app
 
-app.listen(port)
+app.listen(ctx.port)
