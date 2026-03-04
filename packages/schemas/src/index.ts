@@ -1,5 +1,6 @@
 export * from './hindsight'
 export * from './agent'
 export * from './chat'
+export * from './events'
 export { messageSchema } from './router'
 export { tryValibotSummary } from './validation'

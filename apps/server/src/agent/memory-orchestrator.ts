@@ -35,6 +35,20 @@ const FACTS_UI_CAP = 8
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface BankSearchResult {
+	bankId: string
+	status: 'ok' | 'error' | 'timeout'
+	error?: string
+	memoryCount: number
+	methodResults?: Record<
+		string,
+		{
+			hits: Array<{ id: string; score: number }>
+			error?: string
+		}
+	>
+}
+
 export interface MemoryRecallPayload {
 	parts: Array<{
 		type: 'memory'
@@ -45,6 +59,7 @@ export interface MemoryRecallPayload {
 	}>
 	query: string
 	bankIds: string[]
+	searchResults: BankSearchResult[]
 	timestamp: number
 }
 
@@ -118,24 +133,46 @@ export class MemoryOrchestrator {
 			)
 		)
 
-		// Collect successful results
+		// Collect successful results + per-bank diagnostics
 		const memories: Array<{
 			text: string
 			score: number
 			model?: string
 		}> = []
 		const succeededBankIds: string[] = []
+		const searchResults: BankSearchResult[] = []
 
 		for (let i = 0; i < results.length; i++) {
 			const result = results[i]
 			if (result.status === 'fulfilled' && result.value) {
 				succeededBankIds.push(bankIds[i])
-				for (const mem of result.value.memories) {
+				const val = result.value
+				for (const mem of val.memories) {
 					memories.push({
 						text: mem.memory.content,
 						score: mem.score ?? 0
 					})
 				}
+				searchResults.push({
+					bankId: bankIds[i],
+					status: 'ok',
+					memoryCount: val.memories.length,
+					methodResults: val.methodResults
+				})
+			} else if (result.status === 'rejected') {
+				const err = result.reason
+				const isTimeout =
+					err instanceof Error &&
+					err.message.startsWith('Timeout')
+				searchResults.push({
+					bankId: bankIds[i],
+					status: isTimeout ? 'timeout' : 'error',
+					error:
+						err instanceof Error
+							? err.message
+							: String(err),
+					memoryCount: 0
+				})
 			}
 		}
 
@@ -157,6 +194,7 @@ export class MemoryOrchestrator {
 					],
 					query,
 					bankIds: succeededBankIds,
+					searchResults,
 					timestamp: Date.now()
 				},
 				contextBlock: ''
@@ -197,6 +235,7 @@ export class MemoryOrchestrator {
 			],
 			query,
 			bankIds: succeededBankIds,
+			searchResults,
 			timestamp: Date.now()
 		}
 

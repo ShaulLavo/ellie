@@ -151,15 +151,44 @@ export async function recall(
 				durationMs: 0
 			})
 
-	const [semanticTimed, fulltextTimed, temporalTimed] =
-		await Promise.all([
-			semanticTask,
-			fulltextTask,
-			temporalTask
-		])
+	const EMPTY_TIMED: TimedHits = { hits: [], durationMs: 0 }
 
-	const graphTimed = methodSet.has('graph')
-		? await timedAsync(() =>
+	const settled = await Promise.allSettled([
+		semanticTask,
+		fulltextTask,
+		temporalTask
+	])
+	const semanticTimed =
+		settled[0].status === 'fulfilled'
+			? settled[0].value
+			: EMPTY_TIMED
+	const fulltextTimed =
+		settled[1].status === 'fulfilled'
+			? settled[1].value
+			: EMPTY_TIMED
+	const temporalTimed =
+		settled[2].status === 'fulfilled'
+			? settled[2].value
+			: EMPTY_TIMED
+
+	// Collect per-method errors for audit
+	const methodErrors: Record<string, string> = {}
+	for (const [i, name] of (
+		['semantic', 'fulltext', 'temporal'] as const
+	).entries()) {
+		if (settled[i].status === 'rejected') {
+			const reason = settled[i].reason
+			methodErrors[name] =
+				reason instanceof Error
+					? reason.message
+					: String(reason)
+		}
+	}
+
+	let graphTimed: TimedHits
+	if (methodSet.has('graph')) {
+		try {
+			graphTimed = await timedAsync(() =>
 				searchGraph(
 					hdb,
 					memoryVec,
@@ -176,7 +205,14 @@ export async function recall(
 					}
 				)
 			)
-		: { hits: [], durationMs: 0 }
+		} catch (err) {
+			graphTimed = EMPTY_TIMED
+			methodErrors.graph =
+				err instanceof Error ? err.message : String(err)
+		}
+	} else {
+		graphTimed = EMPTY_TIMED
+	}
 
 	phaseMetrics.push({
 		phaseName: 'parallel_retrieval',
@@ -210,10 +246,39 @@ export async function recall(
 		details: { candidatesMerged: fused.length }
 	})
 
+	const toHits = (hits: RetrievalHit[]) =>
+		hits.map(h => ({ id: h.id, score: h.score }))
+
+	const methodResults: Record<
+		string,
+		{
+			hits: Array<{ id: string; score: number }>
+			error?: string
+		}
+	> = {
+		semantic: {
+			hits: toHits(semanticTimed.hits),
+			error: methodErrors.semantic
+		},
+		fulltext: {
+			hits: toHits(fulltextTimed.hits),
+			error: methodErrors.fulltext
+		},
+		graph: {
+			hits: toHits(graphTimed.hits),
+			error: methodErrors.graph
+		},
+		temporal: {
+			hits: toHits(temporalTimed.hits),
+			error: methodErrors.temporal
+		}
+	}
+
 	if (fused.length === 0) {
 		return {
 			memories: [],
 			query,
+			methodResults,
 			entities: options.includeEntities ? {} : undefined,
 			chunks: options.includeChunks ? {} : undefined,
 			trace: options.enableTrace
@@ -898,6 +963,7 @@ export async function recall(
 	return {
 		memories,
 		query,
+		methodResults,
 		entities,
 		chunks,
 		trace,

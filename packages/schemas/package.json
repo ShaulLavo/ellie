@@ -9,6 +9,7 @@
 		".": "./src/index.ts",
 		"./hindsight": "./src/hindsight.ts",
 		"./agent": "./src/agent.ts",
+		"./events": "./src/events.ts",
 		"./router": "./src/router.ts",
 		"./chat": "./src/chat.ts"
 	},
