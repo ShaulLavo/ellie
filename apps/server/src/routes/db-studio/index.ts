@@ -38,11 +38,7 @@ export function createDbStudioRoutes(dataDir: string) {
 		.get(
 			'/:database/tables',
 			({ params }) => {
-				const db = openDb(
-					dataDir,
-					params.database,
-					dbCache
-				)
+				const db = openDb(dataDir, params.database, dbCache)
 				return {
 					database: params.database,
 					tables: getTables(db)
@@ -53,11 +49,7 @@ export function createDbStudioRoutes(dataDir: string) {
 		.get(
 			'/:database/:table/schema',
 			({ params }) => {
-				const db = openDb(
-					dataDir,
-					params.database,
-					dbCache
-				)
+				const db = openDb(dataDir, params.database, dbCache)
 				const schema = getSchema(db, params.table)
 				return {
 					database: params.database,
@@ -70,11 +62,7 @@ export function createDbStudioRoutes(dataDir: string) {
 		.get(
 			'/:database/:table',
 			({ params, query }) => {
-				const db = openDb(
-					dataDir,
-					params.database,
-					dbCache
-				)
+				const db = openDb(dataDir, params.database, dbCache)
 				const { table } = params
 				const page = query.page ?? 1
 				const pageSize = query.pageSize ?? 100
@@ -163,11 +151,7 @@ export function createDbStudioRoutes(dataDir: string) {
 						.query(
 							`SELECT * FROM ${quoteId(table)} ${filterClause} ${orderClause} LIMIT ? OFFSET ?`
 						)
-						.all(
-							...filterParams,
-							ps,
-							offset
-						) as Array<
+						.all(...filterParams, ps, offset) as Array<
 						Record<string, unknown>
 					>
 				} catch {

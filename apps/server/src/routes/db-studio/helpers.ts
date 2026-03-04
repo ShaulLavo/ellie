@@ -133,7 +133,9 @@ export function openDb(
 	name: string,
 	cache: Map<string, Database>
 ): Database {
-	const allowed = new Set(discoverDbs(dataDir).map(d => d.name))
+	const allowed = new Set(
+		discoverDbs(dataDir).map(d => d.name)
+	)
 	if (!allowed.has(name)) {
 		throw new Error(`Database not found: ${name}`)
 	}
@@ -215,9 +217,7 @@ export function getSchema(db: Database, table: string) {
 		for (const idx of indexes) {
 			if (idx.unique) {
 				const idxCols = db
-					.query(
-						`PRAGMA index_info(${quoteId(idx.name)})`
-					)
+					.query(`PRAGMA index_info(${quoteId(idx.name)})`)
 					.all() as Array<{ name: string }>
 				if (idxCols.length === 1) {
 					uniqueCols.add(idxCols[0].name)

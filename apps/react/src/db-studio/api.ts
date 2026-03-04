@@ -12,8 +12,7 @@ function unwrap<T>(result: {
 			typeof result.error.value === 'object' &&
 			'error' in result.error.value
 				? String(
-						(result.error.value as { error: string })
-							.error
+						(result.error.value as { error: string }).error
 					)
 				: 'Request failed'
 		throw new Error(msg)
@@ -38,7 +37,8 @@ export async function fetchSchema(
 	table: string
 ) {
 	const res = await eden
-		.db({ database })({ table }).schema.get()
+		.db({ database })({ table })
+		.schema.get()
 	return unwrap(res)
 }
 
@@ -54,14 +54,15 @@ export async function fetchRows(
 	} = {}
 ) {
 	const res = await eden
-		.db({ database })({ table }).get({
-		query: {
-			page: opts.page as number,
-			pageSize: opts.pageSize as number,
-			sortBy: opts.sortBy,
-			sortDir: opts.sortDir,
-			filter: opts.filter
-		}
-	})
+		.db({ database })({ table })
+		.get({
+			query: {
+				page: opts.page as number,
+				pageSize: opts.pageSize as number,
+				sortBy: opts.sortBy,
+				sortDir: opts.sortDir,
+				filter: opts.filter
+			}
+		})
 	return unwrap(res)
 }

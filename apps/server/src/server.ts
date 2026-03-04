@@ -24,7 +24,10 @@ const ctx = await init()
 export const app = new Elysia()
 	.use(
 		openapi({
-			documentation: { info: API_INFO, tags: [...API_TAGS] },
+			documentation: {
+				info: API_INFO,
+				tags: [...API_TAGS]
+			},
 			mapJsonSchema: { valibot: toJsonSchema }
 		})
 	)
