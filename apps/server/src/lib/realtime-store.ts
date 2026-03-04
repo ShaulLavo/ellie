@@ -228,6 +228,25 @@ export class RealtimeStore {
 		return row
 	}
 
+	/**
+	 * Update the runId of an existing event and notify subscribers.
+	 * Used to backfill runId on user_message events after routing.
+	 */
+	updateEventRunId(
+		id: number,
+		runId: string,
+		sessionId: string
+	): EventRow {
+		const row = this.#store.updateRunId(id, runId)
+
+		this.#publish(`session:${sessionId}`, {
+			type: 'update',
+			event: row
+		} satisfies SessionEvent)
+
+		return row
+	}
+
 	// ── Agent run lifecycle ───────────────────────────────────────────────
 
 	closeAgentRun(sessionId: string, runId: string): void {

@@ -583,6 +583,26 @@ export class EventStore {
 		return result
 	}
 
+	/**
+	 * Update the runId of an existing event row.
+	 * Used to backfill the runId on a user_message that was persisted
+	 * before routing determined which run it belongs to.
+	 */
+	updateRunId(id: number, runId: string): EventRow {
+		const result = this.db
+			.update(events)
+			.set({ runId })
+			.where(eq(events.id, id))
+			.returning()
+			.get()
+
+		if (!result) {
+			throw new Error(`Event not found: ${id}`)
+		}
+
+		return result
+	}
+
 	// ── Event query ─────────────────────────────────────────────────────────
 
 	query(input: QueryInput): EventRow[] {
