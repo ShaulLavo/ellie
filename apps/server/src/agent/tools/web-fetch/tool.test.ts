@@ -12,7 +12,7 @@ function textOf(result: AgentToolResult): string {
 describe('web_fetch tool', () => {
 	const tool = createWebFetchTool()
 
-	// ── HTML (static) ───────────────────────────────────────────────
+	// ── HTML ─────────────────────────────────────────────────────────
 
 	test('fetches a Wikipedia page and extracts content', async () => {
 		const result = await tool.execute('tc-1', {
@@ -33,28 +33,28 @@ describe('web_fetch tool', () => {
 		)
 		expect(details.title).toContain('TypeScript')
 		expect(details.wordCount).toBeGreaterThan(100)
-	}, 15_000)
+	}, 30_000)
 
-	test('returns markdown by default', async () => {
+	test('returns markdown with atx headings and no raw HTML', async () => {
 		const result = await tool.execute('tc-1', {
 			url: 'https://en.wikipedia.org/wiki/Bun_(software)'
 		})
 
 		const text = textOf(result)
-		// Markdown should have headers
 		expect(text).toContain('#')
-	}, 15_000)
-
-	test('uses atx headings and no raw html tags', async () => {
-		const result = await tool.execute('tc-1', {
-			url: 'https://en.wikipedia.org/wiki/Bun_(software)'
-		})
-
-		const text = textOf(result)
-		// Turndown atx headings (## style), not raw HTML
 		expect(text).toMatch(/^#{1,6} /m)
 		expect(text).not.toMatch(/<[a-z]/)
-	}, 15_000)
+	}, 30_000)
+
+	test('renders SPA pages via headless browser', async () => {
+		// react.dev is a SPA — Puppeteer renders it with full JS support
+		const result = await tool.execute('tc-spa', {
+			url: 'https://react.dev/learn'
+		})
+
+		const text = textOf(result)
+		expect(text.length).toBeGreaterThan(200)
+	}, 30_000)
 
 	test('handles invalid URL gracefully', async () => {
 		const result = await tool.execute('tc-1', {
@@ -112,17 +112,4 @@ describe('web_fetch tool', () => {
 		expect(text).toContain('Web fetch error:')
 		expect(text).toContain('404')
 	}, 15_000)
-
-	// ── Auto Playwright (SPA detection) ─────────────────────────────
-
-	test('auto-detects SPA and falls back to Playwright', async () => {
-		// react.dev is a known SPA — static fetch yields a shell
-		const result = await tool.execute('tc-spa', {
-			url: 'https://react.dev/learn'
-		})
-
-		const text = textOf(result)
-		// Should still extract meaningful content via Playwright
-		expect(text.length).toBeGreaterThan(200)
-	}, 30_000)
 })

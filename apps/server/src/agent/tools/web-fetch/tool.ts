@@ -3,23 +3,19 @@
  * PDFs, and other resources.
  *
  * Routes by Content-Type:
- *   PDF   → pdf2md → markdown
- *   media → URL reference
- *   HTML  → auto-detects JS-heavy pages:
- *           1. allowlisted domain → Defuddle (static)
- *           2. SPA shell detected → Playwright
- *           3. Defuddle → wordCount < 50 → Playwright retry
+ *   PDF   → fetch → pdf2md → markdown
+ *   media → fetch → URL reference
+ *   HTML  → Puppeteer (via worker) → Defuddle → markdown
  */
 
 import * as v from 'valibot'
 import * as Comlink from 'comlink'
 import pdf2md from '@opendocsg/pdf2md'
-import { getBrowser } from './browser'
 import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import type { DefuddleWorkerApi } from './defuddle.worker'
+import type { FetchWorkerApi } from './defuddle.worker'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -40,112 +36,11 @@ const USER_AGENT =
 	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
 	'(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
-const MIN_WORD_COUNT = 50
+// ── Fetch worker (lazy singleton) ───────────────────────────────────────
 
-// ── Static domain allowlist ─────────────────────────────────────────────
+let workerProxy: Comlink.Remote<FetchWorkerApi> | null = null
 
-/**
- * Domains known to serve static HTML that never needs JS rendering.
- * Exact entries (e.g. 'abc.net.au') match the full hostname suffix.
- * Short entries match the domain name without TLD (e.g. 'wikipedia'
- * matches en.wikipedia.org, ja.wikipedia.org, etc.).
- */
-const STATIC_DOMAINS = new Set([
-	// exact domains
-	'abc.net.au',
-	'bsky.app',
-	// domain-without-suffix matches
-	'apple',
-	'arxiv',
-	'bbc',
-	'blogspot',
-	'csdn',
-	'deviantart',
-	'digg',
-	'engadget',
-	'etsy',
-	'eventbrite',
-	'flickr',
-	'ghost',
-	'giphy',
-	'github',
-	'gitlab',
-	'google',
-	'huffingtonpost',
-	'imdb',
-	'imgur',
-	'instagram',
-	'meetup',
-	'microsoft',
-	'nytimes',
-	'pinterest',
-	'producthunt',
-	'reddit',
-	'slideshare',
-	'soundcloud',
-	'sourceforge',
-	'spotify',
-	'stackoverflow',
-	'substack',
-	'techcrunch',
-	'telegraph',
-	'theguardian',
-	'theverge',
-	'tumblr',
-	'vimeo',
-	'wikipedia',
-	'wordpress',
-	'ycombinator',
-	'yelp',
-	'youtube',
-	'zoom'
-])
-
-function isStaticDomain(url: string): boolean {
-	try {
-		const hostname = new URL(url).hostname // e.g. "en.wikipedia.org"
-		// Check exact hostname suffix (for multi-part entries like abc.net.au)
-		for (const domain of STATIC_DOMAINS) {
-			if (domain.includes('.')) {
-				// Exact: hostname ends with the domain
-				if (
-					hostname === domain ||
-					hostname.endsWith(`.${domain}`)
-				)
-					return true
-			} else {
-				// Suffix-less: any hostname part matches
-				const parts = hostname.split('.')
-				if (parts.includes(domain)) return true
-			}
-		}
-		return false
-	} catch {
-		return false
-	}
-}
-
-// ── SPA detection ───────────────────────────────────────────────────────
-
-function looksLikeSpa(html: string): boolean {
-	// Very short body — likely an empty shell
-	if (html.length < 1500) return true
-
-	// Has noscript tag — framework fallback for SSR
-	if (/<noscript/i.test(html)) return true
-
-	// Framework hydration markers without real article content
-	const hasFrameworkMarkers =
-		/__NEXT_DATA__|__NUXT__|window\.__/i.test(html)
-	const hasArticleContent = /<article/i.test(html)
-	return hasFrameworkMarkers && !hasArticleContent
-}
-
-// ── Defuddle worker (lazy singleton) ────────────────────────────────────
-
-let workerProxy: Comlink.Remote<DefuddleWorkerApi> | null = null
-
-function getDefuddleWorker(): Comlink.Remote<DefuddleWorkerApi> {
+function getFetchWorker(): Comlink.Remote<FetchWorkerApi> {
 	if (!workerProxy) {
 		const worker = new Worker(
 			new URL('./defuddle.worker.ts', import.meta.url)
@@ -153,10 +48,26 @@ function getDefuddleWorker(): Comlink.Remote<DefuddleWorkerApi> {
 		worker.addEventListener('error', () => {
 			workerProxy = null
 		})
-		workerProxy = Comlink.wrap<DefuddleWorkerApi>(worker)
+		workerProxy = Comlink.wrap<FetchWorkerApi>(worker)
 	}
 	return workerProxy
 }
+
+// Close browser in worker on exit
+process.on('SIGINT', () => {
+	if (workerProxy) {
+		workerProxy.close().finally(() => process.exit(0))
+	} else {
+		process.exit(0)
+	}
+})
+process.on('SIGTERM', () => {
+	if (workerProxy) {
+		workerProxy.close().finally(() => process.exit(0))
+	} else {
+		process.exit(0)
+	}
+})
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -196,54 +107,11 @@ function formatBytes(bytes: number): string {
 
 // ── Handlers ────────────────────────────────────────────────────────────
 
-async function handleHtml(
-	html: string,
+async function handleBrowser(
 	url: string
 ): Promise<AgentToolResult> {
-	// 1. Allowlisted domain — always static, skip detection
-	if (isStaticDomain(url)) {
-		return await htmlToMarkdownResult(html, url)
-	}
-
-	// 2. SPA shell — skip Defuddle, go straight to Playwright
-	if (looksLikeSpa(html)) {
-		return handlePlaywright(url)
-	}
-
-	// 3. Try Defuddle — if too little content, retry with Playwright
-	const result = await htmlToMarkdownResult(html, url)
-	const details = result.details as { wordCount: number }
-	if (details.wordCount < MIN_WORD_COUNT) {
-		return handlePlaywright(url)
-	}
-
-	return result
-}
-
-async function handlePlaywright(
-	url: string
-): Promise<AgentToolResult> {
-	const browser = await getBrowser()
-	const page = await browser.newPage()
-
-	try {
-		await page.goto(url, {
-			waitUntil: 'networkidle',
-			timeout: 30_000
-		})
-		const html = await page.content()
-		return await htmlToMarkdownResult(html, url)
-	} finally {
-		await page.close()
-	}
-}
-
-async function htmlToMarkdownResult(
-	html: string,
-	url: string
-): Promise<AgentToolResult> {
-	const worker = getDefuddleWorker()
-	const result = await worker.parse(html, url)
+	const worker = getFetchWorker()
+	const result = await worker.fetchPage(url)
 
 	const parts: string[] = []
 	if (result.title) parts.push(`# ${result.title}`)
@@ -329,7 +197,7 @@ export function createWebFetchTool(): AgentTool {
 		name: 'fetch_page',
 		description:
 			'Fetch a web page, PDF, or other resource and extract its readable content as markdown. ' +
-			'Automatically detects JavaScript-heavy pages and uses a headless browser when needed. ' +
+			'Uses a headless browser to render pages with full JavaScript support. ' +
 			'Returns markdown for HTML pages and PDFs, or a URL reference for media files.',
 		label: 'Fetching web page',
 		parameters: webFetchParams,
@@ -354,12 +222,12 @@ export function createWebFetchTool(): AgentTool {
 				const contentType =
 					response.headers.get('content-type') ?? ''
 
-				// PDF
+				// PDF — fetch raw bytes
 				if (contentType.includes('application/pdf')) {
 					return handlePdf(response, params.url)
 				}
 
-				// Media (image, video, audio)
+				// Media — URL reference
 				if (isMediaType(contentType)) {
 					return handleMedia(
 						params.url,
@@ -368,9 +236,8 @@ export function createWebFetchTool(): AgentTool {
 					)
 				}
 
-				// HTML — auto-detects JS-heavy pages
-				const html = await response.text()
-				return handleHtml(html, params.url)
+				// HTML — headless Chrome via worker
+				return handleBrowser(params.url)
 			} catch (err) {
 				const msg =
 					err instanceof Error ? err.message : String(err)
