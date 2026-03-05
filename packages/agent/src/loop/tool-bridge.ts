@@ -44,6 +44,21 @@ export function createToolCallTracker(): ToolCallTracker {
 }
 
 /**
+ * Tool names reserved by Anthropic as built-in server tools. TanStack AI's
+ * Anthropic adapter intercepts these and converts them to server tool types
+ * instead of custom tools — our execute function never gets called.
+ */
+const ANTHROPIC_RESERVED_TOOL_NAMES = new Set([
+	'bash',
+	'code_execution',
+	'computer',
+	'memory',
+	'str_replace_editor',
+	'web_fetch',
+	'web_search'
+])
+
+/**
  * Wrap AgentTool[] into TanStack AI tools with execute functions.
  * Each wrapper:
  * - Dequeues the toolCallId from the tracker
@@ -62,6 +77,17 @@ export function wrapToolsForTanStack(
 	maxToolResultChars?: number,
 	loopDetector?: ToolLoopDetector
 ) {
+	for (const tool of tools) {
+		if (ANTHROPIC_RESERVED_TOOL_NAMES.has(tool.name)) {
+			throw new Error(
+				`Tool name "${tool.name}" collides with an Anthropic built-in server tool. ` +
+					`TanStack AI will silently convert it, bypassing our execute function. ` +
+					`Rename the tool to avoid this collision. ` +
+					`Reserved names: ${[...ANTHROPIC_RESERVED_TOOL_NAMES].join(', ')}`
+			)
+		}
+	}
+
 	return tools.map(tool => ({
 		name: tool.name,
 		description: tool.description,
@@ -135,6 +161,7 @@ export function wrapToolsForTanStack(
 				args
 			})
 
+			const startedAt = Date.now()
 			let result: AgentToolResult
 			let isError = false
 
@@ -180,12 +207,15 @@ export function wrapToolsForTanStack(
 				)
 			}
 
+			const elapsedMs = Date.now() - startedAt
+
 			emit({
 				type: 'tool_execution_end',
 				toolCallId,
 				toolName: tool.name,
 				result,
-				isError
+				isError,
+				elapsedMs
 			})
 
 			// Record outcome for loop detection

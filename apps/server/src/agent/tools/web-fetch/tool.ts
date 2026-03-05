@@ -325,7 +325,7 @@ function handleMedia(
  */
 export function createWebFetchTool(): AgentTool {
 	return {
-		name: 'web_fetch',
+		name: 'fetch_page',
 		description:
 			'Fetch a web page, PDF, or other resource and extract its readable content as markdown. ' +
 			'Automatically detects JavaScript-heavy pages and uses a headless browser when needed. ' +
@@ -341,8 +341,7 @@ export function createWebFetchTool(): AgentTool {
 			try {
 				const response = await fetch(params.url, {
 					headers: { 'User-Agent': USER_AGENT },
-					redirect: 'follow',
-					signal: AbortSignal.timeout(30_000)
+					redirect: 'follow'
 				})
 
 				if (!response.ok) {
