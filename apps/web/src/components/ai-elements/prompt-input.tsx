@@ -718,10 +718,16 @@ export const PromptInput = ({
 		[referencedSources, clearReferencedSources]
 	)
 
+	const isSubmittingRef = useRef(false)
+
 	const handleSubmit: FormEventHandler<HTMLFormElement> =
 		useCallback(
 			async event => {
 				event.preventDefault()
+
+				// Guard against double-submit (e.g. key repeat on Enter)
+				if (isSubmittingRef.current) return
+				isSubmittingRef.current = true
 
 				const form = event.currentTarget
 				const text = controller
@@ -732,6 +738,9 @@ export const PromptInput = ({
 								(formData.get('message') as string) || ''
 							)
 						})()
+
+				// Clear controller text immediately to prevent duplicate reads
+				controller?.textInput.clear()
 
 				// Reset form immediately after capturing text to avoid race condition
 				// where user input during async blob conversion would be lost
@@ -774,9 +783,10 @@ export const PromptInput = ({
 
 					// Sync completed without throwing, or async resolved — clear inputs
 					clear()
-					controller?.textInput.clear()
 				} catch {
 					// Don't clear on error - user may want to retry
+				} finally {
+					isSubmittingRef.current = false
 				}
 			},
 			[usingProvider, controller, files, onSubmit, clear]

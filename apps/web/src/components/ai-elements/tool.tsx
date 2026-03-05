@@ -14,6 +14,7 @@ import {
 	CaretDownIcon,
 	CheckCircleIcon,
 	CircleIcon,
+	CircleNotchIcon,
 	ClockIcon,
 	WrenchIcon,
 	XCircleIcon
@@ -75,7 +76,7 @@ const statusIcons: Record<ToolPart['state'], ReactNode> = {
 		<CheckCircleIcon className="size-3 text-muted-foreground" />
 	),
 	'input-available': (
-		<ClockIcon className="size-3 animate-pulse text-muted-foreground" />
+		<CircleNotchIcon className="size-3 animate-spin text-muted-foreground" />
 	),
 	'input-streaming': (
 		<CircleIcon className="size-3 text-muted-foreground" />
@@ -228,7 +229,13 @@ export interface ToolCardProps {
 	args: Record<string, unknown>
 	result?: string
 	isError?: boolean
+	elapsedMs?: number
 	className?: string
+}
+
+function formatElapsed(ms: number): string {
+	if (ms < 1000) return `${ms}ms`
+	return `${(ms / 1000).toFixed(1)}s`
 }
 
 export const ToolCard = ({
@@ -236,6 +243,7 @@ export const ToolCard = ({
 	args,
 	result,
 	isError,
+	elapsedMs,
 	className
 }: ToolCardProps) => {
 	const state: ToolPart['state'] =
@@ -258,6 +266,11 @@ export const ToolCard = ({
 					{name}
 				</span>
 				{getStatusBadge(state)}
+				{elapsedMs != null && (
+					<span className="font-mono text-[11px] text-muted-foreground">
+						{formatElapsed(elapsedMs)}
+					</span>
+				)}
 				<CaretDownIcon className="size-4 ml-auto transition-transform group-data-[state=open]/tool:rotate-180" />
 			</CollapsibleTrigger>
 			<CollapsibleContent

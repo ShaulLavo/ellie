@@ -44,6 +44,7 @@ export const PartRenderer = memo(
 						name={part.name}
 						args={part.args}
 						result={matched?.result}
+						elapsedMs={matched?.elapsedMs}
 					/>
 				)
 			}
@@ -60,6 +61,7 @@ export const PartRenderer = memo(
 						name={part.toolName ?? 'Result'}
 						args={{}}
 						result={part.result}
+						elapsedMs={part.elapsedMs}
 					/>
 				)
 			}

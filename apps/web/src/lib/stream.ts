@@ -74,7 +74,7 @@ export class StreamClient {
 		if (seq > this.lastSeq) this.lastSeq = seq
 	}
 
-	/** Reconnect SSE from last known seq (e.g. on visibility change) */
+	/** Reconnect SSE with a full snapshot (e.g. on visibility change) */
 	resync(): void {
 		if (this.disposed) return
 		this.openSSE()
@@ -108,8 +108,14 @@ export class StreamClient {
 	private openSSE(): void {
 		this.closeSSE()
 
+		// Always request a full snapshot (no afterSeq filter).
+		// In-place row updates (e.g. tool_execution status changes) don't
+		// bump seq, so afterSeq-filtered snapshots would miss them on
+		// reconnect. The client's syncWrite upsert handles duplicates.
+		this.lastSeq = 0
+
 		const baseUrl = env.API_BASE_URL.replace(/\/$/, '')
-		const url = `${baseUrl}/chat/${this.sessionId}/events/sse${this.lastSeq > 0 ? `?afterSeq=${this.lastSeq}` : ''}`
+		const url = `${baseUrl}/chat/${this.sessionId}/events/sse`
 		const es = new EventSource(url)
 		this.eventSource = es
 

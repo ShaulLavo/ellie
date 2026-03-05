@@ -93,7 +93,10 @@ function extractToolResultParts(
 			type: 'tool-result',
 			toolName: parsed.toolName as string,
 			toolCallId: parsed.toolCallId as string,
-			result: resultContent
+			result: resultContent,
+			...(typeof parsed.elapsedMs === 'number' && {
+				elapsedMs: parsed.elapsedMs
+			})
 		}
 	]
 }
@@ -142,7 +145,8 @@ export function eventToStored(
 				toolName: parsed.toolName,
 				toolCallId: parsed.toolCallId,
 				content: (parsed.result as Record<string, unknown>)
-					?.content
+					?.content,
+				elapsedMs: parsed.elapsedMs
 			})
 		} else {
 			parts = extractToolCallParts(parsed)
