@@ -44,14 +44,6 @@ function hasConfigStore(
 	)
 }
 
-// ── Localhost guard ────────────────────────────────────────────────────────
-
-const LOOPBACK_ADDRS = new Set([
-	'127.0.0.1',
-	'::1',
-	'::ffff:127.0.0.1'
-])
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type CreateTusAppOptions = {
@@ -101,18 +93,6 @@ export function createTusApp(options: CreateTusAppOptions) {
 
 	return (
 		new Elysia()
-			// ── Localhost guard (applies to all routes in this plugin) ────────
-			.onBeforeHandle(({ request, server, set }) => {
-				const ip = server?.requestIP(request)
-				const addr = ip?.address
-				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-					set.status = 403
-					return {
-						error:
-							'Upload routes are only available from localhost'
-					}
-				}
-			})
 
 			// ── Native tus routes ────────────────────────────────────────────
 			.options(

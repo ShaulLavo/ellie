@@ -41,3 +41,4 @@ export {
 
 // Stores
 export { FileStore } from './stores/file-store'
+export { SqliteKvStore } from './stores/sqlite-kv-store'

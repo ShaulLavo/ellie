@@ -13,42 +13,22 @@ export abstract class DataStore {
 		return this.extensions.includes(extension)
 	}
 
-	async create(_file: Upload): Promise<Upload> {
-		throw new Error(
-			`[${this.constructor.name}] Method create() must be implemented by subclass`
-		)
-	}
+	abstract create(file: Upload): Promise<Upload>
 
-	async remove(_id: string): Promise<void> {
-		throw new Error(
-			`[${this.constructor.name}] Method remove() must be implemented by subclass`
-		)
-	}
+	abstract remove(id: string): Promise<void>
 
-	async write(
-		_stream: Readable,
-		_id: string,
-		_offset: number
-	): Promise<number> {
-		throw new Error(
-			`[${this.constructor.name}] Method write() must be implemented by subclass`
-		)
-	}
+	abstract write(
+		stream: Readable,
+		id: string,
+		offset: number
+	): Promise<number>
 
-	async getUpload(_id: string): Promise<Upload> {
-		throw new Error(
-			`[${this.constructor.name}] Method getUpload() must be implemented by subclass`
-		)
-	}
+	abstract getUpload(id: string): Promise<Upload>
 
-	async declareUploadLength(
-		_id: string,
-		_upload_length: number
-	): Promise<void> {
-		throw new Error(
-			`[${this.constructor.name}] Method declareUploadLength() must be implemented by subclass`
-		)
-	}
+	abstract declareUploadLength(
+		id: string,
+		upload_length: number
+	): Promise<void>
 
 	async deleteExpired(): Promise<number> {
 		return 0
