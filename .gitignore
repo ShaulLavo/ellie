@@ -66,3 +66,4 @@ scorecard.png
 .claude/settings.local.json
 apps/cli/cli
 apps/cli/ellie
+/ellie
