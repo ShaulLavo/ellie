@@ -250,9 +250,9 @@ export async function refreshMentalModel(
 	// SECURITY: If the mental model has tags, pass them to reflect with "all_strict"
 	// matching to ensure it can only access memories with the SAME tags.
 	// This prevents cross-tenant/cross-user information leakage by excluding untagged content.
-	const tags: string[] | undefined = row.tags
-		? JSON.parse(row.tags)
-		: undefined
+	const tags: string[] | undefined = safeJsonParse<
+		string[] | undefined
+	>(row.tags, undefined)
 	const tagsMatch = tags?.length
 		? ('all_strict' as const)
 		: undefined

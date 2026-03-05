@@ -13,6 +13,7 @@ import type {
 	RerankFunction
 } from './types'
 import { sanitizeText } from './sanitize'
+import { ftsInsert } from './fts'
 import { consolidate } from './consolidation'
 import type { BankProfile } from './reflect'
 import {
@@ -386,10 +387,7 @@ export async function retain(
 			.run()
 
 		// FTS5
-		hdb.sqlite.run(
-			'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-			[memoryId, bankId, fact.content]
-		)
+		ftsInsert(hdb, memoryId, bankId, fact.content)
 
 		// Embedding
 		await memoryVec.upsert(memoryId, fact.content)

@@ -32,6 +32,7 @@ import { parseLLMJson } from './sanitize'
 import { recall } from './recall'
 import { searchMentalModelsWithStaleness } from './mental-models'
 import { loadDirectivesForReflect } from './directives'
+import { ftsInsert } from './fts'
 import {
 	getReflectSystemPrompt,
 	buildDirectivesSection,
@@ -694,10 +695,7 @@ export async function reflect(
 			})
 			.run()
 
-		hdb.sqlite.run(
-			'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-			[observationId, bankId, answer]
-		)
+		ftsInsert(hdb, observationId, bankId, answer)
 		await memoryVec.upsert(observationId, answer)
 		observationTexts.push(answer)
 	}

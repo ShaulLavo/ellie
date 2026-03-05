@@ -267,12 +267,8 @@ export function normalizeExtractedFacts(
 		).toLowerCase()
 		let occurredStart =
 			readIsoDate(fact.occurredStart) ??
-			readIsoDate(fact.occurred_start) ??
-			readIsoDate(fact.occurredStart) ??
 			readIsoDate(fact.occurred_start)
 		let occurredEnd =
-			readIsoDate(fact.occurredEnd) ??
-			readIsoDate(fact.occurred_end) ??
 			readIsoDate(fact.occurredEnd) ??
 			readIsoDate(fact.occurred_end)
 		let mentionedAt =

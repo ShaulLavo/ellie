@@ -7,10 +7,13 @@ import {
 	eq,
 	sql,
 	and,
+	asc,
 	desc,
+	gt,
 	lt,
 	or,
-	isNull
+	isNull,
+	inArray
 } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import {
@@ -153,12 +156,6 @@ function collectEpisodeChain(
 	}
 
 	return chain
-}
-
-function buildEpisodeInClause(
-	episodeIds: string[]
-): string {
-	return episodeIds.map(() => '?').join(',')
 }
 
 export function detectBoundary(
@@ -430,6 +427,84 @@ export function listEpisodes(
 	}
 }
 
+function fetchDirectionalEvents(
+	hdb: HindsightDatabase,
+	bankId: string,
+	anchorEpisodeId: string,
+	anchorEvent: { id: string; eventTime: number },
+	dir: 'before' | 'after',
+	maxSteps: number
+): NarrativeEvent[] {
+	const episodeIds = collectEpisodeChain(
+		hdb,
+		anchorEpisodeId,
+		dir,
+		maxSteps
+	)
+	const { episodeEvents: ee, memoryUnits: mu } = hdb.schema
+	const timeCmp = dir === 'before' ? lt : gt
+	const timeOrder = dir === 'before' ? desc : asc
+	const idOrder = dir === 'before' ? desc : asc
+
+	const rows = hdb.db
+		.select({
+			id: ee.id,
+			memoryId: ee.memoryId,
+			episodeId: ee.episodeId,
+			eventTime: ee.eventTime,
+			route: ee.route,
+			content: sql<string>`COALESCE(${mu.content}, '[deleted]')`
+		})
+		.from(ee)
+		.leftJoin(mu, eq(mu.id, ee.memoryId))
+		.where(
+			and(
+				eq(ee.bankId, bankId),
+				inArray(ee.episodeId, episodeIds),
+				or(
+					timeCmp(ee.eventTime, anchorEvent.eventTime),
+					and(
+						eq(ee.eventTime, anchorEvent.eventTime),
+						timeCmp(ee.id, anchorEvent.id)
+					)
+				)
+			)
+		)
+		.orderBy(timeOrder(ee.eventTime), idOrder(ee.id))
+		.limit(maxSteps)
+		.all()
+
+	const ordered = dir === 'before' ? rows.reverse() : rows
+	return ordered.map(row => ({
+		memoryId: row.memoryId,
+		episodeId: row.episodeId,
+		eventTime: row.eventTime,
+		route: row.route as RetainRoute,
+		contentSnippet: toSnippet(row.content)
+	}))
+}
+
+function buildAnchorEvent(
+	hdb: HindsightDatabase,
+	anchorMemoryId: string,
+	anchorEpisodeId: string,
+	anchorEvent: { eventTime: number; route: string }
+): NarrativeEvent {
+	const anchorMemory = hdb.db
+		.select({ content: hdb.schema.memoryUnits.content })
+		.from(hdb.schema.memoryUnits)
+		.where(eq(hdb.schema.memoryUnits.id, anchorMemoryId))
+		.get()
+
+	return {
+		memoryId: anchorMemoryId,
+		episodeId: anchorEpisodeId,
+		eventTime: anchorEvent.eventTime,
+		route: anchorEvent.route as RetainRoute,
+		contentSnippet: toSnippet(anchorMemory?.content ?? '')
+	}
+}
+
 export function narrative(
 	hdb: HindsightDatabase,
 	bankId: string,
@@ -472,109 +547,38 @@ export function narrative(
 	const anchorEpisodeId = anchorEvent.episodeId
 
 	if (direction === 'before' || direction === 'both') {
-		const episodeIds = collectEpisodeChain(
-			hdb,
-			anchorEpisodeId,
-			'before',
-			maxSteps
-		)
-		const inClause = buildEpisodeInClause(episodeIds)
-		const beforeEvents = hdb.sqlite
-			.prepare(
-				`SELECT ee.id, ee.memory_id, ee.episode_id, ee.event_time, ee.route, COALESCE(mu.content, '[deleted]') AS content
-         FROM hs_episode_events ee
-         LEFT JOIN hs_memory_units mu ON mu.id = ee.memory_id
-         WHERE ee.bank_id = ?
-           AND ee.episode_id IN (${inClause})
-           AND (ee.event_time < ? OR (ee.event_time = ? AND ee.id < ?))
-         ORDER BY ee.event_time DESC, ee.id DESC
-         LIMIT ?`
-			)
-			.all(
+		events.push(
+			...fetchDirectionalEvents(
+				hdb,
 				bankId,
-				...episodeIds,
-				anchorEvent.eventTime,
-				anchorEvent.eventTime,
-				anchorEvent.id,
+				anchorEpisodeId,
+				anchorEvent,
+				'before',
 				maxSteps
-			) as Array<{
-			id: string
-			memory_id: string
-			episode_id: string
-			event_time: number
-			route: string
-			content: string
-		}>
-
-		for (const row of beforeEvents.reverse()) {
-			events.push({
-				memoryId: row.memory_id,
-				episodeId: row.episode_id,
-				eventTime: row.event_time,
-				route: row.route as RetainRoute,
-				contentSnippet: toSnippet(row.content)
-			})
-		}
+			)
+		)
 	}
 
-	const anchorMemory = hdb.db
-		.select({ content: hdb.schema.memoryUnits.content })
-		.from(hdb.schema.memoryUnits)
-		.where(eq(hdb.schema.memoryUnits.id, anchorMemoryId))
-		.get()
-
-	events.push({
-		memoryId: anchorMemoryId,
-		episodeId: anchorEpisodeId,
-		eventTime: anchorEvent.eventTime,
-		route: anchorEvent.route as RetainRoute,
-		contentSnippet: toSnippet(anchorMemory?.content ?? '')
-	})
+	events.push(
+		buildAnchorEvent(
+			hdb,
+			anchorMemoryId,
+			anchorEpisodeId,
+			anchorEvent
+		)
+	)
 
 	if (direction === 'after' || direction === 'both') {
-		const episodeIds = collectEpisodeChain(
-			hdb,
-			anchorEpisodeId,
-			'after',
-			maxSteps
-		)
-		const inClause = buildEpisodeInClause(episodeIds)
-		const afterEvents = hdb.sqlite
-			.prepare(
-				`SELECT ee.id, ee.memory_id, ee.episode_id, ee.event_time, ee.route, COALESCE(mu.content, '[deleted]') AS content
-         FROM hs_episode_events ee
-         LEFT JOIN hs_memory_units mu ON mu.id = ee.memory_id
-         WHERE ee.bank_id = ?
-           AND ee.episode_id IN (${inClause})
-           AND (ee.event_time > ? OR (ee.event_time = ? AND ee.id > ?))
-         ORDER BY ee.event_time ASC, ee.id ASC
-         LIMIT ?`
-			)
-			.all(
+		events.push(
+			...fetchDirectionalEvents(
+				hdb,
 				bankId,
-				...episodeIds,
-				anchorEvent.eventTime,
-				anchorEvent.eventTime,
-				anchorEvent.id,
+				anchorEpisodeId,
+				anchorEvent,
+				'after',
 				maxSteps
-			) as Array<{
-			id: string
-			memory_id: string
-			episode_id: string
-			event_time: number
-			route: string
-			content: string
-		}>
-
-		for (const row of afterEvents) {
-			events.push({
-				memoryId: row.memory_id,
-				episodeId: row.episode_id,
-				eventTime: row.event_time,
-				route: row.route as RetainRoute,
-				contentSnippet: toSnippet(row.content)
-			})
-		}
+			)
+		)
 	}
 
 	return { events, anchorMemoryId }

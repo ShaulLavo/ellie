@@ -17,6 +17,7 @@ import type {
 } from './types'
 import type { DirectiveRow } from './schema'
 import { matchesTags } from './recall'
+import { safeJsonParse } from './util'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ function rowToDirective(row: DirectiveRow): Directive {
 		content: row.content,
 		priority: row.priority,
 		isActive: row.isActive === 1,
-		tags: row.tags ? JSON.parse(row.tags) : null,
+		tags: safeJsonParse<string[] | null>(row.tags, null),
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt
 	}

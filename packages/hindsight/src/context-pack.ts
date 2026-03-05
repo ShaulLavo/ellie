@@ -67,52 +67,27 @@ export function packContext(
 		}
 	}
 
-	const packed: PackedMemory[] = []
-	let totalUsed = 0
-
-	// Step 1: Always include full text for top 2 (pre-compute tokens once)
-	const top2WithTokens = candidates.slice(0, 2).map(c => ({
-		...c,
-		tokens: estimateTokens(c.content)
-	}))
-	const top2Tokens = top2WithTokens.reduce(
-		(sum, c) => sum + c.tokens,
-		0
+	// Step 1 & 7: Always include full text for top 2; overflow if they exceed budget
+	const top2 = packTop2Candidates(
+		candidates.slice(0, 2),
+		tokenBudget
 	)
-
-	// Step 7: If top 2 exceed budget, return them anyway with overflow=true
-	if (top2Tokens > tokenBudget) {
-		for (const c of top2WithTokens) {
-			packed.push({
-				id: c.id,
-				text: c.content,
-				mode: 'full',
-				score: c.score,
-				tokens: c.tokens
-			})
-			totalUsed += c.tokens
-		}
+	if (top2.overflow) {
 		return {
-			packed,
+			packed: top2.entries,
 			overflow: true,
-			totalTokensUsed: totalUsed,
-			budgetRemaining: Math.max(0, tokenBudget - totalUsed)
+			totalTokensUsed: top2.totalTokens,
+			budgetRemaining: Math.max(
+				0,
+				tokenBudget - top2.totalTokens
+			)
 		}
 	}
 
-	// Add top 2 to packed
-	for (const c of top2WithTokens) {
-		packed.push({
-			id: c.id,
-			text: c.content,
-			mode: 'full',
-			score: c.score,
-			tokens: c.tokens
-		})
-		totalUsed += c.tokens
-	}
+	const packed: PackedMemory[] = [...top2.entries]
+	let totalUsed = top2.totalTokens
 
-	// Step 2-4: Compute remaining budget and allocations
+	// Steps 2-4: Compute remaining budget and allocations
 	const remaining = candidates.slice(2)
 	if (remaining.length === 0) {
 		return {
@@ -123,16 +98,103 @@ export function packContext(
 		}
 	}
 
-	const R = Math.max(0, tokenBudget - top2Tokens)
-	let gistBudget = Math.floor(0.7 * R)
-	let fullBackfillBudget = R - gistBudget
+	const R = Math.max(0, tokenBudget - top2.totalTokens)
+	const gistBudget = Math.floor(0.7 * R)
+	const fullBackfillBudget = R - gistBudget
 
 	// Step 5: Fill gist slots first, then full backfill
-	let gistUsed = 0
-	let fullUsed = 0
+	const slots = fillGistAndBackfillSlots(
+		remaining,
+		gistBudget,
+		fullBackfillBudget
+	)
+
+	// Step 6: Reallocate leftover budgets between buckets
+	reallocateLeftoverBudgets(
+		slots,
+		gistBudget,
+		fullBackfillBudget
+	)
+
+	// Merge extra slots (maintain score order)
+	const allExtra = [
+		...slots.gistSlots,
+		...slots.fullBackfillSlots
+	].sort((a, b) => b.score - a.score)
+	for (const slot of allExtra) {
+		packed.push(slot)
+		totalUsed += slot.tokens
+	}
+
+	return {
+		packed,
+		overflow: false,
+		totalTokensUsed: totalUsed,
+		budgetRemaining: Math.max(0, tokenBudget - totalUsed)
+	}
+}
+
+// ── Top-2 packing helper ───────────────────────────────────────────────────
+
+interface Top2Result {
+	entries: PackedMemory[]
+	totalTokens: number
+	overflow: boolean
+}
+
+/**
+ * Build PackedMemory entries for the top-2 candidates and detect budget overflow.
+ */
+function packTop2Candidates(
+	top2: PackCandidate[],
+	tokenBudget: number
+): Top2Result {
+	const entries: PackedMemory[] = []
+	let totalTokens = 0
+
+	for (const c of top2) {
+		const tokens = estimateTokens(c.content)
+		entries.push({
+			id: c.id,
+			text: c.content,
+			mode: 'full',
+			score: c.score,
+			tokens
+		})
+		totalTokens += tokens
+	}
+
+	return {
+		entries,
+		totalTokens,
+		overflow: totalTokens > tokenBudget
+	}
+}
+
+// ── Slot-filling helper ────────────────────────────────────────────────────
+
+interface SlotFillResult {
+	gistSlots: PackedMemory[]
+	fullBackfillSlots: PackedMemory[]
+	skipped: PackCandidate[]
+	gistUsed: number
+	fullUsed: number
+}
+
+/**
+ * Iterate over remaining candidates, filling gist slots first and full-backfill slots second.
+ * Candidates that fit in neither bucket are collected in `skipped`.
+ */
+function fillGistAndBackfillSlots(
+	remaining: PackCandidate[],
+	gistBudget: number,
+	fullBackfillBudget: number
+): SlotFillResult {
 	const gistSlots: PackedMemory[] = []
 	const fullBackfillSlots: PackedMemory[] = []
-	const skippedForBackfill: PackCandidate[] = []
+	const skipped: PackCandidate[] = []
+	let gistUsed = 0
+	let fullUsed = 0
 
 	for (const c of remaining) {
 		const gistText =
@@ -149,66 +211,66 @@ export function packContext(
 				tokens: gistTokens
 			})
 			gistUsed += gistTokens
+		} else if (
+			fullUsed + fullTokens <=
+			fullBackfillBudget
+		) {
+			fullBackfillSlots.push({
+				id: c.id,
+				text: c.content,
+				mode: 'full',
+				score: c.score,
+				tokens: fullTokens
+			})
+			fullUsed += fullTokens
 		} else {
-			// Try full backfill
-			if (fullUsed + fullTokens <= fullBackfillBudget) {
-				fullBackfillSlots.push({
-					id: c.id,
-					text: c.content,
-					mode: 'full',
-					score: c.score,
-					tokens: fullTokens
-				})
-				fullUsed += fullTokens
-			} else {
-				skippedForBackfill.push(c)
-			}
+			skipped.push(c)
 		}
 	}
 
-	// Step 6: If one bucket underuses, allow the other to consume remainder
-	// Run both passes sequentially so leftover from both buckets can be jointly reallocated
-	const gistRemaining = gistBudget - gistUsed
-	const fullRemaining = fullBackfillBudget - fullUsed
+	return {
+		gistSlots,
+		fullBackfillSlots,
+		skipped,
+		gistUsed,
+		fullUsed
+	}
+}
+
+// ── Leftover budget reallocation coordinator ───────────────────────────────
+
+/**
+ * Reallocate leftover budget from one bucket to the other (Step 6).
+ * Mutates slots.gistSlots, slots.fullBackfillSlots, and usage counters.
+ */
+function reallocateLeftoverBudgets(
+	slots: SlotFillResult,
+	gistBudget: number,
+	fullBackfillBudget: number
+): void {
+	const gistRemaining = gistBudget - slots.gistUsed
+	const fullRemaining = fullBackfillBudget - slots.fullUsed
 	const allocatedIds = new Set<string>()
 
-	if (gistRemaining > 0 && skippedForBackfill.length > 0) {
+	if (gistRemaining > 0 && slots.skipped.length > 0) {
 		const spent = reallocateGistBudget(
-			skippedForBackfill,
+			slots.skipped,
 			gistRemaining,
-			fullBackfillSlots,
-			gistSlots,
+			slots.fullBackfillSlots,
+			slots.gistSlots,
 			allocatedIds
 		)
-		fullUsed += spent.fullUsed
-		gistUsed += spent.gistUsed
+		slots.fullUsed += spent.fullUsed
+		slots.gistUsed += spent.gistUsed
 	}
 
-	if (fullRemaining > 0 && skippedForBackfill.length > 0) {
-		gistUsed += reallocateFullBudget(
-			skippedForBackfill,
+	if (fullRemaining > 0 && slots.skipped.length > 0) {
+		slots.gistUsed += reallocateFullBudget(
+			slots.skipped,
 			fullRemaining,
-			gistSlots,
+			slots.gistSlots,
 			allocatedIds
 		)
-	}
-
-	// Merge gist and full backfill slots (maintain score order)
-	const allExtra = [
-		...gistSlots,
-		...fullBackfillSlots
-	].sort((a, b) => b.score - a.score)
-
-	for (const slot of allExtra) {
-		packed.push(slot)
-		totalUsed += slot.tokens
-	}
-
-	return {
-		packed,
-		overflow: false,
-		totalTokensUsed: totalUsed,
-		budgetRemaining: Math.max(0, tokenBudget - totalUsed)
 	}
 }
 

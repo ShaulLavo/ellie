@@ -32,6 +32,11 @@ type ProcedureHandler = (
 	params: Record<string, string>
 ) => Promise<unknown> | unknown
 type ProcedureHandlers = Record<string, ProcedureHandler>
+type InvokeFn = (
+	name: string,
+	input: unknown,
+	params: Record<string, string>
+) => Promise<unknown> | unknown
 
 const bankParamsSchema = v.object({ bankId: v.string() })
 const memoryParamsSchema = v.object({
@@ -63,11 +68,9 @@ const listEpisodesQuerySchema = v.object({
 	cursor: v.optional(v.string())
 })
 
-/**
- * Create procedure handlers for all hindsight procedures.
- * Each handler receives (input, params) and returns the result.
- */
-export function createHindsightHandlers(
+// ── Handler groups ──────────────────────────────────────────────────────────
+
+function createBankHandlers(
 	hs: Hindsight
 ): ProcedureHandlers {
 	return {
@@ -194,8 +197,14 @@ export function createHindsightHandlers(
 		},
 
 		deleteMemoryUnit: async (_input: unknown, params) =>
-			hs.deleteMemoryUnit(params.memoryId),
+			hs.deleteMemoryUnit(params.memoryId)
+	}
+}
 
+function createEntityAndEpisodeHandlers(
+	hs: Hindsight
+): ProcedureHandlers {
+	return {
 		listEntities: async (raw: unknown, params) => {
 			const input = raw as RpcInput
 			const options: { limit?: number; offset?: number } =
@@ -260,9 +269,14 @@ export function createHindsightHandlers(
 				direction,
 				steps: input.steps ? Number(input.steps) : undefined
 			})
-		},
+		}
+	}
+}
 
-		// Phase 3: Location APIs
+function createExtensionHandlers(
+	hs: Hindsight
+): ProcedureHandlers {
+	return {
 		locationRecord: async (raw: unknown, params) => {
 			const input = raw as RpcInput
 			if (!input?.path || typeof input.path !== 'string') {
@@ -342,7 +356,6 @@ export function createHindsightHandlers(
 			return stats
 		},
 
-		// Phase 4: Visual APIs
 		retainVisual: async (raw: unknown, params) => {
 			const input = raw as RpcInput
 			if (
@@ -392,6 +405,191 @@ export function createHindsightHandlers(
 	}
 }
 
+/**
+ * Create procedure handlers for all hindsight procedures.
+ * Each handler receives (input, params) and returns the result.
+ */
+export function createHindsightHandlers(
+	hs: Hindsight
+): ProcedureHandlers {
+	return {
+		...createBankHandlers(hs),
+		...createEntityAndEpisodeHandlers(hs),
+		...createExtensionHandlers(hs)
+	}
+}
+
+// ── Route groups ────────────────────────────────────────────────────────────
+
+function bankAndMemoryRoutes(invoke: InvokeFn) {
+	return new Elysia()
+		.post(
+			'/banks',
+			({ body }) => invoke('createBank', body, {}),
+			{ body: createBankInputSchema }
+		)
+		.get('/banks', () => invoke('listBanks', undefined, {}))
+		.get(
+			'/banks/:bankId',
+			({ params }) => invoke('getBank', undefined, params),
+			{ params: bankParamsSchema }
+		)
+		.patch(
+			'/banks/:bankId',
+			({ body, params }) =>
+				invoke('updateBank', body, params),
+			{
+				params: bankParamsSchema,
+				body: updateBankInputSchema
+			}
+		)
+		.delete(
+			'/banks/:bankId',
+			({ params }) =>
+				invoke('deleteBank', undefined, params),
+			{ params: bankParamsSchema }
+		)
+		.post(
+			'/banks/:bankId/retain',
+			({ body, params }) => invoke('retain', body, params),
+			{
+				params: bankParamsSchema,
+				body: retainInputSchema
+			}
+		)
+		.post(
+			'/banks/:bankId/retain-batch',
+			({ body, params }) =>
+				invoke('retainBatch', body, params),
+			{
+				params: bankParamsSchema,
+				body: retainBatchInputSchema
+			}
+		)
+		.post(
+			'/banks/:bankId/recall',
+			({ body, params }) => invoke('recall', body, params),
+			{
+				params: bankParamsSchema,
+				body: recallInputSchema
+			}
+		)
+		.post(
+			'/banks/:bankId/reflect',
+			({ body, params }) => invoke('reflect', body, params),
+			{
+				params: bankParamsSchema,
+				body: reflectInputSchema
+			}
+		)
+		.get(
+			'/banks/:bankId/stats',
+			({ params }) =>
+				invoke('getBankStats', undefined, params),
+			{ params: bankParamsSchema }
+		)
+		.get(
+			'/banks/:bankId/memories',
+			({ params, query }) =>
+				invoke('listMemoryUnits', query, params),
+			{
+				params: bankParamsSchema,
+				query: listMemoryUnitsQuerySchema
+			}
+		)
+		.get(
+			'/banks/:bankId/memories/:memoryId',
+			({ params }) =>
+				invoke('getMemoryUnit', undefined, params),
+			{ params: memoryParamsSchema }
+		)
+		.delete(
+			'/banks/:bankId/memories/:memoryId',
+			({ params }) =>
+				invoke('deleteMemoryUnit', undefined, params),
+			{ params: memoryParamsSchema }
+		)
+}
+
+function entityAndEpisodeRoutes(invoke: InvokeFn) {
+	return new Elysia()
+		.get(
+			'/banks/:bankId/entities',
+			({ params, query }) =>
+				invoke('listEntities', query, params),
+			{
+				params: bankParamsSchema,
+				query: listEntitiesQuerySchema
+			}
+		)
+		.get(
+			'/banks/:bankId/entities/:entityId',
+			({ params }) =>
+				invoke('getEntity', undefined, params),
+			{ params: entityParamsSchema }
+		)
+		.get(
+			'/banks/:bankId/episodes',
+			({ params, query }) =>
+				invoke('listEpisodes', query, params),
+			{
+				params: bankParamsSchema,
+				query: listEpisodesQuerySchema
+			}
+		)
+		.post(
+			'/banks/:bankId/narrative',
+			({ body, params }) =>
+				invoke('narrative', body, params),
+			{
+				params: bankParamsSchema,
+				body: narrativeInputSchema
+			}
+		)
+}
+
+function extensionRoutes(invoke: InvokeFn) {
+	return new Elysia()
+		.post(
+			'/banks/:bankId/location/record',
+			({ body, params }) =>
+				invoke('locationRecord', body, params),
+			{ params: bankParamsSchema }
+		)
+		.post(
+			'/banks/:bankId/location/find',
+			({ body, params }) =>
+				invoke('locationFind', body, params),
+			{ params: bankParamsSchema }
+		)
+		.post(
+			'/banks/:bankId/location/stats',
+			({ body, params }) =>
+				invoke('locationStats', body, params),
+			{ params: bankParamsSchema }
+		)
+		.post(
+			'/banks/:bankId/visual/retain',
+			({ body, params }) =>
+				invoke('retainVisual', body, params),
+			{ params: bankParamsSchema }
+		)
+		.get(
+			'/banks/:bankId/visual/stats',
+			({ params }) =>
+				invoke('visualStats', undefined, params),
+			{ params: bankParamsSchema }
+		)
+		.post(
+			'/banks/:bankId/visual/find',
+			({ body, params }) =>
+				invoke('visualFind', body, params),
+			{ params: bankParamsSchema }
+		)
+}
+
+// ── Error handling ──────────────────────────────────────────────────────────
+
 function resolveValidationSummary(
 	error: { validator: unknown; value: unknown },
 	request: Request
@@ -421,217 +619,39 @@ function errorStatus(error: unknown): number {
 	return 500
 }
 
+// ── App factory ─────────────────────────────────────────────────────────────
+
 export function createHindsightApp(hs: Hindsight) {
 	const handlers = createHindsightHandlers(hs)
 
-	const invoke = (
-		name: string,
-		input: unknown,
-		params: Record<string, string>
-	): Promise<unknown> | unknown => {
+	const invoke: InvokeFn = (name, input, params) => {
 		const handler = handlers[name]
 		if (!handler)
 			throw new Error(`Handler '${name}' not found`)
 		return handler(input, params)
 	}
 
-	return (
-		new Elysia()
-			.onError(({ code, error, set, request }) => {
-				if (code !== 'VALIDATION') {
-					const message =
-						error instanceof Error
-							? error.message
-							: String(error)
-					set.status = errorStatus(error)
-					return { error: message }
-				}
+	return new Elysia()
+		.onError(({ code, error, set, request }) => {
+			if (code !== 'VALIDATION') {
+				const message =
+					error instanceof Error
+						? error.message
+						: String(error)
+				set.status = errorStatus(error)
+				return { error: message }
+			}
 
-				set.status = 400
-				const summary = resolveValidationSummary(
-					error,
-					request
-				)
-				return { error: summary ?? error.message }
-			})
-			.post(
-				'/banks',
-				({ body }) => invoke('createBank', body, {}),
-				{
-					body: createBankInputSchema
-				}
+			set.status = 400
+			const summary = resolveValidationSummary(
+				error,
+				request
 			)
-			.get('/banks', () =>
-				invoke('listBanks', undefined, {})
-			)
-			.get(
-				'/banks/:bankId',
-				({ params }) =>
-					invoke('getBank', undefined, params),
-				{
-					params: bankParamsSchema
-				}
-			)
-			.patch(
-				'/banks/:bankId',
-				({ body, params }) =>
-					invoke('updateBank', body, params),
-				{
-					params: bankParamsSchema,
-					body: updateBankInputSchema
-				}
-			)
-			.delete(
-				'/banks/:bankId',
-				({ params }) =>
-					invoke('deleteBank', undefined, params),
-				{
-					params: bankParamsSchema
-				}
-			)
-			.post(
-				'/banks/:bankId/retain',
-				({ body, params }) =>
-					invoke('retain', body, params),
-				{
-					params: bankParamsSchema,
-					body: retainInputSchema
-				}
-			)
-			.post(
-				'/banks/:bankId/retain-batch',
-				({ body, params }) =>
-					invoke('retainBatch', body, params),
-				{
-					params: bankParamsSchema,
-					body: retainBatchInputSchema
-				}
-			)
-			.post(
-				'/banks/:bankId/recall',
-				({ body, params }) =>
-					invoke('recall', body, params),
-				{
-					params: bankParamsSchema,
-					body: recallInputSchema
-				}
-			)
-			.post(
-				'/banks/:bankId/reflect',
-				({ body, params }) =>
-					invoke('reflect', body, params),
-				{
-					params: bankParamsSchema,
-					body: reflectInputSchema
-				}
-			)
-			.get(
-				'/banks/:bankId/stats',
-				({ params }) =>
-					invoke('getBankStats', undefined, params),
-				{
-					params: bankParamsSchema
-				}
-			)
-			.get(
-				'/banks/:bankId/memories',
-				({ params, query }) =>
-					invoke('listMemoryUnits', query, params),
-				{
-					params: bankParamsSchema,
-					query: listMemoryUnitsQuerySchema
-				}
-			)
-			.get(
-				'/banks/:bankId/memories/:memoryId',
-				({ params }) =>
-					invoke('getMemoryUnit', undefined, params),
-				{
-					params: memoryParamsSchema
-				}
-			)
-			.delete(
-				'/banks/:bankId/memories/:memoryId',
-				({ params }) =>
-					invoke('deleteMemoryUnit', undefined, params),
-				{
-					params: memoryParamsSchema
-				}
-			)
-			.get(
-				'/banks/:bankId/entities',
-				({ params, query }) =>
-					invoke('listEntities', query, params),
-				{
-					params: bankParamsSchema,
-					query: listEntitiesQuerySchema
-				}
-			)
-			.get(
-				'/banks/:bankId/entities/:entityId',
-				({ params }) =>
-					invoke('getEntity', undefined, params),
-				{
-					params: entityParamsSchema
-				}
-			)
-			.get(
-				'/banks/:bankId/episodes',
-				({ params, query }) =>
-					invoke('listEpisodes', query, params),
-				{
-					params: bankParamsSchema,
-					query: listEpisodesQuerySchema
-				}
-			)
-			.post(
-				'/banks/:bankId/narrative',
-				({ body, params }) =>
-					invoke('narrative', body, params),
-				{
-					params: bankParamsSchema,
-					body: narrativeInputSchema
-				}
-			)
-			// Phase 3: Location APIs
-			.post(
-				'/banks/:bankId/location/record',
-				({ body, params }) =>
-					invoke('locationRecord', body, params),
-				{ params: bankParamsSchema }
-			)
-			.post(
-				'/banks/:bankId/location/find',
-				({ body, params }) =>
-					invoke('locationFind', body, params),
-				{ params: bankParamsSchema }
-			)
-			.post(
-				'/banks/:bankId/location/stats',
-				({ body, params }) =>
-					invoke('locationStats', body, params),
-				{ params: bankParamsSchema }
-			)
-			// Phase 4: Visual APIs
-			.post(
-				'/banks/:bankId/visual/retain',
-				({ body, params }) =>
-					invoke('retainVisual', body, params),
-				{ params: bankParamsSchema }
-			)
-			.get(
-				'/banks/:bankId/visual/stats',
-				({ params }) =>
-					invoke('visualStats', undefined, params),
-				{ params: bankParamsSchema }
-			)
-			.post(
-				'/banks/:bankId/visual/find',
-				({ body, params }) =>
-					invoke('visualFind', body, params),
-				{ params: bankParamsSchema }
-			)
-	)
+			return { error: summary ?? error.message }
+		})
+		.use(bankAndMemoryRoutes(invoke))
+		.use(entityAndEpisodeRoutes(invoke))
+		.use(extensionRoutes(invoke))
 }
 
 function isHindsightPath(pathname: string): boolean {

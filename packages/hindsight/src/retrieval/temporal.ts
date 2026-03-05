@@ -1,39 +1,7 @@
 import type { HindsightDatabase } from '../db'
 import type { TagsMatch } from '../types'
 import type { RetrievalHit } from './semantic'
-
-/**
- * Build the SQL condition and params for tag pre-filtering.
- */
-function buildTagCondition(
-	tags: string[],
-	tagsMatch: TagsMatch | undefined
-): { condition: string; params: (string | number)[] } {
-	const mode = tagsMatch ?? 'any'
-	const tagPlaceholders = tags.map(() => '?').join(', ')
-
-	let condition: string
-	if (mode === 'any') {
-		condition = `(tags IS NULL OR EXISTS (
-          SELECT 1 FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ))`
-	} else if (mode === 'all') {
-		condition = `(tags IS NULL OR (
-          SELECT COUNT(DISTINCT je.value) FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ) = ${tags.length})`
-	} else if (mode === 'any_strict') {
-		condition = `(tags IS NOT NULL AND EXISTS (
-          SELECT 1 FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ))`
-	} else {
-		// all_strict
-		condition = `(tags IS NOT NULL AND (
-          SELECT COUNT(DISTINCT je.value) FROM json_each(tags) je WHERE je.value IN (${tagPlaceholders})
-        ) = ${tags.length})`
-	}
-
-	return { condition, params: [...tags] }
-}
+import { buildNamedTagCondition } from './tag-filter'
 
 /**
  * Time-range retrieval: find memories whose temporal validity overlaps a range.
@@ -64,45 +32,41 @@ export function searchTemporal(
 	const rangeFrom = timeRange.from ?? -8_640_000_000_000_000
 	const rangeTo = timeRange.to ?? 8_640_000_000_000_000
 
-	const conditions: string[] = ['bank_id = ?']
-	const params: (string | number)[] = [
-		bankId,
-		// Case 1: both occurrence bounds → overlap check only
-		rangeTo,
-		rangeFrom,
-		// Case 2: incomplete occurrence data → fallback to mentioned_at or partial bounds
-		rangeFrom,
-		rangeTo,
-		rangeFrom,
-		rangeTo,
-		rangeFrom,
-		rangeTo
-	]
+	const conditions: string[] = ['bank_id = $bankId']
+	const params: Record<string, string | number> = {
+		$bankId: bankId,
+		$rangeFrom: rangeFrom,
+		$rangeTo: rangeTo,
+		$limit: limit
+	}
 
 	// When both occurred_start and occurred_end are present, use only the
 	// overlap check (event time is known precisely). Only fall back to
 	// mentioned_at / partial bounds when occurrence data is incomplete.
 	conditions.push(`(
-    (occurred_start IS NOT NULL AND occurred_end IS NOT NULL AND occurred_start <= ? AND occurred_end >= ?)
+    (occurred_start IS NOT NULL AND occurred_end IS NOT NULL AND occurred_start <= $rangeTo AND occurred_end >= $rangeFrom)
     OR (
       (occurred_start IS NULL OR occurred_end IS NULL) AND (
-        (mentioned_at IS NOT NULL AND mentioned_at BETWEEN ? AND ?)
-        OR (occurred_start IS NOT NULL AND occurred_start BETWEEN ? AND ?)
-        OR (occurred_end IS NOT NULL AND occurred_end BETWEEN ? AND ?)
+        (mentioned_at IS NOT NULL AND mentioned_at BETWEEN $rangeFrom AND $rangeTo)
+        OR (occurred_start IS NOT NULL AND occurred_start BETWEEN $rangeFrom AND $rangeTo)
+        OR (occurred_end IS NOT NULL AND occurred_end BETWEEN $rangeFrom AND $rangeTo)
       )
     )
   )`)
 
 	// Only include memories that have at least some temporal data.
 	conditions.push(
-		'(event_date IS NOT NULL OR occurred_start IS NOT NULL OR occurred_end IS NOT NULL OR mentioned_at IS NOT NULL OR occurred_start IS NOT NULL OR occurred_end IS NOT NULL)'
+		'(event_date IS NOT NULL OR occurred_start IS NOT NULL OR occurred_end IS NOT NULL OR mentioned_at IS NOT NULL)'
 	)
 
 	// Tag pre-filtering
 	if (tags && tags.length > 0) {
-		const tagFilter = buildTagCondition(tags, tagsMatch)
+		const tagFilter = buildNamedTagCondition(
+			tags,
+			tagsMatch
+		)
 		conditions.push(tagFilter.condition)
-		params.push(...tagFilter.params)
+		Object.assign(params, tagFilter.params)
 	}
 
 	const rows = hdb.sqlite
@@ -112,10 +76,10 @@ export function searchTemporal(
       FROM hs_memory_units
       WHERE ${conditions.join(' AND ')}
       ORDER BY COALESCE(event_date, occurred_start, mentioned_at, created_at) DESC
-      LIMIT ?
+      LIMIT $limit
     `
 		)
-		.all(...params, limit) as Array<{
+		.all(params) as Array<{
 		id: string
 		event_date: number | null
 		occurred_start: number | null

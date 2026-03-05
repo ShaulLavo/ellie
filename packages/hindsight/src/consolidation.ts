@@ -38,19 +38,20 @@ import { parseLLMJson } from './sanitize'
 import { refreshMentalModel } from './mental-models'
 import type { BankProfile } from './reflect'
 import { safeJsonParse } from './util'
+import { ftsInsert, ftsReplace, ftsDelete } from './fts'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function getOccurredStart(
 	row: typeof import('./schema').memoryUnits.$inferSelect
 ): number | null {
-	return row.occurredStart ?? row.occurredStart
+	return row.occurredStart ?? null
 }
 
 function getOccurredEnd(
 	row: typeof import('./schema').memoryUnits.$inferSelect
 ): number | null {
-	return row.occurredEnd ?? row.occurredEnd
+	return row.occurredEnd ?? null
 }
 
 function getEventDate(
@@ -384,15 +385,14 @@ function resolveObservationHit(
 
 	// SECURITY: Filter by tags to prevent cross-tenant observation leakage
 	if (tags?.length) {
-		const obsTags: string[] = row.tags
-			? JSON.parse(row.tags)
-			: []
+		const obsTags = safeJsonParse<string[]>(row.tags, [])
 		if (!matchesTags(obsTags, tags, tagsMatch)) return null
 	}
 
-	const sourceMemoryIds: string[] = row.sourceMemoryIds
-		? JSON.parse(row.sourceMemoryIds)
-		: []
+	const sourceMemoryIds = safeJsonParse<string[]>(
+		row.sourceMemoryIds,
+		[]
+	)
 
 	return {
 		id: row.id,
@@ -491,18 +491,14 @@ function normalizeOneAction(
 		return { action: 'create', text, reason }
 
 	if (action === 'update') {
-		const observationId = asString(
-			record.observationId ?? record.learning_id
-		)
+		const observationId = asString(record.observationId)
 		if (!observationId) return null
 		return { action: 'update', observationId, text, reason }
 	}
 
 	if (action === 'merge') {
 		const observationIds = asStringArray(
-			record.observationIds ??
-				record.learning_ids ??
-				record.observation_ids
+			record.observationIds ?? record.observation_ids
 		)
 		if (observationIds.length < 2) return null
 		return { action: 'merge', observationIds, text, reason }
@@ -562,10 +558,7 @@ async function executeCreateAction(
 		.run()
 
 	// FTS5 index
-	hdb.sqlite.run(
-		'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-		[obsId, bankId, action.text]
-	)
+	ftsInsert(hdb, obsId, bankId, action.text)
 
 	// Embedding for semantic search
 	await memoryVec.upsert(obsId, action.text)
@@ -670,13 +663,7 @@ async function executeUpdateAction(
 		.run()
 
 	// Update FTS5 index
-	hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [
-		action.observationId
-	])
-	hdb.sqlite.run(
-		'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-		[action.observationId, bankId, action.text]
-	)
+	ftsReplace(hdb, action.observationId, bankId, action.text)
 
 	// Re-embed with new content
 	await memoryVec.upsert(action.observationId, action.text)
@@ -785,23 +772,14 @@ async function executeMergeAction(
 		.where(eq(schema.memoryUnits.id, targetId))
 		.run()
 
-	hdb.sqlite.run('DELETE FROM hs_memory_fts WHERE id = ?', [
-		targetId
-	])
-	hdb.sqlite.run(
-		'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-		[targetId, bankId, action.text]
-	)
+	ftsReplace(hdb, targetId, bankId, action.text)
 
 	for (const observation of mergedAway) {
 		hdb.db
 			.delete(schema.memoryUnits)
 			.where(eq(schema.memoryUnits.id, observation.id))
 			.run()
-		hdb.sqlite.run(
-			'DELETE FROM hs_memory_fts WHERE id = ?',
-			[observation.id]
-		)
+		ftsDelete(hdb, observation.id)
 		memoryVec.delete(observation.id)
 	}
 
@@ -821,9 +799,7 @@ function shouldRefreshModel(
 	model: { tags: string | null },
 	consolidatedTags: Set<string>
 ): boolean {
-	const modelTags: string[] = model.tags
-		? JSON.parse(model.tags)
-		: []
+	const modelTags = safeJsonParse<string[]>(model.tags, [])
 	const modelIsTagged = modelTags.length > 0
 	const hasConsolidatedTags = consolidatedTags.size > 0
 

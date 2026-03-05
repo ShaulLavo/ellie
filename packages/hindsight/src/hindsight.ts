@@ -52,6 +52,7 @@ import {
 	deleteVisualMemoriesForBank
 } from './visual'
 import { resolveScope } from './scope'
+import { ftsDelete, ftsDeleteBank } from './fts'
 import type {
 	HindsightConfig,
 	BankConfig,
@@ -402,10 +403,7 @@ export class Hindsight {
 		)
 
 		// Clean FTS entries
-		this.hdb.sqlite.run(
-			'DELETE FROM hs_memory_fts WHERE bank_id = ?',
-			[id]
-		)
+		ftsDeleteBank(this.hdb, id)
 
 		// Delete the bank row (cascades to SQL tables)
 		this.hdb.db
@@ -1418,12 +1416,8 @@ Instructions:
 			factType:
 				row.factType as ListMemoryUnitsResult['items'][number]['factType'],
 			mentionedAt: toIsoOrNull(row.mentionedAt),
-			occurredStart: toIsoOrNull(
-				row.occurredStart ?? row.occurredStart
-			),
-			occurredEnd: toIsoOrNull(
-				row.occurredEnd ?? row.occurredEnd
-			),
+			occurredStart: toIsoOrNull(row.occurredStart),
+			occurredEnd: toIsoOrNull(row.occurredEnd),
 			entities: (entityByMemory.get(row.id) ?? []).join(
 				', '
 			),
@@ -1465,18 +1459,13 @@ Instructions:
 			date: toIsoOrEmpty(
 				row.eventDate ??
 					row.occurredStart ??
-					row.occurredStart ??
 					row.mentionedAt ??
 					row.createdAt
 			),
 			type: row.factType as MemoryUnitDetail['type'],
 			mentionedAt: toIsoOrNull(row.mentionedAt),
-			occurredStart: toIsoOrNull(
-				row.occurredStart ?? row.occurredStart
-			),
-			occurredEnd: toIsoOrNull(
-				row.occurredEnd ?? row.occurredEnd
-			),
+			occurredStart: toIsoOrNull(row.occurredStart),
+			occurredEnd: toIsoOrNull(row.occurredEnd),
 			entities: entityNames,
 			documentId: row.documentId,
 			chunkId: row.chunkId,
@@ -1542,10 +1531,7 @@ Instructions:
 		}
 
 		this.memoryVec.delete(memoryId)
-		this.hdb.sqlite.run(
-			'DELETE FROM hs_memory_fts WHERE id = ?',
-			[memoryId]
-		)
+		ftsDelete(this.hdb, memoryId)
 		this.hdb.db
 			.delete(this.hdb.schema.memoryUnits)
 			.where(eq(this.hdb.schema.memoryUnits.id, memoryId))
@@ -1583,10 +1569,7 @@ Instructions:
 
 		for (const observationId of observationIds) {
 			this.memoryVec.delete(observationId)
-			this.hdb.sqlite.run(
-				'DELETE FROM hs_memory_fts WHERE id = ?',
-				[observationId]
-			)
+			ftsDelete(this.hdb, observationId)
 			this.hdb.db
 				.delete(this.hdb.schema.memoryUnits)
 				.where(

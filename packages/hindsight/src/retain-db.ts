@@ -19,14 +19,9 @@ export function runInTransaction(
 	hdb: HindsightDatabase,
 	fn: () => void
 ): void {
-	hdb.sqlite.run('BEGIN')
-	try {
+	hdb.db.transaction(() => {
 		fn()
-		hdb.sqlite.run('COMMIT')
-	} catch (error) {
-		hdb.sqlite.run('ROLLBACK')
-		throw error
-	}
+	})
 }
 
 export function buildContentHash(content: string): string {

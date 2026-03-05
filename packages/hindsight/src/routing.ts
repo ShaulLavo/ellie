@@ -12,6 +12,7 @@ import { eq, sql } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
 import type { RetainRoute, RouteDecision } from './types'
+import { ftsReplace } from './fts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -224,15 +225,14 @@ function candidateScopeMatches(
 	return true
 }
 
-export function findBestCandidateByVector(
+/**
+ * Shared filtering logic: given raw vector search hits, find the first
+ * candidate that passes bank, scope, and temporal checks.
+ */
+function filterBestCandidate(
 	ctx: RoutingContext,
-	vector: Float32Array
+	hits: Array<{ id: string; distance: number }>
 ): CandidateMatch | null {
-	const hits = ctx.memoryVec.searchByVector(
-		vector,
-		CANDIDATE_SEARCH_K
-	)
-
 	for (const hit of hits) {
 		const similarity = 1 - hit.distance
 
@@ -263,6 +263,17 @@ export function findBestCandidateByVector(
 		}
 	}
 	return null
+}
+
+export function findBestCandidateByVector(
+	ctx: RoutingContext,
+	vector: Float32Array
+): CandidateMatch | null {
+	const hits = ctx.memoryVec.searchByVector(
+		vector,
+		CANDIDATE_SEARCH_K
+	)
+	return filterBestCandidate(ctx, hits)
 }
 
 export async function findBestCandidateAsync(
@@ -273,87 +284,19 @@ export async function findBestCandidateAsync(
 		content,
 		CANDIDATE_SEARCH_K
 	)
-
-	for (const hit of hits) {
-		const similarity = 1 - hit.distance
-
-		const row = ctx.hdb.db
-			.select({
-				bankId: ctx.hdb.schema.memoryUnits.bankId,
-				eventDate: ctx.hdb.schema.memoryUnits.eventDate,
-				occurredStart:
-					ctx.hdb.schema.memoryUnits.occurredStart,
-				occurredEnd: ctx.hdb.schema.memoryUnits.occurredEnd,
-				mentionedAt: ctx.hdb.schema.memoryUnits.mentionedAt,
-				createdAt: ctx.hdb.schema.memoryUnits.createdAt
-			})
-			.from(ctx.hdb.schema.memoryUnits)
-			.where(eq(ctx.hdb.schema.memoryUnits.id, hit.id))
-			.get()
-		if (!row || row.bankId !== ctx.bankId) continue
-		if (!candidateScopeMatches(ctx, hit.id)) continue
-		const eventAnchor = resolveMemoryAnchor(row)
-		if (eventAnchor >= ctx.eventTime) continue
-
-		const entities = loadCandidateEntities(ctx.hdb, hit.id)
-		return {
-			memoryId: hit.id,
-			similarity,
-			eventAnchor,
-			entities
-		}
-	}
-	return null
+	return filterBestCandidate(ctx, hits)
 }
 
 // ── Route a single fact ──────────────────────────────────────────────────────
 
-export function routeFactByVector(
-	ctx: RoutingContext,
+/**
+ * Build a RouteDecision from a candidate match (or lack thereof).
+ */
+function buildRouteDecision(
+	candidate: CandidateMatch | null,
 	incomingEntities: ExtractedEntity[],
-	vector: Float32Array,
 	policy: RoutingPolicy = {}
 ): RouteDecision {
-	const candidate = findBestCandidateByVector(ctx, vector)
-	if (!candidate) {
-		return {
-			route: 'new_trace',
-			candidateMemoryId: null,
-			candidateScore: null,
-			conflictDetected: false,
-			conflictKeys: []
-		}
-	}
-
-	const { conflictDetected, conflictKeys } = detectConflict(
-		candidate.entities,
-		incomingEntities
-	)
-	const decidedRoute = classifyRoute(
-		candidate.similarity,
-		conflictDetected,
-		policy
-	)
-
-	return {
-		route: decidedRoute,
-		candidateMemoryId: candidate.memoryId,
-		candidateScore: candidate.similarity,
-		conflictDetected,
-		conflictKeys
-	}
-}
-
-export async function routeFact(
-	ctx: RoutingContext,
-	content: string,
-	incomingEntities: ExtractedEntity[],
-	policy: RoutingPolicy = {}
-): Promise<RouteDecision> {
-	const candidate = await findBestCandidateAsync(
-		ctx,
-		content
-	)
 	if (!candidate) {
 		return {
 			route: 'new_trace',
@@ -381,6 +324,37 @@ export async function routeFact(
 		conflictDetected,
 		conflictKeys
 	}
+}
+
+export function routeFactByVector(
+	ctx: RoutingContext,
+	incomingEntities: ExtractedEntity[],
+	vector: Float32Array,
+	policy: RoutingPolicy = {}
+): RouteDecision {
+	const candidate = findBestCandidateByVector(ctx, vector)
+	return buildRouteDecision(
+		candidate,
+		incomingEntities,
+		policy
+	)
+}
+
+export async function routeFact(
+	ctx: RoutingContext,
+	content: string,
+	incomingEntities: ExtractedEntity[],
+	policy: RoutingPolicy = {}
+): Promise<RouteDecision> {
+	const candidate = await findBestCandidateAsync(
+		ctx,
+		content
+	)
+	return buildRouteDecision(
+		candidate,
+		incomingEntities,
+		policy
+	)
 }
 
 // ── Apply Route Actions ──────────────────────────────────────────────────────
@@ -425,12 +399,19 @@ export async function applyReconsolidate(
 	)
 
 	// Compute next version number
-	const maxVersionRow = hdb.sqlite
-		.prepare(
-			`SELECT COALESCE(MAX(version_no), 0) as max_v FROM hs_memory_versions WHERE memory_id = ?`
+	const maxVersionRow = hdb.db
+		.select({
+			maxV: sql<number>`COALESCE(MAX(${hdb.schema.memoryVersions.versionNo}), 0)`
+		})
+		.from(hdb.schema.memoryVersions)
+		.where(
+			eq(
+				hdb.schema.memoryVersions.memoryId,
+				candidateMemoryId
+			)
 		)
-		.get(candidateMemoryId) as { max_v: number }
-	const nextVersion = maxVersionRow.max_v + 1
+		.get()
+	const nextVersion = (maxVersionRow?.maxV ?? 0) + 1
 
 	const allEntities = hdb.db
 		.select()
@@ -532,13 +513,11 @@ export async function applyReconsolidate(
 				.run()
 		}
 
-		hdb.sqlite.run(
-			'DELETE FROM hs_memory_fts WHERE id = ?',
-			[candidateMemoryId]
-		)
-		hdb.sqlite.run(
-			'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-			[candidateMemoryId, current.bankId, newContent]
+		ftsReplace(
+			hdb,
+			candidateMemoryId,
+			current.bankId,
+			newContent
 		)
 
 		// Update embedding before committing so we can roll back on failure

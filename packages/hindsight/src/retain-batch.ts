@@ -15,6 +15,7 @@ import type {
 	RetainRoute
 } from './types'
 import type { RouteDecision } from './types'
+import { ftsInsert } from './fts'
 import {
 	routeFactByVector,
 	applyReinforce,
@@ -380,10 +381,7 @@ async function processNewTraceMemories(ctx: {
 				.insert(hdb.schema.memoryUnits)
 				.values(row)
 				.run()
-			hdb.sqlite.run(
-				'INSERT INTO hs_memory_fts (id, bank_id, content) VALUES (?, ?, ?)',
-				[row.id, bankId, row.content]
-			)
+			ftsInsert(hdb, row.id, bankId, row.content)
 		}
 
 		memoryVec.upsertVectors(

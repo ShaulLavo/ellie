@@ -1,5 +1,5 @@
 import { ulid } from 'fast-ulid'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
 import type {
@@ -648,14 +648,18 @@ export function updateCooccurrences(
 					? [entityIds[i]!, entityIds[j]!]
 					: [entityIds[j]!, entityIds[i]!]
 
-			// Use raw SQL for upsert (ON CONFLICT UPDATE)
-			hdb.sqlite.run(
-				`INSERT INTO hs_entity_cooccurrences (bank_id, entity_a, entity_b, count)
-         VALUES (?, ?, ?, 1)
-         ON CONFLICT (bank_id, entity_a, entity_b)
-         DO UPDATE SET count = count + 1`,
-				[bankId, entityA, entityB]
-			)
+			hdb.db
+				.insert(hdb.schema.entityCooccurrences)
+				.values({ bankId, entityA, entityB, count: 1 })
+				.onConflictDoUpdate({
+					target: [
+						hdb.schema.entityCooccurrences.bankId,
+						hdb.schema.entityCooccurrences.entityA,
+						hdb.schema.entityCooccurrences.entityB
+					],
+					set: { count: sql`count + 1` }
+				})
+				.run()
 		}
 	}
 }

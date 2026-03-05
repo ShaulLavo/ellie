@@ -797,47 +797,58 @@ function updateCoAccessAssociations(
 				: [otherPathId, currentPathId]
 
 		// Atomic upsert: increment co_access_count or insert initial row.
-		// Uses ON CONFLICT on the unique index (bank_id, source_path_id, related_path_id).
 		// Strength is recomputed from the new count in a follow-up UPDATE since
 		// SQLite's bundled math functions (log1p) are unavailable.
-		// TODO: compile SQLite with -DSQLITE_ENABLE_MATH_FUNCTIONS to compute
-		// strength entirely in SQL and collapse this into a single statement.
+		const { locationAssociations: la } = hdb.schema
 		const initStrength = Math.log1p(1) / (1 + Math.log1p(1))
-		hdb.sqlite.run(
-			`INSERT INTO hs_location_associations (id, bank_id, source_path_id, related_path_id, co_access_count, strength, updated_at)
-			 VALUES (?, ?, ?, ?, 1, ?, ?)
-			 ON CONFLICT (bank_id, source_path_id, related_path_id) DO UPDATE SET
-			   co_access_count = co_access_count + 1,
-			   updated_at = ?`,
-			[
-				ulid(),
+		hdb.db
+			.insert(la)
+			.values({
+				id: ulid(),
 				bankId,
-				sourceId,
-				relatedId,
-				initStrength,
-				now,
-				now
-			]
-		)
+				sourcePathId: sourceId,
+				relatedPathId: relatedId,
+				coAccessCount: 1,
+				strength: initStrength,
+				updatedAt: now
+			})
+			.onConflictDoUpdate({
+				target: [
+					la.bankId,
+					la.sourcePathId,
+					la.relatedPathId
+				],
+				set: {
+					coAccessCount: sql`co_access_count + 1`,
+					updatedAt: now
+				}
+			})
+			.run()
 
 		// Read back the new count and recompute strength
-		const row = hdb.sqlite
-			.query<
-				{ co_access_count: number; id: string },
-				[string, string, string]
-			>(
-				`SELECT id, co_access_count FROM hs_location_associations
-				 WHERE bank_id = ? AND source_path_id = ? AND related_path_id = ?`
+		const row = hdb.db
+			.select({
+				id: la.id,
+				coAccessCount: la.coAccessCount
+			})
+			.from(la)
+			.where(
+				and(
+					eq(la.bankId, bankId),
+					eq(la.sourcePathId, sourceId),
+					eq(la.relatedPathId, relatedId)
+				)
 			)
-			.get(bankId, sourceId, relatedId)
+			.get()
 		if (row) {
 			const strength =
-				Math.log1p(row.co_access_count) /
-				(1 + Math.log1p(row.co_access_count))
-			hdb.sqlite.run(
-				`UPDATE hs_location_associations SET strength = ? WHERE id = ?`,
-				[strength, row.id]
-			)
+				Math.log1p(row.coAccessCount) /
+				(1 + Math.log1p(row.coAccessCount))
+			hdb.db
+				.update(la)
+				.set({ strength })
+				.where(eq(la.id, row.id))
+				.run()
 		}
 	}
 }
