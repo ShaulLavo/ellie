@@ -2,6 +2,7 @@ package chatui
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,8 +25,12 @@ func NewHTTPClient(baseURL string) *HTTPClient {
 }
 
 // GetStatus checks server health via GET /api/status.
-func (c *HTTPClient) GetStatus() (*StatusResponse, error) {
-	resp, err := c.client.Get(c.baseURL + "/api/status")
+func (c *HTTPClient) GetStatus(ctx context.Context) (*StatusResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/status", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create status request: %w", err)
+	}
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("status request failed: %w", err)
 	}
@@ -41,8 +46,12 @@ func (c *HTTPClient) GetStatus() (*StatusResponse, error) {
 }
 
 // ListSessions fetches GET /chat/sessions.
-func (c *HTTPClient) ListSessions() ([]SessionEntry, error) {
-	resp, err := c.client.Get(c.baseURL + "/chat/sessions")
+func (c *HTTPClient) ListSessions(ctx context.Context) ([]SessionEntry, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/chat/sessions", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create sessions request: %w", err)
+	}
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions failed: %w", err)
 	}
@@ -58,8 +67,12 @@ func (c *HTTPClient) ListSessions() ([]SessionEntry, error) {
 }
 
 // GetCurrentSession fetches GET /chat/sessions/current (resolves to the current session entry).
-func (c *HTTPClient) GetCurrentSession() (*SessionEntry, error) {
-	resp, err := c.client.Get(c.baseURL + "/chat/sessions/current")
+func (c *HTTPClient) GetCurrentSession(ctx context.Context) (*SessionEntry, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/chat/sessions/current", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create current session request: %w", err)
+	}
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("get current session failed: %w", err)
 	}
@@ -76,15 +89,16 @@ func (c *HTTPClient) GetCurrentSession() (*SessionEntry, error) {
 }
 
 // SendMessage posts a user message to the current session.
-func (c *HTTPClient) SendMessage(sessionID, content string) error {
+func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string) error {
 	body, _ := json.Marshal(map[string]string{
 		"content": content,
 	})
-	resp, err := c.client.Post(
-		c.baseURL+"/chat/"+sessionID+"/messages",
-		"application/json",
-		bytes.NewReader(body),
-	)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/"+sessionID+"/messages", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create send request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("send message failed: %w", err)
 	}
@@ -97,12 +111,13 @@ func (c *HTTPClient) SendMessage(sessionID, content string) error {
 }
 
 // ClearSession clears the current session via POST /chat/:sessionId/clear.
-func (c *HTTPClient) ClearSession(sessionID string) error {
-	resp, err := c.client.Post(
-		c.baseURL+"/chat/"+sessionID+"/clear",
-		"application/json",
-		nil,
-	)
+func (c *HTTPClient) ClearSession(ctx context.Context, sessionID string) error {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/"+sessionID+"/clear", nil)
+	if err != nil {
+		return fmt.Errorf("create clear request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("clear session failed: %w", err)
 	}

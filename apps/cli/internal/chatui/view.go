@@ -296,7 +296,7 @@ func formatModelName(model string) string {
 	return s
 }
 
-// wrapText performs simple word wrapping.
+// wrapText performs simple word wrapping, preserving leading indentation.
 func wrapText(text string, width int) string {
 	if width <= 0 || len(text) <= width {
 		return text
@@ -312,17 +312,28 @@ func wrapText(text string, width int) string {
 			result.WriteString(line)
 			continue
 		}
-		// Simple word wrap
-		words := strings.Fields(line)
+
+		// Measure leading whitespace to preserve indentation on wrapped lines.
+		indent := ""
+		for _, r := range line {
+			if r == ' ' || r == '\t' {
+				indent += string(r)
+			} else {
+				break
+			}
+		}
+
+		// Split by spaces while preserving spacing (use SplitAfter to keep delimiters).
+		words := splitWords(line)
 		currentLine := ""
 		for _, word := range words {
 			if currentLine == "" {
 				currentLine = word
-			} else if len(currentLine)+1+len(word) <= width {
-				currentLine += " " + word
+			} else if len(currentLine)+len(word) <= width {
+				currentLine += word
 			} else {
 				result.WriteString(currentLine + "\n")
-				currentLine = word
+				currentLine = indent + strings.TrimLeft(word, " ")
 			}
 		}
 		if currentLine != "" {
@@ -330,4 +341,30 @@ func wrapText(text string, width int) string {
 		}
 	}
 	return result.String()
+}
+
+// splitWords splits text into words with trailing spaces attached,
+// preserving all whitespace in the original string.
+func splitWords(s string) []string {
+	var words []string
+	current := ""
+	inSpace := false
+	for _, r := range s {
+		isSpace := r == ' '
+		if isSpace {
+			current += string(r)
+			inSpace = true
+		} else {
+			if inSpace && current != "" {
+				words = append(words, current)
+				current = ""
+			}
+			current += string(r)
+			inSpace = false
+		}
+	}
+	if current != "" {
+		words = append(words, current)
+	}
+	return words
 }

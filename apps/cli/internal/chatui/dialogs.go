@@ -144,7 +144,7 @@ func (d *CommandPaletteDialog) View(width, height int) string {
 		b.WriteString(dialogDim.Render("  No matching commands"))
 	}
 
-	maxW := min(width-4, 60)
+	maxW := clampDialogWidth(width, 60)
 	return dialogBorder.Width(maxW).Render(b.String())
 }
 
@@ -205,13 +205,13 @@ func (d *SessionListDialog) View(width, height int) string {
 
 	if d.loading {
 		b.WriteString(dialogDim.Render("  Loading..."))
-		maxW := min(width-4, 60)
+		maxW := clampDialogWidth(width, 60)
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
 	if len(d.sessions) == 0 {
 		b.WriteString(dialogDim.Render("  No sessions found"))
-		maxW := min(width-4, 60)
+		maxW := clampDialogWidth(width, 60)
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
@@ -233,7 +233,7 @@ func (d *SessionListDialog) View(width, height int) string {
 		b.WriteString(line + "\n")
 	}
 
-	maxW := min(width-4, 70)
+	maxW := clampDialogWidth(width, 70)
 	return dialogBorder.Width(maxW).Render(b.String())
 }
 
@@ -276,13 +276,13 @@ func (d *SessionInfoDialog) View(width, height int) string {
 
 	if d.loading {
 		b.WriteString(dialogDim.Render("  Loading..."))
-		maxW := min(width-4, 50)
+		maxW := clampDialogWidth(width, 50)
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
 	if d.session == nil {
 		b.WriteString(dialogDim.Render("  No session data"))
-		maxW := min(width-4, 50)
+		maxW := clampDialogWidth(width, 50)
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
@@ -306,7 +306,7 @@ func (d *SessionInfoDialog) View(width, height int) string {
 		b.WriteString(fmt.Sprintf("  Cost:         $%.4f\n", d.stats.TotalCost))
 	}
 
-	maxW := min(width-4, 50)
+	maxW := clampDialogWidth(width, 50)
 	return dialogBorder.Width(maxW).Render(b.String())
 }
 
@@ -344,11 +344,24 @@ func (d *ClearConfirmDialog) View(width, height int) string {
 		dialogHighlight.Render("[Y]es"),
 		dialogDim.Render("[N]o")))
 
-	maxW := min(width-4, 50)
+	maxW := clampDialogWidth(width, 50)
 	return dialogBorder.Width(maxW).Render(b.String())
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+// clampDialogWidth returns a safe dialog width: at least 10, at most limit,
+// with 4 columns reserved for border/padding.
+func clampDialogWidth(width, limit int) int {
+	w := width - 4
+	if w > limit {
+		w = limit
+	}
+	if w < 10 {
+		w = 10
+	}
+	return w
+}
 
 func truncateID(id string) string {
 	if len(id) <= 8 {

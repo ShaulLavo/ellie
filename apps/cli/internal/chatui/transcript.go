@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -195,14 +196,26 @@ func formatArgs(args map[string]interface{}) string {
 	if len(args) == 0 {
 		return ""
 	}
-	lines := make([]string, 0, len(args))
-	for k, v := range args {
+	// Sort keys for deterministic output.
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := args[k]
 		switch val := v.(type) {
 		case string:
 			lines = append(lines, fmt.Sprintf("  %s: %s", k, val))
 		default:
-			b, _ := json.Marshal(val)
-			lines = append(lines, fmt.Sprintf("  %s: %s", k, string(b)))
+			b, err := json.Marshal(val)
+			if err != nil {
+				lines = append(lines, fmt.Sprintf("  %s: <marshal error: %v>", k, err))
+			} else {
+				lines = append(lines, fmt.Sprintf("  %s: %s", k, string(b)))
+			}
 		}
 	}
 	return strings.Join(lines, "\n")

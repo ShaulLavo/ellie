@@ -94,7 +94,7 @@ func NewModel(baseURL, sessionID, transcriptDir string) Model {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		textarea.Blink,
-		m.startSSE(),
+		m.sseClient.Subscribe(),
 	)
 }
 
@@ -500,6 +500,9 @@ func (m Model) handleAppend(ev EventRow) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleUpdate(ev EventRow) (tea.Model, tea.Cmd) {
+	// Upsert into allEvents by ID.
+	m.upsertEvent(ev)
+
 	if ev.Type == "assistant_message" {
 		parsed := parsePayload(ev.Payload)
 		streaming, _ := parsed["streaming"].(bool)
@@ -511,10 +514,10 @@ func (m Model) handleUpdate(ev EventRow) (tea.Model, tea.Cmd) {
 		} else {
 			// Finalized — move to messages, clear streaming
 			m.streamingMsg = nil
-			m.messages = append(m.messages, stored)
+			m.upsertMessage(stored)
 
-			delta := ComputeStatsFromEvents([]EventRow{ev})
-			m.stats = MergeStats(m.stats, delta)
+			// Recompute stats from all events for accuracy.
+			m.stats = ComputeStatsFromEvents(m.allEvents)
 		}
 		m.refreshViewport()
 		return m, nil
@@ -525,23 +528,34 @@ func (m Model) handleUpdate(ev EventRow) (tea.Model, tea.Cmd) {
 		if len(stored.Parts) == 0 && stored.Text == "" {
 			return m, nil
 		}
-		// Update existing or append
-		updated := false
-		for i, msg := range m.messages {
-			if msg.ID == stored.ID {
-				m.messages[i] = stored
-				updated = true
-				break
-			}
-		}
-		if !updated {
-			m.messages = append(m.messages, stored)
-		}
+		m.upsertMessage(stored)
 		m.refreshViewport()
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// upsertEvent replaces an existing EventRow by ID, or appends if new.
+func (m *Model) upsertEvent(ev EventRow) {
+	for i, e := range m.allEvents {
+		if e.ID == ev.ID {
+			m.allEvents[i] = ev
+			return
+		}
+	}
+	m.allEvents = append(m.allEvents, ev)
+}
+
+// upsertMessage replaces an existing StoredMessage by ID, or appends if new.
+func (m *Model) upsertMessage(stored StoredMessage) {
+	for i, msg := range m.messages {
+		if msg.ID == stored.ID {
+			m.messages[i] = stored
+			return
+		}
+	}
+	m.messages = append(m.messages, stored)
 }
 
 // ─── Commands ─────────────────────────────────────────────────────
@@ -593,15 +607,25 @@ type transcriptDoneMsg struct {
 }
 
 func (m *Model) startSSE() tea.Cmd {
+	// Cancel any existing loop.
+	if m.sseCancel != nil {
+		m.sseCancel()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	m.sseCancel = cancel
 
+	client := m.sseClient
 	return func() tea.Msg {
-		// This runs in a goroutine. We need to get the program to send messages.
-		// Use a helper that returns the initial state change.
-		// The RunLoop will be started separately.
-		_ = ctx
-		return sseStateMsg{State: StateConnecting}
+		// RunLoop blocks until it gives up or the context is cancelled.
+		// sendFn is stored on the client from the initial StartSSELoop call.
+		client.mu.Lock()
+		send := client.sendFn
+		client.mu.Unlock()
+		if send != nil {
+			client.RunLoop(ctx, send)
+		}
+		return nil
 	}
 }
 
@@ -613,21 +637,21 @@ func (m *Model) StartSSELoop(ctx context.Context, send func(tea.Msg)) {
 
 func (m Model) sendMessage(text string) tea.Cmd {
 	return func() tea.Msg {
-		err := m.httpClient.SendMessage(m.sessionID, text)
+		err := m.httpClient.SendMessage(context.Background(), m.sessionID, text)
 		return sendDoneMsg{err: err}
 	}
 }
 
 func (m Model) clearSession() tea.Cmd {
 	return func() tea.Msg {
-		err := m.httpClient.ClearSession(m.sessionID)
+		err := m.httpClient.ClearSession(context.Background(), m.sessionID)
 		return clearDoneMsg{err: err}
 	}
 }
 
 func (m Model) loadSessions(dlg *SessionListDialog) tea.Cmd {
 	return func() tea.Msg {
-		sessions, err := m.httpClient.ListSessions()
+		sessions, err := m.httpClient.ListSessions(context.Background())
 		if err != nil {
 			return sessionsLoadedMsg{sessions: nil}
 		}
@@ -637,7 +661,7 @@ func (m Model) loadSessions(dlg *SessionListDialog) tea.Cmd {
 
 func (m Model) loadSessionInfo(dlg *SessionInfoDialog) tea.Cmd {
 	return func() tea.Msg {
-		session, err := m.httpClient.GetCurrentSession()
+		session, err := m.httpClient.GetCurrentSession(context.Background())
 		if err != nil {
 			return sessionInfoLoadedMsg{session: nil}
 		}

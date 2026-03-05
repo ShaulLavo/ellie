@@ -130,8 +130,8 @@ type SessionEntry struct {
 
 // StatusResponse is the /api/status response shape.
 type StatusResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version,omitempty"`
+	ConnectedClients int  `json:"connectedClients"`
+	NeedsBootstrap   bool `json:"needsBootstrap"`
 }
 
 // DialogKind identifies which dialog is active.

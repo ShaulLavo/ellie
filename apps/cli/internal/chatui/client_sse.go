@@ -35,6 +35,7 @@ type SSEClient struct {
 	reconnectAttempts int
 	disposed          bool
 	cancelFn          context.CancelFunc
+	sendFn            func(tea.Msg) // stored from first RunLoop call
 }
 
 const (
@@ -64,6 +65,11 @@ func (s *SSEClient) Subscribe() tea.Cmd {
 // RunLoop is a long-lived goroutine that maintains the SSE connection.
 // It sends messages to the provided channel, which the model reads from.
 func (s *SSEClient) RunLoop(ctx context.Context, send func(tea.Msg)) {
+	s.mu.Lock()
+	s.sendFn = send
+	s.disposed = false
+	s.mu.Unlock()
+
 	for {
 		if ctx.Err() != nil {
 			return
@@ -117,7 +123,12 @@ func (s *SSEClient) RunLoop(ctx context.Context, send func(tea.Msg)) {
 
 // connectOnce opens a single SSE connection, reads events until EOF or error.
 func (s *SSEClient) connectOnce(ctx context.Context, send func(tea.Msg)) error {
+	// Create child context so Disconnect() can abort in-flight reads.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	s.mu.Lock()
+	s.cancelFn = cancel
 	seq := s.lastSeq
 	s.mu.Unlock()
 

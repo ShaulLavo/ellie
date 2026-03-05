@@ -46,8 +46,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("ctrl+s", "sessions"),
 		),
 		Info: key.NewBinding(
-			key.WithKeys("ctrl+i"),
-			key.WithHelp("ctrl+i", "info"),
+			key.WithKeys("ctrl+g"),
+			key.WithHelp("ctrl+g", "info"),
 		),
 		Retry: key.NewBinding(
 			key.WithKeys("r"),
@@ -69,9 +69,11 @@ func DefaultKeyMap() KeyMap {
 	)
 	km.Editor.HistoryPrev = key.NewBinding(
 		key.WithKeys("up"),
+		key.WithHelp("↑", "history prev"),
 	)
 	km.Editor.HistoryNext = key.NewBinding(
 		key.WithKeys("down"),
+		key.WithHelp("↓", "history next"),
 	)
 
 	km.Chat.Up = key.NewBinding(

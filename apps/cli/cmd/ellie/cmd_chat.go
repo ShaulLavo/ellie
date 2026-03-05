@@ -28,7 +28,7 @@ func cmdChat(args []string) error {
 
 	// Verify server is reachable
 	client := chatui.NewHTTPClient(base)
-	if _, err := client.GetStatus(); err != nil {
+	if _, err := client.GetStatus(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Cannot connect to server at "+base))
 		fmt.Fprintln(os.Stderr, styleDim.Render("Make sure the server is running (ellie dev or ellie start)"))
 		return errSilent

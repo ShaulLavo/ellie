@@ -3,6 +3,7 @@ package chatui
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -91,7 +92,7 @@ func EventToStored(row EventRow) StoredMessage {
 			textParts = append(textParts, p.Text)
 		}
 	}
-	text := joinStrings(textParts, "\n")
+	text := strings.Join(textParts, "\n")
 
 	// Extract thinking from thinking parts
 	var thinkingParts []string
@@ -100,7 +101,7 @@ func EventToStored(row EventRow) StoredMessage {
 			thinkingParts = append(thinkingParts, p.Text)
 		}
 	}
-	thinking := joinStrings(thinkingParts, "\n")
+	thinking := strings.Join(thinkingParts, "\n")
 
 	// Filter out thinking and toolCall parts
 	filtered := make([]ContentPart, 0, len(parts))
@@ -319,15 +320,4 @@ func parseContentArray(arr []interface{}) []ContentPart {
 		parts = append(parts, p)
 	}
 	return parts
-}
-
-func joinStrings(ss []string, sep string) string {
-	if len(ss) == 0 {
-		return ""
-	}
-	result := ss[0]
-	for _, s := range ss[1:] {
-		result += sep + s
-	}
-	return result
 }
