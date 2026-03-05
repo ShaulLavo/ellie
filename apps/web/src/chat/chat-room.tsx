@@ -17,6 +17,7 @@ import {
 	InfoIcon,
 	Trash2Icon
 } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { SessionStatusBar } from './components/session-status-bar'
 import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
@@ -94,6 +95,7 @@ export function ChatRoom({
 					Info
 				</button>
 				<div className="flex-1" />
+				<ThemeToggle />
 				<button
 					type="button"
 					onClick={async () => {
