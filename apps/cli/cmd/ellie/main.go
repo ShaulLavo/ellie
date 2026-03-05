@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,6 +21,15 @@ var (
 	httpClient = &http.Client{Timeout: 10 * time.Second}
 )
 
+// errSilent signals a non-zero exit without additional output from main.
+// Functions that return errSilent have already printed any necessary messages.
+var errSilent = errors.New("")
+
+// exitCodeError propagates a child-process exit code through the error chain.
+type exitCodeError int
+
+func (e exitCodeError) Error() string { return fmt.Sprintf("exit code %d", int(e)) }
+
 func baseURL() string {
 	if u := os.Getenv("ELLIE_API_URL"); u != "" {
 		return strings.TrimRight(u, "/")
@@ -28,40 +38,52 @@ func baseURL() string {
 }
 
 func main() {
-	args := os.Args[1:]
-	if len(args) == 0 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	switch args[0] {
-	case "dev":
-		cmdDev()
-	case "start":
-		cmdStart()
-	case "auth":
-		runAuth(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
-		printUsage()
+	if err := run(); err != nil {
+		var ec exitCodeError
+		if errors.As(err, &ec) {
+			os.Exit(int(ec))
+		}
+		if !errors.Is(err, errSilent) {
+			fmt.Fprintln(os.Stderr, styleErr.Render("Error:"), err)
+		}
 		os.Exit(1)
 	}
 }
 
-func runAuth(args []string) {
+func run() error {
+	args := os.Args[1:]
 	if len(args) == 0 {
-		cmdAuth()
-		return
+		printUsage()
+		return errSilent
+	}
+
+	switch args[0] {
+	case "dev":
+		return cmdDev()
+	case "start":
+		return cmdStart()
+	case "auth":
+		return runAuth(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
+		printUsage()
+		return errSilent
+	}
+}
+
+func runAuth(args []string) error {
+	if len(args) == 0 {
+		return cmdAuth()
 	}
 	switch args[0] {
 	case "status":
-		cmdAuthStatus()
+		return cmdAuthStatus()
 	case "clear":
-		cmdAuthClear()
+		return cmdAuthClear()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown auth command: %s\n", args[0])
 		printUsage()
-		os.Exit(1)
+		return errSilent
 	}
 }
 
