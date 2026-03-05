@@ -53,6 +53,10 @@ export async function runRecall(
 				deps.baseSystemPrompt + '\n\n' + result.contextBlock
 		}
 	} catch (err) {
+		console.warn(
+			`[agent-controller] memory_recall_failed session=${sessionId} runId=${runId}`,
+			err instanceof Error ? err.message : String(err)
+		)
 		deps.trace('controller.memory_recall_failed', {
 			sessionId,
 			runId,
@@ -103,6 +107,10 @@ export async function runRetain(
 
 		return result.parts[0]?.factsStored ?? 0
 	} catch (err) {
+		console.warn(
+			`[agent-controller] memory_retain_failed session=${sessionId} runId=${runId}`,
+			err instanceof Error ? err.message : String(err)
+		)
 		deps.trace('controller.memory_retain_failed', {
 			sessionId,
 			runId,
@@ -168,6 +176,10 @@ export async function runRetainAndEnforce(
 					'respond with exactly NO_REPLY and nothing else.'
 			)
 			.catch(err => {
+				console.warn(
+					`[agent-controller] enforcement_failed session=${sessionId} runId=${enforcementRunId}`,
+					err instanceof Error ? err.message : String(err)
+				)
 				deps.trace('controller.enforcement_failed', {
 					sessionId,
 					runId: enforcementRunId,

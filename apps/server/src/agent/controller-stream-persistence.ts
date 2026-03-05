@@ -67,6 +67,10 @@ export function handleStreamingEvent(
 			)
 			state.currentMessageRowId = row.id
 		} catch (err) {
+			console.error(
+				`[agent-controller] persist_failed type=assistant_message session=${sessionId} runId=${runId}`,
+				err instanceof Error ? err.message : String(err)
+			)
 			deps.trace('controller.persist_failed', {
 				sessionId,
 				runId,
@@ -91,6 +95,10 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
+			console.warn(
+				`[agent-controller] update_failed type=assistant_message (delta) session=${sessionId} runId=${runId}`,
+				err instanceof Error ? err.message : String(err)
+			)
 			deps.trace('controller.update_failed', {
 				sessionId,
 				runId,
@@ -115,6 +123,10 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
+			console.error(
+				`[agent-controller] update_failed type=assistant_message (final) session=${sessionId} runId=${runId}`,
+				err instanceof Error ? err.message : String(err)
+			)
 			deps.trace('controller.update_failed', {
 				sessionId,
 				runId,
@@ -142,6 +154,10 @@ export function handleStreamingEvent(
 			)
 			state.currentToolRowIds.set(event.toolCallId, row.id)
 		} catch (err) {
+			console.error(
+				`[agent-controller] persist_failed type=tool_execution session=${sessionId} runId=${runId}`,
+				err instanceof Error ? err.message : String(err)
+			)
 			deps.trace('controller.persist_failed', {
 				sessionId,
 				runId,
@@ -171,6 +187,10 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
+			console.warn(
+				`[agent-controller] update_failed type=tool_execution (delta) session=${sessionId} runId=${runId}`,
+				err instanceof Error ? err.message : String(err)
+			)
 			deps.trace('controller.update_failed', {
 				sessionId,
 				runId,
@@ -202,6 +222,10 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
+			console.error(
+				`[agent-controller] update_failed type=tool_execution (final) session=${sessionId} runId=${runId}`,
+				err instanceof Error ? err.message : String(err)
+			)
 			deps.trace('controller.update_failed', {
 				sessionId,
 				runId,
