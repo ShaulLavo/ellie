@@ -16,7 +16,7 @@ import { JSDOM } from 'jsdom'
 import DefuddleClass from 'defuddle'
 import TurndownService from 'turndown'
 import pdf2md from '@opendocsg/pdf2md'
-import { getBrowser } from './web-fetch-browser'
+import { getBrowser } from './browser'
 import type {
 	AgentTool,
 	AgentToolResult

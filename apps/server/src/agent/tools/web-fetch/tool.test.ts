@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AgentToolResult } from '@ellie/agent'
-import { createWebFetchTool } from './web-fetch-tool'
+import { createWebFetchTool } from './tool'
 
 function textOf(result: AgentToolResult): string {
 	const block = result.content[0]

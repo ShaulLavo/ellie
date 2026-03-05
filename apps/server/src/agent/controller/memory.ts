@@ -8,9 +8,9 @@
 import type { Agent } from '@ellie/agent'
 import type { EventPayloadMap } from '@ellie/db'
 import { ulid } from 'fast-ulid'
-import type { RealtimeStore } from '../lib/realtime-store'
-import type { MemoryOrchestrator } from './memory-orchestrator'
-import { handleControllerError } from './controller-error-handler'
+import type { RealtimeStore } from '../../lib/realtime-store'
+import type { MemoryOrchestrator } from '../memory-orchestrator'
+import { handleControllerError } from './error-handler'
 
 export interface MemoryDeps {
 	store: RealtimeStore

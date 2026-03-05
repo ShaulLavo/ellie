@@ -15,7 +15,7 @@ import {
 	writeFileSync,
 	mkdirSync
 } from 'fs'
-import { createMemoryAppendDailyTool } from './memory-daily'
+import { createMemoryAppendDailyTool } from './daily'
 import type { AgentTool } from '@ellie/agent'
 
 // ============================================================================

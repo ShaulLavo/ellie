@@ -5,7 +5,7 @@ import { Hindsight } from '@ellie/hindsight'
 import { FileStore, SqliteKvStore } from '@ellie/tus'
 import { Cron } from 'croner'
 import type { AgentController } from './agent/controller'
-import { AgentControllerFactory } from './agent/controller-factory'
+import { AgentControllerFactory } from './agent/controller'
 import {
 	ensureBootstrapInjected,
 	isBootstrapInjected
