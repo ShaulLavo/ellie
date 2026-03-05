@@ -37,7 +37,14 @@ export function decodeAndValidate<T extends GenericSchema>(
 	const text = decoder.decode(
 		end === bytes.length ? bytes : bytes.subarray(0, end)
 	)
-	const parsed: unknown = JSON.parse(text)
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(text)
+	} catch (err) {
+		throw new Error(
+			`Stream message is not valid JSON: ${(err as Error).message}`
+		)
+	}
 
 	const result = v.safeParse(schema, parsed)
 	if (!result.success) {
