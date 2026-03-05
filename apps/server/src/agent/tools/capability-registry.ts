@@ -13,7 +13,7 @@ import type { AgentTool } from '@ellie/agent'
 import { createWorkspaceTools } from './workspace-tools'
 import { createShellTool } from './shell-tool'
 import { createRipgrepTool } from './ripgrep-tool'
-import { createWebFetchTool } from './web-fetch-tool'
+import { createWebFetchTool } from './web-fetch/tool'
 import {
 	createSessionExecTool,
 	createExecTool

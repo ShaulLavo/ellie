@@ -1,7 +1,7 @@
 /**
  * Shared error-handling helper for agent controller modules.
  * Encapsulates the console.error + trace pattern used across
- * controller.ts, controller-stream-persistence.ts, and controller-memory.ts.
+ * controller.ts, stream-persistence.ts, and memory.ts.
  */
 
 type TraceFn = (

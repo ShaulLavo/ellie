@@ -3,9 +3,9 @@
  *
  * Orchestration facade: manages locking, session binding, message routing,
  * and agent lifecycle. Delegates to:
- *   - controller-stream-persistence: unified INSERT/UPDATE for streaming rows
- *   - controller-event-mapper: pure mapping for non-streaming events
- *   - controller-memory: recall, retain, and enforcement logic
+ *   - stream-persistence: unified INSERT/UPDATE for streaming rows
+ *   - event-mapper: pure mapping for non-streaming events
+ *   - memory: recall, retain, and enforcement logic
  */
 
 import {
@@ -17,25 +17,25 @@ import {
 import type { EventType, EventPayloadMap } from '@ellie/db'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
-import type { RealtimeStore } from '../lib/realtime-store'
-import { buildSystemPrompt } from './system-prompt'
-import type { MemoryOrchestrator } from './memory-orchestrator'
-import { createToolRegistry } from './tools/capability-registry'
-import { createMemoryAppendDailyTool } from './tools/memory-daily'
-import { mapAgentEventToDb } from './controller-event-mapper'
+import type { RealtimeStore } from '../../lib/realtime-store'
+import { buildSystemPrompt } from '../system-prompt'
+import type { MemoryOrchestrator } from '../memory-orchestrator'
+import { createToolRegistry } from '../tools/capability-registry'
+import { createMemoryAppendDailyTool } from '../tools/memory/daily'
+import { mapAgentEventToDb } from './event-mapper'
 import {
 	runRecall,
 	runRetain,
 	runRetainAndEnforce,
 	type MemoryDeps
-} from './controller-memory'
+} from './memory'
 import {
 	handleStreamingEvent,
 	createStreamState,
 	resetStreamState,
 	type StreamPersistenceDeps
-} from './controller-stream-persistence'
-import { handleControllerError } from './controller-error-handler'
+} from './stream-persistence'
+import { handleControllerError } from './error-handler'
 
 // ── Config ───────────────────────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@
  *
  * Handles only non-streaming events (lifecycle, resilience, guardrails).
  * Streaming events (assistant_message, tool_execution) are handled by
- * controller-stream-persistence.ts via INSERT/UPDATE.
+ * stream-persistence.ts via INSERT/UPDATE.
  */
 
 import type { AgentEvent } from '@ellie/agent'

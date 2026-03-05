@@ -8,8 +8,8 @@
 
 import type { AgentEvent } from '@ellie/agent'
 import type { AssistantMessage } from '@ellie/schemas'
-import type { RealtimeStore } from '../lib/realtime-store'
-import { handleControllerError } from './controller-error-handler'
+import type { RealtimeStore } from '../../lib/realtime-store'
+import { handleControllerError } from './error-handler'
 
 export interface StreamPersistenceDeps {
 	store: RealtimeStore

@@ -7,9 +7,9 @@ import {
 } from 'bun:test'
 import { AgentController } from './controller'
 import { EventStore } from '@ellie/db'
-import { RealtimeStore } from '../lib/realtime-store'
-import { seedWorkspace } from './workspace'
-import type { MemoryOrchestrator } from './memory-orchestrator'
+import { RealtimeStore } from '../../lib/realtime-store'
+import { seedWorkspace } from '../workspace'
+import type { MemoryOrchestrator } from '../memory-orchestrator'
 import type {
 	AnyTextAdapter,
 	StreamChunk
