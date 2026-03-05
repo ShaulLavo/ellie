@@ -8,14 +8,6 @@
  */
 
 import {
-	Readable,
-	PassThrough,
-	Transform,
-	type TransformCallback
-} from 'node:stream'
-import * as streamPromises from 'node:stream/promises'
-
-import {
 	ERRORS,
 	HEADERS,
 	ALLOWED_HEADERS,
@@ -26,10 +18,18 @@ import {
 } from './constants'
 import type { DataStore } from './data-store'
 import type { CancellationContext, Locker } from './locker'
-import { MemoryLocker } from './locker'
+import {
+	MemoryLocker,
+	createCancellationContext
+} from './locker'
 import * as Metadata from './metadata'
+import {
+	writeToStore,
+	calculateMaxBodySize
+} from './stream'
 import { Upload } from './upload'
 import { Uid } from './uid'
+import { extractFileId, generateUploadUrl } from './url'
 import { validateHeader } from './validator'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -62,78 +62,6 @@ export type TusServerOptions = {
 		req: Request,
 		uploadId: string
 	) => Promise<void>
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-const reExtractFileID = /([^/]+)\/?$/
-const reForwardedHost = /host="?([^";]+)/
-const reForwardedProto = /proto=(https?)/
-
-function extractHostAndProto(
-	headers: Headers,
-	respect?: boolean
-) {
-	let proto: string | undefined
-	let host: string | undefined
-
-	if (respect) {
-		const forwarded = headers.get('forwarded')
-		if (forwarded) {
-			host ??= reForwardedHost.exec(forwarded)?.[1]
-			proto ??= reForwardedProto.exec(forwarded)?.[1]
-		}
-
-		const forwardHost = headers.get('x-forwarded-host')
-		const forwardProto = headers.get('x-forwarded-proto')
-
-		if (
-			forwardProto === 'http' ||
-			forwardProto === 'https'
-		) {
-			proto ??= forwardProto
-		}
-		host ??= forwardHost ?? undefined
-	}
-
-	host ??= headers.get('host') ?? 'localhost'
-	proto ??= 'http'
-
-	return { host, proto }
-}
-
-// ── StreamLimiter ───────────────────────────────────────────────────────────
-
-class StreamLimiter extends Transform {
-	private maxSize: number
-	private currentSize = 0
-
-	constructor(maxSize: number) {
-		super()
-		this.maxSize = maxSize
-	}
-
-	_transform(
-		chunk: Buffer,
-		_encoding: BufferEncoding,
-		callback: TransformCallback
-	): void {
-		this.currentSize += chunk.length
-		if (this.currentSize > this.maxSize) {
-			callback(
-				Object.assign(
-					new Error(ERRORS.ERR_MAX_SIZE_EXCEEDED.body),
-					{
-						status_code:
-							ERRORS.ERR_MAX_SIZE_EXCEEDED.status_code,
-						body: ERRORS.ERR_MAX_SIZE_EXCEEDED.body
-					}
-				)
-			)
-		} else {
-			callback(null, chunk)
-		}
-	}
 }
 
 // ── TusServer ───────────────────────────────────────────────────────────────
@@ -190,7 +118,9 @@ export class TusServer {
 	}
 
 	async handle(req: Request): Promise<Response> {
-		const context = this.createContext()
+		const context = createCancellationContext(
+			this.opts.lockDrainTimeout
+		)
 		const headers = new Headers()
 
 		const onError = (
@@ -428,7 +358,7 @@ export class TusServer {
 
 		try {
 			await this.store.create(upload)
-			url = this.generateUrl(req, upload.id)
+			url = generateUploadUrl(req, upload.id, this.opts)
 
 			isFinal = upload.size === 0 && !upload.sizeIsDeferred
 
@@ -439,12 +369,13 @@ export class TusServer {
 					req.headers.get('content-type')
 				)
 			) {
-				const bodyMaxSize = this.calculateMaxBodySize(
+				const bodyMaxSize = calculateMaxBodySize(
 					req,
 					upload,
 					maxFileSize
 				)
-				const newOffset = await this.writeToStore(
+				const newOffset = await writeToStore(
+					this.store,
 					req.body,
 					upload,
 					bodyMaxSize,
@@ -517,7 +448,7 @@ export class TusServer {
 		context: CancellationContext,
 		headers: Headers
 	): Promise<Response> {
-		const id = this.getFileIdFromRequest(req)
+		const id = extractFileId(req.url, this.opts.path)
 		if (!id) throw ERRORS.FILE_NOT_FOUND
 
 		if (this.opts.onIncomingRequest) {
@@ -532,18 +463,7 @@ export class TusServer {
 			await lock.unlock()
 		}
 
-		// Check expiration
-		const now = new Date()
-		if (
-			this.store.hasExtension('expiration') &&
-			this.store.getExpiration() > 0 &&
-			file.creation_date &&
-			now >
-				new Date(
-					new Date(file.creation_date).getTime() +
-						this.store.getExpiration()
-				)
-		) {
+		if (this.isUploadExpired(file)) {
 			throw ERRORS.FILE_NO_LONGER_EXISTS
 		}
 
@@ -574,7 +494,7 @@ export class TusServer {
 		context: CancellationContext,
 		headers: Headers
 	): Promise<Response> {
-		const id = this.getFileIdFromRequest(req)
+		const id = extractFileId(req.url, this.opts.path)
 		if (!id) throw ERRORS.FILE_NOT_FOUND
 
 		if (req.headers.get('upload-offset') === null) {
@@ -603,18 +523,7 @@ export class TusServer {
 		try {
 			upload = await this.store.getUpload(id)
 
-			// Expiration check
-			const now = Date.now()
-			const creation = upload.creation_date
-				? new Date(upload.creation_date).getTime()
-				: now
-			const expiration =
-				creation + this.store.getExpiration()
-			if (
-				this.store.hasExtension('expiration') &&
-				this.store.getExpiration() > 0 &&
-				now > expiration
-			) {
+			if (this.isUploadExpired(upload)) {
 				throw ERRORS.FILE_NO_LONGER_EXISTS
 			}
 
@@ -630,12 +539,13 @@ export class TusServer {
 				maxFileSize
 			)
 
-			const maxBodySize = this.calculateMaxBodySize(
+			const maxBodySize = calculateMaxBodySize(
 				req,
 				upload,
 				maxFileSize
 			)
-			newOffset = await this.writeToStore(
+			newOffset = await writeToStore(
+				this.store,
 				req.body,
 				upload,
 				maxBodySize,
@@ -701,7 +611,7 @@ export class TusServer {
 		context: CancellationContext,
 		headers: Headers
 	): Promise<Response> {
-		const id = this.getFileIdFromRequest(req)
+		const id = extractFileId(req.url, this.opts.path)
 		if (!id) throw ERRORS.FILE_NOT_FOUND
 
 		if (this.opts.onIncomingRequest) {
@@ -722,6 +632,22 @@ export class TusServer {
 	}
 
 	// ── Internal Helpers ────────────────────────────────────────────────────
+
+	private isUploadExpired(upload: Upload): boolean {
+		if (
+			!this.store.hasExtension('expiration') ||
+			this.store.getExpiration() <= 0 ||
+			!upload.creation_date
+		) {
+			return false
+		}
+		const creation = new Date(
+			upload.creation_date
+		).getTime()
+		return (
+			Date.now() > creation + this.store.getExpiration()
+		)
+	}
 
 	private async handleDeferredLength(
 		req: Request,
@@ -749,34 +675,6 @@ export class TusServer {
 		upload.size = size
 	}
 
-	private getFileIdFromRequest(
-		req: Request
-	): string | undefined {
-		const url = new URL(req.url)
-		// Strip the path prefix and get the last segment
-		const pathAfterPrefix = url.pathname
-			.replace(this.opts.path, '')
-			.replace(/^\//, '')
-		if (!pathAfterPrefix) return undefined
-		const match = reExtractFileID.exec(pathAfterPrefix)
-		return match ? decodeURIComponent(match[1]) : undefined
-	}
-
-	private generateUrl(req: Request, id: string): string {
-		const path =
-			this.opts.path === '/' ? '' : this.opts.path
-
-		if (this.opts.relativeLocation) {
-			return `${path}/${id}`
-		}
-
-		const { proto, host } = extractHostAndProto(
-			req.headers,
-			this.opts.respectForwardedHeaders
-		)
-		return `${proto}://${host}${path}/${id}`
-	}
-
 	private async acquireLock(
 		id: string,
 		context: CancellationContext
@@ -787,118 +685,6 @@ export class TusServer {
 			context.cancel()
 		})
 		return lock
-	}
-
-	private writeToStore(
-		webStream: ReadableStream | null,
-		upload: Upload,
-		maxFileSize: number,
-		context: CancellationContext
-	): Promise<number> {
-		return new Promise<number>((resolve, reject) => {
-			if (context.signal.aborted) {
-				reject(ERRORS.ABORTED)
-				return
-			}
-
-			const proxy = new PassThrough()
-			const nodeStream = webStream
-				? Readable.fromWeb(
-						webStream as unknown as import('node:stream/web').ReadableStream
-					)
-				: Readable.from([])
-
-			nodeStream.on(
-				'error',
-				(err: NodeJS.ErrnoException) => {
-					// Silently ignore expected client disconnections
-					if (
-						err.code === 'ECONNRESET' ||
-						err.code === 'ECONNABORTED' ||
-						err.code === 'ERR_STREAM_PREMATURE_CLOSE'
-					) {
-						return
-					}
-					console.warn(
-						'[tus] unexpected stream error:',
-						err
-					)
-				}
-			)
-
-			const onAbort = () => {
-				nodeStream.unpipe(proxy)
-				if (!proxy.closed) proxy.end()
-			}
-			context.signal.addEventListener('abort', onAbort, {
-				once: true
-			})
-
-			proxy.on('error', err => {
-				nodeStream.unpipe(proxy)
-				reject(
-					err.name === 'AbortError' ? ERRORS.ABORTED : err
-				)
-			})
-
-			streamPromises
-				.pipeline(
-					nodeStream.pipe(proxy),
-					new StreamLimiter(maxFileSize),
-					async s => {
-						return this.store.write(
-							s as StreamLimiter,
-							upload.id,
-							upload.offset
-						)
-					}
-				)
-				.then(resolve)
-				.catch(reject)
-				.finally(() => {
-					context.signal.removeEventListener(
-						'abort',
-						onAbort
-					)
-				})
-		})
-	}
-
-	private calculateMaxBodySize(
-		req: Request,
-		file: Upload,
-		configuredMaxSize: number
-	): number {
-		const length = Number.parseInt(
-			req.headers.get('content-length') || '0',
-			10
-		)
-		const offset = file.offset
-
-		const hasContentLengthSet =
-			req.headers.get('content-length') !== null
-		const hasConfiguredMaxSizeSet = configuredMaxSize > 0
-
-		if (file.sizeIsDeferred) {
-			if (
-				hasContentLengthSet &&
-				hasConfiguredMaxSizeSet &&
-				offset + length > configuredMaxSize
-			) {
-				throw ERRORS.ERR_SIZE_EXCEEDED
-			}
-			if (hasConfiguredMaxSizeSet) {
-				return configuredMaxSize - offset
-			}
-			return Number.MAX_SAFE_INTEGER
-		}
-
-		if (offset + length > (file.size || 0)) {
-			throw ERRORS.ERR_SIZE_EXCEEDED
-		}
-
-		if (hasContentLengthSet) return length
-		return (file.size || 0) - offset
 	}
 
 	private writeResponse(
@@ -917,36 +703,5 @@ export class TusServer {
 			headers.set('Connection', 'close')
 		}
 		return new Response(body, { status, headers })
-	}
-
-	private createContext(): CancellationContext {
-		const requestAbortController = new AbortController()
-		const abortWithDelayController = new AbortController()
-
-		abortWithDelayController.signal.addEventListener(
-			'abort',
-			() => {
-				setTimeout(() => {
-					if (!requestAbortController.signal.aborted) {
-						requestAbortController.abort(ERRORS.ABORTED)
-					}
-				}, this.opts.lockDrainTimeout)
-			},
-			{ once: true }
-		)
-
-		return {
-			signal: requestAbortController.signal,
-			abort: () => {
-				if (!requestAbortController.signal.aborted) {
-					requestAbortController.abort(ERRORS.ABORTED)
-				}
-			},
-			cancel: () => {
-				if (!abortWithDelayController.signal.aborted) {
-					abortWithDelayController.abort(ERRORS.ABORTED)
-				}
-			}
-		}
 	}
 }

@@ -42,6 +42,39 @@ export class MemoryLocker implements Locker {
 	}
 }
 
+export function createCancellationContext(
+	lockDrainTimeout: number
+): CancellationContext {
+	const requestAbortController = new AbortController()
+	const abortWithDelayController = new AbortController()
+
+	abortWithDelayController.signal.addEventListener(
+		'abort',
+		() => {
+			setTimeout(() => {
+				if (!requestAbortController.signal.aborted) {
+					requestAbortController.abort(ERRORS.ABORTED)
+				}
+			}, lockDrainTimeout)
+		},
+		{ once: true }
+	)
+
+	return {
+		signal: requestAbortController.signal,
+		abort: () => {
+			if (!requestAbortController.signal.aborted) {
+				requestAbortController.abort(ERRORS.ABORTED)
+			}
+		},
+		cancel: () => {
+			if (!abortWithDelayController.signal.aborted) {
+				abortWithDelayController.abort(ERRORS.ABORTED)
+			}
+		}
+	}
+}
+
 class MemoryLock implements Lock {
 	private id: string
 	private locker: MemoryLocker
