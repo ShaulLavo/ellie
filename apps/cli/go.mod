@@ -7,6 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.0
 	charm.land/glamour/v2 v2.0.0-20260123212943-6014aa153a9b
 	charm.land/lipgloss/v2 v2.0.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/harmonica v0.2.0
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/wish v1.4.7
@@ -16,7 +17,6 @@ require (
 require (
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
@@ -31,6 +31,7 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/conpty v0.1.0 // indirect
 	github.com/charmbracelet/x/errors v0.0.0-20240508181413-e8d8b6e2de86 // indirect
+	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260304213900-0e78e2954235 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect

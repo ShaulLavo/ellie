@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
@@ -61,6 +62,29 @@ type Model struct {
 
 	// Auto-scroll
 	autoScroll bool
+
+	// Mouse selection
+	sel selectionState
+
+	// Cached chat content lines (with ANSI) for selection math.
+	contentLines []string
+
+	// Scrollbar auto-hide state
+	scrollbarVisible bool
+	scrollbarHideID  int
+
+	// Trackpad diagonal-swipe guard: timestamp of last vertical wheel event.
+	// Horizontal wheel events arriving within this window are suppressed to
+	// prevent accidental sideways drift during vertical scrolls.
+	lastVerticalWheel time.Time
+
+	// Render cache for non-streaming messages (keyed by message ID).
+	msgRenderCache      map[string]string
+	msgRenderCacheWidth int
+
+	// Active animations (tool calls and thinking spinner).
+	activeAnims    map[string]*chatAnim // toolCallID or "thinking" → anim
+	thinkingAnimID string               // key for the thinking anim
 }
 
 // NewModel creates a new chat TUI model.
@@ -89,17 +113,20 @@ func NewModel(baseURL, sessionID, transcriptDir string) Model {
 	vp.SetContent("")
 
 	return Model{
-		baseURL:       baseURL,
-		sessionID:     sessionID,
-		transcriptDir: transcriptDir,
-		keys:          DefaultKeyMap(),
-		httpClient:    NewHTTPClient(baseURL),
-		sseClient:     NewSSEClient(baseURL, sessionID),
-		textarea:      ta,
-		viewport:      vp,
-		focus:         focusEditor,
-		history:       NewPromptHistory(),
-		autoScroll:    true,
+		baseURL:        baseURL,
+		sessionID:      sessionID,
+		transcriptDir:  transcriptDir,
+		keys:           DefaultKeyMap(),
+		httpClient:     NewHTTPClient(baseURL),
+		sseClient:      NewSSEClient(baseURL, sessionID),
+		textarea:       ta,
+		viewport:       vp,
+		focus:          focusEditor,
+		history:        NewPromptHistory(),
+		autoScroll:     true,
+		msgRenderCache: make(map[string]string),
+		activeAnims:    make(map[string]*chatAnim),
+		thinkingAnimID: "_thinking",
 	}
 }
 
@@ -244,6 +271,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// TODO: show success notification with msg.path
 		return m, nil
+
+	case animStepMsg:
+		for _, a := range m.activeAnims {
+			if a.id == msg.id {
+				cmd := a.animate(msg)
+				m.refreshViewport()
+				return m, cmd
+			}
+		}
+		return m, nil
+
+	case scrollbarHideMsg:
+		if msg.id == m.scrollbarHideID {
+			m.scrollbarVisible = false
+		}
+		return m, nil
+
+	case copyChatSelectionMsg:
+		if msg.clickID == m.sel.pendingClickID && m.sel.hasSelection() {
+			startLine, startCol, endLine, endCol := m.sel.orderedRange()
+			text := extractSelectedText(m.contentLines, startLine, startCol, endLine, endCol)
+			if text != "" {
+				m.sel.clear()
+				return m, copyToClipboard(text)
+			}
+		}
+		return m, nil
 	}
 
 	return m, tea.Batch(cmds...)
@@ -280,7 +334,17 @@ func (m Model) View() tea.View {
 	var b strings.Builder
 	b.WriteString(statusLine)
 	b.WriteString("\n")
-	b.WriteString(m.viewport.View())
+
+	vpView := m.viewport.View()
+	if m.sel.hasSelection() {
+		startLine, startCol, endLine, endCol := m.sel.orderedRange()
+		vpView = applyHighlight(vpView, startLine, startCol, endLine, endCol, m.viewport.YOffset(), vpHeight)
+	}
+	if m.scrollbarVisible {
+		vpView = renderScrollbar(vpView, m.viewport.TotalLineCount(), vpHeight, m.viewport.ScrollPercent())
+	}
+	b.WriteString(vpView)
+
 	b.WriteString("\n")
 	b.WriteString(m.renderInput())
 	if footer != "" {
@@ -434,11 +498,11 @@ func (m Model) updateChat(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		m.autoScroll = m.viewport.AtBottom()
-		return m, cmd
+		return m, tea.Batch(cmd, m.showScrollbar())
 	}
 
 	m.autoScroll = m.viewport.AtBottom()
-	return m, nil
+	return m, m.showScrollbar()
 }
 
 // ─── Dialog handling ──────────────────────────────────────────────
@@ -520,12 +584,21 @@ func (m Model) handleAppend(ev EventRow) (tea.Model, tea.Cmd) {
 	// Agent lifecycle
 	if IsAgentStart(ev.Type) {
 		m.isAgentRunning = true
+		// Start thinking animation.
+		a := newChatAnim("Thinking")
+		m.activeAnims[m.thinkingAnimID] = a
+		m.refreshViewport()
+		return m, a.start()
 	} else if IsAgentEnd(ev.Type) {
 		m.isAgentRunning = false
+		delete(m.activeAnims, m.thinkingAnimID)
 	}
 
 	// assistant_message append: create streaming placeholder
 	if ev.Type == "assistant_message" {
+		// Stop thinking anim once content starts arriving.
+		delete(m.activeAnims, m.thinkingAnimID)
+
 		m.streamingMsg = &StoredMessage{
 			ID:          fmt.Sprintf("%d", ev.ID),
 			Timestamp:   "",
@@ -554,8 +627,28 @@ func (m Model) handleAppend(ev EventRow) (tea.Model, tea.Cmd) {
 	if len(stored.Parts) == 0 && stored.Text == "" {
 		return m, nil
 	}
+
+	// Start animation for new tool calls.
+	var animCmd tea.Cmd
+	if ev.Type == "tool_execution" {
+		for _, part := range stored.Parts {
+			if part.Type == PartToolCall && part.ToolCallID != "" {
+				label := part.Name
+				if label == "" {
+					label = "Running"
+				}
+				a := newChatAnim(label)
+				m.activeAnims[part.ToolCallID] = a
+				animCmd = a.start()
+			}
+		}
+	}
+
 	m.messages = append(m.messages, stored)
 	m.refreshViewport()
+	if animCmd != nil {
+		return m, animCmd
+	}
 	return m, nil
 }
 
@@ -587,6 +680,12 @@ func (m Model) handleUpdate(ev EventRow) (tea.Model, tea.Cmd) {
 		stored := EventToStored(ev)
 		if len(stored.Parts) == 0 && stored.Text == "" {
 			return m, nil
+		}
+		// Stop animation for completed tool calls.
+		for _, part := range stored.Parts {
+			if part.Type == PartToolResult && part.ToolCallID != "" {
+				delete(m.activeAnims, part.ToolCallID)
+			}
 		}
 		m.upsertMessage(stored)
 		m.refreshViewport()
@@ -767,6 +866,7 @@ func (m *Model) resizeComponents() {
 
 func (m *Model) refreshViewport() {
 	content := renderMessages(m, m.width)
+	m.contentLines = strings.Split(content, "\n")
 	m.viewport.SetContent(content)
 	if m.autoScroll {
 		m.viewport.GotoBottom()
@@ -801,6 +901,16 @@ func (m *Model) cleanup() {
 	if m.sseCancel != nil {
 		m.sseCancel()
 	}
+}
+
+// showScrollbar makes the scrollbar visible and schedules an auto-hide.
+func (m *Model) showScrollbar() tea.Cmd {
+	m.scrollbarVisible = true
+	m.scrollbarHideID++
+	id := m.scrollbarHideID
+	return tea.Tick(scrollbarHideDelay, func(_ time.Time) tea.Msg {
+		return scrollbarHideMsg{id: id}
+	})
 }
 
 // ─── Slash command matching ───────────────────────────────────────
@@ -863,7 +973,8 @@ func pointInPane(y int, r paneRect) bool {
 	return y >= r.minY && y <= r.maxY
 }
 
-// handleMouseMsg processes mouse events for pane focus switching and wheel routing.
+// handleMouseMsg processes mouse events for pane focus switching, wheel
+// routing, and text selection in the chat pane.
 func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Ignore mouse when a dialog is open (keyboard-only scope).
 	if m.dialog != nil {
@@ -876,31 +987,119 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		mouse := msg.Mouse()
 		if mouse.Button == tea.MouseLeft {
+			// Click in input pane: clear selection, switch focus.
 			if pointInPane(mouse.Y, layout.input) {
+				m.sel.clear()
 				if m.focus != focusEditor {
 					m.focus = focusEditor
 					m.textarea.Focus()
 				}
 				return m, nil
 			}
+
+			// Click in chat pane: focus + selection handling.
 			if pointInPane(mouse.Y, layout.chat) {
 				if m.focus != focusChat {
 					m.focus = focusChat
 					m.textarea.Blur()
 				}
+
+				m.sel.pendingClickID++
+				m.sel.detectMultiClick(mouse.X, mouse.Y)
+
+				contentLine := (mouse.Y - layout.chat.minY) + m.viewport.YOffset()
+				contentCol := mouse.X
+
+				switch m.sel.clickCount {
+				case 1:
+					m.sel.mouseDown = true
+					m.sel.anchorLine = contentLine
+					m.sel.anchorCol = contentCol
+					m.sel.headLine = contentLine
+					m.sel.headCol = contentCol
+				case 2:
+					m.sel.selectWord(m.contentLines, contentLine, contentCol)
+				case 3:
+					m.sel.selectLine(m.contentLines, contentLine)
+					m.sel.clickCount = 0
+				}
 				return m, nil
 			}
+
+			// Click elsewhere: clear selection.
+			m.sel.clear()
 		}
+
+	case tea.MouseMotionMsg:
+		mouse := msg.Mouse()
+		if !m.sel.mouseDown {
+			return m, nil
+		}
+
+		contentLine := (mouse.Y - layout.chat.minY) + m.viewport.YOffset()
+		contentCol := mouse.X
+
+		// Auto-scroll at chat pane edges.
+		var scrolled bool
+		visY := mouse.Y - layout.chat.minY
+		chatHeight := layout.chat.maxY - layout.chat.minY
+		if visY <= 0 {
+			m.viewport.ScrollUp(1)
+			contentLine = m.viewport.YOffset()
+			scrolled = true
+		} else if visY >= chatHeight {
+			m.viewport.ScrollDown(1)
+			contentLine = m.viewport.YOffset() + chatHeight
+			scrolled = true
+		}
+
+		// Clamp contentLine to valid range.
+		if contentLine < 0 {
+			contentLine = 0
+		}
+		if contentLine >= len(m.contentLines) {
+			contentLine = len(m.contentLines) - 1
+		}
+
+		m.sel.headLine = contentLine
+		m.sel.headCol = contentCol
+		m.autoScroll = m.viewport.AtBottom()
+		if scrolled {
+			return m, m.showScrollbar()
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		if m.sel.mouseDown {
+			m.sel.mouseDown = false
+			if m.sel.hasSelection() {
+				clickID := m.sel.pendingClickID
+				return m, tea.Tick(doubleClickThreshold, func(_ time.Time) tea.Msg {
+					return copyChatSelectionMsg{clickID: clickID}
+				})
+			}
+		}
+		return m, nil
 
 	case tea.MouseWheelMsg:
 		mouse := msg.Mouse()
 		if !pointInPane(mouse.Y, layout.chat) {
 			return m, nil
 		}
+		isHorizontal := mouse.Button == tea.MouseWheelLeft || mouse.Button == tea.MouseWheelRight
+		if isHorizontal {
+			// Suppress horizontal scroll if a vertical scroll happened recently
+			// (diagonal trackpad swipe). Pure horizontal gestures pass through.
+			if time.Since(m.lastVerticalWheel) < 200*time.Millisecond {
+				return m, nil
+			}
+		} else {
+			m.lastVerticalWheel = time.Now()
+		}
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		m.autoScroll = m.viewport.AtBottom()
-		return m, cmd
+		return m, tea.Batch(cmd, m.showScrollbar())
 	}
 
 	return m, nil

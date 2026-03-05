@@ -93,6 +93,12 @@ func renderStatusLine(m *Model, width int) string {
 func renderMessages(m *Model, width int) string {
 	contentWidth := width - 2
 
+	// Invalidate cache on width change.
+	if m.msgRenderCacheWidth != contentWidth {
+		m.msgRenderCache = make(map[string]string)
+		m.msgRenderCacheWidth = contentWidth
+	}
+
 	tg := ComputeToolGrouping(m.messages, m.streamingMsg)
 
 	var b strings.Builder
@@ -101,13 +107,27 @@ func renderMessages(m *Model, width int) string {
 		if tg.HiddenMessageIDs[msg.ID] {
 			continue
 		}
-		b.WriteString(renderMessage(msg, tg, contentWidth))
+		// Check if this message has any active animations (skip cache if so).
+		hasActiveAnim := messageHasActiveAnim(msg, m.activeAnims)
+		// Use cached render for non-streaming, finalized messages without active anims.
+		if !msg.IsStreaming && !hasActiveAnim {
+			if cached, ok := m.msgRenderCache[msg.ID]; ok {
+				b.WriteString(cached)
+				b.WriteString("\n")
+				continue
+			}
+		}
+		rendered := renderMessage(msg, tg, contentWidth, m.activeAnims)
+		if !msg.IsStreaming && !hasActiveAnim {
+			m.msgRenderCache[msg.ID] = rendered
+		}
+		b.WriteString(rendered)
 		b.WriteString("\n")
 	}
 
-	// Render streaming message
+	// Render streaming message (never cached).
 	if m.streamingMsg != nil {
-		b.WriteString(renderMessage(*m.streamingMsg, tg, contentWidth))
+		b.WriteString(renderMessage(*m.streamingMsg, tg, contentWidth, m.activeAnims))
 		b.WriteString("\n")
 	}
 
@@ -115,7 +135,7 @@ func renderMessages(m *Model, width int) string {
 }
 
 // renderMessage renders a single chat message.
-func renderMessage(msg StoredMessage, tg ToolGrouping, width int) string {
+func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[string]*chatAnim) string {
 	var b strings.Builder
 
 	// Sender label
@@ -132,16 +152,20 @@ func renderMessage(msg StoredMessage, tg ToolGrouping, width int) string {
 
 	// Content parts
 	for _, part := range msg.Parts {
-		rendered := renderPart(part, tg, width)
+		rendered := renderPart(part, tg, width, anims)
 		if rendered != "" {
 			b.WriteString(rendered)
 			b.WriteString("\n")
 		}
 	}
 
-	// Streaming indicator
+	// Streaming indicator: use thinking animation if available, otherwise static cursor.
 	if msg.IsStreaming && msg.Text == "" && len(msg.Parts) == 0 {
-		b.WriteString(thinkingStyle.Render("  ▍"))
+		if a, ok := anims["_thinking"]; ok {
+			b.WriteString("  " + a.render())
+		} else {
+			b.WriteString(thinkingStyle.Render("  ▍"))
+		}
 		b.WriteString("\n")
 	}
 
@@ -149,30 +173,35 @@ func renderMessage(msg StoredMessage, tg ToolGrouping, width int) string {
 }
 
 func renderSenderLabel(sender MessageSender) string {
+	label := string(sender)
 	switch sender {
-	case SenderUser:
-		return userStyle.Render("You")
+	case SenderUser, SenderHuman:
+		return userStyle.Render(label)
 	case SenderAgent:
-		return agentStyle.Render("Ellie")
+		return agentStyle.Render(label)
 	case SenderMemory:
-		return memoryStyle.Render("Memory")
+		return memoryStyle.Render(label)
 	case SenderSystem:
-		return systemStyle.Render("System")
+		return systemStyle.Render(label)
 	default:
-		return dimStyle.Render("Unknown")
+		return userStyle.Render(label)
 	}
 }
 
-func renderPart(part ContentPart, tg ToolGrouping, width int) string {
+func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*chatAnim) string {
 	switch part.Type {
 	case PartText:
-		return wrapText(part.Text, width)
+		w := width
+		if w > maxMessageWidth {
+			w = maxMessageWidth
+		}
+		return renderMarkdown(part.Text, w)
 
 	case PartToolCall:
-		status := "running"
 		resultLine := ""
+		animLine := ""
 		if result, ok := tg.ToolResults[part.ToolCallID]; ok {
-			status = "done"
+			// Completed tool call.
 			if result.Result != "" {
 				truncated := result.Result
 				if len(truncated) > 200 {
@@ -180,9 +209,12 @@ func renderPart(part ContentPart, tg ToolGrouping, width int) string {
 				}
 				resultLine = "\n" + toolResultStyle.Render("  → "+truncated)
 			}
+		} else if a, ok := anims[part.ToolCallID]; ok {
+			// Active tool call: show spinner.
+			animLine = "\n  " + a.render()
 		}
-		header := toolCallStyle.Render(fmt.Sprintf("  ⚙ %s [%s]", part.Name, status))
-		return header + resultLine
+		header := toolCallStyle.Render(fmt.Sprintf("  ⚙ %s", part.Name))
+		return header + animLine + resultLine
 
 	case PartToolResult:
 		// Standalone tool results (not consumed inline)
@@ -338,6 +370,18 @@ func wrapText(text string, width int) string {
 		}
 	}
 	return result.String()
+}
+
+// messageHasActiveAnim returns true if any tool call in the message has an active animation.
+func messageHasActiveAnim(msg StoredMessage, anims map[string]*chatAnim) bool {
+	for _, part := range msg.Parts {
+		if part.Type == PartToolCall && part.ToolCallID != "" {
+			if _, ok := anims[part.ToolCallID]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // splitWords splits text into words with trailing spaces attached,
