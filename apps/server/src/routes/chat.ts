@@ -16,13 +16,14 @@ import { agentMessageSchema } from '@ellie/schemas/agent'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
+	eventsQuerySchema,
 	messageInputSchema,
 	normalizeMessageInput,
 	resolveSessionId,
 	toStreamGenerator,
 	type SseState
 } from './common'
-import { errorSchema } from './schemas/auth-schemas'
+import { errorSchema } from './schemas/common-schemas'
 import {
 	sessionSchema,
 	sessionListSchema,
@@ -216,19 +217,7 @@ export function createChatRoutes(
 				},
 				{
 					params: sessionParamsSchema,
-					query: v.object({
-						afterSeq: v.optional(
-							v.pipe(
-								v.string(),
-								v.transform(Number),
-								v.number(),
-								v.finite(),
-								v.integer(),
-								v.minValue(0)
-							)
-						),
-						limit: v.optional(v.string())
-					}),
+					query: eventsQuerySchema,
 					response: { 200: eventRowListSchema }
 				}
 			)

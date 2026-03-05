@@ -1,7 +1,5 @@
 import * as v from 'valibot'
 
-export const errorSchema = v.object({ error: v.string() })
-
 // ── Auth schemas ─────────────────────────────────────────────────────────────
 
 export const authStatusResponseSchema = v.object({

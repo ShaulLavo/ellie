@@ -28,8 +28,8 @@ import {
 	oauthCreateApiKey,
 	tokensToCredential
 } from '@ellie/ai/anthropic-oauth'
+import { errorSchema } from './schemas/common-schemas'
 import {
-	errorSchema,
 	authStatusResponseSchema,
 	authClearResponseSchema,
 	authApiKeyBodySchema,

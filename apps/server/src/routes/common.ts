@@ -1,11 +1,22 @@
 import { sse } from 'elysia'
-import * as v from 'valibot'
 import type { AgentController } from '../agent/controller'
 import type { RealtimeStore } from '../lib/realtime-store'
 import {
 	BadRequestError,
 	ServiceUnavailableError
 } from './http-errors'
+import type { MessageInput } from './schemas/common-schemas'
+
+// Re-export schemas for consumers that import from common.ts
+export {
+	messageInputSchema,
+	type MessageInput,
+	sessionParamsSchema,
+	sessionRunParamsSchema,
+	afterSeqQuerySchema,
+	eventsQuerySchema,
+	statusSchema
+} from './schemas/common-schemas'
 
 // ── Agent controller guard ───────────────────────────────────────────────────
 
@@ -42,43 +53,6 @@ export function resolveSessionId(
 		? store.getCurrentSessionId()
 		: raw
 }
-
-// ── Shared param / query / input schemas ─────────────────────────────────────
-
-export const messageInputSchema = v.object({
-	content: v.string(),
-	role: v.optional(
-		v.picklist([`user`, `assistant`, `system`])
-	)
-})
-
-export type MessageInput = v.InferOutput<
-	typeof messageInputSchema
->
-
-export const sessionParamsSchema = v.object({
-	sessionId: v.string()
-})
-export const sessionRunParamsSchema = v.object({
-	sessionId: v.string(),
-	runId: v.string()
-})
-export const afterSeqQuerySchema = v.object({
-	afterSeq: v.optional(
-		v.pipe(
-			v.string(),
-			v.transform(Number),
-			v.number(),
-			v.finite(),
-			v.integer(),
-			v.minValue(0)
-		)
-	)
-})
-export const statusSchema = v.object({
-	connectedClients: v.number(),
-	needsBootstrap: v.boolean()
-})
 
 // ── Message helpers ──────────────────────────────────────────────────────────
 

@@ -27,7 +27,7 @@ import {
 	toStreamGenerator,
 	type SseState
 } from './common'
-import { errorSchema } from './schemas/auth-schemas'
+import { errorSchema } from './schemas/common-schemas'
 import { BadRequestError } from './http-errors'
 
 function createRunSseStream(

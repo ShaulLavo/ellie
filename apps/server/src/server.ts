@@ -11,7 +11,7 @@ import {
 	createGroqAuthRoutes
 } from './routes/auth'
 import { createChatRoutes } from './routes/chat'
-import { errorSchema } from './routes/schemas/auth-schemas'
+import { errorSchema } from './routes/schemas/common-schemas'
 import { HttpError } from './routes/http-errors'
 import { createSessionRoutes } from './routes/session'
 import { createStatusRoutes } from './routes/status'
