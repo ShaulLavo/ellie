@@ -64,6 +64,8 @@ func run() error {
 		return cmdStart()
 	case "auth":
 		return runAuth(args[1:])
+	case "chat":
+		return cmdChat(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
 		printUsage()
@@ -94,4 +96,5 @@ func printUsage() {
 	fmt.Println("  ellie auth            Interactive authentication setup")
 	fmt.Println("  ellie auth status     Show current auth status")
 	fmt.Println("  ellie auth clear      Remove stored credentials (choose provider)")
+	fmt.Println("  ellie chat            Open interactive chat TUI")
 }
