@@ -105,6 +105,8 @@ export function toStreamGenerator<
 	snapshotEvent: { event: string; data: unknown },
 	initialEvents: TEvent[] = []
 ): AsyncGenerator<unknown> {
+	const HEARTBEAT_MS = 30_000
+
 	return (async function* streamGenerator() {
 		sseState.activeClients++
 
@@ -131,16 +133,41 @@ export function toStreamGenerator<
 			wake()
 		})
 
-		const waitForItem = () =>
-			new Promise<void>(resolve => {
-				resolver = resolve
-			})
+		/** Wait for an item or heartbeat timeout, whichever comes first. */
+		const waitForItemOrHeartbeat = () => {
+			let timer: ReturnType<typeof setTimeout> | null = null
+			return {
+				promise: new Promise<'item' | 'heartbeat'>(
+					resolve => {
+						resolver = () => resolve('item')
+						timer = setTimeout(
+							() => resolve('heartbeat'),
+							HEARTBEAT_MS
+						)
+					}
+				),
+				cleanup: () => {
+					if (timer) clearTimeout(timer)
+				}
+			}
+		}
 
 		try {
 			yield sse(snapshotEvent)
 
 			while (!aborted) {
-				if (queue.length === 0) await waitForItem()
+				if (queue.length === 0) {
+					const waiter = waitForItemOrHeartbeat()
+					const reason = await waiter.promise
+					waiter.cleanup()
+					if (reason === 'heartbeat' && !aborted) {
+						yield sse({
+							event: 'heartbeat',
+							data: ''
+						})
+						continue
+					}
+				}
 				if (aborted) break
 
 				const next = queue.shift()

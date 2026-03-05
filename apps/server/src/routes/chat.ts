@@ -6,6 +6,7 @@
  */
 
 import { Elysia, sse } from 'elysia'
+import { hash } from 'ohash'
 import * as v from 'valibot'
 import type {
 	RealtimeStore,
@@ -121,6 +122,13 @@ export function createChatRoutes(
 
 					// Persist user message BEFORE bootstrap so the client
 					// sees the user bubble first, then the synthetic tool call.
+					// Dedupe key: reject rapid-fire duplicate POSTs with the
+					// same content (e.g. key repeat on Enter). Window ~ 2s.
+					const dedupeWindow = Math.floor(Date.now() / 2000)
+					const contentHash = hash(input.content)
+					const dedupeKey = `user_msg:${sessionId}:${dedupeWindow}:${contentHash}`
+
+					const beforeAppend = Date.now()
 					const row = store.appendEvent(
 						sessionId,
 						'user_message',
@@ -129,9 +137,22 @@ export function createChatRoutes(
 							content: [
 								{ type: 'text', text: input.content }
 							],
-							timestamp: Date.now()
-						}
+							timestamp: beforeAppend
+						},
+						undefined, // runId — backfilled later by controller
+						dedupeKey
 					)
+
+					// Dedupe hit: appendEvent returned an existing row
+					// (createdAt will be older than our beforeAppend timestamp)
+					if (row.createdAt < beforeAppend) {
+						return {
+							id: row.id,
+							seq: row.seq,
+							sessionId: row.sessionId,
+							deduplicated: true
+						}
+					}
 
 					ensureBootstrap?.(sessionId)
 

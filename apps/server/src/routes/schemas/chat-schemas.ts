@@ -31,7 +31,8 @@ export const postMessageResponseSchema = v.object({
 	runId: v.optional(v.string()),
 	routed: v.optional(
 		v.picklist(['prompt', 'followUp', 'queued'])
-	)
+	),
+	deduplicated: v.optional(v.boolean())
 })
 
 export const clearSessionResponseSchema = v.object({
