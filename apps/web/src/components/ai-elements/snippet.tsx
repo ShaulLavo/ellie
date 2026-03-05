@@ -9,15 +9,12 @@ import {
 	InputGroupInput,
 	InputGroupText
 } from '@/components/ui/input-group'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 import { CheckIcon, CopyIcon } from '@phosphor-icons/react'
 import {
 	createContext,
-	useCallback,
-	useContext,
-	useEffect,
-	useRef,
-	useState
+	useContext
 } from 'react'
 
 interface SnippetContextType {
@@ -112,40 +109,12 @@ export const SnippetCopyButton = ({
 	className,
 	...props
 }: SnippetCopyButtonProps) => {
-	const [isCopied, setIsCopied] = useState(false)
-	const timeoutRef = useRef<number>(0)
 	const { code } = useContext(SnippetContext)
-
-	const copyToClipboard = useCallback(async () => {
-		if (
-			typeof window === 'undefined' ||
-			!navigator?.clipboard?.writeText
-		) {
-			onError?.(new Error('Clipboard API not available'))
-			return
-		}
-
-		try {
-			if (!isCopied) {
-				await navigator.clipboard.writeText(code)
-				setIsCopied(true)
-				onCopy?.()
-				timeoutRef.current = window.setTimeout(
-					() => setIsCopied(false),
-					timeout
-				)
-			}
-		} catch (error) {
-			onError?.(error as Error)
-		}
-	}, [code, onCopy, onError, timeout, isCopied])
-
-	useEffect(
-		() => () => {
-			window.clearTimeout(timeoutRef.current)
-		},
-		[]
-	)
+	const { isCopied, copy } = useCopyToClipboard(code, {
+		timeout,
+		onCopy,
+		onError
+	})
 
 	const Icon = isCopied ? CheckIcon : CopyIcon
 
@@ -153,7 +122,7 @@ export const SnippetCopyButton = ({
 		<InputGroupButton
 			aria-label="Copy"
 			className={className}
-			onClick={copyToClipboard}
+			onClick={copy}
 			size="icon-sm"
 			title="Copy"
 			{...props}

@@ -3,6 +3,7 @@
 import type { ComponentProps, HTMLAttributes } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 import Ansi from 'ansi-to-react'
 import {
@@ -13,12 +14,10 @@ import {
 } from '@phosphor-icons/react'
 import {
 	createContext,
-	useCallback,
 	useContext,
 	useEffect,
 	useMemo,
-	useRef,
-	useState
+	useRef
 } from 'react'
 
 import { Shimmer } from './shimmer'
@@ -187,38 +186,12 @@ export const TerminalCopyButton = ({
 	className,
 	...props
 }: TerminalCopyButtonProps) => {
-	const [isCopied, setIsCopied] = useState(false)
-	const timeoutRef = useRef<number>(0)
 	const { output } = useContext(TerminalContext)
-
-	const copyToClipboard = useCallback(async () => {
-		if (
-			typeof window === 'undefined' ||
-			!navigator?.clipboard?.writeText
-		) {
-			onError?.(new Error('Clipboard API not available'))
-			return
-		}
-
-		try {
-			await navigator.clipboard.writeText(output)
-			setIsCopied(true)
-			onCopy?.()
-			timeoutRef.current = window.setTimeout(
-				() => setIsCopied(false),
-				timeout
-			)
-		} catch (error) {
-			onError?.(error as Error)
-		}
-	}, [output, onCopy, onError, timeout])
-
-	useEffect(
-		() => () => {
-			window.clearTimeout(timeoutRef.current)
-		},
-		[]
-	)
+	const { isCopied, copy } = useCopyToClipboard(output, {
+		timeout,
+		onCopy,
+		onError
+	})
 
 	const Icon = isCopied ? CheckIcon : CopyIcon
 
@@ -228,7 +201,7 @@ export const TerminalCopyButton = ({
 				'size-7 shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100',
 				className
 			)}
-			onClick={copyToClipboard}
+			onClick={copy}
 			size="icon"
 			variant="ghost"
 			{...props}
