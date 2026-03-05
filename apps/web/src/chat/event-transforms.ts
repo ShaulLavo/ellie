@@ -116,10 +116,18 @@ function extractToolCallParts(
 export function eventToStored(
 	row: EventRow
 ): StoredChatMessage {
-	const parsed =
-		typeof row.payload === 'string'
-			? (JSON.parse(row.payload) as Record<string, unknown>)
-			: (row.payload as Record<string, unknown>)
+	let parsed: Record<string, unknown>
+	try {
+		parsed =
+			typeof row.payload === 'string'
+				? (JSON.parse(row.payload) as Record<
+						string,
+						unknown
+					>)
+				: (row.payload as Record<string, unknown>)
+	} catch {
+		parsed = {}
+	}
 
 	// Dispatch to the right helper based on event type
 	let parts: ContentPart[]

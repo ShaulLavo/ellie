@@ -28,7 +28,9 @@ export function DbStudioPage() {
 	const page = search.page ?? 1
 	const pageSize = search.pageSize ?? 100
 	const sortBy = search.sortBy
-	const sortDir = search.sortDir ?? 'asc'
+	const sortDir = (search.sortDir ?? 'asc') as
+		| 'asc'
+		| 'desc'
 	const filter = search.filter
 
 	const { data: schema } = useDbSchema(database, table)

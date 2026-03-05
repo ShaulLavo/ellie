@@ -150,7 +150,6 @@ export const PartRenderer = memo(
 				)
 			}
 			case 'artifact':
-				// TODO: artifact renderer
 				return (
 					<div className="rounded-lg border border-border/50 p-3 text-sm">
 						<span className="font-medium">

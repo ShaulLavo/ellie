@@ -474,8 +474,12 @@ export const PromptInput = ({
 		[accept]
 	)
 
-	const addLocal = useCallback(
-		(fileList: File[] | FileList) => {
+	/** Shared accept/size validation — returns validated files or null on rejection. */
+	const validateFiles = useCallback(
+		(
+			fileList: File[] | FileList,
+			currentCount: number
+		): File[] | null => {
 			const incoming = [...fileList]
 			const accepted = incoming.filter(f =>
 				matchesAccept(f)
@@ -485,7 +489,7 @@ export const PromptInput = ({
 					code: 'accept',
 					message: 'No files match the accepted types.'
 				})
-				return
+				return null
 			}
 			const withinSize = (f: File) =>
 				maxFileSize ? f.size <= maxFileSize : true
@@ -495,81 +499,9 @@ export const PromptInput = ({
 					code: 'max_file_size',
 					message: 'All files exceed the maximum size.'
 				})
-				return
+				return null
 			}
 
-			setItems(prev => {
-				const capacity =
-					typeof maxFiles === 'number'
-						? Math.max(0, maxFiles - prev.length)
-						: undefined
-				const capped =
-					typeof capacity === 'number'
-						? sized.slice(0, capacity)
-						: sized
-				if (
-					typeof capacity === 'number' &&
-					sized.length > capacity
-				) {
-					onError?.({
-						code: 'max_files',
-						message: 'Too many files. Some were not added.'
-					})
-				}
-				const next: (FileUIPart & { id: string })[] = []
-				for (const file of capped) {
-					next.push({
-						filename: file.name,
-						id: nanoid(),
-						mediaType: file.type,
-						type: 'file',
-						url: URL.createObjectURL(file)
-					})
-				}
-				return [...prev, ...next]
-			})
-		},
-		[matchesAccept, maxFiles, maxFileSize, onError]
-	)
-
-	const removeLocal = useCallback(
-		(id: string) =>
-			setItems(prev => {
-				const found = prev.find(file => file.id === id)
-				if (found?.url) {
-					URL.revokeObjectURL(found.url)
-				}
-				return prev.filter(file => file.id !== id)
-			}),
-		[]
-	)
-
-	// Wrapper that validates files before calling provider's add
-	const addWithProviderValidation = useCallback(
-		(fileList: File[] | FileList) => {
-			const incoming = [...fileList]
-			const accepted = incoming.filter(f =>
-				matchesAccept(f)
-			)
-			if (incoming.length && accepted.length === 0) {
-				onError?.({
-					code: 'accept',
-					message: 'No files match the accepted types.'
-				})
-				return
-			}
-			const withinSize = (f: File) =>
-				maxFileSize ? f.size <= maxFileSize : true
-			const sized = accepted.filter(withinSize)
-			if (accepted.length > 0 && sized.length === 0) {
-				onError?.({
-					code: 'max_file_size',
-					message: 'All files exceed the maximum size.'
-				})
-				return
-			}
-
-			const currentCount = files.length
 			const capacity =
 				typeof maxFiles === 'number'
 					? Math.max(0, maxFiles - currentCount)
@@ -587,19 +519,52 @@ export const PromptInput = ({
 					message: 'Too many files. Some were not added.'
 				})
 			}
+			return capped
+		},
+		[matchesAccept, maxFiles, maxFileSize, onError]
+	)
 
-			if (capped.length > 0) {
+	const addLocal = useCallback(
+		(fileList: File[] | FileList) => {
+			setItems(prev => {
+				const capped = validateFiles(fileList, prev.length)
+				if (!capped || capped.length === 0) return prev
+				const next: (FileUIPart & { id: string })[] = []
+				for (const file of capped) {
+					next.push({
+						filename: file.name,
+						id: nanoid(),
+						mediaType: file.type,
+						type: 'file',
+						url: URL.createObjectURL(file)
+					})
+				}
+				return [...prev, ...next]
+			})
+		},
+		[validateFiles]
+	)
+
+	const removeLocal = useCallback(
+		(id: string) =>
+			setItems(prev => {
+				const found = prev.find(file => file.id === id)
+				if (found?.url) {
+					URL.revokeObjectURL(found.url)
+				}
+				return prev.filter(file => file.id !== id)
+			}),
+		[]
+	)
+
+	const addWithProviderValidation = useCallback(
+		(fileList: File[] | FileList) => {
+			const capped = validateFiles(fileList, files.length)
+			if (capped && capped.length > 0) {
 				controller?.attachments.add(capped)
 			}
 		},
-		[
-			matchesAccept,
-			maxFileSize,
-			maxFiles,
-			onError,
-			files.length,
-			controller
-		]
+		[validateFiles, files.length, controller]
 	)
 
 	const clearAttachments = useCallback(
@@ -659,67 +624,37 @@ export const PromptInput = ({
 		}
 	}, [files, syncHiddenInput])
 
-	// Attach drop handlers on nearest form and document (opt-in)
+	// Attach drop handlers on nearest form or document (globalDrop opt-in)
 	useEffect(() => {
-		const form = formRef.current
-		if (!form) {
-			return
-		}
-		if (globalDrop) {
-			// when global drop is on, let the document-level handler own drops
-			return
-		}
+		const target = globalDrop ? document : formRef.current
+		if (!target) return
 
-		const onDragOver = (e: DragEvent) => {
-			if (e.dataTransfer?.types?.includes('Files')) {
+		const onDragOver = (e: Event) => {
+			if (
+				(e as DragEvent).dataTransfer?.types?.includes(
+					'Files'
+				)
+			) {
 				e.preventDefault()
 			}
 		}
-		const onDrop = (e: DragEvent) => {
-			if (e.dataTransfer?.types?.includes('Files')) {
+		const onDrop = (e: Event) => {
+			const de = e as DragEvent
+			if (de.dataTransfer?.types?.includes('Files')) {
 				e.preventDefault()
 			}
 			if (
-				e.dataTransfer?.files &&
-				e.dataTransfer.files.length > 0
+				de.dataTransfer?.files &&
+				de.dataTransfer.files.length > 0
 			) {
-				add(e.dataTransfer.files)
+				add(de.dataTransfer.files)
 			}
 		}
-		form.addEventListener('dragover', onDragOver)
-		form.addEventListener('drop', onDrop)
+		target.addEventListener('dragover', onDragOver)
+		target.addEventListener('drop', onDrop)
 		return () => {
-			form.removeEventListener('dragover', onDragOver)
-			form.removeEventListener('drop', onDrop)
-		}
-	}, [add, globalDrop])
-
-	useEffect(() => {
-		if (!globalDrop) {
-			return
-		}
-
-		const onDragOver = (e: DragEvent) => {
-			if (e.dataTransfer?.types?.includes('Files')) {
-				e.preventDefault()
-			}
-		}
-		const onDrop = (e: DragEvent) => {
-			if (e.dataTransfer?.types?.includes('Files')) {
-				e.preventDefault()
-			}
-			if (
-				e.dataTransfer?.files &&
-				e.dataTransfer.files.length > 0
-			) {
-				add(e.dataTransfer.files)
-			}
-		}
-		document.addEventListener('dragover', onDragOver)
-		document.addEventListener('drop', onDrop)
-		return () => {
-			document.removeEventListener('dragover', onDragOver)
-			document.removeEventListener('drop', onDrop)
+			target.removeEventListener('dragover', onDragOver)
+			target.removeEventListener('drop', onDrop)
 		}
 	}, [add, globalDrop])
 

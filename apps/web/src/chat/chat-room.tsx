@@ -120,9 +120,7 @@ export function ChatRoom({
 				listSessions={() =>
 					eden.chat.sessions.get().then(r => r.data)
 				}
-				onResume={async () => {
-					/* TODO: actually switch sessions */
-				}}
+				onResume={async () => {}}
 				currentSessionId={sessionId}
 			/>
 			<SessionInfo
