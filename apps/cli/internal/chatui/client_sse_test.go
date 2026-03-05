@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestSSEClient_ParsesSnapshot(t *testing.T) {
@@ -236,7 +236,7 @@ func TestSSEClient_IgnoresUnknownEvents(t *testing.T) {
 	}
 }
 
-func TestSSEClient_AfterSeqQuery(t *testing.T) {
+func TestSSEClient_AlwaysFullSnapshot(t *testing.T) {
 	var requestedURL string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestedURL = r.URL.String()
@@ -261,8 +261,9 @@ func TestSSEClient_AfterSeqQuery(t *testing.T) {
 
 	<-ctx.Done()
 
-	if requestedURL != "/chat/current/events/sse?afterSeq=42" {
-		t.Errorf("expected afterSeq=42 in URL, got %q", requestedURL)
+	// After removing afterSeq (always full snapshot), the URL should have no query params.
+	if requestedURL != "/chat/current/events/sse" {
+		t.Errorf("expected no afterSeq in URL, got %q", requestedURL)
 	}
 }
 

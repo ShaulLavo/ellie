@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // SSE message types sent by the Bubble Tea program loop.
@@ -129,13 +129,12 @@ func (s *SSEClient) connectOnce(ctx context.Context, send func(tea.Msg)) error {
 
 	s.mu.Lock()
 	s.cancelFn = cancel
-	seq := s.lastSeq
 	s.mu.Unlock()
 
+	// Always request the full snapshot (no afterSeq) so handleSnapshot
+	// receives the complete event history and doesn't lose messages on
+	// reconnect. The server streams only new events after the snapshot.
 	url := fmt.Sprintf("%s/chat/%s/events/sse", s.baseURL, s.sessionID)
-	if seq > 0 {
-		url += fmt.Sprintf("?afterSeq=%d", seq)
-	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

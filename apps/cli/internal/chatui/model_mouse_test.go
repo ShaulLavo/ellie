@@ -3,7 +3,7 @@ package chatui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // newTestModel returns a Model pre-sized to a 80x24 terminal.
@@ -17,22 +17,20 @@ func newTestModel() Model {
 	return m
 }
 
-func mouseClick(x, y int) tea.MouseMsg {
-	return tea.MouseMsg{
+func mouseClick(x, y int) tea.MouseClickMsg {
+	return tea.MouseClickMsg(tea.Mouse{
 		X:      x,
 		Y:      y,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+		Button: tea.MouseLeft,
+	})
 }
 
-func mouseWheel(x, y int, button tea.MouseButton) tea.MouseMsg {
-	return tea.MouseMsg{
+func mouseWheel(x, y int, button tea.MouseButton) tea.MouseWheelMsg {
+	return tea.MouseWheelMsg(tea.Mouse{
 		X:      x,
 		Y:      y,
-		Action: tea.MouseActionPress,
 		Button: button,
-	}
+	})
 }
 
 // ─── Click focus tests ──────────────────────────────────────────
@@ -100,7 +98,7 @@ func TestMouseWheel_OverChat_ScrollsViewport(t *testing.T) {
 	wheelY := layout.chat.minY + 1
 
 	// Scroll up should change viewport offset.
-	result, _ := m.Update(mouseWheel(10, wheelY, tea.MouseButtonWheelUp))
+	result, _ := m.Update(mouseWheel(10, wheelY, tea.MouseWheelUp))
 	rm := result.(Model)
 
 	if rm.autoScroll {
@@ -121,7 +119,7 @@ func TestMouseWheel_OutsideChat_DoesNotScroll(t *testing.T) {
 	layout := m.computeLayout()
 	wheelY := layout.input.minY + 1
 
-	result, _ := m.Update(mouseWheel(10, wheelY, tea.MouseButtonWheelUp))
+	result, _ := m.Update(mouseWheel(10, wheelY, tea.MouseWheelUp))
 	rm := result.(Model)
 
 	if !rm.autoScroll {
@@ -155,7 +153,7 @@ func TestMouseWheel_DialogOpen_IgnoresWheel(t *testing.T) {
 	layout := m.computeLayout()
 	wheelY := layout.chat.minY + 1
 
-	result, _ := m.Update(mouseWheel(10, wheelY, tea.MouseButtonWheelDown))
+	result, _ := m.Update(mouseWheel(10, wheelY, tea.MouseWheelDown))
 	rm := result.(Model)
 
 	if !rm.autoScroll {
@@ -181,7 +179,7 @@ func TestMouseWheel_RapidEvents_ScrollsPredictably(t *testing.T) {
 	// Simulate rapid touchpad scroll (multiple wheel-up events).
 	var result tea.Model = m
 	for i := 0; i < 10; i++ {
-		result, _ = result.(Model).Update(mouseWheel(10, wheelY, tea.MouseButtonWheelUp))
+		result, _ = result.(Model).Update(mouseWheel(10, wheelY, tea.MouseWheelUp))
 	}
 	rm := result.(Model)
 
@@ -241,7 +239,7 @@ func TestKeyboard_EscStillToggles_AfterMouseSupport(t *testing.T) {
 	m.connState = StateConnected
 
 	// Esc with empty input should switch to chat focus.
-	escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	escMsg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape})
 	result, _ := m.Update(escMsg)
 	rm := result.(Model)
 

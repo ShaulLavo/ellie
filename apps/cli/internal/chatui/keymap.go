@@ -1,6 +1,6 @@
 package chatui
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
 // KeyMap defines all key bindings for the chat TUI,
 // inspired by Crush's hierarchical keymap structure.
@@ -8,17 +8,19 @@ type KeyMap struct {
 	Editor struct {
 		Send        key.Binding
 		Newline     key.Binding
+		FocusChat   key.Binding
 		HistoryPrev key.Binding
 		HistoryNext key.Binding
 	}
 
 	Chat struct {
-		Up       key.Binding
-		Down     key.Binding
-		PageUp   key.Binding
-		PageDown key.Binding
-		Home     key.Binding
-		End      key.Binding
+		Up          key.Binding
+		Down        key.Binding
+		PageUp      key.Binding
+		PageDown    key.Binding
+		Home        key.Binding
+		End         key.Binding
+		FocusEditor key.Binding
 	}
 
 	// Global bindings
@@ -64,8 +66,12 @@ func DefaultKeyMap() KeyMap {
 		key.WithHelp("enter", "send"),
 	)
 	km.Editor.Newline = key.NewBinding(
-		key.WithKeys("shift+enter", "ctrl+j"),
-		key.WithHelp("ctrl+j", "newline"),
+		key.WithKeys("shift+enter", "alt+enter"),
+		key.WithHelp("shift+enter", "newline"),
+	)
+	km.Editor.FocusChat = key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "chat"),
 	)
 	km.Editor.HistoryPrev = key.NewBinding(
 		key.WithKeys("up"),
@@ -99,6 +105,10 @@ func DefaultKeyMap() KeyMap {
 	km.Chat.End = key.NewBinding(
 		key.WithKeys("end"),
 		key.WithHelp("end", "bottom"),
+	)
+	km.Chat.FocusEditor = key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "editor"),
 	)
 
 	return km

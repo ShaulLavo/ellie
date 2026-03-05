@@ -4,24 +4,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Styles for the chat TUI.
 var (
 	statusLineStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#1a1a2e")).
-			Foreground(lipgloss.Color("#e0e0e0")).
+			Foreground(lipgloss.Color("#666")).
 			Padding(0, 1)
 
 	connectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00A66D")).
-			Bold(true)
+			Foreground(lipgloss.Color("#666"))
 	connectingStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FBBF24"))
+			Foreground(lipgloss.Color("#666"))
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#EF4444")).
-			Bold(true)
+			Foreground(lipgloss.Color("#666"))
 	disconnectedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#666"))
 

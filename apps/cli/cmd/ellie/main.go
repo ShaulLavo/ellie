@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 const defaultBaseURL = "http://localhost:3000"

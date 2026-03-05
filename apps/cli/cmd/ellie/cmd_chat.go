@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"ellie/apps/cli/internal/chatui"
 )
@@ -36,11 +36,7 @@ func cmdChat(args []string) error {
 
 	model := chatui.NewModel(base, *sessionFlag, *transcriptDir)
 
-	p := tea.NewProgram(
-		model,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
+	p := tea.NewProgram(model)
 
 	// Start SSE loop in background goroutine with Program.Send
 	ctx, cancel := context.WithCancel(context.Background())

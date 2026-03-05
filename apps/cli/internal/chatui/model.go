@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -70,9 +70,22 @@ func NewModel(baseURL, sessionID, transcriptDir string) Model {
 	ta.Focus()
 	ta.CharLimit = 0
 	ta.ShowLineNumbers = false
-	ta.SetHeight(3)
+	ta.SetHeight(1)
 
-	vp := viewport.New(80, 20)
+	// Disable the textarea's built-in InsertNewline binding so that
+	// enter/shift+enter reach our updateEditor handler instead.
+	ta.KeyMap.InsertNewline.SetEnabled(false)
+
+	// Clear the default black background on the cursor line and end-of-buffer
+	// so the input is transparent against the terminal background.
+	styles := ta.Styles()
+	styles.Focused.CursorLine = lipgloss.NewStyle()
+	styles.Focused.EndOfBuffer = lipgloss.NewStyle()
+	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	styles.Blurred.EndOfBuffer = lipgloss.NewStyle()
+	ta.SetStyles(styles)
+
+	vp := viewport.New()
 	vp.SetContent("")
 
 	return Model{
@@ -111,9 +124,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		return m.handleMouse(msg)
+		return m.handleMouseMsg(msg)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Quit
 		if key.Matches(msg, m.keys.Quit) {
 			m.cleanup()
@@ -236,9 +249,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if !m.ready {
-		return "Initializing..."
+		v := tea.NewView("Initializing...")
+		v.AltScreen = true
+		return v
 	}
 
 	statusLine := renderStatusLine(&m, m.width)
@@ -252,8 +267,8 @@ func (m Model) View() string {
 	if vpHeight < 1 {
 		vpHeight = 1
 	}
-	m.viewport.Height = vpHeight
-	m.viewport.Width = m.width
+	m.viewport.SetHeight(vpHeight)
+	m.viewport.SetWidth(m.width)
 
 	// Build dialog overlay
 	var dialogView string
@@ -273,25 +288,34 @@ func (m Model) View() string {
 		b.WriteString(footer)
 	}
 
-	view := b.String()
+	content := b.String()
 
 	// Overlay dialog centered on screen
 	if dialogView != "" {
-		view = overlayCenter(view, dialogView, m.width, m.height)
+		content = overlayCenter(content, dialogView, m.width, m.height)
 	}
 
-	return view
+	v := tea.NewView(content)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }
 
 // ─── Editor handling ──────────────────────────────────────────────
 
-func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateEditor(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Editor.Send):
 		return m.handleSend()
 
 	case key.Matches(msg, m.keys.Editor.Newline):
 		m.textarea.InsertString("\n")
+		m.adjustTextareaHeight()
+		return m, nil
+
+	case key.Matches(msg, m.keys.Editor.FocusChat):
+		m.focus = focusChat
+		m.textarea.Blur()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Editor.HistoryPrev):
@@ -309,13 +333,23 @@ func (m Model) updateEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Track draft changes for history
 	if m.textarea.Value() != oldVal {
 		m.history.UpdateDraft(m.textarea.Value())
+		m.adjustTextareaHeight()
 	}
 
 	return m, cmd
 }
 
 func (m Model) handleSend() (tea.Model, tea.Cmd) {
-	text := strings.TrimSpace(m.textarea.Value())
+	value := m.textarea.Value()
+
+	// Backslash escape: if the line ends with \, remove it and insert a
+	// newline instead of sending. This mirrors Crush's pattern.
+	if before, found := strings.CutSuffix(value, "\\"); found {
+		m.textarea.SetValue(before + "\n")
+		return m, nil
+	}
+
+	text := strings.TrimSpace(value)
 	if text == "" {
 		return m, nil
 	}
@@ -335,6 +369,8 @@ func (m Model) handleSend() (tea.Model, tea.Cmd) {
 	// Save to history and clear
 	m.history.Add(text)
 	m.textarea.Reset()
+	m.textarea.SetHeight(1)
+	m.resizeComponents()
 	m.autoScroll = true
 
 	return m, m.sendMessage(text)
@@ -342,7 +378,7 @@ func (m Model) handleSend() (tea.Model, tea.Cmd) {
 
 // handleHistoryUp navigates up in prompt history.
 // Ported from Crush history.go — boundary-aware.
-func (m Model) handleHistoryUp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleHistoryUp(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// At top of editor or empty: enter history
 	if m.textarea.Value() == "" || isAtEditorStart(m.textarea) {
 		if text, ok := m.history.Prev(m.textarea.Value()); ok {
@@ -358,7 +394,7 @@ func (m Model) handleHistoryUp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleHistoryDown navigates down in prompt history.
-func (m Model) handleHistoryDown(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleHistoryDown(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if isAtEditorEnd(m.textarea) {
 		if text, ok := m.history.Next(); ok {
 			m.textarea.Reset()
@@ -373,9 +409,9 @@ func (m Model) handleHistoryDown(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Chat viewport handling ───────────────────────────────────────
 
-func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateChat(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Tab back to editor
-	if key.Matches(msg, key.NewBinding(key.WithKeys("tab"))) {
+	if key.Matches(msg, m.keys.Chat.FocusEditor) {
 		m.focus = focusEditor
 		m.textarea.Focus()
 		return m, nil
@@ -383,13 +419,13 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, m.keys.Chat.Up):
-		m.viewport.LineUp(1)
+		m.viewport.ScrollUp(1)
 	case key.Matches(msg, m.keys.Chat.Down):
-		m.viewport.LineDown(1)
+		m.viewport.ScrollDown(1)
 	case key.Matches(msg, m.keys.Chat.PageUp):
-		m.viewport.HalfViewUp()
+		m.viewport.HalfPageUp()
 	case key.Matches(msg, m.keys.Chat.PageDown):
-		m.viewport.HalfViewDown()
+		m.viewport.HalfPageDown()
 	case key.Matches(msg, m.keys.Chat.Home):
 		m.viewport.GotoTop()
 	case key.Matches(msg, m.keys.Chat.End):
@@ -407,7 +443,7 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Dialog handling ──────────────────────────────────────────────
 
-func (m Model) updateDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateDialog(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Capture reference to current dialog before Update may nil it.
 	prev := m.dialog
 	newDialog, action := prev.Update(msg, m.keys)
@@ -719,13 +755,13 @@ func (m *Model) resizeComponents() {
 
 	statusH := 1 // status line
 	footerH := 1 // footer
-	inputH := 5  // textarea with border
+	inputH := 3  // textarea with border
 	vpHeight := m.height - statusH - footerH - inputH
 	if vpHeight < 1 {
 		vpHeight = 1
 	}
-	m.viewport.Width = m.width
-	m.viewport.Height = vpHeight
+	m.viewport.SetWidth(m.width)
+	m.viewport.SetHeight(vpHeight)
 	m.refreshViewport()
 }
 
@@ -735,6 +771,21 @@ func (m *Model) refreshViewport() {
 	if m.autoScroll {
 		m.viewport.GotoBottom()
 	}
+}
+
+const maxTextareaHeight = 6
+
+// adjustTextareaHeight grows/shrinks the textarea to fit content, capped at maxTextareaHeight.
+func (m *Model) adjustTextareaHeight() {
+	lines := m.textarea.LineCount()
+	if lines < 1 {
+		lines = 1
+	}
+	if lines > maxTextareaHeight {
+		lines = maxTextareaHeight
+	}
+	m.textarea.SetHeight(lines)
+	m.resizeComponents()
 }
 
 func (m Model) renderInput() string {
@@ -812,8 +863,8 @@ func pointInPane(y int, r paneRect) bool {
 	return y >= r.minY && y <= r.maxY
 }
 
-// handleMouse processes mouse events for pane focus switching and wheel routing.
-func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+// handleMouseMsg processes mouse events for pane focus switching and wheel routing.
+func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Ignore mouse when a dialog is open (keyboard-only scope).
 	if m.dialog != nil {
 		return m, nil
@@ -821,28 +872,29 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	layout := m.computeLayout()
 
-	// Left click: switch focus.
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-		if pointInPane(msg.Y, layout.input) {
-			if m.focus != focusEditor {
-				m.focus = focusEditor
-				m.textarea.Focus()
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		mouse := msg.Mouse()
+		if mouse.Button == tea.MouseLeft {
+			if pointInPane(mouse.Y, layout.input) {
+				if m.focus != focusEditor {
+					m.focus = focusEditor
+					m.textarea.Focus()
+				}
+				return m, nil
 			}
-			return m, nil
-		}
-		if pointInPane(msg.Y, layout.chat) {
-			if m.focus != focusChat {
-				m.focus = focusChat
-				m.textarea.Blur()
+			if pointInPane(mouse.Y, layout.chat) {
+				if m.focus != focusChat {
+					m.focus = focusChat
+					m.textarea.Blur()
+				}
+				return m, nil
 			}
-			return m, nil
 		}
-		return m, nil
-	}
 
-	// Wheel: route to chat viewport only when pointer is over chat.
-	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
-		if !pointInPane(msg.Y, layout.chat) {
+	case tea.MouseWheelMsg:
+		mouse := msg.Mouse()
+		if !pointInPane(mouse.Y, layout.chat) {
 			return m, nil
 		}
 		var cmd tea.Cmd
