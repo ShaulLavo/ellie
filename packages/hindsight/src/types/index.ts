@@ -98,6 +98,7 @@ export {
 	NARRATIVE_STEPS_MAX
 } from './features'
 export type {
+	BankProfile,
 	MentalModel,
 	CreateMentalModelOptions,
 	UpdateMentalModelOptions,

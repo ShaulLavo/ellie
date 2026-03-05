@@ -15,7 +15,7 @@ import type {
 import { sanitizeText } from './sanitize'
 import { ftsInsert } from './fts'
 import { consolidate } from './consolidation'
-import type { BankProfile } from './reflect'
+import type { BankProfile } from './types'
 import {
 	routeFact,
 	applyReinforce,

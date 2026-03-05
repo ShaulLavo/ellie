@@ -16,7 +16,7 @@ import type {
 	TagsMatch
 } from './types'
 import type { DirectiveRow } from './schema'
-import { matchesTags } from './recall'
+import { matchesTags } from './tags'
 import { safeJsonParse } from './util'
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -20,7 +20,8 @@ import type {
 	RefreshMentalModelResult,
 	RerankFunction
 } from './types'
-import { reflect, type BankProfile } from './reflect'
+import { reflect } from './reflect'
+import type { BankProfile } from './types'
 import type { MentalModelRow } from './schema'
 import { safeJsonParse } from './util'
 

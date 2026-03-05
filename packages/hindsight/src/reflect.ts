@@ -26,7 +26,7 @@ import type {
 	Freshness,
 	ScoredMemory,
 	RerankFunction,
-	DispositionTraits
+	BankProfile
 } from './types'
 import { parseLLMJson } from './sanitize'
 import { recall } from './recall'
@@ -39,12 +39,7 @@ import {
 	buildDirectivesReminder
 } from './prompts'
 
-/** Bank profile passed to reflect for prompt injection */
-export interface BankProfile {
-	name: string
-	mission: string
-	disposition: DispositionTraits
-}
+export type { BankProfile } from './types'
 
 const BUDGET_ITERATIONS: Record<ReflectBudget, number> = {
 	low: 3,

@@ -26,7 +26,7 @@ import {
 } from './retrieval/cognitive'
 import type { WorkingMemoryStore } from './working-memory'
 import { reciprocalRankFusion } from './fusion'
-import { rowToMemoryUnit, rowToEntity } from './retain'
+import { rowToMemoryUnit, rowToEntity } from './retain-db'
 import { extractTemporalRange } from './temporal'
 import { matchesTags, parseStringArray } from './tags'
 import { clamp } from './util'

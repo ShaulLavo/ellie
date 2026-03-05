@@ -1,4 +1,14 @@
-import type { ReflectResult } from './operations'
+import type { ReflectResult } from './shared'
+import type { DispositionTraits } from '../schemas'
+
+// ── Bank Profile ─────────────────────────────────────────────────────────
+
+/** Bank profile passed to reflect for prompt injection */
+export interface BankProfile {
+	name: string
+	mission: string
+	disposition: DispositionTraits
+}
 
 // ── Mental Models ────────────────────────────────────────────────────────
 
@@ -246,14 +256,7 @@ export interface VisualRetainResult {
 }
 
 /** A scored visual memory returned from recall fusion. */
-export interface ScoredVisualMemory {
-	id: string
-	bankId: string
-	sourceId: string | null
-	description: string
-	score: number
-	createdAt: number
-}
+export type { ScoredVisualMemory } from './shared'
 
 /** Stats for visual memories in a bank. */
 export interface VisualStats {

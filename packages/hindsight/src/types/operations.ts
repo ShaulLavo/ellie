@@ -1,4 +1,4 @@
-import type { ScoredVisualMemory } from './features'
+import type { ScoredVisualMemory } from './shared'
 import type { RetainContentInput } from './config'
 
 // ── Operation options ──────────────────────────────────────────────────────
@@ -173,23 +173,7 @@ export interface MethodResult {
 }
 
 /** Result from reflect() */
-export interface ReflectResult {
-	answer: string
-	memories: import('../schemas').ScoredMemory[]
-	observations: string[]
-	structuredOutput?: Record<string, unknown> | null
-	trace?: {
-		startedAt: number
-		durationMs: number
-		toolCalls: Array<{
-			tool: string
-			durationMs: number
-			input: Record<string, unknown>
-			outputSize: number
-			error?: string
-		}>
-	}
-}
+export type { ReflectResult } from './shared'
 
 /** Aggregated entity state payload returned by recall(includeEntities=true). */
 export interface RecallEntityState {

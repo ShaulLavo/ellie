@@ -28,7 +28,7 @@ import type {
 	RerankFunction,
 	TagsMatch
 } from './types'
-import { matchesTags } from './recall'
+import { matchesTags } from './tags'
 import {
 	CONSOLIDATION_SYSTEM,
 	getConsolidationUserPrompt,
@@ -36,7 +36,7 @@ import {
 } from './prompts'
 import { parseLLMJson } from './sanitize'
 import { refreshMentalModel } from './mental-models'
-import type { BankProfile } from './reflect'
+import type { BankProfile } from './types'
 import { safeJsonParse } from './util'
 import { ftsInsert, ftsReplace, ftsDelete } from './fts'
 
