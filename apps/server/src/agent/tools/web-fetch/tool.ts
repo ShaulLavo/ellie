@@ -12,15 +12,14 @@
  */
 
 import * as v from 'valibot'
-import { JSDOM } from 'jsdom'
-import DefuddleClass from 'defuddle'
-import TurndownService from 'turndown'
+import * as Comlink from 'comlink'
 import pdf2md from '@opendocsg/pdf2md'
 import { getBrowser } from './browser'
 import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
+import type { DefuddleWorkerApi } from './defuddle.worker'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -142,13 +141,22 @@ function looksLikeSpa(html: string): boolean {
 	return hasFrameworkMarkers && !hasArticleContent
 }
 
-// ── Turndown ────────────────────────────────────────────────────────────
+// ── Defuddle worker (lazy singleton) ────────────────────────────────────
 
-const turndown = new TurndownService({
-	headingStyle: 'atx',
-	codeBlockStyle: 'fenced',
-	bulletListMarker: '-'
-})
+let workerProxy: Comlink.Remote<DefuddleWorkerApi> | null = null
+
+function getDefuddleWorker(): Comlink.Remote<DefuddleWorkerApi> {
+	if (!workerProxy) {
+		const worker = new Worker(
+			new URL('./defuddle.worker.ts', import.meta.url)
+		)
+		worker.addEventListener('error', () => {
+			workerProxy = null
+		})
+		workerProxy = Comlink.wrap<DefuddleWorkerApi>(worker)
+	}
+	return workerProxy
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -194,7 +202,7 @@ async function handleHtml(
 ): Promise<AgentToolResult> {
 	// 1. Allowlisted domain — always static, skip detection
 	if (isStaticDomain(url)) {
-		return htmlToMarkdownResult(html, url)
+		return await htmlToMarkdownResult(html, url)
 	}
 
 	// 2. SPA shell — skip Defuddle, go straight to Playwright
@@ -203,7 +211,7 @@ async function handleHtml(
 	}
 
 	// 3. Try Defuddle — if too little content, retry with Playwright
-	const result = htmlToMarkdownResult(html, url)
+	const result = await htmlToMarkdownResult(html, url)
 	const details = result.details as { wordCount: number }
 	if (details.wordCount < MIN_WORD_COUNT) {
 		return handlePlaywright(url)
@@ -224,31 +232,24 @@ async function handlePlaywright(
 			timeout: 30_000
 		})
 		const html = await page.content()
-		return htmlToMarkdownResult(html, url)
+		return await htmlToMarkdownResult(html, url)
 	} finally {
 		await page.close()
 	}
 }
 
-function htmlToMarkdownResult(
+async function htmlToMarkdownResult(
 	html: string,
 	url: string
-): AgentToolResult {
-	const dom = new JSDOM(html, { url })
-	const defuddle = new DefuddleClass(dom.window.document, {
-		url
-	})
-	const result = defuddle.parse()
-
-	const markdown = result.content
-		? turndown.turndown(result.content)
-		: ''
+): Promise<AgentToolResult> {
+	const worker = getDefuddleWorker()
+	const result = await worker.parse(html, url)
 
 	const parts: string[] = []
 	if (result.title) parts.push(`# ${result.title}`)
 	if (result.author)
 		parts.push(`**Author:** ${result.author}`)
-	if (markdown) parts.push(markdown)
+	if (result.content) parts.push(result.content)
 
 	const text = parts.join('\n\n')
 	const truncated = truncateText(text, MAX_OUTPUT_CHARS)
@@ -262,9 +263,9 @@ function htmlToMarkdownResult(
 		],
 		details: {
 			url,
-			title: result.title ?? null,
-			author: result.author ?? null,
-			wordCount: result.wordCount ?? 0
+			title: result.title,
+			author: result.author,
+			wordCount: result.wordCount
 		}
 	}
 }
