@@ -12,10 +12,6 @@
  * - Configurable shouldRetry predicate for caller-specific logic
  */
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface RetryOptions {
 	/** Maximum number of attempts (including the first). Default: 3. */
 	maxAttempts: number
@@ -44,10 +40,6 @@ const DEFAULT_OPTIONS: RetryOptions = {
 	backoffMultiplier: 2
 }
 
-// ============================================================================
-// Delay calculation
-// ============================================================================
-
 /**
  * Calculate the delay for a given attempt.
  *
@@ -63,32 +55,23 @@ export function calculateDelay(
 	options: RetryOptions,
 	retryAfterMs?: number
 ): number {
-	// Exponential: base * multiplier^(attempt - 1)
 	const exponential =
 		options.baseDelayMs *
 		Math.pow(options.backoffMultiplier, attempt - 1)
 
-	// Cap at maxDelayMs
 	let delay = Math.min(exponential, options.maxDelayMs)
 
-	// Respect Retry-After if provided
 	if (retryAfterMs !== undefined && retryAfterMs > 0) {
 		delay = Math.max(delay, retryAfterMs)
 	}
 
-	// Cap again after Retry-After merge
 	delay = Math.min(delay, options.maxDelayMs)
 
-	// Add jitter: ±20%
 	const jitter = delay * 0.2 * (2 * Math.random() - 1)
 	delay = Math.max(0, delay + jitter)
 
 	return Math.round(delay)
 }
-
-// ============================================================================
-// Sleep with abort
-// ============================================================================
 
 /**
  * Sleep for the given duration, interruptible by abort signal.
@@ -129,10 +112,6 @@ export function abortableSleep(
 	})
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
 /**
  * Extract retryAfterMs from an error object, if present and valid.
  */
@@ -151,10 +130,6 @@ function extractRetryAfterMs(
 		? val
 		: undefined
 }
-
-// ============================================================================
-// withRetry
-// ============================================================================
 
 /**
  * Execute an async function with retry on failure.
@@ -184,7 +159,6 @@ export async function withRetry<T>(
 		attempt <= opts.maxAttempts;
 		attempt++
 	) {
-		// Check abort before each attempt
 		if (opts.signal?.aborted) {
 			throw new DOMException('Retry aborted', 'AbortError')
 		}
@@ -194,12 +168,10 @@ export async function withRetry<T>(
 		} catch (err) {
 			lastError = err
 
-			// Last attempt — don't retry, just throw
 			if (attempt >= opts.maxAttempts) {
 				break
 			}
 
-			// Check if caller wants to retry this error
 			if (
 				opts.shouldRetry &&
 				!opts.shouldRetry(err, attempt)
@@ -207,14 +179,12 @@ export async function withRetry<T>(
 				break
 			}
 
-			// Calculate delay for this retry
 			const delayMs = calculateDelay(
 				attempt,
 				opts,
 				extractRetryAfterMs(err)
 			)
 
-			// Notify caller of retry
 			opts.onRetry?.(err, attempt, delayMs)
 
 			// Sleep (interruptible by abort)

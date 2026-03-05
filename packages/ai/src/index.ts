@@ -36,12 +36,6 @@ export {
 	mapTanStackUsage
 } from './usage'
 
-// Context overflow detection (backward compat)
-export {
-	isContextOverflow,
-	getOverflowPatterns
-} from './overflow'
-
 // Error classification & retry support
 export {
 	classifyError,
@@ -55,6 +49,7 @@ export {
 	isFormatError,
 	isTransientHttpError,
 	isContextOverflowError,
+	getOverflowPatterns,
 	parseRetryAfter
 } from './errors'
 export type { ErrorClass, ClassifiedError } from './errors'

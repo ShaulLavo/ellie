@@ -110,6 +110,138 @@ const DEFAULT_OPTIONS: ToolLoopDetectorOptions = {
 	requireIdenticalResults: true
 }
 
+// ============================================================================
+// Detection algorithms
+// ============================================================================
+
+function checkRepeatedCalls(
+	history: ToolCallEntry[],
+	toolName: string,
+	argsHash: string,
+	config: ToolLoopDetectorOptions
+): LoopDetectionResult {
+	let streak = 0
+	for (let i = history.length - 1; i >= 0; i--) {
+		const entry = history[i]
+		if (
+			entry.toolName === toolName &&
+			entry.argsHash === argsHash
+		) {
+			streak++
+		} else {
+			break
+		}
+	}
+
+	if (streak < config.maxRepeatedCalls) {
+		return { detected: false }
+	}
+
+	if (config.requireIdenticalResults) {
+		const streakEntries = history.slice(-streak)
+		const withResults = streakEntries.filter(
+			e => e.resultHash !== undefined
+		)
+		if (withResults.length < 2) {
+			return { detected: false }
+		}
+		const allSame = withResults.every(
+			e => e.resultHash === withResults[0].resultHash
+		)
+		if (!allSame) {
+			return { detected: false }
+		}
+	}
+
+	return {
+		detected: true,
+		pattern: 'repeated_call',
+		message: `Loop detected: "${toolName}" has been called ${streak} times with identical arguments${config.requireIdenticalResults ? ' and results' : ''}. Try a different approach or different arguments.`
+	}
+}
+
+function checkPingPong(
+	history: ToolCallEntry[],
+	config: ToolLoopDetectorOptions
+): LoopDetectionResult {
+	if (history.length < config.maxPingPongCycles * 2) {
+		return { detected: false }
+	}
+
+	const last = history[history.length - 1]
+	const secondLast = history[history.length - 2]
+
+	if (
+		!secondLast ||
+		last.toolName === secondLast.toolName
+	) {
+		return { detected: false }
+	}
+
+	const toolA = secondLast.toolName
+	const toolB = last.toolName
+
+	let cycles = 0
+	let i = history.length - 1
+
+	while (i >= 1) {
+		const current = history[i]
+		const prev = history[i - 1]
+
+		if (
+			current.toolName === toolB &&
+			prev.toolName === toolA
+		) {
+			cycles++
+			i -= 2
+		} else {
+			break
+		}
+	}
+
+	if (cycles < config.maxPingPongCycles) {
+		return { detected: false }
+	}
+
+	if (config.requireIdenticalResults) {
+		const tailLength = cycles * 2
+		const tailEntries = history.slice(-tailLength)
+		const aEntries = tailEntries.filter(
+			e =>
+				e.toolName === toolA && e.resultHash !== undefined
+		)
+		const bEntries = tailEntries.filter(
+			e =>
+				e.toolName === toolB && e.resultHash !== undefined
+		)
+
+		if (aEntries.length < 2 || bEntries.length < 2) {
+			return { detected: false }
+		}
+
+		const aAllSame = aEntries.every(
+			e => e.resultHash === aEntries[0].resultHash
+		)
+		const bAllSame = bEntries.every(
+			e => e.resultHash === bEntries[0].resultHash
+		)
+
+		if (!aAllSame || !bAllSame) {
+			return { detected: false }
+		}
+	}
+
+	return {
+		detected: true,
+		pattern: 'ping_pong',
+		message: `Loop detected: "${toolA}" and "${toolB}" are being called in an alternating pattern (${cycles} cycles) with no progress. Try a different approach.`
+	}
+}
+
+// ============================================================================
+// Factory
+// ============================================================================
+
 export function createToolLoopDetector(
 	options?: Partial<ToolLoopDetectorOptions>
 ): ToolLoopDetector {
@@ -120,192 +252,54 @@ export function createToolLoopDetector(
 
 	let history: ToolCallEntry[] = []
 
-	function trimHistory() {
-		if (history.length > opts.historySize) {
-			history = history.slice(
-				history.length - opts.historySize
-			)
-		}
-	}
-
-	function record(
-		toolName: string,
-		args: unknown
-	): LoopDetectionResult {
-		const argsHash = stableHash(args)
-
-		// Add entry (result not yet known)
-		history.push({ toolName, argsHash })
-		trimHistory()
-
-		// Check for repeated calls
-		const repeatedResult = checkRepeatedCalls(
-			toolName,
-			argsHash,
-			opts
-		)
-		if (repeatedResult.detected) return repeatedResult
-
-		// Check for ping-pong
-		const pingPongResult = checkPingPong(opts)
-		if (pingPongResult.detected) return pingPongResult
-
-		return { detected: false }
-	}
-
-	function recordOutcome(
-		toolName: string,
-		args: unknown,
-		result: unknown
-	): void {
-		const argsHash = stableHash(args)
-		const resultHash = stableHash(result)
-
-		// Find the most recent entry matching this call and set its result
-		for (let i = history.length - 1; i >= 0; i--) {
-			const entry = history[i]
-			if (
-				entry.toolName === toolName &&
-				entry.argsHash === argsHash &&
-				entry.resultHash === undefined
-			) {
-				entry.resultHash = resultHash
-				break
-			}
-		}
-	}
-
-	function checkRepeatedCalls(
-		toolName: string,
-		argsHash: string,
-		config: ToolLoopDetectorOptions
-	): LoopDetectionResult {
-		// Count consecutive identical calls from the tail
-		let streak = 0
-		for (let i = history.length - 1; i >= 0; i--) {
-			const entry = history[i]
-			if (
-				entry.toolName === toolName &&
-				entry.argsHash === argsHash
-			) {
-				streak++
-			} else {
-				break
-			}
-		}
-
-		if (streak < config.maxRepeatedCalls) {
-			return { detected: false }
-		}
-
-		// If requireIdenticalResults, verify all results in the streak are the same
-		if (config.requireIdenticalResults) {
-			const streakEntries = history.slice(-streak)
-			const withResults = streakEntries.filter(
-				e => e.resultHash !== undefined
-			)
-			if (withResults.length < 2) {
-				// Not enough result data yet
-				return { detected: false }
-			}
-			const allSame = withResults.every(
-				e => e.resultHash === withResults[0].resultHash
-			)
-			if (!allSame) {
-				return { detected: false }
-			}
-		}
-
-		return {
-			detected: true,
-			pattern: 'repeated_call',
-			message: `Loop detected: "${toolName}" has been called ${streak} times with identical arguments${config.requireIdenticalResults ? ' and results' : ''}. Try a different approach or different arguments.`
-		}
-	}
-
-	function checkPingPong(
-		config: ToolLoopDetectorOptions
-	): LoopDetectionResult {
-		if (history.length < config.maxPingPongCycles * 2) {
-			return { detected: false }
-		}
-
-		// Check the tail for A→B→A→B pattern
-		const last = history[history.length - 1]
-		const secondLast = history[history.length - 2]
-
-		if (
-			!secondLast ||
-			last.toolName === secondLast.toolName
-		) {
-			return { detected: false }
-		}
-
-		const toolA = secondLast.toolName
-		const toolB = last.toolName
-
-		// Count alternating pairs from the tail
-		let cycles = 0
-		let i = history.length - 1
-
-		while (i >= 1) {
-			const current = history[i]
-			const prev = history[i - 1]
-
-			if (
-				current.toolName === toolB &&
-				prev.toolName === toolA
-			) {
-				cycles++
-				i -= 2
-			} else {
-				break
-			}
-		}
-
-		if (cycles < config.maxPingPongCycles) {
-			return { detected: false }
-		}
-
-		// If requireIdenticalResults, check that all A-results are the same AND all B-results are the same
-		if (config.requireIdenticalResults) {
-			const tailLength = cycles * 2
-			const tailEntries = history.slice(-tailLength)
-			const aEntries = tailEntries.filter(
-				e =>
-					e.toolName === toolA && e.resultHash !== undefined
-			)
-			const bEntries = tailEntries.filter(
-				e =>
-					e.toolName === toolB && e.resultHash !== undefined
-			)
-
-			if (aEntries.length < 2 || bEntries.length < 2) {
-				return { detected: false }
-			}
-
-			const aAllSame = aEntries.every(
-				e => e.resultHash === aEntries[0].resultHash
-			)
-			const bAllSame = bEntries.every(
-				e => e.resultHash === bEntries[0].resultHash
-			)
-
-			if (!aAllSame || !bAllSame) {
-				return { detected: false }
-			}
-		}
-
-		return {
-			detected: true,
-			pattern: 'ping_pong',
-			message: `Loop detected: "${toolA}" and "${toolB}" are being called in an alternating pattern (${cycles} cycles) with no progress. Try a different approach.`
-		}
-	}
-
 	return {
-		record,
-		recordOutcome,
+		record(
+			toolName: string,
+			args: unknown
+		): LoopDetectionResult {
+			const argsHash = stableHash(args)
+			history.push({ toolName, argsHash })
+			if (history.length > opts.historySize) {
+				history = history.slice(
+					history.length - opts.historySize
+				)
+			}
+
+			const repeatedResult = checkRepeatedCalls(
+				history,
+				toolName,
+				argsHash,
+				opts
+			)
+			if (repeatedResult.detected) return repeatedResult
+
+			const pingPongResult = checkPingPong(history, opts)
+			if (pingPongResult.detected) return pingPongResult
+
+			return { detected: false }
+		},
+
+		recordOutcome(
+			toolName: string,
+			args: unknown,
+			result: unknown
+		): void {
+			const argsHash = stableHash(args)
+			const resultHash = stableHash(result)
+
+			for (let i = history.length - 1; i >= 0; i--) {
+				const entry = history[i]
+				if (
+					entry.toolName === toolName &&
+					entry.argsHash === argsHash &&
+					entry.resultHash === undefined
+				) {
+					entry.resultHash = resultHash
+					break
+				}
+			}
+		},
+
 		reset() {
 			history = []
 		}
