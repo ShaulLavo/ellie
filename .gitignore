@@ -54,6 +54,12 @@ apps/cli/bin/
 
 # Tailwind CLI output
 apps/react/src/output.css
+apps/web/src/output.css
+
+# Desloppify
+.desloppify/
+BRUTAL_MONOREPO_REVIEW.md
+scorecard.png
 
 # Claude
 .claude/worktrees/

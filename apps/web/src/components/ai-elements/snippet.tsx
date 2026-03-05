@@ -12,10 +12,7 @@ import {
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 import { CheckIcon, CopyIcon } from '@phosphor-icons/react'
-import {
-	createContext,
-	useContext
-} from 'react'
+import { createContext, useContext } from 'react'
 
 interface SnippetContextType {
 	code: string

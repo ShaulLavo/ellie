@@ -84,7 +84,6 @@ export function readWorkspaceFile(
 
 /**
  * Write content to a workspace file. Creates the file if it doesn't exist.
- * Only allows writing to known workspace files (safety guard).
  */
 export function writeWorkspaceFile(
 	workspaceDir: string,
