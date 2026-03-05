@@ -265,7 +265,7 @@ function filterBestCandidate(
 	return null
 }
 
-export function findBestCandidateByVector(
+function findBestCandidateByVector(
 	ctx: RoutingContext,
 	vector: Float32Array
 ): CandidateMatch | null {
@@ -276,7 +276,7 @@ export function findBestCandidateByVector(
 	return filterBestCandidate(ctx, hits)
 }
 
-export async function findBestCandidateAsync(
+async function findBestCandidateAsync(
 	ctx: RoutingContext,
 	content: string
 ): Promise<CandidateMatch | null> {

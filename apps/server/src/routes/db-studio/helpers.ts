@@ -100,6 +100,10 @@ export function buildFilterClause(filter: ParsedFilter): {
 			return { sql: `${col} > ?`, params: [filter.value] }
 		case 'lt':
 			return { sql: `${col} < ?`, params: [filter.value] }
+		default: {
+			const _exhaustive: never = filter.op
+			throw new Error(`Unknown filter op: ${_exhaustive}`)
+		}
 	}
 }
 

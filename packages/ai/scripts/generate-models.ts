@@ -290,12 +290,16 @@ import type { Model, ProviderName } from "./types";
 export const MODELS: Record<ProviderName, Record<string, Model>> = {
 `
 
-	const sortedProviderIds = Object.keys(providers).sort()
+	const sortedProviderIds = Object.keys(providers).sort(
+		(a, b) => a.localeCompare(b)
+	)
 	for (const providerId of sortedProviderIds) {
 		const models = providers[providerId]
 		output += `\t${JSON.stringify(providerId)}: {\n`
 
-		const sortedModelIds = Object.keys(models).sort()
+		const sortedModelIds = Object.keys(models).sort(
+			(a, b) => a.localeCompare(b)
+		)
 		for (const modelId of sortedModelIds) {
 			const model = models[modelId]
 			output += `\t\t${JSON.stringify(model.id)}: {\n`

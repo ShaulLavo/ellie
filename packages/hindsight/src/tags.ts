@@ -41,6 +41,12 @@ export function matchesTags(
 				!isUntagged &&
 				filterTags.every(t => memoryTags.includes(t))
 			)
+		default: {
+			const _exhaustive: never = mode
+			throw new Error(
+				`Unknown tags match mode: ${_exhaustive}`
+			)
+		}
 	}
 }
 

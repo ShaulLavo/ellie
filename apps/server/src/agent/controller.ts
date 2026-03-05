@@ -361,8 +361,9 @@ export class AgentController {
 				runId: this.agent.runId,
 				payload
 			})
-		} catch {
-			// trace is best-effort
+		} catch (err) {
+			// trace is best-effort — log but don't propagate
+			console.warn('[controller] trace failed:', err)
 		}
 	}
 
@@ -433,8 +434,12 @@ export class AgentController {
 
 		try {
 			this.store.closeAgentRun(sessionId, runId)
-		} catch {
-			// Already closed — non-fatal
+		} catch (err) {
+			// Already closed — non-fatal, but log for visibility
+			console.warn(
+				'[controller] closeAgentRun failed:',
+				err
+			)
 		}
 
 		// Memory retain + enforcement

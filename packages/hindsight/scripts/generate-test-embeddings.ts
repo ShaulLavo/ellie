@@ -158,7 +158,9 @@ const ALL_TEXTS = [
 	...MENTAL_MODEL_QUERIES
 ]
 
-const uniqueTexts = [...new Set(ALL_TEXTS)].sort()
+const uniqueTexts = [...new Set(ALL_TEXTS)].sort((a, b) =>
+	a.localeCompare(b)
+)
 
 // ── Ollama API ──────────────────────────────────────────────────────────────
 
@@ -239,7 +241,9 @@ async function main() {
 	mkdirSync(fixtureDir, { recursive: true })
 
 	const sorted: Record<string, number[]> = {}
-	for (const key of Object.keys(embeddings).sort()) {
+	for (const key of Object.keys(embeddings).sort((a, b) =>
+		a.localeCompare(b)
+	)) {
 		sorted[key] = embeddings[key]!
 	}
 

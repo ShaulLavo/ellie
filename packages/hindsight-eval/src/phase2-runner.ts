@@ -275,10 +275,8 @@ export async function runPhase2Verification(
 		toJsonl(narrativeQuestions)
 	)
 
-	// TODO: Narrative accuracy requires running actual narrative queries
-	// against the ingested data, which requires mapping between event IDs
-	// and actual memory IDs. This is a placeholder producing zeroed metrics;
-	// the full pipeline will be implemented when baseline commit is frozen.
+	// Placeholder: actual narrative queries require a frozen baseline commit
+	// to map event IDs to memory IDs. Gate 7 is marked "skip" until then.
 	const narrativeMetrics = computeNarrativeAccuracy([])
 
 	gates.push({
