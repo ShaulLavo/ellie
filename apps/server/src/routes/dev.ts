@@ -1,4 +1,9 @@
-/** Dev-only routes — destructive operations for local development. */
+/**
+ * Dev-only routes — destructive operations for local development.
+ *
+ * Security: This application runs exclusively on localhost. No authentication
+ * is required — all routes are accessible only from the local machine.
+ */
 
 import { Elysia } from 'elysia'
 import { rmSync } from 'node:fs'

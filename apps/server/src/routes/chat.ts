@@ -1,3 +1,10 @@
+/**
+ * Chat routes — sessions, messages, and SSE event streams.
+ *
+ * Security: This application runs exclusively on localhost. No authentication
+ * is required — all routes are accessible only from the local machine.
+ */
+
 import { Elysia, sse } from 'elysia'
 import * as v from 'valibot'
 import type {
@@ -9,18 +16,24 @@ import { agentMessageSchema } from '@ellie/schemas/agent'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
-	errorSchema,
 	messageInputSchema,
 	normalizeMessageInput,
 	resolveSessionId,
 	toStreamGenerator,
+	type SseState
+} from './common'
+import { errorSchema } from './schemas/auth-schemas'
+import {
 	sessionSchema,
 	sessionListSchema,
 	eventRowListSchema,
 	postMessageResponseSchema,
-	clearSessionResponseSchema,
-	type SseState
-} from './common'
+	clearSessionResponseSchema
+} from './schemas/chat-schemas'
+import {
+	BadRequestError,
+	NotFoundError
+} from './http-errors'
 
 export function createChatRoutes(
 	store: RealtimeStore,
@@ -56,15 +69,14 @@ export function createChatRoutes(
 
 			.get(
 				'/sessions/:sessionId',
-				({ params, set }) => {
+				({ params }) => {
 					const sessionId = resolveSessionId(
 						store,
 						params.sessionId
 					)
 					const session = store.getSession(sessionId)
 					if (!session) {
-						set.status = 404
-						return { error: 'Session not found' }
+						throw new NotFoundError('Session not found')
 					}
 					return session
 				},
@@ -98,7 +110,7 @@ export function createChatRoutes(
 
 			.post(
 				'/:sessionId/messages',
-				async ({ params, body, set }) => {
+				async ({ params, body }) => {
 					const sessionId = resolveSessionId(
 						store,
 						params.sessionId
@@ -140,13 +152,11 @@ export function createChatRoutes(
 								)
 							: undefined
 					} catch (err) {
-						set.status = 400
-						return {
-							error:
-								err instanceof Error
-									? err.message
-									: 'Message routing failed'
-						}
+						throw new BadRequestError(
+							err instanceof Error
+								? err.message
+								: 'Message routing failed'
+						)
 					}
 
 					return {

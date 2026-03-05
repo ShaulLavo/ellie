@@ -83,7 +83,16 @@ export class RealtimeStore {
 			if (!this.#store.getSession(sessionId)) {
 				this.#store.createSession(sessionId)
 			}
-		} catch {
+		} catch (err) {
+			const isConstraintViolation =
+				err instanceof Error &&
+				err.message.includes('UNIQUE constraint')
+			if (!isConstraintViolation) {
+				console.warn(
+					`[RealtimeStore] Unexpected error creating session ${sessionId}:`,
+					err
+				)
+			}
 			// Session may have been created concurrently — verify it exists
 			if (!this.#store.getSession(sessionId))
 				throw new Error(

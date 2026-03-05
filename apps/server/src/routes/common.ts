@@ -1,7 +1,37 @@
 import { sse } from 'elysia'
 import * as v from 'valibot'
+import type { AgentController } from '../agent/controller'
 import type { RealtimeStore } from '../lib/realtime-store'
-import { BadRequestError } from './http-errors'
+import {
+	BadRequestError,
+	ServiceUnavailableError
+} from './http-errors'
+
+// ── Agent controller guard ───────────────────────────────────────────────────
+
+const AGENT_UNAVAILABLE_ERROR =
+	'Agent routes unavailable: no ANTHROPIC_API_KEY configured'
+
+/**
+ * Resolve the agent controller or throw a 503 ServiceUnavailableError.
+ * Callers no longer need to check for `null` — the error is caught by
+ * the global onError handler.
+ */
+export async function requireController(
+	getAgentController: () => Promise<AgentController | null>
+): Promise<AgentController> {
+	const controller = await getAgentController()
+	if (!controller) {
+		throw new ServiceUnavailableError(
+			AGENT_UNAVAILABLE_ERROR
+		)
+	}
+	return controller
+}
+
+export { AGENT_UNAVAILABLE_ERROR }
+
+// ── Session helpers ──────────────────────────────────────────────────────────
 
 /** Resolve the virtual 'current' session ID to the actual one. */
 export function resolveSessionId(
@@ -12,6 +42,8 @@ export function resolveSessionId(
 		? store.getCurrentSessionId()
 		: raw
 }
+
+// ── Shared param / query / input schemas ─────────────────────────────────────
 
 export const messageInputSchema = v.object({
 	content: v.string(),
@@ -47,138 +79,8 @@ export const statusSchema = v.object({
 	connectedClients: v.number(),
 	needsBootstrap: v.boolean()
 })
-export const errorSchema = v.object({ error: v.string() })
 
-// ── Chat response schemas ───────────────────────────────────────────────────
-
-export const sessionSchema = v.object({
-	id: v.string(),
-	createdAt: v.number(),
-	updatedAt: v.number(),
-	currentSeq: v.number()
-})
-
-export const sessionListSchema = v.array(sessionSchema)
-
-export const eventRowSchema = v.object({
-	id: v.number(),
-	sessionId: v.string(),
-	seq: v.number(),
-	runId: v.nullable(v.string()),
-	type: v.string(),
-	payload: v.string(),
-	dedupeKey: v.nullable(v.string()),
-	createdAt: v.number()
-})
-
-export const eventRowListSchema = v.array(eventRowSchema)
-
-export const postMessageResponseSchema = v.object({
-	id: v.number(),
-	seq: v.number(),
-	sessionId: v.string(),
-	runId: v.optional(v.string()),
-	routed: v.optional(
-		v.picklist(['prompt', 'followUp', 'queued'])
-	)
-})
-
-export const clearSessionResponseSchema = v.object({
-	sessionId: v.string(),
-	cleared: v.literal(true)
-})
-
-// ── Auth schemas ─────────────────────────────────────────────────────────────
-
-export const authStatusResponseSchema = v.object({
-	mode: v.nullable(
-		v.picklist(['api_key', 'token', 'oauth'])
-	),
-	source: v.picklist([
-		'env_api_key',
-		'env_token',
-		'env_oauth',
-		'file',
-		'none'
-	]),
-	configured: v.boolean(),
-	expires_at: v.optional(v.number()),
-	expired: v.optional(v.boolean()),
-	preview: v.optional(v.string())
-})
-
-export const authClearResponseSchema = v.object({
-	cleared: v.boolean()
-})
-
-export const authApiKeyBodySchema = v.object({
-	key: v.pipe(v.string(), v.nonEmpty()),
-	validate: v.optional(v.boolean())
-})
-
-export const authApiKeyResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.literal('api_key')
-})
-
-export const authTokenBodySchema = v.object({
-	token: v.pipe(v.string(), v.nonEmpty()),
-	expires: v.optional(v.number())
-})
-
-export const authTokenResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.literal('token')
-})
-
-export const authOAuthAuthorizeBodySchema = v.object({
-	mode: v.picklist(['max', 'console'])
-})
-
-export const authOAuthAuthorizeResponseSchema = v.object({
-	url: v.string(),
-	verifier: v.string(),
-	mode: v.picklist(['max', 'console'])
-})
-
-export const authOAuthExchangeBodySchema = v.object({
-	callback_code: v.pipe(v.string(), v.nonEmpty()),
-	verifier: v.pipe(v.string(), v.nonEmpty()),
-	mode: v.picklist(['max', 'console'])
-})
-
-export const authOAuthExchangeResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.picklist(['oauth', 'api_key']),
-	message: v.string()
-})
-
-// ── Groq auth schemas ────────────────────────────────────────────────────────
-
-export const groqAuthStatusResponseSchema = v.object({
-	mode: v.nullable(v.literal('api_key')),
-	source: v.picklist(['env_api_key', 'file', 'none']),
-	configured: v.boolean(),
-	preview: v.optional(v.string())
-})
-
-export const groqAuthClearResponseSchema = v.object({
-	cleared: v.boolean()
-})
-
-export const groqAuthApiKeyBodySchema = v.object({
-	key: v.pipe(v.string(), v.nonEmpty()),
-	validate: v.optional(v.boolean())
-})
-
-export const groqAuthApiKeyResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.literal('api_key')
-})
-
-export interface SseState {
-	activeClients: number
-}
+// ── Message helpers ──────────────────────────────────────────────────────────
 
 export function normalizeMessageInput(
 	body: MessageInput
@@ -205,6 +107,12 @@ export function parseAgentActionBody(body: {
 	})
 
 	return value.content
+}
+
+// ── SSE utilities ────────────────────────────────────────────────────────────
+
+export interface SseState {
+	activeClients: number
 }
 
 export function toStreamGenerator<

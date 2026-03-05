@@ -1,3 +1,10 @@
+/**
+ * Agent routes — run events, SSE streams, steer, abort, and history.
+ *
+ * Security: This application runs exclusively on localhost. No authentication
+ * is required — all routes are accessible only from the local machine.
+ */
+
 import {
 	agentAbortInputSchema,
 	agentAbortOutputSchema,
@@ -14,12 +21,14 @@ import type {
 import {
 	sessionParamsSchema,
 	sessionRunParamsSchema,
-	errorSchema,
 	parseAgentActionBody,
+	requireController,
 	resolveSessionId,
 	toStreamGenerator,
 	type SseState
 } from './common'
+import { errorSchema } from './schemas/auth-schemas'
+import { BadRequestError } from './http-errors'
 
 function createRunSseStream(
 	store: RealtimeStore,
@@ -94,14 +103,10 @@ export function createAgentRoutes(
 		)
 		.post(
 			'/:sessionId/steer',
-			async ({ params, body, set }) => {
-				const controller = await getAgentController()
-				if (!controller) {
-					set.status = 503
-					return {
-						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
-					}
-				}
+			async ({ params, body }) => {
+				const controller = await requireController(
+					getAgentController
+				)
 
 				const sessionId = resolveSessionId(
 					store,
@@ -111,13 +116,11 @@ export function createAgentRoutes(
 				try {
 					controller.steer(sessionId, message)
 				} catch (err) {
-					set.status = 400
-					return {
-						error:
-							err instanceof Error
-								? err.message
-								: 'Steer failed'
-					}
+					throw new BadRequestError(
+						err instanceof Error
+							? err.message
+							: 'Steer failed'
+					)
 				}
 				return { status: `queued` as const }
 			},
@@ -133,14 +136,10 @@ export function createAgentRoutes(
 		)
 		.post(
 			'/:sessionId/abort',
-			async ({ params, set }) => {
-				const controller = await getAgentController()
-				if (!controller) {
-					set.status = 503
-					return {
-						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
-					}
-				}
+			async ({ params }) => {
+				const controller = await requireController(
+					getAgentController
+				)
 
 				const sessionId = resolveSessionId(
 					store,
@@ -149,13 +148,11 @@ export function createAgentRoutes(
 				try {
 					controller.abort(sessionId)
 				} catch (err) {
-					set.status = 400
-					return {
-						error:
-							err instanceof Error
-								? err.message
-								: 'Abort failed'
-					}
+					throw new BadRequestError(
+						err instanceof Error
+							? err.message
+							: 'Abort failed'
+					)
 				}
 				return { status: `aborted` as const }
 			},
@@ -171,14 +168,10 @@ export function createAgentRoutes(
 		)
 		.get(
 			'/:sessionId/history',
-			async ({ params, set }) => {
-				const controller = await getAgentController()
-				if (!controller) {
-					set.status = 503
-					return {
-						error: `Agent routes unavailable: no ANTHROPIC_API_KEY configured`
-					}
-				}
+			async ({ params }) => {
+				const controller = await requireController(
+					getAgentController
+				)
 
 				const sessionId = resolveSessionId(
 					store,

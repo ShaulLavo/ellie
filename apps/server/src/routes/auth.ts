@@ -1,8 +1,14 @@
 /**
  * Auth routes for Anthropic credential management.
  *
- * All endpoints are under /api/auth/anthropic and restricted to localhost.
+ * All endpoints are under /api/auth and restricted to localhost.
  * The CLI calls these routes — no credential writing happens client-side.
+ *
+ * Security: The entire application runs exclusively on localhost, so most
+ * routes need no auth guard. Auth routes use a localhost guard as
+ * defense-in-depth for credential handling specifically — API keys and
+ * tokens pass through these endpoints, so the guard prevents accidental
+ * exposure if the server were ever bound to a non-loopback interface.
  */
 
 import { Elysia } from 'elysia'
@@ -38,9 +44,15 @@ import {
 	groqAuthClearResponseSchema,
 	groqAuthApiKeyBodySchema,
 	groqAuthApiKeyResponseSchema
-} from './common'
+} from './schemas/auth-schemas'
+import {
+	BadRequestError,
+	ForbiddenError,
+	InternalServerError,
+	UnauthorizedError
+} from './http-errors'
 
-// ── Localhost guard ──────────────────────────────────────────────────────────
+// ── Localhost guard (defense-in-depth for credential endpoints) ──────────────
 
 /** Real client IP addresses considered loopback (IPv4, IPv6, IPv4-mapped IPv6). */
 const LOOPBACK_ADDRS = new Set([
@@ -165,7 +177,6 @@ async function handleOAuthExchange(
 		verifier: string
 		mode: string
 	},
-	set: { status: number },
 	onCredentialChange?: () => void
 ) {
 	const { callback_code, verifier, mode } = body
@@ -175,8 +186,7 @@ async function handleOAuthExchange(
 		verifier
 	)
 	if (!exchangeResult.ok) {
-		set.status = 400
-		return { error: exchangeResult.error }
+		throw new BadRequestError(exchangeResult.error)
 	}
 
 	if (mode === 'console') {
@@ -184,8 +194,7 @@ async function handleOAuthExchange(
 			exchangeResult.tokens.accessToken
 		)
 		if (!keyResult.ok) {
-			set.status = 500
-			return { error: keyResult.error }
+			throw new InternalServerError(keyResult.error)
 		}
 
 		const cred: AnthropicCredential = {
@@ -197,8 +206,7 @@ async function handleOAuthExchange(
 			cred
 		)
 		if (!saveResult.ok) {
-			set.status = 500
-			return { error: saveResult.error }
+			throw new InternalServerError(saveResult.error)
 		}
 
 		onCredentialChange?.()
@@ -216,8 +224,7 @@ async function handleOAuthExchange(
 		cred
 	)
 	if (!saveResult.ok) {
-		set.status = 500
-		return { error: saveResult.error }
+		throw new InternalServerError(saveResult.error)
 	}
 
 	onCredentialChange?.()
@@ -231,7 +238,6 @@ async function handleOAuthExchange(
 async function handleSetApiKey(
 	credentialsPath: string,
 	body: { key: string; validate?: boolean },
-	set: { status: number },
 	onCredentialChange?: () => void
 ) {
 	const { key, validate = true } = body
@@ -241,8 +247,7 @@ async function handleSetApiKey(
 			key.trim()
 		)
 		if (invalid) {
-			set.status = 401
-			return { error: invalid }
+			throw new UnauthorizedError(invalid)
 		}
 	}
 
@@ -255,8 +260,7 @@ async function handleSetApiKey(
 		cred
 	)
 	if (!result.ok) {
-		set.status = 500
-		return { error: result.error }
+		throw new InternalServerError(result.error)
 	}
 
 	onCredentialChange?.()
@@ -269,7 +273,6 @@ async function handleSetApiKey(
 async function handleSetToken(
 	credentialsPath: string,
 	body: { token: string; expires?: number },
-	set: { status: number },
 	onCredentialChange?: () => void
 ) {
 	const { token, expires } = body
@@ -284,8 +287,7 @@ async function handleSetToken(
 		cred
 	)
 	if (!result.ok) {
-		set.status = 500
-		return { error: result.error }
+		throw new InternalServerError(result.error)
 	}
 
 	onCredentialChange?.()
@@ -305,15 +307,13 @@ export function createAuthRoutes(
 		prefix: '/api/auth/anthropic',
 		tags: ['Auth']
 	})
-		.onBeforeHandle(({ request, server, set }) => {
+		.onBeforeHandle(({ request, server }) => {
 			const ip = server?.requestIP(request)
 			const addr = ip?.address
 			if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-				set.status = 403
-				return {
-					error:
-						'Auth routes are only available from localhost'
-				}
+				throw new ForbiddenError(
+					'Auth routes are only available from localhost'
+				)
 			}
 		})
 		.get(
@@ -343,11 +343,10 @@ export function createAuthRoutes(
 		)
 		.post(
 			'/api-key',
-			({ body, set }) =>
+			({ body }) =>
 				handleSetApiKey(
 					credentialsPath,
 					body,
-					set as { status: number },
 					onCredentialChange
 				),
 			{
@@ -363,11 +362,10 @@ export function createAuthRoutes(
 		)
 		.post(
 			'/token',
-			({ body, set }) =>
+			({ body }) =>
 				handleSetToken(
 					credentialsPath,
 					body,
-					set as { status: number },
 					onCredentialChange
 				),
 			{
@@ -401,11 +399,10 @@ export function createAuthRoutes(
 		)
 		.post(
 			'/oauth/exchange',
-			({ body, set }) =>
+			({ body }) =>
 				handleOAuthExchange(
 					credentialsPath,
 					body,
-					set as { status: number },
 					onCredentialChange
 				),
 			{
@@ -461,15 +458,13 @@ export function createGroqAuthRoutes(
 			prefix: '/api/auth/groq',
 			tags: ['Auth']
 		})
-			.onBeforeHandle(({ request, server, set }) => {
+			.onBeforeHandle(({ request, server }) => {
 				const ip = server?.requestIP(request)
 				const addr = ip?.address
 				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-					set.status = 403
-					return {
-						error:
-							'Auth routes are only available from localhost'
-					}
+					throw new ForbiddenError(
+						'Auth routes are only available from localhost'
+					)
 				}
 			})
 
@@ -532,7 +527,7 @@ export function createGroqAuthRoutes(
 			// ── POST /api-key ──────────────────────────────────────
 			.post(
 				'/api-key',
-				async ({ body, set }) => {
+				async ({ body }) => {
 					const { key, validate = true } = body
 
 					if (validate) {
@@ -540,8 +535,7 @@ export function createGroqAuthRoutes(
 							key.trim()
 						)
 						if (invalid) {
-							set.status = 401
-							return { error: invalid }
+							throw new UnauthorizedError(invalid)
 						}
 					}
 
@@ -554,8 +548,7 @@ export function createGroqAuthRoutes(
 						cred
 					)
 					if (!result.ok) {
-						set.status = 500
-						return { error: result.error }
+						throw new InternalServerError(result.error)
 					}
 
 					onCredentialChange?.()
