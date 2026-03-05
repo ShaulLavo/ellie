@@ -95,12 +95,12 @@ func (d *CommandPaletteDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogA
 			return nil, ActionSelectCommand
 		}
 		return d, ActionNone
-	case key.Matches(km, key.NewBinding(key.WithKeys("up"))):
+	case key.Matches(km, keys.Chat.Up):
 		if d.cursor > 0 {
 			d.cursor--
 		}
 		return d, ActionNone
-	case key.Matches(km, key.NewBinding(key.WithKeys("down"))):
+	case key.Matches(km, keys.Chat.Down):
 		items := d.filtered()
 		if d.cursor < len(items)-1 {
 			d.cursor++
@@ -186,11 +186,11 @@ func (d *SessionListDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogActi
 	switch {
 	case key.Matches(km, keys.Escape):
 		return nil, ActionClose
-	case key.Matches(km, key.NewBinding(key.WithKeys("up"))):
+	case key.Matches(km, keys.Chat.Up):
 		if d.cursor > 0 {
 			d.cursor--
 		}
-	case key.Matches(km, key.NewBinding(key.WithKeys("down"))):
+	case key.Matches(km, keys.Chat.Down):
 		if d.cursor < len(d.sessions)-1 {
 			d.cursor++
 		}

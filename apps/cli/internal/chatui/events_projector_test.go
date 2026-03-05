@@ -257,6 +257,29 @@ func TestEventToStored_InvalidPayload(t *testing.T) {
 	}
 }
 
+func TestEventToStored_StringEncodedPayload(t *testing.T) {
+	// Server stores payload as TEXT; Elysia re-serializes so it arrives
+	// as a JSON string (double-encoded).
+	inner := `{"content":"Hello from user","role":"user"}`
+	doubleEncoded, _ := json.Marshal(inner) // produces `"{ ... }"`
+
+	row := EventRow{
+		ID:        11,
+		Seq:       20,
+		Type:      "user_message",
+		Payload:   json.RawMessage(doubleEncoded),
+		CreatedAt: 1700000010000,
+	}
+
+	msg := EventToStored(row)
+	if msg.Text != "Hello from user" {
+		t.Errorf("expected text from string-encoded payload, got %q", msg.Text)
+	}
+	if msg.Sender != SenderUser {
+		t.Errorf("expected sender 'user', got %q", msg.Sender)
+	}
+}
+
 func TestIsRenderable(t *testing.T) {
 	tests := []struct {
 		eventType string

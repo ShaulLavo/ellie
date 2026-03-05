@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // focusState tracks which pane has focus.
@@ -380,17 +381,28 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
-
-	// If user scrolled up, disable auto-scroll
-	if m.viewport.AtBottom() {
-		m.autoScroll = true
-	} else {
-		m.autoScroll = false
+	switch {
+	case key.Matches(msg, m.keys.Chat.Up):
+		m.viewport.LineUp(1)
+	case key.Matches(msg, m.keys.Chat.Down):
+		m.viewport.LineDown(1)
+	case key.Matches(msg, m.keys.Chat.PageUp):
+		m.viewport.HalfViewUp()
+	case key.Matches(msg, m.keys.Chat.PageDown):
+		m.viewport.HalfViewDown()
+	case key.Matches(msg, m.keys.Chat.Home):
+		m.viewport.GotoTop()
+	case key.Matches(msg, m.keys.Chat.End):
+		m.viewport.GotoBottom()
+	default:
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		m.autoScroll = m.viewport.AtBottom()
+		return m, cmd
 	}
 
-	return m, cmd
+	m.autoScroll = m.viewport.AtBottom()
+	return m, nil
 }
 
 // ─── Dialog handling ──────────────────────────────────────────────
@@ -672,12 +684,15 @@ func (m Model) loadSessions(dlg *SessionListDialog) tea.Cmd {
 }
 
 func (m Model) loadSessionInfo(dlg *SessionInfoDialog) tea.Cmd {
+	// Snapshot the slice so the closure doesn't race with SSE mutations.
+	eventsSnapshot := make([]EventRow, len(m.allEvents))
+	copy(eventsSnapshot, m.allEvents)
 	return func() tea.Msg {
 		session, err := m.httpClient.GetCurrentSession(context.Background())
 		if err != nil {
 			return sessionInfoLoadedMsg{session: nil}
 		}
-		stats := ComputeStatsFromEvents(m.allEvents)
+		stats := ComputeStatsFromEvents(eventsSnapshot)
 		return sessionInfoLoadedMsg{session: session, stats: stats}
 	}
 }
@@ -893,8 +908,9 @@ func overlayCenter(bg, fg string, width, height int) string {
 		for lipgloss.Width(bgLine) < startX {
 			bgLine += " "
 		}
-		// Replace portion with dialog line
-		bgLines[y] = bgLine[:startX] + fgLine
+		// ANSI-aware truncation so we don't cut through escape sequences.
+		prefix := ansi.Truncate(bgLine, startX, "")
+		bgLines[y] = prefix + fgLine
 	}
 
 	return strings.Join(bgLines, "\n")

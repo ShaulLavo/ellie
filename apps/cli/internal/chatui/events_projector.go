@@ -191,10 +191,18 @@ func MergeStats(prev, delta SessionStats) SessionStats {
 
 func parsePayload(raw json.RawMessage) map[string]interface{} {
 	var out map[string]interface{}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return map[string]interface{}{}
+	if err := json.Unmarshal(raw, &out); err == nil {
+		return out
 	}
-	return out
+	// The server stores payload as a TEXT column; Elysia re-serializes the
+	// EventRow so the payload arrives as a JSON string.  Try unwrapping.
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		if err2 := json.Unmarshal([]byte(s), &out); err2 == nil {
+			return out
+		}
+	}
+	return map[string]interface{}{}
 }
 
 func jsonObj(m map[string]interface{}, key string) map[string]interface{} {

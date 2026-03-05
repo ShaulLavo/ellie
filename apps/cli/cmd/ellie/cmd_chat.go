@@ -12,7 +12,7 @@ import (
 )
 
 func cmdChat(args []string) error {
-	fs := flag.NewFlagSet("chat", flag.ExitOnError)
+	fs := flag.NewFlagSet("chat", flag.ContinueOnError)
 	sessionFlag := fs.String("session", "current", "Session to connect to (only 'current' supported in v1)")
 	transcriptDir := fs.String("transcript-dir", ".", "Directory to save transcripts")
 	if err := fs.Parse(args); err != nil {
