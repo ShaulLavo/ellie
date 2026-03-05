@@ -109,6 +109,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeComponents()
 		return m, nil
 
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+
 	case tea.KeyMsg:
 		// Quit
 		if key.Matches(msg, m.keys.Quit) {
@@ -747,6 +750,93 @@ func matchSlashCommand(text string) *SlashCommand {
 		}
 	}
 	return nil
+}
+
+// ─── Mouse handling ───────────────────────────────────────────────
+
+// paneRect describes a rectangular region in terminal cells.
+type paneRect struct {
+	minY, maxY int // inclusive row range
+}
+
+// paneLayout holds the computed Y-ranges for each pane.
+type paneLayout struct {
+	status paneRect
+	chat   paneRect
+	input  paneRect
+	footer paneRect
+}
+
+// computeLayout returns pane rectangles matching the View() rendering order.
+func (m *Model) computeLayout() paneLayout {
+	statusH := 1
+	footerH := 1
+	inputH := lipgloss.Height(m.renderInput())
+	vpHeight := m.height - statusH - footerH - inputH
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+
+	y := 0
+	status := paneRect{minY: y, maxY: y + statusH - 1}
+	y += statusH
+
+	chat := paneRect{minY: y, maxY: y + vpHeight - 1}
+	y += vpHeight
+
+	input := paneRect{minY: y, maxY: y + inputH - 1}
+	y += inputH
+
+	footer := paneRect{minY: y, maxY: y + footerH - 1}
+
+	return paneLayout{status: status, chat: chat, input: input, footer: footer}
+}
+
+// pointInPane returns true if the Y coordinate is within the pane.
+func pointInPane(y int, r paneRect) bool {
+	return y >= r.minY && y <= r.maxY
+}
+
+// handleMouse processes mouse events for pane focus switching and wheel routing.
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// Ignore mouse when a dialog is open (keyboard-only scope).
+	if m.dialog != nil {
+		return m, nil
+	}
+
+	layout := m.computeLayout()
+
+	// Left click: switch focus.
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		if pointInPane(msg.Y, layout.input) {
+			if m.focus != focusEditor {
+				m.focus = focusEditor
+				m.textarea.Focus()
+			}
+			return m, nil
+		}
+		if pointInPane(msg.Y, layout.chat) {
+			if m.focus != focusChat {
+				m.focus = focusChat
+				m.textarea.Blur()
+			}
+			return m, nil
+		}
+		return m, nil
+	}
+
+	// Wheel: route to chat viewport only when pointer is over chat.
+	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+		if !pointInPane(msg.Y, layout.chat) {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		m.autoScroll = m.viewport.AtBottom()
+		return m, cmd
+	}
+
+	return m, nil
 }
 
 // ─── Editor boundary checks (ported from Crush) ──────────────────
