@@ -42,6 +42,7 @@ export interface EventPayloadMap {
 		}
 		isError?: boolean
 		status: 'running' | 'complete' | 'error'
+		elapsedMs?: number
 	}
 
 	// --- Agent lifecycle ---

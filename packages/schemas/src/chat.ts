@@ -52,6 +52,7 @@ export type ContentPart =
 			result: string
 			toolCallId?: string
 			toolName?: string
+			elapsedMs?: number
 	  }
 	| {
 			type: 'memory'

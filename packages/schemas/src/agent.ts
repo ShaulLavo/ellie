@@ -321,7 +321,8 @@ const toolExecutionEndEventSchema = v.object({
 	toolCallId: v.string(),
 	toolName: v.string(),
 	result: toolExecutionResultSchema,
-	isError: v.boolean()
+	isError: v.boolean(),
+	elapsedMs: v.optional(v.number())
 })
 
 // --- Resilience event schemas ---
