@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ChevronRight, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
@@ -16,6 +17,7 @@ interface DbDatabaseGroupProps {
 	isSelected: boolean
 	selectedTable?: string
 	onSelectTable: (table: string) => void
+	showInternal: boolean
 }
 
 export function DbDatabaseGroup({
@@ -23,9 +25,18 @@ export function DbDatabaseGroup({
 	sizeBytes,
 	isSelected,
 	selectedTable,
-	onSelectTable
+	onSelectTable,
+	showInternal
 }: DbDatabaseGroupProps) {
 	const { data: tables, isLoading } = useDbTables(name)
+
+	const visibleTables = useMemo(
+		() =>
+			showInternal
+				? tables
+				: tables?.filter(t => !t.isInternal),
+		[tables, showInternal]
+	)
 
 	return (
 		<Collapsible defaultOpen={isSelected || undefined}>
@@ -51,7 +62,7 @@ export function DbDatabaseGroup({
 							<Spinner className="size-3 text-muted-foreground" />
 						</div>
 					)}
-					{tables?.map(t => (
+					{visibleTables?.map(t => (
 						<DbTableItem
 							key={t.name}
 							table={t}
@@ -59,7 +70,7 @@ export function DbDatabaseGroup({
 							onClick={() => onSelectTable(t.name)}
 						/>
 					))}
-					{!isLoading && tables?.length === 0 && (
+					{!isLoading && visibleTables?.length === 0 && (
 						<p className="text-[10px] text-muted-foreground py-2 pl-2">
 							No tables
 						</p>

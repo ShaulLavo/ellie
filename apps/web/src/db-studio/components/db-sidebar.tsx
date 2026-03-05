@@ -1,5 +1,13 @@
+import { useState } from 'react'
+import { EyeOff, Eye } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Spinner } from '@/components/ui/spinner'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger
+} from '@/components/ui/tooltip'
 import { useDbDatabases } from '../hooks/use-db-queries'
 import { DbDatabaseGroup } from './db-database-group'
 
@@ -15,13 +23,33 @@ export function DbSidebar({
 	onSelect
 }: DbSidebarProps) {
 	const { data: databases, isLoading } = useDbDatabases()
+	const [showInternal, setShowInternal] = useState(false)
 
 	return (
 		<aside className="w-60 shrink-0 border-r bg-sidebar flex flex-col">
-			<div className="px-3 py-2.5 border-b">
+			<div className="px-3 py-2.5 border-b flex items-center justify-between">
 				<span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					Databases
 				</span>
+				<TooltipProvider delay={0}>
+					<Tooltip>
+						<TooltipTrigger
+							onClick={() => setShowInternal(v => !v)}
+							className="text-muted-foreground hover:text-foreground transition-colors"
+						>
+							{showInternal ? (
+								<Eye className="size-3.5" />
+							) : (
+								<EyeOff className="size-3.5" />
+							)}
+						</TooltipTrigger>
+						<TooltipContent side="right">
+							{showInternal
+								? 'Hide internal tables'
+								: 'Show internal tables'}
+						</TooltipContent>
+					</Tooltip>
+				</TooltipProvider>
 			</div>
 			<ScrollArea className="flex-1">
 				<div className="p-1.5">
@@ -44,6 +72,7 @@ export function DbSidebar({
 							onSelectTable={table =>
 								onSelect(db.name, table)
 							}
+							showInternal={showInternal}
 						/>
 					))}
 					{!isLoading && databases?.length === 0 && (

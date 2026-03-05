@@ -8,6 +8,7 @@ export type TableInfo = {
 	name: string
 	type: 'table' | 'view'
 	isVirtual: boolean
+	isInternal: boolean
 }
 
 export type ColumnInfo = {
