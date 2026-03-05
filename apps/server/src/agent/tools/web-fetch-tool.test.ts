@@ -12,6 +12,8 @@ function textOf(result: AgentToolResult): string {
 describe('web_fetch tool', () => {
 	const tool = createWebFetchTool()
 
+	// ── HTML (static) ───────────────────────────────────────────────
+
 	test('fetches a Wikipedia page and extracts content', async () => {
 		const result = await tool.execute('tc-1', {
 			url: 'https://en.wikipedia.org/wiki/TypeScript'
@@ -43,14 +45,15 @@ describe('web_fetch tool', () => {
 		expect(text).toContain('#')
 	}, 15_000)
 
-	test('returns html when markdown is false', async () => {
+	test('uses atx headings and no raw html tags', async () => {
 		const result = await tool.execute('tc-1', {
-			url: 'https://en.wikipedia.org/wiki/Bun_(software)',
-			markdown: false
+			url: 'https://en.wikipedia.org/wiki/Bun_(software)'
 		})
 
 		const text = textOf(result)
-		expect(text).toMatch(/<[a-z]/)
+		// Turndown atx headings (## style), not raw HTML
+		expect(text).toMatch(/^#{1,6} /m)
+		expect(text).not.toMatch(/<[a-z]/)
 	}, 15_000)
 
 	test('handles invalid URL gracefully', async () => {
@@ -62,4 +65,64 @@ describe('web_fetch tool', () => {
 		expect(text).toStartWith('Web fetch error:')
 		expect(result.details).toHaveProperty('success', false)
 	}, 15_000)
+
+	// ── PDF ──────────────────────────────────────────────────────────
+
+	test('extracts markdown from a PDF', async () => {
+		const result = await tool.execute('tc-pdf', {
+			url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+		})
+
+		const text = textOf(result)
+		expect(text).not.toStartWith('Web fetch error:')
+		expect(text.length).toBeGreaterThan(10)
+
+		const details = result.details as {
+			contentType: string
+		}
+		expect(details.contentType).toBe('application/pdf')
+	}, 15_000)
+
+	// ── Media ────────────────────────────────────────────────────────
+
+	test('returns URL reference for image content', async () => {
+		const result = await tool.execute('tc-media', {
+			url: 'https://www.w3.org/Icons/w3c_home.png'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('Media resource:')
+		expect(text).toContain('image/png')
+
+		const details = result.details as {
+			url: string
+			contentType: string
+		}
+		expect(details.contentType).toContain('image/png')
+	}, 15_000)
+
+	// ── HTTP errors ──────────────────────────────────────────────────
+
+	test('handles non-OK HTTP responses', async () => {
+		const result = await tool.execute('tc-404', {
+			url: 'https://en.wikipedia.org/wiki/This_page_definitely_does_not_exist_12345'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('Web fetch error:')
+		expect(text).toContain('404')
+	}, 15_000)
+
+	// ── Auto Playwright (SPA detection) ─────────────────────────────
+
+	test('auto-detects SPA and falls back to Playwright', async () => {
+		// react.dev is a known SPA — static fetch yields a shell
+		const result = await tool.execute('tc-spa', {
+			url: 'https://react.dev/learn'
+		})
+
+		const text = textOf(result)
+		// Should still extract meaningful content via Playwright
+		expect(text.length).toBeGreaterThan(200)
+	}, 30_000)
 })

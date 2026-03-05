@@ -24,6 +24,7 @@
 		"@elysiajs/cors": "1.4.1",
 		"@elysiajs/openapi": "^1.4.14",
 		"@elysiajs/static": "^1.4.7",
+		"@opendocsg/pdf2md": "^0.2.3",
 		"@tanstack/ai": "^0.5.1",
 		"@tanstack/ai-anthropic": "^0.5.0",
 		"@valibot/to-json-schema": "^1.5.0",
@@ -32,6 +33,10 @@
 		"elysia": "^1.4.25",
 		"fast-ulid": "^1.2.1",
 		"jsdom": "^28.1.0",
+		"playwright-core": "^1.52.0",
+		"playwright-extra": "^4.3.6",
+		"puppeteer-extra-plugin-stealth": "^2.11.2",
+		"turndown": "^7.2.0",
 		"valibot": "^1.2.0"
 	},
 	"devDependencies": {
@@ -40,6 +45,7 @@
 		"@babel/plugin-transform-typescript": "^7.28.6",
 		"@repo/typescript-config": "workspace:*",
 		"@types/jsdom": "^28.0.0",
+		"@types/turndown": "^5.0.5",
 		"babel-plugin-react-compiler": "^1.0.0",
 		"bun-types": "latest"
 	}
