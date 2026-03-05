@@ -10,11 +10,49 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
+	"github.com/spf13/cobra"
 )
+
+// ── auth (interactive wizard) ────────────────────────────────────────────────
+
+var authCmd = &cobra.Command{
+	Use:   "auth",
+	Short: "Interactive authentication setup",
+	RunE:  runAuthWizard,
+}
+
+func runAuthWizard(cmd *cobra.Command, args []string) error {
+	var provider string
+	err := huh.NewSelect[string]().
+		Title("Choose a provider to authenticate").
+		Options(
+			huh.NewOption("Anthropic", "anthropic"),
+			huh.NewOption("Groq", "groq"),
+		).
+		Value(&provider).
+		Run()
+	if err != nil {
+		return errSilent
+	}
+
+	switch provider {
+	case "anthropic":
+		return authAnthropic()
+	case "groq":
+		return authGroq()
+	}
+	return nil
+}
 
 // ── auth status ──────────────────────────────────────────────────────────────
 
-func cmdAuthStatus() error {
+var authStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show current auth status",
+	RunE:  runAuthStatus,
+}
+
+func runAuthStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(styleBold.Render("Auth Status"))
 	fmt.Println(strings.Repeat("─", 40))
@@ -83,7 +121,13 @@ func printProviderStatus(name string, path string) error {
 
 // ── auth clear ───────────────────────────────────────────────────────────────
 
-func cmdAuthClear() error {
+var authClearCmd = &cobra.Command{
+	Use:   "clear",
+	Short: "Remove stored credentials (choose provider)",
+	RunE:  runAuthClear,
+}
+
+func runAuthClear(cmd *cobra.Command, args []string) error {
 	var target string
 	err := huh.NewSelect[string]().
 		Title("Which provider credentials should be cleared?").
@@ -95,6 +139,23 @@ func cmdAuthClear() error {
 		Value(&target).
 		Run()
 	if err != nil {
+		return errSilent
+	}
+
+	// Confirm before clearing
+	var confirm bool
+	label := target
+	if target == "all" {
+		label = "all providers"
+	}
+	err = huh.NewConfirm().
+		Title(fmt.Sprintf("Clear %s credentials?", label)).
+		Affirmative("Yes, clear").
+		Negative("Cancel").
+		Value(&confirm).
+		Run()
+	if err != nil || !confirm {
+		fmt.Println("Cancelled.")
 		return errSilent
 	}
 
@@ -140,30 +201,7 @@ func clearProvider(name string, path string) error {
 	return nil
 }
 
-// ── auth (interactive wizard) ────────────────────────────────────────────────
-
-func cmdAuth() error {
-	var provider string
-	err := huh.NewSelect[string]().
-		Title("Choose a provider to authenticate").
-		Options(
-			huh.NewOption("Anthropic", "anthropic"),
-			huh.NewOption("Groq", "groq"),
-		).
-		Value(&provider).
-		Run()
-	if err != nil {
-		return errSilent
-	}
-
-	switch provider {
-	case "anthropic":
-		return authAnthropic()
-	case "groq":
-		return authGroq()
-	}
-	return nil
-}
+// ── anthropic auth flows ─────────────────────────────────────────────────────
 
 func authAnthropic() error {
 	var method string
@@ -321,10 +359,7 @@ func authOAuth(mode string) error {
 	var authResp struct {
 		URL      string `json:"url"`
 		Verifier string `json:"verifier"`
-		// State is captured but not forwarded to the exchange endpoint.
-		// Anthropic embeds the state in the callback code (code#state),
-		// and server-side validation occurs during the token exchange.
-		State string `json:"state"`
+		State    string `json:"state"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
 		return fmt.Errorf("invalid response: %w", err)

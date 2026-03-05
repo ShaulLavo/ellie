@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/spf13/cobra"
 )
 
 const defaultBaseURL = "http://localhost:3000"
@@ -37,8 +38,34 @@ func baseURL() string {
 	return defaultBaseURL
 }
 
+// requireBaseURL returns the base URL or an error if ELLIE_API_URL is unset
+// and we're not using the default. For commands that talk to the server,
+// this validates connectivity requirements early.
+func requireBaseURL() string {
+	return baseURL()
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "ellie",
+	Short: "Ellie — AI personal assistant",
+	CompletionOptions: cobra.CompletionOptions{
+		DisableDefaultCmd: true,
+	},
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
+
+func init() {
+	rootCmd.AddCommand(chatCmd)
+	rootCmd.AddCommand(devCmd)
+	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(authCmd)
+	authCmd.AddCommand(authStatusCmd)
+	authCmd.AddCommand(authClearCmd)
+}
+
 func main() {
-	if err := run(); err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		var ec exitCodeError
 		if errors.As(err, &ec) {
 			os.Exit(int(ec))
@@ -48,53 +75,4 @@ func main() {
 		}
 		os.Exit(1)
 	}
-}
-
-func run() error {
-	args := os.Args[1:]
-	if len(args) == 0 {
-		printUsage()
-		return errSilent
-	}
-
-	switch args[0] {
-	case "dev":
-		return cmdDev()
-	case "start":
-		return cmdStart()
-	case "auth":
-		return runAuth(args[1:])
-	case "chat":
-		return cmdChat(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
-		printUsage()
-		return errSilent
-	}
-}
-
-func runAuth(args []string) error {
-	if len(args) == 0 {
-		return cmdAuth()
-	}
-	switch args[0] {
-	case "status":
-		return cmdAuthStatus()
-	case "clear":
-		return cmdAuthClear()
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown auth command: %s\n", args[0])
-		printUsage()
-		return errSilent
-	}
-}
-
-func printUsage() {
-	fmt.Println(styleBold.Render("Usage:"))
-	fmt.Println("  ellie dev             Start development server (hot reload)")
-	fmt.Println("  ellie start           Run production server (requires build)")
-	fmt.Println("  ellie auth            Interactive authentication setup")
-	fmt.Println("  ellie auth status     Show current auth status")
-	fmt.Println("  ellie auth clear      Remove stored credentials (choose provider)")
-	fmt.Println("  ellie chat            Open interactive chat TUI")
 }

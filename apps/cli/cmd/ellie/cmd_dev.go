@@ -2,9 +2,17 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/spf13/cobra"
 )
 
-func cmdDev() error {
+var devCmd = &cobra.Command{
+	Use:   "dev",
+	Short: "Start development server (hot reload)",
+	RunE:  runDev,
+}
+
+func runDev(cmd *cobra.Command, args []string) error {
 	root, err := findMonorepoRoot()
 	if err != nil {
 		return err

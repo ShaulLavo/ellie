@@ -2,39 +2,40 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/spf13/cobra"
 
 	"ellie/apps/cli/internal/chatui"
 )
 
-func cmdChat(args []string) error {
-	fs := flag.NewFlagSet("chat", flag.ContinueOnError)
-	sessionFlag := fs.String("session", "current", "Session to connect to (only 'current' supported in v1)")
-	transcriptDir := fs.String("transcript-dir", ".", "Directory to save transcripts")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
+var chatCmd = &cobra.Command{
+	Use:   "chat",
+	Short: "Open interactive chat TUI",
+	RunE:  runChat,
+}
 
-	// v1: only "current" session supported
-	if *sessionFlag != "current" {
-		return fmt.Errorf("only --session=current is supported in v1")
-	}
+var transcriptDir string
 
-	base := baseURL()
+func init() {
+	chatCmd.Flags().StringVar(&transcriptDir, "transcript-dir", ".", "Directory to save transcripts")
+}
+
+func runChat(cmd *cobra.Command, args []string) error {
+	base := requireBaseURL()
 
 	// Verify server is reachable
 	client := chatui.NewHTTPClient(base)
 	if _, err := client.GetStatus(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, styleErr.Render("Cannot connect to server at "+base))
 		fmt.Fprintln(os.Stderr, styleDim.Render("Make sure the server is running (ellie dev or ellie start)"))
+		fmt.Fprintln(os.Stderr, styleDim.Render("Set ELLIE_API_URL if the server is at a different address"))
 		return errSilent
 	}
 
-	model := chatui.NewModel(base, *sessionFlag, *transcriptDir)
+	model := chatui.NewModel(base, "current", transcriptDir)
 
 	p := tea.NewProgram(model)
 

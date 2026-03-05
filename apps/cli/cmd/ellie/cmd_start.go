@@ -4,9 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 )
 
-func cmdStart() error {
+var startCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Run production server (requires build)",
+	RunE:  runStart,
+}
+
+func runStart(cmd *cobra.Command, args []string) error {
 	root, err := findMonorepoRoot()
 	if err != nil {
 		return err
