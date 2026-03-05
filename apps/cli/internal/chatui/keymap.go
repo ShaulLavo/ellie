@@ -1,0 +1,103 @@
+package chatui
+
+import "github.com/charmbracelet/bubbles/key"
+
+// KeyMap defines all key bindings for the chat TUI,
+// inspired by Crush's hierarchical keymap structure.
+type KeyMap struct {
+	Editor struct {
+		Send        key.Binding
+		Newline     key.Binding
+		HistoryPrev key.Binding
+		HistoryNext key.Binding
+	}
+
+	Chat struct {
+		Up       key.Binding
+		Down     key.Binding
+		PageUp   key.Binding
+		PageDown key.Binding
+		Home     key.Binding
+		End      key.Binding
+	}
+
+	// Global bindings
+	Quit     key.Binding
+	Commands key.Binding
+	Sessions key.Binding
+	Info     key.Binding
+	Retry    key.Binding
+	Escape   key.Binding
+}
+
+// DefaultKeyMap returns the default key bindings.
+func DefaultKeyMap() KeyMap {
+	km := KeyMap{
+		Quit: key.NewBinding(
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "quit"),
+		),
+		Commands: key.NewBinding(
+			key.WithKeys("ctrl+p"),
+			key.WithHelp("ctrl+p", "commands"),
+		),
+		Sessions: key.NewBinding(
+			key.WithKeys("ctrl+s"),
+			key.WithHelp("ctrl+s", "sessions"),
+		),
+		Info: key.NewBinding(
+			key.WithKeys("ctrl+i"),
+			key.WithHelp("ctrl+i", "info"),
+		),
+		Retry: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "retry"),
+		),
+		Escape: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "back"),
+		),
+	}
+
+	km.Editor.Send = key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "send"),
+	)
+	km.Editor.Newline = key.NewBinding(
+		key.WithKeys("shift+enter", "ctrl+j"),
+		key.WithHelp("ctrl+j", "newline"),
+	)
+	km.Editor.HistoryPrev = key.NewBinding(
+		key.WithKeys("up"),
+	)
+	km.Editor.HistoryNext = key.NewBinding(
+		key.WithKeys("down"),
+	)
+
+	km.Chat.Up = key.NewBinding(
+		key.WithKeys("up"),
+		key.WithHelp("↑", "scroll up"),
+	)
+	km.Chat.Down = key.NewBinding(
+		key.WithKeys("down"),
+		key.WithHelp("↓", "scroll down"),
+	)
+	km.Chat.PageUp = key.NewBinding(
+		key.WithKeys("pgup"),
+		key.WithHelp("pgup", "page up"),
+	)
+	km.Chat.PageDown = key.NewBinding(
+		key.WithKeys("pgdown"),
+		key.WithHelp("pgdn", "page down"),
+	)
+	km.Chat.Home = key.NewBinding(
+		key.WithKeys("home"),
+		key.WithHelp("home", "top"),
+	)
+	km.Chat.End = key.NewBinding(
+		key.WithKeys("end"),
+		key.WithHelp("end", "bottom"),
+	)
+
+	return km
+}
