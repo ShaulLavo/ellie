@@ -1,13 +1,11 @@
-import { EventStream } from '../event-stream'
 import type {
-	AgentContext,
 	AgentEvent,
 	AgentLoopConfig,
 	AgentMessage,
 	AgentRuntimeLimits,
 	AssistantMessage
 } from '../types'
-import type { EmitFn, GuardrailState } from './types'
+import type { GuardrailState, RunContext } from './types'
 import { createEmptyUsage } from './helpers'
 
 export function createGuardrailState(): GuardrailState {
@@ -172,12 +170,22 @@ export function extractLastAssistantText(
  */
 export function emitLimitHitAndStop(
 	limitEvent: AgentEvent,
-	config: AgentLoopConfig,
-	currentContext: AgentContext,
-	newMessages: AgentMessage[],
-	emit: EmitFn,
-	stream: EventStream<AgentEvent, AgentMessage[]>
+	ctx: Pick<
+		RunContext,
+		| 'config'
+		| 'currentContext'
+		| 'newMessages'
+		| 'emit'
+		| 'stream'
+	>
 ): void {
+	const {
+		config,
+		currentContext,
+		newMessages,
+		emit,
+		stream
+	} = ctx
 	emit(limitEvent)
 	const lastText = extractLastAssistantText(newMessages)
 	const termMsg = buildLimitTerminalMessage(

@@ -14,17 +14,19 @@ import {
 import type { Model } from '@ellie/ai'
 import { toModelMessages } from '../messages'
 import { removeOrphans } from '../context-recovery'
-import type { ToolLoopDetector } from '../tool-loop-detection'
 import type {
 	AgentContext,
 	AgentLoopConfig,
 	AgentMessage,
 	AssistantMessage,
 	ToolCall,
-	ToolResultMessage,
-	StreamFn
+	ToolResultMessage
 } from '../types'
-import type { EmitFn, ProcessResult } from './types'
+import type {
+	EmitFn,
+	ProcessResult,
+	StreamContext
+} from './types'
 import {
 	createPartial,
 	emitTrace,
@@ -35,20 +37,16 @@ import {
 	wrapToolsForTanStack
 } from './tool-bridge'
 
-/**
- * Process a full TanStack AI agent stream (may include multiple LLM turns
- * if tools are involved). Builds AssistantMessage + ToolResultMessage objects,
- * emits events for subscribers.
- */
-export async function processAgentStream(
+// ---------------------------------------------------------------------------
+// Setup helpers — prepare inputs for the stream iteration
+// ---------------------------------------------------------------------------
+
+/** Apply context transform, sanitize orphans, convert to LLM messages. */
+async function prepareMessages(
 	context: AgentContext,
 	config: AgentLoopConfig,
-	signal: AbortSignal | undefined,
-	emit: EmitFn,
-	streamFn?: StreamFn,
-	loopDetector?: ToolLoopDetector
-): Promise<ProcessResult> {
-	// Apply context transform
+	signal: AbortSignal | undefined
+) {
 	let messages = context.messages
 	if (config.transformContext) {
 		messages = await config.transformContext(
@@ -56,32 +54,40 @@ export async function processAgentStream(
 			signal
 		)
 	}
-
-	// Sanitize orphaned tool results/calls before sending to API.
-	// Orphans can appear after error-retry rollbacks or process crashes.
 	messages = removeOrphans(messages)
+	return toModelMessages(messages)
+}
 
-	// Convert to LLM-compatible messages
-	const llmMessages = toModelMessages(messages)
+/** Wire an external AbortSignal to a fresh AbortController. */
+function createAbortBridge(
+	signal: AbortSignal | undefined
+) {
+	if (!signal)
+		return {
+			abortController: undefined,
+			cleanup: undefined
+		}
+	const abortController = new AbortController()
+	const onAbort = () => abortController.abort()
+	signal.addEventListener('abort', onAbort, { once: true })
+	const cleanup = () =>
+		signal.removeEventListener('abort', onAbort)
+	return { abortController, cleanup }
+}
 
-	// Set up tool bridge
-	const tracker = createToolCallTracker()
-	const toolResultCollector: ToolResultMessage[] = []
-	const maxToolResultChars =
-		config.toolSafety?.maxToolResultChars ?? 50_000
-	const tanStackTools = context.tools?.length
-		? wrapToolsForTanStack(
-				context.tools,
-				tracker,
-				signal,
-				emit,
-				toolResultCollector,
-				maxToolResultChars,
-				loopDetector
-			)
+/** Build the AsyncIterable stream source from streamFn or chat(). */
+function buildStreamSource(
+	sctx: StreamContext,
+	llmMessages: ReturnType<typeof toModelMessages>,
+	tanStackTools:
+		| ReturnType<typeof wrapToolsForTanStack>
+		| undefined,
+	abortController: AbortController | undefined
+): AsyncIterable<StreamChunk> {
+	const { config, streamFn } = sctx
+	const systemPrompts = sctx.currentContext.systemPrompt
+		? [sctx.currentContext.systemPrompt]
 		: undefined
-
-	// Build model options
 	const modelOptions =
 		config.thinkingLevel && config.thinkingLevel !== 'off'
 			? toThinkingModelOptions(
@@ -90,166 +96,79 @@ export async function processAgentStream(
 				)
 			: undefined
 
-	// Build abort controller — create a real one and wire external signal
-	let abortController: AbortController | undefined
-	let cleanupAbortListener: (() => void) | undefined
-	if (signal) {
-		abortController = new AbortController()
-		const onAbort = () => abortController!.abort()
-		signal.addEventListener('abort', onAbort, {
-			once: true
-		})
-		cleanupAbortListener = () =>
-			signal.removeEventListener('abort', onAbort)
+	const shared = {
+		adapter: config.adapter,
+		messages: llmMessages,
+		systemPrompts,
+		tools: tanStackTools,
+		modelOptions,
+		temperature: config.temperature,
+		maxTokens: config.maxTokens,
+		abortController
+	} as const
+
+	if (streamFn) return streamFn(shared)
+
+	return chat({
+		...shared,
+		agentLoopStrategy: tanStackTools
+			? maxIterations(config.maxTurns ?? 10)
+			: () => false
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Iteration state — mutable bag carried through the for-await loop
+// ---------------------------------------------------------------------------
+
+interface IterationState {
+	allMessages: AgentMessage[]
+	partial: AssistantMessage
+	emittedStart: boolean
+	turnCount: number
+	chunkCount: number
+	partialJsonMap: Map<string, string>
+	toolCallIndexMap: Map<string, number>
+	rolling: { textIdx: number; thinkIdx: number }
+}
+
+function createIterationState(
+	config: AgentLoopConfig
+): IterationState {
+	return {
+		allMessages: [],
+		partial: createPartial(config),
+		emittedStart: false,
+		turnCount: 0,
+		chunkCount: 0,
+		partialJsonMap: new Map(),
+		toolCallIndexMap: new Map(),
+		rolling: { textIdx: -1, thinkIdx: -1 }
 	}
+}
 
-	// Use custom streamFn or chat() with TanStack's agent loop
-	const streamSource: AsyncIterable<StreamChunk> = streamFn
-		? streamFn({
-				adapter: config.adapter,
-				messages: llmMessages,
-				systemPrompts: context.systemPrompt
-					? [context.systemPrompt]
-					: undefined,
-				tools: tanStackTools,
-				modelOptions,
-				temperature: config.temperature,
-				maxTokens: config.maxTokens,
-				abortController
-			})
-		: chat({
-				adapter: config.adapter,
-				messages: llmMessages,
-				systemPrompts: context.systemPrompt
-					? [context.systemPrompt]
-					: undefined,
-				tools: tanStackTools,
-				modelOptions,
-				temperature: config.temperature,
-				maxTokens: config.maxTokens,
-				abortController,
-				// Let TanStack handle tool-call iterations
-				agentLoopStrategy: tanStackTools
-					? maxIterations(config.maxTurns ?? 10)
-					: () => false
-			})
+/** Reset per-turn state when a new LLM turn begins. */
+function resetTurn(
+	state: IterationState,
+	config: AgentLoopConfig
+): void {
+	state.partial = createPartial(config)
+	state.emittedStart = false
+	state.partialJsonMap.clear()
+	state.toolCallIndexMap.clear()
+	state.rolling.textIdx = -1
+	state.rolling.thinkIdx = -1
+}
 
-	// State for multi-turn message accumulation
-	const allMessages: AgentMessage[] = []
-	let partial: AssistantMessage = createPartial(config)
-	let emittedStart = false
-	let turnCount = 0
-	const partialJsonMap = new Map<string, string>()
-	const toolCallIndexMap = new Map<string, number>()
-	let chunkCount = 0
-	/** Rolling indices for current text/thinking blocks — avoids O(n) scans. */
-	const rolling = { textIdx: -1, thinkIdx: -1 }
+// ---------------------------------------------------------------------------
+// Post-stream helpers
+// ---------------------------------------------------------------------------
 
-	try {
-		for await (const chunk of streamSource) {
-			chunkCount++
-			if (signal?.aborted) {
-				partial.stopReason = 'aborted'
-				partial.errorMessage = 'Request was aborted'
-				break
-			}
-
-			// Detect new LLM turn: RUN_STARTED after a previous turn completed
-			// This happens when TanStack re-calls the LLM after tool execution
-			if (chunk.type === 'RUN_STARTED' && turnCount > 0) {
-				// Only finalize if the previous partial has meaningful content
-				if (emittedStart || partial.content.length > 0) {
-					finalizePartial(
-						partial,
-						emittedStart,
-						context,
-						allMessages,
-						emit
-					)
-				}
-				// Start fresh partial for new turn
-				partial = createPartial(config)
-				emittedStart = false
-				partialJsonMap.clear()
-				toolCallIndexMap.clear()
-				rolling.textIdx = -1
-				rolling.thinkIdx = -1
-			}
-
-			// Track tool call IDs for the bridge
-			if (chunk.type === 'TOOL_CALL_START') {
-				tracker.register(chunk.toolCallId, chunk.toolName)
-			}
-
-			// Track RUN_STARTED for turn counting
-			if (chunk.type === 'RUN_STARTED') {
-				turnCount++
-			}
-
-			// After TanStack executes a tool, it emits TOOL_CALL_END with result.
-			// Our wrapped execute already emitted tool_execution_* events and created
-			// ToolResultMessages. The TOOL_CALL_END with result is TanStack's own event
-			// after our execute returns — we should skip it to avoid double-processing.
-			if (
-				chunk.type === 'TOOL_CALL_END' &&
-				'result' in chunk &&
-				chunk.result !== undefined
-			) {
-				// TanStack's post-execution event. Tool results already handled by wrapper.
-				// Push tool results into context for next LLM call awareness
-				flushToolResults(
-					toolResultCollector,
-					allMessages,
-					context
-				)
-				continue
-			}
-
-			// Process chunk into partial AssistantMessage
-			processChunk(
-				chunk,
-				partial,
-				emit,
-				emittedStart,
-				partialJsonMap,
-				toolCallIndexMap,
-				config.model,
-				config,
-				rolling
-			)
-
-			// Update emittedStart after processing
-			if (
-				!emittedStart &&
-				(chunk.type === 'RUN_STARTED' ||
-					chunk.type === 'TEXT_MESSAGE_START' ||
-					chunk.type === 'STEP_STARTED' ||
-					chunk.type === 'TOOL_CALL_START')
-			) {
-				emittedStart = true
-			}
-		}
-	} catch (err: unknown) {
-		partial.stopReason = signal?.aborted
-			? 'aborted'
-			: 'error'
-		partial.errorMessage =
-			err instanceof Error ? err.message : String(err)
-		emitTrace(config, 'agent_loop.stream_error', {
-			chunkCount,
-			stopReason: partial.stopReason,
-			errorMessage: partial.errorMessage
-		})
-		console.error(
-			`[agent-loop] processAgentStream CAUGHT ERROR after ${chunkCount} chunks: stopReason=${partial.stopReason} errorMessage=${partial.errorMessage}`
-		)
-	} finally {
-		cleanupAbortListener?.()
-	}
-
-	// Detect empty response — model returned no content (likely a failed
-	// tool-use attempt when no tools are defined in the API request).
-	// Mark as error so the caller/client sees a meaningful failure.
+/** Mark the partial as an error if the model returned no content. */
+function detectEmptyResponse(
+	partial: AssistantMessage,
+	config: AgentLoopConfig
+): void {
 	if (
 		partial.content.length === 0 &&
 		partial.stopReason !== 'error' &&
@@ -266,23 +185,180 @@ export async function processAgentStream(
 		partial.errorMessage =
 			'Model returned an empty response. This can happen when a tool call was attempted but no tools are available.'
 	}
+}
 
-	// Finalize last partial
-	finalizePartial(
-		partial,
-		emittedStart,
+/** Handle a caught stream error — mutates partial and emits trace. */
+function handleStreamError(
+	err: unknown,
+	partial: AssistantMessage,
+	config: AgentLoopConfig,
+	signal: AbortSignal | undefined,
+	chunkCount: number
+): void {
+	partial.stopReason = signal?.aborted ? 'aborted' : 'error'
+	partial.errorMessage =
+		err instanceof Error ? err.message : String(err)
+	emitTrace(config, 'agent_loop.stream_error', {
+		chunkCount,
+		stopReason: partial.stopReason,
+		errorMessage: partial.errorMessage
+	})
+	console.error(
+		`[agent-loop] processAgentStream CAUGHT ERROR after ${chunkCount} chunks: stopReason=${partial.stopReason} errorMessage=${partial.errorMessage}`
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Process a full TanStack AI agent stream (may include multiple LLM turns
+ * if tools are involved). Builds AssistantMessage + ToolResultMessage objects,
+ * emits events for subscribers.
+ */
+export async function processAgentStream(
+	sctx: StreamContext
+): Promise<ProcessResult> {
+	const {
+		currentContext: context,
+		config,
+		signal,
+		emit,
+		loopDetector
+	} = sctx
+
+	// Prepare inputs
+	const llmMessages = await prepareMessages(
 		context,
-		allMessages,
+		config,
+		signal
+	)
+	const tracker = createToolCallTracker()
+	const toolResultCollector: ToolResultMessage[] = []
+	const tanStackTools = context.tools?.length
+		? wrapToolsForTanStack(
+				context.tools,
+				tracker,
+				signal,
+				emit,
+				toolResultCollector,
+				config.toolSafety?.maxToolResultChars ?? 50_000,
+				loopDetector
+			)
+		: undefined
+	const { abortController, cleanup } =
+		createAbortBridge(signal)
+	const streamSource = buildStreamSource(
+		sctx,
+		llmMessages,
+		tanStackTools,
+		abortController
+	)
+
+	// Iteration state
+	const state = createIterationState(config)
+
+	try {
+		for await (const chunk of streamSource) {
+			state.chunkCount++
+			if (signal?.aborted) {
+				state.partial.stopReason = 'aborted'
+				state.partial.errorMessage = 'Request was aborted'
+				break
+			}
+
+			// New LLM turn after tool execution
+			if (
+				chunk.type === 'RUN_STARTED' &&
+				state.turnCount > 0
+			) {
+				if (
+					state.emittedStart ||
+					state.partial.content.length > 0
+				) {
+					finalizePartial(
+						state.partial,
+						state.emittedStart,
+						context,
+						state.allMessages,
+						emit
+					)
+				}
+				resetTurn(state, config)
+			}
+
+			if (chunk.type === 'TOOL_CALL_START') {
+				tracker.register(chunk.toolCallId, chunk.toolName)
+			}
+			if (chunk.type === 'RUN_STARTED') {
+				state.turnCount++
+			}
+
+			// Skip TanStack's post-execution event (results already handled by wrapper)
+			if (
+				chunk.type === 'TOOL_CALL_END' &&
+				'result' in chunk &&
+				chunk.result !== undefined
+			) {
+				flushToolResults(
+					toolResultCollector,
+					state.allMessages,
+					context
+				)
+				continue
+			}
+
+			processChunk(
+				chunk,
+				state.partial,
+				emit,
+				state.emittedStart,
+				state.partialJsonMap,
+				state.toolCallIndexMap,
+				config.model,
+				config,
+				state.rolling
+			)
+
+			if (
+				!state.emittedStart &&
+				(chunk.type === 'RUN_STARTED' ||
+					chunk.type === 'TEXT_MESSAGE_START' ||
+					chunk.type === 'STEP_STARTED' ||
+					chunk.type === 'TOOL_CALL_START')
+			) {
+				state.emittedStart = true
+			}
+		}
+	} catch (err: unknown) {
+		handleStreamError(
+			err,
+			state.partial,
+			config,
+			signal,
+			state.chunkCount
+		)
+	} finally {
+		cleanup?.()
+	}
+
+	detectEmptyResponse(state.partial, config)
+	finalizePartial(
+		state.partial,
+		state.emittedStart,
+		context,
+		state.allMessages,
 		emit
 	)
 
 	return {
-		messages: allMessages,
+		messages: state.allMessages,
 		toolResults: toolResultCollector,
-		lastAssistant: partial,
+		lastAssistant: state.partial,
 		abortedOrError:
-			partial.stopReason === 'error' ||
-			partial.stopReason === 'aborted'
+			state.partial.stopReason === 'error' ||
+			state.partial.stopReason === 'aborted'
 	}
 }
 

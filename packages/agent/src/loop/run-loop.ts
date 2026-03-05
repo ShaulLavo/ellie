@@ -6,10 +6,7 @@
  */
 
 import { EventStream } from '../event-stream'
-import {
-	createToolLoopDetector,
-	type ToolLoopDetector
-} from '../tool-loop-detection'
+import { createToolLoopDetector } from '../tool-loop-detection'
 import type {
 	AgentContext,
 	AgentEvent,
@@ -22,7 +19,7 @@ import type {
 import type {
 	EmitFn,
 	ProcessResult,
-	GuardrailState
+	RunContext
 } from './types'
 import {
 	createGuardrailState,
@@ -45,10 +42,9 @@ import { processAgentStreamWithRetry } from './stream-retry'
 function emitSkippedToolResults(
 	toolCalls: ToolCall[],
 	startIndex: number,
-	emit: EmitFn,
-	currentContext: AgentContext,
-	newMessages: AgentMessage[]
+	ctx: RunContext
 ): void {
+	const { emit, currentContext, newMessages } = ctx
 	for (let j = startIndex; j < toolCalls.length; j++) {
 		const remaining = toolCalls[j]
 		const skipResult: ToolResultMessage = {
@@ -94,33 +90,30 @@ function emitSkippedToolResults(
  */
 async function executeToolCallsWithSteering(
 	toolCalls: ToolCall[],
-	currentContext: AgentContext,
-	newMessages: AgentMessage[],
-	config: AgentLoopConfig,
-	effectiveSignal: AbortSignal | undefined,
-	emit: EmitFn,
-	loopDetector: ToolLoopDetector
+	ctx: RunContext
 ): Promise<AgentMessage[]> {
+	const {
+		currentContext,
+		newMessages,
+		config,
+		signal,
+		emit,
+		loopDetector
+	} = ctx
 	for (let i = 0; i < toolCalls.length; i++) {
-		if (effectiveSignal?.aborted) break
+		if (signal?.aborted) break
 
 		const midSteering =
 			(await config.getSteeringMessages?.()) || []
 		if (midSteering.length > 0) {
-			emitSkippedToolResults(
-				toolCalls,
-				i,
-				emit,
-				currentContext,
-				newMessages
-			)
+			emitSkippedToolResults(toolCalls, i, ctx)
 			return midSteering
 		}
 
 		const toolResults = await executeToolCall(
 			toolCalls[i],
 			currentContext.tools ?? [],
-			effectiveSignal,
+			signal,
 			emit,
 			config.toolSafety?.maxToolResultChars ?? 50_000,
 			loopDetector
@@ -149,16 +142,10 @@ interface ToolLoopOutcome {
  */
 async function runToolLoop(
 	result: ProcessResult,
-	currentContext: AgentContext,
-	newMessages: AgentMessage[],
-	config: AgentLoopConfig,
-	effectiveSignal: AbortSignal | undefined,
-	stream: EventStream<AgentEvent, AgentMessage[]>,
-	emit: EmitFn,
-	streamFn: StreamFn,
-	loopDetector: ToolLoopDetector,
-	guardrailState: GuardrailState
+	ctx: RunContext
 ): Promise<ToolLoopOutcome> {
+	const { newMessages, config, signal, guardrailState } =
+		ctx
 	let current = result
 	let iterations = 0
 	const maxTurns = config.maxTurns ?? 10
@@ -177,14 +164,7 @@ async function runToolLoop(
 			limits
 		)
 		if (toolIterLimitEvent) {
-			emitLimitHitAndStop(
-				toolIterLimitEvent,
-				config,
-				currentContext,
-				newMessages,
-				emit,
-				stream
-			)
+			emitLimitHitAndStop(toolIterLimitEvent, ctx)
 			return {
 				result: current,
 				pendingMessages: [],
@@ -198,12 +178,7 @@ async function runToolLoop(
 
 		const steering = await executeToolCallsWithSteering(
 			toolCalls,
-			currentContext,
-			newMessages,
-			config,
-			effectiveSignal,
-			emit,
-			loopDetector
+			ctx
 		)
 		if (steering.length > 0) {
 			return {
@@ -213,7 +188,7 @@ async function runToolLoop(
 			}
 		}
 
-		if (effectiveSignal?.aborted) break
+		if (signal?.aborted) break
 
 		// --- Guardrail check: before re-call ---
 		guardrailState.modelCallCount++
@@ -222,14 +197,7 @@ async function runToolLoop(
 			limits
 		)
 		if (reCallLimitEvent) {
-			emitLimitHitAndStop(
-				reCallLimitEvent,
-				config,
-				currentContext,
-				newMessages,
-				emit,
-				stream
-			)
+			emitLimitHitAndStop(reCallLimitEvent, ctx)
 			return {
 				result: current,
 				pendingMessages: [],
@@ -239,12 +207,7 @@ async function runToolLoop(
 
 		// Re-call the LLM with tool results (with retry)
 		current = await processAgentStreamWithRetry(
-			currentContext,
-			config,
-			effectiveSignal,
-			emit,
-			streamFn,
-			loopDetector,
+			ctx,
 			guardrailState
 		)
 		for (const msg of current.messages) {
@@ -293,6 +256,22 @@ export async function runLoop(
 	// Use the guarded signal throughout the loop (falls back to original if no wall-clock limit)
 	const effectiveSignal = guardedSignal ?? signal
 
+	// Build the shared run context
+	// `signal` is the effective (guarded) signal for stream processing;
+	// `userSignal` preserves the original for wall-clock timeout detection.
+	const ctx: RunContext = {
+		currentContext,
+		newMessages,
+		config,
+		signal: effectiveSignal,
+		emit,
+		streamFn,
+		stream,
+		guardrailState,
+		loopDetector,
+		userSignal: signal
+	}
+
 	let firstTurn = true
 	let pendingMessages: AgentMessage[] =
 		(await config.getSteeringMessages?.()) || []
@@ -325,14 +304,7 @@ export async function runLoop(
 			limits
 		)
 		if (preLimitEvent) {
-			emitLimitHitAndStop(
-				preLimitEvent,
-				config,
-				currentContext,
-				newMessages,
-				emit,
-				stream
-			)
+			emitLimitHitAndStop(preLimitEvent, ctx)
 			return
 		}
 
@@ -340,12 +312,7 @@ export async function runLoop(
 		// With chat(): TanStack handles tool loop internally via maxIterations.
 		// With streamFn: we must handle tool execution + re-call manually.
 		let result = await processAgentStreamWithRetry(
-			currentContext,
-			config,
-			effectiveSignal,
-			emit,
-			streamFn,
-			loopDetector,
+			ctx,
 			guardrailState
 		)
 
@@ -360,31 +327,13 @@ export async function runLoop(
 			limits
 		)
 		if (postLimitEvent) {
-			emitLimitHitAndStop(
-				postLimitEvent,
-				config,
-				currentContext,
-				newMessages,
-				emit,
-				stream
-			)
+			emitLimitHitAndStop(postLimitEvent, ctx)
 			return
 		}
 
 		// When using streamFn, handle tool execution loop manually
 		if (streamFn) {
-			const outcome = await runToolLoop(
-				result,
-				currentContext,
-				newMessages,
-				config,
-				effectiveSignal,
-				stream,
-				emit,
-				streamFn,
-				loopDetector,
-				guardrailState
-			)
+			const outcome = await runToolLoop(result, ctx)
 			if (outcome.shouldReturn) return
 			result = outcome.result
 			if (outcome.pendingMessages.length > 0) {
@@ -393,18 +342,7 @@ export async function runLoop(
 		}
 
 		if (result.abortedOrError) {
-			handleAbortOrError(
-				result,
-				guardrailState,
-				limits,
-				effectiveSignal,
-				signal,
-				config,
-				currentContext,
-				newMessages,
-				emit,
-				stream
-			)
+			handleAbortOrError(result, ctx)
 			return
 		}
 
@@ -440,23 +378,25 @@ export async function runLoop(
  */
 function handleAbortOrError(
 	result: ProcessResult,
-	guardrailState: GuardrailState,
-	limits: AgentLoopConfig['runtimeLimits'],
-	effectiveSignal: AbortSignal | undefined,
-	signal: AbortSignal | undefined,
-	config: AgentLoopConfig,
-	currentContext: AgentContext,
-	newMessages: AgentMessage[],
-	emit: EmitFn,
-	stream: EventStream<AgentEvent, AgentMessage[]>
+	ctx: RunContext
 ): void {
+	const {
+		guardrailState,
+		signal,
+		userSignal,
+		config,
+		emit,
+		newMessages,
+		stream
+	} = ctx
+	const limits = config.runtimeLimits
 	const wallClockMs = limits?.maxWallClockMs
 	const isWallClockTimeout =
 		result.lastAssistant.stopReason === 'aborted' &&
 		!guardrailState.limitTriggered &&
 		isLimitEnabled(wallClockMs) &&
-		effectiveSignal?.aborted &&
-		!signal?.aborted
+		signal?.aborted &&
+		!userSignal?.aborted
 
 	if (isWallClockTimeout) {
 		const elapsed = Date.now() - guardrailState.startedAtMs
@@ -474,14 +414,7 @@ function handleAbortOrError(
 			scope: 'run',
 			action: 'hard_stop'
 		}
-		emitLimitHitAndStop(
-			wallClockEvent,
-			config,
-			currentContext,
-			newMessages,
-			emit,
-			stream
-		)
+		emitLimitHitAndStop(wallClockEvent, ctx)
 		return
 	}
 
