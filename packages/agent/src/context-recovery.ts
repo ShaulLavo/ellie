@@ -147,6 +147,8 @@ export function estimateMessageTokens(
 				// Images are typically ~1000 tokens regardless of size
 				chars += 4000 // ~1000 tokens at 4 chars/token
 				break
+			default:
+				break
 		}
 	}
 

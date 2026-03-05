@@ -91,7 +91,9 @@ function sortedReplacer(
 		!Array.isArray(value)
 	) {
 		const sorted: Record<string, unknown> = {}
-		for (const k of Object.keys(value).sort()) {
+		for (const k of Object.keys(value).sort((a, b) =>
+			a.localeCompare(b)
+		)) {
 			sorted[k] = (value as Record<string, unknown>)[k]
 		}
 		return sorted

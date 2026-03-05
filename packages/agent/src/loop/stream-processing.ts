@@ -11,7 +11,6 @@ import {
 	mapTanStackUsage,
 	toThinkingModelOptions
 } from '@ellie/ai'
-import type { Model } from '@ellie/ai'
 import { toModelMessages } from '../messages'
 import { removeOrphans } from '../context-recovery'
 import type {
@@ -309,17 +308,7 @@ export async function processAgentStream(
 				continue
 			}
 
-			processChunk(
-				chunk,
-				state.partial,
-				emit,
-				state.emittedStart,
-				state.partialJsonMap,
-				state.toolCallIndexMap,
-				config.model,
-				config,
-				state.rolling
-			)
+			processChunk(chunk, state, emit, config)
 
 			if (
 				!state.emittedStart &&
@@ -413,33 +402,35 @@ function flushToolResults(
  */
 function processChunk(
 	chunk: StreamChunk,
-	partial: AssistantMessage,
+	state: IterationState,
 	emit: EmitFn,
-	emittedStart: boolean,
-	partialJsonMap: Map<string, string>,
-	toolCallIndexMap: Map<string, number>,
-	model: Model,
-	config: AgentLoopConfig,
-	rolling: { textIdx: number; thinkIdx: number }
+	config: AgentLoopConfig
 ): void {
+	const {
+		partial,
+		emittedStart,
+		partialJsonMap,
+		toolCallIndexMap,
+		rolling
+	} = state
+	const { model } = config
+
+	// Emit message_start once for any chunk that begins a new message turn
+	const startsMessage =
+		chunk.type === 'RUN_STARTED' ||
+		chunk.type === 'TEXT_MESSAGE_START' ||
+		chunk.type === 'STEP_STARTED' ||
+		chunk.type === 'TOOL_CALL_START'
+	if (!emittedStart && startsMessage) {
+		emit({ type: 'message_start', message: { ...partial } })
+	}
+
 	switch (chunk.type) {
 		case 'RUN_STARTED': {
-			if (!emittedStart) {
-				emit({
-					type: 'message_start',
-					message: { ...partial }
-				})
-			}
 			break
 		}
 
 		case 'TEXT_MESSAGE_START': {
-			if (!emittedStart) {
-				emit({
-					type: 'message_start',
-					message: { ...partial }
-				})
-			}
 			rolling.textIdx = partial.content.length
 			partial.content.push({ type: 'text', text: '' })
 			emitUpdate(emit, partial, {
@@ -473,12 +464,6 @@ function processChunk(
 		}
 
 		case 'STEP_STARTED': {
-			if (!emittedStart) {
-				emit({
-					type: 'message_start',
-					message: { ...partial }
-				})
-			}
 			rolling.thinkIdx = partial.content.length
 			partial.content.push({
 				type: 'thinking',
@@ -509,12 +494,6 @@ function processChunk(
 		}
 
 		case 'TOOL_CALL_START': {
-			if (!emittedStart) {
-				emit({
-					type: 'message_start',
-					message: { ...partial }
-				})
-			}
 			const tcIdx = partial.content.length
 			partial.content.push({
 				type: 'toolCall',
@@ -578,6 +557,9 @@ function processChunk(
 				chunk.error?.message || 'Unknown error'
 			break
 		}
+
+		default:
+			break
 	}
 }
 

@@ -26,6 +26,12 @@ export function toModelMessage(msg: Message): ModelMessage {
 			return assistantToModelMessage(msg)
 		case 'toolResult':
 			return toolResultToModelMessage(msg)
+		default: {
+			const _exhaustive: never = msg
+			throw new Error(
+				`Unknown message role: ${(_exhaustive as { role: string }).role}`
+			)
+		}
 	}
 }
 
