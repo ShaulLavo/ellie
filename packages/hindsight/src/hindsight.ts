@@ -1,5 +1,12 @@
 import { ulid } from 'fast-ulid'
-import { eq, and, inArray } from 'drizzle-orm'
+import {
+	eq,
+	and,
+	inArray,
+	desc,
+	or,
+	count
+} from 'drizzle-orm'
 import { groqChat } from '@ellie/ai/openai-compat'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { chat, streamToText } from '@ellie/ai'
@@ -153,12 +160,21 @@ export class Hindsight {
 	private _resolvedAdapter?: AnyTextAdapter
 	private get adapter(): AnyTextAdapter {
 		if (!this._resolvedAdapter) {
-			this._resolvedAdapter =
-				this._configAdapter ??
-				groqChat(
+			if (this._configAdapter) {
+				this._resolvedAdapter = this._configAdapter
+			} else {
+				const apiKey = process.env.GROQ_API_KEY
+				if (!apiKey) {
+					throw new Error(
+						'No adapter configured and GROQ_API_KEY environment variable is not set. ' +
+							'Either pass an adapter in the Hindsight config or set GROQ_API_KEY.'
+					)
+				}
+				this._resolvedAdapter = groqChat(
 					'openai/gpt-oss-120b',
-					process.env.GROQ_API_KEY!
+					apiKey
 				)
+			}
 		}
 		return this._resolvedAdapter
 	}
@@ -591,6 +607,7 @@ Instructions:
 					this.adapter,
 					bankId,
 					normalizedContent,
+					reflectImpl,
 					resolvedOptions,
 					this.rerank,
 					retainProfile
@@ -643,6 +660,7 @@ Instructions:
 					this.adapter,
 					bankId,
 					contents,
+					reflectImpl,
 					resolvedOptions,
 					this.rerank
 				),
@@ -779,6 +797,7 @@ Instructions:
 					this.modelVec,
 					this.adapter,
 					bankId,
+					reflectImpl,
 					options,
 					this.rerank,
 					consProfile
@@ -868,27 +887,37 @@ Instructions:
 	): ListOperationsResult {
 		const limit = options?.limit ?? 20
 		const offset = options?.offset ?? 0
+		const t = this.hdb.schema.asyncOperations
+
+		const statusFilter = options?.status
+			? options.status === 'pending'
+				? or(
+						eq(t.status, 'pending'),
+						eq(t.status, 'processing')
+					)
+				: eq(t.status, options.status)
+			: undefined
+
+		const whereClause = statusFilter
+			? and(eq(t.bankId, bankId), statusFilter)
+			: eq(t.bankId, bankId)
+
+		const [{ total }] = this.hdb.db
+			.select({ total: count() })
+			.from(t)
+			.where(whereClause)
+			.all()
+
 		const rows = this.hdb.db
 			.select()
-			.from(this.hdb.schema.asyncOperations)
-			.where(
-				eq(this.hdb.schema.asyncOperations.bankId, bankId)
-			)
+			.from(t)
+			.where(whereClause)
+			.orderBy(desc(t.createdAt))
+			.limit(limit)
+			.offset(offset)
 			.all()
-			.filter(row => {
-				if (!options?.status) return true
-				if (options.status === 'pending') {
-					return (
-						row.status === 'pending' ||
-						row.status === 'processing'
-					)
-				}
-				return row.status === options.status
-			})
-			.sort((a, b) => b.createdAt - a.createdAt)
 
-		const paged = rows.slice(offset, offset + limit)
-		const operations: AsyncOperationSummary[] = paged.map(
+		const operations: AsyncOperationSummary[] = rows.map(
 			row => {
 				const metadata = row.resultMetadata
 					? safeJson<Record<string, unknown>>(
@@ -917,7 +946,7 @@ Instructions:
 		)
 
 		return {
-			total: rows.length,
+			total,
 			operations
 		}
 	}
@@ -1311,6 +1340,7 @@ Instructions:
 			this.adapter,
 			bankId,
 			id,
+			reflectImpl,
 			this.rerank,
 			profile
 		)

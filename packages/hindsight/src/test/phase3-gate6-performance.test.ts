@@ -12,7 +12,7 @@
  * - scopeMatches at 10k filter operations
  * - normalizePath at 10k paths
  * - detectLocationSignals at 10k queries
- * - computeLocationBoost at scale (100 memories with location data)
+ * - computeLocationBoostBatch at scale (100 memories with location data)
  */
 
 import {
@@ -40,7 +40,7 @@ import {
 	normalizePath,
 	detectLocationSignals,
 	locationRecord,
-	computeLocationBoost,
+	computeLocationBoostBatch,
 	getMaxStrengthForPaths,
 	resolveSignalsToPaths
 } from '../location'
@@ -218,7 +218,7 @@ describe('Gate 6: Performance Guardrail', () => {
 			t.cleanup()
 		})
 
-		it('computeLocationBoost at 100 memories completes in < 100ms p95', () => {
+		it('computeLocationBoostBatch at 100 memories completes in < 100ms p95', () => {
 			const hdb = getHdb(t.hs)
 			const now = Date.now()
 
@@ -256,21 +256,19 @@ describe('Gate 6: Performance Guardrail', () => {
 				queryPathIds
 			)
 
-			// Benchmark: compute boost for all 100 memories
+			// Benchmark: compute boost for all 100 memories in one batch
 			const durations: number[] = []
 			for (let run = 0; run < 20; run++) {
 				durations.push(
 					measureMs(() => {
-						for (const memId of memIds) {
-							computeLocationBoost(
-								hdb,
-								bankId,
-								memId,
-								queryPathIds,
-								maxStrength,
-								now
-							)
-						}
+						computeLocationBoostBatch(
+							hdb,
+							bankId,
+							memIds,
+							queryPathIds,
+							maxStrength,
+							now
+						)
 					})
 				)
 			}

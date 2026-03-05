@@ -26,7 +26,7 @@ import {
 	locationFind,
 	locationStats,
 	resolveSignalsToPaths,
-	computeLocationBoost,
+	computeLocationBoostBatch,
 	getMaxStrengthForPaths
 } from '../location'
 
@@ -387,21 +387,21 @@ describe('resolveSignalsToPaths', () => {
 
 // ── Boost computation ───────────────────────────────────────────────────────
 
-describe('computeLocationBoost', () => {
-	it('returns 0 when no query paths provided', () => {
+describe('computeLocationBoostBatch', () => {
+	it('returns empty map when no query paths provided', () => {
 		const hdb = getHdb(test.hs)
-		const boost = computeLocationBoost(
+		const boosts = computeLocationBoostBatch(
 			hdb,
 			bankId,
-			'mem-1',
+			['mem-1'],
 			new Set(),
 			0,
 			Date.now()
 		)
-		expect(boost).toBe(0)
+		expect(boosts.get('mem-1')).toBeUndefined()
 	})
 
-	it('returns 0 when memory has no location associations', () => {
+	it('returns no boost when memory has no location associations', () => {
 		const hdb = getHdb(test.hs)
 		const mem1 = insertTestMemory(hdb, bankId)
 		const mem2 = insertTestMemory(hdb, bankId)
@@ -415,15 +415,15 @@ describe('computeLocationBoost', () => {
 		const pathId = hits[0]!.pathId
 
 		// mem2 has no associations
-		const boost = computeLocationBoost(
+		const boosts = computeLocationBoostBatch(
 			hdb,
 			bankId,
-			mem2,
+			[mem2],
 			new Set([pathId]),
 			0,
 			Date.now()
 		)
-		expect(boost).toBe(0)
+		expect(boosts.get(mem2)).toBeUndefined()
 	})
 
 	it('returns direct path boost when memory shares a query path', () => {
@@ -438,16 +438,16 @@ describe('computeLocationBoost', () => {
 		})
 		const pathId = hits[0]!.pathId
 
-		const boost = computeLocationBoost(
+		const boosts = computeLocationBoostBatch(
 			hdb,
 			bankId,
-			memId,
+			[memId],
 			new Set([pathId]),
 			0,
 			Date.now()
 		)
 		// Should have at least directPathBoost (0.12) + familiarityBoost
-		expect(boost).toBeGreaterThan(0.1)
+		expect(boosts.get(memId)).toBeGreaterThan(0.1)
 	})
 })
 

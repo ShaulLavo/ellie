@@ -9,7 +9,7 @@
  * - scopeMatches produces identical results for same input
  * - normalizePath is deterministic
  * - detectLocationSignals is deterministic
- * - computeLocationBoost is deterministic (given same DB state)
+ * - computeLocationBoostBatch is deterministic (given same DB state)
  * - locationFind ordering is deterministic
  */
 
@@ -35,7 +35,7 @@ import {
 	locationFind,
 	locationStats,
 	resolveSignalsToPaths,
-	computeLocationBoost,
+	computeLocationBoostBatch,
 	getMaxStrengthForPaths
 } from '../location'
 import {
@@ -356,7 +356,7 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			}
 		})
 
-		it('computeLocationBoost is deterministic for same DB state and timestamp', () => {
+		it('computeLocationBoostBatch is deterministic for same DB state and timestamp', () => {
 			const hdb = getHdb(t.hs)
 			const fixedNow = 1700000000000
 
@@ -388,16 +388,17 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 				queryPathIds
 			)
 
-			const runs = Array.from({ length: 10 }, () =>
-				computeLocationBoost(
+			const runs = Array.from({ length: 10 }, () => {
+				const map = computeLocationBoostBatch(
 					hdb,
 					bankId,
-					memId,
+					[memId],
 					queryPathIds,
 					maxStrength,
 					fixedNow
 				)
-			)
+				return map.get(memId) ?? 0
+			})
 
 			const first = runs[0]
 			for (let i = 1; i < runs.length; i++) {

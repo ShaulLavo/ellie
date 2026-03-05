@@ -31,7 +31,7 @@ import {
 import type { HindsightDatabase } from '../db'
 import {
 	locationRecord,
-	computeLocationBoost,
+	computeLocationBoostBatch,
 	getMaxStrengthForPaths,
 	resolveSignalsToPaths,
 	detectLocationSignals
@@ -148,15 +148,16 @@ describe('Gate 2: Location P@5 Uplift', () => {
 		)
 
 		// Compute boost for each memory
-		const boosts = memoryIds.map(memId =>
-			computeLocationBoost(
-				hdb,
-				bankId,
-				memId,
-				queryPathIds,
-				maxStrength,
-				now
-			)
+		const boostMap = computeLocationBoostBatch(
+			hdb,
+			bankId,
+			memoryIds,
+			queryPathIds,
+			maxStrength,
+			now
+		)
+		const boosts = memoryIds.map(
+			id => boostMap.get(id) ?? 0
 		)
 
 		// Memory 0 (login.ts) should have highest boost (direct path match)
@@ -268,15 +269,16 @@ describe('Gate 2: Location P@5 Uplift', () => {
 			if (baselineTop5.has(goldIdx)) baselineHits++
 
 			// Phase 3: apply location boost
+			const boostMap = computeLocationBoostBatch(
+				hdb,
+				bankId,
+				memoryIds,
+				queryPathIds,
+				maxStrength,
+				now
+			)
 			const phase3Scores = memoryIds.map((memId, i) => {
-				const boost = computeLocationBoost(
-					hdb,
-					bankId,
-					memId,
-					queryPathIds,
-					maxStrength,
-					now
-				)
+				const boost = boostMap.get(memId) ?? 0
 				return { idx: i, score: 1.0 - i * 0.01 + boost }
 			})
 			phase3Scores.sort((a, b) => b.score - a.score)
@@ -353,15 +355,16 @@ describe('Gate 2: Location P@5 Uplift', () => {
 		expect(baselineTop5).not.toContain(10) // memory 10 not in baseline top-5
 
 		// Phase 3: location boost should elevate memory 10
+		const boostMap = computeLocationBoostBatch(
+			hdb,
+			bankId,
+			memories,
+			queryPathIds,
+			maxStrength,
+			now
+		)
 		const phase3Scores = memories.map((memId, i) => {
-			const boost = computeLocationBoost(
-				hdb,
-				bankId,
-				memId,
-				queryPathIds,
-				maxStrength,
-				now
-			)
+			const boost = boostMap.get(memId) ?? 0
 			return { idx: i, score: 1.0 - i * 0.02 + boost }
 		})
 		phase3Scores.sort((a, b) => b.score - a.score)
@@ -426,30 +429,17 @@ describe('Gate 2: Location P@5 Uplift', () => {
 			queryPathIds
 		)
 
-		const boostA = computeLocationBoost(
+		const boostMap = computeLocationBoostBatch(
 			hdb,
 			bankId,
-			memA,
+			[memA, memB, memC],
 			queryPathIds,
 			maxStrength,
 			now
 		)
-		const boostB = computeLocationBoost(
-			hdb,
-			bankId,
-			memB,
-			queryPathIds,
-			maxStrength,
-			now
-		)
-		const boostC = computeLocationBoost(
-			hdb,
-			bankId,
-			memC,
-			queryPathIds,
-			maxStrength,
-			now
-		)
+		const boostA = boostMap.get(memA) ?? 0
+		const boostB = boostMap.get(memB) ?? 0
+		const boostC = boostMap.get(memC) ?? 0
 
 		// A has direct path match — highest boost
 		expect(boostA).toBeGreaterThan(boostB)
@@ -486,14 +476,15 @@ describe('Gate 2: Location P@5 Uplift', () => {
 			for (const id of ids) queryPathIds.add(id)
 		}
 
-		const boost = computeLocationBoost(
+		const boostMap = computeLocationBoostBatch(
 			hdb,
 			bankId,
-			memId,
+			[memId],
 			queryPathIds,
 			0,
 			now
 		)
+		const boost = boostMap.get(memId) ?? 0
 
 		// directPathBoost (0.12) + familiarityBoost (some small amount based on recency)
 		// directPathBoost alone is 0.12, familiarity adds up to 0.10

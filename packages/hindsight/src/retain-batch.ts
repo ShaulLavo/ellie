@@ -25,6 +25,7 @@ import {
 	type RoutingContext
 } from './routing'
 import { consolidate } from './consolidation'
+import type { ReflectFn } from './mental-models'
 import {
 	resolveEpisode,
 	recordEpisodeEvent
@@ -501,6 +502,7 @@ export async function retainBatch(
 	adapter: AnyTextAdapter,
 	bankId: string,
 	contents: string[] | RetainBatchItem[],
+	reflectFn: ReflectFn,
 	options: RetainBatchOptions = {},
 	rerank?: RerankFunction
 ): Promise<RetainBatchResult> {
@@ -811,6 +813,7 @@ export async function retainBatch(
 			modelVec,
 			adapter,
 			bankId,
+			reflectFn,
 			{},
 			rerank
 		).catch(() => {

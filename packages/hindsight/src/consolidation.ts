@@ -35,7 +35,10 @@ import {
 	type ConsolidationPromptFact
 } from './prompts'
 import { parseLLMJson } from './sanitize'
-import { refreshMentalModel } from './mental-models'
+import {
+	refreshMentalModel,
+	type ReflectFn
+} from './mental-models'
 import type { BankProfile } from './types'
 import { safeJsonParse } from './util'
 import { ftsInsert, ftsReplace, ftsDelete } from './fts'
@@ -106,6 +109,7 @@ export async function consolidate(
 	modelVec: EmbeddingStore,
 	adapter: AnyTextAdapter,
 	bankId: string,
+	reflectFn: ReflectFn,
 	options: ConsolidateOptions = {},
 	rerank?: RerankFunction,
 	bankProfile?: BankProfile
@@ -174,6 +178,7 @@ export async function consolidate(
 				modelVec,
 				adapter,
 				bankId,
+				reflectFn,
 				allTags,
 				rerank,
 				bankProfile
@@ -275,9 +280,11 @@ async function applyConsolidationAction(
 			memory,
 			action
 		)
-		createResult === 'skipped'
-			? result.skipped++
-			: result.observationsCreated++
+		if (createResult === 'skipped') {
+			result.skipped++
+		} else {
+			result.observationsCreated++
+		}
 		return
 	}
 
@@ -289,9 +296,11 @@ async function applyConsolidationAction(
 			memory,
 			action
 		)
-		updateResult === 'skipped'
-			? result.skipped++
-			: result.observationsUpdated++
+		if (updateResult === 'skipped') {
+			result.skipped++
+		} else {
+			result.observationsUpdated++
+		}
 		return
 	}
 
@@ -302,9 +311,11 @@ async function applyConsolidationAction(
 		memory,
 		action
 	)
-	mergeResult === 'skipped'
-		? result.skipped++
-		: result.observationsMerged++
+	if (mergeResult === 'skipped') {
+		result.skipped++
+	} else {
+		result.observationsMerged++
+	}
 }
 
 // ── Find related observations ───────────────────────────────────────────
@@ -834,6 +845,7 @@ async function triggerMentalModelRefreshes(
 	modelVec: EmbeddingStore,
 	adapter: AnyTextAdapter,
 	bankId: string,
+	reflectFn: ReflectFn,
 	consolidatedTags: Set<string>,
 	rerank?: RerankFunction,
 	bankProfile?: BankProfile
@@ -866,6 +878,7 @@ async function triggerMentalModelRefreshes(
 			adapter,
 			bankId,
 			model.id,
+			reflectFn,
 			rerank,
 			bankProfile
 		)

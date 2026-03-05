@@ -33,7 +33,7 @@ import { clamp } from './util'
 import {
 	detectLocationSignals,
 	resolveSignalsToPaths,
-	computeLocationBoost,
+	computeLocationBoostBatch,
 	getMaxStrengthForPaths
 } from './location'
 import {
@@ -532,15 +532,17 @@ export async function recall(
 				allQueryPathIds
 			)
 
+			const boostMap = computeLocationBoostBatch(
+				hdb,
+				bankId,
+				rankedCandidates.map(c => c.id),
+				allQueryPathIds,
+				maxStrength,
+				now
+			)
+
 			for (const candidate of rankedCandidates) {
-				const boost = computeLocationBoost(
-					hdb,
-					bankId,
-					candidate.id,
-					allQueryPathIds,
-					maxStrength,
-					now
-				)
+				const boost = boostMap.get(candidate.id) ?? 0
 				if (boost > 0) {
 					candidate.combinedScore += boost
 					locationBoostApplied = true

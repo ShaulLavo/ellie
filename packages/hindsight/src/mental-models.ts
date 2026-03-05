@@ -18,12 +18,26 @@ import type {
 	ListMentalModelsOptions,
 	UpdateMentalModelOptions,
 	RefreshMentalModelResult,
-	RerankFunction
+	RerankFunction,
+	ReflectOptions,
+	ReflectResult,
+	BankProfile
 } from './types'
-import { reflect } from './reflect'
-import type { BankProfile } from './types'
 import type { MentalModelRow } from './schema'
 import { safeJsonParse } from './util'
+
+/** Callback type for the reflect function, injected to avoid a circular import. */
+export type ReflectFn = (
+	hdb: HindsightDatabase,
+	memoryVec: EmbeddingStore,
+	modelVec: EmbeddingStore | null,
+	adapter: AnyTextAdapter,
+	bankId: string,
+	query: string,
+	options?: ReflectOptions,
+	rerank?: RerankFunction,
+	bankProfile?: BankProfile
+) => Promise<ReflectResult>
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -229,6 +243,7 @@ export async function refreshMentalModel(
 	adapter: AnyTextAdapter,
 	bankId: string,
 	id: string,
+	reflectFn: ReflectFn,
 	rerank?: RerankFunction,
 	bankProfile?: BankProfile
 ): Promise<RefreshMentalModelResult> {
@@ -259,7 +274,7 @@ export async function refreshMentalModel(
 		: undefined
 
 	// Run the source query through reflect (without modelVec to avoid recursion)
-	const reflectResult = await reflect(
+	const reflectResult = await reflectFn(
 		hdb,
 		memoryVec,
 		null, // no modelVec — don't look up mental models during refresh

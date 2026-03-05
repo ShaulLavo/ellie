@@ -15,6 +15,7 @@ import type {
 import { sanitizeText } from './sanitize'
 import { ftsInsert } from './fts'
 import { consolidate } from './consolidation'
+import type { ReflectFn } from './mental-models'
 import type { BankProfile } from './types'
 import {
 	routeFact,
@@ -65,6 +66,7 @@ export async function retain(
 	adapter: AnyTextAdapter,
 	bankId: string,
 	content: string,
+	reflectFn: ReflectFn,
 	options: RetainOptions = {},
 	rerank?: RerankFunction,
 	bankProfile?: BankProfile
@@ -568,6 +570,7 @@ export async function retain(
 			modelVec,
 			adapter,
 			bankId,
+			reflectFn,
 			{},
 			rerank,
 			bankProfile

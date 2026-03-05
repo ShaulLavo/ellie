@@ -264,7 +264,7 @@ export function locationFind(
 		)
 	}
 
-	return pathRows.map(row => pathRowToHit(hdb, bankId, row))
+	return pathRowsToHits(hdb, bankId, pathRows)
 }
 
 /**
@@ -408,63 +408,103 @@ export function resolveSignalsToPaths(
 	const result = new Map<string, string[]>()
 	if (signals.length === 0) return result
 
+	const baseConditions = [
+		eq(hdb.schema.locationPaths.bankId, bankId)
+	]
+	if (scope?.profile) {
+		baseConditions.push(
+			eq(hdb.schema.locationPaths.profile, scope.profile)
+		)
+	}
+	if (scope?.project) {
+		baseConditions.push(
+			eq(hdb.schema.locationPaths.project, scope.project)
+		)
+	}
+
+	// Normalize all signals upfront and build signal→normalized map
+	const signalToNorm = new Map<string, string>()
+	const allNormalized: string[] = []
 	for (const signal of signals) {
-		const normalized = normalizePath(signal)
-		const conditions = [
-			eq(hdb.schema.locationPaths.bankId, bankId)
-		]
-		if (scope?.profile) {
-			conditions.push(
-				eq(hdb.schema.locationPaths.profile, scope.profile)
-			)
-		}
-		if (scope?.project) {
-			conditions.push(
-				eq(hdb.schema.locationPaths.project, scope.project)
-			)
-		}
+		const norm = normalizePath(signal)
+		signalToNorm.set(signal, norm)
+		allNormalized.push(norm)
+	}
 
-		// Try exact match first
-		const exact = hdb.db
-			.select({ id: hdb.schema.locationPaths.id })
+	// Batch exact match: one query for all normalized signals
+	const exactRows = hdb.db
+		.select({
+			id: hdb.schema.locationPaths.id,
+			normalizedPath:
+				hdb.schema.locationPaths.normalizedPath
+		})
+		.from(hdb.schema.locationPaths)
+		.where(
+			and(
+				...baseConditions,
+				inArray(
+					hdb.schema.locationPaths.normalizedPath,
+					allNormalized
+				)
+			)
+		)
+		.all()
+
+	// Group exact matches by normalizedPath
+	const exactByNorm = new Map<string, string[]>()
+	for (const row of exactRows) {
+		let ids = exactByNorm.get(row.normalizedPath)
+		if (!ids) {
+			ids = []
+			exactByNorm.set(row.normalizedPath, ids)
+		}
+		ids.push(row.id)
+	}
+
+	// Assign exact matches and collect unmatched signals for suffix search
+	const unmatchedSignals: string[] = []
+	for (const signal of signals) {
+		const norm = signalToNorm.get(signal)!
+		const ids = exactByNorm.get(norm)
+		if (ids && ids.length > 0) {
+			result.set(signal, ids)
+		} else {
+			unmatchedSignals.push(signal)
+		}
+	}
+
+	// Batch suffix match for unmatched signals: one query with OR conditions
+	if (unmatchedSignals.length > 0) {
+		const suffixConditions = unmatchedSignals.map(
+			signal => {
+				const norm = signalToNorm.get(signal)!
+				return sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%/' + norm}`
+			}
+		)
+
+		const suffixRows = hdb.db
+			.select({
+				id: hdb.schema.locationPaths.id,
+				normalizedPath:
+					hdb.schema.locationPaths.normalizedPath
+			})
 			.from(hdb.schema.locationPaths)
 			.where(
-				and(
-					...conditions,
-					eq(
-						hdb.schema.locationPaths.normalizedPath,
-						normalized
-					)
-				)
+				and(...baseConditions, or(...suffixConditions))
 			)
 			.all()
 
-		if (exact.length > 0) {
-			result.set(
-				signal,
-				exact.map(r => r.id)
-			)
-			continue
-		}
-
-		// Suffix match (e.g., "foo.ts" matches "/src/foo.ts")
-		const suffix = hdb.db
-			.select({ id: hdb.schema.locationPaths.id })
-			.from(hdb.schema.locationPaths)
-			.where(
-				and(
-					...conditions,
-					sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%/' + normalized}`
-				)
-			)
-			.limit(5)
-			.all()
-
-		if (suffix.length > 0) {
-			result.set(
-				signal,
-				suffix.map(r => r.id)
-			)
+		// Match suffix rows back to signals
+		for (const signal of unmatchedSignals) {
+			const norm = signalToNorm.get(signal)!
+			const suffix = '/' + norm
+			const matched = suffixRows
+				.filter(r => r.normalizedPath.endsWith(suffix))
+				.slice(0, 5)
+				.map(r => r.id)
+			if (matched.length > 0) {
+				result.set(signal, matched)
+			}
 		}
 	}
 
@@ -473,32 +513,29 @@ export function resolveSignalsToPaths(
 
 // ── Retrieval boost computation ─────────────────────────────────────────────
 
-export interface LocationBoostInput {
-	memoryId: string
-	queryPathIds: Set<string>
-	maxStrengthForQueryPaths: number
-}
-
 /**
- * Compute the location boost for a single memory candidate.
+ * Batch-compute location boosts for multiple memory candidates.
  *
- * directPathBoost: +0.12 if memory is directly associated with a query path
- * familiarityBoost: up to +0.10 based on access frequency and recency
- * coAccessBoost: up to +0.08 based on co-access strength between query and candidate paths
+ * Prefetches all access contexts for the candidate set in one query,
+ * then computes per-memory boosts in-memory. Eliminates N+1 queries
+ * when called from the recall ranking loop.
  */
-export function computeLocationBoost(
+export function computeLocationBoostBatch(
 	hdb: HindsightDatabase,
 	bankId: string,
-	memoryId: string,
+	memoryIds: string[],
 	queryPathIds: Set<string>,
 	maxStrengthForQueryPaths: number,
 	now: number
-): number {
-	if (queryPathIds.size === 0) return 0
+): Map<string, number> {
+	const result = new Map<string, number>()
+	if (queryPathIds.size === 0 || memoryIds.length === 0)
+		return result
 
-	// Find all paths associated with this memory via access contexts
-	const memoryAccessRows = hdb.db
+	// Single query: fetch all access contexts for all candidate memories
+	const allAccessRows = hdb.db
 		.select({
+			memoryId: hdb.schema.locationAccessContexts.memoryId,
 			pathId: hdb.schema.locationAccessContexts.pathId,
 			accessedAt:
 				hdb.schema.locationAccessContexts.accessedAt
@@ -510,68 +547,112 @@ export function computeLocationBoost(
 					hdb.schema.locationAccessContexts.bankId,
 					bankId
 				),
-				eq(
+				inArray(
 					hdb.schema.locationAccessContexts.memoryId,
-					memoryId
+					memoryIds
 				)
 			)
 		)
 		.all()
 
-	if (memoryAccessRows.length === 0) return 0
-
-	const candidatePathIds = new Set(
-		memoryAccessRows.map(r => r.pathId)
-	)
-
-	// 1. directPathBoost: +0.12 if any candidate path exactly matches a query path
-	let directPathBoost = 0
-	for (const pathId of candidatePathIds) {
-		if (queryPathIds.has(pathId)) {
-			directPathBoost = 0.12
-			break
+	// Group by memoryId
+	const accessByMemory = new Map<
+		string,
+		Array<{ pathId: string; accessedAt: number }>
+	>()
+	const allCandidatePathIds = new Set<string>()
+	for (const row of allAccessRows) {
+		let rows = accessByMemory.get(row.memoryId)
+		if (!rows) {
+			rows = []
+			accessByMemory.set(row.memoryId, rows)
 		}
+		rows.push({
+			pathId: row.pathId,
+			accessedAt: row.accessedAt
+		})
+		allCandidatePathIds.add(row.pathId)
 	}
 
-	// 2. familiarityBoost: based on access count and recency
-	const accessCountByPath = new Map<string, number>()
-	const lastAccessByPath = new Map<string, number>()
-	for (const row of memoryAccessRows) {
-		accessCountByPath.set(
-			row.pathId,
-			(accessCountByPath.get(row.pathId) ?? 0) + 1
-		)
-		const prev = lastAccessByPath.get(row.pathId) ?? 0
-		if (row.accessedAt > prev)
-			lastAccessByPath.set(row.pathId, row.accessedAt)
-	}
-
-	let maxFamiliarityNorm = 0
-	const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000
-	for (const pathId of candidatePathIds) {
-		const count = accessCountByPath.get(pathId) ?? 0
-		const lastAccess = lastAccessByPath.get(pathId) ?? 0
-		const timeDelta = now - lastAccess
-		const f =
-			Math.log1p(count) *
-			Math.exp(-timeDelta / thirtyDaysMs)
-		const fNorm = f / (1 + f)
-		if (fNorm > maxFamiliarityNorm)
-			maxFamiliarityNorm = fNorm
-	}
-	const familiarityBoost = 0.1 * maxFamiliarityNorm
-
-	// 3. coAccessBoost: from hs_location_associations
-	const maxCoNorm = computeMaxCoAccessNorm(
+	// Prefetch all co-access associations between query paths and all candidate paths
+	const coAccessMap = prefetchCoAccessStrengths(
 		hdb,
 		bankId,
-		candidatePathIds,
+		allCandidatePathIds,
 		queryPathIds,
 		maxStrengthForQueryPaths
 	)
-	const coAccessBoost = 0.08 * maxCoNorm
 
-	return directPathBoost + familiarityBoost + coAccessBoost
+	const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000
+
+	for (const memoryId of memoryIds) {
+		const memoryAccessRows = accessByMemory.get(memoryId)
+		if (
+			!memoryAccessRows ||
+			memoryAccessRows.length === 0
+		) {
+			continue
+		}
+
+		const candidatePathIds = new Set(
+			memoryAccessRows.map(r => r.pathId)
+		)
+
+		// 1. directPathBoost
+		let directPathBoost = 0
+		for (const pathId of candidatePathIds) {
+			if (queryPathIds.has(pathId)) {
+				directPathBoost = 0.12
+				break
+			}
+		}
+
+		// 2. familiarityBoost
+		const accessCountByPath = new Map<string, number>()
+		const lastAccessByPath = new Map<string, number>()
+		for (const row of memoryAccessRows) {
+			accessCountByPath.set(
+				row.pathId,
+				(accessCountByPath.get(row.pathId) ?? 0) + 1
+			)
+			const prev = lastAccessByPath.get(row.pathId) ?? 0
+			if (row.accessedAt > prev)
+				lastAccessByPath.set(row.pathId, row.accessedAt)
+		}
+
+		let maxFamiliarityNorm = 0
+		for (const pathId of candidatePathIds) {
+			const count = accessCountByPath.get(pathId) ?? 0
+			const lastAccess = lastAccessByPath.get(pathId) ?? 0
+			const timeDelta = now - lastAccess
+			const f =
+				Math.log1p(count) *
+				Math.exp(-timeDelta / thirtyDaysMs)
+			const fNorm = f / (1 + f)
+			if (fNorm > maxFamiliarityNorm)
+				maxFamiliarityNorm = fNorm
+		}
+		const familiarityBoost = 0.1 * maxFamiliarityNorm
+
+		// 3. coAccessBoost: use prefetched map
+		let maxCoNorm = 0
+		if (maxStrengthForQueryPaths > 0) {
+			for (const pathId of candidatePathIds) {
+				const strength = coAccessMap.get(pathId) ?? 0
+				const coNorm = strength / maxStrengthForQueryPaths
+				if (coNorm > maxCoNorm) maxCoNorm = coNorm
+			}
+		}
+		const coAccessBoost = 0.08 * maxCoNorm
+
+		const boost =
+			directPathBoost + familiarityBoost + coAccessBoost
+		if (boost > 0) {
+			result.set(memoryId, boost)
+		}
+	}
+
+	return result
 }
 
 /**
@@ -614,19 +695,130 @@ export function getMaxStrengthForPaths(
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 
-function computeMaxCoAccessNorm(
+function findBySignalFallback(
+	hdb: HindsightDatabase,
+	bankId: string,
+	query: string,
+	scope: { profile?: string; project?: string } | undefined,
+	limit: number
+): LocationHit[] {
+	const signals = detectLocationSignals(query)
+	if (signals.length === 0) return []
+
+	const normalizedSignals = signals.map(normalizePath)
+	const baseConditions = [
+		eq(hdb.schema.locationPaths.bankId, bankId)
+	]
+	if (scope?.profile) {
+		baseConditions.push(
+			eq(hdb.schema.locationPaths.profile, scope.profile)
+		)
+	}
+	if (scope?.project) {
+		baseConditions.push(
+			eq(hdb.schema.locationPaths.project, scope.project)
+		)
+	}
+
+	// Single query with OR for all signal LIKE conditions
+	const likeConditions = normalizedSignals.map(
+		norm =>
+			sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%' + norm + '%'}`
+	)
+
+	const matchedRows = hdb.db
+		.select()
+		.from(hdb.schema.locationPaths)
+		.where(and(...baseConditions, or(...likeConditions)))
+		.limit(limit)
+		.all()
+
+	return pathRowsToHits(hdb, bankId, matchedRows)
+}
+
+/**
+ * Batch-convert path rows to LocationHits.
+ * Fetches access contexts for all path IDs in one query.
+ */
+function pathRowsToHits(
+	hdb: HindsightDatabase,
+	bankId: string,
+	rows: Array<
+		typeof import('./schema').locationPaths.$inferSelect
+	>
+): LocationHit[] {
+	if (rows.length === 0) return []
+
+	const pathIds = rows.map(r => r.id)
+
+	// Single query for all access contexts
+	const allAccessRows = hdb.db
+		.select({
+			pathId: hdb.schema.locationAccessContexts.pathId,
+			accessedAt:
+				hdb.schema.locationAccessContexts.accessedAt
+		})
+		.from(hdb.schema.locationAccessContexts)
+		.where(
+			and(
+				eq(
+					hdb.schema.locationAccessContexts.bankId,
+					bankId
+				),
+				inArray(
+					hdb.schema.locationAccessContexts.pathId,
+					pathIds
+				)
+			)
+		)
+		.all()
+
+	// Build maps: pathId → count, pathId → maxAccessedAt
+	const countByPath = new Map<string, number>()
+	const maxAccessByPath = new Map<string, number>()
+	for (const row of allAccessRows) {
+		countByPath.set(
+			row.pathId,
+			(countByPath.get(row.pathId) ?? 0) + 1
+		)
+		const prev = maxAccessByPath.get(row.pathId) ?? 0
+		if (row.accessedAt > prev)
+			maxAccessByPath.set(row.pathId, row.accessedAt)
+	}
+
+	return rows.map(row => ({
+		pathId: row.id,
+		rawPath: row.rawPath,
+		normalizedPath: row.normalizedPath,
+		profile: row.profile,
+		project: row.project,
+		accessCount: countByPath.get(row.id) ?? 0,
+		lastAccessedAt:
+			maxAccessByPath.get(row.id) ?? row.createdAt
+	}))
+}
+
+/**
+ * Prefetch co-access strengths between a set of candidate paths and query paths.
+ * Returns a map of candidatePathId → max strength with any query path.
+ */
+function prefetchCoAccessStrengths(
 	hdb: HindsightDatabase,
 	bankId: string,
 	candidatePathIds: Set<string>,
 	queryPathIds: Set<string>,
 	maxStrengthForQueryPaths: number
-): number {
-	if (maxStrengthForQueryPaths <= 0) return 0
-	const candidatePathArray = [...candidatePathIds]
-	if (candidatePathArray.length === 0) return 0
+): Map<string, number> {
+	const result = new Map<string, number>()
+	if (
+		maxStrengthForQueryPaths <= 0 ||
+		candidatePathIds.size === 0
+	)
+		return result
 
+	const candidatePathArray = [...candidatePathIds]
 	const queryPathArray = [...queryPathIds]
-	// Check both directions since canonical ordering may put query path as either source or related
+
 	const assocs = hdb.db
 		.select()
 		.from(hdb.schema.locationAssociations)
@@ -659,93 +851,18 @@ function computeMaxCoAccessNorm(
 		)
 		.all()
 
-	let maxCoNorm = 0
 	for (const assoc of assocs) {
-		const coNorm = assoc.strength / maxStrengthForQueryPaths
-		if (coNorm > maxCoNorm) maxCoNorm = coNorm
-	}
-	return maxCoNorm
-}
-
-function findBySignalFallback(
-	hdb: HindsightDatabase,
-	bankId: string,
-	query: string,
-	scope: { profile?: string; project?: string } | undefined,
-	limit: number
-): LocationHit[] {
-	const signals = detectLocationSignals(query)
-	if (signals.length === 0) return []
-
-	const normalizedSignals = signals.map(normalizePath)
-	const signalConditions = [
-		eq(hdb.schema.locationPaths.bankId, bankId)
-	]
-	if (scope?.profile) {
-		signalConditions.push(
-			eq(hdb.schema.locationPaths.profile, scope.profile)
-		)
-	}
-	if (scope?.project) {
-		signalConditions.push(
-			eq(hdb.schema.locationPaths.project, scope.project)
-		)
-	}
-
-	const allMatches: LocationHit[] = []
-	for (const norm of normalizedSignals) {
-		const matches = hdb.db
-			.select()
-			.from(hdb.schema.locationPaths)
-			.where(
-				and(
-					...signalConditions,
-					sql`${hdb.schema.locationPaths.normalizedPath} LIKE ${'%' + norm + '%'}`
-				)
-			)
-			.limit(limit)
-			.all()
-		for (const row of matches) {
-			allMatches.push(pathRowToHit(hdb, bankId, row))
+		// Determine which side is the candidate path
+		const candidateId = queryPathIds.has(assoc.sourcePathId)
+			? assoc.relatedPathId
+			: assoc.sourcePathId
+		const prev = result.get(candidateId) ?? 0
+		if (assoc.strength > prev) {
+			result.set(candidateId, assoc.strength)
 		}
 	}
-	return allMatches.slice(0, limit)
-}
 
-function pathRowToHit(
-	hdb: HindsightDatabase,
-	bankId: string,
-	row: typeof import('./schema').locationPaths.$inferSelect
-): LocationHit {
-	const accessRows = hdb.db
-		.select({
-			accessedAt:
-				hdb.schema.locationAccessContexts.accessedAt
-		})
-		.from(hdb.schema.locationAccessContexts)
-		.where(
-			and(
-				eq(
-					hdb.schema.locationAccessContexts.bankId,
-					bankId
-				),
-				eq(hdb.schema.locationAccessContexts.pathId, row.id)
-			)
-		)
-		.all()
-
-	return {
-		pathId: row.id,
-		rawPath: row.rawPath,
-		normalizedPath: row.normalizedPath,
-		profile: row.profile,
-		project: row.project,
-		accessCount: accessRows.length,
-		lastAccessedAt:
-			accessRows.length > 0
-				? Math.max(...accessRows.map(r => r.accessedAt))
-				: row.createdAt
-	}
+	return result
 }
 
 /**
