@@ -200,7 +200,8 @@ export function handleStreamingEvent(
 					isError: event.isError,
 					status: event.isError
 						? ('error' as const)
-						: ('complete' as const)
+						: ('complete' as const),
+					elapsedMs: event.elapsedMs
 				},
 				sessionId
 			)

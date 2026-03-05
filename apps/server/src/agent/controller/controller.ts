@@ -25,7 +25,6 @@ import { createMemoryAppendDailyTool } from '../tools/memory/daily'
 import { mapAgentEventToDb } from './event-mapper'
 import {
 	runRecall,
-	runRetain,
 	runRetainAndEnforce,
 	type MemoryDeps
 } from './memory'
@@ -444,19 +443,11 @@ export class AgentController {
 
 		// Memory retain + enforcement
 		if (isEnforcement) {
+			// Enforcement runs contain only a system prompt + tool call —
+			// no user/assistant turns worth retaining. The original run
+			// already retained those turns, so skip retain entirely to
+			// avoid reprocessing the same sequence range.
 			this.enforcementRunIds.delete(runId)
-			runRetain(this.memoryDeps, sessionId, runId).catch(
-				err => {
-					handleControllerError(
-						(type, payload) => this.trace(type, payload),
-						`retain_post_enforcement_error session=${sessionId} runId=${runId}`,
-						'controller.retain_post_enforcement_error',
-						{ sessionId, runId },
-						err,
-						'warn'
-					)
-				}
-			)
 		} else {
 			runRetainAndEnforce(
 				this.memoryDeps,

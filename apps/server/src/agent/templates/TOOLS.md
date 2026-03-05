@@ -80,15 +80,16 @@ print(result)
 
 ### Selection guide
 
-| Task                                 | Use            |
-| ------------------------------------ | -------------- |
-| Read a single file                   | Direct tool    |
-| Run a shell command                  | Direct tool    |
-| Search for a pattern                 | Direct tool    |
-| One-off script or computation        | `exec`         |
-| Transform a file with logic          | `exec`         |
-| Process 10 files in a loop           | `session_exec` |
+| Task                 | Use         |
+| -------------------- | ----------- |
+| Read a single file   | Direct tool |
+| Run a shell command  | Direct tool |
+| Search for a pattern | Direct tool |
+
+| One-off script or computation | `exec` |
+| Transform a file with logic | `exec` |
+| Process 10 files in a loop | `session_exec` |
 | Chain 3 tool calls with conditionals | `session_exec` |
-| Iteratively explore a dataset        | `session_exec` |
+| Iteratively explore a dataset | `session_exec` |
 | Build up analysis state across steps | `session_exec` |
-| Debug something step by step         | `session_exec` |
+| Debug something step by step | `session_exec` |

@@ -103,6 +103,8 @@ export class MemoryOrchestrator {
 		type: string
 		payload: unknown
 	}) => void
+	/** Guard against concurrent evaluateRetain for the same session. */
+	private retainInFlight = new Set<string>()
 
 	constructor(config: MemoryOrchestratorConfig) {
 		this.hindsight = config.hindsight
@@ -249,6 +251,25 @@ export class MemoryOrchestrator {
 		sessionId: string,
 		force?: boolean
 	): Promise<MemoryRetainPayload | null> {
+		if (this.retainInFlight.has(sessionId)) {
+			this.trace('memory.retain_skip', {
+				sessionId,
+				reason: 'already_in_flight'
+			})
+			return null
+		}
+		this.retainInFlight.add(sessionId)
+		try {
+			return await this._evaluateRetain(sessionId, force)
+		} finally {
+			this.retainInFlight.delete(sessionId)
+		}
+	}
+
+	private async _evaluateRetain(
+		sessionId: string,
+		force?: boolean
+	): Promise<MemoryRetainPayload | null> {
 		const bankIds = this.resolveBankIds()
 		const turns = this.collectUnprocessedTurns(sessionId)
 		if (turns.length === 0) {
@@ -338,13 +359,25 @@ export class MemoryOrchestrator {
 		for (let i = 0; i < results.length; i++) {
 			const result = results[i]
 			if (result.status === 'rejected') {
+				const errMsg =
+					result.reason instanceof Error
+						? result.reason.message
+						: String(result.reason)
+				// UNIQUE constraint means the document is already stored —
+				// advance the cursor so we don't reprocess the same range.
+				if (errMsg.includes('UNIQUE constraint')) {
+					const cursorKey = this.cursorKey(
+						bankIds[i],
+						sessionId
+					)
+					this.eventStore.setKv(cursorKey, String(seqTo))
+					succeededBankIds.push(bankIds[i])
+					continue
+				}
 				this.trace('memory.retain_bank_error', {
 					sessionId,
 					bankId: bankIds[i],
-					error:
-						result.reason instanceof Error
-							? result.reason.message
-							: String(result.reason)
+					error: errMsg
 				})
 				continue
 			}
