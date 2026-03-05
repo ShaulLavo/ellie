@@ -9,6 +9,7 @@
 import type { AgentEvent } from '@ellie/agent'
 import type { AssistantMessage } from '@ellie/schemas'
 import type { RealtimeStore } from '../lib/realtime-store'
+import { handleControllerError } from './controller-error-handler'
 
 export interface StreamPersistenceDeps {
 	store: RealtimeStore
@@ -67,17 +68,13 @@ export function handleStreamingEvent(
 			)
 			state.currentMessageRowId = row.id
 		} catch (err) {
-			console.error(
-				`[agent-controller] persist_failed type=assistant_message session=${sessionId} runId=${runId}`,
-				err instanceof Error ? err.message : String(err)
+			handleControllerError(
+				deps.trace,
+				`persist_failed type=assistant_message session=${sessionId} runId=${runId}`,
+				'controller.persist_failed',
+				{ sessionId, runId, dbType: 'assistant_message' },
+				err
 			)
-			deps.trace('controller.persist_failed', {
-				sessionId,
-				runId,
-				dbType: 'assistant_message',
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
 		}
 		return true
 	}
@@ -95,17 +92,14 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
-			console.warn(
-				`[agent-controller] update_failed type=assistant_message (delta) session=${sessionId} runId=${runId}`,
-				err instanceof Error ? err.message : String(err)
+			handleControllerError(
+				deps.trace,
+				`update_failed type=assistant_message (delta) session=${sessionId} runId=${runId}`,
+				'controller.update_failed',
+				{ sessionId, runId, dbType: 'assistant_message' },
+				err,
+				'warn'
 			)
-			deps.trace('controller.update_failed', {
-				sessionId,
-				runId,
-				dbType: 'assistant_message',
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
 		}
 		return true
 	}
@@ -123,17 +117,13 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
-			console.error(
-				`[agent-controller] update_failed type=assistant_message (final) session=${sessionId} runId=${runId}`,
-				err instanceof Error ? err.message : String(err)
+			handleControllerError(
+				deps.trace,
+				`update_failed type=assistant_message (final) session=${sessionId} runId=${runId}`,
+				'controller.update_failed',
+				{ sessionId, runId, dbType: 'assistant_message' },
+				err
 			)
-			deps.trace('controller.update_failed', {
-				sessionId,
-				runId,
-				dbType: 'assistant_message',
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
 		}
 		state.currentMessageRowId = null
 		return true
@@ -154,17 +144,13 @@ export function handleStreamingEvent(
 			)
 			state.currentToolRowIds.set(event.toolCallId, row.id)
 		} catch (err) {
-			console.error(
-				`[agent-controller] persist_failed type=tool_execution session=${sessionId} runId=${runId}`,
-				err instanceof Error ? err.message : String(err)
+			handleControllerError(
+				deps.trace,
+				`persist_failed type=tool_execution session=${sessionId} runId=${runId}`,
+				'controller.persist_failed',
+				{ sessionId, runId, dbType: 'tool_execution' },
+				err
 			)
-			deps.trace('controller.persist_failed', {
-				sessionId,
-				runId,
-				dbType: 'tool_execution',
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
 		}
 		return true
 	}
@@ -187,17 +173,14 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
-			console.warn(
-				`[agent-controller] update_failed type=tool_execution (delta) session=${sessionId} runId=${runId}`,
-				err instanceof Error ? err.message : String(err)
+			handleControllerError(
+				deps.trace,
+				`update_failed type=tool_execution (delta) session=${sessionId} runId=${runId}`,
+				'controller.update_failed',
+				{ sessionId, runId, dbType: 'tool_execution' },
+				err,
+				'warn'
 			)
-			deps.trace('controller.update_failed', {
-				sessionId,
-				runId,
-				dbType: 'tool_execution',
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
 		}
 		return true
 	}
@@ -222,17 +205,13 @@ export function handleStreamingEvent(
 				sessionId
 			)
 		} catch (err) {
-			console.error(
-				`[agent-controller] update_failed type=tool_execution (final) session=${sessionId} runId=${runId}`,
-				err instanceof Error ? err.message : String(err)
+			handleControllerError(
+				deps.trace,
+				`update_failed type=tool_execution (final) session=${sessionId} runId=${runId}`,
+				'controller.update_failed',
+				{ sessionId, runId, dbType: 'tool_execution' },
+				err
 			)
-			deps.trace('controller.update_failed', {
-				sessionId,
-				runId,
-				dbType: 'tool_execution',
-				message:
-					err instanceof Error ? err.message : String(err)
-			})
 		}
 		state.currentToolRowIds.delete(event.toolCallId)
 		return true

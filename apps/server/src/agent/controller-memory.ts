@@ -10,6 +10,7 @@ import type { EventPayloadMap } from '@ellie/db'
 import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../lib/realtime-store'
 import type { MemoryOrchestrator } from './memory-orchestrator'
+import { handleControllerError } from './controller-error-handler'
 
 export interface MemoryDeps {
 	store: RealtimeStore
@@ -53,16 +54,14 @@ export async function runRecall(
 				deps.baseSystemPrompt + '\n\n' + result.contextBlock
 		}
 	} catch (err) {
-		console.warn(
-			`[agent-controller] memory_recall_failed session=${sessionId} runId=${runId}`,
-			err instanceof Error ? err.message : String(err)
+		handleControllerError(
+			deps.trace,
+			`memory_recall_failed session=${sessionId} runId=${runId}`,
+			'controller.memory_recall_failed',
+			{ sessionId, runId },
+			err,
+			'warn'
 		)
-		deps.trace('controller.memory_recall_failed', {
-			sessionId,
-			runId,
-			message:
-				err instanceof Error ? err.message : String(err)
-		})
 		try {
 			deps.store.appendEvent(
 				sessionId,
@@ -107,16 +106,14 @@ export async function runRetain(
 
 		return result.parts[0]?.factsStored ?? 0
 	} catch (err) {
-		console.warn(
-			`[agent-controller] memory_retain_failed session=${sessionId} runId=${runId}`,
-			err instanceof Error ? err.message : String(err)
+		handleControllerError(
+			deps.trace,
+			`memory_retain_failed session=${sessionId} runId=${runId}`,
+			'controller.memory_retain_failed',
+			{ sessionId, runId },
+			err,
+			'warn'
 		)
-		deps.trace('controller.memory_retain_failed', {
-			sessionId,
-			runId,
-			message:
-				err instanceof Error ? err.message : String(err)
-		})
 		return 0
 	}
 }
@@ -176,16 +173,14 @@ export async function runRetainAndEnforce(
 					'respond with exactly NO_REPLY and nothing else.'
 			)
 			.catch(err => {
-				console.warn(
-					`[agent-controller] enforcement_failed session=${sessionId} runId=${enforcementRunId}`,
-					err instanceof Error ? err.message : String(err)
+				handleControllerError(
+					deps.trace,
+					`enforcement_failed session=${sessionId} runId=${enforcementRunId}`,
+					'controller.enforcement_failed',
+					{ sessionId, runId: enforcementRunId },
+					err,
+					'warn'
 				)
-				deps.trace('controller.enforcement_failed', {
-					sessionId,
-					runId: enforcementRunId,
-					message:
-						err instanceof Error ? err.message : String(err)
-				})
 			})
 	})
 }
