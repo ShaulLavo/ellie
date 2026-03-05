@@ -5,33 +5,22 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import type { AgentController } from '../agent/controller'
+import { agentMessageSchema } from '@ellie/schemas/agent'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
 	errorSchema,
 	messageInputSchema,
 	normalizeMessageInput,
+	resolveSessionId,
 	toStreamGenerator,
+	sessionSchema,
+	sessionListSchema,
+	eventRowListSchema,
+	postMessageResponseSchema,
+	clearSessionResponseSchema,
 	type SseState
 } from './common'
-
-export interface ChatRouteDeps {
-	store: RealtimeStore
-	sseState: SseState
-	getAgentController?: () => Promise<AgentController | null>
-	/** Called before the first user message to inject bootstrap events */
-	ensureBootstrap?: (sessionId: string) => void
-}
-
-/** Resolve the virtual 'current' session ID to the actual one. */
-function resolveSessionId(
-	store: RealtimeStore,
-	raw: string
-): string {
-	return raw === 'current'
-		? store.getCurrentSessionId()
-		: raw
-}
 
 export function createChatRoutes(
 	store: RealtimeStore,
@@ -44,14 +33,26 @@ export function createChatRoutes(
 
 			// ── Sessions CRUD ───────────────────────────────────────────────
 
-			.post('/sessions', () => {
-				const session = store.createSession()
-				return session
-			})
+			.post(
+				'/sessions',
+				() => {
+					const session = store.createSession()
+					return session
+				},
+				{
+					response: { 200: sessionSchema }
+				}
+			)
 
-			.get('/sessions', () => {
-				return store.listSessions()
-			})
+			.get(
+				'/sessions',
+				() => {
+					return store.listSessions()
+				},
+				{
+					response: { 200: sessionListSchema }
+				}
+			)
 
 			.get(
 				'/sessions/:sessionId',
@@ -60,8 +61,7 @@ export function createChatRoutes(
 						store,
 						params.sessionId
 					)
-					const session =
-						store.eventStore.getSession(sessionId)
+					const session = store.getSession(sessionId)
 					if (!session) {
 						set.status = 404
 						return { error: 'Session not found' }
@@ -70,7 +70,10 @@ export function createChatRoutes(
 				},
 				{
 					params: sessionParamsSchema,
-					response: { 404: errorSchema }
+					response: {
+						200: sessionSchema,
+						404: errorSchema
+					}
 				}
 			)
 
@@ -85,12 +88,17 @@ export function createChatRoutes(
 					)
 					return store.listAgentMessages(sessionId)
 				},
-				{ params: sessionParamsSchema }
+				{
+					params: sessionParamsSchema,
+					response: {
+						200: v.array(agentMessageSchema)
+					}
+				}
 			)
 
 			.post(
 				'/:sessionId/messages',
-				async ({ params, body }) => {
+				async ({ params, body, set }) => {
 					const sessionId = resolveSessionId(
 						store,
 						params.sessionId
@@ -116,14 +124,30 @@ export function createChatRoutes(
 
 					// Route the message directly to the agent controller.
 					// handleMessage backfills the runId on the user_message row.
-					const controller = await getAgentController?.()
-					const result = controller
-						? await controller.handleMessage(
-								sessionId,
-								input.content,
-								row.id
-							)
-						: undefined
+					let result:
+						| {
+								runId: string
+								routed: 'prompt' | 'followUp' | 'queued'
+						  }
+						| undefined
+					try {
+						const controller = await getAgentController?.()
+						result = controller
+							? await controller.handleMessage(
+									sessionId,
+									input.content,
+									row.id
+								)
+							: undefined
+					} catch (err) {
+						set.status = 400
+						return {
+							error:
+								err instanceof Error
+									? err.message
+									: 'Message routing failed'
+						}
+					}
 
 					return {
 						id: row.id,
@@ -140,7 +164,10 @@ export function createChatRoutes(
 				{
 					params: sessionParamsSchema,
 					body: messageInputSchema,
-					response: { 400: errorSchema }
+					response: {
+						200: postMessageResponseSchema,
+						400: errorSchema
+					}
 				}
 			)
 
@@ -191,7 +218,8 @@ export function createChatRoutes(
 							)
 						),
 						limit: v.optional(v.string())
-					})
+					}),
+					response: { 200: eventRowListSchema }
 				}
 			)
 
@@ -281,7 +309,12 @@ export function createChatRoutes(
 						cleared: true
 					}
 				},
-				{ params: sessionParamsSchema }
+				{
+					params: sessionParamsSchema,
+					response: {
+						200: clearSessionResponseSchema
+					}
+				}
 			)
 	)
 }

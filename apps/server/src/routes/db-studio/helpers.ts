@@ -1,6 +1,10 @@
 import { readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Database } from 'bun:sqlite'
+import {
+	BadRequestError,
+	NotFoundError
+} from '../http-errors'
 
 // ── System / shadow table detection ─────────────────────────────────────────
 
@@ -62,7 +66,7 @@ interface ParsedFilter {
 export function parseFilter(raw: string): ParsedFilter {
 	const parts = raw.split(':')
 	if (parts.length < 3) {
-		throw new Error(
+		throw new BadRequestError(
 			`Invalid filter format. Expected column:operator:value`
 		)
 	}
@@ -71,7 +75,7 @@ export function parseFilter(raw: string): ParsedFilter {
 	const value = parts.slice(2).join(':') // value may contain colons
 
 	if (!['eq', 'contains', 'gt', 'lt'].includes(op)) {
-		throw new Error(
+		throw new BadRequestError(
 			`Invalid filter operator: ${op}. Expected eq|contains|gt|lt`
 		)
 	}
@@ -137,7 +141,7 @@ export function openDb(
 		discoverDbs(dataDir).map(d => d.name)
 	)
 	if (!allowed.has(name)) {
-		throw new Error(`Database not found: ${name}`)
+		throw new NotFoundError(`Database not found: ${name}`)
 	}
 	let db = cache.get(name)
 	if (!db) {
@@ -189,7 +193,7 @@ export function getSchema(db: Database, table: string) {
 		)
 		.get(table)
 	if (!exists) {
-		throw new Error(`Table not found: ${table}`)
+		throw new NotFoundError(`Table not found: ${table}`)
 	}
 
 	// Columns via table_xinfo (includes hidden columns)

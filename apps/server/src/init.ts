@@ -1,13 +1,11 @@
 import { resolve } from 'node:path'
-import { loadAnthropicCredential } from '@ellie/ai/credentials'
 import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
 import { Hindsight } from '@ellie/hindsight'
-import { FileStore } from '@ellie/tus'
+import { FileStore, SqliteKvStore } from '@ellie/tus'
 import { Cron } from 'croner'
-import { AgentController } from './agent/controller'
-import { MemoryOrchestrator } from './agent/memory-orchestrator'
-import { buildGuardrailPolicy } from './agent/guardrail-policy'
+import type { AgentController } from './agent/controller'
+import { AgentControllerFactory } from './agent/controller-factory'
 import {
 	ensureBootstrapInjected,
 	isBootstrapInjected
@@ -15,10 +13,7 @@ import {
 import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { startTei } from './lib/tei'
-import {
-	resolveAgentAdapter,
-	resolveGroqAdapter
-} from './adapters'
+import { resolveGroqAdapter } from './adapters'
 import type { SseState } from './routes/common'
 
 export interface ServerContext {
@@ -38,6 +33,23 @@ export interface ServerContext {
 	isBootstrapInjected: () => boolean
 }
 
+// ── Phase sub-context types ──────────────────────────────────────────────
+
+interface StoresContext {
+	eventStore: EventStore
+	store: RealtimeStore
+}
+
+interface HindsightContext {
+	hindsight: Hindsight
+}
+
+interface UploadsContext {
+	uploadStore: FileStore
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
 function todaySessionId(): string {
 	const now = new Date()
 	const y = now.getFullYear()
@@ -46,31 +58,14 @@ function todaySessionId(): string {
 	return `session-${y}-${m}-${d}`
 }
 
-export async function init(): Promise<ServerContext> {
-	const { DATA_DIR } = env
-
-	// ── Config ────────────────────────────────────────────────────────────
-	const parsedUrl = new URL(env.API_BASE_URL)
-	const port =
-		parsedUrl.port !== ''
-			? Number(parsedUrl.port)
-			: parsedUrl.protocol === 'https:'
-				? 443
-				: 80
-
-	const CREDENTIALS_PATH =
-		process.env.CREDENTIALS_PATH ??
-		resolve(import.meta.dir, '../../../.credentials.json')
-
-	const STUDIO_PUBLIC = resolve(
-		import.meta.dir,
-		'../../react/public'
-	)
-
-	// ── Stores ────────────────────────────────────────────────────────────
+/**
+ * Creates EventStore + RealtimeStore and recovers any stale runs
+ * left over from a previous crash.
+ */
+function initStores(dataDir: string): StoresContext {
 	const eventStore = new EventStore(
-		`${DATA_DIR}/events.db`,
-		`${DATA_DIR}/audit`
+		`${dataDir}/events.db`,
+		`${dataDir}/audit`
 	)
 	const initialSessionId =
 		eventStore.getKv('currentSessionId') ?? todaySessionId()
@@ -79,7 +74,8 @@ export async function init(): Promise<ServerContext> {
 		initialSessionId
 	)
 
-	// ── Startup recovery ──────────────────────────────────────────────────
+	// Startup recovery — close runs that were still open when the
+	// server last exited.
 	const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000)
 	for (const { sessionId, runId } of staleRuns) {
 		try {
@@ -99,6 +95,66 @@ export async function init(): Promise<ServerContext> {
 		}
 	}
 
+	return { eventStore, store }
+}
+
+/**
+ * Resolves the LLM adapter and creates the Hindsight memory system.
+ */
+async function initHindsight(
+	dataDir: string,
+	credentialsPath: string
+): Promise<HindsightContext> {
+	const hindsightAdapter =
+		await resolveGroqAdapter(credentialsPath)
+	const hindsight = new Hindsight({
+		dbPath: `${dataDir}/hindsight.db`,
+		...(hindsightAdapter
+			? { adapter: hindsightAdapter }
+			: {})
+	})
+
+	return { hindsight }
+}
+
+/**
+ * Creates the tus FileStore backed by a SQLite config store.
+ */
+function initUploads(dataDir: string): UploadsContext {
+	const uploadStore = new FileStore({
+		directory: `${dataDir}/uploads`,
+		configstore: new SqliteKvStore(`${dataDir}/uploads.db`)
+	})
+
+	return { uploadStore }
+}
+
+// ── Main init ────────────────────────────────────────────────────────────
+
+export async function init(): Promise<ServerContext> {
+	const { DATA_DIR } = env
+
+	// ── Config ────────────────────────────────────────────────────────────
+	const parsedUrl = new URL(env.API_BASE_URL)
+	const port =
+		parsedUrl.port !== ''
+			? Number(parsedUrl.port)
+			: parsedUrl.protocol === 'https:'
+				? 443
+				: 80
+
+	const CREDENTIALS_PATH =
+		process.env.CREDENTIALS_PATH ??
+		resolve(import.meta.dir, '../../../.credentials.json')
+
+	const STUDIO_PUBLIC = resolve(
+		import.meta.dir,
+		'../../web/public'
+	)
+
+	// ── Stores ────────────────────────────────────────────────────────────
+	const { eventStore, store } = initStores(DATA_DIR)
+
 	// ── Workspace seeding ─────────────────────────────────────────────────
 	const workspaceDir = seedWorkspace(DATA_DIR)
 	eventStore.markWorkspaceSeededOnce('main')
@@ -107,86 +163,27 @@ export async function init(): Promise<ServerContext> {
 	await startTei()
 
 	// ── Hindsight (memory) ────────────────────────────────────────────────
-	const hindsightAdapter = await resolveGroqAdapter(
+	const { hindsight } = await initHindsight(
+		DATA_DIR,
 		CREDENTIALS_PATH
 	)
-	const hindsight = new Hindsight({
-		dbPath: `${DATA_DIR}/hindsight.db`,
-		...(hindsightAdapter
-			? { adapter: hindsightAdapter }
-			: {})
+
+	// ── Agent controller (lazy-init + token refresh) ─────────────────────
+	const controllerFactory = new AgentControllerFactory({
+		store,
+		eventStore,
+		hindsight,
+		credentialsPath: CREDENTIALS_PATH,
+		workspaceDir,
+		dataDir: DATA_DIR,
+		env
 	})
-
-	// ── Lazy agent controller ─────────────────────────────────────────────
-	let cachedController: AgentController | null | undefined
-
-	async function ensureTokenFresh(): Promise<void> {
-		const cred = await loadAnthropicCredential(
-			CREDENTIALS_PATH
-		)
-		if (!cred || cred.type !== 'oauth') return
-
-		const REFRESH_BUFFER_MS = 5 * 60 * 1000
-		if (cred.expires - Date.now() < REFRESH_BUFFER_MS) {
-			const freshAdapter = await resolveAgentAdapter(
-				CREDENTIALS_PATH
-			)
-			if (freshAdapter && cachedController) {
-				cachedController.updateAdapter(freshAdapter)
-			} else {
-				cachedController = undefined
-			}
-		}
-	}
-
-	async function getAgentController(): Promise<AgentController | null> {
-		await ensureTokenFresh()
-		if (cachedController !== undefined)
-			return cachedController
-		const adapter = await resolveAgentAdapter(
-			CREDENTIALS_PATH
-		)
-		const guardrails = buildGuardrailPolicy(env)
-
-		const memory = new MemoryOrchestrator({
-			hindsight,
-			eventStore,
-			workspaceDir,
-			onTrace: entry => {
-				store.trace({
-					sessionId: store.getCurrentSessionId(),
-					type: entry.type,
-					payload: entry.payload
-				})
-			}
-		})
-
-		cachedController = adapter
-			? new AgentController(store, {
-					adapter,
-					workspaceDir,
-					dataDir: DATA_DIR,
-					memory,
-					agentOptions: guardrails
-						? { guardrails }
-						: undefined
-				})
-			: null
-		return cachedController
-	}
-
-	function invalidateAgentCache() {
-		cachedController = undefined
-	}
 
 	// Eagerly resolve once at startup
-	await getAgentController()
+	await controllerFactory.get()
 
 	// ── Tus uploads ───────────────────────────────────────────────────────
-	const uploadStore = new FileStore({
-		directory: `${DATA_DIR}/uploads`,
-		expirationPeriodInMilliseconds: 24 * 60 * 60 * 1000
-	})
+	const { uploadStore } = initUploads(DATA_DIR)
 
 	const sseState: SseState = { activeClients: 0 }
 
@@ -215,8 +212,9 @@ export async function init(): Promise<ServerContext> {
 		hindsight,
 		uploadStore,
 		sseState,
-		getAgentController,
-		invalidateAgentCache,
+		getAgentController: () => controllerFactory.get(),
+		invalidateAgentCache: () =>
+			controllerFactory.invalidate(),
 		ensureBootstrap,
 		isBootstrapInjected: () =>
 			isBootstrapInjected(eventStore)

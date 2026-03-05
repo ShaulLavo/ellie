@@ -12,6 +12,7 @@ import {
 } from './routes/auth'
 import { createChatRoutes } from './routes/chat'
 import { errorSchema } from './routes/common'
+import { HttpError } from './routes/http-errors'
 import { createSessionRoutes } from './routes/session'
 import { createStatusRoutes } from './routes/status'
 import { createDbStudioRoutes } from './routes/db-studio'
@@ -116,17 +117,13 @@ export const app = new Elysia()
 			return { error: summary || error.message }
 		}
 
+		if (error instanceof HttpError) {
+			set.status = error.status
+			return { error: error.message }
+		}
+
 		const message =
 			error instanceof Error ? error.message : String(error)
-		const lower = message.toLowerCase()
-		if (lower.includes(`not found`)) set.status = 404
-		if (
-			lower.includes(`missing`) ||
-			lower.includes(`empty`) ||
-			lower.includes(`invalid`)
-		) {
-			set.status = 400
-		}
 		if (set.status === 200) set.status = 500
 
 		return {

@@ -1,5 +1,17 @@
 import { sse } from 'elysia'
 import * as v from 'valibot'
+import type { RealtimeStore } from '../lib/realtime-store'
+import { BadRequestError } from './http-errors'
+
+/** Resolve the virtual 'current' session ID to the actual one. */
+export function resolveSessionId(
+	store: RealtimeStore,
+	raw: string
+): string {
+	return raw === 'current'
+		? store.getCurrentSessionId()
+		: raw
+}
 
 export const messageInputSchema = v.object({
 	content: v.string(),
@@ -36,6 +48,45 @@ export const statusSchema = v.object({
 	needsBootstrap: v.boolean()
 })
 export const errorSchema = v.object({ error: v.string() })
+
+// ── Chat response schemas ───────────────────────────────────────────────────
+
+export const sessionSchema = v.object({
+	id: v.string(),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+	currentSeq: v.number()
+})
+
+export const sessionListSchema = v.array(sessionSchema)
+
+export const eventRowSchema = v.object({
+	id: v.number(),
+	sessionId: v.string(),
+	seq: v.number(),
+	runId: v.nullable(v.string()),
+	type: v.string(),
+	payload: v.string(),
+	dedupeKey: v.nullable(v.string()),
+	createdAt: v.number()
+})
+
+export const eventRowListSchema = v.array(eventRowSchema)
+
+export const postMessageResponseSchema = v.object({
+	id: v.number(),
+	seq: v.number(),
+	sessionId: v.string(),
+	runId: v.optional(v.string()),
+	routed: v.optional(
+		v.picklist(['prompt', 'followUp', 'queued'])
+	)
+})
+
+export const clearSessionResponseSchema = v.object({
+	sessionId: v.string(),
+	cleared: v.literal(true)
+})
 
 // ── Auth schemas ─────────────────────────────────────────────────────────────
 
@@ -134,7 +185,7 @@ export function normalizeMessageInput(
 ): MessageInput {
 	const content = body.content.trim()
 	if (content.length === 0) {
-		throw new Error(
+		throw new BadRequestError(
 			`Missing 'content' field in request body`
 		)
 	}

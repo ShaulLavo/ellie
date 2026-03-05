@@ -1,9 +1,7 @@
-/**
- * Dev-only routes — destructive operations for local development.
- */
+/** Dev-only routes — destructive operations for local development. */
 
-import { rmSync } from 'node:fs'
 import { Elysia } from 'elysia'
+import { rmSync } from 'node:fs'
 
 /**
  * POST /api/dev/reset

@@ -3,7 +3,8 @@ import type {
 	EventRow,
 	EventType,
 	EventPayloadMap,
-	AgentMessage
+	AgentMessage,
+	SessionRow
 } from '@ellie/db'
 
 export type SessionEvent =
@@ -71,8 +72,8 @@ export class RealtimeStore {
 		return this.#subscribe('current-session', listener)
 	}
 
-	get eventStore(): EventStore {
-		return this.#store
+	getSession(sessionId: string): SessionRow | undefined {
+		return this.#store.getSession(sessionId)
 	}
 
 	// ── Session CRUD ──────────────────────────────────────────────────────
