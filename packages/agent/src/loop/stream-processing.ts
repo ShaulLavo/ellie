@@ -142,6 +142,8 @@ export async function processAgentStream(
 	const partialJsonMap = new Map<string, string>()
 	const toolCallIndexMap = new Map<string, number>()
 	let chunkCount = 0
+	/** Rolling indices for current text/thinking blocks — avoids O(n) scans. */
+	const rolling = { textIdx: -1, thinkIdx: -1 }
 
 	try {
 		for await (const chunk of streamSource) {
@@ -170,6 +172,8 @@ export async function processAgentStream(
 				emittedStart = false
 				partialJsonMap.clear()
 				toolCallIndexMap.clear()
+				rolling.textIdx = -1
+				rolling.thinkIdx = -1
 			}
 
 			// Track tool call IDs for the bridge
@@ -210,7 +214,8 @@ export async function processAgentStream(
 				partialJsonMap,
 				toolCallIndexMap,
 				config.model,
-				config
+				config,
+				rolling
 			)
 
 			// Update emittedStart after processing
@@ -338,7 +343,8 @@ function processChunk(
 	partialJsonMap: Map<string, string>,
 	toolCallIndexMap: Map<string, number>,
 	model: Model,
-	config: AgentLoopConfig
+	config: AgentLoopConfig,
+	rolling: { textIdx: number; thinkIdx: number }
 ): void {
 	switch (chunk.type) {
 		case 'RUN_STARTED': {
@@ -358,25 +364,22 @@ function processChunk(
 					message: { ...partial }
 				})
 			}
-			const textIdx = partial.content.length
+			rolling.textIdx = partial.content.length
 			partial.content.push({ type: 'text', text: '' })
 			emitUpdate(emit, partial, {
 				type: 'text_start',
-				contentIndex: textIdx
+				contentIndex: rolling.textIdx
 			})
 			break
 		}
 
 		case 'TEXT_MESSAGE_CONTENT': {
-			const lastText = partial.content.findLast(
-				c => c.type === 'text'
-			)
-			if (lastText && lastText.type === 'text') {
-				lastText.text += chunk.delta
-				const idx = partial.content.lastIndexOf(lastText)
+			const tc = partial.content[rolling.textIdx]
+			if (tc && tc.type === 'text') {
+				tc.text += chunk.delta
 				emitUpdate(emit, partial, {
 					type: 'text_delta',
-					contentIndex: idx,
+					contentIndex: rolling.textIdx,
 					delta: chunk.delta
 				})
 			}
@@ -384,14 +387,10 @@ function processChunk(
 		}
 
 		case 'TEXT_MESSAGE_END': {
-			const endText = partial.content.findLast(
-				c => c.type === 'text'
-			)
-			if (endText) {
-				const idx = partial.content.lastIndexOf(endText)
+			if (rolling.textIdx >= 0) {
 				emitUpdate(emit, partial, {
 					type: 'text_end',
-					contentIndex: idx
+					contentIndex: rolling.textIdx
 				})
 			}
 			break
@@ -404,37 +403,30 @@ function processChunk(
 					message: { ...partial }
 				})
 			}
-			const thinkIdx = partial.content.length
+			rolling.thinkIdx = partial.content.length
 			partial.content.push({
 				type: 'thinking',
 				text: ''
 			})
 			emitUpdate(emit, partial, {
 				type: 'thinking_start',
-				contentIndex: thinkIdx
+				contentIndex: rolling.thinkIdx
 			})
 			break
 		}
 
 		case 'STEP_FINISHED': {
-			const lastThinking = partial.content.findLast(
-				c => c.type === 'thinking'
-			)
-			if (
-				lastThinking &&
-				lastThinking.type === 'thinking'
-			) {
-				lastThinking.text += chunk.delta
-				const idx =
-					partial.content.lastIndexOf(lastThinking)
+			const tc = partial.content[rolling.thinkIdx]
+			if (tc && tc.type === 'thinking') {
+				tc.text += chunk.delta
 				emitUpdate(emit, partial, {
 					type: 'thinking_delta',
-					contentIndex: idx,
+					contentIndex: rolling.thinkIdx,
 					delta: chunk.delta
 				})
 				emitUpdate(emit, partial, {
 					type: 'thinking_end',
-					contentIndex: idx
+					contentIndex: rolling.thinkIdx
 				})
 			}
 			break
