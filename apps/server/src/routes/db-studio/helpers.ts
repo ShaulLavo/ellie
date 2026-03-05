@@ -46,6 +46,16 @@ function isShadowTable(
 	return false
 }
 
+const INTERNAL_PATTERNS = [/^__/, /^_/, /^libsql_/]
+
+function isInternalTable(
+	name: string,
+	isVirtual: boolean
+): boolean {
+	if (isVirtual) return true
+	return INTERNAL_PATTERNS.some(p => p.test(name))
+}
+
 // ── SQL helpers ─────────────────────────────────────────────────────────────
 
 /** Double-quote an identifier to prevent injection. */
@@ -161,6 +171,7 @@ export function getTables(db: Database): Array<{
 	name: string
 	type: 'table' | 'view'
 	isVirtual: boolean
+	isInternal: boolean
 }> {
 	const rows = db
 		.query(
@@ -180,13 +191,17 @@ export function getTables(db: Database): Array<{
 				!isSystemTable(r.name) &&
 				!isShadowTable(r.name, allNames)
 		)
-		.map(r => ({
-			name: r.name,
-			type: r.type as 'table' | 'view',
-			isVirtual: r.sql
+		.map(r => {
+			const isVirtual = r.sql
 				? /^\s*CREATE\s+VIRTUAL\s+TABLE/i.test(r.sql)
 				: false
-		}))
+			return {
+				name: r.name,
+				type: r.type as 'table' | 'view',
+				isVirtual,
+				isInternal: isInternalTable(r.name, isVirtual)
+			}
+		})
 }
 
 export function getSchema(db: Database, table: string) {
