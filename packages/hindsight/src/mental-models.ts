@@ -22,20 +22,9 @@ import type {
 } from './types'
 import { reflect, type BankProfile } from './reflect'
 import type { MentalModelRow } from './schema'
+import { safeJsonParse } from './util'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function safeJsonParse<T>(
-	value: string | null,
-	fallback: T
-): T {
-	if (!value) return fallback
-	try {
-		return JSON.parse(value) as T
-	} catch {
-		return fallback
-	}
-}
 
 function rowToMentalModel(
 	row: MentalModelRow

@@ -37,20 +37,9 @@ import {
 import { parseLLMJson } from './sanitize'
 import { refreshMentalModel } from './mental-models'
 import type { BankProfile } from './reflect'
+import { safeJsonParse } from './util'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function safeJsonParse<T>(
-	value: string | null,
-	fallback: T
-): T {
-	if (!value) return fallback
-	try {
-		return JSON.parse(value) as T
-	} catch {
-		return fallback
-	}
-}
 
 function getOccurredStart(
 	row: typeof import('./schema').memoryUnits.$inferSelect
