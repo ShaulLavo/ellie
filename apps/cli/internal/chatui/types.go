@@ -123,7 +123,7 @@ type SessionStats struct {
 // SessionEntry is a summary of a chat session.
 type SessionEntry struct {
 	ID         string `json:"id"`
-	EventCount int    `json:"eventCount"`
+	CurrentSeq int    `json:"currentSeq"`
 	CreatedAt  int64  `json:"createdAt"`
 	UpdatedAt  int64  `json:"updatedAt"`
 }

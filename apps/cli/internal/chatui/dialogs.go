@@ -229,7 +229,7 @@ func (d *SessionListDialog) View(width, height int) string {
 		}
 
 		line := fmt.Sprintf("%s%s  %s  %d events%s",
-			prefix, id, dialogDim.Render(created), s.EventCount, marker)
+			prefix, id, dialogDim.Render(created), s.CurrentSeq, marker)
 		b.WriteString(line + "\n")
 	}
 
@@ -287,7 +287,7 @@ func (d *SessionInfoDialog) View(width, height int) string {
 	}
 
 	b.WriteString(fmt.Sprintf("  Session ID:   %s\n", d.session.ID))
-	b.WriteString(fmt.Sprintf("  Events:       %d\n", d.session.EventCount))
+	b.WriteString(fmt.Sprintf("  Events:       %d\n", d.session.CurrentSeq))
 	b.WriteString(fmt.Sprintf("  Created:      %s\n",
 		time.UnixMilli(d.session.CreatedAt).Format("2006-01-02 15:04:05")))
 	b.WriteString(fmt.Sprintf("  Updated:      %s\n",

@@ -139,16 +139,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea.Focus()
 				return m, nil
 			}
-			// In editor: try escape from history
+			// In editor: try escape from history first
 			if text, ok := m.history.EscapeToDraft(); ok {
 				m.textarea.Reset()
 				m.textarea.SetValue(text)
 				return m, nil
 			}
+			// In editor with empty input: switch to chat viewport
+			if strings.TrimSpace(m.textarea.Value()) == "" {
+				m.focus = focusChat
+				m.textarea.Blur()
+				return m, nil
+			}
 			return m, nil
 
 		case key.Matches(msg, m.keys.Retry):
-			if m.focus == focusChat && m.connState == StateError {
+			if m.connState == StateError {
 				m.sseClient.ResetRetry()
 				return m, m.startSSE()
 			}
@@ -387,7 +393,9 @@ func (m Model) updateChat(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // ─── Dialog handling ──────────────────────────────────────────────
 
 func (m Model) updateDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	newDialog, action := m.dialog.Update(msg, m.keys)
+	// Capture reference to current dialog before Update may nil it.
+	prev := m.dialog
+	newDialog, action := prev.Update(msg, m.keys)
 	m.dialog = newDialog
 
 	switch action {
@@ -400,7 +408,8 @@ func (m Model) updateDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.clearSession()
 
 	case ActionSelectCommand:
-		if cp, ok := m.dialog.(*CommandPaletteDialog); ok {
+		// prev still points to the CommandPaletteDialog even if Update returned nil.
+		if cp, ok := prev.(*CommandPaletteDialog); ok {
 			if sel := cp.Selected(); sel != nil {
 				m.dialog = nil
 				return m.executeCommand(sel)
@@ -671,7 +680,12 @@ func (m Model) loadSessionInfo(dlg *SessionInfoDialog) tea.Cmd {
 }
 
 func (m Model) saveTranscript() tea.Cmd {
-	msgs := m.messages
+	// Include in-flight streaming message if present.
+	msgs := make([]StoredMessage, len(m.messages))
+	copy(msgs, m.messages)
+	if m.streamingMsg != nil {
+		msgs = append(msgs, *m.streamingMsg)
+	}
 	sid := m.sessionID
 	dir := m.transcriptDir
 	return func() tea.Msg {
@@ -738,11 +752,18 @@ func matchSlashCommand(text string) *SlashCommand {
 // ─── Editor boundary checks (ported from Crush) ──────────────────
 
 func isAtEditorStart(ta textarea.Model) bool {
-	return ta.Line() == 0
+	// Only trigger history when cursor is on the first line at column 0.
+	li := ta.LineInfo()
+	return ta.Line() == 0 && li.ColumnOffset == 0
 }
 
 func isAtEditorEnd(ta textarea.Model) bool {
-	return ta.Line() >= ta.LineCount()-1
+	// Only trigger history when cursor is on the last line at the end.
+	if ta.Line() < ta.LineCount()-1 {
+		return false
+	}
+	li := ta.LineInfo()
+	return li.ColumnOffset >= li.CharWidth
 }
 
 // ─── Overlay helper ───────────────────────────────────────────────
