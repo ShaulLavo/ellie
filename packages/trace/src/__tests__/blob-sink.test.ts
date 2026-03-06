@@ -2,9 +2,10 @@ import {
 	describe,
 	test,
 	expect,
-	beforeEach
+	beforeEach,
+	afterEach
 } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { FileStore } from '@ellie/tus'
@@ -47,6 +48,10 @@ describe('TusBlobSink', () => {
 		dataDir = mkdtempSync(join(tmpdir(), 'blob-sink-test-'))
 		fileStore = new FileStore({ directory: dataDir })
 		sink = new TusBlobSink(fileStore)
+	})
+
+	afterEach(() => {
+		rmSync(dataDir, { recursive: true, force: true })
 	})
 
 	test('writes blob and returns BlobRef with correct fields', async () => {

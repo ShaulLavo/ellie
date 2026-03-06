@@ -67,23 +67,16 @@ export interface ToolRegistry {
 export function createToolRegistry(
 	config: ToolRegistryConfig
 ): ToolRegistry {
-	let basicDirectTools: AgentTool[] = [
+	// Raw tools — no trace wrapping (used inside REPL HTTP handler)
+	const rawBasicTools: AgentTool[] = [
 		...createWorkspaceTools(config.workspaceDir),
 		createShellTool(config.workspaceDir),
 		createRipgrepTool(config.workspaceDir),
 		createWebFetchTool()
 	]
 
-	let execTools: AgentTool[] = [
-		createExecTool(basicDirectTools),
-		createSessionExecTool(
-			config.dataDir,
-			config.getSessionId,
-			basicDirectTools
-		)
-	]
-
-	// Wrap with traced facades when trace deps are available
+	// Traced versions for direct agent-loop use
+	let basicDirectTools: AgentTool[] = rawBasicTools
 	if (config.traceRecorder && config.traceScope) {
 		const traceOpts = {
 			recorder: config.traceRecorder,
@@ -91,9 +84,35 @@ export function createToolRegistry(
 			parentScope: config.traceScope
 		}
 
-		basicDirectTools = basicDirectTools.map(t =>
+		basicDirectTools = rawBasicTools.map(t =>
 			createTracedToolWrapper(t, traceOpts)
 		)
+	}
+
+	// Exec tools get RAW tools + trace deps (not traced wrappers —
+	// the REPL HTTP handler does its own tracing to avoid double-tracing)
+	const traceDeps = config.traceRecorder
+		? { recorder: config.traceRecorder }
+		: undefined
+
+	let execTools: AgentTool[] = [
+		createExecTool(rawBasicTools, traceDeps),
+		createSessionExecTool(
+			config.dataDir,
+			config.getSessionId,
+			rawBasicTools,
+			traceDeps
+		)
+	]
+
+	// Wrap exec tools with traced REPL facades
+	if (config.traceRecorder && config.traceScope) {
+		const traceOpts = {
+			recorder: config.traceRecorder,
+			blobSink: config.blobSink,
+			parentScope: config.traceScope
+		}
+
 		execTools = execTools.map(t =>
 			createTracedReplTool(t, traceOpts)
 		)

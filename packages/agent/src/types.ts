@@ -170,14 +170,19 @@ export interface AgentLoopConfig {
 		charsPerToken?: number
 	}
 
-	/** Tool result truncation configuration. Default: 50_000 chars per result. */
+	/**
+	 * Tool result truncation configuration. Default: 50_000 chars per result.
+	 *
+	 * Invariant: blobSink and traceScope must both be set or both be unset.
+	 * The tool bridge enforces this at runtime and fails closed on mismatch.
+	 */
 	toolSafety?: {
 		maxToolResultChars?: number
 		/** @deprecated Use blobSink instead. Directory to write full output when a tool result is truncated. */
 		overflowDir?: string
-		/** Traced blob sink for overflow. When set, overflowDir is ignored. */
+		/** Traced blob sink for overflow. When set, overflowDir is ignored. Must be paired with traceScope. */
 		blobSink?: BlobSink
-		/** Active trace scope for correlating overflows. Required when blobSink is set. */
+		/** Active trace scope for correlating overflows. Must be paired with blobSink. */
 		traceScope?: TraceScope
 	}
 

@@ -231,8 +231,23 @@ export function wrapToolsForTanStack(
 						}
 						isError = true
 					}
+				} else if (blobSink || traceScope) {
+					// Partial config — one of blobSink/traceScope is missing
+					const missing = blobSink
+						? 'traceScope'
+						: 'blobSink'
+					result = {
+						content: [
+							{
+								type: 'text',
+								text: `Tool result overflow misconfigured: ${missing} is required when ${blobSink ? 'blobSink' : 'traceScope'} is set (toolCallId: ${toolCallId})`
+							}
+						],
+						details: {}
+					}
+					isError = true
 				} else {
-					// Legacy file-based overflow
+					// Legacy file-based overflow (neither blobSink nor traceScope)
 					result = truncateToolResult(
 						result,
 						maxToolResultChars,

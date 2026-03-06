@@ -710,10 +710,7 @@ export function createHindsightApp(
 			return handler(input, params)
 		}
 
-		const parentScope = extractTraceScope(
-			trace,
-			request
-		)
+		const parentScope = extractTraceScope(trace, request)
 		const childScope =
 			trace.factory.createChildScope(parentScope)
 		const startedAt = Date.now()
@@ -750,9 +747,7 @@ export function createHindsightApp(
 					elapsedMs: Date.now() - startedAt,
 					success: false,
 					error:
-						err instanceof Error
-							? err.message
-							: String(err)
+						err instanceof Error ? err.message : String(err)
 				}
 			)
 			throw err

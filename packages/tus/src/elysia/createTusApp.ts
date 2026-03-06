@@ -196,19 +196,30 @@ export function createTusApp(options: CreateTusAppOptions) {
 			.get(
 				`${rpcPrefix}/:id/content`,
 				async ({ params, set }) => {
+					let upload: Awaited<
+						ReturnType<typeof options.datastore.getUpload>
+					>
 					try {
-						const upload =
-							await options.datastore.getUpload(params.id)
-						const ds = options.datastore as unknown as {
-							read: (id: string) => NodeJS.ReadableStream
+						upload = await options.datastore.getUpload(
+							params.id
+						)
+					} catch {
+						set.status = 404
+						return { error: 'Upload not found' }
+					}
+
+					const ds = options.datastore as unknown as {
+						read: (id: string) => NodeJS.ReadableStream
+					}
+					if (typeof ds.read !== 'function') {
+						set.status = 501
+						return {
+							error:
+								'Datastore does not support content reads'
 						}
-						if (typeof ds.read !== 'function') {
-							set.status = 501
-							return {
-								error:
-									'Datastore does not support content reads'
-							}
-						}
+					}
+
+					try {
 						const stream = ds.read(params.id)
 						const contentType =
 							(upload.metadata as Record<string, string>)
@@ -220,10 +231,10 @@ export function createTusApp(options: CreateTusAppOptions) {
 							)
 						}
 						return stream
-					} catch {
-						set.status = 404
+					} catch (readErr) {
+						set.status = 500
 						return {
-							error: 'Upload not found'
+							error: `Failed to read upload content: ${readErr instanceof Error ? readErr.message : String(readErr)}`
 						}
 					}
 				},

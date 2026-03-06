@@ -28,7 +28,8 @@ import type {
 } from './types'
 import {
 	shouldBlob,
-	createTracedStreamFn
+	createTracedStreamFn,
+	type BlobRef
 } from '@ellie/trace'
 import {
 	createPartial,
@@ -314,9 +315,7 @@ export async function processAgentStream(
 	) {
 		const scope = config.toolSafety.traceScope
 		const serialized = JSON.stringify(snapshotPayload)
-		let blobRefs:
-			| import('@ellie/trace').BlobRef[]
-			| undefined
+		let blobRefs: BlobRef[] | undefined
 		let inlinePayload: Record<string, unknown> =
 			snapshotPayload
 
@@ -341,8 +340,14 @@ export async function processAgentStream(
 					messages: `[${llmMessages.length} messages — see blob]`,
 					_preview: serialized.slice(0, 2048)
 				}
-			} catch {
+			} catch (blobErr) {
 				// Best-effort blob — fall through with full inline payload
+				console.warn(
+					'[stream-processing] prompt.snapshot blob write failed:',
+					blobErr instanceof Error
+						? blobErr.message
+						: String(blobErr)
+				)
 			}
 		}
 

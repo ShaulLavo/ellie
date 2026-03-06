@@ -40,6 +40,13 @@ export interface TracedReplOptions {
 	parentScope: TraceScope
 }
 
+/** Structural interface for tools that support scope threading. */
+interface ScopeSettable {
+	setActiveReplScope?: (
+		scope: TraceScope | undefined
+	) => void
+}
+
 const REPL_TOOL_NAMES = new Set(['exec', 'session_exec'])
 
 /**
@@ -61,6 +68,12 @@ export function createTracedReplTool<T extends ReplTool>(
 		const scope = createChildScope(opts.parentScope)
 		const startedAt = Date.now()
 
+		// Thread scope so REPL HTTP handler nests tool calls under this span
+		const settable = tool as ReplTool & ScopeSettable
+		if (settable.setActiveReplScope) {
+			settable.setActiveReplScope(scope)
+		}
+
 		const code = (params as Record<string, unknown>)?.code
 		opts.recorder.record(scope, 'repl.start', 'repl', {
 			toolName: tool.name,
@@ -71,68 +84,81 @@ export function createTracedReplTool<T extends ReplTool>(
 					: undefined
 		})
 
-		let result: ToolResult
-		let isError = false
 		try {
-			result = await tool.execute(
-				toolCallId,
-				params,
-				signal,
-				onUpdate
-			)
-		} catch (err) {
-			isError = true
-			opts.recorder.record(scope, 'repl.end', 'repl', {
-				toolName: tool.name,
-				toolCallId,
-				isError: true,
-				error:
-					err instanceof Error ? err.message : String(err),
-				elapsedMs: Date.now() - startedAt
-			})
-			throw err
-		}
-
-		const elapsedMs = Date.now() - startedAt
-		const outputText = result.content
-			.filter(c => c.type === 'text')
-			.map(c => c.text ?? '')
-			.join('\n')
-
-		let blobRefs: BlobRef[] | undefined
-		if (opts.blobSink && shouldBlob(outputText)) {
+			let result: ToolResult
+			let isError = false
 			try {
-				const ref = await opts.blobSink.write({
-					traceId: scope.traceId,
-					spanId: scope.spanId,
-					role: 'repl_output',
-					content: outputText,
-					mimeType: 'text/plain',
-					ext: 'txt'
+				result = await tool.execute(
+					toolCallId,
+					params,
+					signal,
+					onUpdate
+				)
+			} catch (err) {
+				isError = true
+				opts.recorder.record(scope, 'repl.end', 'repl', {
+					toolName: tool.name,
+					toolCallId,
+					isError: true,
+					error:
+						err instanceof Error
+							? err.message
+							: String(err),
+					elapsedMs: Date.now() - startedAt
 				})
-				blobRefs = [ref]
-			} catch {
-				// Best-effort blob
+				throw err
+			}
+
+			const elapsedMs = Date.now() - startedAt
+			const outputText = result.content
+				.filter(c => c.type === 'text')
+				.map(c => c.text ?? '')
+				.join('\n')
+
+			let blobRefs: BlobRef[] | undefined
+			if (opts.blobSink && shouldBlob(outputText)) {
+				try {
+					const ref = await opts.blobSink.write({
+						traceId: scope.traceId,
+						spanId: scope.spanId,
+						role: 'repl_output',
+						content: outputText,
+						mimeType: 'text/plain',
+						ext: 'txt'
+					})
+					blobRefs = [ref]
+				} catch (blobErr) {
+					console.warn(
+						`[traced-repl] output blob write failed (traceId=${scope.traceId}):`,
+						blobErr instanceof Error
+							? blobErr.message
+							: String(blobErr)
+					)
+				}
+			}
+
+			opts.recorder.record(
+				scope,
+				'repl.end',
+				'repl',
+				{
+					toolName: tool.name,
+					toolCallId,
+					isError,
+					elapsedMs,
+					outputPreview: outputText.slice(0, 500),
+					outputLength: outputText.length,
+					details: result.details
+				},
+				blobRefs
+			)
+
+			return result
+		} finally {
+			if (settable.setActiveReplScope) {
+				settable.setActiveReplScope(undefined)
 			}
 		}
-
-		opts.recorder.record(
-			scope,
-			'repl.end',
-			'repl',
-			{
-				toolName: tool.name,
-				toolCallId,
-				isError,
-				elapsedMs,
-				outputPreview: outputText.slice(0, 500),
-				outputLength: outputText.length,
-				details: result.details
-			},
-			blobRefs
-		)
-
-		return result
 	}
 
 	return {

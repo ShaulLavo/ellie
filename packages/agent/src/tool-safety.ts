@@ -119,11 +119,12 @@ export function truncateToolResult(
 		suffix
 	)
 
+	const baseDetails =
+		result.details && typeof result.details === 'object'
+			? (result.details as Record<string, unknown>)
+			: {}
 	const details = overflowPath
-		? {
-				...(result.details as Record<string, unknown>),
-				overflowPath
-			}
+		? { ...baseDetails, overflowPath }
 		: result.details
 
 	return {
@@ -181,11 +182,15 @@ export async function truncateToolResultWithBlob(
 		suffix
 	)
 
+	const baseDetails =
+		result.details && typeof result.details === 'object'
+			? (result.details as Record<string, unknown>)
+			: {}
 	return {
 		...result,
 		content: truncatedContent,
 		details: {
-			...(result.details as Record<string, unknown>),
+			...baseDetails,
 			overflowRef: blobRef
 		}
 	}

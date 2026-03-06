@@ -14,8 +14,20 @@
 
 import { ulid } from 'fast-ulid'
 import type { AgentTool } from '@ellie/agent'
+import type {
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
+import { createChildScope } from '@ellie/trace'
 
 // ── Types ───────────────────────────────────────────────────────────────
+
+/** Trace dependencies for recording nested tool calls in the REPL. */
+export interface ReplTraceDeps {
+	recorder: TraceRecorder
+	/** Returns the active REPL scope — set per-invocation by traced-repl.ts. */
+	getParentScope: () => TraceScope | undefined
+}
 
 export interface ReplEvalResult {
 	/** Committed output (from print/commit calls). Injected into model context. */
@@ -139,6 +151,7 @@ export class ReplRuntime {
 	readonly sessionId: string
 	readonly #createdAt: number
 	readonly #tools: AgentTool[]
+	readonly #traceDeps?: ReplTraceDeps
 
 	#proc: ReplProc | null = null
 	#server: ReturnType<typeof Bun.serve> | null = null
@@ -149,10 +162,15 @@ export class ReplRuntime {
 	#residualBuffer = ''
 	#decoder = new TextDecoder()
 
-	constructor(sessionId?: string, tools?: AgentTool[]) {
+	constructor(
+		sessionId?: string,
+		tools?: AgentTool[],
+		traceDeps?: ReplTraceDeps
+	) {
 		this.sessionId = sessionId ?? ulid()
 		this.#createdAt = Date.now()
 		this.#tools = tools ?? []
+		this.#traceDeps = traceDeps
 	}
 
 	/** Spawn the REPL subprocess + tool server. Idempotent. */
@@ -180,8 +198,75 @@ export class ReplRuntime {
 								error: `Unknown tool: ${body.tool}`
 							})
 						}
+
+						const toolCallId = `repl-${ulid()}`
+						const parentScope =
+							this.#traceDeps?.getParentScope()
+
+						// Traced path — record tool.start/tool.end as children of the REPL span
+						if (this.#traceDeps && parentScope) {
+							const scope = createChildScope(parentScope)
+							const startedAt = Date.now()
+
+							this.#traceDeps.recorder.record(
+								scope,
+								'tool.start',
+								'tool',
+								{
+									toolName: body.tool,
+									toolCallId,
+									args: body.args,
+									context: 'repl'
+								}
+							)
+
+							try {
+								const result = await tool.execute(
+									toolCallId,
+									body.args
+								)
+								this.#traceDeps.recorder.record(
+									scope,
+									'tool.end',
+									'tool',
+									{
+										toolName: body.tool,
+										toolCallId,
+										isError: false,
+										elapsedMs: Date.now() - startedAt,
+										context: 'repl'
+									}
+								)
+								return Response.json({
+									result
+								})
+							} catch (err) {
+								const msg =
+									err instanceof Error
+										? err.message
+										: String(err)
+								this.#traceDeps.recorder.record(
+									scope,
+									'tool.end',
+									'tool',
+									{
+										toolName: body.tool,
+										toolCallId,
+										isError: true,
+										error: msg,
+										elapsedMs: Date.now() - startedAt,
+										context: 'repl'
+									}
+								)
+								return Response.json({
+									error: msg
+								})
+							}
+						}
+
+						// Untraced path
 						const result = await tool.execute(
-							`repl-${ulid()}`,
+							toolCallId,
 							body.args
 						)
 						return Response.json({ result })

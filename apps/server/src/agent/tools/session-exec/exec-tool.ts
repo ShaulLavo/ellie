@@ -13,7 +13,14 @@ import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import { ReplRuntime } from '../../repl/repl-runtime'
+import type {
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
+import {
+	ReplRuntime,
+	type ReplTraceDeps
+} from '../../repl/repl-runtime'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -44,20 +51,43 @@ type ExecParams = v.InferOutput<typeof execParams>
  * Each call spawns a fresh REPL, runs the code, and tears down.
  */
 export function createExecTool(
-	baseTools?: AgentTool[]
-): AgentTool {
+	baseTools?: AgentTool[],
+	traceDeps?: { recorder: TraceRecorder }
+): AgentTool & {
+	setActiveReplScope?: (
+		scope: TraceScope | undefined
+	) => void
+} {
+	let activeReplScope: TraceScope | undefined
+
+	const replTraceDeps: ReplTraceDeps | undefined = traceDeps
+		? {
+				recorder: traceDeps.recorder,
+				getParentScope: () => activeReplScope
+			}
+		: undefined
+
 	return {
 		name: 'exec',
 		description:
 			'Execute TypeScript in a fresh isolated environment. No state persists between calls. Tools are available as async functions: read_workspace_file({ path }), write_workspace_file({ path, content }), shell({ command }), ripgrep({ pattern }). Use print() to return output. Example: `const files = await shell({ command: "ls" }); print(files)`',
 		label: 'Running code',
 		parameters: execParams,
+		setActiveReplScope: traceDeps
+			? (scope: TraceScope | undefined) => {
+					activeReplScope = scope
+				}
+			: undefined,
 		execute: async (
 			_toolCallId,
 			rawParams
 		): Promise<AgentToolResult> => {
 			const params = rawParams as ExecParams
-			const runtime = new ReplRuntime(undefined, baseTools)
+			const runtime = new ReplRuntime(
+				undefined,
+				baseTools,
+				replTraceDeps
+			)
 
 			try {
 				await runtime.start()

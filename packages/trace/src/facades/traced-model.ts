@@ -83,10 +83,13 @@ async function* wrapAsyncIterable(
 	scope: TraceScope,
 	opts: TracedModelOptions
 ): AsyncIterable<StreamChunk> {
+	let finished = false
+	let errored = false
 	try {
 		for await (const chunk of source) {
 			// Intercept RUN_FINISHED to record usage
 			if (chunk.type === 'RUN_FINISHED') {
+				finished = true
 				const usage = chunk.usage as
 					| Record<string, number>
 					| undefined
@@ -110,8 +113,13 @@ async function* wrapAsyncIterable(
 							ext: 'json'
 						})
 						blobRefs = [ref]
-					} catch {
-						// Best-effort blob
+					} catch (blobErr) {
+						console.warn(
+							`[traced-model] response blob write failed (traceId=${scope.traceId}):`,
+							blobErr instanceof Error
+								? blobErr.message
+								: String(blobErr)
+						)
 					}
 				}
 
@@ -127,10 +135,23 @@ async function* wrapAsyncIterable(
 			yield chunk
 		}
 	} catch (err) {
+		errored = true
 		opts.recorder.record(scope, 'model.error', 'model', {
 			error:
 				err instanceof Error ? err.message : String(err)
 		})
 		throw err
+	} finally {
+		if (!finished && !errored) {
+			opts.recorder.record(
+				scope,
+				'model.response',
+				'model',
+				{
+					finishReason: 'partial',
+					partial: true
+				}
+			)
+		}
 	}
 }

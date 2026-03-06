@@ -99,8 +99,13 @@ export function wrapMemoryOrchestrator<
 									ext: 'txt'
 								})
 								blobRefs = [ref]
-							} catch {
-								// Best-effort blob
+							} catch (blobErr) {
+								console.warn(
+									`[traced-memory] recall blob write failed (traceId=${scope.traceId}):`,
+									blobErr instanceof Error
+										? blobErr.message
+										: String(blobErr)
+								)
 							}
 						}
 

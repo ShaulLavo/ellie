@@ -36,7 +36,9 @@ export function shouldBlob(
 ): boolean {
 	if (Buffer.isBuffer(content)) return true
 	if (wasTruncated) return true
-	return content.length > BLOB_THRESHOLD
+	return (
+		Buffer.byteLength(content, 'utf-8') > BLOB_THRESHOLD
+	)
 }
 
 /**

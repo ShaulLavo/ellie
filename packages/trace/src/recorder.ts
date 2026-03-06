@@ -76,9 +76,19 @@ export class TraceRecorder {
 
 		const content = readFileSync(filePath, 'utf-8')
 		const lines = content.split('\n').filter(l => l.trim())
-		return lines.map(
-			line => JSON.parse(line) as TraceEventEnvelope
-		)
+		const events: TraceEventEnvelope[] = []
+		for (let i = 0; i < lines.length; i++) {
+			try {
+				events.push(
+					JSON.parse(lines[i]) as TraceEventEnvelope
+				)
+			} catch {
+				console.warn(
+					`[TraceRecorder] Skipping malformed JSONL line ${i + 1} in ${filePath}`
+				)
+			}
+		}
+		return events
 	}
 
 	/**
@@ -107,20 +117,38 @@ export class TraceRecorder {
 		}> = []
 
 		for (const traceId of this.listTraceIds()) {
-			const events = this.readTrace(traceId)
-			if (
-				events.length > 0 &&
-				events[0].sessionId === sessionId
-			) {
+			const first = this.#readFirstEvent(traceId)
+			if (first && first.sessionId === sessionId) {
 				results.push({
 					traceId,
-					ts: events[0].ts,
-					kind: events[0].kind
+					ts: first.ts,
+					kind: first.kind
 				})
 			}
 		}
 
 		return results.sort((a, b) => a.ts - b.ts)
+	}
+
+	/** Read only the first event from a trace file without loading the entire file. */
+	#readFirstEvent(
+		traceId: string
+	): TraceEventEnvelope | null {
+		const filePath = this.#tracePath(traceId)
+		if (!existsSync(filePath)) return null
+		const content = readFileSync(filePath, 'utf-8')
+		const newlineIdx = content.indexOf('\n')
+		const firstLine = (
+			newlineIdx >= 0
+				? content.slice(0, newlineIdx)
+				: content
+		).trim()
+		if (!firstLine) return null
+		try {
+			return JSON.parse(firstLine) as TraceEventEnvelope
+		} catch {
+			return null
+		}
 	}
 
 	/** Get the next monotonic sequence number for a trace. */
@@ -130,8 +158,16 @@ export class TraceRecorder {
 		return current
 	}
 
+	/** Validate traceId to prevent path traversal. */
+	static #SAFE_ID = /^[A-Za-z0-9_-]+$/
+
 	/** Build the file path for a trace's JSONL file. */
 	#tracePath(traceId: string): string {
+		if (!TraceRecorder.#SAFE_ID.test(traceId)) {
+			throw new Error(
+				`Invalid traceId: must match /^[A-Za-z0-9_-]+$/, got "${traceId}"`
+			)
+		}
 		return join(this.#traceDir, `${traceId}.jsonl`)
 	}
 }

@@ -2,9 +2,10 @@ import {
 	describe,
 	test,
 	expect,
-	beforeEach
+	beforeEach,
+	afterEach
 } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { TraceRecorder } from '../recorder'
@@ -17,6 +18,10 @@ describe('TraceRecorder', () => {
 	beforeEach(() => {
 		traceDir = mkdtempSync(join(tmpdir(), 'trace-test-'))
 		recorder = new TraceRecorder(traceDir)
+	})
+
+	afterEach(() => {
+		rmSync(traceDir, { recursive: true, force: true })
 	})
 
 	test('record writes JSONL and readTrace returns events', () => {
