@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import App from './App'
 import { DbStudioPage } from './db-studio'
+import { TerminalPage } from './terminal/terminal-page'
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 
@@ -52,9 +53,21 @@ const dbRoute = createRoute({
 	})
 })
 
+// ── /terminal → TUI in the browser ──────────────────────────────────────────
+
+const terminalRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: '/terminal',
+	component: TerminalPage
+})
+
 // ── Router ───────────────────────────────────────────────────────────────────
 
-const routeTree = rootRoute.addChildren([appRoute, dbRoute])
+const routeTree = rootRoute.addChildren([
+	appRoute,
+	dbRoute,
+	terminalRoute
+])
 
 export const router = createRouter({ routeTree })
 

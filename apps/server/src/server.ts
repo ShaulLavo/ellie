@@ -17,6 +17,7 @@ import { createSessionRoutes } from './routes/session'
 import { createStatusRoutes } from './routes/status'
 import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
+import { createTerminalRoutes } from './routes/terminal'
 import { API_INFO, API_TAGS } from './consts'
 import { init } from './init'
 
@@ -75,6 +76,7 @@ export const app = new Elysia()
 	)
 	.use(createDevRoutes(ctx.DATA_DIR))
 	.use(createDbStudioRoutes(ctx.DATA_DIR))
+	.use(createTerminalRoutes())
 	.use(createHindsightApp(ctx.hindsight))
 	.get('/', ({ redirect }) => redirect('/app'))
 	.use(
@@ -88,6 +90,13 @@ export const app = new Elysia()
 		await staticPlugin({
 			assets: ctx.STUDIO_PUBLIC,
 			prefix: `/db`,
+			indexHTML: true
+		})
+	)
+	.use(
+		await staticPlugin({
+			assets: ctx.STUDIO_PUBLIC,
+			prefix: `/terminal`,
 			indexHTML: true
 		})
 	)

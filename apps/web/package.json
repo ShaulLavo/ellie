@@ -45,6 +45,7 @@
 		"cmdk": "^1.1.1",
 		"dompurify": "3.3.1",
 		"embla-carousel-react": "^8.6.0",
+		"ghostty-web": "^0.4.0",
 		"idb": "8.0.3",
 		"idb-keyval": "^6.2.2",
 		"jszip": "3.10.1",
