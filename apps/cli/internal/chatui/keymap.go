@@ -28,6 +28,7 @@ type KeyMap struct {
 	Commands key.Binding
 	Sessions key.Binding
 	Info     key.Binding
+	Theme    key.Binding
 	Retry    key.Binding
 	Escape   key.Binding
 }
@@ -50,6 +51,10 @@ func DefaultKeyMap() KeyMap {
 		Info: key.NewBinding(
 			key.WithKeys("ctrl+g"),
 			key.WithHelp("ctrl+g", "info"),
+		),
+		Theme: key.NewBinding(
+			key.WithKeys("ctrl+t"),
+			key.WithHelp("ctrl+t", "theme"),
 		),
 		Retry: key.NewBinding(
 			key.WithKeys("r"),

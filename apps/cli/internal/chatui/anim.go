@@ -66,12 +66,18 @@ const (
 	springNumDots  = 3
 )
 
-// Spinner styles — sourced from shared palette.
+// Spinner styles — rebuilt by rebuildAnimStyles() on theme change.
 var (
-	spinnerFrameStyle = lipgloss.NewStyle().Foreground(colorAccent)
-	animLabelStyle    = lipgloss.NewStyle().Foreground(colorMuted)
-	animEllipStyle    = lipgloss.NewStyle().Foreground(colorDim)
+	spinnerFrameStyle lipgloss.Style
+	animLabelStyle    lipgloss.Style
+	animEllipStyle    lipgloss.Style
 )
+
+func rebuildAnimStyles() {
+	spinnerFrameStyle = lipgloss.NewStyle().Foreground(colorAccent)
+	animLabelStyle = lipgloss.NewStyle().Foreground(colorMuted)
+	animEllipStyle = lipgloss.NewStyle().Foreground(colorDim)
+}
 
 var animEllipsisFrames = []string{".", "..", "...", ""}
 

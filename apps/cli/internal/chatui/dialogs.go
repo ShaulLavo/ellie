@@ -25,23 +25,31 @@ const (
 	ActionClose
 	ActionClearSession
 	ActionSelectCommand
+	ActionRetry
 )
 
-// dialogStyles holds shared dialog styling.
+// dialogStyles holds shared dialog styling — rebuilt by rebuildDialogStyles() on theme change.
 var (
-	dialogBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorSubtle).
-			Padding(1, 2)
-	dialogTitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorAccent)
-	dialogDim = lipgloss.NewStyle().
-			Foreground(colorDim)
-	dialogHighlight = lipgloss.NewStyle().
-			Foreground(colorAccent).
-			Bold(true)
+	dialogBorder    lipgloss.Style
+	dialogTitle     lipgloss.Style
+	dialogDim       lipgloss.Style
+	dialogHighlight lipgloss.Style
 )
+
+func rebuildDialogStyles() {
+	dialogBorder = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorSubtle).
+		Padding(1, 2)
+	dialogTitle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(colorAccent)
+	dialogDim = lipgloss.NewStyle().
+		Foreground(colorDim)
+	dialogHighlight = lipgloss.NewStyle().
+		Foreground(colorAccent).
+		Bold(true)
+}
 
 // ─── Command Palette ──────────────────────────────────────────────
 
@@ -368,4 +376,62 @@ func truncateID(id string) string {
 		return id
 	}
 	return id[:8]
+}
+
+// ─── Disconnect Overlay ──────────────────────────────────────────
+
+// DisconnectDialog is shown when the server becomes unreachable.
+// It cannot be dismissed with Escape — only retry or reconnection clears it.
+type DisconnectDialog struct {
+	state ConnectionState
+	err   string
+}
+
+// NewDisconnectDialog creates a disconnect overlay.
+func NewDisconnectDialog(state ConnectionState, errMsg string) *DisconnectDialog {
+	return &DisconnectDialog{state: state, err: errMsg}
+}
+
+// UpdateState refreshes the dialog with new connection info.
+func (d *DisconnectDialog) UpdateState(state ConnectionState, errMsg string) {
+	d.state = state
+	d.err = errMsg
+}
+
+func (d *DisconnectDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogAction) {
+	km, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return d, ActionNone
+	}
+	// 'r' to retry — works in any disconnect state
+	if key.Matches(km, key.NewBinding(key.WithKeys("r", "R"))) {
+		return d, ActionRetry
+	}
+	// Non-dismissible: Escape does nothing
+	return d, ActionNone
+}
+
+func (d *DisconnectDialog) View(width, height int) string {
+	var b strings.Builder
+	b.WriteString(dialogTitle.Render("Server Unreachable"))
+	b.WriteString("\n\n")
+
+	switch d.state {
+	case StateError:
+		b.WriteString("  ✕ Connection failed")
+		if d.err != "" {
+			b.WriteString("\n")
+			b.WriteString(dialogDim.Render("  " + d.err))
+		}
+	case StateConnecting:
+		b.WriteString(dialogDim.Render("  ◌ Reconnecting..."))
+	default:
+		b.WriteString(dialogDim.Render("  ○ Disconnected"))
+	}
+
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("  Press %s to retry", dialogHighlight.Render("[R]")))
+
+	maxW := clampDialogWidth(width, 50)
+	return dialogBorder.Width(maxW).Render(b.String())
 }

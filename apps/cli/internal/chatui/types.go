@@ -56,8 +56,9 @@ type ContentPart struct {
 	Streaming  bool                   `json:"streaming,omitempty"`
 
 	// tool-result
-	Result   string `json:"result,omitempty"`
-	ToolName string `json:"toolName,omitempty"`
+	Result    string `json:"result,omitempty"`
+	ToolName  string `json:"toolName,omitempty"`
+	ElapsedMs int    `json:"elapsedMs,omitempty"`
 
 	// memory
 	Count      int          `json:"count,omitempty"`
@@ -157,4 +158,5 @@ var Commands = []SlashCommand{
 	{Name: "sessions", Description: "List all sessions"},
 	{Name: "info", Description: "Show current session info"},
 	{Name: "transcript", Description: "Save session transcript"},
+	{Name: "theme", Description: "Toggle light/dark mode"},
 }

@@ -149,8 +149,8 @@ func TestEventToStored_ToolExecution_Complete(t *testing.T) {
 	if len(msg.Parts) != 1 {
 		t.Fatalf("expected 1 part, got %d", len(msg.Parts))
 	}
-	if msg.Parts[0].Type != PartToolResult {
-		t.Errorf("expected tool-result, got %s", msg.Parts[0].Type)
+	if msg.Parts[0].Type != PartToolCall {
+		t.Errorf("expected tool-call with embedded result, got %s", msg.Parts[0].Type)
 	}
 	if msg.Parts[0].Result != "file contents here" {
 		t.Errorf("expected result text, got %q", msg.Parts[0].Result)
@@ -176,8 +176,8 @@ func TestEventToStored_ToolExecution_Error(t *testing.T) {
 	}
 
 	msg := EventToStored(row)
-	if msg.Parts[0].Type != PartToolResult {
-		t.Errorf("expected tool-result for error status, got %s", msg.Parts[0].Type)
+	if msg.Parts[0].Type != PartToolCall {
+		t.Errorf("expected tool-call with embedded result for error status, got %s", msg.Parts[0].Type)
 	}
 }
 

@@ -100,6 +100,7 @@ func EventToStored(row EventRow) StoredMessage {
 				"toolName":   parsed["toolName"],
 				"toolCallId": parsed["toolCallId"],
 				"content":    resultObj["content"],
+				"elapsedMs":  parsed["elapsedMs"],
 			})
 		} else {
 			parts = extractToolCallParts(parsed)
@@ -284,11 +285,18 @@ func extractToolResultParts(parsed map[string]interface{}) []ContentPart {
 			}
 		}
 	}
+	var elapsedMs int
+	if v, ok := parsed["elapsedMs"].(float64); ok {
+		elapsedMs = int(v)
+	}
+	// Emit a completed PartToolCall with result embedded directly,
+	// so the ⚙ header persists after completion.
 	return []ContentPart{{
-		Type:       PartToolResult,
-		ToolName:   jsonStr(parsed, "toolName"),
+		Type:       PartToolCall,
+		Name:       jsonStr(parsed, "toolName"),
 		ToolCallID: jsonStr(parsed, "toolCallId"),
 		Result:     resultContent,
+		ElapsedMs:  elapsedMs,
 	}}
 }
 

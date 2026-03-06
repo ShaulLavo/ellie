@@ -35,8 +35,8 @@ type SSEClient struct {
 
 const (
 	maxReconnectAttempts = 10
-	baseReconnectDelay   = 1 * time.Second
-	maxReconnectDelay    = 30 * time.Second
+	baseReconnectDelay   = 500 * time.Millisecond
+	maxReconnectDelay    = 5 * time.Second
 )
 
 // NewSSEClient creates an SSE client for the given session.

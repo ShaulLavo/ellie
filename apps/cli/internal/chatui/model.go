@@ -85,6 +85,9 @@ type Model struct {
 	// Active animations (tool calls and thinking spinner).
 	activeAnims    map[string]*chatAnim // toolCallID or "thinking" → anim
 	thinkingAnimID string               // key for the thinking anim
+
+	// Inline autocomplete ghost for slash commands.
+	ghostSuggestion string
 }
 
 // NewModel creates a new chat TUI model.
@@ -130,12 +133,30 @@ func NewModel(baseURL, sessionID, transcriptDir string) Model {
 	}
 }
 
+// ─── Health poll ──────────────────────────────────────────────────
+
+// healthPollMsg carries the result of a periodic /api/status check.
+type healthPollMsg struct{ reachable bool }
+
+const healthPollInterval = 3 * time.Second
+
+func (m *Model) healthPollTick() tea.Cmd {
+	client := m.httpClient
+	return tea.Tick(healthPollInterval, func(_ time.Time) tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), healthPollInterval)
+		defer cancel()
+		_, err := client.GetStatus(ctx)
+		return healthPollMsg{reachable: err == nil}
+	})
+}
+
 // ─── Bubble Tea interface ─────────────────────────────────────────
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		textarea.Blink,
 		m.sseClient.Subscribe(),
+		m.healthPollTick(),
 	)
 }
 
@@ -152,6 +173,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMsg:
 		return m.handleMouseMsg(msg)
+
+	case tea.PasteMsg:
+		if m.focus == focusEditor && m.dialog == nil {
+			m.textarea.InsertString(msg.Content)
+			m.history.UpdateDraft(m.textarea.Value())
+			m.adjustTextareaHeight()
+		}
+		return m, nil
 
 	case tea.KeyPressMsg:
 		// Quit
@@ -176,6 +205,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Info):
 			return m.openInfoDialog()
+
+		case key.Matches(msg, m.keys.Theme):
+			return m.toggleTheme()
 
 		case key.Matches(msg, m.keys.Escape):
 			if m.focus == focusChat {
@@ -216,12 +248,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connState = msg.State
 		if msg.State == StateConnected {
 			m.connError = ""
+			// Auto-dismiss disconnect overlay on reconnection
+			if _, ok := m.dialog.(*DisconnectDialog); ok {
+				m.dialog = nil
+			}
+		} else {
+			// Show disconnect overlay (or update existing one)
+			if d, ok := m.dialog.(*DisconnectDialog); ok {
+				d.UpdateState(msg.State, m.connError)
+			} else if msg.State == StateError {
+				// Show immediately on error
+				m.dialog = NewDisconnectDialog(msg.State, m.connError)
+			}
 		}
 		return m, nil
 
 	case sseErrorMsg:
 		m.connError = msg.Message
+		// Show/update disconnect overlay when an error arrives
+		if d, ok := m.dialog.(*DisconnectDialog); ok {
+			d.UpdateState(m.connState, msg.Message)
+		} else if m.connState != StateConnected {
+			m.dialog = NewDisconnectDialog(m.connState, msg.Message)
+		}
 		return m, nil
+
+	case healthPollMsg:
+		if !msg.reachable && m.connState == StateConnected {
+			// Server went away — show overlay immediately
+			m.connState = StateConnecting
+			m.dialog = NewDisconnectDialog(StateConnecting, "")
+		} else if msg.reachable && m.connState != StateConnected {
+			// Server is back — force reconnect now
+			if d, ok := m.dialog.(*DisconnectDialog); ok {
+				d.UpdateState(StateConnecting, "")
+			}
+			m.sseClient.ResetRetry()
+			return m, tea.Batch(m.healthPollTick(), m.startSSE())
+		}
+		return m, m.healthPollTick()
 
 	case sseSnapshotMsg:
 		return m.handleSnapshot(msg.Events)
@@ -375,9 +440,16 @@ func (m Model) updateEditor(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Editor.Newline):
 		m.textarea.InsertString("\n")
 		m.adjustTextareaHeight()
+		m.updateGhost()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Editor.FocusChat):
+		// Accept ghost suggestion if present, otherwise switch focus.
+		if m.ghostSuggestion != "" {
+			m.textarea.InsertString(m.ghostSuggestion)
+			m.ghostSuggestion = ""
+			return m, nil
+		}
 		m.focus = focusChat
 		m.textarea.Blur()
 		return m, nil
@@ -400,6 +472,7 @@ func (m Model) updateEditor(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.adjustTextareaHeight()
 	}
 
+	m.updateGhost()
 	return m, cmd
 }
 
@@ -422,6 +495,7 @@ func (m Model) handleSend() (tea.Model, tea.Cmd) {
 	if cmd := matchSlashCommand(text); cmd != nil {
 		m.textarea.Reset()
 		m.history.Reset()
+		m.ghostSuggestion = ""
 		return m.executeCommand(cmd)
 	}
 
@@ -532,6 +606,10 @@ func (m Model) updateDialog(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.dialog = nil
 		return m, nil
+
+	case ActionRetry:
+		m.sseClient.ResetRetry()
+		return m, m.startSSE()
 	}
 
 	return m, nil
@@ -683,7 +761,11 @@ func (m Model) handleUpdate(ev EventRow) (tea.Model, tea.Cmd) {
 		}
 		// Stop animation for completed tool calls.
 		for _, part := range stored.Parts {
-			if part.Type == PartToolResult && part.ToolCallID != "" {
+			if part.ToolCallID == "" {
+				continue
+			}
+			// Completed: either a PartToolResult or a PartToolCall with embedded result.
+			if part.Type == PartToolResult || (part.Type == PartToolCall && (part.Result != "" || part.ElapsedMs > 0)) {
 				delete(m.activeAnims, part.ToolCallID)
 			}
 		}
@@ -730,9 +812,22 @@ func (m Model) executeCommand(cmd *SlashCommand) (tea.Model, tea.Cmd) {
 		return m.openInfoDialog()
 	case "transcript":
 		return m, m.saveTranscript()
+	case "theme":
+		return m.toggleTheme()
 	default:
 		return m, nil
 	}
+}
+
+func (m Model) toggleTheme() (tea.Model, tea.Cmd) {
+	ToggleTheme()
+	m.msgRenderCache = make(map[string]string)
+	m.msgRenderCacheWidth = 0
+	m.refreshViewport()
+	// Emit OSC 11 to signal terminal background color change.
+	// Use tea.Raw to route through BubbleTea's output pipeline.
+	osc11 := fmt.Sprintf("\x1b]11;%s\x07", ThemeBgHex())
+	return m, tea.Raw(osc11)
 }
 
 func (m Model) openSessionsDialog() (tea.Model, tea.Cmd) {
@@ -893,7 +988,36 @@ func (m Model) renderInput() string {
 	if m.focus == focusEditor {
 		style = inputBorderFocused
 	}
-	return style.Width(m.width - 4).Render(m.textarea.View())
+	view := m.textarea.View()
+	if m.ghostSuggestion != "" && m.focus == focusEditor {
+		// The textarea pads each line with spaces to its full width.
+		// Trim trailing spaces from the first line so the ghost text
+		// appears right after the cursor instead of wrapping to the next line.
+		ghost := dimStyle.Render(m.ghostSuggestion)
+		if idx := strings.Index(view, "\n"); idx >= 0 {
+			firstLine := strings.TrimRight(view[:idx], " ")
+			view = firstLine + ghost + view[idx:]
+		} else {
+			view = strings.TrimRight(view, " ") + ghost
+		}
+	}
+	return style.Width(m.width - 4).Render(view)
+}
+
+// updateGhost computes inline autocomplete for slash commands.
+func (m *Model) updateGhost() {
+	m.ghostSuggestion = ""
+	text := m.textarea.Value()
+	if !strings.HasPrefix(text, "/") || strings.Contains(text, " ") {
+		return
+	}
+	prefix := text[1:] // strip leading /
+	for _, cmd := range Commands {
+		if strings.HasPrefix(cmd.Name, prefix) && cmd.Name != prefix {
+			m.ghostSuggestion = cmd.Name[len(prefix):]
+			return
+		}
+	}
 }
 
 func (m *Model) cleanup() {

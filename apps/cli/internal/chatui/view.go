@@ -7,52 +7,71 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Styles for the chat TUI.
+// Styles for the chat TUI — rebuilt by rebuildViewStyles() on theme change.
 var (
-	statusLineStyle = lipgloss.NewStyle().
-			Foreground(colorDim).
-			Padding(0, 1)
+	statusLineStyle   lipgloss.Style
+	connectedStyle    lipgloss.Style
+	connectingStyle   lipgloss.Style
+	errorStyle        lipgloss.Style
+	disconnectedStyle lipgloss.Style
+	userStyle         lipgloss.Style
+	agentStyle        lipgloss.Style
+	memoryStyle       lipgloss.Style
+	systemStyle       lipgloss.Style
+	toolCallStyle     lipgloss.Style
+	toolResultStyle   lipgloss.Style
+	thinkingStyle     lipgloss.Style
+	dimStyle          lipgloss.Style
+	inputBorder       lipgloss.Style
+	inputBorderFocused lipgloss.Style
+	footerStyle       lipgloss.Style
+)
 
-	connectedStyle    = lipgloss.NewStyle().Foreground(colorDim)
-	connectingStyle   = lipgloss.NewStyle().Foreground(colorDim)
-	errorStyle        = lipgloss.NewStyle().Foreground(colorDim)
+func rebuildViewStyles() {
+	statusLineStyle = lipgloss.NewStyle().
+		Foreground(colorDim).
+		Padding(0, 1)
+
+	connectedStyle = lipgloss.NewStyle().Foreground(colorDim)
+	connectingStyle = lipgloss.NewStyle().Foreground(colorDim)
+	errorStyle = lipgloss.NewStyle().Foreground(colorDim)
 	disconnectedStyle = lipgloss.NewStyle().Foreground(colorDim)
 
 	userStyle = lipgloss.NewStyle().
-			Foreground(colorUser).
-			Bold(true)
+		Foreground(colorUser).
+		Bold(true)
 	agentStyle = lipgloss.NewStyle().
-			Foreground(colorAccent).
-			Bold(true)
+		Foreground(colorAccent).
+		Bold(true)
 	memoryStyle = lipgloss.NewStyle().
-			Foreground(colorMemory).
-			Bold(true)
+		Foreground(colorMemory).
+		Bold(true)
 	systemStyle = lipgloss.NewStyle().
-			Foreground(colorSystem).
-			Bold(true)
+		Foreground(colorSystem).
+		Bold(true)
 
 	toolCallStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+		Foreground(colorMuted)
 	toolResultStyle = lipgloss.NewStyle().
-			Foreground(colorDim)
+		Foreground(colorDim)
 	thinkingStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
-			Italic(true)
+		Foreground(colorMuted).
+		Italic(true)
 	dimStyle = lipgloss.NewStyle().
-			Foreground(colorDim)
+		Foreground(colorDim)
 
 	inputBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorSurface).
-			Padding(0, 1)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorSurface).
+		Padding(0, 1)
 	inputBorderFocused = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorAccent).
-				Padding(0, 1)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorAccent).
+		Padding(0, 1)
 
 	footerStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
-)
+		Foreground(colorMuted)
+}
 
 // renderStatusLine renders the top status bar.
 func renderStatusLine(m *Model, width int) string {
@@ -200,8 +219,24 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 		}
 		resultLine := ""
 		animLine := ""
-		if result, ok := tg.ToolResults[part.ToolCallID]; ok {
-			// Completed tool call.
+		elapsed := ""
+		if part.Result != "" || part.ElapsedMs > 0 {
+			// Completed tool call with embedded result.
+			if part.ElapsedMs > 0 {
+				elapsed = " " + dimStyle.Render(formatElapsed(part.ElapsedMs))
+			}
+			if part.Result != "" {
+				truncated := part.Result
+				if len(truncated) > 200 {
+					truncated = truncated[:200] + "..."
+				}
+				resultLine = "\n" + toolResultStyle.Render("  → "+truncated)
+			}
+		} else if result, ok := tg.ToolResults[part.ToolCallID]; ok {
+			// Completed via ToolGrouping (result in a separate message).
+			if result.ElapsedMs > 0 {
+				elapsed = " " + dimStyle.Render(formatElapsed(result.ElapsedMs))
+			}
 			if result.Result != "" {
 				truncated := result.Result
 				if len(truncated) > 200 {
@@ -213,7 +248,7 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 			// Active tool call: show spinner.
 			animLine = "\n  " + a.render()
 		}
-		header := toolCallStyle.Render(fmt.Sprintf("  ⚙ %s", part.Name))
+		header := toolCallStyle.Render(fmt.Sprintf("  ⚙ %s", part.Name)) + elapsed
 		return header + animLine + resultLine
 
 	case PartToolResult:
@@ -233,7 +268,11 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 
 	case PartMemory:
 		var lines []string
-		lines = append(lines, memoryStyle.Render("  ◆ Memory Recall"))
+		header := memoryStyle.Render("  ◆ Memory Recall")
+		if part.DurationMs > 0 {
+			header += " " + dimStyle.Render(formatElapsed(part.DurationMs))
+		}
+		lines = append(lines, header)
 		if len(part.Memories) > 0 {
 			for _, m := range part.Memories {
 				lines = append(lines, dimStyle.Render("    - "+m.Text))
@@ -248,7 +287,11 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 
 	case PartMemoryRetain:
 		var lines []string
-		lines = append(lines, memoryStyle.Render(fmt.Sprintf("  ◇ Memory Retain (%d facts)", part.FactsStored)))
+		header := memoryStyle.Render(fmt.Sprintf("  ◇ Memory Retain (%d facts)", part.FactsStored))
+		if part.DurationMs > 0 {
+			header += " " + dimStyle.Render(formatElapsed(part.DurationMs))
+		}
+		lines = append(lines, header)
 		for _, f := range part.Facts {
 			lines = append(lines, dimStyle.Render("    - "+f))
 		}
@@ -323,6 +366,15 @@ func formatModelName(model string) string {
 		}
 	}
 	return s
+}
+
+// formatElapsed formats a duration in milliseconds for display.
+// Matches the FE formatElapsed: "234ms" or "1.2s".
+func formatElapsed(ms int) string {
+	if ms < 1000 {
+		return fmt.Sprintf("%dms", ms)
+	}
+	return fmt.Sprintf("%.1fs", float64(ms)/1000)
 }
 
 // wrapText performs simple word wrapping, preserving leading indentation.

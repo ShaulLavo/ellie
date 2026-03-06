@@ -52,6 +52,14 @@ func hex(k charmtone.Key) *string { s := k.Hex(); return &s }
 //	Oyster   → dim gray (rules, operators, punctuation)
 //	Pepper   → dark bg (code blocks, H1 background)
 func markdownStyle() ansi.StyleConfig {
+	if CurrentTheme == ThemeLight {
+		return markdownStyleLight()
+	}
+	return markdownStyleDark()
+}
+
+// markdownStyleDark returns the dark-mode markdown style.
+func markdownStyleDark() ansi.StyleConfig {
 	return ansi.StyleConfig{
 		Document: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
@@ -245,6 +253,216 @@ func markdownStyle() ansi.StyleConfig {
 				},
 				Background: ansi.StylePrimitive{
 					BackgroundColor: hex(charmtone.Pepper),
+				},
+			},
+		},
+		Table: ansi.StyleTable{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{},
+			},
+		},
+		DefinitionDescription: ansi.StylePrimitive{
+			BlockPrefix: "\n ",
+		},
+	}
+}
+
+// markdownStyleLight returns the light-mode markdown style.
+// Swaps text/bg colors for readability on light backgrounds.
+func markdownStyleLight() ansi.StyleConfig {
+	return ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: hex(charmtone.Pepper),
+			},
+		},
+		BlockQuote: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+			Indent:         up(1),
+			IndentToken:    sp("│ "),
+		},
+		List: ansi.StyleList{
+			LevelIndent: 2,
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+				Color:       hex(charmtone.Pickle),
+				Bold:        bp(true),
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix:          " ",
+				Suffix:          " ",
+				Color:           hex(charmtone.Pickle),
+				BackgroundColor: hex(charmtone.Ash),
+				Bold:            bp(true),
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "## ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "### ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "#### ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "##### ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "###### ",
+				Color:  hex(charmtone.Zinc),
+				Bold:   bp(false),
+			},
+		},
+		Strikethrough: ansi.StylePrimitive{
+			CrossedOut: bp(true),
+		},
+		Emph: ansi.StylePrimitive{
+			Italic: bp(true),
+		},
+		Strong: ansi.StylePrimitive{
+			Bold: bp(true),
+		},
+		HorizontalRule: ansi.StylePrimitive{
+			Color:  hex(charmtone.Smoke),
+			Format: "\n--------\n",
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: ansi.StyleTask{
+			StylePrimitive: ansi.StylePrimitive{},
+			Ticked:         "[✓] ",
+			Unticked:       "[ ] ",
+		},
+		Link: ansi.StylePrimitive{
+			Color:     hex(charmtone.Oceania),
+			Underline: bp(true),
+		},
+		LinkText: ansi.StylePrimitive{
+			Color: hex(charmtone.Oceania),
+			Bold:  bp(true),
+		},
+		Image: ansi.StylePrimitive{
+			Color:     hex(charmtone.Prince),
+			Underline: bp(true),
+		},
+		ImageText: ansi.StylePrimitive{
+			Color:  hex(charmtone.Iron),
+			Format: "Image: {{.text}} →",
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix:          " ",
+				Suffix:          " ",
+				Color:           hex(charmtone.Zinc),
+				BackgroundColor: hex(charmtone.Ash),
+			},
+		},
+		CodeBlock: ansi.StyleCodeBlock{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{
+					Color: hex(charmtone.Iron),
+				},
+				Margin: up(2),
+			},
+			Chroma: &ansi.Chroma{
+				Text: ansi.StylePrimitive{
+					Color: hex(charmtone.Charcoal),
+				},
+				Error: ansi.StylePrimitive{
+					Color:           hex(charmtone.Zest),
+					BackgroundColor: hex(charmtone.Bengal),
+				},
+				Comment: ansi.StylePrimitive{
+					Color: hex(charmtone.Squid),
+				},
+				CommentPreproc: ansi.StylePrimitive{
+					Color: hex(charmtone.Prince),
+				},
+				Keyword: ansi.StylePrimitive{
+					Color: hex(charmtone.Oceania),
+				},
+				KeywordReserved: ansi.StylePrimitive{
+					Color: hex(charmtone.Prince),
+				},
+				KeywordNamespace: ansi.StylePrimitive{
+					Color: hex(charmtone.Prince),
+				},
+				KeywordType: ansi.StylePrimitive{
+					Color: hex(charmtone.Zinc),
+				},
+				Operator: ansi.StylePrimitive{
+					Color: hex(charmtone.Iron),
+				},
+				Punctuation: ansi.StylePrimitive{
+					Color: hex(charmtone.Iron),
+				},
+				Name: ansi.StylePrimitive{
+					Color: hex(charmtone.Charcoal),
+				},
+				NameBuiltin: ansi.StylePrimitive{
+					Color: hex(charmtone.Zinc),
+				},
+				NameTag: ansi.StylePrimitive{
+					Color: hex(charmtone.Oceania),
+				},
+				NameAttribute: ansi.StylePrimitive{
+					Color: hex(charmtone.Pickle),
+				},
+				NameClass: ansi.StylePrimitive{
+					Color:     hex(charmtone.Charcoal),
+					Underline: bp(true),
+					Bold:      bp(true),
+				},
+				NameDecorator: ansi.StylePrimitive{
+					Color: hex(charmtone.Prince),
+				},
+				NameFunction: ansi.StylePrimitive{
+					Color: hex(charmtone.Pickle),
+				},
+				LiteralNumber: ansi.StylePrimitive{
+					Color: hex(charmtone.Cumin),
+				},
+				LiteralString: ansi.StylePrimitive{
+					Color: hex(charmtone.Cumin),
+				},
+				LiteralStringEscape: ansi.StylePrimitive{
+					Color: hex(charmtone.Zinc),
+				},
+				GenericDeleted: ansi.StylePrimitive{
+					Color: hex(charmtone.Bengal),
+				},
+				GenericEmph: ansi.StylePrimitive{
+					Italic: bp(true),
+				},
+				GenericInserted: ansi.StylePrimitive{
+					Color: hex(charmtone.Pickle),
+				},
+				GenericStrong: ansi.StylePrimitive{
+					Bold: bp(true),
+				},
+				GenericSubheading: ansi.StylePrimitive{
+					Color: hex(charmtone.Iron),
+				},
+				Background: ansi.StylePrimitive{
+					BackgroundColor: hex(charmtone.Ash),
 				},
 			},
 		},

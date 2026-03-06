@@ -22,6 +22,27 @@ type resizeMsg struct {
 	Rows uint16 `json:"rows"`
 }
 
+// ensureTermEnv guarantees TERM and COLORTERM are set so that
+// TUI apps detect color support inside the PTY we provide.
+func ensureTermEnv(env []string) []string {
+	hasTerm, hasColorTerm := false, false
+	for _, e := range env {
+		if len(e) > 5 && e[:5] == "TERM=" {
+			hasTerm = true
+		}
+		if len(e) > 10 && e[:10] == "COLORTERM=" {
+			hasColorTerm = true
+		}
+	}
+	if !hasTerm {
+		env = append(env, "TERM=xterm-256color")
+	}
+	if !hasColorTerm {
+		env = append(env, "COLORTERM=truecolor")
+	}
+	return env
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		os.Stderr.WriteString("usage: pty-bridge <command> [args...]\n")
@@ -29,7 +50,7 @@ func main() {
 	}
 
 	cmd := exec.Command(os.Args[1], os.Args[2:]...)
-	cmd.Env = os.Environ()
+	cmd.Env = ensureTermEnv(os.Environ())
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24})
 	if err != nil {
@@ -38,8 +59,15 @@ func main() {
 	}
 	defer ptmx.Close()
 
-	// PTY stdout → our stdout
-	go io.Copy(os.Stdout, ptmx)
+	// PTY stdout → our stdout.
+	// When the child exits the PTY read side returns EOF, io.Copy
+	// finishes. Close stdout so the parent's pipe reader gets EOF,
+	// and close stdin to unblock the read loop below.
+	go func() {
+		io.Copy(os.Stdout, ptmx)
+		os.Stdout.Close()
+		os.Stdin.Close()
+	}()
 
 	// Our stdin → PTY stdin (with resize protocol)
 	buf := make([]byte, 32*1024)
