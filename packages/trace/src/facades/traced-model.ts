@@ -95,6 +95,7 @@ async function* wrapAsyncIterable(
 		argsJson: string
 	}> = []
 	let activeToolArgs = new Map<string, string>()
+	let activeToolNames = new Map<string, string>()
 
 	try {
 		for await (const chunk of source) {
@@ -108,6 +109,10 @@ async function* wrapAsyncIterable(
 					break
 				case 'TOOL_CALL_START':
 					activeToolArgs.set(chunk.toolCallId as string, '')
+					activeToolNames.set(
+						chunk.toolCallId as string,
+						chunk.toolName as string
+					)
 					break
 				case 'TOOL_CALL_ARGS':
 					activeToolArgs.set(
@@ -117,17 +122,20 @@ async function* wrapAsyncIterable(
 						) ?? '') + (chunk.delta as string)
 					)
 					break
-				case 'TOOL_CALL_END':
+				case 'TOOL_CALL_END': {
+					const tcId = chunk.toolCallId as string
 					toolCalls.push({
-						toolCallId: chunk.toolCallId as string,
-						toolName: chunk.toolName as string,
+						toolCallId: tcId,
+						toolName:
+							activeToolNames.get(tcId) ??
+							(chunk.toolName as string),
 						argsJson:
-							activeToolArgs.get(
-								chunk.toolCallId as string
-							) ?? '{}'
+							activeToolArgs.get(tcId) ?? '{}'
 					})
-					activeToolArgs.delete(chunk.toolCallId as string)
+					activeToolArgs.delete(tcId)
+					activeToolNames.delete(tcId)
 					break
+				}
 			}
 
 			// Handle RUN_ERROR — mark as errored so finally doesn't emit partial
@@ -201,6 +209,7 @@ async function* wrapAsyncIterable(
 				thinkingParts = []
 				toolCalls = []
 				activeToolArgs.clear()
+				activeToolNames.clear()
 			}
 
 			yield chunk
