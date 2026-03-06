@@ -10,8 +10,6 @@
  * Default max: 50,000 characters per tool result.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
 import type {
 	BlobRef,
 	BlobSink,
@@ -26,14 +24,6 @@ import type { AgentToolResult } from './types'
 export interface ToolSafetyOptions {
 	/** Max chars for a single tool result. Default 50_000. Per-invocation. */
 	maxToolResultChars: number
-}
-
-export interface TruncateOverflowOptions {
-	/** @deprecated Use TruncateBlobOverflowOptions instead. */
-	/** Directory to write full output files. If unset, full output is discarded. */
-	overflowDir?: string
-	/** Tool call ID used as the overflow filename. Falls back to Date.now(). */
-	toolCallId?: string
 }
 
 export interface TruncateBlobOverflowOptions {
@@ -76,61 +66,26 @@ export function needsTruncation(
  */
 export function truncateToolResult(
 	result: AgentToolResult,
-	maxChars: number = DEFAULT_MAX_CHARS,
-	overflow?: TruncateOverflowOptions
+	maxChars: number = DEFAULT_MAX_CHARS
 ): AgentToolResult {
 	const totalChars = countResultChars(result)
 	if (totalChars <= maxChars) return result
 
-	// Write full output to file before truncating
-	let overflowPath: string | undefined
-	if (overflow?.overflowDir) {
-		try {
-			mkdirSync(overflow.overflowDir, { recursive: true })
-			const filename = `${overflow.toolCallId || Date.now()}.txt`
-			overflowPath = join(overflow.overflowDir, filename)
-			const fullText = result.content
-				.filter(
-					(c): c is { type: 'text'; text: string } =>
-						c.type === 'text'
-				)
-				.map(c => c.text)
-				.join('\n')
-			writeFileSync(overflowPath, fullText, 'utf-8')
-		} catch {
-			// Best-effort — don't block truncation if write fails
-			overflowPath = undefined
-		}
-	}
-
-	const suffix = overflowPath
-		? `\n\n---\n [Output truncated — showing first portion of result. Full output saved to: ${overflowPath}]`
-		: TRUNCATION_SUFFIX
-
 	// Budget for text (subtract suffix length)
 	const textBudget = Math.max(
 		MIN_KEEP_CHARS,
-		maxChars - suffix.length
+		maxChars - TRUNCATION_SUFFIX.length
 	)
 
 	const truncatedContent = applyTruncation(
 		result.content,
 		textBudget,
-		suffix
+		TRUNCATION_SUFFIX
 	)
-
-	const baseDetails =
-		result.details && typeof result.details === 'object'
-			? (result.details as Record<string, unknown>)
-			: {}
-	const details = overflowPath
-		? { ...baseDetails, overflowPath }
-		: result.details
 
 	return {
 		...result,
-		content: truncatedContent,
-		details
+		content: truncatedContent
 	}
 }
 

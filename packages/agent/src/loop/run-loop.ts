@@ -117,7 +117,6 @@ async function executeToolCallsWithSteering(
 			emit,
 			config.toolSafety?.maxToolResultChars ?? 50_000,
 			loopDetector,
-			config.toolSafety?.overflowDir,
 			config.toolSafety?.blobSink,
 			config.toolSafety?.traceScope
 		)

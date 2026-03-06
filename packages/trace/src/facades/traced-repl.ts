@@ -37,7 +37,7 @@ interface ReplTool {
 export interface TracedReplOptions {
 	recorder: TraceRecorder
 	blobSink?: BlobSink
-	parentScope: TraceScope
+	getParentScope: () => TraceScope | undefined
 }
 
 /** Structural interface for tools that support scope threading. */
@@ -65,7 +65,16 @@ export function createTracedReplTool<T extends ReplTool>(
 		signal,
 		onUpdate
 	) => {
-		const scope = createChildScope(opts.parentScope)
+		const parentScope = opts.getParentScope()
+		if (!parentScope) {
+			return tool.execute(
+				toolCallId,
+				params,
+				signal,
+				onUpdate
+			)
+		}
+		const scope = createChildScope(parentScope)
 		const startedAt = Date.now()
 
 		// Thread scope so REPL HTTP handler nests tool calls under this span
@@ -116,9 +125,11 @@ export function createTracedReplTool<T extends ReplTool>(
 				.join('\n')
 
 			let blobRefs: BlobRef[] | undefined
-			if (opts.blobSink && shouldBlob(outputText)) {
+			const blobbed =
+				opts.blobSink && shouldBlob(outputText)
+			if (blobbed) {
 				try {
-					const ref = await opts.blobSink.write({
+					const ref = await opts.blobSink!.write({
 						traceId: scope.traceId,
 						spanId: scope.spanId,
 						role: 'repl_output',
@@ -146,8 +157,13 @@ export function createTracedReplTool<T extends ReplTool>(
 					toolCallId,
 					isError,
 					elapsedMs,
-					outputPreview: outputText.slice(0, 500),
-					outputLength: outputText.length,
+					// Full output inline when small; preview only when blobbed
+					...(blobbed
+						? {
+								outputPreview: outputText.slice(0, 500),
+								outputLength: outputText.length
+							}
+						: { output: outputText }),
 					details: result.details
 				},
 				blobRefs

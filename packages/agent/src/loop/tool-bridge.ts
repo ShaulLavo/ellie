@@ -78,7 +78,6 @@ export function wrapToolsForTanStack(
 	toolResultCollector: ToolResultMessage[],
 	maxToolResultChars?: number,
 	loopDetector?: ToolLoopDetector,
-	overflowDir?: string,
 	blobSink?: BlobSink,
 	traceScope?: TraceScope
 ) {
@@ -247,11 +246,10 @@ export function wrapToolsForTanStack(
 					}
 					isError = true
 				} else {
-					// Legacy file-based overflow (neither blobSink nor traceScope)
+					// No blob storage — truncate without overflow storage
 					result = truncateToolResult(
 						result,
-						maxToolResultChars,
-						{ overflowDir, toolCallId }
+						maxToolResultChars
 					)
 				}
 			}

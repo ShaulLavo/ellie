@@ -5,7 +5,11 @@
  * the activeReplScope / replTraceDeps / setActiveReplScope pattern.
  */
 
-import type { TraceRecorder, TraceScope } from '@ellie/trace'
+import type {
+	BlobSink,
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
 import type { ReplTraceDeps } from '../../repl/repl-runtime'
 
 export interface ReplTraceDepsResult {
@@ -15,9 +19,10 @@ export interface ReplTraceDepsResult {
 		| undefined
 }
 
-export function createReplTraceDeps(
-	traceDeps?: { recorder: TraceRecorder }
-): ReplTraceDepsResult {
+export function createReplTraceDeps(traceDeps?: {
+	recorder: TraceRecorder
+	blobSink?: BlobSink
+}): ReplTraceDepsResult {
 	if (!traceDeps) {
 		return {
 			replTraceDeps: undefined,
@@ -30,11 +35,10 @@ export function createReplTraceDeps(
 	return {
 		replTraceDeps: {
 			recorder: traceDeps.recorder,
+			blobSink: traceDeps.blobSink,
 			getParentScope: () => activeReplScope
 		},
-		setActiveReplScope: (
-			scope: TraceScope | undefined
-		) => {
+		setActiveReplScope: (scope: TraceScope | undefined) => {
 			activeReplScope = scope
 		}
 	}

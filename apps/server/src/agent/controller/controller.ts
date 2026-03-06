@@ -22,7 +22,6 @@ import type {
 } from '@ellie/trace'
 import { createRootScope } from '@ellie/trace'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import { join } from 'node:path'
 import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import { buildSystemPrompt } from '../system-prompt'
@@ -114,21 +113,16 @@ export class AgentController {
 		this.baseSystemPrompt = systemPrompt
 		const registry = createToolRegistry({
 			workspaceDir: options.workspaceDir,
-			dataDir: options.dataDir,
-			getSessionId: () => this.boundSessionId
+			getSessionId: () => this.boundSessionId,
+			traceRecorder: this.traceRecorder,
+			blobSink: this.blobSink,
+			getTraceScope: () => this.activeTraceScope
 		})
 
-		// Build toolSafety config — prefer blobSink over overflowDir
+		// Build toolSafety config — blob-backed overflow when available
 		const toolSafety: NonNullable<
 			AgentOptions['toolSafety']
-		> = this.blobSink
-			? { blobSink: this.blobSink }
-			: {
-					overflowDir: join(
-						options.dataDir,
-						'tool-overflow'
-					)
-				}
+		> = this.blobSink ? { blobSink: this.blobSink } : {}
 
 		this.agent = new Agent({
 			...options.agentOptions,

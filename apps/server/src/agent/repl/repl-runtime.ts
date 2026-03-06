@@ -15,6 +15,7 @@
 import { ulid } from 'fast-ulid'
 import type { AgentTool } from '@ellie/agent'
 import type {
+	BlobSink,
 	TraceRecorder,
 	TraceScope
 } from '@ellie/trace'
@@ -25,6 +26,8 @@ import { createChildScope } from '@ellie/trace'
 /** Trace dependencies for recording nested tool calls in the REPL. */
 export interface ReplTraceDeps {
 	recorder: TraceRecorder
+	/** Blob sink for artifact storage. */
+	blobSink?: BlobSink
 	/** Returns the active REPL scope — set per-invocation by traced-repl.ts. */
 	getParentScope: () => TraceScope | undefined
 }

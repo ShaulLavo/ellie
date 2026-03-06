@@ -32,7 +32,7 @@ interface TracedTool {
 export interface TracedToolOptions {
 	recorder: TraceRecorder
 	blobSink?: BlobSink
-	parentScope: TraceScope
+	getParentScope: () => TraceScope | undefined
 }
 
 /**
@@ -48,7 +48,16 @@ export function createTracedToolWrapper<
 		signal,
 		onUpdate
 	) => {
-		const scope = createChildScope(opts.parentScope)
+		const parentScope = opts.getParentScope()
+		if (!parentScope) {
+			return tool.execute(
+				toolCallId,
+				params,
+				signal,
+				onUpdate
+			)
+		}
+		const scope = createChildScope(parentScope)
 		const startedAt = Date.now()
 
 		opts.recorder.record(scope, 'tool.start', 'tool', {

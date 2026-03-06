@@ -25,7 +25,6 @@ export async function executeToolCall(
 	emit: EmitFn,
 	maxToolResultChars?: number,
 	loopDetector?: ToolLoopDetector,
-	overflowDir?: string,
 	blobSink?: BlobSink,
 	traceScope?: TraceScope
 ): Promise<ToolResultMessage[]> {
@@ -177,14 +176,10 @@ export async function executeToolCall(
 				isError = true
 			}
 		} else {
-			// Legacy file-based overflow
+			// No blob storage — truncate without overflow storage
 			result = truncateToolResult(
 				result,
-				maxToolResultChars,
-				{
-					overflowDir,
-					toolCallId: toolCall.id
-				}
+				maxToolResultChars
 			)
 		}
 	}

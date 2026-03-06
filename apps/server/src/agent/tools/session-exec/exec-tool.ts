@@ -13,7 +13,11 @@ import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import type { TraceRecorder, TraceScope } from '@ellie/trace'
+import type {
+	BlobSink,
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
 import { ReplRuntime } from '../../repl/repl-runtime'
 import { createReplTraceDeps } from './repl-trace-deps'
 
@@ -47,7 +51,10 @@ type ExecParams = v.InferOutput<typeof execParams>
  */
 export function createExecTool(
 	baseTools?: AgentTool[],
-	traceDeps?: { recorder: TraceRecorder }
+	traceDeps?: {
+		recorder: TraceRecorder
+		blobSink?: BlobSink
+	}
 ): AgentTool & {
 	setActiveReplScope?: (
 		scope: TraceScope | undefined

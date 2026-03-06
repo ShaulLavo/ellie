@@ -178,9 +178,7 @@ export interface AgentLoopConfig {
 	 */
 	toolSafety?: {
 		maxToolResultChars?: number
-		/** @deprecated Use blobSink instead. Directory to write full output when a tool result is truncated. */
-		overflowDir?: string
-		/** Traced blob sink for overflow. When set, overflowDir is ignored. Must be paired with traceScope. */
+		/** Traced blob sink for overflow. Must be paired with traceScope. */
 		blobSink?: BlobSink
 		/** Active trace scope for correlating overflows. Must be paired with blobSink. */
 		traceScope?: TraceScope

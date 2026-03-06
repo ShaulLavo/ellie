@@ -10,11 +10,7 @@
  */
 
 import type { AgentTool } from '@ellie/agent'
-import type {
-	TraceRecorder,
-	BlobSink,
-	TraceScope
-} from '@ellie/trace'
+import type { TraceRecorder, BlobSink } from '@ellie/trace'
 import {
 	createTracedToolWrapper,
 	createTracedReplTool
@@ -33,16 +29,16 @@ import {
 export interface ToolRegistryConfig {
 	/** Workspace directory for file I/O tools. */
 	workspaceDir: string
-	/** Data directory for session artifacts and snapshots. */
-	dataDir: string
 	/** Returns the currently bound session ID (for REPL isolation). */
 	getSessionId: () => string | null
 	/** Trace recorder for wrapping tools with traced facades. */
 	traceRecorder?: TraceRecorder
 	/** Blob sink for traced overflow. */
 	blobSink?: BlobSink
-	/** Active trace scope for correlating tool spans. */
-	traceScope?: TraceScope
+	/** Returns the active trace scope for the current run. Resolved lazily per-invocation. */
+	getTraceScope?: () =>
+		| import('@ellie/trace').TraceScope
+		| undefined
 }
 
 export interface ToolRegistry {
@@ -77,11 +73,11 @@ export function createToolRegistry(
 
 	// Traced versions for direct agent-loop use
 	let basicDirectTools: AgentTool[] = rawBasicTools
-	if (config.traceRecorder && config.traceScope) {
+	if (config.traceRecorder && config.getTraceScope) {
 		const traceOpts = {
 			recorder: config.traceRecorder,
 			blobSink: config.blobSink,
-			parentScope: config.traceScope
+			getParentScope: config.getTraceScope
 		}
 
 		basicDirectTools = rawBasicTools.map(t =>
@@ -92,13 +88,15 @@ export function createToolRegistry(
 	// Exec tools get RAW tools + trace deps (not traced wrappers —
 	// the REPL HTTP handler does its own tracing to avoid double-tracing)
 	const traceDeps = config.traceRecorder
-		? { recorder: config.traceRecorder }
+		? {
+				recorder: config.traceRecorder,
+				blobSink: config.blobSink
+			}
 		: undefined
 
 	let execTools: AgentTool[] = [
 		createExecTool(rawBasicTools, traceDeps),
 		createSessionExecTool(
-			config.dataDir,
 			config.getSessionId,
 			rawBasicTools,
 			traceDeps
@@ -106,11 +104,11 @@ export function createToolRegistry(
 	]
 
 	// Wrap exec tools with traced REPL facades
-	if (config.traceRecorder && config.traceScope) {
+	if (config.traceRecorder && config.getTraceScope) {
 		const traceOpts = {
 			recorder: config.traceRecorder,
 			blobSink: config.blobSink,
-			parentScope: config.traceScope
+			getParentScope: config.getTraceScope
 		}
 
 		execTools = execTools.map(t =>

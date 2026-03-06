@@ -22,13 +22,18 @@ import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import type { TraceRecorder, TraceScope } from '@ellie/trace'
+import type {
+	BlobRef,
+	BlobSink,
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
+import { shouldBlob } from '@ellie/trace'
 import {
 	ReplRuntime,
 	type ReplEvalResult
 } from '../../repl/repl-runtime'
 import { createReplTraceDeps } from './repl-trace-deps'
-import { ArtifactStore } from '../../repl/artifact-store'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -66,10 +71,12 @@ type SessionExecParams = v.InferOutput<
  * subprocess via a localhost HTTP server.
  */
 export function createSessionExecTool(
-	dataDir: string,
 	getSessionId: () => string | null,
 	baseTools?: AgentTool[],
-	traceDeps?: { recorder: TraceRecorder }
+	traceDeps?: {
+		recorder: TraceRecorder
+		blobSink?: BlobSink
+	}
 ): AgentTool & {
 	setActiveReplScope?: (
 		scope: TraceScope | undefined
@@ -79,7 +86,6 @@ export function createSessionExecTool(
 		createReplTraceDeps(traceDeps)
 	let runtime: ReplRuntime | null = null
 	let boundSessionId: string | null = null
-	const artifactStore = new ArtifactStore(dataDir)
 
 	return {
 		name: 'session_exec',
@@ -124,15 +130,76 @@ export function createSessionExecTool(
 						params.timeoutMs
 					)
 
-				// Always log the full execution trace
-				await artifactStore.append(runtime.sessionId, {
-					code: params.code,
-					committed: result.committed,
-					raw: result.raw,
-					isError: result.isError,
-					errorMessage: result.errorMessage,
-					elapsedMs: result.elapsedMs
-				})
+				// Persist execution trace through blob sink + trace recorder
+				if (replTraceDeps) {
+					const scope = replTraceDeps.getParentScope()
+					if (scope) {
+						const artifact = {
+							code: params.code,
+							committed: result.committed,
+							raw: result.raw,
+							isError: result.isError,
+							errorMessage: result.errorMessage,
+							elapsedMs: result.elapsedMs
+						}
+						const serialized = JSON.stringify(artifact)
+
+						let blobRefs: BlobRef[] | undefined
+						const blobbed =
+							replTraceDeps.blobSink &&
+							shouldBlob(serialized)
+						if (blobbed) {
+							try {
+								const ref =
+									await replTraceDeps.blobSink!.write({
+										traceId: scope.traceId,
+										spanId: scope.spanId,
+										role: 'repl_artifact',
+										content: serialized,
+										mimeType: 'application/json',
+										ext: 'json'
+									})
+								blobRefs = [ref]
+							} catch (blobErr) {
+								console.warn(
+									'[session_exec] artifact blob write failed:',
+									blobErr instanceof Error
+										? blobErr.message
+										: String(blobErr)
+								)
+							}
+						}
+
+						replTraceDeps.recorder.record(
+							scope,
+							'repl.artifact',
+							'repl',
+							{
+								sessionId: runtime.sessionId,
+								isError: result.isError,
+								elapsedMs: result.elapsedMs,
+								// Full artifact inline when small; preview + lengths when blobbed
+								...(blobbed
+									? {
+											codePreview: params.code.slice(
+												0,
+												500
+											),
+											committedLength:
+												result.committed.length,
+											rawLength: result.raw.length
+										}
+									: {
+											code: params.code,
+											committed: result.committed,
+											raw: result.raw,
+											errorMessage: result.errorMessage
+										})
+							},
+							blobRefs
+						)
+					}
+				}
 
 				// Only committed output goes into tool result
 				if (result.isError) {
