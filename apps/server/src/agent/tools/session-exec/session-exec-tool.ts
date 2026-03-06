@@ -145,10 +145,10 @@ export function createSessionExecTool(
 						const serialized = JSON.stringify(artifact)
 
 						let blobRefs: BlobRef[] | undefined
-						const blobbed =
+						const shouldWriteBlob =
 							replTraceDeps.blobSink &&
 							shouldBlob(serialized)
-						if (blobbed) {
+						if (shouldWriteBlob) {
 							try {
 								const ref =
 									await replTraceDeps.blobSink!.write({
@@ -169,6 +169,7 @@ export function createSessionExecTool(
 								)
 							}
 						}
+						const hasBlob = (blobRefs?.length ?? 0) > 0
 
 						replTraceDeps.recorder.record(
 							scope,
@@ -178,8 +179,8 @@ export function createSessionExecTool(
 								sessionId: runtime.sessionId,
 								isError: result.isError,
 								elapsedMs: result.elapsedMs,
-								// Full artifact inline when small; preview + lengths when blobbed
-								...(blobbed
+								// Full artifact inline unless the blob write succeeded
+								...(hasBlob
 									? {
 											codePreview: params.code.slice(
 												0,

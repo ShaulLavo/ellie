@@ -125,9 +125,9 @@ export function createTracedReplTool<T extends ReplTool>(
 				.join('\n')
 
 			let blobRefs: BlobRef[] | undefined
-			const blobbed =
+			const shouldWriteBlob =
 				opts.blobSink && shouldBlob(outputText)
-			if (blobbed) {
+			if (shouldWriteBlob) {
 				try {
 					const ref = await opts.blobSink!.write({
 						traceId: scope.traceId,
@@ -147,6 +147,7 @@ export function createTracedReplTool<T extends ReplTool>(
 					)
 				}
 			}
+			const hasBlob = (blobRefs?.length ?? 0) > 0
 
 			opts.recorder.record(
 				scope,
@@ -157,8 +158,8 @@ export function createTracedReplTool<T extends ReplTool>(
 					toolCallId,
 					isError,
 					elapsedMs,
-					// Full output inline when small; preview only when blobbed
-					...(blobbed
+					// Full output inline unless the blob write succeeded
+					...(hasBlob
 						? {
 								outputPreview: outputText.slice(0, 500),
 								outputLength: outputText.length
