@@ -59,6 +59,7 @@ func init() {
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authClearCmd)
