@@ -3,9 +3,11 @@
  * PDFs, and other resources.
  *
  * Routes by Content-Type:
- *   PDF   → fetch → pdf2md → markdown
- *   media → fetch → URL reference
- *   HTML  → Puppeteer (via worker) → Defuddle → markdown
+ *   Reddit    → JSON API → formatted text
+ *   Wikipedia → REST API → Defuddle (via worker) → markdown
+ *   PDF       → fetch → pdf2md → markdown
+ *   media     → fetch → URL reference
+ *   HTML      → Puppeteer (via worker) → Defuddle → markdown
  */
 
 import * as v from 'valibot'
@@ -363,6 +365,69 @@ async function handleReddit(
 	}
 }
 
+// ── Wikipedia handler ────────────────────────────────────────────────────
+
+const WIKIPEDIA_HOST_RE = /^(?:\w+)\.wikipedia\.org$/
+
+function isWikipediaUrl(url: string): boolean {
+	try {
+		const u = new URL(url)
+		return (
+			WIKIPEDIA_HOST_RE.test(u.hostname) &&
+			u.pathname.startsWith('/wiki/')
+		)
+	} catch {
+		return false
+	}
+}
+
+/** Convert a Wikipedia /wiki/Title URL to the REST API HTML endpoint. */
+function toWikipediaApiUrl(url: string): string {
+	const u = new URL(url)
+	// /wiki/Some_Title → Some_Title
+	const title = u.pathname.replace(/^\/wiki\//, '')
+	return `https://${u.hostname}/api/rest_v1/page/html/${title}`
+}
+
+async function handleWikipedia(
+	url: string
+): Promise<AgentToolResult> {
+	const apiUrl = toWikipediaApiUrl(url)
+	const res = await fetch(apiUrl, {
+		headers: { 'User-Agent': USER_AGENT }
+	})
+	if (!res.ok) {
+		return errorResult(
+			`Wikipedia API: HTTP ${res.status} ${res.statusText}`
+		)
+	}
+	const html = await res.text()
+
+	// Reuse the worker's Defuddle/Readability pipeline
+	const result = await callWorker(w => w.parse(html, url))
+
+	const parts: string[] = []
+	if (result.title) parts.push(`# ${result.title}`)
+	if (result.content) parts.push(result.content)
+
+	const text = parts.join('\n\n')
+	const truncated = truncateText(text, MAX_OUTPUT_CHARS)
+
+	return {
+		content: [
+			{
+				type: 'text',
+				text: truncated || '(no readable content found)'
+			}
+		],
+		details: {
+			url,
+			source: 'wikipedia-rest',
+			title: result.title
+		}
+	}
+}
+
 // ── Handlers ────────────────────────────────────────────────────────────
 
 async function handleBrowser(
@@ -468,6 +533,11 @@ export function createWebFetchTool(): AgentTool {
 				// Reddit — use JSON API directly (no browser needed)
 				if (isRedditUrl(params.url)) {
 					return handleReddit(params.url)
+				}
+
+				// Wikipedia — use REST API (no browser needed)
+				if (isWikipediaUrl(params.url)) {
+					return handleWikipedia(params.url)
 				}
 
 				const response = await fetch(params.url, {

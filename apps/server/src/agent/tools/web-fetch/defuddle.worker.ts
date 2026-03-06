@@ -1,6 +1,6 @@
 /**
  * Fetch worker — manages headless Chrome via puppeteer-core and extracts
- * readable content from rendered pages using Defuddle + Turndown.
+ * readable content from rendered pages using Defuddle.
  *
  * Runs in a Web Worker to keep the main server thread free.
  * Chrome path detection adapted from @agent-infra/browser-finder.
@@ -11,8 +11,8 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import type { Browser } from 'puppeteer-core'
 
 puppeteer.use(StealthPlugin())
-import { JSDOM } from 'jsdom'
-import Defuddle from 'defuddle'
+import { Defuddle } from 'defuddle/node'
+import { parseHTML } from 'linkedom'
 import { Readability } from '@mozilla/readability'
 import TurndownService from 'turndown'
 import * as Comlink from 'comlink'
@@ -233,55 +233,21 @@ async function getBrowser(): Promise<Browser> {
 
 const MIN_WORD_COUNT = 10
 
-/** Sites where Defuddle consistently fails — skip straight to Readability. */
-const READABILITY_ONLY_HOSTS: string[] = []
-
-function shouldSkipDefuddle(url: string): boolean {
-	if (READABILITY_ONLY_HOSTS.length === 0) return false
-	try {
-		const host = new URL(url).hostname.replace(/^www\./, '')
-		return READABILITY_ONLY_HOSTS.some(
-			h => host === h || host.endsWith('.' + h)
-		)
-	} catch {
-		return false
-	}
-}
-
 const turndown = new TurndownService({
 	headingStyle: 'atx',
 	codeBlockStyle: 'fenced',
 	bulletListMarker: '-'
 })
 
-function parseWithDefuddle(html: string, url: string) {
-	const dom = new JSDOM(html, { url })
-	const defuddle = new Defuddle(dom.window.document, {
-		url
-	})
-	const result = defuddle.parse()
-
-	const markdown = result.content
-		? turndown.turndown(result.content)
-		: ''
-
-	return {
-		title: result.title || null,
-		author: result.author || null,
-		wordCount: result.wordCount ?? 0,
-		content: markdown
-	}
-}
-
-function parseWithReadability(html: string, url: string) {
-	const dom = new JSDOM(html, { url })
+function parseWithReadability(html: string, _url: string) {
+	const { document } = parseHTML(html)
 	const article = new Readability(
-		dom.window.document
+		document as unknown as Document
 	).parse()
 
 	if (!article?.content) {
 		return {
-			title: dom.window.document.title || null,
+			title: document.title || null,
 			author: null,
 			wordCount: 0,
 			content: ''
@@ -301,17 +267,26 @@ function parseWithReadability(html: string, url: string) {
 	}
 }
 
-function parseHtml(html: string, url: string) {
-	if (shouldSkipDefuddle(url)) {
-		return parseWithReadability(html, url)
+async function parseHtml(html: string, url: string) {
+	const defuddled = await Defuddle(html, url, {
+		markdown: true
+	})
+	const defuddleResult = {
+		title: defuddled.title || null,
+		author: defuddled.author || null,
+		wordCount: defuddled.wordCount ?? 0,
+		content: defuddled.content || ''
 	}
-	const defuddled = parseWithDefuddle(html, url)
-	if (defuddled.wordCount >= MIN_WORD_COUNT)
-		return defuddled
+
+	if (defuddleResult.wordCount >= MIN_WORD_COUNT)
+		return defuddleResult
+
+	// Fallback to Readability when Defuddle scores poorly
 	const readable = parseWithReadability(html, url)
-	if (readable.wordCount > defuddled.wordCount)
+	if (readable.wordCount > defuddleResult.wordCount)
 		return readable
-	return defuddled
+
+	return defuddleResult
 }
 
 // ── Worker API ─────────────────────────────────────────────────────────

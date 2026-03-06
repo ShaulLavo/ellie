@@ -14,7 +14,7 @@ describe('web_fetch tool', () => {
 
 	// ── HTML ─────────────────────────────────────────────────────────
 
-	test('fetches a Wikipedia page and extracts content', async () => {
+	test('fetches a Wikipedia page via REST API', async () => {
 		const result = await tool.execute('tc-1', {
 			url: 'https://en.wikipedia.org/wiki/TypeScript'
 		})
@@ -25,14 +25,14 @@ describe('web_fetch tool', () => {
 
 		const details = result.details as {
 			url: string
-			title: string | null
-			wordCount: number
+			source: string
+			title: string
 		}
 		expect(details.url).toBe(
 			'https://en.wikipedia.org/wiki/TypeScript'
 		)
+		expect(details.source).toBe('wikipedia-rest')
 		expect(details.title).toContain('TypeScript')
-		expect(details.wordCount).toBeGreaterThan(100)
 	}, 30_000)
 
 	test('returns markdown with atx headings and no raw HTML', async () => {
