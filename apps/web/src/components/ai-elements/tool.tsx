@@ -14,11 +14,11 @@ import {
 	CaretDownIcon,
 	CheckCircleIcon,
 	CircleIcon,
-	CircleNotchIcon,
 	ClockIcon,
 	WrenchIcon,
 	XCircleIcon
 } from '@phosphor-icons/react'
+import { AILoader } from '@/components/ai-loader'
 import { isValidElement, useRef, useEffect } from 'react'
 import { useCollapsibleScroll } from '@/hooks/use-collapsible-scroll'
 
@@ -75,9 +75,7 @@ const statusIcons: Record<ToolPart['state'], ReactNode> = {
 	'approval-responded': (
 		<CheckCircleIcon className="size-3 text-muted-foreground" />
 	),
-	'input-available': (
-		<CircleNotchIcon className="size-3 animate-spin text-muted-foreground" />
-	),
+	'input-available': <AILoader className="size-4" />,
 	'input-streaming': (
 		<CircleIcon className="size-3 text-muted-foreground" />
 	),
