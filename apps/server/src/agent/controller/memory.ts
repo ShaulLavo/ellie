@@ -12,7 +12,14 @@ import type {
 	TraceRecorder,
 	TraceScope
 } from '@ellie/trace'
-import { wrapMemoryOrchestrator } from '@ellie/trace'
+import {
+	wrapMemoryOrchestrator,
+	createChildScope
+} from '@ellie/trace'
+import {
+	hindsightTraceStore,
+	type HindsightTraceContext
+} from '@ellie/hindsight'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import type { MemoryOrchestrator } from '../memory-orchestrator'
 import { handleControllerError } from './error-handler'
@@ -57,7 +64,17 @@ export async function runRecall(
 			: deps.memory
 
 	try {
-		const result = await memory.recall(query)
+		const runMemoryRecall = () => memory.recall(query)
+		const result =
+			deps.traceRecorder && deps.traceScope
+				? await hindsightTraceStore.run(
+						createMemoryTraceCtx(
+							deps.traceRecorder!,
+							deps.traceScope!
+						),
+						runMemoryRecall
+					)
+				: await runMemoryRecall()
 		if (!result) return
 
 		deps.store.appendEvent(
@@ -119,10 +136,18 @@ export async function runRetain(
 			: deps.memory
 
 	try {
-		const result = await memory.evaluateRetain(
-			sessionId,
-			force
-		)
+		const runMemoryRetain = () =>
+			memory.evaluateRetain(sessionId, force)
+		const result =
+			deps.traceRecorder && deps.traceScope
+				? await hindsightTraceStore.run(
+						createMemoryTraceCtx(
+							deps.traceRecorder!,
+							deps.traceScope!
+						),
+						runMemoryRetain
+					)
+				: await runMemoryRetain()
 		if (!result) return 0
 
 		deps.store.appendEvent(
@@ -143,5 +168,33 @@ export async function runRetain(
 			'warn'
 		)
 		return 0
+	}
+}
+
+// ── Hindsight LLM trace context ──────────────────────────────────────
+
+/**
+ * Create a HindsightTraceContext that emits memory.chat.* events
+ * for every internal LLM call (extraction, consolidation, reflection, gist).
+ *
+ * Captures recorder and scope by value at creation time so that
+ * fire-and-forget retain operations are immune to scope mutations
+ * from subsequent runs.
+ */
+function createMemoryTraceCtx(
+	recorder: TraceRecorder,
+	scope: TraceScope
+): HindsightTraceContext {
+	return {
+		onLLMCall: event => {
+			const llmScope = createChildScope(scope)
+			const eventName =
+				event.phase === 'start'
+					? 'memory.chat.start'
+					: event.phase === 'end'
+						? 'memory.chat.end'
+						: 'memory.chat.error'
+			recorder.record(llmScope, eventName, 'memory', event)
+		}
 	}
 }

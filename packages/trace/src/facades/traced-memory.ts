@@ -66,6 +66,11 @@ export function wrapMemoryOrchestrator<
 							unknown
 						>
 
+						const contextBlock =
+							typeof r?.contextBlock === 'string'
+								? r.contextBlock
+								: ''
+
 						const recallPayload: Record<string, unknown> = {
 							elapsedMs,
 							found: result !== null,
@@ -75,30 +80,31 @@ export function wrapMemoryOrchestrator<
 										| Array<Record<string, unknown>>
 										| undefined
 								)?.[0]?.count ?? 0,
-							bankIds: payload?.bankIds,
-							contextBlockLength:
-								typeof r?.contextBlock === 'string'
-									? r.contextBlock.length
-									: 0
+							bankIds: payload?.bankIds
 						}
 
-						// Blob large recall context blocks
+						// Persist context block: blob when large, inline otherwise
 						let blobRefs: BlobRef[] | undefined
-						if (
+						const needsBlob =
 							opts.blobSink &&
-							typeof r?.contextBlock === 'string' &&
-							shouldBlob(r.contextBlock)
-						) {
+							contextBlock.length > 0 &&
+							shouldBlob(contextBlock)
+
+						if (needsBlob) {
 							try {
-								const ref = await opts.blobSink.write({
+								const ref = await opts.blobSink!.write({
 									traceId: scope.traceId,
 									spanId: scope.spanId,
 									role: 'memory_recall_context',
-									content: r.contextBlock,
+									content: contextBlock,
 									mimeType: 'text/plain',
 									ext: 'txt'
 								})
 								blobRefs = [ref]
+								recallPayload.contextBlockPreview =
+									contextBlock.slice(0, 500)
+								recallPayload.contextBlockLength =
+									contextBlock.length
 							} catch (blobErr) {
 								console.warn(
 									`[traced-memory] recall blob write failed (traceId=${scope.traceId}):`,
@@ -106,7 +112,11 @@ export function wrapMemoryOrchestrator<
 										? blobErr.message
 										: String(blobErr)
 								)
+								// Blob failed — fall back to inline so the data is not lost
+								recallPayload.contextBlock = contextBlock
 							}
+						} else if (contextBlock.length > 0) {
+							recallPayload.contextBlock = contextBlock
 						}
 
 						opts.recorder.record(

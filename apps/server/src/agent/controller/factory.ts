@@ -51,14 +51,7 @@ export class AgentControllerFactory {
 		const memory = new MemoryOrchestrator({
 			hindsight,
 			eventStore,
-			workspaceDir,
-			onTrace: entry => {
-				store.trace({
-					sessionId: store.getCurrentSessionId(),
-					type: entry.type,
-					payload: entry.payload
-				})
-			}
+			workspaceDir
 		})
 
 		this.cached = adapter
