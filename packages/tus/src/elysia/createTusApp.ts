@@ -223,7 +223,10 @@ export function createTusApp(options: CreateTusAppOptions) {
 						const stream = ds.read(params.id)
 						const contentType =
 							(upload.metadata as Record<string, string>)
-								?.contentType ?? 'application/octet-stream'
+								?.mimeType ??
+							(upload.metadata as Record<string, string>)
+								?.contentType ??
+							'application/octet-stream'
 						set.headers['content-type'] = contentType
 						if (upload.size) {
 							set.headers['content-length'] = String(
