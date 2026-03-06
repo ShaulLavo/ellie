@@ -46,11 +46,11 @@ var defaultSpinner = SpinnerDots
 // Ellipsis cycles every ~500ms worth of frames.
 const animEllipsisSpeed = 6
 
-// Ellie TUI palette — matches view.go styles.
+// Spinner styles — sourced from shared palette.
 var (
-	spinnerFrameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00A66D")) // teal (agent accent)
-	animLabelStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#888"))    // gray
-	animEllipStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#666"))    // dim gray
+	spinnerFrameStyle = lipgloss.NewStyle().Foreground(colorAccent)
+	animLabelStyle    = lipgloss.NewStyle().Foreground(colorMuted)
+	animEllipStyle    = lipgloss.NewStyle().Foreground(colorDim)
 )
 
 var animEllipsisFrames = []string{".", "..", "...", ""}
