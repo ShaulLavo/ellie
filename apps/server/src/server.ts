@@ -1,4 +1,8 @@
 import { createHindsightApp } from '@ellie/hindsight/server'
+import {
+	createRootScope,
+	createChildScope
+} from '@ellie/trace'
 import { createTusApp } from '@ellie/tus'
 import { openapi } from '@elysiajs/openapi'
 import { staticPlugin } from '@elysiajs/static'
@@ -79,7 +83,18 @@ export const app = new Elysia()
 	.use(createTraceRoutes(ctx.traceRecorder))
 	.use(createDbStudioRoutes(ctx.DATA_DIR))
 	.use(createTerminalRoutes())
-	.use(createHindsightApp(ctx.hindsight))
+	.use(
+		createHindsightApp(ctx.hindsight, {
+			record: (scope, kind, component, payload) =>
+				ctx.traceRecorder.record(
+					scope,
+					kind,
+					component,
+					payload
+				),
+			factory: { createRootScope, createChildScope }
+		})
+	)
 	.get('/', ({ redirect }) => redirect('/app'))
 	.use(
 		await staticPlugin({

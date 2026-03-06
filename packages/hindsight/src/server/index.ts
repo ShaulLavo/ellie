@@ -1,5 +1,7 @@
 export {
 	handleHindsightRequest,
 	createHindsightHandlers,
-	createHindsightApp
+	createHindsightApp,
+	type HindsightRouteTraceContext,
+	type HindsightRouteTraceScope
 } from './routes'

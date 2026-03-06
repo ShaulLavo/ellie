@@ -35,8 +35,74 @@ type ProcedureHandlers = Record<string, ProcedureHandler>
 type InvokeFn = (
 	name: string,
 	input: unknown,
-	params: Record<string, string>
+	params: Record<string, string>,
+	request?: Request
 ) => Promise<unknown> | unknown
+
+// ── Trace propagation types ─────────────────────────────────────────────────
+// Structural match for @ellie/trace types — no import needed.
+
+/** Trace scope for propagation via HTTP headers. */
+export interface HindsightRouteTraceScope {
+	traceId: string
+	spanId: string
+	parentSpanId?: string
+	sessionId?: string
+}
+
+/** Callback to record a trace event. Injected by the server. */
+export type HindsightRouteTraceRecordFn = (
+	scope: HindsightRouteTraceScope,
+	kind: string,
+	component: string,
+	payload: unknown
+) => void
+
+/** Scope factory functions, injected by the server. */
+export interface HindsightRouteTraceFactory {
+	createRootScope: (opts?: {
+		sessionId?: string
+	}) => HindsightRouteTraceScope
+	createChildScope: (
+		parent: HindsightRouteTraceScope
+	) => HindsightRouteTraceScope
+}
+
+/** Optional trace context for Hindsight routes. */
+export interface HindsightRouteTraceContext {
+	record: HindsightRouteTraceRecordFn
+	factory: HindsightRouteTraceFactory
+}
+
+const TRACED_OPERATIONS = new Set([
+	'retain',
+	'retainBatch',
+	'recall',
+	'reflect',
+	'narrative'
+])
+
+function extractTraceScope(
+	trace: HindsightRouteTraceContext,
+	request?: Request
+): HindsightRouteTraceScope {
+	const traceId = request?.headers.get('x-trace-id')
+	const parentSpanId = request?.headers.get(
+		'x-parent-span-id'
+	)
+	const sessionId = request?.headers.get('x-session-id')
+
+	if (traceId && parentSpanId) {
+		return {
+			traceId,
+			spanId: parentSpanId,
+			sessionId: sessionId ?? undefined
+		}
+	}
+	return trace.factory.createRootScope({
+		sessionId: sessionId ?? undefined
+	})
+}
 
 const bankParamsSchema = v.object({ bankId: v.string() })
 const memoryParamsSchema = v.object({
@@ -451,7 +517,8 @@ function bankAndMemoryRoutes(invoke: InvokeFn) {
 		)
 		.post(
 			'/banks/:bankId/retain',
-			({ body, params }) => invoke('retain', body, params),
+			({ body, params, request }) =>
+				invoke('retain', body, params, request),
 			{
 				params: bankParamsSchema,
 				body: retainInputSchema
@@ -459,8 +526,8 @@ function bankAndMemoryRoutes(invoke: InvokeFn) {
 		)
 		.post(
 			'/banks/:bankId/retain-batch',
-			({ body, params }) =>
-				invoke('retainBatch', body, params),
+			({ body, params, request }) =>
+				invoke('retainBatch', body, params, request),
 			{
 				params: bankParamsSchema,
 				body: retainBatchInputSchema
@@ -468,7 +535,8 @@ function bankAndMemoryRoutes(invoke: InvokeFn) {
 		)
 		.post(
 			'/banks/:bankId/recall',
-			({ body, params }) => invoke('recall', body, params),
+			({ body, params, request }) =>
+				invoke('recall', body, params, request),
 			{
 				params: bankParamsSchema,
 				body: recallInputSchema
@@ -476,7 +544,8 @@ function bankAndMemoryRoutes(invoke: InvokeFn) {
 		)
 		.post(
 			'/banks/:bankId/reflect',
-			({ body, params }) => invoke('reflect', body, params),
+			({ body, params, request }) =>
+				invoke('reflect', body, params, request),
 			{
 				params: bankParamsSchema,
 				body: reflectInputSchema
@@ -539,8 +608,8 @@ function entityAndEpisodeRoutes(invoke: InvokeFn) {
 		)
 		.post(
 			'/banks/:bankId/narrative',
-			({ body, params }) =>
-				invoke('narrative', body, params),
+			({ body, params, request }) =>
+				invoke('narrative', body, params, request),
 			{
 				params: bankParamsSchema,
 				body: narrativeInputSchema
@@ -621,14 +690,73 @@ function errorStatus(error: unknown): number {
 
 // ── App factory ─────────────────────────────────────────────────────────────
 
-export function createHindsightApp(hs: Hindsight) {
+export function createHindsightApp(
+	hs: Hindsight,
+	trace?: HindsightRouteTraceContext
+) {
 	const handlers = createHindsightHandlers(hs)
 
-	const invoke: InvokeFn = (name, input, params) => {
+	const invoke: InvokeFn = async (
+		name,
+		input,
+		params,
+		request
+	) => {
 		const handler = handlers[name]
 		if (!handler)
 			throw new Error(`Handler '${name}' not found`)
-		return handler(input, params)
+
+		if (!trace || !TRACED_OPERATIONS.has(name)) {
+			return handler(input, params)
+		}
+
+		const parentScope = extractTraceScope(
+			trace,
+			request
+		)
+		const childScope =
+			trace.factory.createChildScope(parentScope)
+		const startedAt = Date.now()
+
+		trace.record(
+			childScope,
+			`hindsight.${name}.start`,
+			'hindsight',
+			{ bankId: params.bankId, operation: name }
+		)
+
+		try {
+			const result = await handler(input, params)
+			trace.record(
+				childScope,
+				`hindsight.${name}.end`,
+				'hindsight',
+				{
+					bankId: params.bankId,
+					operation: name,
+					elapsedMs: Date.now() - startedAt,
+					success: true
+				}
+			)
+			return result
+		} catch (err) {
+			trace.record(
+				childScope,
+				`hindsight.${name}.end`,
+				'hindsight',
+				{
+					bankId: params.bankId,
+					operation: name,
+					elapsedMs: Date.now() - startedAt,
+					success: false,
+					error:
+						err instanceof Error
+							? err.message
+							: String(err)
+				}
+			)
+			throw err
+		}
 	}
 
 	return new Elysia()
@@ -672,13 +800,14 @@ const appCache = new WeakMap<
 export function handleHindsightRequest(
 	hs: Hindsight,
 	req: Request,
-	pathname: string
+	pathname: string,
+	trace?: HindsightRouteTraceContext
 ): Promise<Response> | null {
 	if (!isHindsightPath(pathname)) return null
 
 	let app = appCache.get(hs)
 	if (!app) {
-		app = createHindsightApp(hs)
+		app = createHindsightApp(hs, trace)
 		appCache.set(hs, app)
 	}
 
