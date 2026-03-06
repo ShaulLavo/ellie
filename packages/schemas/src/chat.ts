@@ -46,6 +46,7 @@ export type ContentPart =
 			name: string
 			args: Record<string, unknown>
 			toolCallId?: string
+			streaming?: boolean
 	  }
 	| {
 			type: 'tool-result'

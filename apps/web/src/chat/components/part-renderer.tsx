@@ -35,6 +35,13 @@ export const PartRenderer = memo(
 					<MessageResponse>{part.text}</MessageResponse>
 				)
 			case 'tool-call': {
+				if (
+					part.streaming &&
+					part.toolCallId &&
+					consumedToolCallIds?.has(part.toolCallId)
+				) {
+					return null
+				}
 				const matched = part.toolCallId
 					? toolResults?.get(part.toolCallId)
 					: undefined
@@ -45,6 +52,7 @@ export const PartRenderer = memo(
 						args={part.args}
 						result={matched?.result}
 						elapsedMs={matched?.elapsedMs}
+						streaming={part.streaming}
 					/>
 				)
 			}

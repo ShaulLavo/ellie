@@ -134,6 +134,7 @@ export function eventToStored(
 
 	// Dispatch to the right helper based on event type
 	let parts: ContentPart[]
+	const isMessageStreaming = parsed.streaming === true
 	if (row.type === 'assistant_message') {
 		// Unified type: message is wrapped in { message, streaming }
 		const msg = parsed.message as Record<string, unknown>
@@ -186,11 +187,27 @@ export function eventToStored(
 	// Filter out non-renderable blocks:
 	// - thinking: extracted above for separate display
 	// - toolCall: agent-internal camelCase format, already rendered via tool_execution events
-	const filteredParts = parts.filter(
-		p =>
-			p.type !== 'thinking' &&
-			(p as Record<string, unknown>).type !== 'toolCall'
-	)
+	//   EXCEPT during streaming, where we surface them as tool-call parts with streaming flag
+	const filteredParts: ContentPart[] = []
+	for (const p of parts) {
+		if (p.type === 'thinking') continue
+		const raw = p as Record<string, unknown>
+		if (raw.type === 'toolCall') {
+			if (isMessageStreaming) {
+				filteredParts.push({
+					type: 'tool-call',
+					name: raw.name as string,
+					args:
+						(raw.arguments as Record<string, unknown>) ??
+						{},
+					toolCallId: raw.id as string | undefined,
+					streaming: true
+				})
+			}
+			continue
+		}
+		filteredParts.push(p)
+	}
 
 	// Determine sender from event type or payload
 	let sender: MessageSender | undefined

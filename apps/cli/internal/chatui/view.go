@@ -194,6 +194,10 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 		return renderMarkdown(part.Text, w)
 
 	case PartToolCall:
+		// Skip streaming tool-calls superseded by a real execution
+		if part.Streaming && tg.ConsumedToolCallIDs[part.ToolCallID] {
+			return ""
+		}
 		resultLine := ""
 		animLine := ""
 		if result, ok := tg.ToolResults[part.ToolCallID]; ok {

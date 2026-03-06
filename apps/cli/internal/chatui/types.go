@@ -53,6 +53,7 @@ type ContentPart struct {
 	Name       string                 `json:"name,omitempty"`
 	Args       map[string]interface{} `json:"args,omitempty"`
 	ToolCallID string                 `json:"toolCallId,omitempty"`
+	Streaming  bool                   `json:"streaming,omitempty"`
 
 	// tool-result
 	Result   string `json:"result,omitempty"`

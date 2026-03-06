@@ -37,13 +37,28 @@ func ComputeToolGrouping(messages []StoredMessage, streaming *StoredMessage) Too
 		}
 	}
 
-	// Find consumed tool-call IDs: tool-calls that have matching results
+	// Collect non-streaming tool-call IDs (from tool_execution events)
+	executingIDs := make(map[string]bool)
+	for _, msg := range all {
+		for _, part := range msg.Parts {
+			if part.Type == PartToolCall && part.ToolCallID != "" && !part.Streaming {
+				executingIDs[part.ToolCallID] = true
+			}
+		}
+	}
+
+	// Find consumed tool-call IDs:
+	// - tool-calls that have matching results
+	// - streaming tool-calls superseded by a real execution
 	for _, msg := range all {
 		for _, part := range msg.Parts {
 			if part.Type != PartToolCall || part.ToolCallID == "" {
 				continue
 			}
 			if _, ok := tg.ToolResults[part.ToolCallID]; ok {
+				tg.ConsumedToolCallIDs[part.ToolCallID] = true
+			}
+			if part.Streaming && executingIDs[part.ToolCallID] {
 				tg.ConsumedToolCallIDs[part.ToolCallID] = true
 			}
 		}

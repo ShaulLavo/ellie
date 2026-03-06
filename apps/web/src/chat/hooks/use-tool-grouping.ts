@@ -33,12 +33,36 @@ export function useToolGrouping(
 
 	const consumedToolCallIds = useMemo(() => {
 		const set = new Set<string>()
+
+		// Collect non-streaming tool-call IDs (from tool_execution events)
+		const executingIds = new Set<string>()
+		for (const msg of allMessages) {
+			for (const part of msg.parts) {
+				if (
+					part.type === 'tool-call' &&
+					part.toolCallId &&
+					!part.streaming
+				) {
+					executingIds.add(part.toolCallId)
+				}
+			}
+		}
+
 		for (const msg of allMessages) {
 			for (const part of msg.parts) {
 				if (part.type !== 'tool-call' || !part.toolCallId)
 					continue
-				if (!toolResults.has(part.toolCallId)) continue
-				set.add(part.toolCallId)
+				// Mark tool-calls that have a matching result
+				if (toolResults.has(part.toolCallId)) {
+					set.add(part.toolCallId)
+				}
+				// Mark streaming tool-calls superseded by a real execution
+				if (
+					part.streaming &&
+					executingIds.has(part.toolCallId)
+				) {
+					set.add(part.toolCallId)
+				}
 			}
 		}
 		return set

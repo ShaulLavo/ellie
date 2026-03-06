@@ -13,7 +13,6 @@ import { cn } from '@/lib/utils'
 import {
 	CaretDownIcon,
 	CheckCircleIcon,
-	CircleIcon,
 	ClockIcon,
 	WrenchIcon,
 	XCircleIcon
@@ -76,9 +75,7 @@ const statusIcons: Record<ToolPart['state'], ReactNode> = {
 		<CheckCircleIcon className="size-3 text-muted-foreground" />
 	),
 	'input-available': <AILoader className="size-4" />,
-	'input-streaming': (
-		<CircleIcon className="size-3 text-muted-foreground" />
-	),
+	'input-streaming': <AILoader className="size-4" />,
 	'output-available': (
 		<CheckCircleIcon className="size-3 text-muted-foreground" />
 	),
@@ -228,6 +225,7 @@ export interface ToolCardProps {
 	result?: string
 	isError?: boolean
 	elapsedMs?: number
+	streaming?: boolean
 	className?: string
 }
 
@@ -242,6 +240,7 @@ export const ToolCard = ({
 	result,
 	isError,
 	elapsedMs,
+	streaming,
 	className
 }: ToolCardProps) => {
 	const state: ToolPart['state'] =
@@ -249,7 +248,9 @@ export const ToolCard = ({
 			? isError
 				? 'output-error'
 				: 'output-available'
-			: 'input-available'
+			: streaming
+				? 'input-streaming'
+				: 'input-available'
 
 	const contentRef = useRef<HTMLDivElement>(null)
 	useCollapsibleScroll(contentRef)

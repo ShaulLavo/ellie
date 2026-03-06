@@ -57,10 +57,40 @@ func EventToStored(row EventRow) StoredMessage {
 
 	var parts []ContentPart
 
+	// Check if the assistant_message is still streaming
+	isMessageStreaming := false
+	if b, ok := parsed["streaming"].(bool); ok {
+		isMessageStreaming = b
+	}
+
 	switch row.Type {
 	case "assistant_message":
 		msg := jsonObj(parsed, "message")
 		parts = extractMessageParts(msg)
+		// During streaming, surface toolCall blocks as streaming tool-call parts.
+		// The raw toolCall format uses "id" and "arguments" (not "toolCallId"/"args"),
+		// so we extract from the raw content array.
+		if isMessageStreaming {
+			if arr, ok := msg["content"].([]interface{}); ok {
+				for _, item := range arr {
+					m, ok := item.(map[string]interface{})
+					if !ok || m["type"] != "toolCall" {
+						continue
+					}
+					args := map[string]interface{}{}
+					if a, ok := m["arguments"].(map[string]interface{}); ok {
+						args = a
+					}
+					parts = append(parts, ContentPart{
+						Type:       PartToolCall,
+						Name:       jsonStr(m, "name"),
+						Args:       args,
+						ToolCallID: jsonStr(m, "id"),
+						Streaming:  true,
+					})
+				}
+			}
+		}
 
 	case "tool_execution":
 		status := jsonStr(parsed, "status")
