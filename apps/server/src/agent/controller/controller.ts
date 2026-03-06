@@ -5,7 +5,7 @@
  * and agent lifecycle. Delegates to:
  *   - stream-persistence: unified INSERT/UPDATE for streaming rows
  *   - event-mapper: pure mapping for non-streaming events
- *   - memory: recall, retain, and enforcement logic
+ *   - memory: recall and retain (Hindsight only)
  */
 
 import {
@@ -21,11 +21,10 @@ import type { RealtimeStore } from '../../lib/realtime-store'
 import { buildSystemPrompt } from '../system-prompt'
 import type { MemoryOrchestrator } from '../memory-orchestrator'
 import { createToolRegistry } from '../tools/capability-registry'
-import { createMemoryAppendDailyTool } from '../tools/memory/daily'
 import { mapAgentEventToDb } from './event-mapper'
 import {
 	runRecall,
-	runRetainAndEnforce,
+	runRetain,
 	type MemoryDeps
 } from './memory'
 import {
@@ -68,13 +67,11 @@ export class AgentController {
 	private options: AgentControllerOptions
 	private memory: MemoryOrchestrator | null
 	private baseSystemPrompt: string
-	/** Set of runIds that are enforcement turns (skip re-enforcement) */
-	private enforcementRunIds = new Set<string>()
 
 	/** Lazily-cached MemoryDeps — safe to cache for the controller lifetime:
-	 *  all deps are stable references (store, memory, agent, baseSystemPrompt,
-	 *  enforcementRunIds) or captured via closures that read current values at
-	 *  call time (trace, withLock, getBoundSessionId). */
+	 *  all deps are stable references (store, memory, agent, baseSystemPrompt)
+	 *  or captured via closures that read current values at call time
+	 *  (trace). */
 	#memoryDeps: MemoryDeps | null = null
 
 	/** Streaming row state (owned here, passed to stream-persistence) */
@@ -103,9 +100,6 @@ export class AgentController {
 			dataDir: options.dataDir,
 			getSessionId: () => this.boundSessionId
 		})
-		const memoryTool = createMemoryAppendDailyTool(
-			options.workspaceDir
-		)
 
 		this.agent = new Agent({
 			...options.agentOptions,
@@ -116,7 +110,7 @@ export class AgentController {
 				thinkingLevel:
 					options.agentOptions?.initialState
 						?.thinkingLevel ?? 'low',
-				tools: [...registry.all, memoryTool]
+				tools: registry.all
 			},
 			onEvent: event => this.handleEvent(event),
 			onTrace: entry => {
@@ -329,10 +323,7 @@ export class AgentController {
 				memory: this.memory,
 				agent: this.agent,
 				baseSystemPrompt: this.baseSystemPrompt,
-				enforcementRunIds: this.enforcementRunIds,
-				trace: (type, payload) => this.trace(type, payload),
-				withLock: fn => this.withLock(fn),
-				getBoundSessionId: () => this.boundSessionId
+				trace: (type, payload) => this.trace(type, payload)
 			}
 		}
 		return this.#memoryDeps
@@ -389,21 +380,15 @@ export class AgentController {
 			return
 		}
 
-		// Enforcement runs are silent — skip everything except agent_end
-		const isEnforcement = this.enforcementRunIds.has(runId)
-		if (isEnforcement && event.type !== 'agent_end') return
-
 		// 1. Try streaming persistence (assistant_message, tool_execution)
-		if (!isEnforcement) {
-			const handled = handleStreamingEvent(
-				this.streamDeps,
-				this.streamState,
-				event,
-				sessionId,
-				runId
-			)
-			if (handled) return
-		}
+		const handled = handleStreamingEvent(
+			this.streamDeps,
+			this.streamState,
+			event,
+			sessionId,
+			runId
+		)
+		if (handled) return
 
 		// 2. Map non-streaming events to DB rows
 		const rows = mapAgentEventToDb(event)
@@ -441,29 +426,21 @@ export class AgentController {
 			)
 		}
 
-		// Memory retain + enforcement
-		if (isEnforcement) {
-			// Enforcement runs contain only a system prompt + tool call —
-			// no user/assistant turns worth retaining. The original run
-			// already retained those turns, so skip retain entirely to
-			// avoid reprocessing the same sequence range.
-			this.enforcementRunIds.delete(runId)
-		} else {
-			runRetainAndEnforce(
-				this.memoryDeps,
-				sessionId,
-				runId
-			).catch(err => {
-				handleControllerError(
-					(type, payload) => this.trace(type, payload),
-					`retain_enforce_error session=${sessionId} runId=${runId}`,
-					'controller.retain_enforce_error',
-					{ sessionId, runId },
-					err,
-					'warn'
-				)
-			})
-		}
+		// Memory retain (Hindsight only — no agent prompting)
+		runRetain(
+			this.memoryDeps,
+			sessionId,
+			runId
+		).catch(err => {
+			handleControllerError(
+				(type, payload) => this.trace(type, payload),
+				`retain_error session=${sessionId} runId=${runId}`,
+				'controller.retain_error',
+				{ sessionId, runId },
+				err,
+				'warn'
+			)
+		})
 
 		// Reset system prompt and clear runId
 		this.agent.state.systemPrompt = this.baseSystemPrompt

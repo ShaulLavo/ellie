@@ -16,8 +16,7 @@ const PROMPT_SECTIONS = [
 	'USER.md',
 	'AGENTS.md',
 	'TOOLS.md',
-	'HEARTBEAT.md',
-	'MEMORY.md'
+	'HEARTBEAT.md'
 ] as const
 
 /**

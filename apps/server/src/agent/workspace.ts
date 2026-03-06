@@ -30,7 +30,6 @@ const TEMPLATE_FILES = [
 	'IDENTITY.md',
 	'USER.md',
 	'TOOLS.md',
-	'MEMORY.md',
 	'HEARTBEAT.md',
 	'BOOTSTRAP.md'
 ] as const

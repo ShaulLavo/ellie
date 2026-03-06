@@ -2,12 +2,11 @@
  * Memory integration helpers for AgentController.
  *
  * Extracted from controller.ts to keep the controller focused on
- * orchestration. Handles recall, retain, and daily-write enforcement.
+ * orchestration. Handles recall and retain (Hindsight only).
  */
 
 import type { Agent } from '@ellie/agent'
 import type { EventPayloadMap } from '@ellie/db'
-import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import type { MemoryOrchestrator } from '../memory-orchestrator'
 import { handleControllerError } from './error-handler'
@@ -17,13 +16,10 @@ export interface MemoryDeps {
 	memory: MemoryOrchestrator | null
 	agent: Agent
 	baseSystemPrompt: string
-	enforcementRunIds: Set<string>
 	trace: (
 		type: string,
 		payload: Record<string, unknown>
 	) => void
-	withLock: (fn: () => Promise<void>) => Promise<void>
-	getBoundSessionId: () => string | null
 }
 
 /**
@@ -80,7 +76,7 @@ export async function runRecall(
 
 /**
  * Evaluate and run memory retain after an agent run completes.
- * Does not block or affect the agent response.
+ * Stores facts in Hindsight only — does not prompt the agent.
  */
 export async function runRetain(
 	deps: MemoryDeps,
@@ -116,71 +112,4 @@ export async function runRetain(
 		)
 		return 0
 	}
-}
-
-/**
- * Run retain and enforce daily memory write if retain found facts
- * but the agent didn't call memory_append_daily during this run.
- */
-export async function runRetainAndEnforce(
-	deps: MemoryDeps,
-	sessionId: string,
-	runId: string
-): Promise<void> {
-	const factsStored = await runRetain(
-		deps,
-		sessionId,
-		runId
-	)
-	if (factsStored === 0) return
-
-	// Check if the run contained a memory_append_daily call
-	const runEvents = deps.store.queryRunEvents(
-		sessionId,
-		runId
-	)
-
-	const hadDailyWrite = runEvents.some(e => {
-		if (e.type !== 'tool_execution') return false
-		try {
-			const parsed = JSON.parse(e.payload)
-			return (
-				parsed.toolName === 'memory_append_daily' &&
-				parsed.status === 'complete' &&
-				!parsed.isError
-			)
-		} catch {
-			return false
-		}
-	})
-
-	if (hadDailyWrite) return
-
-	// Enforcement: trigger a silent follow-up turn
-	await deps.withLock(async () => {
-		if (deps.agent.state.isStreaming) return
-		if (deps.getBoundSessionId() !== sessionId) return
-
-		const enforcementRunId = ulid()
-		deps.enforcementRunIds.add(enforcementRunId)
-		deps.agent.runId = enforcementRunId
-
-		deps.agent
-			.prompt(
-				'[SYSTEM] The retain pipeline just stored new facts from this conversation. ' +
-					'You MUST call memory_append_daily now to persist any durable facts ' +
-					'to daily memory. If there is nothing meaningful to persist, ' +
-					'respond with exactly NO_REPLY and nothing else.'
-			)
-			.catch(err => {
-				handleControllerError(
-					deps.trace,
-					`enforcement_failed session=${sessionId} runId=${enforcementRunId}`,
-					'controller.enforcement_failed',
-					{ sessionId, runId: enforcementRunId },
-					err,
-					'warn'
-				)
-			})
-	})
 }
