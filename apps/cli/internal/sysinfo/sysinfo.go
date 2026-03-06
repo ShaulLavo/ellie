@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
-	"time"
 )
 
 // ReadoutKey identifies a piece of system information.
@@ -173,49 +172,6 @@ var defaultOrder = []ReadoutKey{
 	KeyShell, KeyTerminal, KeyLocalIP, KeyDisk, KeyUptime, KeyPackages,
 }
 
-// dynamicKeys are readouts that change while the process is running.
-// These get a TTL; everything else is cached forever.
-var dynamicKeys = map[ReadoutKey]time.Duration{
-	KeyCPULoad: 2 * time.Second,
-	KeyMemory:  5 * time.Second,
-	KeyDisk:    30 * time.Second,
-	KeyBattery: 10 * time.Second,
-	KeyUptime:  60 * time.Second,
-}
-
-type cachedReadout struct {
-	readout   Readout
-	fetchedAt time.Time
-}
-
-var (
-	cache   = make(map[ReadoutKey]cachedReadout)
-	cacheMu sync.RWMutex
-)
-
-// getCached returns a cached readout if still valid, or ok=false.
-func getCached(key ReadoutKey) (Readout, bool) {
-	cacheMu.RLock()
-	defer cacheMu.RUnlock()
-	entry, exists := cache[key]
-	if !exists {
-		return Readout{}, false
-	}
-	if ttl, dynamic := dynamicKeys[key]; dynamic {
-		if time.Since(entry.fetchedAt) > ttl {
-			return Readout{}, false
-		}
-	}
-	// Static keys never expire
-	return entry.readout, true
-}
-
-func setCache(key ReadoutKey, r Readout) {
-	cacheMu.Lock()
-	cache[key] = cachedReadout{readout: r, fetchedAt: time.Now()}
-	cacheMu.Unlock()
-}
-
 // Collect gathers system readouts concurrently.
 // If keys is nil, all readouts are collected. Otherwise only the specified keys.
 func Collect(keys []ReadoutKey) Info {
@@ -227,22 +183,15 @@ func Collect(keys []ReadoutKey) Info {
 	results := make([]Readout, len(order))
 	var wg sync.WaitGroup
 	for i, key := range order {
-		// Use cache if available
-		if cached, ok := getCached(key); ok {
-			results[i] = cached
-			continue
-		}
 		fn, ok := allFetchers[key]
 		if !ok {
 			continue
 		}
 		wg.Add(1)
-		go func(idx int, k ReadoutKey, f func() Readout) {
+		go func(idx int, f func() Readout) {
 			defer wg.Done()
-			r := f()
-			setCache(k, r)
-			results[idx] = r
-		}(i, key, fn)
+			results[idx] = f()
+		}(i, fn)
 	}
 	wg.Wait()
 
