@@ -130,6 +130,18 @@ async function* wrapAsyncIterable(
 					break
 			}
 
+			// Handle RUN_ERROR — mark as errored so finally doesn't emit partial
+			if (chunk.type === 'RUN_ERROR') {
+				errored = true
+				opts.recorder.record(scope, 'model.error', 'model', {
+					error:
+						(chunk.error as { message?: string })
+							?.message ?? String(chunk)
+				})
+				yield chunk
+				break
+			}
+
 			// Intercept RUN_FINISHED to record usage + response body
 			if (chunk.type === 'RUN_FINISHED') {
 				finished = true

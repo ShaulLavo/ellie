@@ -285,14 +285,9 @@ export async function processAgentStream(
 		: undefined
 	const { abortController, cleanup } =
 		createAbortBridge(signal)
-	const streamSource = buildStreamSource(
-		sctx,
-		llmMessages,
-		tanStackTools,
-		abortController
-	)
 
 	// Trace the full context being sent to the API
+	// Emitted before buildStreamSource so prompt.snapshot precedes model.request
 	const snapshotPayload = {
 		systemPrompt: sctx.currentContext.systemPrompt,
 		messages: llmMessages,
@@ -361,6 +356,13 @@ export async function processAgentStream(
 	} else {
 		emitTrace(config, 'agent_context', snapshotPayload)
 	}
+
+	const streamSource = buildStreamSource(
+		sctx,
+		llmMessages,
+		tanStackTools,
+		abortController
+	)
 
 	// Iteration state
 	const state = createIterationState(config)

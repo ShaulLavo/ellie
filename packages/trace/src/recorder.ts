@@ -130,7 +130,7 @@ export class TraceRecorder {
 		return results.sort((a, b) => a.ts - b.ts)
 	}
 
-	/** Read only the first event from a trace file without loading the entire file. */
+	/** Read and parse the first event from a trace file. */
 	#readFirstEvent(
 		traceId: string
 	): TraceEventEnvelope | null {

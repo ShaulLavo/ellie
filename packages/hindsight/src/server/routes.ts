@@ -783,7 +783,11 @@ function isHindsightPath(pathname: string): boolean {
 	)
 }
 
-const appCache = new WeakMap<
+const untracedAppCache = new WeakMap<
+	Hindsight,
+	ReturnType<typeof createHindsightApp>
+>()
+const tracedAppCache = new WeakMap<
 	Hindsight,
 	ReturnType<typeof createHindsightApp>
 >()
@@ -800,10 +804,11 @@ export function handleHindsightRequest(
 ): Promise<Response> | null {
 	if (!isHindsightPath(pathname)) return null
 
-	let app = appCache.get(hs)
+	const cache = trace ? tracedAppCache : untracedAppCache
+	let app = cache.get(hs)
 	if (!app) {
 		app = createHindsightApp(hs, trace)
-		appCache.set(hs, app)
+		cache.set(hs, app)
 	}
 
 	return app.handle(req)
