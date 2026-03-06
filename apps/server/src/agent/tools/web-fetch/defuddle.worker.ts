@@ -174,7 +174,9 @@ const turndown = new TurndownService({
 
 function parseHtml(html: string, url: string) {
 	const dom = new JSDOM(html, { url })
-	const defuddle = new Defuddle(dom.window.document, { url })
+	const defuddle = new Defuddle(dom.window.document, {
+		url
+	})
 	const result = defuddle.parse()
 
 	const markdown = result.content
