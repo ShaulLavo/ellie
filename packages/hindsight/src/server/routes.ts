@@ -724,32 +724,52 @@ export function createHindsightApp(
 
 		try {
 			const result = await handler(input, params)
-			trace.record(
-				childScope,
-				`hindsight.${name}.end`,
-				'hindsight',
-				{
-					bankId: params.bankId,
-					operation: name,
-					elapsedMs: Date.now() - startedAt,
-					success: true
-				}
-			)
+			try {
+				trace.record(
+					childScope,
+					`hindsight.${name}.end`,
+					'hindsight',
+					{
+						bankId: params.bankId,
+						operation: name,
+						elapsedMs: Date.now() - startedAt,
+						success: true
+					}
+				)
+			} catch (traceErr) {
+				console.warn(
+					`[hindsight] trace.record failed for ${name}.end:`,
+					traceErr instanceof Error
+						? traceErr.message
+						: String(traceErr)
+				)
+			}
 			return result
 		} catch (err) {
-			trace.record(
-				childScope,
-				`hindsight.${name}.end`,
-				'hindsight',
-				{
-					bankId: params.bankId,
-					operation: name,
-					elapsedMs: Date.now() - startedAt,
-					success: false,
-					error:
-						err instanceof Error ? err.message : String(err)
-				}
-			)
+			try {
+				trace.record(
+					childScope,
+					`hindsight.${name}.end`,
+					'hindsight',
+					{
+						bankId: params.bankId,
+						operation: name,
+						elapsedMs: Date.now() - startedAt,
+						success: false,
+						error:
+							err instanceof Error
+								? err.message
+								: String(err)
+					}
+				)
+			} catch (traceErr) {
+				console.warn(
+					`[hindsight] trace.record failed for ${name}.end (error path):`,
+					traceErr instanceof Error
+						? traceErr.message
+						: String(traceErr)
+				)
+			}
 			throw err
 		}
 	}
@@ -789,7 +809,10 @@ const untracedAppCache = new WeakMap<
 >()
 const tracedAppCache = new WeakMap<
 	Hindsight,
-	ReturnType<typeof createHindsightApp>
+	WeakMap<
+		HindsightRouteTraceContext,
+		ReturnType<typeof createHindsightApp>
+	>
 >()
 
 /**
@@ -804,11 +827,24 @@ export function handleHindsightRequest(
 ): Promise<Response> | null {
 	if (!isHindsightPath(pathname)) return null
 
-	const cache = trace ? tracedAppCache : untracedAppCache
-	let app = cache.get(hs)
+	if (!trace) {
+		let app = untracedAppCache.get(hs)
+		if (!app) {
+			app = createHindsightApp(hs)
+			untracedAppCache.set(hs, app)
+		}
+		return app.handle(req)
+	}
+
+	let inner = tracedAppCache.get(hs)
+	if (!inner) {
+		inner = new WeakMap()
+		tracedAppCache.set(hs, inner)
+	}
+	let app = inner.get(trace)
 	if (!app) {
 		app = createHindsightApp(hs, trace)
-		cache.set(hs, app)
+		inner.set(trace, app)
 	}
 
 	return app.handle(req)

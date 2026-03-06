@@ -1,6 +1,8 @@
 export {
 	createTracedStreamFn,
-	type TracedModelOptions
+	type TracedModelOptions,
+	type StreamCallOptions,
+	type StreamFn
 } from './traced-model'
 export {
 	createTracedToolWrapper,

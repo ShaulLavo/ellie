@@ -9,6 +9,7 @@
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@fontsource/geist-mono": "^5.2.7",
         "@fontsource/google-sans-flex": "^5.2.2",
+        "@mozilla/readability": "^0.6.0",
         "@tanstack/ai-ollama": "^0.5.0",
         "defuddle": "github:ShaulLavo/defuddle",
         "fast-ulid": "^1.2.1",
@@ -119,6 +120,7 @@
         "cmdk": "^1.1.1",
         "dompurify": "3.3.1",
         "embla-carousel-react": "^8.6.0",
+        "ghostty-web": "^0.4.0",
         "idb": "8.0.3",
         "idb-keyval": "^6.2.2",
         "jszip": "3.10.1",
@@ -1708,6 +1710,8 @@
     "get-tsconfig": ["get-tsconfig@4.13.6", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-shZT/QMiSHc/YBLxxOkMtgSid5HFoauqCE3/exfsEcwg1WkeqjG+V40yBbBrsD+jW2HDXcs28xOfcbm2jI8Ddw=="],
 
     "get-uri": ["get-uri@6.0.5", "", { "dependencies": { "basic-ftp": "^5.0.2", "data-uri-to-buffer": "^6.0.2", "debug": "^4.3.4" } }, "sha512-b1O07XYq8eRuVzBNgJLstU6FYc1tS6wnMtF1I1D9lE8LxZSOGZ7LhxN54yPP6mGw5f2CkXY2BQUL9Fx41qvcIg=="],
+
+    "ghostty-web": ["ghostty-web@0.4.0", "", {}, "sha512-0puDBik2qapbD/QQBW9o5ZHfXnZBqZWx/ctBiVtKZ6ZLds4NYb+wZuw1cRLXZk9zYovIQ908z3rvFhexAvc5Hg=="],
 
     "github-from-package": ["github-from-package@0.0.0", "", {}, "sha512-SyHy3T1v2NUXn29OsWdxmK6RwHD+vkj3v8en8AOBZ1wBQ/hCAQ5bAQTD02kW4W9tUp/3Qh6J8r9EvntiyCmOOw=="],
 

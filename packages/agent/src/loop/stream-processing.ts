@@ -29,7 +29,9 @@ import type {
 import {
 	shouldBlob,
 	createTracedStreamFn,
-	type BlobRef
+	type BlobRef,
+	type StreamCallOptions,
+	type StreamFn
 } from '@ellie/trace'
 import {
 	createPartial,
@@ -111,23 +113,21 @@ function buildStreamSource(
 		abortController
 	} as const
 
-	// Build the effective stream function
-	let effectiveFn: (
-		opts: Record<string, unknown>
-	) => AsyncIterable<StreamChunk>
+	// Build the effective stream function.
+	// StreamFn / StreamCallOptions are structural bridges from @ellie/trace
+	// that abstract over the generic TextActivityOptions from @tanstack/ai.
+	let effectiveFn: StreamFn
 
 	if (streamFn) {
-		effectiveFn = streamFn as unknown as typeof effectiveFn
+		effectiveFn = streamFn as unknown as StreamFn
 	} else {
-		effectiveFn = (opts: Record<string, unknown>) =>
+		effectiveFn = ((opts: StreamCallOptions) =>
 			chat({
 				...opts,
 				agentLoopStrategy: tanStackTools
 					? maxIterations(config.maxTurns ?? 10)
 					: () => false
-			} as Parameters<
-				typeof chat
-			>[0]) as AsyncIterable<StreamChunk>
+			} as Parameters<typeof chat>[0])) as StreamFn
 	}
 
 	// Wrap with traced model facade when trace deps are available
@@ -135,19 +135,16 @@ function buildStreamSource(
 		config.traceRecorder &&
 		config.toolSafety?.traceScope
 	) {
-		effectiveFn = createTracedStreamFn(
-			effectiveFn as Parameters<
-				typeof createTracedStreamFn
-			>[0],
-			{
-				recorder: config.traceRecorder,
-				blobSink: config.toolSafety.blobSink,
-				parentScope: config.toolSafety.traceScope
-			}
-		) as typeof effectiveFn
+		effectiveFn = createTracedStreamFn(effectiveFn, {
+			recorder: config.traceRecorder,
+			blobSink: config.toolSafety.blobSink,
+			parentScope: config.toolSafety.traceScope
+		})
 	}
 
-	return effectiveFn(shared as Record<string, unknown>)
+	return effectiveFn(
+		shared as StreamCallOptions
+	) as AsyncIterable<StreamChunk>
 }
 
 // ---------------------------------------------------------------------------

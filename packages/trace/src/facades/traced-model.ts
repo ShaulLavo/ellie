@@ -18,7 +18,7 @@ import type { TraceRecorder } from '../recorder'
 // Structural types matching the shapes from @ellie/agent and @tanstack/ai
 // without importing them directly.
 
-interface StreamCallOptions {
+export interface StreamCallOptions {
 	messages: unknown[]
 	systemPrompts?: string[]
 	tools?: unknown[]
@@ -34,7 +34,7 @@ interface StreamChunk {
 	[key: string]: unknown
 }
 
-type StreamFn = (
+export type StreamFn = (
 	options: StreamCallOptions
 ) => AsyncIterable<StreamChunk>
 

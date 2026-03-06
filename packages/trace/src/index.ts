@@ -29,7 +29,9 @@ export {
 	type TracedModelOptions,
 	type TracedToolOptions,
 	type TracedMemoryOptions,
-	type TracedReplOptions
+	type TracedReplOptions,
+	type StreamCallOptions,
+	type StreamFn
 } from './facades'
 
 // Projector
