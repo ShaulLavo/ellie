@@ -8,6 +8,7 @@ require (
 	charm.land/glamour/v2 v2.0.0-20260123212943-6014aa153a9b
 	charm.land/lipgloss/v2 v2.0.0
 	github.com/atotto/clipboard v0.1.4
+	github.com/charmbracelet/harmonica v0.2.0
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/wish v1.4.7
 	github.com/charmbracelet/x/ansi v0.11.6
