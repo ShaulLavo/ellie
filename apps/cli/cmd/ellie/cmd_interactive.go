@@ -13,6 +13,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/creack/pty"
 	"github.com/spf13/cobra"
+
+	"ellie/apps/cli/internal/sysinfo"
 )
 
 // Commands that need full terminal control (own TUI).
@@ -20,6 +22,14 @@ import (
 var execCommands = map[string]bool{
 	"chat": true,
 	"auth": true,
+}
+
+// inlineCommands run in-process and return output directly (no subprocess).
+var inlineCommands = map[string]func() string{
+	"sysinfo": func() string {
+		info := sysinfo.Collect(nil)
+		return sysinfo.Render(info, sysinfo.RenderOpts{})
+	},
 }
 
 // ── state ───────────────────────────────────────────────────────────
@@ -43,6 +53,7 @@ type processStartedMsg struct {
 
 type outputLineMsg string
 type outputDoneMsg struct{ err error }
+type inlineOutputMsg struct{ output string }
 
 // ── model ───────────────────────────────────────────────────────────
 
@@ -111,6 +122,12 @@ func (m interactiveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.proc = nil
 		return m, nil
 
+	case inlineOutputMsg:
+		m.outputLines = strings.Split(msg.output, "\n")
+		m.viewport.SetContent(msg.output)
+		m.outputDone = true
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.state == stateOutput {
 			return m.updateOutput(msg)
@@ -148,6 +165,12 @@ func (m interactiveModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.outputDone = false
 		m.viewport.SetContent("")
 		m.viewport.GotoTop()
+		// Use in-process handler if available (avoids subprocess + PTY overhead)
+		if fn, ok := inlineCommands[cmd.Name()]; ok {
+			return m, func() tea.Msg {
+				return inlineOutputMsg{output: fn()}
+			}
+		}
 		return m, startOutputProcess(cmd.Name())
 	}
 	return m, nil
