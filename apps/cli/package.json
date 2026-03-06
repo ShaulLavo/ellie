@@ -7,8 +7,7 @@
 	},
 	"scripts": {
 		"dev": "go run ./cmd/ellie",
-		"build": "go build -o bin/ellie ./cmd/ellie",
-		"install-global": "go install ./cmd/ellie",
+		"build": "go install ./cmd/ellie && go build -o bin/pty-bridge ./cmd/pty-bridge",
 		"test": "go test ./...",
 		"check-types": "go test ./..."
 	}

@@ -32,9 +32,7 @@ export function createTerminalRoutes(paths?: {
 	const bridgePath =
 		paths?.bridge ??
 		resolve(import.meta.dir, '../../../cli/bin/pty-bridge')
-	const cliPath =
-		paths?.cli ??
-		resolve(import.meta.dir, '../../../cli/bin/ellie')
+	const cliPath = paths?.cli ?? 'ellie'
 
 	return new Elysia({ tags: ['Terminal'] }).ws(
 		'/ws/terminal',
