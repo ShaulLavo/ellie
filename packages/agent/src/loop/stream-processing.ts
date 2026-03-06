@@ -255,6 +255,22 @@ export async function processAgentStream(
 		abortController
 	)
 
+	// Trace the full context being sent to the API
+	emitTrace(config, 'agent_context', {
+		systemPrompt: sctx.currentContext.systemPrompt,
+		messages: llmMessages,
+		tools: context.tools?.map(t => ({
+			name: t.name,
+			description: t.description
+		})),
+		model: config.model.id,
+		provider: config.model.provider,
+		thinkingLevel: config.thinkingLevel,
+		temperature: config.temperature,
+		maxTokens: config.maxTokens,
+		messageCount: llmMessages.length
+	})
+
 	// Iteration state
 	const state = createIterationState(config)
 
