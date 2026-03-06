@@ -3,25 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import { useChatDB } from './hooks/use-chat-db'
 import { useToolGrouping } from './hooks/use-tool-grouping'
 import { useChatCommands } from './hooks/use-chat-commands'
-import {
-	Conversation,
-	ConversationContent,
-	ConversationScrollButton
-} from '@/components/ai-elements/conversation'
 import { PromptInputProvider } from '@/components/ai-elements/prompt-input'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
-import { ChatMessageRow } from './components/chat-message'
 import { eden } from '@/lib/eden'
-import {
-	ListIcon,
-	InfoIcon,
-	Trash2Icon
-} from 'lucide-react'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { ChatToolbar } from './components/chat-toolbar'
+import { ChatMessageList } from './components/chat-message-list'
 import { SessionStatusBar } from './components/session-status-bar'
 import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
-import { EmptyState } from './components/empty-state'
 import { ConnectionIndicator } from './components/connection-indicator'
 import { ServerDownOverlay } from './components/server-down-overlay'
 import { PromptInputWithCommands } from './components/prompt-input-with-commands'
@@ -78,38 +67,10 @@ export function ChatRoom({
 
 	return (
 		<div className="flex h-full w-full flex-col">
-			<div className="flex items-center gap-1 px-5 py-1.5 border-b border-border/60">
-				<button
-					type="button"
-					onClick={() => setShowSessionList(true)}
-					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-				>
-					<ListIcon className="size-3" />
-					Sessions
-				</button>
-				<button
-					type="button"
-					onClick={() => setShowSessionInfo(true)}
-					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-				>
-					<InfoIcon className="size-3" />
-					Info
-				</button>
-				<div className="flex-1" />
-				<ThemeToggle />
-				<button
-					type="button"
-					onClick={async () => {
-						await eden.api.dev.reset.post()
-						// Server exits — wait a moment then reload
-						setTimeout(() => window.location.reload(), 1500)
-					}}
-					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10 transition-colors"
-				>
-					<Trash2Icon className="size-3" />
-					Reset
-				</button>
-			</div>
+			<ChatToolbar
+				onShowSessions={() => setShowSessionList(true)}
+				onShowInfo={() => setShowSessionInfo(true)}
+			/>
 
 			<ConnectionIndicator
 				state={chat.connectionState}
@@ -142,45 +103,15 @@ export function ChatRoom({
 				}
 			/>
 
-			<Conversation className="flex-1">
-				<ConversationContent className="gap-5 px-6 py-5">
-					{chat.messages.length === 0 &&
-					!chat.streamingMessage ? (
-						<EmptyState needsBootstrap={needsBootstrap} />
-					) : (
-						<>
-							{chat.messages.map(msg =>
-								hiddenMessageIds.has(msg.id) ? null : (
-									<ChatMessageRow
-										key={msg.id}
-										message={msg}
-										toolResults={toolResults}
-										consumedToolCallIds={
-											consumedToolCallIds
-										}
-									/>
-								)
-							)}
-							{chat.streamingMessage &&
-								!hiddenMessageIds.has(
-									chat.streamingMessage.id
-								) && (
-									<ChatMessageRow
-										key={chat.streamingMessage.id}
-										message={chat.streamingMessage}
-										toolResults={toolResults}
-										consumedToolCallIds={
-											consumedToolCallIds
-										}
-									/>
-								)}
-						</>
-					)}
-				</ConversationContent>
-				<ConversationScrollButton />
-			</Conversation>
+			<ChatMessageList
+				messages={chat.messages}
+				streamingMessage={chat.streamingMessage}
+				toolResults={toolResults}
+				consumedToolCallIds={consumedToolCallIds}
+				hiddenMessageIds={hiddenMessageIds}
+				needsBootstrap={needsBootstrap}
+			/>
 
-			{/* Prompt area */}
 			<div className="relative px-6 pb-5 pt-3">
 				<div className="absolute inset-x-6 top-0 h-px bg-border/60" />
 				<PromptInputProvider>
