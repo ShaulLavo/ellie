@@ -12,10 +12,10 @@ function textOf(result: AgentToolResult): string {
 describe('web_fetch tool', () => {
 	const tool = createWebFetchTool()
 
-	// ── HTML ─────────────────────────────────────────────────────────
+	// ── Wikipedia ────────────────────────────────────────────────────
 
-	test('fetches a Wikipedia page via REST API', async () => {
-		const result = await tool.execute('tc-1', {
+	test('fetches a Wikipedia page via extracts API', async () => {
+		const result = await tool.execute('tc-wiki', {
 			url: 'https://en.wikipedia.org/wiki/TypeScript'
 		})
 
@@ -33,21 +33,109 @@ describe('web_fetch tool', () => {
 		)
 		expect(details.source).toBe('wikipedia-rest')
 		expect(details.title).toContain('TypeScript')
-	}, 30_000)
+	}, 15_000)
 
-	test('returns markdown with atx headings and no raw HTML', async () => {
-		const result = await tool.execute('tc-1', {
+	test('Wikipedia: returns markdown headings, no raw HTML', async () => {
+		const result = await tool.execute('tc-wiki-md', {
 			url: 'https://en.wikipedia.org/wiki/Bun_(software)'
 		})
 
 		const text = textOf(result)
-		expect(text).toContain('#')
-		expect(text).toMatch(/^#{1,6} /m)
+		expect(text).toMatch(/^# /m)
+		expect(text).toMatch(/^## /m)
 		expect(text).not.toMatch(/<[a-z]/)
-	}, 30_000)
+	}, 15_000)
+
+	test('Wikipedia: strips References and See also sections', async () => {
+		const result = await tool.execute('tc-wiki-strip', {
+			url: 'https://en.wikipedia.org/wiki/TypeScript'
+		})
+
+		const text = textOf(result)
+		expect(text).not.toMatch(/^## References$/m)
+		expect(text).not.toMatch(/^## See also$/m)
+		expect(text).not.toMatch(/^## External links$/m)
+	}, 15_000)
+
+	test('Wikipedia: handles non-English wikis', async () => {
+		const result = await tool.execute('tc-wiki-lang', {
+			url: 'https://fr.wikipedia.org/wiki/TypeScript'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('TypeScript')
+		expect(text.length).toBeGreaterThan(200)
+
+		const details = result.details as { source: string }
+		expect(details.source).toBe('wikipedia-rest')
+	}, 15_000)
+
+	test('Wikipedia: handles mobile URLs (en.m.wikipedia.org)', async () => {
+		const result = await tool.execute('tc-wiki-mobile', {
+			url: 'https://en.m.wikipedia.org/wiki/TypeScript'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('TypeScript')
+		expect(text.length).toBeGreaterThan(500)
+
+		const details = result.details as { source: string }
+		expect(details.source).toBe('wikipedia-rest')
+	}, 15_000)
+
+	// ── Reddit ───────────────────────────────────────────────────────
+
+	test('Reddit: fetches subreddit listing', async () => {
+		const result = await tool.execute('tc-reddit-sub', {
+			url: 'https://www.reddit.com/r/typescript'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('r/typescript')
+		expect(text).toMatch(/^\d+\./m)
+
+		const details = result.details as {
+			source: string
+			postCount: number
+		}
+		expect(details.source).toBe('reddit-json')
+		expect(details.postCount).toBeGreaterThan(0)
+	}, 15_000)
+
+	test('Reddit: fetches thread with comments', async () => {
+		const result = await tool.execute('tc-reddit-thread', {
+			url: 'https://www.reddit.com/r/typescript/comments/1hhvut3/i_thought_i_was_a_coding_genius_then_i_met/'
+		})
+
+		const text = textOf(result)
+		expect(text).toMatch(/u\//)
+		expect(text).toContain('---')
+
+		const details = result.details as {
+			source: string
+			title: string
+			commentCount: number
+		}
+		expect(details.source).toBe('reddit-json')
+		expect(details.title).toBeTruthy()
+		expect(details.commentCount).toBeGreaterThan(0)
+	}, 15_000)
+
+	test('Reddit: handles old.reddit URLs', async () => {
+		const result = await tool.execute('tc-reddit-old', {
+			url: 'https://old.reddit.com/r/typescript'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('r/typescript')
+
+		const details = result.details as { source: string }
+		expect(details.source).toBe('reddit-json')
+	}, 15_000)
+
+	// ── HTML (browser) ──────────────────────────────────────────────
 
 	test('renders SPA pages via headless browser', async () => {
-		// react.dev is a SPA — Puppeteer renders it with full JS support
 		const result = await tool.execute('tc-spa', {
 			url: 'https://react.dev/learn'
 		})
@@ -105,11 +193,21 @@ describe('web_fetch tool', () => {
 
 	test('handles non-OK HTTP responses', async () => {
 		const result = await tool.execute('tc-404', {
-			url: 'https://en.wikipedia.org/wiki/This_page_definitely_does_not_exist_12345'
+			url: 'https://www.google.com/this-page-does-not-exist-12345'
 		})
 
 		const text = textOf(result)
 		expect(text).toContain('Web fetch error:')
 		expect(text).toContain('404')
+	}, 15_000)
+
+	test('handles missing Wikipedia page', async () => {
+		const result = await tool.execute('tc-wiki-404', {
+			url: 'https://en.wikipedia.org/wiki/This_page_definitely_does_not_exist_12345'
+		})
+
+		const text = textOf(result)
+		expect(text).toContain('Web fetch error:')
+		expect(text).toContain('page not found')
 	}, 15_000)
 })

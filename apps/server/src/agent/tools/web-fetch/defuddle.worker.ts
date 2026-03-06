@@ -310,11 +310,6 @@ const api = {
 		}
 	},
 
-	/** Parse pre-fetched HTML without a browser. */
-	parse(html: string, url: string) {
-		return parseHtml(html, url)
-	},
-
 	/** Close the browser if running. */
 	async close() {
 		if (browserInstance) {
