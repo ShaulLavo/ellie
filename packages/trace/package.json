@@ -1,30 +1,24 @@
 {
-	"name": "@ellie/agent",
+	"name": "@ellie/trace",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
 	"main": "./src/index.ts",
 	"types": "./src/index.ts",
 	"exports": {
-		".": "./src/index.ts",
-		"./schemas": "./src/schemas.ts"
+		".": "./src/index.ts"
 	},
 	"scripts": {
 		"check-types": "tsgo --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@ellie/ai": "workspace:*",
-		"@ellie/schemas": "workspace:*",
-		"@ellie/trace": "workspace:*",
-		"valibot": "^1.2.0"
+		"@ellie/tus": "workspace:*",
+		"fast-ulid": "^1.2.1",
+		"ohash": "^1.1.4"
 	},
 	"devDependencies": {
 		"@repo/typescript-config": "workspace:*",
-		"@tanstack/ai": "^0.5.1",
 		"typescript": "^5.0.0"
-	},
-	"peerDependencies": {
-		"@tanstack/ai": "^0.5.0"
 	}
 }

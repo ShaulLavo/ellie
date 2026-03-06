@@ -9,7 +9,6 @@
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@fontsource/geist-mono": "^5.2.7",
         "@fontsource/google-sans-flex": "^5.2.2",
-        "@mozilla/readability": "^0.6.0",
         "@tanstack/ai-ollama": "^0.5.0",
         "defuddle": "github:ShaulLavo/defuddle",
         "fast-ulid": "^1.2.1",
@@ -44,6 +43,7 @@
         "@ellie/env": "workspace:*",
         "@ellie/hindsight": "workspace:*",
         "@ellie/schemas": "workspace:*",
+        "@ellie/trace": "workspace:*",
         "@ellie/tus": "workspace:*",
         "@ellie/utils": "workspace:*",
         "@elysiajs/cors": "1.4.1",
@@ -118,7 +118,6 @@
         "cmdk": "^1.1.1",
         "dompurify": "3.3.1",
         "embla-carousel-react": "^8.6.0",
-        "ghostty-web": "^0.4.0",
         "idb": "8.0.3",
         "idb-keyval": "^6.2.2",
         "jszip": "3.10.1",
@@ -172,6 +171,7 @@
       "dependencies": {
         "@ellie/ai": "workspace:*",
         "@ellie/schemas": "workspace:*",
+        "@ellie/trace": "workspace:*",
         "valibot": "^1.2.0",
       },
       "devDependencies": {
@@ -277,6 +277,19 @@
       },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
+      },
+    },
+    "packages/trace": {
+      "name": "@ellie/trace",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/tus": "workspace:*",
+        "fast-ulid": "^1.2.1",
+        "ohash": "^1.1.4",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "typescript": "^5.0.0",
       },
     },
     "packages/tus": {
@@ -454,6 +467,8 @@
     "@ellie/hindsight-eval": ["@ellie/hindsight-eval@workspace:packages/hindsight-eval"],
 
     "@ellie/schemas": ["@ellie/schemas@workspace:packages/schemas"],
+
+    "@ellie/trace": ["@ellie/trace@workspace:packages/trace"],
 
     "@ellie/tus": ["@ellie/tus@workspace:packages/tus"],
 
@@ -1687,8 +1702,6 @@
 
     "get-uri": ["get-uri@6.0.5", "", { "dependencies": { "basic-ftp": "^5.0.2", "data-uri-to-buffer": "^6.0.2", "debug": "^4.3.4" } }, "sha512-b1O07XYq8eRuVzBNgJLstU6FYc1tS6wnMtF1I1D9lE8LxZSOGZ7LhxN54yPP6mGw5f2CkXY2BQUL9Fx41qvcIg=="],
 
-    "ghostty-web": ["ghostty-web@0.4.0", "", {}, "sha512-0puDBik2qapbD/QQBW9o5ZHfXnZBqZWx/ctBiVtKZ6ZLds4NYb+wZuw1cRLXZk9zYovIQ908z3rvFhexAvc5Hg=="],
-
     "github-from-package": ["github-from-package@0.0.0", "", {}, "sha512-SyHy3T1v2NUXn29OsWdxmK6RwHD+vkj3v8en8AOBZ1wBQ/hCAQ5bAQTD02kW4W9tUp/3Qh6J8r9EvntiyCmOOw=="],
 
     "glob": ["glob@7.2.3", "", { "dependencies": { "fs.realpath": "^1.0.0", "inflight": "^1.0.4", "inherits": "2", "minimatch": "^3.1.1", "once": "^1.3.0", "path-is-absolute": "^1.0.0" } }, "sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q=="],
@@ -2175,7 +2188,7 @@
 
     "object-treeify": ["object-treeify@1.1.33", "", {}, "sha512-EFVjAYfzWqWsBMRHPMAXLCDIJnpMhdWAqR7xG6M6a2cs6PMFpl/+Z20w9zDW4vkxOFfddegBKq9Rehd0bxWE7A=="],
 
-    "ohash": ["ohash@2.0.11", "", {}, "sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ=="],
+    "ohash": ["ohash@1.1.6", "", {}, "sha512-TBu7PtV8YkAZn0tSxobKY2n2aAQva936lhRrj6957aDaCf9IEtqsKbgMzXE/F/sjqYOwmrukeORHNLe5glk7Cg=="],
 
     "ollama": ["ollama@0.6.3", "", { "dependencies": { "whatwg-fetch": "^3.6.20" } }, "sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg=="],
 
@@ -2911,7 +2924,9 @@
 
     "router/path-to-regexp": ["path-to-regexp@8.3.0", "", {}, "sha512-7jdwVIRtsP8MYpdXSwOS0YdD0Du+qOoF/AEPIt88PcCFrZCzx41oxku1jD88hZBwbNUIEfpqvuhjFaMAqMTWnA=="],
 
-    "server/defuddle": ["defuddle@github:ShaulLavo/defuddle#776065b", { "dependencies": { "commander": "^12.1.0", "linkedom": "^0.18.12" }, "optionalDependencies": { "mathml-to-latex": "^1.4.3", "temml": "^0.11.2", "turndown": "^7.2.0" }, "bin": { "defuddle": "dist/cli.js" } }, "ShaulLavo-defuddle-776065b", "sha512-kmbB/t9FqtVCoMO45T1r3ceHkZPKldIGCf3sRXFqFfB2hse6gAv6LwWFdcPfuFuB9xEOj/M9mgzWd+ROHYgz7w=="],
+    "server/defuddle": ["defuddle@github:ShaulLavo/defuddle#ca65de3", { "dependencies": { "commander": "^12.1.0", "linkedom": "^0.18.12" }, "optionalDependencies": { "mathml-to-latex": "^1.4.3", "temml": "^0.11.2", "turndown": "^7.2.0" }, "bin": { "defuddle": "dist/cli.js" } }, "ShaulLavo-defuddle-ca65de3", "sha512-VCYu6KCjOtc3ZgW0yHMQHFjDBgx0v/DSZsDudGHF0u6Sg2PmTwtDqq22k9lI4lTOw8OGlj/464gqAozc4aVBng=="],
+
+    "server/ohash": ["ohash@2.0.11", "", {}, "sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ=="],
 
     "shadcn/commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
 

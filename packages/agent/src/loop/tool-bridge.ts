@@ -1,6 +1,8 @@
 import * as v from 'valibot'
+import type { BlobSink, TraceScope } from '@ellie/trace'
 import {
 	truncateToolResult,
+	truncateToolResultWithBlob,
 	needsTruncation
 } from '../tool-safety'
 import type { ToolLoopDetector } from '../tool-loop-detection'
@@ -76,7 +78,9 @@ export function wrapToolsForTanStack(
 	toolResultCollector: ToolResultMessage[],
 	maxToolResultChars?: number,
 	loopDetector?: ToolLoopDetector,
-	overflowDir?: string
+	overflowDir?: string,
+	blobSink?: BlobSink,
+	traceScope?: TraceScope
 ) {
 	for (const tool of tools) {
 		if (ANTHROPIC_RESERVED_TOOL_NAMES.has(tool.name)) {
@@ -202,11 +206,39 @@ export function wrapToolsForTanStack(
 				maxToolResultChars &&
 				needsTruncation(result, maxToolResultChars)
 			) {
-				result = truncateToolResult(
-					result,
-					maxToolResultChars,
-					{ overflowDir, toolCallId }
-				)
+				if (blobSink && traceScope) {
+					// Blob-backed overflow (fail-closed)
+					try {
+						result = await truncateToolResultWithBlob(
+							result,
+							maxToolResultChars,
+							{
+								blobSink,
+								traceScope,
+								toolCallId
+							}
+						)
+					} catch (blobErr) {
+						// Fail closed: blob write failed, convert to error result
+						result = {
+							content: [
+								{
+									type: 'text',
+									text: `Tool result overflow failed: ${blobErr instanceof Error ? blobErr.message : String(blobErr)}`
+								}
+							],
+							details: {}
+						}
+						isError = true
+					}
+				} else {
+					// Legacy file-based overflow
+					result = truncateToolResult(
+						result,
+						maxToolResultChars,
+						{ overflowDir, toolCallId }
+					)
+				}
 			}
 
 			const elapsedMs = Date.now() - startedAt

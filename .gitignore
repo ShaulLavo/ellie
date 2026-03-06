@@ -27,6 +27,12 @@ out/
 build
 dist
 
+# TypeScript build artifacts (tsgo --build)
+*.d.ts
+*.d.ts.map
+!*.config.d.ts
+*.tsbuildinfo
+
 
 # Debug
 npm-debug.log*

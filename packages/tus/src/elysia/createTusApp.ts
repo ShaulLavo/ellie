@@ -193,6 +193,48 @@ export function createTusApp(options: CreateTusAppOptions) {
 				}
 			)
 
+			.get(
+				`${rpcPrefix}/:id/content`,
+				async ({ params, set }) => {
+					try {
+						const upload =
+							await options.datastore.getUpload(params.id)
+						const ds = options.datastore as unknown as {
+							read: (id: string) => NodeJS.ReadableStream
+						}
+						if (typeof ds.read !== 'function') {
+							set.status = 501
+							return {
+								error:
+									'Datastore does not support content reads'
+							}
+						}
+						const stream = ds.read(params.id)
+						const contentType =
+							(upload.metadata as Record<string, string>)
+								?.contentType ?? 'application/octet-stream'
+						set.headers['content-type'] = contentType
+						if (upload.size) {
+							set.headers['content-length'] = String(
+								upload.size
+							)
+						}
+						return stream
+					} catch {
+						set.status = 404
+						return {
+							error: 'Upload not found'
+						}
+					}
+				},
+				{
+					detail: {
+						tags: ['Uploads'],
+						summary: 'Get upload content by ID'
+					}
+				}
+			)
+
 			.post(
 				`${rpcPrefix}/cleanup-expired`,
 				async ({ set }) => {

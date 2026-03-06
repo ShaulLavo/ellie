@@ -15,6 +15,12 @@ import {
 	type AgentMessage
 } from '@ellie/agent'
 import type { EventType, EventPayloadMap } from '@ellie/db'
+import type {
+	TraceRecorder,
+	BlobSink,
+	TraceScope
+} from '@ellie/trace'
+import { createRootScope } from '@ellie/trace'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { join } from 'node:path'
 import { ulid } from 'fast-ulid'
@@ -49,6 +55,10 @@ export interface AgentControllerOptions {
 	agentOptions?: Partial<AgentOptions>
 	/** Memory orchestrator for recall/retain integration */
 	memory?: MemoryOrchestrator
+	/** Trace recorder for structured trace events */
+	traceRecorder?: TraceRecorder
+	/** Blob sink for overflow storage */
+	blobSink?: BlobSink
 }
 
 // ── Queued cross-session message ─────────────────────────────────────────────
@@ -68,6 +78,10 @@ export class AgentController {
 	private options: AgentControllerOptions
 	private memory: MemoryOrchestrator | null
 	private baseSystemPrompt: string
+	private traceRecorder: TraceRecorder | undefined
+	private blobSink: BlobSink | undefined
+	/** Active trace scope for the current run */
+	private activeTraceScope: TraceScope | undefined
 
 	/** Lazily-cached MemoryDeps — safe to cache for the controller lifetime:
 	 *  all deps are stable references (store, memory, agent, baseSystemPrompt)
@@ -91,6 +105,8 @@ export class AgentController {
 		this.store = store
 		this.options = options
 		this.memory = options.memory ?? null
+		this.traceRecorder = options.traceRecorder
+		this.blobSink = options.blobSink
 
 		const systemPrompt = buildSystemPrompt(
 			options.workspaceDir
@@ -101,6 +117,18 @@ export class AgentController {
 			dataDir: options.dataDir,
 			getSessionId: () => this.boundSessionId
 		})
+
+		// Build toolSafety config — prefer blobSink over overflowDir
+		const toolSafety: NonNullable<
+			AgentOptions['toolSafety']
+		> = this.blobSink
+			? { blobSink: this.blobSink }
+			: {
+					overflowDir: join(
+						options.dataDir,
+						'tool-overflow'
+					)
+				}
 
 		this.agent = new Agent({
 			...options.agentOptions,
@@ -113,9 +141,8 @@ export class AgentController {
 						?.thinkingLevel ?? 'low',
 				tools: registry.all
 			},
-			toolSafety: {
-				overflowDir: join(options.dataDir, 'tool-overflow')
-			},
+			toolSafety,
+			traceRecorder: this.traceRecorder,
 			onEvent: event => this.handleEvent(event),
 			onTrace: entry => {
 				const sessionId = this.boundSessionId
@@ -195,11 +222,13 @@ export class AgentController {
 	): Promise<{
 		runId: string
 		routed: 'prompt' | 'followUp' | 'queued'
+		traceId?: string
 	}> {
 		this.store.ensureSession(sessionId)
 
 		const runId = ulid()
 		let routed: 'prompt' | 'followUp' | 'queued' = 'prompt'
+		let traceId: string | undefined
 
 		await this.withLock(async () => {
 			// Agent busy — queue as follow-up or cross-session
@@ -226,6 +255,28 @@ export class AgentController {
 			const historyLoaded = this.ensureBinding(sessionId)
 
 			this.agent.runId = runId
+
+			// Create root trace scope for this run
+			if (this.traceRecorder) {
+				const scope = createRootScope({
+					sessionId,
+					runId
+				})
+				this.activeTraceScope = scope
+				traceId = scope.traceId
+
+				// Thread trace scope into agent's toolSafety
+				this.agent.updateToolSafety({
+					traceScope: scope
+				})
+
+				this.traceRecorder.record(
+					scope,
+					'trace.root',
+					'controller',
+					{ sessionId, runId, text: text.slice(0, 200) }
+				)
+			}
 
 			// Backfill the runId on the already-persisted user_message
 			if (userMessageRowId) {
@@ -279,7 +330,7 @@ export class AgentController {
 			}
 		})
 
-		return { runId, routed }
+		return { runId, routed, traceId }
 	}
 
 	// ── Control passthrough ──────────────────────────────────────────────────
@@ -327,8 +378,13 @@ export class AgentController {
 				memory: this.memory,
 				agent: this.agent,
 				baseSystemPrompt: this.baseSystemPrompt,
-				trace: (type, payload) => this.trace(type, payload)
+				trace: (type, payload) => this.trace(type, payload),
+				traceRecorder: this.traceRecorder,
+				traceScope: this.activeTraceScope
 			}
+		} else {
+			// Update traceScope each access since it changes per-run
+			this.#memoryDeps.traceScope = this.activeTraceScope
 		}
 		return this.#memoryDeps
 	}
@@ -444,9 +500,10 @@ export class AgentController {
 			}
 		)
 
-		// Reset system prompt and clear runId
+		// Reset system prompt, clear runId, and clear trace scope
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.runId = undefined
+		this.activeTraceScope = undefined
 
 		// Process queues
 		if (this.agent.hasQueuedMessages()) {

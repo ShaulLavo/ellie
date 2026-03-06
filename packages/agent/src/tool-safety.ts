@@ -12,6 +12,11 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import type {
+	BlobRef,
+	BlobSink,
+	TraceScope
+} from '@ellie/trace'
 import type { AgentToolResult } from './types'
 
 // ============================================================================
@@ -24,9 +29,19 @@ export interface ToolSafetyOptions {
 }
 
 export interface TruncateOverflowOptions {
+	/** @deprecated Use TruncateBlobOverflowOptions instead. */
 	/** Directory to write full output files. If unset, full output is discarded. */
 	overflowDir?: string
 	/** Tool call ID used as the overflow filename. Falls back to Date.now(). */
+	toolCallId?: string
+}
+
+export interface TruncateBlobOverflowOptions {
+	/** Traced blob sink for writing the full output. */
+	blobSink: BlobSink
+	/** Active trace scope for correlating the overflow blob. */
+	traceScope: TraceScope
+	/** Tool call ID for the blob role path. */
 	toolCallId?: string
 }
 
@@ -98,28 +113,127 @@ export function truncateToolResult(
 		maxChars - suffix.length
 	)
 
-	// Collect text blocks with their indices
-	const textBlocks: Array<{
-		index: number
-		text: string
-	}> = []
-	for (let i = 0; i < result.content.length; i++) {
-		const block = result.content[i]
+	const truncatedContent = applyTruncation(
+		result.content,
+		textBudget,
+		suffix
+	)
+
+	const details = overflowPath
+		? {
+				...(result.details as Record<string, unknown>),
+				overflowPath
+			}
+		: result.details
+
+	return {
+		...result,
+		content: truncatedContent,
+		details
+	}
+}
+
+/**
+ * Truncate a tool result with TUS-backed blob storage.
+ *
+ * Fail-closed: if blob writing fails, the error propagates.
+ * The caller should catch and convert the tool call to an error result.
+ */
+export async function truncateToolResultWithBlob(
+	result: AgentToolResult,
+	maxChars: number = DEFAULT_MAX_CHARS,
+	opts: TruncateBlobOverflowOptions
+): Promise<AgentToolResult> {
+	const totalChars = countResultChars(result)
+	if (totalChars <= maxChars) return result
+
+	// Collect full text for blob storage
+	const fullText = result.content
+		.filter(
+			(c): c is { type: 'text'; text: string } =>
+				c.type === 'text'
+		)
+		.map(c => c.text)
+		.join('\n')
+
+	// Write full output to TUS blob — throws on failure (fail-closed)
+	const blobRef: BlobRef = await opts.blobSink.write({
+		traceId: opts.traceScope.traceId,
+		spanId: opts.traceScope.spanId,
+		role: 'tool_result_full',
+		content: fullText,
+		mimeType: 'text/plain',
+		ext: 'txt'
+	})
+
+	const suffix = `\n\n---\n [Output truncated — showing first portion of result. Full output stored as blob: ${blobRef.uploadId}]`
+
+	// Budget for text (subtract suffix length)
+	const textBudget = Math.max(
+		MIN_KEEP_CHARS,
+		maxChars - suffix.length
+	)
+
+	// Apply the same truncation logic as truncateToolResult
+	const truncatedContent = applyTruncation(
+		result.content,
+		textBudget,
+		suffix
+	)
+
+	return {
+		...result,
+		content: truncatedContent,
+		details: {
+			...(result.details as Record<string, unknown>),
+			overflowRef: blobRef
+		}
+	}
+}
+
+// ============================================================================
+// Internals
+// ============================================================================
+
+/**
+ * Count total text characters in a tool result.
+ */
+function countResultChars(result: AgentToolResult): number {
+	let total = 0
+	for (const block of result.content) {
+		if (block.type === 'text') {
+			total += block.text.length
+		}
+	}
+	return total
+}
+
+/**
+ * Apply proportional truncation to content blocks.
+ * Shared by both file-based and blob-based truncation paths.
+ */
+function applyTruncation(
+	content: AgentToolResult['content'],
+	textBudget: number,
+	suffix: string
+): AgentToolResult['content'] {
+	const textBlocks: Array<{ index: number; text: string }> =
+		[]
+	for (let i = 0; i < content.length; i++) {
+		const block = content[i]
 		if (block.type === 'text') {
 			textBlocks.push({ index: i, text: block.text })
 		}
 	}
 
-	if (textBlocks.length === 0) return result
+	if (textBlocks.length === 0) return content
 
-	// Calculate total text chars
 	const totalTextChars = textBlocks.reduce(
 		(sum, b) => sum + b.text.length,
 		0
 	)
 
-	// Proportional budget per block
-	const truncatedContent = [...result.content]
+	const truncatedContent = [...content]
 	let suffixAdded = false
 
 	for (const block of textBlocks) {
@@ -144,8 +258,11 @@ export function truncateToolResult(
 		}
 	}
 
-	// If no block was truncated but total exceeds (shouldn't happen, but safety)
-	if (!suffixAdded && totalChars > maxChars) {
+	// Safety: if no block was truncated but total exceeds
+	if (
+		!suffixAdded &&
+		totalTextChars > textBudget + suffix.length
+	) {
 		const lastTextIdx =
 			textBlocks[textBlocks.length - 1].index
 		const lastContent = truncatedContent[lastTextIdx]
@@ -159,35 +276,7 @@ export function truncateToolResult(
 		}
 	}
 
-	const details = overflowPath
-		? {
-				...(result.details as Record<string, unknown>),
-				overflowPath
-			}
-		: result.details
-
-	return {
-		...result,
-		content: truncatedContent,
-		details
-	}
-}
-
-// ============================================================================
-// Internals
-// ============================================================================
-
-/**
- * Count total text characters in a tool result.
- */
-function countResultChars(result: AgentToolResult): number {
-	let total = 0
-	for (const block of result.content) {
-		if (block.type === 'text') {
-			total += block.text.length
-		}
-	}
-	return total
+	return truncatedContent
 }
 
 /**

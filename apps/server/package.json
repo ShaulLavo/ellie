@@ -19,6 +19,7 @@
 		"@ellie/env": "workspace:*",
 		"@ellie/hindsight": "workspace:*",
 		"@ellie/schemas": "workspace:*",
+		"@ellie/trace": "workspace:*",
 		"@ellie/tus": "workspace:*",
 		"@ellie/utils": "workspace:*",
 		"@elysiajs/cors": "1.4.1",

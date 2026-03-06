@@ -1,6 +1,7 @@
 import { loadAnthropicCredential } from '@ellie/ai/credentials'
 import type { EventStore } from '@ellie/db'
 import type { Hindsight } from '@ellie/hindsight'
+import type { TraceRecorder, BlobSink } from '@ellie/trace'
 import { AgentController } from './controller'
 import { MemoryOrchestrator } from '../memory-orchestrator'
 import { buildGuardrailPolicy } from '../guardrail-policy'
@@ -16,6 +17,8 @@ interface ControllerFactoryDeps {
 	workspaceDir: string
 	dataDir: string
 	env: ServerEnv
+	traceRecorder?: TraceRecorder
+	blobSink?: BlobSink
 }
 
 const REFRESH_BUFFER_MS = 5 * 60 * 1000
@@ -66,7 +69,9 @@ export class AgentControllerFactory {
 					memory,
 					agentOptions: guardrails
 						? { guardrails }
-						: undefined
+						: undefined,
+					traceRecorder: this.deps.traceRecorder,
+					blobSink: this.deps.blobSink
 				})
 			: null
 		return this.cached

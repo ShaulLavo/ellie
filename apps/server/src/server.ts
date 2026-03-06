@@ -18,6 +18,7 @@ import { createStatusRoutes } from './routes/status'
 import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
 import { createTerminalRoutes } from './routes/terminal'
+import { createTraceRoutes } from './routes/traces'
 import { API_INFO, API_TAGS } from './consts'
 import { init } from './init'
 
@@ -75,6 +76,7 @@ export const app = new Elysia()
 		})
 	)
 	.use(createDevRoutes(ctx.DATA_DIR))
+	.use(createTraceRoutes(ctx.traceRecorder))
 	.use(createDbStudioRoutes(ctx.DATA_DIR))
 	.use(createTerminalRoutes())
 	.use(createHindsightApp(ctx.hindsight))

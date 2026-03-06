@@ -64,6 +64,9 @@ export interface AgentOptions {
 
 	/** Tool result truncation and overflow configuration. */
 	toolSafety?: AgentLoopConfig['toolSafety']
+
+	/** Trace recorder for structured trace events. Set by the server runtime. */
+	traceRecorder?: AgentLoopConfig['traceRecorder']
 }
 
 export class Agent {
@@ -83,6 +86,7 @@ export class Agent {
 	private followUpMode: 'all' | 'one-at-a-time'
 	private guardrails?: AgentGuardrailPolicy
 	private toolSafety?: AgentLoopConfig['toolSafety']
+	private traceRecorder?: AgentLoopConfig['traceRecorder']
 	public streamFn?: StreamFn
 	public adapter?: AnyTextAdapter
 	public onEvent?: (event: AgentEvent) => void
@@ -126,6 +130,7 @@ export class Agent {
 		this.onTrace = opts.onTrace
 		this.guardrails = opts.guardrails
 		this.toolSafety = opts.toolSafety
+		this.traceRecorder = opts.traceRecorder
 	}
 
 	get state(): AgentState {
@@ -169,6 +174,15 @@ export class Agent {
 
 	setTools(t: AgentTool[]) {
 		this._state.tools = t
+	}
+
+	/** Merge partial updates into toolSafety (e.g. updating traceScope per-run). */
+	updateToolSafety(
+		updates: Partial<
+			NonNullable<AgentLoopConfig['toolSafety']>
+		>
+	) {
+		this.toolSafety = { ...this.toolSafety, ...updates }
 	}
 
 	replaceMessages(ms: AgentMessage[]) {
@@ -425,7 +439,8 @@ export class Agent {
 			onEvent: this.onEvent,
 			onTrace: this.onTrace,
 			runtimeLimits: this.guardrails?.runtimeLimits,
-			toolSafety: this.toolSafety
+			toolSafety: this.toolSafety,
+			traceRecorder: this.traceRecorder
 		}
 
 		let partial: AgentMessage | null = null

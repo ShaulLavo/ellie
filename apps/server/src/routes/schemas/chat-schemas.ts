@@ -29,6 +29,7 @@ export const postMessageResponseSchema = v.object({
 	seq: v.number(),
 	sessionId: v.string(),
 	runId: v.optional(v.string()),
+	traceId: v.optional(v.string()),
 	routed: v.optional(
 		v.picklist(['prompt', 'followUp', 'queued'])
 	),

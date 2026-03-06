@@ -162,6 +162,7 @@ export function createChatRoutes(
 						| {
 								runId: string
 								routed: 'prompt' | 'followUp' | 'queued'
+								traceId?: string
 						  }
 						| undefined
 					try {
@@ -188,6 +189,7 @@ export function createChatRoutes(
 						...(result
 							? {
 									runId: result.runId,
+									traceId: result.traceId,
 									routed: result.routed
 								}
 							: {})

@@ -26,6 +26,7 @@ import type {
 	ProcessResult,
 	StreamContext
 } from './types'
+import { shouldBlob } from '@ellie/trace'
 import {
 	createPartial,
 	emitTrace,
@@ -244,7 +245,9 @@ export async function processAgentStream(
 				toolResultCollector,
 				config.toolSafety?.maxToolResultChars ?? 50_000,
 				loopDetector,
-				config.toolSafety?.overflowDir
+				config.toolSafety?.overflowDir,
+				config.toolSafety?.blobSink,
+				config.toolSafety?.traceScope
 			)
 		: undefined
 	const { abortController, cleanup } =
@@ -257,7 +260,7 @@ export async function processAgentStream(
 	)
 
 	// Trace the full context being sent to the API
-	emitTrace(config, 'agent_context', {
+	const snapshotPayload = {
 		systemPrompt: sctx.currentContext.systemPrompt,
 		messages: llmMessages,
 		tools: context.tools?.map(t => ({
@@ -270,7 +273,56 @@ export async function processAgentStream(
 		temperature: config.temperature,
 		maxTokens: config.maxTokens,
 		messageCount: llmMessages.length
-	})
+	}
+
+	if (
+		config.traceRecorder &&
+		config.toolSafety?.traceScope
+	) {
+		const scope = config.toolSafety.traceScope
+		const serialized = JSON.stringify(snapshotPayload)
+		let blobRefs:
+			| import('@ellie/trace').BlobRef[]
+			| undefined
+		let inlinePayload: Record<string, unknown> =
+			snapshotPayload
+
+		if (
+			config.toolSafety.blobSink &&
+			shouldBlob(serialized)
+		) {
+			try {
+				const blobRef =
+					await config.toolSafety.blobSink.write({
+						traceId: scope.traceId,
+						spanId: scope.spanId,
+						role: 'prompt_snapshot',
+						content: serialized,
+						mimeType: 'application/json',
+						ext: 'json'
+					})
+				blobRefs = [blobRef]
+				// Keep a 2KB preview inline
+				inlinePayload = {
+					...snapshotPayload,
+					messages: `[${llmMessages.length} messages — see blob]`,
+					_preview: serialized.slice(0, 2048)
+				}
+			} catch {
+				// Best-effort blob — fall through with full inline payload
+			}
+		}
+
+		config.traceRecorder.record(
+			scope,
+			'prompt.snapshot',
+			'model',
+			inlinePayload,
+			blobRefs
+		)
+	} else {
+		emitTrace(config, 'agent_context', snapshotPayload)
+	}
 
 	// Iteration state
 	const state = createIterationState(config)

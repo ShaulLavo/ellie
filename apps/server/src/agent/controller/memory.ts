@@ -7,6 +7,11 @@
 
 import type { Agent } from '@ellie/agent'
 import type { EventPayloadMap } from '@ellie/db'
+import type {
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
+import { wrapMemoryOrchestrator } from '@ellie/trace'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import type { MemoryOrchestrator } from '../memory-orchestrator'
 import { handleControllerError } from './error-handler'
@@ -20,6 +25,10 @@ export interface MemoryDeps {
 		type: string,
 		payload: Record<string, unknown>
 	) => void
+	/** Trace recorder for memory operation spans. */
+	traceRecorder?: TraceRecorder
+	/** Active trace scope for correlating memory spans. */
+	traceScope?: TraceScope
 }
 
 /**
@@ -34,8 +43,17 @@ export async function runRecall(
 ): Promise<void> {
 	if (!deps.memory) return
 
+	// Wrap with traced facade when trace deps are available
+	const memory =
+		deps.traceRecorder && deps.traceScope
+			? wrapMemoryOrchestrator(deps.memory, {
+					recorder: deps.traceRecorder,
+					parentScope: deps.traceScope
+				})
+			: deps.memory
+
 	try {
-		const result = await deps.memory.recall(query)
+		const result = await memory.recall(query)
 		if (!result) return
 
 		deps.store.appendEvent(
@@ -86,8 +104,17 @@ export async function runRetain(
 ): Promise<number> {
 	if (!deps.memory) return 0
 
+	// Wrap with traced facade when trace deps are available
+	const memory =
+		deps.traceRecorder && deps.traceScope
+			? wrapMemoryOrchestrator(deps.memory, {
+					recorder: deps.traceRecorder,
+					parentScope: deps.traceScope
+				})
+			: deps.memory
+
 	try {
-		const result = await deps.memory.evaluateRetain(
+		const result = await memory.evaluateRetain(
 			sessionId,
 			force
 		)

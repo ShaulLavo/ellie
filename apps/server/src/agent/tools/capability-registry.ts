@@ -10,6 +10,15 @@
  */
 
 import type { AgentTool } from '@ellie/agent'
+import type {
+	TraceRecorder,
+	BlobSink,
+	TraceScope
+} from '@ellie/trace'
+import {
+	createTracedToolWrapper,
+	createTracedReplTool
+} from '@ellie/trace'
 import { createWorkspaceTools } from './workspace-tools'
 import { createShellTool } from './shell-tool'
 import { createRipgrepTool } from './ripgrep-tool'
@@ -28,6 +37,12 @@ export interface ToolRegistryConfig {
 	dataDir: string
 	/** Returns the currently bound session ID (for REPL isolation). */
 	getSessionId: () => string | null
+	/** Trace recorder for wrapping tools with traced facades. */
+	traceRecorder?: TraceRecorder
+	/** Blob sink for traced overflow. */
+	blobSink?: BlobSink
+	/** Active trace scope for correlating tool spans. */
+	traceScope?: TraceScope
 }
 
 export interface ToolRegistry {
@@ -52,14 +67,14 @@ export interface ToolRegistry {
 export function createToolRegistry(
 	config: ToolRegistryConfig
 ): ToolRegistry {
-	const basicDirectTools: AgentTool[] = [
+	let basicDirectTools: AgentTool[] = [
 		...createWorkspaceTools(config.workspaceDir),
 		createShellTool(config.workspaceDir),
 		createRipgrepTool(config.workspaceDir),
 		createWebFetchTool()
 	]
 
-	const execTools: AgentTool[] = [
+	let execTools: AgentTool[] = [
 		createExecTool(basicDirectTools),
 		createSessionExecTool(
 			config.dataDir,
@@ -67,6 +82,22 @@ export function createToolRegistry(
 			basicDirectTools
 		)
 	]
+
+	// Wrap with traced facades when trace deps are available
+	if (config.traceRecorder && config.traceScope) {
+		const traceOpts = {
+			recorder: config.traceRecorder,
+			blobSink: config.blobSink,
+			parentScope: config.traceScope
+		}
+
+		basicDirectTools = basicDirectTools.map(t =>
+			createTracedToolWrapper(t, traceOpts)
+		)
+		execTools = execTools.map(t =>
+			createTracedReplTool(t, traceOpts)
+		)
+	}
 
 	return {
 		basicDirectTools,

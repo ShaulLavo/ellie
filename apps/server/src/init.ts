@@ -2,6 +2,10 @@ import { resolve } from 'node:path'
 import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
 import { Hindsight } from '@ellie/hindsight'
+import type {
+	TraceRecorder,
+	TusBlobSink
+} from '@ellie/trace'
 import { FileStore, SqliteKvStore } from '@ellie/tus'
 import { Cron } from 'croner'
 import type { AgentController } from './agent/controller'
@@ -15,6 +19,7 @@ import { RealtimeStore } from './lib/realtime-store'
 import { startTei } from './lib/tei'
 import { resolveGroqAdapter } from './adapters'
 import type { SseState } from './routes/common'
+import { initTraceRuntime } from './trace/init-trace'
 
 export interface ServerContext {
 	port: number
@@ -26,6 +31,8 @@ export interface ServerContext {
 	store: RealtimeStore
 	hindsight: Hindsight
 	uploadStore: FileStore
+	traceRecorder: TraceRecorder
+	blobSink: TusBlobSink
 	sseState: SseState
 	getAgentController: () => Promise<AgentController | null>
 	invalidateAgentCache: () => void
@@ -177,6 +184,13 @@ export async function init(): Promise<ServerContext> {
 		CREDENTIALS_PATH
 	)
 
+	// ── Tus uploads ───────────────────────────────────────────────────────
+	const { uploadStore } = initUploads(DATA_DIR)
+
+	// ── Trace runtime ─────────────────────────────────────────────────────
+	const { recorder: traceRecorder, blobSink } =
+		initTraceRuntime(DATA_DIR, uploadStore)
+
 	// ── Agent controller (lazy-init + token refresh) ─────────────────────
 	const controllerFactory = new AgentControllerFactory({
 		store,
@@ -185,14 +199,13 @@ export async function init(): Promise<ServerContext> {
 		credentialsPath: CREDENTIALS_PATH,
 		workspaceDir,
 		dataDir: DATA_DIR,
-		env
+		env,
+		traceRecorder,
+		blobSink
 	})
 
 	// Eagerly resolve once at startup
 	await controllerFactory.get()
-
-	// ── Tus uploads ───────────────────────────────────────────────────────
-	const { uploadStore } = initUploads(DATA_DIR)
 
 	const sseState: SseState = { activeClients: 0 }
 
@@ -220,6 +233,8 @@ export async function init(): Promise<ServerContext> {
 		store,
 		hindsight,
 		uploadStore,
+		traceRecorder,
+		blobSink,
 		sseState,
 		getAgentController: () => controllerFactory.get(),
 		invalidateAgentCache: () =>

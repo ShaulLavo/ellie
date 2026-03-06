@@ -1,5 +1,10 @@
 import type { Model, ThinkingLevel } from '@ellie/ai'
 import type {
+	BlobSink,
+	TraceRecorder,
+	TraceScope
+} from '@ellie/trace'
+import type {
 	ModelMessage,
 	StreamChunk,
 	Tool as TanStackTool,
@@ -168,9 +173,16 @@ export interface AgentLoopConfig {
 	/** Tool result truncation configuration. Default: 50_000 chars per result. */
 	toolSafety?: {
 		maxToolResultChars?: number
-		/** Directory to write full output when a tool result is truncated. */
+		/** @deprecated Use blobSink instead. Directory to write full output when a tool result is truncated. */
 		overflowDir?: string
+		/** Traced blob sink for overflow. When set, overflowDir is ignored. */
+		blobSink?: BlobSink
+		/** Active trace scope for correlating overflows. Required when blobSink is set. */
+		traceScope?: TraceScope
 	}
+
+	/** Trace recorder for structured trace events. Set by the server runtime. */
+	traceRecorder?: TraceRecorder
 
 	/** Tool loop detection configuration. */
 	toolLoopDetection?: {
