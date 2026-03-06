@@ -10,12 +10,14 @@
 		"lint": "eslint ."
 	},
 	"dependencies": {
+		"@base-ui-components/react": "^1.0.0-rc.0",
 		"@base-ui/react": "^1.2.0",
 		"@dnd-kit/core": "^6.3.1",
 		"@ellie/env": "workspace:*",
 		"@ellie/schemas": "workspace:*",
 		"@ellie/utils": "workspace:*",
 		"@elysiajs/eden": "1.4.8",
+		"@floating-ui/react": "^0.27.19",
 		"@fontsource-variable/bricolage-grotesque": "^5.2.10",
 		"@fontsource-variable/geist": "^5.2.8",
 		"@omit/react-confirm-dialog": "^2.0.0",
@@ -60,6 +62,8 @@
 		"react-json-view-lite": "2.5.0",
 		"react-jsx-parser": "^2.4.1",
 		"react-pdf": "10.3.0",
+		"react-tweet": "^3.3.0",
+		"rough-notation": "^0.5.1",
 		"server": "workspace:*",
 		"shadcn": "^3.8.5",
 		"shiki": "3.23.0",
