@@ -129,8 +129,7 @@ async function* wrapAsyncIterable(
 						toolName:
 							activeToolNames.get(tcId) ??
 							(chunk.toolName as string),
-						argsJson:
-							activeToolArgs.get(tcId) ?? '{}'
+						argsJson: activeToolArgs.get(tcId) ?? '{}'
 					})
 					activeToolArgs.delete(tcId)
 					activeToolNames.delete(tcId)
@@ -141,11 +140,16 @@ async function* wrapAsyncIterable(
 			// Handle RUN_ERROR — mark as errored so finally doesn't emit partial
 			if (chunk.type === 'RUN_ERROR') {
 				errored = true
-				opts.recorder.record(scope, 'model.error', 'model', {
-					error:
-						(chunk.error as { message?: string })
-							?.message ?? String(chunk)
-				})
+				opts.recorder.record(
+					scope,
+					'model.error',
+					'model',
+					{
+						error:
+							(chunk.error as { message?: string })
+								?.message ?? String(chunk)
+					}
+				)
 				yield chunk
 				break
 			}

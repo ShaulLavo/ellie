@@ -13,10 +13,7 @@
  * to get automatic trace instrumentation.
  */
 
-import {
-	chat as rawChat,
-	streamToText
-} from '@ellie/ai'
+import { chat as rawChat, streamToText } from '@ellie/ai'
 import type { AGUIEvent } from '@tanstack/ai'
 import {
 	hindsightTraceStore,
@@ -45,12 +42,13 @@ export function chat(
 		phase: 'start',
 		startedAt,
 		messageCount: options.messages?.length ?? 0,
-		systemPromptCount:
-			options.systemPrompts?.length ?? 0,
-		hasTools: !!(options.tools?.length)
+		systemPromptCount: options.systemPrompts?.length ?? 0,
+		hasTools: !!options.tools?.length
 	})
 
-	const source = rawChat(options) as AsyncIterable<AGUIEvent>
+	const source = rawChat(
+		options
+	) as AsyncIterable<AGUIEvent>
 	return wrapWithTrace(source, startedAt, traceCtx)
 }
 
