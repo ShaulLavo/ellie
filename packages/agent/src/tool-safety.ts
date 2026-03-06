@@ -10,6 +10,8 @@
  * Default max: 50,000 characters per tool result.
  */
 
+import { writeFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AgentToolResult } from './types'
 
 // ============================================================================
@@ -19,6 +21,13 @@ import type { AgentToolResult } from './types'
 export interface ToolSafetyOptions {
 	/** Max chars for a single tool result. Default 50_000. Per-invocation. */
 	maxToolResultChars: number
+}
+
+export interface TruncateOverflowOptions {
+	/** Directory to write full output files. If unset, full output is discarded. */
+	overflowDir?: string
+	/** Tool call ID used as the overflow filename. Falls back to Date.now(). */
+	toolCallId?: string
 }
 
 const DEFAULT_MAX_CHARS = 50_000
@@ -52,15 +61,41 @@ export function needsTruncation(
  */
 export function truncateToolResult(
 	result: AgentToolResult,
-	maxChars: number = DEFAULT_MAX_CHARS
+	maxChars: number = DEFAULT_MAX_CHARS,
+	overflow?: TruncateOverflowOptions
 ): AgentToolResult {
 	const totalChars = countResultChars(result)
 	if (totalChars <= maxChars) return result
 
+	// Write full output to file before truncating
+	let overflowPath: string | undefined
+	if (overflow?.overflowDir) {
+		try {
+			mkdirSync(overflow.overflowDir, { recursive: true })
+			const filename = `${overflow.toolCallId || Date.now()}.txt`
+			overflowPath = join(overflow.overflowDir, filename)
+			const fullText = result.content
+				.filter(
+					(c): c is { type: 'text'; text: string } =>
+						c.type === 'text'
+				)
+				.map(c => c.text)
+				.join('\n')
+			writeFileSync(overflowPath, fullText, 'utf-8')
+		} catch {
+			// Best-effort — don't block truncation if write fails
+			overflowPath = undefined
+		}
+	}
+
+	const suffix = overflowPath
+		? `\n\n---\n [Output truncated — showing first portion of result. Full output saved to: ${overflowPath}]`
+		: TRUNCATION_SUFFIX
+
 	// Budget for text (subtract suffix length)
 	const textBudget = Math.max(
 		MIN_KEEP_CHARS,
-		maxChars - TRUNCATION_SUFFIX.length
+		maxChars - suffix.length
 	)
 
 	// Collect text blocks with their indices
@@ -103,7 +138,7 @@ export function truncateToolResult(
 				type: 'text' as const,
 				text: suffixAdded
 					? truncatedText
-					: truncatedText + TRUNCATION_SUFFIX
+					: truncatedText + suffix
 			}
 			suffixAdded = true
 		}
@@ -119,14 +154,22 @@ export function truncateToolResult(
 				type: 'text' as const,
 				text:
 					truncateText(lastContent.text, textBudget) +
-					TRUNCATION_SUFFIX
+					suffix
 			}
 		}
 	}
 
+	const details = overflowPath
+		? {
+				...(result.details as Record<string, unknown>),
+				overflowPath
+			}
+		: result.details
+
 	return {
 		...result,
-		content: truncatedContent
+		content: truncatedContent,
+		details
 	}
 }
 

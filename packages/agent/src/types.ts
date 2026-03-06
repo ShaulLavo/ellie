@@ -168,6 +168,8 @@ export interface AgentLoopConfig {
 	/** Tool result truncation configuration. Default: 50_000 chars per result. */
 	toolSafety?: {
 		maxToolResultChars?: number
+		/** Directory to write full output when a tool result is truncated. */
+		overflowDir?: string
 	}
 
 	/** Tool loop detection configuration. */
