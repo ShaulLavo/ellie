@@ -28,10 +28,12 @@ export interface EventRow {
 }
 
 export interface StreamCallbacks {
-	onSnapshot: (events: EventRow[]) => void
+	onSnapshot: (
+		events: EventRow[],
+		sessionChanged: boolean
+	) => void
 	onAppend: (event: EventRow) => void
 	onUpdate: (event: EventRow) => void
-	onReset: () => void
 	onStateChange: (state: ConnectionState) => void
 	onError: (message: string) => void
 }
@@ -48,6 +50,7 @@ export class StreamClient {
 		typeof setTimeout
 	> | null = null
 	private disposed = false
+	private lastResolvedSessionId: string | null = null
 
 	constructor(
 		sessionId: string,
@@ -122,13 +125,23 @@ export class StreamClient {
 
 		es.addEventListener('snapshot', event => {
 			try {
-				const events = JSON.parse(
+				const data = JSON.parse(
 					(event as MessageEvent).data
-				) as EventRow[]
-				for (const ev of events) {
+				) as {
+					sessionId: string
+					events: EventRow[]
+				}
+				for (const ev of data.events) {
 					this.updateLastSeq(ev.seq)
 				}
-				this.callbacks.onSnapshot(events)
+				const sessionChanged =
+					this.lastResolvedSessionId !== null &&
+					this.lastResolvedSessionId !== data.sessionId
+				this.lastResolvedSessionId = data.sessionId
+				this.callbacks.onSnapshot(
+					data.events,
+					sessionChanged
+				)
 			} catch (err) {
 				console.error(
 					'[stream] Failed to parse snapshot:',
@@ -165,10 +178,6 @@ export class StreamClient {
 					err
 				)
 			}
-		})
-
-		es.addEventListener('reset', () => {
-			this.callbacks.onReset()
 		})
 
 		es.addEventListener('open', () => {

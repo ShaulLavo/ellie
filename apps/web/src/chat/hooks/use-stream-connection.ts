@@ -58,15 +58,13 @@ export function useStreamConnection(
 		useState(false)
 
 	const streamRef = useRef<StreamClient | null>(null)
-	const isInitialLoadRef = useRef(true)
 
 	useEffect(() => {
-		isInitialLoadRef.current = true
 		setSessionStats(EMPTY_STATS)
 		setIsAgentRunning(false)
 
 		const stream = new StreamClient(sessionId, {
-			onSnapshot(events) {
+			onSnapshot(events, sessionChanged) {
 				const messageEvents = events.filter(e =>
 					RENDERABLE_TYPES.includes(e.type as EventType)
 				)
@@ -74,9 +72,12 @@ export function useStreamConnection(
 					.map(eventToStored)
 					.filter(m => m.parts.length > 0 || m.text)
 
-				if (isInitialLoadRef.current) {
+				if (sessionChanged) {
+					// Session rotated — full replace and reset UI state
+					setStreamingMessage(null)
+					setSessionStats(EMPTY_STATS)
+					setIsAgentRunning(false)
 					syncReplaceAll(msgs)
-					isInitialLoadRef.current = false
 				} else {
 					if (msgs.length > 0) {
 						syncWrite(msgs)
@@ -104,7 +105,7 @@ export function useStreamConnection(
 						...stored,
 						isStreaming: true
 					})
-				} else {
+				} else if (!sessionChanged) {
 					setStreamingMessage(null)
 				}
 
@@ -167,13 +168,6 @@ export function useStreamConnection(
 				const msg = eventToStored(event)
 				if (msg.parts.length === 0 && !msg.text) return
 				syncWrite([msg])
-			},
-
-			onReset() {
-				isInitialLoadRef.current = true
-				setStreamingMessage(null)
-				setSessionStats(EMPTY_STATS)
-				setIsAgentRunning(false)
 			},
 
 			onUpdate(event) {

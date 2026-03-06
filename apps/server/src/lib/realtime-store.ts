@@ -10,7 +10,6 @@ import type {
 export type SessionEvent =
 	| { type: 'append'; event: EventRow }
 	| { type: 'update'; event: EventRow }
-	| { type: 'reset' }
 
 type Listener<T> = (event: T) => void
 

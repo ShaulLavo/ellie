@@ -42,14 +42,10 @@ function createRunSseStream(
 		sseState,
 		listener =>
 			store.subscribeToSession(sessionId, event => {
-				if (event.type === 'reset') return
 				if (event.event.runId !== runId) return
 				listener(event)
 			}),
 		event => {
-			if (event.type === 'reset') {
-				return { event: 'reset', data: {}, close: true }
-			}
 			if (event.event.type === 'run_closed') {
 				return {
 					event: 'closed',
