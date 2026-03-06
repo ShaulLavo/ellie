@@ -1,14 +1,9 @@
 package chatui
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"math"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -131,27 +126,11 @@ func (s *SSEClient) connectOnce(ctx context.Context, send func(tea.Msg)) error {
 	s.cancelFn = cancel
 	s.mu.Unlock()
 
-	// Always request the full snapshot (no afterSeq) so handleSnapshot
-	// receives the complete event history and doesn't lose messages on
-	// reconnect. The server streams only new events after the snapshot.
-	url := fmt.Sprintf("%s/chat/%s/events/sse", s.baseURL, s.sessionID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	body, err := connectSSE(ctx, s.baseURL, s.sessionID)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return err
 	}
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("SSE connect: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("SSE returned %d", resp.StatusCode)
-	}
+	defer body.Close()
 
 	// Connected successfully — reset attempts
 	s.mu.Lock()
@@ -159,83 +138,41 @@ func (s *SSEClient) connectOnce(ctx context.Context, send func(tea.Msg)) error {
 	s.mu.Unlock()
 	send(sseStateMsg{State: StateConnected})
 
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
+	// Use the shared SSE reader; convert sseEvent → tea.Msg.
+	readErr := readSSEStream(ctx, body, func(ev sseEvent) {
+		if ev.Err != nil {
+			slog.Error("SSE event error", "error", ev.Err)
+			return
+		}
 
-	var eventType string
-	var dataLines []string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if line == "" {
-			// End of event — dispatch
-			if eventType != "" && len(dataLines) > 0 {
-				data := strings.Join(dataLines, "\n")
-				s.dispatchEvent(eventType, data, send)
+		switch ev.Kind {
+		case "snapshot":
+			s.mu.Lock()
+			for _, row := range ev.Rows {
+				if row.Seq > s.lastSeq {
+					s.lastSeq = row.Seq
+				}
 			}
-			eventType = ""
-			dataLines = dataLines[:0]
-			continue
-		}
+			s.mu.Unlock()
+			send(sseSnapshotMsg{Events: ev.Rows})
 
-		if strings.HasPrefix(line, "event:") {
-			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		} else if strings.HasPrefix(line, "data:") {
-			dataLines = append(dataLines, strings.TrimPrefix(line, "data:"))
-		}
-		// Ignore id:, retry:, comments (:)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("SSE read: %w", err)
-	}
-
-	return fmt.Errorf("SSE stream ended")
-}
-
-func (s *SSEClient) dispatchEvent(eventType, data string, send func(tea.Msg)) {
-	switch eventType {
-	case "snapshot":
-		var events []EventRow
-		if err := json.Unmarshal([]byte(data), &events); err != nil {
-			slog.Error("Failed to parse SSE snapshot", "error", err)
-			return
-		}
-		s.mu.Lock()
-		for _, ev := range events {
-			if ev.Seq > s.lastSeq {
-				s.lastSeq = ev.Seq
+		case "append":
+			s.mu.Lock()
+			if ev.Row.Seq > s.lastSeq {
+				s.lastSeq = ev.Row.Seq
 			}
-		}
-		s.mu.Unlock()
-		send(sseSnapshotMsg{Events: events})
+			s.mu.Unlock()
+			send(sseAppendMsg{Event: ev.Row})
 
-	case "append":
-		var ev EventRow
-		if err := json.Unmarshal([]byte(data), &ev); err != nil {
-			slog.Error("Failed to parse SSE append", "error", err)
-			return
+		case "update":
+			send(sseUpdateMsg{Event: ev.Row})
 		}
-		s.mu.Lock()
-		if ev.Seq > s.lastSeq {
-			s.lastSeq = ev.Seq
-		}
-		s.mu.Unlock()
-		send(sseAppendMsg{Event: ev})
+	})
 
-	case "update":
-		var ev EventRow
-		if err := json.Unmarshal([]byte(data), &ev); err != nil {
-			slog.Error("Failed to parse SSE update", "error", err)
-			return
-		}
-		// No lastSeq update for updates — seq was set at INSERT time
-		send(sseUpdateMsg{Event: ev})
-
-	default:
-		slog.Debug("Unknown SSE event type", "type", eventType)
+	if readErr != nil {
+		return readErr
 	}
+	return nil
 }
 
 // Disconnect stops the SSE client.

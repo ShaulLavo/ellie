@@ -85,6 +85,9 @@ func animNextID() int {
 	return int(atomic.AddInt64(&animLastID, 1))
 }
 
+// Spring bar rendering constants.
+var springBarChars = []string{"·", "∘", "○", "●"}
+
 // springDot is a single spring-driven particle in the bar.
 type springDot struct {
 	pos    float64
@@ -105,8 +108,9 @@ type chatAnim struct {
 	frameIndex int
 
 	// Spring-based state.
-	dots    []springDot
-	elapsed float64
+	dots         []springDot
+	elapsed      float64
+	intensityBuf [springBarWidth]float64
 
 	// Shared.
 	ellipsisStep  int
@@ -227,8 +231,10 @@ func (a *chatAnim) render() string {
 
 // renderSpringBar renders the spring-physics bar as an intensity-mapped string.
 func (a *chatAnim) renderSpringBar() string {
+	// Zero the reusable intensity buffer.
+	a.intensityBuf = [springBarWidth]float64{}
+
 	// Build intensity map from dot positions.
-	intensity := make([]float64, springBarWidth)
 	for _, d := range a.dots {
 		pos := clampF(d.pos, 0, float64(springBarWidth-1))
 		idx := int(math.Round(pos))
@@ -241,20 +247,19 @@ func (a *chatAnim) renderSpringBar() string {
 				if falloff < 0 {
 					falloff = 0
 				}
-				intensity[j] = math.Max(intensity[j], energy*falloff)
+				a.intensityBuf[j] = math.Max(a.intensityBuf[j], energy*falloff)
 			}
 		}
 	}
 
-	chars := []string{"·", "∘", "○", "●"}
 	var b strings.Builder
 	for i := range springBarWidth {
-		v := intensity[i]
-		ci := int(v * float64(len(chars)-1))
-		if ci >= len(chars) {
-			ci = len(chars) - 1
+		v := a.intensityBuf[i]
+		ci := int(v * float64(len(springBarChars)-1))
+		if ci >= len(springBarChars) {
+			ci = len(springBarChars) - 1
 		}
-		ch := chars[ci]
+		ch := springBarChars[ci]
 		if v > 0.6 {
 			b.WriteString(spinnerFrameStyle.Render(ch))
 		} else if v > 0.2 {

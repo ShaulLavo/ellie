@@ -14,6 +14,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260304213900-0e78e2954235
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/term v0.31.0
 )
 
 require (
