@@ -32,7 +32,7 @@
 		"@valibot/to-json-schema": "^1.5.0",
 		"comlink": "^4.4.2",
 		"croner": "^6.0.7",
-		"defuddle": "^0.8.0",
+		"defuddle": "github:ShaulLavo/defuddle",
 		"elysia": "^1.4.25",
 		"fast-ulid": "^1.2.1",
 		"jsdom": "^28.1.0",
