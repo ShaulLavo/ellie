@@ -5,8 +5,34 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
+
+// swVersData caches a single sw_vers call (used by OS and Distro).
+var (
+	swVersOnce   sync.Once
+	swVersFields map[string]string
+	swVersErr    error
+)
+
+func loadSwVers() (map[string]string, error) {
+	swVersOnce.Do(func() {
+		out, err := exec.Command("sw_vers").Output()
+		if err != nil {
+			swVersErr = err
+			return
+		}
+		swVersFields = make(map[string]string)
+		for _, line := range strings.Split(string(out), "\n") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				swVersFields[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+			}
+		}
+	})
+	return swVersFields, swVersErr
+}
 
 func fetchKernel() Readout {
 	out, err := exec.Command("uname", "-r").Output()
@@ -18,31 +44,33 @@ func fetchKernel() Readout {
 }
 
 func fetchOS() Readout {
-	name, err := swVers("ProductName")
+	fields, err := loadSwVers()
 	if err != nil {
 		return Readout{Key: KeyOS, Err: err}
 	}
-	ver, err := swVers("ProductVersion")
-	if err != nil {
-		return Readout{Key: KeyOS, Err: err}
+	name := fields["ProductName"]
+	ver := fields["ProductVersion"]
+	if name == "" || ver == "" {
+		return Readout{Key: KeyOS, Err: fmt.Errorf("missing sw_vers fields")}
 	}
 	return Readout{Key: KeyOS, Value: fmt.Sprintf("%s %s (%s)", name, ver, runtime.GOARCH)}
 }
 
 func fetchDistro() Readout {
-	name, err := swVers("ProductName")
+	fields, err := loadSwVers()
 	if err != nil {
 		return Readout{Key: KeyDistro, Err: err}
 	}
-	ver, err := swVers("ProductVersion")
-	if err != nil {
-		return Readout{Key: KeyDistro, Err: err}
+	name := fields["ProductName"]
+	ver := fields["ProductVersion"]
+	build := fields["BuildVersion"]
+	if name == "" || ver == "" {
+		return Readout{Key: KeyDistro, Err: fmt.Errorf("missing sw_vers fields")}
 	}
-	build, err := swVers("BuildVersion")
-	if err != nil {
-		return Readout{Key: KeyDistro, Value: fmt.Sprintf("%s %s", name, ver)}
+	if build != "" {
+		return Readout{Key: KeyDistro, Value: fmt.Sprintf("%s %s (%s)", name, ver, build)}
 	}
-	return Readout{Key: KeyDistro, Value: fmt.Sprintf("%s %s (%s)", name, ver, build)}
+	return Readout{Key: KeyDistro, Value: fmt.Sprintf("%s %s", name, ver)}
 }
 
 func fetchDE() Readout {
@@ -59,7 +87,6 @@ func fetchUptime() Readout {
 		return Readout{Key: KeyUptime, Err: err}
 	}
 	// Output: "{ sec = 1709750400, usec = 0 } Thu Mar  6 ..."
-	// Parse the sec value
 	s := string(out)
 	idx := strings.Index(s, "sec = ")
 	if idx == -1 {
@@ -79,13 +106,4 @@ func fetchUptime() Readout {
 	now := time.Now().Unix()
 	uptimeSec := uint64(now - bootSec)
 	return Readout{Key: KeyUptime, Value: FormatUptime(uptimeSec)}
-}
-
-// swVers runs sw_vers and returns the value for the given key.
-func swVers(key string) (string, error) {
-	out, err := exec.Command("sw_vers", "-"+key).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
 }
