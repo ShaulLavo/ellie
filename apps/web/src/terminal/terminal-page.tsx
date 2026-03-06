@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type {
 	Terminal as GhosttyTerminal,
 	FitAddon
@@ -8,11 +8,6 @@ import { eden } from '@/lib/eden'
 type TerminalWS = ReturnType<
 	typeof eden.ws.terminal.subscribe
 >
-type Status =
-	| 'loading'
-	| 'connecting'
-	| 'connected'
-	| 'disconnected'
 
 /**
  * Convert a wheel event into SGR mouse escape sequences.
@@ -47,9 +42,85 @@ function wheelToMouseSequences(
 	return seq
 }
 
+// ── Terminal themes ──────────────────────────────────────────
+
+const darkTermTheme = {
+	background: '#0a0a0a',
+	foreground: '#e4e4e7',
+	cursor: '#e4e4e7',
+	cursorAccent: '#0a0a0a',
+	selectionBackground: '#27272a',
+	black: '#18181b',
+	red: '#f87171',
+	green: '#4ade80',
+	yellow: '#facc15',
+	blue: '#60a5fa',
+	magenta: '#c084fc',
+	cyan: '#22d3ee',
+	white: '#e4e4e7',
+	brightBlack: '#52525b',
+	brightRed: '#fca5a5',
+	brightGreen: '#86efac',
+	brightYellow: '#fde68a',
+	brightBlue: '#93c5fd',
+	brightMagenta: '#d8b4fe',
+	brightCyan: '#67e8f9',
+	brightWhite: '#fafafa'
+}
+
+const lightTermTheme = {
+	background: '#f5f5f4',
+	foreground: '#1c1917',
+	cursor: '#1c1917',
+	cursorAccent: '#f5f5f4',
+	selectionBackground: '#d6d3d1',
+	black: '#1c1917',
+	red: '#dc2626',
+	green: '#16a34a',
+	yellow: '#ca8a04',
+	blue: '#2563eb',
+	magenta: '#9333ea',
+	cyan: '#0891b2',
+	white: '#e7e5e4',
+	brightBlack: '#78716c',
+	brightRed: '#ef4444',
+	brightGreen: '#22c55e',
+	brightYellow: '#eab308',
+	brightBlue: '#3b82f6',
+	brightMagenta: '#a855f7',
+	brightCyan: '#06b6d4',
+	brightWhite: '#fafaf9'
+}
+
+// OSC 11 pattern: \x1b]11;#rrggbb\x07  (BEL terminator)
+// or              \x1b]11;#rrggbb\x1b\\ (ST terminator)
+const OSC11_RE = new RegExp(
+	// eslint-disable-next-line no-control-regex
+	'\\x1b\\]11;(#[0-9a-fA-F]{6})(?:\\x07|\\x1b\\\\)',
+	'g'
+)
+
+/**
+ * Scan data for OSC 11 (set background color) escape sequences.
+ * Returns the cleaned data (OSC stripped) and the last bg color found, if any.
+ */
+function extractOSC11(data: string): {
+	cleaned: string
+	bgColor: string | null
+} {
+	let bgColor: string | null = null
+	const cleaned = data.replace(
+		OSC11_RE,
+		(_match, color) => {
+			bgColor = color
+			return ''
+		}
+	)
+	return { cleaned, bgColor }
+}
+
 export function TerminalPage() {
 	const containerRef = useRef<HTMLDivElement>(null)
-	const [status, setStatus] = useState<Status>('loading')
 
 	useEffect(() => {
 		let term: GhosttyTerminal | null = null
@@ -59,10 +130,83 @@ export function TerminalPage() {
 		let wheelHandler: ((e: WheelEvent) => void) | null =
 			null
 		let clickHandler: (() => void) | null = null
+		let keydownHandler:
+			| ((e: KeyboardEvent) => void)
+			| null = null
+		let clipDiv: HTMLDivElement | null = null
+		let pasteHandler: ((e: ClipboardEvent) => void) | null =
+			null
 		let disposed = false
+		const container = containerRef.current
+
+		/** Apply a terminal theme change (dark/light). */
+		function applyTermTheme(bgColor: string) {
+			if (!term || !container) return
+			const bg = bgColor.toLowerCase()
+			const theme =
+				bg === lightTermTheme.background
+					? lightTermTheme
+					: darkTermTheme
+			term.options.theme = theme
+			container.style.backgroundColor = theme.background
+		}
+
+		function connectWS() {
+			if (disposed || !term) return
+
+			// Clear screen + cursor home so the fresh TUI starts clean.
+			// Avoid \x1bc (RIS) — it resets the terminal color theme
+			// back to defaults, wiping the custom palette.
+			term.write('\x1b[2J\x1b[H')
+
+			const newWS = eden.ws.terminal.subscribe()
+			ws = newWS
+
+			newWS.on('open', () => {
+				if (disposed || !term) return
+				newWS.send({
+					type: 'resize',
+					cols: term.cols,
+					rows: term.rows
+				})
+			})
+
+			newWS.on('close', () => {
+				if (disposed) return
+				// PTY process died — auto-relaunch after a short delay.
+				console.log(
+					'[terminal] ws closed, reconnecting in 500ms'
+				)
+				setTimeout(() => connectWS(), 500)
+			})
+
+			// Batch terminal output into animation frames so a
+			// flood of small WS messages (e.g. during paste) gets
+			// coalesced into a single term.write + canvas redraw.
+			let pendingOutput = ''
+			let rafId = 0
+
+			newWS.subscribe(event => {
+				if (!term) return
+				const { cleaned, bgColor } = extractOSC11(
+					event.data
+				)
+				if (bgColor) applyTermTheme(bgColor)
+				if (!cleaned) return
+
+				pendingOutput += cleaned
+				if (rafId) return
+				rafId = requestAnimationFrame(() => {
+					if (term && pendingOutput)
+						term.write(pendingOutput)
+					pendingOutput = ''
+					rafId = 0
+				})
+			})
+		}
 
 		async function setup() {
-			if (!containerRef.current || disposed) return
+			if (!container || disposed) return
 
 			const { init, Terminal, FitAddon } =
 				await import('ghostty-web')
@@ -76,70 +220,97 @@ export function TerminalPage() {
 					"'JetBrains Mono Variable', 'JetBrains Mono', monospace",
 				cursorBlink: true,
 				scrollback: 10_000,
-				theme: {
-					background: '#0a0a0a',
-					foreground: '#e4e4e7',
-					cursor: '#e4e4e7',
-					cursorAccent: '#0a0a0a',
-					selectionBackground: '#27272a',
-					black: '#18181b',
-					red: '#f87171',
-					green: '#4ade80',
-					yellow: '#facc15',
-					blue: '#60a5fa',
-					magenta: '#c084fc',
-					cyan: '#22d3ee',
-					white: '#e4e4e7',
-					brightBlack: '#52525b',
-					brightRed: '#fca5a5',
-					brightGreen: '#86efac',
-					brightYellow: '#fde68a',
-					brightBlue: '#93c5fd',
-					brightMagenta: '#d8b4fe',
-					brightCyan: '#67e8f9',
-					brightWhite: '#fafafa'
-				}
+				theme: darkTermTheme
 			})
 
 			fitAddon = new FitAddon()
 			term.loadAddon(fitAddon)
-			term.open(containerRef.current)
+
+			// ── Register BEFORE term.open() ─────────────────────
+			// ghostty-web installs its own document-level capture
+			// listeners in open(). Since capture handlers on the same
+			// element fire in registration order, we must register
+			// first so we intercept before ghostty-web.
+
+			keydownHandler = (e: KeyboardEvent) => {
+				if (e.key === 'Enter' && e.shiftKey) {
+					e.preventDefault()
+					e.stopImmediatePropagation()
+					ws?.send({ type: 'input', data: '\x1b[13;2u' })
+					return
+				}
+				// Stop ghostty-web from handling Cmd/Ctrl+V so
+				// paste only fires once (via our document paste
+				// handler). Don't preventDefault — the browser
+				// still needs to generate the paste event.
+				if (e.key === 'v' && (e.metaKey || e.ctrlKey)) {
+					e.stopImmediatePropagation()
+					return
+				}
+			}
+
+			// ── Paste handler (document capture phase) ──────────
+			// Intercept the paste event before ghostty-web can see
+			// it. Read clipboard data and forward to PTY as
+			// bracketed paste. stopImmediatePropagation ensures
+			// ghostty-web's own paste handler never fires.
+			pasteHandler = (e: ClipboardEvent) => {
+				e.preventDefault()
+				e.stopImmediatePropagation()
+				const text = e.clipboardData?.getData('text/plain')
+				if (!text || !ws) return
+				ws.send({
+					type: 'input',
+					data: `\x1b[200~${text}\x1b[201~`
+				})
+			}
+
+			// Register both BEFORE term.open() so they fire
+			// before ghostty-web's capture handlers.
+			document.addEventListener('keydown', keydownHandler, {
+				capture: true
+			})
+			document.addEventListener('paste', pasteHandler, {
+				capture: true
+			})
+
+			term.open(container)
 			fitAddon.fit()
 			term.focus()
+
+			// ── Contenteditable overlay ──────────────────────────
+			// The browser only generates paste events when an
+			// editable element is focused. This invisible div
+			// serves as the focus target; actual paste handling
+			// happens in the document capture handler above.
+			clipDiv = document.createElement('div')
+			clipDiv.contentEditable = 'true'
+			clipDiv.style.cssText =
+				'position:absolute;top:0;left:0;width:100%;height:100%;' +
+				'opacity:0;z-index:10;overflow:hidden;cursor:text;' +
+				'caret-color:transparent;outline:none;'
+			clipDiv.setAttribute('aria-hidden', 'true')
+			container.style.position = 'relative'
+			container.appendChild(clipDiv)
+
+			// Prevent the contenteditable from handling any keyboard
+			// input — it exists only as a paste focus target.
+			clipDiv.addEventListener('keydown', e => {
+				e.preventDefault()
+			})
 
 			if (disposed) {
 				term.dispose()
 				return
 			}
 
-			// ── Open WS only after terminal is mounted ───────────
-			setStatus('connecting')
-			ws = eden.ws.terminal.subscribe()
-
-			ws.on('open', () => {
-				if (disposed || !term) return
-				setStatus('connected')
-				ws!.send({
-					type: 'resize',
-					cols: term.cols,
-					rows: term.rows
-				})
-			})
-
-			ws.on('close', () => {
-				if (!disposed) setStatus('disconnected')
-			})
-
-			ws.subscribe(event => {
-				term?.write(event.data)
-			})
-
+			// Register once — these read the current `ws` via closure.
 			term.onData(data => {
-				ws!.send({ type: 'input', data })
+				ws?.send({ type: 'input', data })
 			})
 
 			term.onResize(({ cols, rows }) => {
-				ws!.send({ type: 'resize', cols, rows })
+				ws?.send({ type: 'resize', cols, rows })
 			})
 
 			// ── Mouse wheel → SGR mouse sequences ────────────────
@@ -173,47 +344,59 @@ export function TerminalPage() {
 
 				const seq = wheelToMouseSequences(e, term)
 				if (seq)
-					ws!.send({
+					ws?.send({
 						type: 'input',
 						data: seq.repeat(lines)
 					})
 			}
-			containerRef.current.addEventListener(
-				'wheel',
-				wheelHandler,
-				{ passive: false, capture: true }
-			)
+			container.addEventListener('wheel', wheelHandler, {
+				passive: false,
+				capture: true
+			})
 
 			// ── Click-to-focus ───────────────────────────────────
-			clickHandler = () => term?.focus()
-			containerRef.current.addEventListener(
-				'mousedown',
-				clickHandler
-			)
+			clickHandler = () => clipDiv?.focus()
+			container.addEventListener('mousedown', clickHandler)
 
 			observer = new ResizeObserver(() => fitAddon?.fit())
-			observer.observe(containerRef.current)
+			observer.observe(container)
+
+			// ── Connect WS (spawns PTY on server) ────────────────
+			connectWS()
 		}
 
 		setup()
 
 		return () => {
 			disposed = true
-			if (containerRef.current) {
-				if (wheelHandler) {
-					containerRef.current.removeEventListener(
-						'wheel',
-						wheelHandler,
-						{ capture: true }
-					)
-				}
-				if (clickHandler) {
-					containerRef.current.removeEventListener(
-						'mousedown',
-						clickHandler
-					)
-				}
-			}
+			if (wheelHandler)
+				container?.removeEventListener(
+					'wheel',
+					wheelHandler,
+					{
+						capture: true
+					}
+				)
+			if (clickHandler)
+				container?.removeEventListener(
+					'mousedown',
+					clickHandler
+				)
+			if (keydownHandler)
+				document.removeEventListener(
+					'keydown',
+					keydownHandler,
+					{ capture: true }
+				)
+			if (pasteHandler)
+				document.removeEventListener(
+					'paste',
+					pasteHandler,
+					{
+						capture: true
+					}
+				)
+			clipDiv?.remove()
 			observer?.disconnect()
 			ws?.close()
 			term?.dispose()
@@ -221,23 +404,10 @@ export function TerminalPage() {
 	}, [])
 
 	return (
-		<div className="h-screen w-screen bg-[#0a0a0a] relative overflow-hidden">
-			{status !== 'connected' && (
-				<div
-					className={`absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm border ${
-						status === 'loading' || status === 'connecting'
-							? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-							: 'bg-red-500/10 text-red-400 border-red-500/20'
-					}`}
-				>
-					{status === 'loading'
-						? 'Loading terminal…'
-						: status === 'connecting'
-							? 'Connecting…'
-							: 'Disconnected'}
-				</div>
-			)}
-			<div ref={containerRef} className="w-full h-full" />
-		</div>
+		<div
+			ref={containerRef}
+			className="h-screen w-screen relative overflow-hidden"
+			style={{ backgroundColor: darkTermTheme.background }}
+		/>
 	)
 }

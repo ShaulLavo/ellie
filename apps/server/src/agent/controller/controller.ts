@@ -141,7 +141,7 @@ export class AgentController {
 			onTrace: entry => {
 				const sessionId = this.boundSessionId
 				if (!sessionId) return
-				this.store.trace({
+				this.store.publishTraceEphemeral({
 					sessionId,
 					type: entry.type,
 					runId: this.agent.runId,
@@ -461,7 +461,7 @@ export class AgentController {
 		const sessionId = this.boundSessionId
 		if (!sessionId) return
 		try {
-			this.store.trace({
+			this.store.publishTraceEphemeral({
 				sessionId,
 				type,
 				runId: this.agent.runId,

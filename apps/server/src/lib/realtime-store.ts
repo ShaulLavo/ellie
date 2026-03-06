@@ -148,25 +148,13 @@ export class RealtimeStore {
 		} satisfies SessionEvent)
 	}
 
-	// ── Trace (JSONL + ephemeral SSE, no DB) ─────────────────────────────
+	// ── Ephemeral trace (SSE only, no disk) ──────────────────────────────
 
 	/**
-	 * Tier 2: Write a structured trace entry to JSONL and broadcast as
-	 * ephemeral SSE. No SQLite write — keeps the DB lean.
+	 * Broadcast a structured trace entry as ephemeral SSE only.
+	 * No disk write — canonical trace persistence is handled by TraceRecorder.
 	 */
-	trace(entry: TraceEntry): void {
-		const audit = this.#store.auditLogger
-		if (audit) {
-			audit.trace({
-				sessionId: entry.sessionId,
-				type: entry.type,
-				runId: entry.runId,
-				payload: entry.payload,
-				ts: Date.now()
-			})
-		}
-
-		// Broadcast as ephemeral SSE so a live logs panel can pick it up
+	publishTraceEphemeral(entry: TraceEntry): void {
 		this.#publish(`session:${entry.sessionId}`, {
 			type: 'append',
 			event: {

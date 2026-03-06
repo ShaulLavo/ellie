@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { rmSync, existsSync } from 'node:fs'
 import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
 import { Hindsight } from '@ellie/hindsight'
@@ -66,14 +67,32 @@ function todaySessionId(): string {
 }
 
 /**
+ * Delete legacy data directories that are no longer used.
+ * Safe to call on every startup — skips directories that don't exist.
+ */
+function cleanupLegacyData(dataDir: string): void {
+	const legacyDirs = [
+		'audit',
+		'tool-overflow',
+		'repl-artifacts'
+	]
+	for (const dir of legacyDirs) {
+		const fullPath = `${dataDir}/${dir}`
+		if (existsSync(fullPath)) {
+			rmSync(fullPath, { recursive: true, force: true })
+			console.log(
+				`[server] removed legacy directory: ${fullPath}`
+			)
+		}
+	}
+}
+
+/**
  * Creates EventStore + RealtimeStore and recovers any stale runs
  * left over from a previous crash.
  */
 function initStores(dataDir: string): StoresContext {
-	const eventStore = new EventStore(
-		`${dataDir}/events.db`,
-		`${dataDir}/audit`
-	)
+	const eventStore = new EventStore(`${dataDir}/events.db`)
 	const initialSessionId =
 		eventStore.getKv('currentSessionId') ?? todaySessionId()
 	const store = new RealtimeStore(
@@ -167,6 +186,9 @@ export async function init(): Promise<ServerContext> {
 		import.meta.dir,
 		'../../web/public'
 	)
+
+	// ── Legacy cleanup ───────────────────────────────────────────────────
+	cleanupLegacyData(DATA_DIR)
 
 	// ── Stores ────────────────────────────────────────────────────────────
 	const { eventStore, store } = initStores(DATA_DIR)

@@ -23,6 +23,7 @@ import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
 import { EmptyState } from './components/empty-state'
 import { ConnectionIndicator } from './components/connection-indicator'
+import { ServerDownOverlay } from './components/server-down-overlay'
 import { PromptInputWithCommands } from './components/prompt-input-with-commands'
 import { matchSlashCommand } from './utils'
 
@@ -111,6 +112,11 @@ export function ChatRoom({
 			</div>
 
 			<ConnectionIndicator
+				state={chat.connectionState}
+				error={chat.error}
+				onRetry={chat.retry}
+			/>
+			<ServerDownOverlay
 				state={chat.connectionState}
 				error={chat.error}
 				onRetry={chat.retry}

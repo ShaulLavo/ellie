@@ -96,6 +96,7 @@ export async function executeToolCall(
 		args: toolCall.arguments
 	})
 
+	const startedAt = Date.now()
 	let result: AgentToolResult
 	let isError = false
 
@@ -184,12 +185,15 @@ export async function executeToolCall(
 		}
 	}
 
+	const elapsedMs = Date.now() - startedAt
+
 	emit({
 		type: 'tool_execution_end',
 		toolCallId: toolCall.id,
 		toolName: toolCall.name,
 		result,
-		isError
+		isError,
+		elapsedMs
 	})
 
 	// Record outcome for loop detection

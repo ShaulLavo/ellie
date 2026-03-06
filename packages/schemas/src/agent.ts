@@ -1,7 +1,6 @@
 /**
  * Valibot schemas for serializing AgentMessage and AgentEvent to/from JSON.
- * Used by the SQLite EventStore for validated event persistence and
- * by AuditLogger for structured audit logging.
+ * Used by the SQLite EventStore for validated event persistence.
  */
 
 import * as v from 'valibot'

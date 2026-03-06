@@ -186,11 +186,14 @@ export class StreamClient {
 		})
 
 		es.addEventListener('error', () => {
-			if (es.readyState === EventSource.CLOSED) {
-				this.eventSource = null
-				this.callbacks.onStateChange('connecting')
-				this.scheduleReconnect()
-			}
+			// Close manually — the browser's built-in EventSource
+			// reconnection keeps readyState as CONNECTING when the
+			// server is unreachable, so our custom retry logic
+			// (with max attempts and exponential backoff) would
+			// never trigger.
+			this.closeSSE()
+			this.callbacks.onStateChange('connecting')
+			this.scheduleReconnect()
 		})
 	}
 

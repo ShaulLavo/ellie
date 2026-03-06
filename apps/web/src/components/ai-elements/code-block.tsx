@@ -117,6 +117,7 @@ type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
 	code: string
 	language: BundledLanguage
 	showLineNumbers?: boolean
+	small?: boolean
 }
 
 interface TokenizedCode {
@@ -280,10 +281,12 @@ const CodeBlockBody = memo(
 	({
 		tokenized,
 		showLineNumbers,
+		small,
 		className
 	}: {
 		tokenized: TokenizedCode
 		showLineNumbers: boolean
+		small?: boolean
 		className?: string
 	}) => {
 		const preStyle = useMemo(
@@ -299,17 +302,21 @@ const CodeBlockBody = memo(
 			[tokenized.tokens]
 		)
 
+		const textSize = small ? 'text-xs' : 'text-sm'
+
 		return (
 			<pre
 				className={cn(
-					'dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4 text-sm',
+					'dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4',
+					textSize,
 					className
 				)}
 				style={preStyle}
 			>
 				<code
 					className={cn(
-						'font-mono text-sm',
+						'font-mono',
+						textSize,
 						showLineNumbers &&
 							'[counter-increment:line_0] [counter-reset:line]'
 					)}
@@ -329,6 +336,7 @@ const CodeBlockBody = memo(
 		prevProps.tokenized === nextProps.tokenized &&
 		prevProps.showLineNumbers ===
 			nextProps.showLineNumbers &&
+		prevProps.small === nextProps.small &&
 		prevProps.className === nextProps.className
 )
 
@@ -415,11 +423,13 @@ export const CodeBlockActions = ({
 export const CodeBlockContent = ({
 	code,
 	language,
-	showLineNumbers = false
+	showLineNumbers = false,
+	small
 }: {
 	code: string
 	language: BundledLanguage
 	showLineNumbers?: boolean
+	small?: boolean
 }) => {
 	// Memoized raw tokens for immediate display
 	const rawTokens = useMemo(
@@ -454,9 +464,10 @@ export const CodeBlockContent = ({
 	const tokenized = asyncTokenized ?? syncTokenized
 
 	return (
-		<div className="relative overflow-auto">
+		<div className="relative max-h-96 overflow-auto">
 			<CodeBlockBody
 				showLineNumbers={showLineNumbers}
+				small={small}
 				tokenized={tokenized}
 			/>
 		</div>
@@ -467,6 +478,7 @@ export const CodeBlock = ({
 	code,
 	language,
 	showLineNumbers = false,
+	small,
 	className,
 	children,
 	...props
@@ -485,6 +497,7 @@ export const CodeBlock = ({
 					code={code}
 					language={language}
 					showLineNumbers={showLineNumbers}
+					small={small}
 				/>
 			</CodeBlockContainer>
 		</CodeBlockContext.Provider>

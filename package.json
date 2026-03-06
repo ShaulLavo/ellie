@@ -25,8 +25,7 @@
 		"@mozilla/readability": "^0.6.0",
 		"@tanstack/ai-ollama": "^0.5.0",
 		"defuddle": "github:ShaulLavo/defuddle",
-		"fast-ulid": "^1.2.1",
-		"jsdom": "^28.1.0"
+		"fast-ulid": "^1.2.1"
 	},
 	"devDependencies": {
 		"@tailwindcss/typography": "^0.5.19",

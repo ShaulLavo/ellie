@@ -17,7 +17,6 @@ import * as v from 'valibot'
 import type { Database } from 'bun:sqlite'
 import { ulid } from 'fast-ulid'
 import { openDatabase } from './init'
-import { AuditLogger } from './audit-log'
 import * as schema from './schema'
 import {
 	sessions,
@@ -77,17 +76,8 @@ const MIGRATIONS_DIR = join(
 export class EventStore {
 	readonly db: ReturnType<typeof drizzle>
 	readonly sqlite: Database
-	readonly #audit: AuditLogger | null
 
-	get auditLogger(): AuditLogger | null {
-		return this.#audit
-	}
-
-	constructor(
-		dbPath: string,
-		auditLogDir?: string,
-		migrationsFolder?: string
-	) {
+	constructor(dbPath: string, migrationsFolder?: string) {
 		this.sqlite = openDatabase(dbPath)
 		this.db = drizzle(this.sqlite, { schema })
 
@@ -95,10 +85,6 @@ export class EventStore {
 		migrate(this.db, {
 			migrationsFolder: migrationsFolder ?? MIGRATIONS_DIR
 		})
-
-		this.#audit = auditLogDir
-			? new AuditLogger(auditLogDir)
-			: null
 	}
 
 	// ── Session CRUD ────────────────────────────────────────────────────────
@@ -216,18 +202,6 @@ export class EventStore {
 
 			return inserted
 		})
-
-		// Best-effort audit
-		if (this.#audit) {
-			this.#audit.log({
-				sessionId: input.sessionId,
-				type: input.type,
-				seq: result.seq,
-				runId: result.runId ?? undefined,
-				payload: input.payload,
-				ts: now
-			})
-		}
 
 		return result
 	}
@@ -546,7 +520,6 @@ export class EventStore {
 	// ── Cleanup ───────────────────────────────────────────────────────────
 
 	close(): void {
-		this.#audit?.close()
 		this.sqlite.close()
 	}
 }

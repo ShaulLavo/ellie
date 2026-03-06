@@ -1,3 +1,4 @@
+import { motion } from 'motion/react'
 import { cn } from '@/lib/utils'
 
 interface AILoaderProps {
@@ -5,77 +6,56 @@ interface AILoaderProps {
 }
 
 /**
- * Spinning concentric-ring loader using theme colors.
- * Pure SVG + CSS keyframes — no JS animation runtime.
+ * Spinning concentric-ring loader themed with --primary.
+ * Two conic-gradient rings (one counter-rotating) with a subtle breathing scale.
  */
 export function AILoader({ className }: AILoaderProps) {
 	return (
-		<div className={cn('relative', className)}>
-			<svg
-				viewBox="0 0 240 240"
-				fill="none"
-				xmlns="http://www.w3.org/2000/svg"
-				className="w-full h-full"
-				aria-label="Loading"
-			>
-				<title>Loading</title>
-
-				<style>
-					{`
-						@keyframes ai-loader-cw {
-							from { transform: rotate(0deg); }
-							to { transform: rotate(360deg); }
-						}
-						@keyframes ai-loader-ccw {
-							from { transform: rotate(360deg); }
-							to { transform: rotate(0deg); }
-						}
-						.ai-loader-spin circle {
-							transform-origin: 120px 120px;
-						}
-						.ai-loader-spin circle:nth-child(1) { animation: ai-loader-cw 6s linear infinite; }
-						.ai-loader-spin circle:nth-child(2) { animation: ai-loader-ccw 5s linear infinite; }
-						.ai-loader-spin circle:nth-child(3) { animation: ai-loader-cw 7s linear infinite; }
-						.ai-loader-spin circle:nth-child(4) { animation: ai-loader-ccw 4.5s linear infinite; }
-					`}
-				</style>
-
-				<g
-					className="ai-loader-spin"
-					strokeWidth="18"
-					strokeDasharray="15% 45%"
-					strokeLinecap="round"
-				>
-					<circle
-						r="100"
-						cx="120"
-						cy="120"
-						stroke="var(--primary)"
-						opacity="0.9"
-					/>
-					<circle
-						r="80"
-						cx="120"
-						cy="120"
-						stroke="var(--muted-foreground)"
-						opacity="0.4"
-					/>
-					<circle
-						r="60"
-						cx="120"
-						cy="120"
-						stroke="var(--primary)"
-						opacity="0.55"
-					/>
-					<circle
-						r="40"
-						cx="120"
-						cy="120"
-						stroke="var(--foreground)"
-						opacity="0.2"
-					/>
-				</g>
-			</svg>
-		</div>
+		<motion.div
+			className={cn('relative', className)}
+			animate={{ scale: [1, 1.02, 1] }}
+			transition={{
+				duration: 4,
+				repeat: Number.POSITIVE_INFINITY,
+				ease: [0.4, 0, 0.6, 1]
+			}}
+		>
+			{/* Primary ring */}
+			<motion.div
+				className="absolute inset-0 rounded-full"
+				style={{
+					background:
+						'conic-gradient(from 0deg, transparent 0deg, var(--primary) 120deg, color-mix(in srgb, var(--primary), transparent 50%) 240deg, transparent 360deg)',
+					mask: 'radial-gradient(circle, transparent 42%, black 44%, black 48%, transparent 50%)',
+					WebkitMask:
+						'radial-gradient(circle, transparent 42%, black 44%, black 48%, transparent 50%)',
+					opacity: 0.9
+				}}
+				animate={{ rotate: [0, 360] }}
+				transition={{
+					duration: 2.5,
+					repeat: Number.POSITIVE_INFINITY,
+					ease: [0.4, 0, 0.6, 1]
+				}}
+			/>
+			{/* Counter-rotation accent ring */}
+			<motion.div
+				className="absolute inset-0 rounded-full"
+				style={{
+					background:
+						'conic-gradient(from 180deg, transparent 0deg, color-mix(in srgb, var(--primary), transparent 40%) 45deg, transparent 90deg)',
+					mask: 'radial-gradient(circle, transparent 52%, black 54%, black 56%, transparent 58%)',
+					WebkitMask:
+						'radial-gradient(circle, transparent 52%, black 54%, black 56%, transparent 58%)',
+					opacity: 0.35
+				}}
+				animate={{ rotate: [0, -360] }}
+				transition={{
+					duration: 4,
+					repeat: Number.POSITIVE_INFINITY,
+					ease: [0.4, 0, 0.6, 1]
+				}}
+			/>
+		</motion.div>
 	)
 }

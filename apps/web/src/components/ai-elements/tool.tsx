@@ -207,6 +207,7 @@ export const ToolInput = ({
 			<CodeBlock
 				code={JSON.stringify(input, null, 2)}
 				language="json"
+				small
 			/>
 		</div>
 	</div>
@@ -323,10 +324,13 @@ export const ToolOutput = ({
 			<CodeBlock
 				code={JSON.stringify(output, null, 2)}
 				language="json"
+				small
 			/>
 		)
 	} else if (typeof output === 'string') {
-		Output = <CodeBlock code={output} language="json" />
+		Output = (
+			<CodeBlock code={output} language="json" small />
+		)
 	}
 
 	return (

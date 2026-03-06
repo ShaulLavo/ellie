@@ -6,13 +6,7 @@ import {
 	afterEach
 } from 'bun:test'
 import { EventStore } from './event-store'
-import {
-	existsSync,
-	rmSync,
-	mkdtempSync,
-	readdirSync,
-	readFileSync
-} from 'fs'
+import { existsSync, rmSync, mkdtempSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -859,18 +853,17 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Audit logging ─────────────────────────────────────────────────────
+	// ── No audit logging ─────────────────────────────────────────────────
 
-	describe('audit logging', () => {
-		it('creates audit log when auditLogDir is provided', () => {
+	describe('no audit logging', () => {
+		it('does not create an audit directory when appending events', () => {
 			const auditDir = join(tmpDir, 'audit')
-			const auditStore = new EventStore(
-				join(tmpDir, 'audit-test.db'),
-				auditDir
+			const plainStore = new EventStore(
+				join(tmpDir, 'no-audit-test.db')
 			)
 
-			auditStore.createSession('s1')
-			auditStore.append({
+			plainStore.createSession('s1')
+			plainStore.append({
 				sessionId: 's1',
 				type: 'user_message',
 				payload: {
@@ -880,23 +873,9 @@ describe('EventStore', () => {
 				}
 			})
 
-			auditStore.close()
+			plainStore.close()
 
-			expect(existsSync(auditDir)).toBe(true)
-
-			// Verify audit file contains the expected entry
-			const files = readdirSync(auditDir).filter(f =>
-				f.endsWith('.jsonl')
-			)
-			expect(files.length).toBeGreaterThan(0)
-			const content = readFileSync(
-				join(auditDir, files[0]!),
-				'utf-8'
-			).trim()
-			const entry = JSON.parse(content)
-			expect(entry.sessionId).toBe('s1')
-			expect(entry.type).toBe('user_message')
-			expect(entry.seq).toBe(1)
+			expect(existsSync(auditDir)).toBe(false)
 		})
 	})
 

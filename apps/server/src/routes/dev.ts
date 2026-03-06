@@ -11,8 +11,8 @@ import { rmSync } from 'node:fs'
 /**
  * POST /api/dev/reset
  *
- * Nukes everything: DB, JSONL logs, workspace, uploads.
- * Exits the process so you restart fresh.
+ * Nukes the entire DATA_DIR (events.db, hindsight.db, uploads.db,
+ * uploads/, traces/, workspace/) and exits the process.
  */
 export function createDevRoutes(dataDir: string) {
 	return new Elysia({

@@ -9,8 +9,6 @@ export type {
 	AgentMessage
 } from './event-store'
 export type { EventPayloadMap } from '@ellie/schemas/events'
-export { AuditLogger } from './audit-log'
-export type { AuditEntry, AuditLevel } from './audit-log'
 export * as schema from './schema'
 export type {
 	SessionRow,
