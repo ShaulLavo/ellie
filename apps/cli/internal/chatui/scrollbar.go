@@ -13,7 +13,7 @@ const scrollbarHideDelay = 1500 * time.Millisecond
 // scrollbarHideMsg is sent after the hide delay to auto-hide the scrollbar.
 type scrollbarHideMsg struct{ id int }
 
-var scrollbarThumbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#555"))
+var scrollbarThumbStyle = lipgloss.NewStyle().Foreground(colorSubtle)
 
 // renderScrollbar overlays a scrollbar thumb on the right edge of the viewport
 // view string. If totalLines <= vpHeight (all content visible), returns vpView

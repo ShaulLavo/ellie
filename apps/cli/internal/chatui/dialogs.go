@@ -31,15 +31,15 @@ const (
 var (
 	dialogBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#555")).
+			BorderForeground(colorSubtle).
 			Padding(1, 2)
 	dialogTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#00A66D"))
+			Foreground(colorAccent)
 	dialogDim = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666"))
+			Foreground(colorDim)
 	dialogHighlight = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00A66D")).
+			Foreground(colorAccent).
 			Bold(true)
 )
 

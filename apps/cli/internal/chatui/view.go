@@ -10,52 +10,48 @@ import (
 // Styles for the chat TUI.
 var (
 	statusLineStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666")).
+			Foreground(colorDim).
 			Padding(0, 1)
 
-	connectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666"))
-	connectingStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666"))
-	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666"))
-	disconnectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#666"))
+	connectedStyle    = lipgloss.NewStyle().Foreground(colorDim)
+	connectingStyle   = lipgloss.NewStyle().Foreground(colorDim)
+	errorStyle        = lipgloss.NewStyle().Foreground(colorDim)
+	disconnectedStyle = lipgloss.NewStyle().Foreground(colorDim)
 
 	userStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#60A5FA")).
+			Foreground(colorUser).
 			Bold(true)
 	agentStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00A66D")).
+			Foreground(colorAccent).
 			Bold(true)
 	memoryStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A78BFA")).
+			Foreground(colorMemory).
 			Bold(true)
 	systemStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#F59E0B")).
+			Foreground(colorSystem).
 			Bold(true)
 
 	toolCallStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888"))
+			Foreground(colorMuted)
 	toolResultStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666"))
+			Foreground(colorDim)
 	thinkingStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888")).
+			Foreground(colorMuted).
 			Italic(true)
 	dimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666"))
+			Foreground(colorDim)
 
 	inputBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#333")).
+			BorderForeground(colorSurface).
 			Padding(0, 1)
 	inputBorderFocused = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("#00A66D")).
+				BorderForeground(colorAccent).
 				Padding(0, 1)
 
 	footerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888"))
+			Foreground(colorMuted)
 )
 
 // renderStatusLine renders the top status bar.
