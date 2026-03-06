@@ -223,7 +223,8 @@ function formatRedditListing(
 	for (let i = 0; i < posts.length; i++) {
 		const p = posts[i]
 		lines.push(
-			`${i + 1}. ${p.title} [↑${compactNumber(p.score)} · ${compactNumber(p.num_comments)}c · u/${p.author}]`
+			`${i + 1}. ${p.title} [↑${compactNumber(p.score)} · ${compactNumber(p.num_comments)}c · u/${p.author}]`,
+			`   https://reddit.com${p.permalink}`
 		)
 	}
 	return lines.join('\n')
