@@ -107,7 +107,7 @@ async function callWorker<T>(
 	})
 }
 
-// Close browser in worker on exit
+// Close browser in worker on exit — covers clean shutdowns
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 	process.on(signal, () => {
 		if (_proxy) {
@@ -123,6 +123,21 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 		} else {
 			process.exit(0)
 		}
+	})
+}
+
+// Best-effort cleanup on crashes — the PID file will handle
+// true orphans on next startup, but try to clean up here too.
+process.on('beforeExit', () => {
+	destroyWorker()
+})
+
+for (const event of [
+	'uncaughtException',
+	'unhandledRejection'
+] as const) {
+	process.on(event, () => {
+		destroyWorker()
 	})
 }
 

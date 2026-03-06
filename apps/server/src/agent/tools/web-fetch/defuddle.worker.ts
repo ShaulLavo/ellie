@@ -16,8 +16,62 @@ import Defuddle from 'defuddle'
 import { Readability } from '@mozilla/readability'
 import TurndownService from 'turndown'
 import * as Comlink from 'comlink'
-import { existsSync } from 'fs'
+import {
+	existsSync,
+	readFileSync,
+	writeFileSync,
+	unlinkSync
+} from 'fs'
 import { join } from 'path'
+import { tmpdir } from 'os'
+
+// ── PID file for orphan cleanup ──────────────────────────────────────
+
+const PID_FILE = join(tmpdir(), 'ellie-browser.pid')
+
+/** Kill an orphaned browser process from a previous run. */
+function killOrphanedBrowser(): void {
+	try {
+		if (!existsSync(PID_FILE)) return
+		const pid = parseInt(
+			readFileSync(PID_FILE, 'utf8').trim(),
+			10
+		)
+		if (isNaN(pid)) {
+			unlinkSync(PID_FILE)
+			return
+		}
+		// Check if the process is still alive
+		try {
+			process.kill(pid, 0) // signal 0 = existence check
+			console.log(
+				`[web-fetch] killing orphaned browser (pid ${pid})`
+			)
+			process.kill(pid, 'SIGKILL')
+		} catch {
+			// Process already dead — clean up stale PID file
+		}
+		unlinkSync(PID_FILE)
+	} catch {
+		// PID file read/delete failed — ignore
+	}
+}
+
+function writePidFile(pid: number): void {
+	try {
+		writeFileSync(PID_FILE, String(pid), 'utf8')
+	} catch {
+		// Non-critical — orphan cleanup just won't work next time
+	}
+}
+
+function removePidFile(): void {
+	try {
+		if (existsSync(PID_FILE)) unlinkSync(PID_FILE)
+	} catch {
+		// ignore
+	}
+}
 
 // ── Chrome finder (adapted from @agent-infra/browser-finder) ────────────
 
@@ -136,6 +190,9 @@ async function getBrowser(): Promise<Browser> {
 	if (browserInstance?.connected) return browserInstance
 
 	if (!browserLaunchPromise) {
+		// Kill any orphaned browser from a previous server run
+		killOrphanedBrowser()
+
 		browserLaunchPromise = puppeteer
 			.launch({
 				executablePath: findChrome(),
@@ -150,8 +207,15 @@ async function getBrowser(): Promise<Browser> {
 				browserInstance = browser
 				browserLaunchPromise = null
 
+				// Track the browser PID so we can clean up after crashes
+				const proc = browser.process()
+				if (proc?.pid) {
+					writePidFile(proc.pid)
+				}
+
 				browser.on('disconnected', () => {
 					browserInstance = null
+					removePidFile()
 				})
 
 				return browser
@@ -281,6 +345,7 @@ const api = {
 		if (browserInstance) {
 			await browserInstance.close()
 			browserInstance = null
+			removePidFile()
 		}
 	}
 }
