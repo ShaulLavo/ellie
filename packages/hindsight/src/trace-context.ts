@@ -13,12 +13,28 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 export interface HindsightLLMEvent {
 	phase: 'start' | 'end' | 'error'
+	callId: string
 	startedAt: number
 	messageCount?: number
 	systemPromptCount?: number
 	hasTools?: boolean
+	messages?: unknown[]
+	systemPrompts?: string[]
+	tools?: Array<{
+		name?: string
+		description?: string
+		parameters?: unknown
+	}>
+	modelOptions?: unknown
 	elapsedMs?: number
 	responseLength?: number
+	responseText?: string
+	thinkingText?: string
+	toolCalls?: Array<{
+		toolCallId: string
+		toolName: string
+		argsJson: string
+	}>
 	error?: string
 }
 

@@ -185,9 +185,13 @@ function createMemoryTraceCtx(
 	recorder: TraceRecorder,
 	scope: TraceScope
 ): HindsightTraceContext {
+	const llmScopes = new Map<string, TraceScope>()
 	return {
 		onLLMCall: event => {
-			const llmScope = createChildScope(scope)
+			const llmScope =
+				llmScopes.get(event.callId) ??
+				createChildScope(scope)
+			llmScopes.set(event.callId, llmScope)
 			const eventName =
 				event.phase === 'start'
 					? 'memory.chat.start'
@@ -195,6 +199,9 @@ function createMemoryTraceCtx(
 						? 'memory.chat.end'
 						: 'memory.chat.error'
 			recorder.record(llmScope, eventName, 'memory', event)
+			if (event.phase !== 'start') {
+				llmScopes.delete(event.callId)
+			}
 		}
 	}
 }
