@@ -40,16 +40,18 @@ func init() {
 }
 
 func runSysinfo(cmd *cobra.Command, args []string) error {
-	info := sysinfo.Collect()
-
-	// Filter readouts if --show is specified
+	// Parse --show filter (nil means collect all)
+	var keys []sysinfo.ReadoutKey
 	if sysinfoShow != "" {
-		keys, err := sysinfo.ParseShowKeys(sysinfoShow)
+		var err error
+		keys, err = sysinfo.ParseShowKeys(sysinfoShow)
 		if err != nil {
 			return err
 		}
-		info = info.Filter(keys)
 	}
+
+	// Collect only the needed readouts
+	info := sysinfo.Collect(keys)
 
 	// JSON output mode
 	if sysinfoJSON {

@@ -142,33 +142,51 @@ func (e *UnknownKeyError) Error() string {
 	return "unknown readout key: " + e.Name + "\nvalid keys: " + strings.Join(AllKeyNames(), ", ")
 }
 
-// Collect gathers all system readouts concurrently.
-func Collect() Info {
-	fetchers := []func() Readout{
-		fetchHost,
-		fetchMachine,
-		fetchKernel,
-		fetchOS,
-		fetchDistro,
-		fetchDE,
-		fetchWM,
-		fetchCPU,
-		fetchCPULoad,
-		fetchMemory,
-		fetchBattery,
-		fetchGPU,
-		fetchResolution,
-		fetchShell,
-		fetchTerminal,
-		fetchLocalIP,
-		fetchDisk,
-		fetchUptime,
-		fetchPackages,
+// allFetchers maps each ReadoutKey to its fetch function.
+var allFetchers = map[ReadoutKey]func() Readout{
+	KeyHost:       fetchHost,
+	KeyMachine:    fetchMachine,
+	KeyKernel:     fetchKernel,
+	KeyOS:         fetchOS,
+	KeyDistro:     fetchDistro,
+	KeyDE:         fetchDE,
+	KeyWM:         fetchWM,
+	KeyCPU:        fetchCPU,
+	KeyCPULoad:    fetchCPULoad,
+	KeyMemory:     fetchMemory,
+	KeyBattery:    fetchBattery,
+	KeyGPU:        fetchGPU,
+	KeyResolution: fetchResolution,
+	KeyShell:      fetchShell,
+	KeyTerminal:   fetchTerminal,
+	KeyLocalIP:    fetchLocalIP,
+	KeyDisk:       fetchDisk,
+	KeyUptime:     fetchUptime,
+	KeyPackages:   fetchPackages,
+}
+
+// defaultOrder defines the display order of readouts.
+var defaultOrder = []ReadoutKey{
+	KeyHost, KeyMachine, KeyKernel, KeyOS, KeyDistro, KeyDE, KeyWM,
+	KeyCPU, KeyCPULoad, KeyMemory, KeyBattery, KeyGPU, KeyResolution,
+	KeyShell, KeyTerminal, KeyLocalIP, KeyDisk, KeyUptime, KeyPackages,
+}
+
+// Collect gathers system readouts concurrently.
+// If keys is nil, all readouts are collected. Otherwise only the specified keys.
+func Collect(keys []ReadoutKey) Info {
+	order := defaultOrder
+	if keys != nil {
+		order = keys
 	}
 
-	results := make([]Readout, len(fetchers))
+	results := make([]Readout, len(order))
 	var wg sync.WaitGroup
-	for i, fn := range fetchers {
+	for i, key := range order {
+		fn, ok := allFetchers[key]
+		if !ok {
+			continue
+		}
 		wg.Add(1)
 		go func(idx int, f func() Readout) {
 			defer wg.Done()

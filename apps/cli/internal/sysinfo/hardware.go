@@ -6,12 +6,49 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+// modelNames maps hw.model identifiers to friendly names.
+// This avoids the slow system_profiler SPHardwareDataType call (~90ms).
+var modelNames = map[string]string{
+	"Mac14,2":   "MacBook Air",
+	"Mac14,7":   "MacBook Pro",
+	"Mac14,3":   "MacBook Pro",
+	"Mac14,5":   "MacBook Pro",
+	"Mac14,6":   "MacBook Pro",
+	"Mac14,9":   "MacBook Pro",
+	"Mac14,10":  "MacBook Pro",
+	"Mac14,15":  "MacBook Air",
+	"Mac15,3":   "MacBook Pro",
+	"Mac15,6":   "MacBook Pro",
+	"Mac15,7":   "MacBook Pro",
+	"Mac15,8":   "MacBook Pro",
+	"Mac15,9":   "MacBook Pro",
+	"Mac15,10":  "MacBook Pro",
+	"Mac15,11":  "MacBook Pro",
+	"Mac15,12":  "MacBook Air",
+	"Mac15,13":  "MacBook Air",
+	"Mac14,8":   "Mac Pro",
+	"Mac14,12":  "Mac mini",
+	"Mac14,13":  "Mac Studio",
+	"Mac14,14":  "Mac Studio",
+	"Mac15,4":   "iMac",
+	"Mac15,5":   "iMac",
+	"Mac16,1":   "MacBook Pro",
+	"Mac16,2":   "MacBook Pro",
+	"Mac16,3":   "MacBook Air",
+	"Mac16,5":   "MacBook Pro",
+	"Mac16,6":   "MacBook Pro",
+	"Mac16,7":   "MacBook Pro",
+	"Mac16,8":   "MacBook Pro",
+	"Mac16,10":  "Mac mini",
+	"Mac16,11":  "Mac mini",
+	"Mac16,12":  "iMac",
+}
 
 func fetchMachine() Readout {
 	out, err := exec.Command("sysctl", "-n", "hw.model").Output()
@@ -20,17 +57,22 @@ func fetchMachine() Readout {
 	}
 	model := strings.TrimSpace(string(out))
 
-	// Try to get a friendlier name from system_profiler
-	spOut, err := exec.Command("system_profiler", "SPHardwareDataType").Output()
-	if err == nil {
-		for _, line := range strings.Split(string(spOut), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "Model Name:") {
-				friendly := strings.TrimSpace(strings.TrimPrefix(line, "Model Name:"))
-				if friendly != "" {
-					return Readout{Key: KeyMachine, Value: friendly, Percent: -1}
-				}
-			}
+	if friendly, ok := modelNames[model]; ok {
+		return Readout{Key: KeyMachine, Value: friendly, Percent: -1}
+	}
+
+	// Fallback: try to extract a name from the model ID pattern
+	// e.g. "MacBookAir10,1" -> "MacBook Air"
+	for _, prefix := range []struct{ id, name string }{
+		{"MacBookAir", "MacBook Air"},
+		{"MacBookPro", "MacBook Pro"},
+		{"Macmini", "Mac mini"},
+		{"MacPro", "Mac Pro"},
+		{"iMac", "iMac"},
+		{"MacStudio", "Mac Studio"},
+	} {
+		if strings.HasPrefix(model, prefix.id) {
+			return Readout{Key: KeyMachine, Value: prefix.name, Percent: -1}
 		}
 	}
 
@@ -55,7 +97,8 @@ func fetchCPU() Readout {
 }
 
 func fetchCPULoad() Readout {
-	pcts, err := cpu.Percent(200*time.Millisecond, false)
+	// Use 0 duration for instant snapshot (avoids 200ms+ sleep).
+	pcts, err := cpu.Percent(0, false)
 	if err != nil || len(pcts) == 0 {
 		return Readout{Key: KeyCPULoad, Err: fmt.Errorf("cpu load: %w", err)}
 	}
