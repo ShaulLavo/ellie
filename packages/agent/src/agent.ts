@@ -61,6 +61,9 @@ export interface AgentOptions {
 
 	/** Guardrail policy with runtime limits. */
 	guardrails?: AgentGuardrailPolicy
+
+	/** Tool result truncation and overflow configuration. */
+	toolSafety?: AgentLoopConfig['toolSafety']
 }
 
 export class Agent {
@@ -79,6 +82,7 @@ export class Agent {
 	private steeringMode: 'all' | 'one-at-a-time'
 	private followUpMode: 'all' | 'one-at-a-time'
 	private guardrails?: AgentGuardrailPolicy
+	private toolSafety?: AgentLoopConfig['toolSafety']
 	public streamFn?: StreamFn
 	public adapter?: AnyTextAdapter
 	public onEvent?: (event: AgentEvent) => void
@@ -121,6 +125,7 @@ export class Agent {
 		this.onEvent = opts.onEvent
 		this.onTrace = opts.onTrace
 		this.guardrails = opts.guardrails
+		this.toolSafety = opts.toolSafety
 	}
 
 	get state(): AgentState {
@@ -419,7 +424,8 @@ export class Agent {
 				this.dequeueFollowUpMessages(),
 			onEvent: this.onEvent,
 			onTrace: this.onTrace,
-			runtimeLimits: this.guardrails?.runtimeLimits
+			runtimeLimits: this.guardrails?.runtimeLimits,
+			toolSafety: this.toolSafety
 		}
 
 		let partial: AgentMessage | null = null

@@ -75,7 +75,8 @@ export function wrapToolsForTanStack(
 	emit: EmitFn,
 	toolResultCollector: ToolResultMessage[],
 	maxToolResultChars?: number,
-	loopDetector?: ToolLoopDetector
+	loopDetector?: ToolLoopDetector,
+	overflowDir?: string
 ) {
 	for (const tool of tools) {
 		if (ANTHROPIC_RESERVED_TOOL_NAMES.has(tool.name)) {
@@ -203,7 +204,8 @@ export function wrapToolsForTanStack(
 			) {
 				result = truncateToolResult(
 					result,
-					maxToolResultChars
+					maxToolResultChars,
+					{ overflowDir, toolCallId }
 				)
 			}
 

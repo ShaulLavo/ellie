@@ -243,7 +243,8 @@ export async function processAgentStream(
 				emit,
 				toolResultCollector,
 				config.toolSafety?.maxToolResultChars ?? 50_000,
-				loopDetector
+				loopDetector,
+				config.toolSafety?.overflowDir
 			)
 		: undefined
 	const { abortController, cleanup } =

@@ -116,7 +116,8 @@ async function executeToolCallsWithSteering(
 			signal,
 			emit,
 			config.toolSafety?.maxToolResultChars ?? 50_000,
-			loopDetector
+			loopDetector,
+			config.toolSafety?.overflowDir
 		)
 		for (const tr of toolResults) {
 			currentContext.messages.push(tr)

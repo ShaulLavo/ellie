@@ -22,7 +22,8 @@ export async function executeToolCall(
 	signal: AbortSignal | undefined,
 	emit: EmitFn,
 	maxToolResultChars?: number,
-	loopDetector?: ToolLoopDetector
+	loopDetector?: ToolLoopDetector,
+	overflowDir?: string
 ): Promise<ToolResultMessage[]> {
 	const tool = tools.find(t => t.name === toolCall.name)
 
@@ -146,7 +147,14 @@ export async function executeToolCall(
 		maxToolResultChars &&
 		needsTruncation(result, maxToolResultChars)
 	) {
-		result = truncateToolResult(result, maxToolResultChars)
+		result = truncateToolResult(
+			result,
+			maxToolResultChars,
+			{
+				overflowDir,
+				toolCallId: toolCall.id
+			}
+		)
 	}
 
 	emit({
