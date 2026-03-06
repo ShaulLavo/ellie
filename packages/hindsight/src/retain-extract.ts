@@ -1,4 +1,4 @@
-import { chat, streamToText } from '@ellie/ai'
+import { chat, streamToText } from './traced-chat'
 import { ulid } from 'fast-ulid'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { RecursiveChunker } from '@chonkiejs/core'

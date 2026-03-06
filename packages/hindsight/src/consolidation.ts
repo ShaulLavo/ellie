@@ -13,7 +13,7 @@
  * tracked by proofCount, sourceMemoryIds, and history.
  */
 
-import { chat, streamToText } from '@ellie/ai'
+import { chat, streamToText } from './traced-chat'
 import { ulid } from 'fast-ulid'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import * as v from 'valibot'

@@ -143,5 +143,12 @@ export {
 	MAX_GIST_LENGTH
 } from './gist'
 
+// Trace context (ALS) for internal LLM call instrumentation
+export { hindsightTraceStore } from './trace-context'
+export type {
+	HindsightTraceContext,
+	HindsightLLMEvent
+} from './trace-context'
+
 export * as schema from './schema'
 export * as schemas from './schemas'

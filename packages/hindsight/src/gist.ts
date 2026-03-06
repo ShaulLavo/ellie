@@ -11,7 +11,7 @@
  * - plain text only
  */
 
-import { chat, streamToText } from '@ellie/ai'
+import { chat, streamToText } from './traced-chat'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { generateFallbackGist } from './context-pack'
 

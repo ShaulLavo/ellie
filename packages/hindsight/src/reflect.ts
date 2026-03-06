@@ -7,12 +7,8 @@
  * Utility — get_entity: cross-tier entity lookup
  */
 
-import {
-	chat,
-	streamToText,
-	maxIterations,
-	toolDefinition
-} from '@ellie/ai'
+import { chat, streamToText } from './traced-chat'
+import { maxIterations, toolDefinition } from '@ellie/ai'
 import { ulid } from 'fast-ulid'
 import { eq, and, inArray } from 'drizzle-orm'
 import * as v from 'valibot'

@@ -9,7 +9,7 @@ import {
 } from 'drizzle-orm'
 import { groqChat } from '@ellie/ai/openai-compat'
 import type { AnyTextAdapter } from '@tanstack/ai'
-import { chat, streamToText } from '@ellie/ai'
+import { chat, streamToText } from './traced-chat'
 import {
 	createHindsightDB,
 	type HindsightDatabase
