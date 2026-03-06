@@ -95,6 +95,15 @@ function initStores(dataDir: string): StoresContext {
 		}
 	}
 
+	// Recover stale streaming events (tools stuck as 'running',
+	// messages stuck as 'streaming') from a previous crash.
+	const recovered = eventStore.recoverStaleStreamingEvents()
+	if (recovered.tools || recovered.messages) {
+		console.log(
+			`[server] recovered stale streaming events: ${recovered.tools} tool(s), ${recovered.messages} message(s)`
+		)
+	}
+
 	return { eventStore, store }
 }
 

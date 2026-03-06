@@ -379,6 +379,40 @@ export class EventStore {
 		}>
 	}
 
+	// ── Stale event recovery ─────────────────────────────────────────────
+
+	/**
+	 * Mark any in-flight tool_execution (status='running') as 'error'
+	 * and any in-flight assistant_message (streaming=true) as finalized.
+	 * Called at startup to clean up after a crash.
+	 */
+	recoverStaleStreamingEvents(): {
+		tools: number
+		messages: number
+	} {
+		const toolResult = this.sqlite.run(
+			`UPDATE events
+			 SET payload = json_set(
+				json_set(payload, '$.status', 'error'),
+				'$.isError', json('true')
+			 )
+			 WHERE type = 'tool_execution'
+			   AND json_extract(payload, '$.status') = 'running'`
+		)
+
+		const msgResult = this.sqlite.run(
+			`UPDATE events
+			 SET payload = json_set(payload, '$.streaming', json('false'))
+			 WHERE type = 'assistant_message'
+			   AND json_extract(payload, '$.streaming') = json('true')`
+		)
+
+		return {
+			tools: toolResult.changes,
+			messages: msgResult.changes
+		}
+	}
+
 	// ── Bootstrap state ──────────────────────────────────────────────────
 
 	getBootstrapState(
