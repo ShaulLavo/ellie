@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 )
@@ -53,6 +54,12 @@ var rootCmd = &cobra.Command{
 	},
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		m := newInteractiveModel(cmd)
+		p := tea.NewProgram(m)
+		_, err := p.Run()
+		return err
+	},
 }
 
 func init() {
@@ -60,6 +67,7 @@ func init() {
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(sysinfoCmd)
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authClearCmd)
