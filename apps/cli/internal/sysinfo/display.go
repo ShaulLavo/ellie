@@ -1,6 +1,7 @@
 package sysinfo
 
 import (
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -12,8 +13,6 @@ var (
 	colorAccent = lipgloss.Color(charmtone.Guac.Hex())
 	colorMuted  = lipgloss.Color(charmtone.Squid.Hex())
 	colorValue  = lipgloss.Color(charmtone.Oyster.Hex())
-	colorLogo   = lipgloss.Color(charmtone.Anchovy.Hex())
-
 	keyStyle = lipgloss.NewStyle().
 			Foreground(colorAccent).
 			Bold(true).
@@ -26,9 +25,14 @@ var (
 	valStyle = lipgloss.NewStyle().
 			Foreground(colorValue)
 
-	logoStyle = lipgloss.NewStyle().
-			Foreground(colorLogo).
-			MarginRight(3)
+	// Apple rainbow gradient — green, yellow, red, magenta, blue (top to bottom).
+	logoColors = []color.Color{
+		lipgloss.Color("#34C759"), // green
+		lipgloss.Color("#FFCC00"), // yellow
+		lipgloss.Color("#FF3B30"), // red
+		lipgloss.Color("#AF52DE"), // magenta
+		lipgloss.Color("#007AFF"), // blue
+	}
 )
 
 // keyLabels maps ReadoutKey to its display label.
@@ -75,10 +79,19 @@ func Render(info Info) string {
 		return infoBlock + "\n"
 	}
 
-	// Color the logo
+	// Color the logo with rainbow gradient (3 lines per color band)
+	linesPerBand := len(logoLines) / len(logoColors)
+	if linesPerBand < 1 {
+		linesPerBand = 1
+	}
 	var coloredLogo []string
-	for _, l := range logoLines {
-		coloredLogo = append(coloredLogo, logoStyle.Render(l))
+	for i, l := range logoLines {
+		band := i / linesPerBand
+		if band >= len(logoColors) {
+			band = len(logoColors) - 1
+		}
+		style := lipgloss.NewStyle().Foreground(logoColors[band]).MarginRight(3)
+		coloredLogo = append(coloredLogo, style.Render(l))
 	}
 	logoBlock := strings.Join(coloredLogo, "\n")
 
