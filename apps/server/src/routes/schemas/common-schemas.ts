@@ -6,11 +6,19 @@ import * as v from 'valibot'
 
 export const errorSchema = v.object({ error: v.string() })
 
+const attachmentInputSchema = v.object({
+	uploadId: v.string(),
+	mime: v.string(),
+	size: v.number(),
+	name: v.string()
+})
+
 export const messageInputSchema = v.object({
 	content: v.string(),
 	role: v.optional(
 		v.picklist([`user`, `assistant`, `system`])
-	)
+	),
+	attachments: v.optional(v.array(attachmentInputSchema))
 })
 
 export type MessageInput = v.InferOutput<

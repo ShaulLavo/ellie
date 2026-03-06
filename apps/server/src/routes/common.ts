@@ -60,7 +60,9 @@ export function normalizeMessageInput(
 	body: MessageInput
 ): MessageInput {
 	const content = body.content.trim()
-	if (content.length === 0) {
+	const hasAttachments =
+		body.attachments && body.attachments.length > 0
+	if (content.length === 0 && !hasAttachments) {
 		throw new BadRequestError(
 			`Missing 'content' field in request body`
 		)
@@ -68,7 +70,8 @@ export function normalizeMessageInput(
 
 	return {
 		content,
-		role: body.role
+		role: body.role,
+		attachments: body.attachments
 	}
 }
 

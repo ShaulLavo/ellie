@@ -82,28 +82,6 @@ import {
 // Helpers
 // ============================================================================
 
-const convertBlobUrlToDataUrl = async (
-	url: string
-): Promise<string | null> => {
-	try {
-		const response = await fetch(url)
-		const blob = await response.blob()
-		// FileReader uses callback-based API, wrapping in Promise is necessary
-		// oxlint-disable-next-line eslint-plugin-promise(avoid-new)
-		return new Promise(resolve => {
-			const reader = new FileReader()
-			// oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
-			reader.onloadend = () =>
-				resolve(reader.result as string)
-			// oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
-			reader.onerror = () => resolve(null)
-			reader.readAsDataURL(blob)
-		})
-	} catch {
-		return null
-	}
-}
-
 // ============================================================================
 // Provider Context & Types
 // ============================================================================
@@ -204,7 +182,8 @@ export const PromptInputProvider = ({
 				id: nanoid(),
 				mediaType: file.type,
 				type: 'file' as const,
-				url: URL.createObjectURL(file)
+				url: URL.createObjectURL(file),
+				rawFile: file
 			}))
 		])
 	}, [])
@@ -536,7 +515,8 @@ export const PromptInput = ({
 						id: nanoid(),
 						mediaType: file.type,
 						type: 'file',
-						url: URL.createObjectURL(file)
+						url: URL.createObjectURL(file),
+						rawFile: file
 					})
 				}
 				return [...prev, ...next]
@@ -749,22 +729,10 @@ export const PromptInput = ({
 				}
 
 				try {
-					// Convert blob URLs to data URLs asynchronously
-					const convertedFiles: FileUIPart[] =
-						await Promise.all(
-							files.map(async ({ id: _id, ...item }) => {
-								if (item.url?.startsWith('blob:')) {
-									const dataUrl =
-										await convertBlobUrlToDataUrl(item.url)
-									// If conversion failed, keep the original blob URL
-									return {
-										...item,
-										url: dataUrl ?? item.url
-									}
-								}
-								return item
-							})
-						)
+					// Strip internal `id` field, keep rawFile for TUS upload
+					const convertedFiles: FileUIPart[] = files.map(
+						({ id: _id, ...item }) => item
+					)
 
 					const result = onSubmit(
 						{ files: convertedFiles, text },

@@ -51,20 +51,36 @@ export function toModelMessages(
 function userToModelMessage(
 	msg: UserMessage
 ): ModelMessage {
-	const content = msg.content.map((c): ContentPart => {
+	const content: ContentPart[] = []
+	for (const c of msg.content) {
 		if (c.type === 'text') {
-			return { type: 'text', content: c.text }
+			content.push({ type: 'text', content: c.text })
+		} else if (
+			c.type === 'image' &&
+			'data' in c &&
+			c.data
+		) {
+			// Base64 image (inline or file-reference with embedded data)
+			const mimeType =
+				('mimeType' in c ? c.mimeType : undefined) ??
+				('mime' in c ? (c.mime as string) : 'image/png')
+			content.push({
+				type: 'image',
+				source: {
+					type: 'data',
+					value: c.data,
+					mimeType
+				}
+			})
+		} else if ('file' in c) {
+			// File-reference attachment — describe as text for the model
+			const name = 'name' in c ? (c.name as string) : c.type
+			content.push({
+				type: 'text',
+				content: `[Attached ${c.type}: ${name}]`
+			})
 		}
-		// ImageContent
-		return {
-			type: 'image',
-			source: {
-				type: 'data',
-				value: c.data,
-				mimeType: c.mimeType
-			}
-		}
-	})
+	}
 
 	return { role: 'user', content }
 }

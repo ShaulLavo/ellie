@@ -25,6 +25,41 @@ export const imageContentSchema = v.object({
 	mimeType: v.string()
 })
 
+// File-reference content schemas (for TUS upload attachments)
+export const imageFileContentSchema = v.object({
+	type: v.literal('image'),
+	file: v.string(),
+	mime: v.string(),
+	size: v.number(),
+	name: v.optional(v.string()),
+	data: v.optional(v.string()),
+	mimeType: v.optional(v.string())
+})
+
+export const videoFileContentSchema = v.object({
+	type: v.literal('video'),
+	file: v.string(),
+	mime: v.string(),
+	size: v.number(),
+	name: v.optional(v.string())
+})
+
+export const audioFileContentSchema = v.object({
+	type: v.literal('audio'),
+	file: v.string(),
+	mime: v.string(),
+	size: v.number(),
+	name: v.optional(v.string())
+})
+
+export const fileContentSchema = v.object({
+	type: v.literal('file'),
+	file: v.string(),
+	mime: v.string(),
+	size: v.number(),
+	name: v.optional(v.string())
+})
+
 export const toolCallSchema = v.object({
 	type: v.literal('toolCall'),
 	id: v.string(),
@@ -68,9 +103,13 @@ const usageSchema = v.object({
 export const userMessageSchema = v.object({
 	role: v.literal('user'),
 	content: v.array(
-		v.variant('type', [
+		v.union([
 			textContentSchema,
-			imageContentSchema
+			imageContentSchema,
+			imageFileContentSchema,
+			videoFileContentSchema,
+			audioFileContentSchema,
+			fileContentSchema
 		])
 	),
 	timestamp: v.number()

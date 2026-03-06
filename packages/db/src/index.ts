@@ -2,6 +2,10 @@
 export { openDatabase } from './init'
 export { LogFile } from './log'
 export { EventStore } from './event-store'
+export {
+	DURABLE_EVENT_TYPES,
+	isDurableEventType
+} from './event-schemas'
 export type {
 	EventType,
 	AppendInput,

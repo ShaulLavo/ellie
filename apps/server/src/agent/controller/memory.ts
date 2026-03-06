@@ -6,7 +6,6 @@
  */
 
 import type { Agent } from '@ellie/agent'
-import type { EventPayloadMap } from '@ellie/db'
 import type {
 	BlobSink,
 	TraceRecorder,
@@ -77,13 +76,6 @@ export async function runRecall(
 				: await runMemoryRecall()
 		if (!result) return
 
-		deps.store.appendEvent(
-			sessionId,
-			'memory_recall',
-			result.payload as EventPayloadMap['memory_recall'],
-			runId
-		)
-
 		if (result.contextBlock) {
 			deps.agent.state.systemPrompt =
 				deps.baseSystemPrompt + '\n\n' + result.contextBlock
@@ -97,19 +89,6 @@ export async function runRecall(
 			err,
 			'warn'
 		)
-		try {
-			deps.store.appendEvent(
-				sessionId,
-				'error',
-				{
-					message: `Memory recall failed: ${err instanceof Error ? err.message : String(err)}`,
-					code: 'memory_recall_failed'
-				},
-				runId
-			)
-		} catch {
-			// Best-effort error event
-		}
 	}
 }
 
@@ -149,13 +128,6 @@ export async function runRetain(
 					)
 				: await runMemoryRetain()
 		if (!result) return 0
-
-		deps.store.appendEvent(
-			sessionId,
-			'memory_retain',
-			result as EventPayloadMap['memory_retain'],
-			runId
-		)
 
 		return result.parts[0]?.factsStored ?? 0
 	} catch (err) {

@@ -4,7 +4,8 @@ export type {
 	BlobRef,
 	BlobSink,
 	BlobWriteOptions,
-	TraceScope
+	TraceScope,
+	TraceKind
 } from './types'
 
 // Scope factories
@@ -18,7 +19,10 @@ export {
 } from './blob-sink'
 
 // Recorder
-export { TraceRecorder } from './recorder'
+export {
+	TraceRecorder,
+	type TraceIndexEntry
+} from './recorder'
 
 // Traced facades
 export {

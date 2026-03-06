@@ -36,7 +36,15 @@ interface StreamConnectionResult {
 	streamingMessage: StoredChatMessage | null
 	sessionStats: SessionStats
 	isAgentRunning: boolean
-	sendMessage: (text: string) => Promise<void>
+	sendMessage: (
+		text: string,
+		attachments?: {
+			uploadId: string
+			mime: string
+			size: number
+			name: string
+		}[]
+	) => Promise<void>
 	clearSession: () => Promise<void>
 	retry: () => void
 }
@@ -252,14 +260,29 @@ export function useStreamConnection(
 		}
 	}, [sessionId, syncWrite, syncReplaceAll])
 
-	const sendMessage = useCallback(async (text: string) => {
-		try {
-			await streamRef.current?.sendMessage(text)
-		} catch (err) {
-			console.error('[chat-db] Send failed:', err)
-			setError('Failed to send message')
-		}
-	}, [])
+	const sendMessage = useCallback(
+		async (
+			text: string,
+			attachments?: {
+				uploadId: string
+				mime: string
+				size: number
+				name: string
+			}[]
+		) => {
+			try {
+				await streamRef.current?.sendMessage(
+					text,
+					undefined,
+					attachments
+				)
+			} catch (err) {
+				console.error('[chat-db] Send failed:', err)
+				setError('Failed to send message')
+			}
+		},
+		[]
+	)
 
 	const clearSession = useCallback(async () => {
 		try {

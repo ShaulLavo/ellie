@@ -9,6 +9,7 @@ function makeEnvelope(
 		eventId: 'evt-1',
 		traceId: 'trace-1',
 		spanId: 'span-1',
+		traceKind: 'chat',
 		kind: 'test',
 		ts: 1000,
 		seq: 0,
@@ -19,11 +20,10 @@ function makeEnvelope(
 }
 
 describe('projectTraceToEvents', () => {
-	test('maps tool.start to tool_execution_start', () => {
+	test('filters out tool.start because it is not durable', () => {
 		const events = [makeEnvelope({ kind: 'tool.start' })]
 		const projected = projectTraceToEvents(events)
-		expect(projected).toHaveLength(1)
-		expect(projected[0].type).toBe('tool_execution_start')
+		expect(projected).toHaveLength(0)
 	})
 
 	test('maps tool.end to tool_execution', () => {
@@ -42,29 +42,26 @@ describe('projectTraceToEvents', () => {
 		expect(projected[0].type).toBe('assistant_message')
 	})
 
-	test('maps model.error to error', () => {
+	test('filters out model.error because errors are reconstructed from messages/traces', () => {
 		const events = [makeEnvelope({ kind: 'model.error' })]
 		const projected = projectTraceToEvents(events)
-		expect(projected).toHaveLength(1)
-		expect(projected[0].type).toBe('error')
+		expect(projected).toHaveLength(0)
 	})
 
-	test('maps memory.recall.end to memory_recall', () => {
+	test('filters out memory.recall.end because memory diagnostics are trace-only', () => {
 		const events = [
 			makeEnvelope({ kind: 'memory.recall.end' })
 		]
 		const projected = projectTraceToEvents(events)
-		expect(projected).toHaveLength(1)
-		expect(projected[0].type).toBe('memory_recall')
+		expect(projected).toHaveLength(0)
 	})
 
-	test('maps memory.retain.end to memory_retain', () => {
+	test('filters out memory.retain.end because memory diagnostics are trace-only', () => {
 		const events = [
 			makeEnvelope({ kind: 'memory.retain.end' })
 		]
 		const projected = projectTraceToEvents(events)
-		expect(projected).toHaveLength(1)
-		expect(projected[0].type).toBe('memory_retain')
+		expect(projected).toHaveLength(0)
 	})
 
 	test('maps repl.end to tool_execution', () => {
@@ -81,11 +78,11 @@ describe('projectTraceToEvents', () => {
 		expect(projected[0].type).toBe('user_message')
 	})
 
-	test('maps control.abort to abort', () => {
+	test('maps control.abort to run_closed', () => {
 		const events = [makeEnvelope({ kind: 'control.abort' })]
 		const projected = projectTraceToEvents(events)
 		expect(projected).toHaveLength(1)
-		expect(projected[0].type).toBe('abort')
+		expect(projected[0].type).toBe('run_closed')
 	})
 
 	test('filters out trace-only events', () => {
@@ -149,10 +146,9 @@ describe('projectTraceToEvents', () => {
 			makeEnvelope({ kind: 'tool.end', seq: 5 })
 		]
 		const projected = projectTraceToEvents(events)
-		expect(projected).toHaveLength(3)
+		expect(projected).toHaveLength(2)
 		expect(projected[0].type).toBe('assistant_message')
-		expect(projected[1].type).toBe('tool_execution_start')
-		expect(projected[2].type).toBe('tool_execution')
+		expect(projected[1].type).toBe('tool_execution')
 	})
 
 	test('returns empty array for empty input', () => {

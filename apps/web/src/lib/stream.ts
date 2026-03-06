@@ -84,16 +84,29 @@ export class StreamClient {
 		this.openSSE()
 	}
 
-	/** Send a user message */
+	/** Send a user message with optional file attachments */
 	async sendMessage(
 		content: string,
-		role?: 'user' | 'assistant' | 'system'
+		role?: 'user' | 'assistant' | 'system',
+		attachments?: {
+			uploadId: string
+			mime: string
+			size: number
+			name: string
+		}[]
 	): Promise<void> {
 		const { error } = await eden
 			.chat({
 				sessionId: this.sessionId
 			})
-			.messages.post({ content, role })
+			.messages.post({
+				content,
+				role,
+				attachments:
+					attachments && attachments.length > 0
+						? attachments
+						: undefined
+			})
 		if (error) throw error
 	}
 

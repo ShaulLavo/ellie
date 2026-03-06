@@ -30,9 +30,8 @@ export function useTerminal(
 			| ((e: KeyboardEvent) => void)
 			| null = null
 		let clipDiv: HTMLDivElement | null = null
-		let pasteHandler:
-			| ((e: ClipboardEvent) => void)
-			| null = null
+		let pasteHandler: ((e: ClipboardEvent) => void) | null =
+			null
 		let disposed = false
 		const container = containerRef.current
 
@@ -155,8 +154,7 @@ export function useTerminal(
 			pasteHandler = (e: ClipboardEvent) => {
 				e.preventDefault()
 				e.stopImmediatePropagation()
-				const text =
-					e.clipboardData?.getData('text/plain')
+				const text = e.clipboardData?.getData('text/plain')
 				if (!text || !ws) return
 				ws.send({
 					type: 'input',
@@ -166,11 +164,9 @@ export function useTerminal(
 
 			// Register both BEFORE term.open() so they fire
 			// before ghostty-web's capture handlers.
-			document.addEventListener(
-				'keydown',
-				keydownHandler,
-				{ capture: true }
-			)
+			document.addEventListener('keydown', keydownHandler, {
+				capture: true
+			})
 			document.addEventListener('paste', pasteHandler, {
 				capture: true
 			})
@@ -239,10 +235,7 @@ export function useTerminal(
 					elapsed < 400
 						? 1
 						: Math.min(
-								1 +
-									Math.floor(
-										(elapsed - 400) / 200
-									),
+								1 + Math.floor((elapsed - 400) / 200),
 								5
 							)
 
@@ -260,10 +253,7 @@ export function useTerminal(
 
 			// ── Click-to-focus ───────────────────────────────────
 			clickHandler = () => clipDiv?.focus()
-			container.addEventListener(
-				'mousedown',
-				clickHandler
-			)
+			container.addEventListener('mousedown', clickHandler)
 
 			observer = new ResizeObserver(() => fitAddon?.fit())
 			observer.observe(container)

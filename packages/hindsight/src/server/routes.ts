@@ -15,6 +15,15 @@ import {
 	updateBankInputSchema
 } from '@ellie/schemas/hindsight'
 import { tryValibotSummary } from '@ellie/schemas'
+
+type TraceKind =
+	| 'chat'
+	| 'follow-up'
+	| 'hindsight-recall'
+	| 'hindsight-retain'
+	| 'hindsight-retain-batch'
+	| 'hindsight-reflect'
+	| 'hindsight-narrative'
 import type { Hindsight } from '../hindsight'
 import type {
 	BankConfig,
@@ -48,6 +57,7 @@ export interface HindsightRouteTraceScope {
 	spanId: string
 	parentSpanId?: string
 	sessionId?: string
+	traceKind: TraceKind
 }
 
 /** Callback to record a trace event. Injected by the server. */
@@ -60,7 +70,8 @@ export type HindsightRouteTraceRecordFn = (
 
 /** Scope factory functions, injected by the server. */
 export interface HindsightRouteTraceFactory {
-	createRootScope: (opts?: {
+	createRootScope: (opts: {
+		traceKind: TraceKind
 		sessionId?: string
 	}) => HindsightRouteTraceScope
 	createChildScope: (
@@ -82,26 +93,47 @@ const TRACED_OPERATIONS = new Set([
 	'narrative'
 ])
 
+/** Map hindsight operation name to trace kind. */
+const HINDSIGHT_OP_TO_TRACE_KIND: Record<string, TraceKind> = {
+	recall: 'hindsight-recall',
+	retain: 'hindsight-retain',
+	retainBatch: 'hindsight-retain-batch',
+	reflect: 'hindsight-reflect',
+	narrative: 'hindsight-narrative'
+}
+
 function extractTraceScope(
 	trace: HindsightRouteTraceContext,
-	request?: Request
-): HindsightRouteTraceScope {
+	request: Request | undefined,
+	operationName: string
+): { scope: HindsightRouteTraceScope; isNewRoot: boolean } {
 	const traceId = request?.headers.get('x-trace-id')
 	const parentSpanId = request?.headers.get(
 		'x-parent-span-id'
 	)
 	const sessionId = request?.headers.get('x-session-id')
+	const traceKind =
+		HINDSIGHT_OP_TO_TRACE_KIND[operationName] ??
+		'hindsight-recall'
 
 	if (traceId && parentSpanId) {
 		return {
-			traceId,
-			spanId: parentSpanId,
-			sessionId: sessionId ?? undefined
+			scope: {
+				traceId,
+				spanId: parentSpanId,
+				sessionId: sessionId ?? undefined,
+				traceKind
+			},
+			isNewRoot: false
 		}
 	}
-	return trace.factory.createRootScope({
-		sessionId: sessionId ?? undefined
-	})
+	return {
+		scope: trace.factory.createRootScope({
+			traceKind,
+			sessionId: sessionId ?? undefined
+		}),
+		isNewRoot: true
+	}
 }
 
 const bankParamsSchema = v.object({ bankId: v.string() })
@@ -710,7 +742,17 @@ export function createHindsightApp(
 			return handler(input, params)
 		}
 
-		const parentScope = extractTraceScope(trace, request)
+		const { scope: parentScope, isNewRoot } =
+			extractTraceScope(trace, request, name)
+
+		// Emit trace.root for direct hindsight calls (no propagated headers)
+		if (isNewRoot) {
+			trace.record(parentScope, 'trace.root', 'hindsight', {
+				operation: name,
+				bankId: params.bankId
+			})
+		}
+
 		const childScope =
 			trace.factory.createChildScope(parentScope)
 		const startedAt = Date.now()

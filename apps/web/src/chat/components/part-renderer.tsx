@@ -1,6 +1,7 @@
 import { memo } from 'react'
-import { BookOpenIcon } from 'lucide-react'
+import { BookOpenIcon, FileTextIcon } from 'lucide-react'
 import type { ContentPart } from '@ellie/schemas/chat'
+import { env } from '@ellie/env/client'
 import {
 	MessageResponse,
 	StreamingMessageResponse
@@ -159,6 +160,60 @@ export const PartRenderer = memo(
 					</Reasoning>
 				)
 			}
+			case 'image':
+				return (
+					<div className="my-2 max-w-sm">
+						<img
+							src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+							alt={
+								(part as ContentPart & { name?: string })
+									.name ?? 'Image'
+							}
+							className="max-h-80 rounded-lg object-contain"
+							loading="lazy"
+						/>
+					</div>
+				)
+			case 'video':
+				return (
+					<div className="my-2 max-w-sm">
+						<video
+							src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+							controls
+							className="max-h-80 rounded-lg"
+						/>
+					</div>
+				)
+			case 'audio':
+				return (
+					<div className="my-2">
+						<audio
+							src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+							controls
+							className="w-full max-w-sm"
+						/>
+					</div>
+				)
+			case 'file':
+				return (
+					<a
+						href={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
+						download={part.name}
+					>
+						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
+						<div className="min-w-0">
+							<span className="block truncate font-medium">
+								{part.name ?? 'Attachment'}
+							</span>
+							<span className="text-xs text-muted-foreground">
+								{part.mime}
+							</span>
+						</div>
+					</a>
+				)
 			case 'artifact':
 				return (
 					<div className="rounded-lg border border-border/50 p-3 text-sm">

@@ -6,6 +6,7 @@ import type {
 	AgentMessage,
 	SessionRow
 } from '@ellie/db'
+import { isDurableEventType } from '@ellie/db'
 
 export type SessionEvent =
 	| { type: 'append'; event: EventRow }
@@ -179,6 +180,19 @@ export class RealtimeStore {
 		runId?: string,
 		dedupeKey?: string
 	): EventRow {
+		if (!isDurableEventType(type)) {
+			return {
+				id: -1,
+				sessionId,
+				seq: -1,
+				runId: runId ?? null,
+				type,
+				payload: JSON.stringify(payload),
+				dedupeKey: dedupeKey ?? null,
+				createdAt: Date.now()
+			}
+		}
+
 		const row = this.#store.append({
 			sessionId,
 			type,
@@ -248,6 +262,7 @@ export class RealtimeStore {
 	// ── Agent run lifecycle ───────────────────────────────────────────────
 
 	closeAgentRun(sessionId: string, runId: string): void {
+		if (this.isAgentRunClosed(sessionId, runId)) return
 		this.appendEvent(
 			sessionId,
 			'run_closed',

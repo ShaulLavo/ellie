@@ -50,7 +50,8 @@ export const app = new Elysia()
 			ctx.store,
 			ctx.sseState,
 			ctx.getAgentController,
-			ctx.ensureBootstrap
+			ctx.ensureBootstrap,
+			ctx.uploadStore
 		)
 	)
 	.use(

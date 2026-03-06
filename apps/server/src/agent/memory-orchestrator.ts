@@ -7,8 +7,8 @@
  *   2. **Retain**: After the agent completes (or on long turns), chunk
  *      unprocessed transcript events and store them as memories.
  *
- * Memory operations emit first-class `memory_recall` / `memory_retain`
- * events — never synthetic tool_execution rows.
+ * Memory operations return payloads for tracing and prompt injection.
+ * They no longer write first-class session DB rows.
  */
 
 import type {

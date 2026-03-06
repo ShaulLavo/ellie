@@ -38,9 +38,7 @@ export function ChatMessageList({
 									key={msg.id}
 									message={msg}
 									toolResults={toolResults}
-									consumedToolCallIds={
-										consumedToolCallIds
-									}
+									consumedToolCallIds={consumedToolCallIds}
 								/>
 							)
 						)}
@@ -52,9 +50,7 @@ export function ChatMessageList({
 									key={streamingMessage.id}
 									message={streamingMessage}
 									toolResults={toolResults}
-									consumedToolCallIds={
-										consumedToolCallIds
-									}
+									consumedToolCallIds={consumedToolCallIds}
 								/>
 							)}
 					</>

@@ -29,31 +29,12 @@ describe('runRecall tracing', () => {
 
 		const recorder = new TraceRecorder(traceDir)
 		const scope = createRootScope({
+			traceKind: 'chat',
 			sessionId: 'session-1',
 			runId: 'run-1'
 		})
-		const storedEvents: Array<{
-			sessionId: string
-			type: string
-			payload: unknown
-			runId?: string
-		}> = []
 		const deps = {
-			store: {
-				appendEvent: (
-					sessionId: string,
-					type: string,
-					payload: unknown,
-					runId?: string
-				) => {
-					storedEvents.push({
-						sessionId,
-						type,
-						payload,
-						runId
-					})
-				}
-			} as unknown as RealtimeStore,
+			store: {} as RealtimeStore,
 			memory: {
 				async recall(query: string) {
 					const ctx = hindsightTraceStore.getStore()
@@ -167,12 +148,6 @@ describe('runRecall tracing', () => {
 					argsJson: '{"query":"alpha"}'
 				}
 			]
-		})
-		expect(storedEvents).toHaveLength(1)
-		expect(storedEvents[0]).toMatchObject({
-			sessionId: 'session-1',
-			type: 'memory_recall',
-			runId: 'run-1'
 		})
 		expect(
 			(

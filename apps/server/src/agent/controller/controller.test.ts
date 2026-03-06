@@ -340,15 +340,15 @@ describe('AgentController', () => {
 			})
 			const types = events.map(e => e.type)
 
-			// Run completes normally — no limit_hit since 1 < 10
+			// Run completes normally with only durable lifecycle rows.
 			expect(types).toContain('agent_start')
-			expect(types).toContain('agent_end')
+			expect(types).toContain('run_closed')
 			expect(types).not.toContain('limit_hit')
 		} finally {
 		}
 	})
 
-	test('memory_recall event emitted before agent_start', async () => {
+	test('memory diagnostics stay out of the durable session DB', async () => {
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -379,56 +379,15 @@ describe('AgentController', () => {
 			})
 			const types = events.map(e => e.type)
 
-			// memory_recall should appear before agent_start
-			const recallIdx = types.indexOf('memory_recall')
-			const agentStartIdx = types.indexOf('agent_start')
-
-			expect(recallIdx).toBeGreaterThanOrEqual(0)
-			expect(agentStartIdx).toBeGreaterThan(recallIdx)
+			expect(types).toContain('agent_start')
+			expect(types).toContain('run_closed')
+			expect(types).not.toContain('memory_recall')
+			expect(types).not.toContain('memory_retain')
 		} finally {
 		}
 	})
 
-	test('memory_retain event emitted after agent_end', async () => {
-		store.ensureSession('session-1')
-		store.appendEvent('session-1', 'user_message', {
-			role: 'user',
-			content: [{ type: 'text', text: 'Hello' }],
-			timestamp: Date.now()
-		})
-
-		const memoryController = new AgentController(store, {
-			adapter: createMockAdapter(),
-			workspaceDir,
-			dataDir: tmpDir,
-			memory: createMockMemory()
-		})
-
-		try {
-			await memoryController.handleMessage(
-				'session-1',
-				'Hello'
-			)
-
-			// Wait for agent to complete and retain to fire
-			await new Promise(r => setTimeout(r, 1000))
-
-			const events = eventStore.query({
-				sessionId: 'session-1'
-			})
-			const types = events.map(e => e.type)
-
-			// memory_retain should appear after agent_end
-			const retainIdx = types.indexOf('memory_retain')
-			const agentEndIdx = types.indexOf('agent_end')
-
-			expect(agentEndIdx).toBeGreaterThanOrEqual(0)
-			expect(retainIdx).toBeGreaterThan(agentEndIdx)
-		} finally {
-		}
-	})
-
-	test('memory_recall payload is correctly persisted', async () => {
+	test('memory recall payload is not persisted to the session DB', async () => {
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -456,15 +415,40 @@ describe('AgentController', () => {
 				types: ['memory_recall']
 			})
 
-			expect(recallEvents).toHaveLength(1)
+			expect(recallEvents).toHaveLength(0)
+		} finally {
+		}
+	})
 
-			const payload = JSON.parse(
-				recallEvents[0]!.payload as string
+	test('memory retain payload is not persisted to the session DB', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		const memoryController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			dataDir: tmpDir,
+			memory: createMockMemory()
+		})
+
+		try {
+			await memoryController.handleMessage(
+				'session-1',
+				'Hello'
 			)
-			expect(payload.parts[0].type).toBe('memory')
-			expect(payload.parts[0].count).toBe(1)
-			expect(payload.query).toBe('test query')
-			expect(payload.bankIds).toContain('bank-1')
+
+			await new Promise(r => setTimeout(r, 1000))
+
+			const retainEvents = eventStore.query({
+				sessionId: 'session-1',
+				types: ['memory_retain']
+			})
+
+			expect(retainEvents).toHaveLength(0)
 		} finally {
 		}
 	})
@@ -495,9 +479,10 @@ describe('AgentController', () => {
 		expect(types).not.toContain('memory_recall')
 		expect(types).not.toContain('memory_retain')
 		expect(types).toContain('agent_start')
+		expect(types).toContain('run_closed')
 	})
 
-	test('limit_hit event is persisted when guardrail triggers', async () => {
+	test('guardrail diagnostics stay out of the durable session DB', async () => {
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -549,21 +534,8 @@ describe('AgentController', () => {
 			const types = events.map(e => e.type)
 
 			expect(types).toContain('agent_start')
-			expect(types).toContain('agent_end')
-
-			// The pre-call checkpoint fires before the second model call
-			// because modelCallCount(2) > maxModelCalls(1)
-			expect(types).toContain('limit_hit')
-
-			// Verify the limit_hit payload
-			const limitHitRow = events.find(
-				e => e.type === 'limit_hit'
-			)
-			expect(limitHitRow).toBeDefined()
-			const payload = JSON.parse(
-				limitHitRow!.payload as string
-			) as { limit: string }
-			expect(payload.limit).toBe('max_model_calls')
+			expect(types).toContain('run_closed')
+			expect(types).not.toContain('limit_hit')
 		} finally {
 		}
 	})

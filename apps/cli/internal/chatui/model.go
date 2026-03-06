@@ -78,6 +78,10 @@ type Model struct {
 	// prevent accidental sideways drift during vertical scrolls.
 	lastVerticalWheel time.Time
 
+	// Last time we got any sign of life from the server (SSE event, etc.).
+	// If recent enough, we skip the health poll HTTP request.
+	lastServerActivity time.Time
+
 	// Render cache for non-streaming messages (keyed by message ID).
 	msgRenderCache      map[string]string
 	msgRenderCacheWidth int
@@ -138,11 +142,16 @@ func NewModel(baseURL, sessionID, transcriptDir string) Model {
 // healthPollMsg carries the result of a periodic /api/status check.
 type healthPollMsg struct{ reachable bool }
 
-const healthPollInterval = 3 * time.Second
+const healthPollInterval = 1 * time.Second
 
 func (m *Model) healthPollTick() tea.Cmd {
 	client := m.httpClient
+	lastActivity := m.lastServerActivity
 	return tea.Tick(healthPollInterval, func(_ time.Time) tea.Msg {
+		// Skip the HTTP call if we got any sign of life recently.
+		if time.Since(lastActivity) < healthPollInterval {
+			return healthPollMsg{reachable: true}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), healthPollInterval)
 		defer cancel()
 		_, err := client.GetStatus(ctx)
@@ -245,6 +254,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── SSE events ────────────────────────────────────────────
 
 	case sseStateMsg:
+		m.lastServerActivity = time.Now()
 		m.connState = msg.State
 		if msg.State == StateConnected {
 			m.connError = ""
@@ -274,6 +284,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case healthPollMsg:
+		if msg.reachable {
+			m.lastServerActivity = time.Now()
+		}
 		if !msg.reachable && m.connState == StateConnected {
 			// Server went away — show overlay immediately
 			m.connState = StateConnecting
@@ -289,12 +302,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.healthPollTick()
 
 	case sseSnapshotMsg:
+		m.lastServerActivity = time.Now()
 		return m.handleSnapshot(msg.Events)
 
 	case sseAppendMsg:
+		m.lastServerActivity = time.Now()
 		return m.handleAppend(msg.Event)
 
 	case sseUpdateMsg:
+		m.lastServerActivity = time.Now()
 		return m.handleUpdate(msg.Event)
 
 	// ── Async results ─────────────────────────────────────────

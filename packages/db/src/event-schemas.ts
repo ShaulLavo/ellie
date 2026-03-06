@@ -38,6 +38,29 @@ export const EVENT_TYPES = [
 
 export const eventTypeSchema = v.picklist(EVENT_TYPES)
 
+/**
+ * Durable session DB policy:
+ * keep only the rows needed to rebuild chat history and recover run state.
+ * Everything else belongs in the trace journal, not SQLite.
+ */
+export const DURABLE_EVENT_TYPES = [
+	'user_message',
+	'assistant_message',
+	'tool_execution',
+	'agent_start',
+	'run_closed'
+] as const satisfies readonly EventType[]
+
+const durableEventTypeSet = new Set<EventType>(
+	DURABLE_EVENT_TYPES
+)
+
+export function isDurableEventType(
+	type: EventType
+): boolean {
+	return durableEventTypeSet.has(type)
+}
+
 // ── Per-type payload schemas ────────────────────────────────────────────────
 
 const textContent = v.object({
@@ -49,6 +72,32 @@ const imageContent = v.object({
 	data: v.string(),
 	mimeType: v.string()
 })
+const imageFileContent = v.object({
+	type: v.literal('image'),
+	file: v.string(),
+	name: v.optional(v.string()),
+	mime: v.optional(v.string()),
+	data: v.optional(v.string()),
+	mimeType: v.optional(v.string())
+})
+const videoFileContent = v.object({
+	type: v.literal('video'),
+	file: v.string(),
+	name: v.optional(v.string()),
+	mime: v.optional(v.string())
+})
+const audioFileContent = v.object({
+	type: v.literal('audio'),
+	file: v.string(),
+	name: v.optional(v.string()),
+	mime: v.optional(v.string())
+})
+const fileContent = v.object({
+	type: v.literal('file'),
+	file: v.string(),
+	name: v.optional(v.string()),
+	mime: v.optional(v.string())
+})
 
 export const payloadSchemas: Record<
 	EventType,
@@ -57,7 +106,14 @@ export const payloadSchemas: Record<
 	user_message: v.object({
 		role: v.literal('user'),
 		content: v.array(
-			v.variant('type', [textContent, imageContent])
+			v.union([
+				textContent,
+				imageContent,
+				imageFileContent,
+				videoFileContent,
+				audioFileContent,
+				fileContent
+			])
 		),
 		timestamp: v.number()
 	}),

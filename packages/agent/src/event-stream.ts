@@ -53,6 +53,33 @@ export class EventStream<
 		}
 	}
 
+	/**
+	 * Signal an error — makes the for-await consumer throw.
+	 */
+	error(err: Error): void {
+		if (this.done) return
+		this.done = true
+		this.resultReject?.(err)
+		this.resultResolve = null
+		this.resultReject = null
+
+		if (this.resolve) {
+			// Reject via a special sentinel so the async iterator throws
+			const r = this.resolve
+			this.resolve = null
+			// Store error for the iterator to throw
+			this._error = err
+			r({
+				done: true,
+				value: undefined
+			} as IteratorResult<T>)
+		} else {
+			this._error = err
+		}
+	}
+
+	private _error: Error | undefined
+
 	end(result?: R): void {
 		if (this.done) return
 		this.done = true
@@ -99,14 +126,20 @@ export class EventStream<
 					yield next
 					continue
 				}
-				if (this.done) return
+				if (this.done) {
+					if (this._error) throw this._error
+					return
+				}
 
 				const value = await new Promise<IteratorResult<T>>(
 					resolve => {
 						this.resolve = resolve
 					}
 				)
-				if (value.done) return
+				if (value.done) {
+					if (this._error) throw this._error
+					return
+				}
 				yield value.value
 			}
 		} finally {

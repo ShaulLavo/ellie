@@ -7,6 +7,19 @@
  */
 
 // ============================================================================
+// Trace kind — fixed vocabulary for root trace classification
+// ============================================================================
+
+export type TraceKind =
+	| 'chat'
+	| 'follow-up'
+	| 'hindsight-recall'
+	| 'hindsight-retain'
+	| 'hindsight-retain-batch'
+	| 'hindsight-reflect'
+	| 'hindsight-narrative'
+
+// ============================================================================
 // Trace event envelope
 // ============================================================================
 
@@ -29,6 +42,8 @@ export interface TraceEventEnvelope {
 	sessionId?: string
 	/** Agent run this trace belongs to, if any. */
 	runId?: string
+	/** Root trace classification. */
+	traceKind: TraceKind
 	/** Event kind — e.g. 'prompt.snapshot', 'tool.start', 'model.request'. */
 	kind: string
 	/** Timestamp (Date.now()). */
@@ -110,4 +125,5 @@ export interface TraceScope {
 	parentSpanId?: string
 	sessionId?: string
 	runId?: string
+	traceKind: TraceKind
 }

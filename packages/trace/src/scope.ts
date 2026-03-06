@@ -5,12 +5,13 @@
  */
 
 import { ulid } from 'fast-ulid'
-import type { TraceScope } from './types'
+import type { TraceKind, TraceScope } from './types'
 
 /**
  * Create a root trace scope. This is the entry point for a new trace.
  */
-export function createRootScope(opts?: {
+export function createRootScope(opts: {
+	traceKind: TraceKind
 	sessionId?: string
 	runId?: string
 }): TraceScope {
@@ -19,13 +20,14 @@ export function createRootScope(opts?: {
 		traceId: id,
 		spanId: id, // root span shares the trace ID
 		parentSpanId: undefined,
-		sessionId: opts?.sessionId,
-		runId: opts?.runId
+		sessionId: opts.sessionId,
+		runId: opts.runId,
+		traceKind: opts.traceKind
 	}
 }
 
 /**
- * Create a child scope from a parent. Inherits traceId, sessionId, runId.
+ * Create a child scope from a parent. Inherits traceId, sessionId, runId, traceKind.
  * Gets a fresh spanId and sets parentSpanId to the parent's spanId.
  */
 export function createChildScope(
@@ -36,6 +38,7 @@ export function createChildScope(
 		spanId: ulid(),
 		parentSpanId: parent.spanId,
 		sessionId: parent.sessionId,
-		runId: parent.runId
+		runId: parent.runId,
+		traceKind: parent.traceKind
 	}
 }

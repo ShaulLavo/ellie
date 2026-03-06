@@ -13,7 +13,10 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import type { AgentController } from '../agent/controller'
-import { agentMessageSchema } from '@ellie/schemas/agent'
+import {
+	agentMessageSchema,
+	type UserMessage
+} from '@ellie/schemas/agent'
 import {
 	sessionParamsSchema,
 	afterSeqQuerySchema,
@@ -36,12 +39,46 @@ import {
 	BadRequestError,
 	NotFoundError
 } from './http-errors'
+import type { FileStore } from '@ellie/tus'
+
+/** Read a TUS upload into a Buffer. */
+async function readUploadBytes(
+	uploadStore: FileStore,
+	uploadId: string
+): Promise<Buffer> {
+	const stream = uploadStore.read(uploadId)
+	const chunks: Uint8Array[] = []
+	for await (const chunk of stream) {
+		chunks.push(
+			chunk instanceof Uint8Array
+				? chunk
+				: new Uint8Array(chunk as ArrayBuffer)
+		)
+	}
+	return Buffer.concat(chunks)
+}
+
+/** Check if a MIME type represents text-based content the model can read. */
+const TEXT_MIME_PREFIXES = [
+	'text/',
+	'application/json',
+	'application/xml',
+	'application/javascript',
+	'application/typescript',
+	'application/x-yaml',
+	'application/toml',
+	'application/sql'
+]
+function isTextMime(mime: string): boolean {
+	return TEXT_MIME_PREFIXES.some(p => mime.startsWith(p))
+}
 
 export function createChatRoutes(
 	store: RealtimeStore,
 	sseState: SseState,
 	getAgentController?: () => Promise<AgentController | null>,
-	ensureBootstrap?: (sessionId: string) => void
+	ensureBootstrap?: (sessionId: string) => void,
+	uploadStore?: FileStore
 ) {
 	return (
 		new Elysia({ prefix: '/chat', tags: ['Chat'] })
@@ -120,6 +157,71 @@ export function createChatRoutes(
 					const input = normalizeMessageInput(body)
 					store.ensureSession(sessionId)
 
+					// Build content parts: text + attachments
+					const contentParts: UserMessage['content'] = []
+					if (input.content.trim()) {
+						contentParts.push({
+							type: 'text',
+							text: input.content
+						})
+					}
+					if (input.attachments && uploadStore) {
+						for (const att of input.attachments) {
+							const mime = att.mime
+							if (mime.startsWith('image/')) {
+								// Read image data as base64 so the model can see it
+								const bytes = await readUploadBytes(
+									uploadStore,
+									att.uploadId
+								)
+								contentParts.push({
+									type: 'image',
+									file: att.uploadId,
+									mime: att.mime,
+									size: att.size,
+									name: att.name,
+									data: bytes.toString('base64'),
+									mimeType: att.mime
+								})
+							} else if (isTextMime(mime)) {
+								// Read text content so the model can read it
+								const bytes = await readUploadBytes(
+									uploadStore,
+									att.uploadId
+								)
+								const text = new TextDecoder().decode(bytes)
+								contentParts.push({
+									type: 'text',
+									text: `<file name="${att.name}">\n${text}\n</file>`
+								})
+							} else if (mime.startsWith('video/')) {
+								contentParts.push({
+									type: 'video',
+									file: att.uploadId,
+									mime: att.mime,
+									size: att.size,
+									name: att.name
+								})
+							} else if (mime.startsWith('audio/')) {
+								contentParts.push({
+									type: 'audio',
+									file: att.uploadId,
+									mime: att.mime,
+									size: att.size,
+									name: att.name
+								})
+							} else {
+								contentParts.push({
+									type: 'file',
+									file: att.uploadId,
+									mime: att.mime,
+									size: att.size,
+									name: att.name
+								})
+							}
+						}
+					}
+
 					// Persist user message BEFORE bootstrap so the client
 					// sees the user bubble first, then the synthetic tool call.
 					// Dedupe key: reject rapid-fire duplicate POSTs with the
@@ -134,9 +236,7 @@ export function createChatRoutes(
 						'user_message',
 						{
 							role: 'user',
-							content: [
-								{ type: 'text', text: input.content }
-							],
+							content: contentParts,
 							timestamp: beforeAppend
 						},
 						undefined, // runId — backfilled later by controller

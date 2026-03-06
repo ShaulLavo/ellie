@@ -70,8 +70,11 @@ export function agentLoop(
 				`[agent-loop] agentLoop top-level CATCH:`,
 				err instanceof Error ? err.message : String(err)
 			)
-			emit({ type: 'agent_end', messages: [] })
-			stream.end([])
+			// Propagate error to the consumer (agent._runLoop)
+			// so it emits a visible error assistant message.
+			stream.error(
+				err instanceof Error ? err : new Error(String(err))
+			)
 		}
 	})()
 
@@ -134,8 +137,11 @@ export function agentLoopContinue(
 				`[agent-loop] agentLoopContinue top-level CATCH:`,
 				err instanceof Error ? err.message : String(err)
 			)
-			emit({ type: 'agent_end', messages: [] })
-			stream.end([])
+			// Propagate error to the consumer (agent._runLoop)
+			// so it emits a visible error assistant message.
+			stream.error(
+				err instanceof Error ? err : new Error(String(err))
+			)
 		}
 	})()
 

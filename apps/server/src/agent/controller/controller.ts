@@ -245,14 +245,15 @@ export class AgentController {
 				return
 			}
 
-			// Agent idle — bind if needed and start new run
-			const historyLoaded = this.ensureBinding(sessionId)
+			// Agent idle — bind if needed
+			this.ensureBinding(sessionId)
 
 			this.agent.runId = runId
 
 			// Create root trace scope for this run
 			if (this.traceRecorder) {
 				const scope = createRootScope({
+					traceKind: 'chat',
 					sessionId,
 					runId
 				})
@@ -299,29 +300,23 @@ export class AgentController {
 				runId
 			)
 
-			if (historyLoaded) {
-				this.agent.continue().catch(err => {
-					handleControllerError(
-						(type, payload) => this.trace(type, payload),
-						`continue_failed session=${sessionId} runId=${runId}`,
-						'controller.continue_failed',
-						{ sessionId, runId },
-						err
-					)
-					this.writeErrorEvent(sessionId, runId)
-				})
-			} else {
-				this.agent.prompt(text).catch(err => {
-					handleControllerError(
-						(type, payload) => this.trace(type, payload),
-						`prompt_failed session=${sessionId} runId=${runId}`,
-						'controller.prompt_failed',
-						{ sessionId, runId },
-						err
-					)
-					this.writeErrorEvent(sessionId, runId)
-				})
+			// The user_message event is persisted before handleMessage
+			// is called. Reload history so the agent has the full
+			// content parts (including image data from attachments).
+			{
+				const history = this.loadHistory(sessionId)
+				this.agent.replaceMessages(history)
 			}
+			this.agent.continue().catch(err => {
+				handleControllerError(
+					(type, payload) => this.trace(type, payload),
+					`continue_failed session=${sessionId} runId=${runId}`,
+					'controller.continue_failed',
+					{ sessionId, runId },
+					err
+				)
+				this.writeErrorEvent(sessionId, runId)
+			})
 		})
 
 		return { runId, routed, traceId }
@@ -589,6 +584,7 @@ export class AgentController {
 			// Create root trace scope for the follow-up run
 			if (this.traceRecorder) {
 				const scope = createRootScope({
+					traceKind: 'follow-up',
 					sessionId,
 					runId: newRunId
 				})
@@ -651,14 +647,6 @@ export class AgentController {
 			runId
 		})
 		try {
-			this.store.appendEvent(
-				sessionId,
-				'error',
-				{
-					message: 'Agent prompt failed unexpectedly'
-				},
-				runId
-			)
 			this.store.closeAgentRun(sessionId, runId)
 		} catch (err) {
 			handleControllerError(

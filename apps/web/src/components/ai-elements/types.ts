@@ -60,6 +60,8 @@ export interface FileUIPart {
 	filename?: string
 	mediaType?: string
 	url?: string
+	/** Original File object — available before upload, used for TUS upload */
+	rawFile?: File
 }
 
 export interface SourceDocumentUIPart {

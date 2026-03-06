@@ -5,7 +5,14 @@ import {
 	beforeEach,
 	afterEach
 } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import {
+	mkdtempSync,
+	rmSync,
+	existsSync,
+	readFileSync,
+	readdirSync,
+	unlinkSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { TraceRecorder } from '../recorder'
@@ -26,6 +33,7 @@ describe('TraceRecorder', () => {
 
 	test('record writes JSONL and readTrace returns events', () => {
 		const scope = createRootScope({
+			traceKind: 'chat',
 			sessionId: 's1',
 			runId: 'r1'
 		})
@@ -48,7 +56,9 @@ describe('TraceRecorder', () => {
 	})
 
 	test('monotonic seq within a trace', () => {
-		const scope = createRootScope()
+		const scope = createRootScope({
+			traceKind: 'chat'
+		})
 
 		recorder.record(scope, 'a', 'test', {})
 		recorder.record(scope, 'b', 'test', {})
@@ -62,8 +72,12 @@ describe('TraceRecorder', () => {
 	})
 
 	test('independent seq counters per trace', () => {
-		const scope1 = createRootScope()
-		const scope2 = createRootScope()
+		const scope1 = createRootScope({
+			traceKind: 'chat'
+		})
+		const scope2 = createRootScope({
+			traceKind: 'chat'
+		})
 
 		recorder.record(scope1, 'a', 'test', {})
 		recorder.record(scope2, 'x', 'test', {})
@@ -78,7 +92,9 @@ describe('TraceRecorder', () => {
 	})
 
 	test('child span events appear in same trace', () => {
-		const root = createRootScope()
+		const root = createRootScope({
+			traceKind: 'chat'
+		})
 		const child = createChildScope(root)
 
 		recorder.record(root, 'root.event', 'test', {})
@@ -91,7 +107,9 @@ describe('TraceRecorder', () => {
 	})
 
 	test('blobRefs are included in envelope', () => {
-		const scope = createRootScope()
+		const scope = createRootScope({
+			traceKind: 'chat'
+		})
 
 		recorder.record(scope, 'test', 'test', {}, [
 			{
@@ -110,8 +128,12 @@ describe('TraceRecorder', () => {
 	})
 
 	test('listTraceIds returns available trace IDs', () => {
-		const scope1 = createRootScope()
-		const scope2 = createRootScope()
+		const scope1 = createRootScope({
+			traceKind: 'chat'
+		})
+		const scope2 = createRootScope({
+			traceKind: 'chat'
+		})
 
 		recorder.record(scope1, 'a', 'test', {})
 		recorder.record(scope2, 'b', 'test', {})
@@ -122,9 +144,18 @@ describe('TraceRecorder', () => {
 	})
 
 	test('findTracesBySession filters by sessionId', () => {
-		const scope1 = createRootScope({ sessionId: 's1' })
-		const scope2 = createRootScope({ sessionId: 's2' })
-		const scope3 = createRootScope({ sessionId: 's1' })
+		const scope1 = createRootScope({
+			traceKind: 'chat',
+			sessionId: 's1'
+		})
+		const scope2 = createRootScope({
+			traceKind: 'chat',
+			sessionId: 's2'
+		})
+		const scope3 = createRootScope({
+			traceKind: 'follow-up',
+			sessionId: 's1'
+		})
 
 		recorder.record(scope1, 'a', 'test', {})
 		recorder.record(scope2, 'b', 'test', {})
@@ -145,8 +176,10 @@ describe('TraceRecorder', () => {
 		expect(events).toEqual([])
 	})
 
-	test('envelope has required fields', () => {
-		const scope = createRootScope()
+	test('envelope has required fields including traceKind', () => {
+		const scope = createRootScope({
+			traceKind: 'chat'
+		})
 		recorder.record(scope, 'test', 'comp', {
 			data: true
 		})
@@ -156,9 +189,102 @@ describe('TraceRecorder', () => {
 		expect(event.traceId).toBe(scope.traceId)
 		expect(event.spanId).toBe(scope.spanId)
 		expect(event.kind).toBe('test')
+		expect(event.traceKind).toBe('chat')
 		expect(event.component).toBe('comp')
 		expect(event.ts).toBeGreaterThan(0)
 		expect(event.seq).toBe(0)
 		expect(event.payload).toEqual({ data: true })
+	})
+
+	// ── Day-partitioned layout tests ────────────────────────────────
+
+	test('trace files are created under YYYY-MM-DD subdirectories', () => {
+		const scope = createRootScope({
+			traceKind: 'chat'
+		})
+		recorder.record(scope, 'test', 'test', {})
+
+		// Verify day directory exists
+		const entries = readdirSync(traceDir)
+		const dayDirs = entries.filter(
+			e =>
+				/^\d{4}-\d{2}-\d{2}$/.test(e) &&
+				existsSync(join(traceDir, e))
+		)
+		expect(dayDirs.length).toBeGreaterThanOrEqual(1)
+	})
+
+	test('_index.jsonl is created with correct entries', () => {
+		const scope = createRootScope({
+			traceKind: 'chat',
+			sessionId: 's1'
+		})
+		recorder.record(scope, 'test', 'test', {})
+
+		const indexPath = join(traceDir, '_index.jsonl')
+		expect(existsSync(indexPath)).toBe(true)
+
+		const content = readFileSync(indexPath, 'utf-8')
+		const lines = content.split('\n').filter(l => l.trim())
+		expect(lines.length).toBeGreaterThanOrEqual(1)
+
+		const entry = JSON.parse(lines[lines.length - 1])
+		expect(entry.traceId).toBe(scope.traceId)
+		expect(entry.traceKind).toBe('chat')
+		expect(entry.sessionId).toBe('s1')
+		expect(entry.relativePath).toMatch(
+			/^\d{4}-\d{2}-\d{2}\/\d{2}-\d{2}-\d{2}-chat-/
+		)
+	})
+
+	test('findTracesBySession returns traceKind', () => {
+		const scope = createRootScope({
+			traceKind: 'hindsight-recall',
+			sessionId: 's1'
+		})
+		recorder.record(scope, 'test', 'test', {})
+
+		const results = recorder.findTracesBySession('s1')
+		expect(results).toHaveLength(1)
+		expect(results[0].traceKind).toBe('hindsight-recall')
+	})
+
+	test('index rebuild works when _index.jsonl is deleted', () => {
+		const scope = createRootScope({
+			traceKind: 'chat',
+			sessionId: 's1'
+		})
+		recorder.record(scope, 'test', 'test', {})
+
+		// Delete the index
+		const indexPath = join(traceDir, '_index.jsonl')
+		unlinkSync(indexPath)
+
+		// Create a new recorder — should rebuild
+		const recorder2 = new TraceRecorder(traceDir)
+		const events = recorder2.readTrace(scope.traceId)
+		expect(events).toHaveLength(1)
+		expect(events[0].traceId).toBe(scope.traceId)
+
+		// Index should be recreated
+		expect(existsSync(indexPath)).toBe(true)
+	})
+
+	test('readTrace works after process restart via index', () => {
+		const scope = createRootScope({
+			traceKind: 'follow-up',
+			sessionId: 's1',
+			runId: 'r1'
+		})
+		recorder.record(scope, 'test.event', 'test', {
+			key: 'value'
+		})
+
+		// Create a new recorder (simulates restart)
+		const recorder2 = new TraceRecorder(traceDir)
+		const events = recorder2.readTrace(scope.traceId)
+		expect(events).toHaveLength(1)
+		expect(events[0].kind).toBe('test.event')
+		expect(events[0].traceKind).toBe('follow-up')
 	})
 })

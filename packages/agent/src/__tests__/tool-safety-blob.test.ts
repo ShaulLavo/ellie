@@ -18,7 +18,8 @@ function makeScope(): TraceScope {
 		traceId: 'trace-1',
 		spanId: 'span-1',
 		sessionId: 'sess-1',
-		runId: 'run-1'
+		runId: 'run-1',
+		traceKind: 'chat'
 	}
 }
 
