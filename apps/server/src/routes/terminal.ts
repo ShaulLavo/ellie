@@ -54,14 +54,11 @@ export function createTerminalRoutes(paths?: {
 			response: t.String(),
 
 			open(ws) {
-				const proc = Bun.spawn(
-					[bridgePath, cliPath, 'chat'],
-					{
-						stdin: 'pipe',
-						stdout: 'pipe',
-						stderr: 'inherit'
-					}
-				)
+				const proc = Bun.spawn([bridgePath, cliPath], {
+					stdin: 'pipe',
+					stdout: 'pipe',
+					stderr: 'inherit'
+				})
 
 				bridges.set(ws.id, proc)
 
