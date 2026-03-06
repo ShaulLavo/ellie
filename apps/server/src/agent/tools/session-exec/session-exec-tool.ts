@@ -22,15 +22,12 @@ import type {
 	AgentTool,
 	AgentToolResult
 } from '@ellie/agent'
-import type {
-	TraceRecorder,
-	TraceScope
-} from '@ellie/trace'
+import type { TraceRecorder, TraceScope } from '@ellie/trace'
 import {
 	ReplRuntime,
-	type ReplEvalResult,
-	type ReplTraceDeps
+	type ReplEvalResult
 } from '../../repl/repl-runtime'
+import { createReplTraceDeps } from './repl-trace-deps'
 import { ArtifactStore } from '../../repl/artifact-store'
 
 // ── Schema ──────────────────────────────────────────────────────────────
@@ -78,17 +75,11 @@ export function createSessionExecTool(
 		scope: TraceScope | undefined
 	) => void
 } {
-	let activeReplScope: TraceScope | undefined
+	const { replTraceDeps, setActiveReplScope } =
+		createReplTraceDeps(traceDeps)
 	let runtime: ReplRuntime | null = null
 	let boundSessionId: string | null = null
 	const artifactStore = new ArtifactStore(dataDir)
-
-	const replTraceDeps: ReplTraceDeps | undefined = traceDeps
-		? {
-				recorder: traceDeps.recorder,
-				getParentScope: () => activeReplScope
-			}
-		: undefined
 
 	return {
 		name: 'session_exec',
@@ -96,11 +87,7 @@ export function createSessionExecTool(
 			'Execute TypeScript code in a persistent REPL session. Variables, imports, and function definitions persist across calls. Tools are available as async functions: read_workspace_file({ path }), write_workspace_file({ path, content }), shell({ command }), ripgrep({ pattern }). Use print() to send output to the conversation — only printed output appears in tool results. Raw stdout/stderr is stored as artifacts for later inspection. Example: `const f = await read_workspace_file({ path: "data.json" }); print(f)`',
 		label: 'Running session code',
 		parameters: sessionExecParams,
-		setActiveReplScope: traceDeps
-			? (scope: TraceScope | undefined) => {
-					activeReplScope = scope
-				}
-			: undefined,
+		setActiveReplScope,
 		execute: async (
 			_toolCallId,
 			rawParams
