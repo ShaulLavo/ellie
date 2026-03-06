@@ -169,6 +169,13 @@ export function useStreamConnection(
 				syncWrite([msg])
 			},
 
+			onReset() {
+				isInitialLoadRef.current = true
+				setStreamingMessage(null)
+				setSessionStats(EMPTY_STATS)
+				setIsAgentRunning(false)
+			},
+
 			onUpdate(event) {
 				if (event.type === 'assistant_message') {
 					let parsed: Record<string, unknown>

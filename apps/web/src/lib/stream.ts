@@ -31,6 +31,7 @@ export interface StreamCallbacks {
 	onSnapshot: (events: EventRow[]) => void
 	onAppend: (event: EventRow) => void
 	onUpdate: (event: EventRow) => void
+	onReset: () => void
 	onStateChange: (state: ConnectionState) => void
 	onError: (message: string) => void
 }
@@ -164,6 +165,10 @@ export class StreamClient {
 					err
 				)
 			}
+		})
+
+		es.addEventListener('reset', () => {
+			this.callbacks.onReset()
 		})
 
 		es.addEventListener('open', () => {

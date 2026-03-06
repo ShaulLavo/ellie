@@ -258,47 +258,41 @@ export function createChatRoutes(
 						afterSeq
 					)
 
-					// For 'current' connections, create a combined abort
-					// signal that fires on rotation OR client disconnect.
-					// This wakes toStreamGenerator's blocking wait so the
-					// client reconnects to the new session.
-					let effectiveRequest = request
-					let unsubRotation: (() => void) | undefined
-					if (isCurrent) {
-						const ac = new AbortController()
-						request.signal.addEventListener(
-							'abort',
-							() => ac.abort(),
-							{ once: true }
-						)
-						unsubRotation = store.subscribeToRotation(() =>
-							ac.abort()
-						)
-						effectiveRequest = new Request(request.url, {
-							signal: ac.signal
-						})
-					}
-
 					const stream = toStreamGenerator<SessionEvent>(
-						effectiveRequest,
+						request,
 						sseState,
 						listener => {
 							const unsubSession = store.subscribeToSession(
 								sessionId,
 								listener
 							)
-							// Bundle rotation cleanup with session
-							// unsubscribe so both are cleaned up by
-							// toStreamGenerator's finally block.
+							// On rotation, inject a reset event so the
+							// client knows to do a full replace on
+							// reconnect, then abort the connection.
+							let unsubRotation: (() => void) | undefined
+							if (isCurrent) {
+								unsubRotation = store.subscribeToRotation(
+									() => listener({ type: 'reset' })
+								)
+							}
 							return () => {
 								unsubSession()
 								unsubRotation?.()
 							}
 						},
-						event => ({
-							event: event.type,
-							data: event.event
-						}),
+						event => {
+							if (event.type === 'reset') {
+								return {
+									event: 'reset',
+									data: {},
+									close: true
+								}
+							}
+							return {
+								event: event.type,
+								data: event.event
+							}
+						},
 						{
 							event: 'snapshot',
 							data: existingEvents
