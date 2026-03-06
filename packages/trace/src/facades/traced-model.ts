@@ -85,19 +85,72 @@ async function* wrapAsyncIterable(
 ): AsyncIterable<StreamChunk> {
 	let finished = false
 	let errored = false
+
+	// Accumulate response content from stream chunks
+	let textParts: string[] = []
+	let thinkingParts: string[] = []
+	let toolCalls: Array<{
+		toolCallId: string
+		toolName: string
+		argsJson: string
+	}> = []
+	let activeToolArgs = new Map<string, string>()
+
 	try {
 		for await (const chunk of source) {
-			// Intercept RUN_FINISHED to record usage
+			// Accumulate response body content
+			switch (chunk.type) {
+				case 'TEXT_MESSAGE_CONTENT':
+					textParts.push(chunk.delta as string)
+					break
+				case 'STEP_FINISHED':
+					thinkingParts.push(chunk.delta as string)
+					break
+				case 'TOOL_CALL_START':
+					activeToolArgs.set(chunk.toolCallId as string, '')
+					break
+				case 'TOOL_CALL_ARGS':
+					activeToolArgs.set(
+						chunk.toolCallId as string,
+						(activeToolArgs.get(
+							chunk.toolCallId as string
+						) ?? '') + (chunk.delta as string)
+					)
+					break
+				case 'TOOL_CALL_END':
+					toolCalls.push({
+						toolCallId: chunk.toolCallId as string,
+						toolName: chunk.toolName as string,
+						argsJson:
+							activeToolArgs.get(
+								chunk.toolCallId as string
+							) ?? '{}'
+					})
+					activeToolArgs.delete(chunk.toolCallId as string)
+					break
+			}
+
+			// Intercept RUN_FINISHED to record usage + response body
 			if (chunk.type === 'RUN_FINISHED') {
 				finished = true
 				const usage = chunk.usage as
 					| Record<string, number>
 					| undefined
+				// Build response body from accumulated content
+				const responseBody: Record<string, unknown> = {}
+				const text = textParts.join('')
+				if (text) responseBody.text = text
+				const thinking = thinkingParts.join('')
+				if (thinking) responseBody.thinking = thinking
+				if (toolCalls.length > 0)
+					responseBody.toolCalls = toolCalls
+
 				const responsePayload: Record<string, unknown> = {
 					finishReason: chunk.finishReason,
 					promptTokens: usage?.promptTokens,
 					completionTokens: usage?.completionTokens,
-					totalTokens: usage?.totalTokens
+					totalTokens: usage?.totalTokens,
+					responseBody
 				}
 
 				let blobRefs: BlobRef[] | undefined
@@ -130,6 +183,12 @@ async function* wrapAsyncIterable(
 					responsePayload,
 					blobRefs
 				)
+
+				// Reset accumulators for next turn
+				textParts = []
+				thinkingParts = []
+				toolCalls = []
+				activeToolArgs.clear()
 			}
 
 			yield chunk
