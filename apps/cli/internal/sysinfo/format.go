@@ -1,6 +1,9 @@
 package sysinfo
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // FormatUptime converts seconds to a human-readable duration.
 // Examples: "2d 3h 15m", "45m", "3h 2m"
@@ -57,4 +60,42 @@ func FormatBattery(pct int, state string) string {
 	default:
 		return fmt.Sprintf("%d%% (%s)", pct, state)
 	}
+}
+
+const barWidth = 10
+
+// FormatBar renders a percentage as a visual bar.
+// Example: [=========-] 83%
+func FormatBar(pct float64) string {
+	if pct > 100 {
+		pct = 100
+	}
+	if pct < 0 {
+		pct = 0
+	}
+	filled := int(pct / 100 * float64(barWidth))
+	if filled > barWidth {
+		filled = barWidth
+	}
+	empty := barWidth - filled
+	return fmt.Sprintf("[%s%s] %.0f%%",
+		strings.Repeat("=", filled),
+		strings.Repeat("-", empty),
+		pct)
+}
+
+// MemoryPercent extracts the percentage from used/total bytes.
+func MemoryPercent(used, total uint64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(used) / float64(total) * 100
+}
+
+// DiskPercent extracts the percentage from used/total bytes.
+func DiskPercent(used, total uint64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(used) / float64(total) * 100
 }

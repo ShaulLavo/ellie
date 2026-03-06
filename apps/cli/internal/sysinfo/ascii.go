@@ -77,7 +77,7 @@ func solidLine(text string, c color.Color) LogoLine {
 	return LogoLine{s(text, c)}
 }
 
-// SelectLogo returns the appropriate logo for the current OS.
+// SelectLogo returns the appropriate big logo for the current OS.
 func SelectLogo() Logo {
 	switch runtime.GOOS {
 	case "darwin":
@@ -94,5 +94,25 @@ func SelectLogo() Logo {
 		return LogoNetBSDBig()
 	default:
 		return LogoLinuxBig()
+	}
+}
+
+// SelectLogoSmall returns the appropriate small logo for the current OS.
+func SelectLogoSmall() Logo {
+	switch runtime.GOOS {
+	case "darwin":
+		return LogoMacOSSmall()
+	case "linux":
+		return LogoLinuxSmall()
+	case "windows":
+		return LogoWindowsSmall()
+	case "android":
+		return LogoAndroidSmall()
+	case "freebsd":
+		return LogoFreeBSD() // FreeBSD only has small
+	case "netbsd":
+		return LogoNetBSDSmall()
+	default:
+		return LogoLinuxSmall()
 	}
 }

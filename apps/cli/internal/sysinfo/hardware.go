@@ -28,13 +28,13 @@ func fetchMachine() Readout {
 			if strings.HasPrefix(line, "Model Name:") {
 				friendly := strings.TrimSpace(strings.TrimPrefix(line, "Model Name:"))
 				if friendly != "" {
-					return Readout{Key: KeyMachine, Value: friendly}
+					return Readout{Key: KeyMachine, Value: friendly, Percent: -1}
 				}
 			}
 		}
 	}
 
-	return Readout{Key: KeyMachine, Value: model}
+	return Readout{Key: KeyMachine, Value: model, Percent: -1}
 }
 
 func fetchCPU() Readout {
@@ -48,10 +48,10 @@ func fetchCPU() Readout {
 	coreOut, err := exec.Command("sysctl", "-n", "hw.logicalcpu").Output()
 	if err == nil {
 		cores := strings.TrimSpace(string(coreOut))
-		return Readout{Key: KeyCPU, Value: fmt.Sprintf("%s (%s)", brand, cores)}
+		return Readout{Key: KeyCPU, Value: fmt.Sprintf("%s (%s)", brand, cores), Percent: -1}
 	}
 
-	return Readout{Key: KeyCPU, Value: brand}
+	return Readout{Key: KeyCPU, Value: brand, Percent: -1}
 }
 
 func fetchCPULoad() Readout {
@@ -59,7 +59,11 @@ func fetchCPULoad() Readout {
 	if err != nil || len(pcts) == 0 {
 		return Readout{Key: KeyCPULoad, Err: fmt.Errorf("cpu load: %w", err)}
 	}
-	return Readout{Key: KeyCPULoad, Value: fmt.Sprintf("%.1f%%", pcts[0])}
+	return Readout{
+		Key:     KeyCPULoad,
+		Value:   fmt.Sprintf("%.1f%%", pcts[0]),
+		Percent: pcts[0],
+	}
 }
 
 func fetchMemory() Readout {
@@ -67,7 +71,11 @@ func fetchMemory() Readout {
 	if err != nil {
 		return Readout{Key: KeyMemory, Err: err}
 	}
-	return Readout{Key: KeyMemory, Value: FormatMemory(v.Used, v.Total)}
+	return Readout{
+		Key:     KeyMemory,
+		Value:   FormatMemory(v.Used, v.Total),
+		Percent: MemoryPercent(v.Used, v.Total),
+	}
 }
 
 func fetchBattery() Readout {
@@ -87,7 +95,7 @@ func fetchBattery() Readout {
 
 	pct, _ := strconv.Atoi(matches[1])
 	state := strings.TrimSpace(matches[2])
-	return Readout{Key: KeyBattery, Value: FormatBattery(pct, state)}
+	return Readout{Key: KeyBattery, Value: FormatBattery(pct, state), Percent: float64(pct)}
 }
 
 func fetchDisk() Readout {
@@ -95,5 +103,9 @@ func fetchDisk() Readout {
 	if err != nil {
 		return Readout{Key: KeyDisk, Err: err}
 	}
-	return Readout{Key: KeyDisk, Value: FormatDisk(usage.Used, usage.Total)}
+	return Readout{
+		Key:     KeyDisk,
+		Value:   FormatDisk(usage.Used, usage.Total),
+		Percent: DiskPercent(usage.Used, usage.Total),
+	}
 }
