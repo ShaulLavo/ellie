@@ -12,6 +12,9 @@ require (
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/wish v1.4.7
 	github.com/charmbracelet/x/ansi v0.11.6
+	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260304213900-0e78e2954235
+	github.com/spf13/cobra v1.10.2
+	golang.org/x/term v0.31.0
 )
 
 require (
@@ -31,7 +34,6 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/conpty v0.1.0 // indirect
 	github.com/charmbracelet/x/errors v0.0.0-20240508181413-e8d8b6e2de86 // indirect
-	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260304213900-0e78e2954235 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
@@ -56,7 +58,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
