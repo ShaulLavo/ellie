@@ -16,6 +16,7 @@ import {
 } from '@ellie/agent'
 import type { EventType, EventPayloadMap } from '@ellie/db'
 import type { AnyTextAdapter } from '@tanstack/ai'
+import { join } from 'node:path'
 import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import { buildSystemPrompt } from '../system-prompt'
@@ -111,6 +112,9 @@ export class AgentController {
 					options.agentOptions?.initialState
 						?.thinkingLevel ?? 'low',
 				tools: registry.all
+			},
+			toolSafety: {
+				overflowDir: join(options.dataDir, 'tool-overflow')
 			},
 			onEvent: event => this.handleEvent(event),
 			onTrace: entry => {
@@ -427,20 +431,18 @@ export class AgentController {
 		}
 
 		// Memory retain (Hindsight only — no agent prompting)
-		runRetain(
-			this.memoryDeps,
-			sessionId,
-			runId
-		).catch(err => {
-			handleControllerError(
-				(type, payload) => this.trace(type, payload),
-				`retain_error session=${sessionId} runId=${runId}`,
-				'controller.retain_error',
-				{ sessionId, runId },
-				err,
-				'warn'
-			)
-		})
+		runRetain(this.memoryDeps, sessionId, runId).catch(
+			err => {
+				handleControllerError(
+					(type, payload) => this.trace(type, payload),
+					`retain_error session=${sessionId} runId=${runId}`,
+					'controller.retain_error',
+					{ sessionId, runId },
+					err,
+					'warn'
+				)
+			}
+		)
 
 		// Reset system prompt and clear runId
 		this.agent.state.systemPrompt = this.baseSystemPrompt
