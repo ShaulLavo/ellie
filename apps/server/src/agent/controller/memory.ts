@@ -8,6 +8,7 @@
 import type { Agent } from '@ellie/agent'
 import type { EventPayloadMap } from '@ellie/db'
 import type {
+	BlobSink,
 	TraceRecorder,
 	TraceScope
 } from '@ellie/trace'
@@ -29,6 +30,8 @@ export interface MemoryDeps {
 	traceRecorder?: TraceRecorder
 	/** Active trace scope for correlating memory spans. */
 	traceScope?: TraceScope
+	/** Blob sink for large recall/retain payloads. */
+	blobSink?: BlobSink
 }
 
 /**
@@ -48,7 +51,8 @@ export async function runRecall(
 		deps.traceRecorder && deps.traceScope
 			? wrapMemoryOrchestrator(deps.memory, {
 					recorder: deps.traceRecorder,
-					parentScope: deps.traceScope
+					parentScope: deps.traceScope,
+					blobSink: deps.blobSink
 				})
 			: deps.memory
 
@@ -109,7 +113,8 @@ export async function runRetain(
 		deps.traceRecorder && deps.traceScope
 			? wrapMemoryOrchestrator(deps.memory, {
 					recorder: deps.traceRecorder,
-					parentScope: deps.traceScope
+					parentScope: deps.traceScope,
+					blobSink: deps.blobSink
 				})
 			: deps.memory
 

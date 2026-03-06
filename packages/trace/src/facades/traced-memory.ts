@@ -6,7 +6,12 @@
  */
 
 import { createChildScope } from '../scope'
-import type { TraceScope } from '../types'
+import { shouldBlob } from '../blob-sink'
+import type {
+	BlobRef,
+	BlobSink,
+	TraceScope
+} from '../types'
 import type { TraceRecorder } from '../recorder'
 
 // Minimal structural constraint — intentionally loose so concrete types
@@ -22,6 +27,7 @@ interface MemoryLike {
 export interface TracedMemoryOptions {
 	recorder: TraceRecorder
 	parentScope: TraceScope
+	blobSink?: BlobSink
 }
 
 /**
@@ -60,25 +66,50 @@ export function wrapMemoryOrchestrator<
 							unknown
 						>
 
+						const recallPayload: Record<string, unknown> = {
+							elapsedMs,
+							found: result !== null,
+							resultCount:
+								(
+									payload?.parts as
+										| Array<Record<string, unknown>>
+										| undefined
+								)?.[0]?.count ?? 0,
+							bankIds: payload?.bankIds,
+							contextBlockLength:
+								typeof r?.contextBlock === 'string'
+									? r.contextBlock.length
+									: 0
+						}
+
+						// Blob large recall context blocks
+						let blobRefs: BlobRef[] | undefined
+						if (
+							opts.blobSink &&
+							typeof r?.contextBlock === 'string' &&
+							shouldBlob(r.contextBlock)
+						) {
+							try {
+								const ref = await opts.blobSink.write({
+									traceId: scope.traceId,
+									spanId: scope.spanId,
+									role: 'memory_recall_context',
+									content: r.contextBlock,
+									mimeType: 'text/plain',
+									ext: 'txt'
+								})
+								blobRefs = [ref]
+							} catch {
+								// Best-effort blob
+							}
+						}
+
 						opts.recorder.record(
 							scope,
 							'memory.recall.end',
 							'memory',
-							{
-								elapsedMs,
-								found: result !== null,
-								resultCount:
-									(
-										payload?.parts as
-											| Array<Record<string, unknown>>
-											| undefined
-									)?.[0]?.count ?? 0,
-								bankIds: payload?.bankIds,
-								contextBlockLength:
-									typeof r?.contextBlock === 'string'
-										? r.contextBlock.length
-										: 0
-							}
+							recallPayload,
+							blobRefs
 						)
 
 						return result

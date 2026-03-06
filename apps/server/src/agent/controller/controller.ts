@@ -335,26 +335,87 @@ export class AgentController {
 
 	// ── Control passthrough ──────────────────────────────────────────────────
 
-	steer(sessionId: string, text: string): void {
+	steer(
+		sessionId: string,
+		text: string
+	): { traceId?: string } {
 		if (this.boundSessionId !== sessionId) {
 			throw new Error(
 				`Agent not bound to session ${sessionId}`
 			)
 		}
+
+		let traceId: string | undefined
+
+		// Persist steering input as a first-class user_message event
+		const runId = this.agent.runId
+		if (runId) {
+			this.store.appendEvent(
+				sessionId,
+				'user_message',
+				{
+					role: 'user',
+					content: [{ type: 'text', text }],
+					timestamp: Date.now()
+				},
+				runId
+			)
+		}
+
+		// Emit control.steer trace event
+		if (this.traceRecorder && this.activeTraceScope) {
+			this.traceRecorder.record(
+				this.activeTraceScope,
+				'control.steer',
+				'controller',
+				{ sessionId, text: text.slice(0, 200) }
+			)
+			traceId = this.activeTraceScope.traceId
+		}
+
 		this.agent.steer({
 			role: 'user',
 			content: [{ type: 'text', text }],
 			timestamp: Date.now()
 		})
+
+		return { traceId }
 	}
 
-	abort(sessionId: string): void {
+	abort(sessionId: string): { traceId?: string } {
 		if (this.boundSessionId !== sessionId) {
 			throw new Error(
 				`Agent not bound to session ${sessionId}`
 			)
 		}
+
+		let traceId: string | undefined
+
+		// Persist abort as a control event
+		const runId = this.agent.runId
+		if (runId) {
+			this.store.appendEvent(
+				sessionId,
+				'run_closed',
+				{ reason: 'abort' },
+				runId
+			)
+		}
+
+		// Emit control.abort trace event
+		if (this.traceRecorder && this.activeTraceScope) {
+			this.traceRecorder.record(
+				this.activeTraceScope,
+				'control.abort',
+				'controller',
+				{ sessionId }
+			)
+			traceId = this.activeTraceScope.traceId
+		}
+
 		this.agent.abort()
+
+		return { traceId }
 	}
 
 	// ── Queries ──────────────────────────────────────────────────────────────
@@ -380,7 +441,8 @@ export class AgentController {
 				baseSystemPrompt: this.baseSystemPrompt,
 				trace: (type, payload) => this.trace(type, payload),
 				traceRecorder: this.traceRecorder,
-				traceScope: this.activeTraceScope
+				traceScope: this.activeTraceScope,
+				blobSink: this.blobSink
 			}
 		} else {
 			// Update traceScope each access since it changes per-run
@@ -529,6 +591,29 @@ export class AgentController {
 			}
 			const newRunId = ulid()
 			this.agent.runId = newRunId
+
+			// Create root trace scope for the follow-up run
+			if (this.traceRecorder) {
+				const scope = createRootScope({
+					sessionId,
+					runId: newRunId
+				})
+				this.activeTraceScope = scope
+				this.agent.updateToolSafety({
+					traceScope: scope
+				})
+				this.traceRecorder.record(
+					scope,
+					'trace.root',
+					'controller',
+					{
+						sessionId,
+						runId: newRunId,
+						type: 'follow-up-drain'
+					}
+				)
+			}
+
 			this.agent.continue().catch(err => {
 				handleControllerError(
 					(type, payload) => this.trace(type, payload),

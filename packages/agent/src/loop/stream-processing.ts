@@ -26,7 +26,10 @@ import type {
 	ProcessResult,
 	StreamContext
 } from './types'
-import { shouldBlob } from '@ellie/trace'
+import {
+	shouldBlob,
+	createTracedStreamFn
+} from '@ellie/trace'
 import {
 	createPartial,
 	emitTrace,
@@ -107,14 +110,43 @@ function buildStreamSource(
 		abortController
 	} as const
 
-	if (streamFn) return streamFn(shared)
+	// Build the effective stream function
+	let effectiveFn: (
+		opts: Record<string, unknown>
+	) => AsyncIterable<StreamChunk>
 
-	return chat({
-		...shared,
-		agentLoopStrategy: tanStackTools
-			? maxIterations(config.maxTurns ?? 10)
-			: () => false
-	})
+	if (streamFn) {
+		effectiveFn = streamFn as unknown as typeof effectiveFn
+	} else {
+		effectiveFn = (opts: Record<string, unknown>) =>
+			chat({
+				...opts,
+				agentLoopStrategy: tanStackTools
+					? maxIterations(config.maxTurns ?? 10)
+					: () => false
+			} as Parameters<
+				typeof chat
+			>[0]) as AsyncIterable<StreamChunk>
+	}
+
+	// Wrap with traced model facade when trace deps are available
+	if (
+		config.traceRecorder &&
+		config.toolSafety?.traceScope
+	) {
+		effectiveFn = createTracedStreamFn(
+			effectiveFn as Parameters<
+				typeof createTracedStreamFn
+			>[0],
+			{
+				recorder: config.traceRecorder,
+				blobSink: config.toolSafety.blobSink,
+				parentScope: config.toolSafety.traceScope
+			}
+		) as typeof effectiveFn
+	}
+
+	return effectiveFn(shared as Record<string, unknown>)
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +297,8 @@ export async function processAgentStream(
 		messages: llmMessages,
 		tools: context.tools?.map(t => ({
 			name: t.name,
-			description: t.description
+			description: t.description,
+			parameters: t.parameters
 		})),
 		model: config.model.id,
 		provider: config.model.provider,
