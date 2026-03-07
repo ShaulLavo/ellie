@@ -182,7 +182,7 @@ impl EngineState {
         }));
 
         match transcribe_result {
-            Ok((mut engine, result)) => {
+            Ok((engine, result)) => {
                 // Success — put engine back
                 self.engine = Some(engine);
                 result
