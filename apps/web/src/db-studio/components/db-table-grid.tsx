@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
 	useReactTable,
 	getCoreRowModel,
@@ -76,10 +76,20 @@ export function DbTableGrid({
 		c => !c.hidden
 	)
 
-	const [inspectedCell, setInspectedCell] = useState<{
+	const [cellDialogOpen, setCellDialogOpen] =
+		useState(false)
+	const [cellDialogData, setCellDialogData] = useState<{
 		column: ColumnInfo
 		value: unknown
 	} | null>(null)
+
+	const openCellDialog = useCallback(
+		(column: ColumnInfo, value: unknown) => {
+			setCellDialogData({ column, value })
+			setCellDialogOpen(true)
+		},
+		[]
+	)
 
 	const columns = useMemo<
 		ColumnDef<Record<string, unknown>>[]
@@ -98,12 +108,7 @@ export function DbTableGrid({
 				cell: ({ getValue }) => (
 					<CellValue
 						value={getValue()}
-						onExpand={v =>
-							setInspectedCell({
-								column: col,
-								value: v
-							})
-						}
+						onExpand={v => openCellDialog(col, v)}
 					/>
 				)
 			})),
@@ -283,12 +288,10 @@ export function DbTableGrid({
 			</div>
 
 			<CellDetailDialog
-				open={inspectedCell !== null}
-				onOpenChange={open => {
-					if (!open) setInspectedCell(null)
-				}}
-				column={inspectedCell?.column ?? null}
-				value={inspectedCell?.value}
+				open={cellDialogOpen}
+				onOpenChange={setCellDialogOpen}
+				column={cellDialogData?.column ?? null}
+				value={cellDialogData?.value}
 			/>
 		</div>
 	)
@@ -391,61 +394,39 @@ function CellValue({
 
 	if (typeof value === 'object') {
 		const json = JSON.stringify(value)
-		const isTruncated = json.length > 60
 		return (
 			<span
-				className={cn(
-					'font-mono text-xs text-muted-foreground',
-					isTruncated &&
-						'cursor-pointer hover:text-foreground transition-colors'
-				)}
-				role={isTruncated ? 'button' : undefined}
-				tabIndex={isTruncated ? 0 : undefined}
-				onClick={
-					isTruncated ? () => onExpand(value) : undefined
-				}
-				onKeyDown={
-					isTruncated
-						? e => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault()
-									onExpand(value)
-								}
-							}
-						: undefined
-				}
+				className="font-mono text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors truncate block"
+				role="button"
+				tabIndex={0}
+				onClick={() => onExpand(value)}
+				onKeyDown={e => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault()
+						onExpand(value)
+					}
+				}}
 			>
-				{isTruncated ? `${json.slice(0, 60)}...` : json}
+				{json}
 			</span>
 		)
 	}
 
 	const str = String(value)
-	const isTruncated = str.length > 120
 	return (
 		<span
-			className={cn(
-				'font-mono text-xs',
-				isTruncated &&
-					'cursor-pointer hover:text-foreground transition-colors'
-			)}
-			role={isTruncated ? 'button' : undefined}
-			tabIndex={isTruncated ? 0 : undefined}
-			onClick={
-				isTruncated ? () => onExpand(value) : undefined
-			}
-			onKeyDown={
-				isTruncated
-					? e => {
-							if (e.key === 'Enter' || e.key === ' ') {
-								e.preventDefault()
-								onExpand(value)
-							}
-						}
-					: undefined
-			}
+			className="font-mono text-xs cursor-pointer hover:text-foreground transition-colors truncate block"
+			role="button"
+			tabIndex={0}
+			onClick={() => onExpand(value)}
+			onKeyDown={e => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault()
+					onExpand(value)
+				}
+			}}
 		>
-			{isTruncated ? `${str.slice(0, 120)}...` : str}
+			{str}
 		</span>
 	)
 }
