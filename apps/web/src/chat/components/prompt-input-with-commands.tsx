@@ -15,7 +15,7 @@ import {
 	usePromptInputController
 } from '@/components/ai-elements/prompt-input'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
-import { SpeechInput } from '@/components/ai-elements/speech-input'
+import { MicRecordButton } from '@/components/ai-elements/mic-record-button'
 import {
 	GlobeIcon,
 	PaperclipIcon
@@ -161,15 +161,12 @@ export function PromptInputWithCommands({
 								)}
 							</AnimatePresence>
 						</button>
-						<SpeechInput
+						<MicRecordButton
 							forceMediaRecorder
 							onAudioRecorded={handleAudioRecorded}
 							onTranscriptionChange={
 								handleTranscriptionChange
 							}
-							variant="ghost"
-							size="icon"
-							className="size-8 rounded-lg border border-transparent bg-black/5 text-muted-foreground transition-all hover:text-foreground dark:bg-white/5"
 						/>
 					</PromptInputTools>
 					<PromptInputSubmit disabled={disabled} />
