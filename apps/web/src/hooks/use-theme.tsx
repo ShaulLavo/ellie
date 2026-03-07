@@ -40,11 +40,21 @@ function resolveTheme(preference: ThemePreference): Theme {
 }
 
 function applyTheme(theme: Theme) {
+	// Disable transitions during theme switch to prevent ugly color animations
+	const css = document.createElement('style')
+	css.textContent =
+		'*, *::before, *::after { transition: none !important; }'
+	document.head.appendChild(css)
+
 	document.documentElement.classList.toggle(
 		'dark',
 		theme === 'dark'
 	)
 	document.documentElement.style.colorScheme = theme
+
+	// Force reflow, then re-enable transitions
+	void document.body.offsetHeight
+	css.remove()
 }
 
 function getStoredPreference(): ThemePreference {

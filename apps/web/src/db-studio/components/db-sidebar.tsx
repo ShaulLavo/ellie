@@ -26,7 +26,7 @@ export function DbSidebar({
 	const [showInternal, setShowInternal] = useState(false)
 
 	return (
-		<aside className="w-60 shrink-0 border-r bg-sidebar flex flex-col">
+		<aside className="w-60 shrink-0 border-l bg-sidebar flex flex-col">
 			<div className="px-3 py-2.5 border-b flex items-center justify-between">
 				<span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					Databases

@@ -1,0 +1,97 @@
+/* ─── Ioskeley Mono ─── */
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-Light.ttf')
+		format('truetype');
+	font-weight: 300;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-LightItalic.ttf')
+		format('truetype');
+	font-weight: 300;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-Regular.ttf')
+		format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-Italic.ttf')
+		format('truetype');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-Medium.ttf')
+		format('truetype');
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-MediumItalic.ttf')
+		format('truetype');
+	font-weight: 500;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-SemiBold.ttf')
+		format('truetype');
+	font-weight: 600;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-SemiBoldItalic.ttf')
+		format('truetype');
+	font-weight: 600;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-Bold.ttf')
+		format('truetype');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-BoldItalic.ttf')
+		format('truetype');
+	font-weight: 700;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-ExtraBold.ttf')
+		format('truetype');
+	font-weight: 800;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ioskeley Mono';
+	src: url('./IoskeleyMono/IoskeleyMono-ExtraBoldItalic.ttf')
+		format('truetype');
+	font-weight: 800;
+	font-style: italic;
+	font-display: swap;
+}

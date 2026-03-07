@@ -7,10 +7,10 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useTheme } from '@/components/theme-provider'
+import { useTheme } from '@/hooks/use-theme'
 
 export function ThemeToggle() {
-	const { setTheme } = useTheme()
+	const { setPreference } = useTheme()
 
 	return (
 		<DropdownMenu>
@@ -28,14 +28,18 @@ export function ThemeToggle() {
 				<span className="sr-only">Toggle theme</span>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuItem onClick={() => setTheme('light')}>
+				<DropdownMenuItem
+					onClick={() => setPreference('light')}
+				>
 					Light
 				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setTheme('dark')}>
+				<DropdownMenuItem
+					onClick={() => setPreference('dark')}
+				>
 					Dark
 				</DropdownMenuItem>
 				<DropdownMenuItem
-					onClick={() => setTheme('system')}
+					onClick={() => setPreference('system')}
 				>
 					System
 				</DropdownMenuItem>

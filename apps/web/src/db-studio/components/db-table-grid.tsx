@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
 	useReactTable,
 	getCoreRowModel,
@@ -9,6 +9,7 @@ import {
 	ArrowDown,
 	ArrowUp,
 	ArrowUpDown,
+	ChevronDown,
 	KeyRound,
 	ChevronsLeft,
 	ChevronsRight,
@@ -26,12 +27,12 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select'
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import {
 	Tooltip,
@@ -39,6 +40,7 @@ import {
 	TooltipTrigger
 } from '@/components/ui/tooltip'
 import { Spinner } from '@/components/ui/spinner'
+import { CellDetailDialog } from './cell-detail-dialog'
 import type {
 	ColumnInfo,
 	RowsResponse,
@@ -74,6 +76,11 @@ export function DbTableGrid({
 		c => !c.hidden
 	)
 
+	const [inspectedCell, setInspectedCell] = useState<{
+		column: ColumnInfo
+		value: unknown
+	} | null>(null)
+
 	const columns = useMemo<
 		ColumnDef<Record<string, unknown>>[]
 	>(
@@ -89,7 +96,15 @@ export function DbTableGrid({
 					/>
 				),
 				cell: ({ getValue }) => (
-					<CellValue value={getValue()} />
+					<CellValue
+						value={getValue()}
+						onExpand={v =>
+							setInspectedCell({
+								column: col,
+								value: v
+							})
+						}
+					/>
 				)
 			})),
 		[visibleColumns, sortBy, sortDir, onSort]
@@ -186,23 +201,36 @@ export function DbTableGrid({
 						<span className="text-xs text-muted-foreground">
 							Rows per page
 						</span>
-						<Select
-							value={String(pageSize)}
-							onValueChange={v =>
-								onPageSizeChange(Number(v))
-							}
-						>
-							<SelectTrigger className="h-7 w-16 text-xs">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent side="top">
-								{[25, 50, 100, 250, 500].map(s => (
-									<SelectItem key={s} value={String(s)}>
-										{s}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<DropdownMenu>
+							<DropdownMenuTrigger
+								render={
+									<button
+										type="button"
+										className="inline-flex items-center gap-1 h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus:ring-1 focus:ring-ring hover:bg-accent transition-colors"
+									/>
+								}
+							>
+								<span>{pageSize}</span>
+								<ChevronDown className="size-3 text-muted-foreground shrink-0" />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" side="top">
+								<DropdownMenuRadioGroup
+									value={String(pageSize)}
+									onValueChange={v =>
+										onPageSizeChange(Number(v))
+									}
+								>
+									{[25, 50, 100, 250, 500].map(s => (
+										<DropdownMenuRadioItem
+											key={s}
+											value={String(s)}
+										>
+											{s}
+										</DropdownMenuRadioItem>
+									))}
+								</DropdownMenuRadioGroup>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 
 					<div className="flex items-center justify-center text-xs tabular-nums text-muted-foreground min-w-20">
@@ -253,6 +281,15 @@ export function DbTableGrid({
 					</div>
 				</div>
 			</div>
+
+			<CellDetailDialog
+				open={inspectedCell !== null}
+				onOpenChange={open => {
+					if (!open) setInspectedCell(null)
+				}}
+				column={inspectedCell?.column ?? null}
+				value={inspectedCell?.value}
+			/>
 		</div>
 	)
 }
@@ -326,7 +363,13 @@ function ColumnHeader({
 
 // ── Cell value rendering ─────────────────────────────────────────────────────
 
-function CellValue({ value }: { value: unknown }) {
+function CellValue({
+	value,
+	onExpand
+}: {
+	value: unknown
+	onExpand: (value: unknown) => void
+}) {
 	if (value === null || value === undefined) {
 		return (
 			<span className="text-muted-foreground/60 italic text-xs font-mono">
@@ -348,30 +391,61 @@ function CellValue({ value }: { value: unknown }) {
 
 	if (typeof value === 'object') {
 		const json = JSON.stringify(value)
+		const isTruncated = json.length > 60
 		return (
-			<Tooltip>
-				<TooltipTrigger
-					render={
-						<span className="font-mono text-xs text-muted-foreground cursor-default" />
-					}
-				>
-					{json.length > 60
-						? `${json.slice(0, 60)}...`
-						: json}
-				</TooltipTrigger>
-				<TooltipContent side="bottom" className="max-w-md">
-					<pre className="text-xs font-mono whitespace-pre-wrap break-all">
-						{JSON.stringify(value, null, 2)}
-					</pre>
-				</TooltipContent>
-			</Tooltip>
+			<span
+				className={cn(
+					'font-mono text-xs text-muted-foreground',
+					isTruncated &&
+						'cursor-pointer hover:text-foreground transition-colors'
+				)}
+				role={isTruncated ? 'button' : undefined}
+				tabIndex={isTruncated ? 0 : undefined}
+				onClick={
+					isTruncated ? () => onExpand(value) : undefined
+				}
+				onKeyDown={
+					isTruncated
+						? e => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault()
+									onExpand(value)
+								}
+							}
+						: undefined
+				}
+			>
+				{isTruncated ? `${json.slice(0, 60)}...` : json}
+			</span>
 		)
 	}
 
 	const str = String(value)
+	const isTruncated = str.length > 120
 	return (
-		<span className="font-mono text-xs">
-			{str.length > 120 ? `${str.slice(0, 120)}...` : str}
+		<span
+			className={cn(
+				'font-mono text-xs',
+				isTruncated &&
+					'cursor-pointer hover:text-foreground transition-colors'
+			)}
+			role={isTruncated ? 'button' : undefined}
+			tabIndex={isTruncated ? 0 : undefined}
+			onClick={
+				isTruncated ? () => onExpand(value) : undefined
+			}
+			onKeyDown={
+				isTruncated
+					? e => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault()
+								onExpand(value)
+							}
+						}
+					: undefined
+			}
+		>
+			{isTruncated ? `${str.slice(0, 120)}...` : str}
 		</span>
 	)
 }
