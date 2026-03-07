@@ -244,19 +244,36 @@ export const MicRecordButton = ({
 				const audioBlob = new Blob(audioChunksRef.current, {
 					type: 'audio/webm'
 				})
+				console.log(
+					'[MicRecordButton] Recording stopped — chunks:',
+					audioChunksRef.current.length,
+					'blob size:',
+					audioBlob.size
+				)
 				if (
 					audioBlob.size === 0 ||
 					!onAudioRecordedRef.current
-				)
+				) {
+					console.warn(
+						'[MicRecordButton] Empty blob or no handler, skipping'
+					)
 					return
+				}
 				setIsProcessing(true)
 				try {
 					const transcript =
 						await onAudioRecordedRef.current(audioBlob)
+					console.log(
+						'[MicRecordButton] Transcript result:',
+						JSON.stringify(transcript)
+					)
 					if (transcript)
 						onTranscriptionChangeRef.current?.(transcript)
-				} catch {
-					// delegated to caller
+				} catch (err) {
+					console.error(
+						'[MicRecordButton] Transcription error:',
+						err
+					)
 				} finally {
 					setIsProcessing(false)
 				}
