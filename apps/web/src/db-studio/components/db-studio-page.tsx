@@ -4,9 +4,8 @@ import {
 	useSearch
 } from '@tanstack/react-router'
 import {
-	DatabaseIcon,
-	PanelRightClose,
-	PanelRightOpen
+	PanelLeftClose,
+	PanelLeftOpen
 } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { DbSidebar } from './db-sidebar'
@@ -97,10 +96,19 @@ export function DbStudioPage() {
 		<div className="h-screen flex flex-col overflow-hidden bg-background">
 			{/* Header */}
 			<header className="flex items-center gap-3 px-4 h-11 border-b bg-card/50 shrink-0">
-				<DatabaseIcon className="size-4 text-primary" />
-				<h1 className="text-sm font-semibold tracking-tight">
-					DB Studio
-				</h1>
+				<button
+					onClick={() => setIsCollapsed(v => !v)}
+					className="inline-flex items-center justify-center size-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+					title={
+						isCollapsed ? 'Show sidebar' : 'Hide sidebar'
+					}
+				>
+					{isCollapsed ? (
+						<PanelLeftOpen className="size-3.5" />
+					) : (
+						<PanelLeftClose className="size-3.5" />
+					)}
+				</button>
 				<Separator orientation="vertical" className="h-4" />
 				{database && table ? (
 					<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -122,24 +130,18 @@ export function DbStudioPage() {
 				)}
 				<div className="ml-auto flex items-center gap-1">
 					<ThemeToggle />
-					<button
-						onClick={() => setIsCollapsed(v => !v)}
-						className="inline-flex items-center justify-center size-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-						title={
-							isCollapsed ? 'Show sidebar' : 'Hide sidebar'
-						}
-					>
-						{isCollapsed ? (
-							<PanelRightOpen className="size-3.5" />
-						) : (
-							<PanelRightClose className="size-3.5" />
-						)}
-					</button>
 				</div>
 			</header>
 
 			{/* Body */}
 			<div className="flex flex-1 overflow-hidden">
+				{!isCollapsed && (
+					<DbSidebar
+						selectedDatabase={database}
+						selectedTable={table}
+						onSelect={handleSelectTable}
+					/>
+				)}
 				<main className="flex-1 flex flex-col overflow-hidden">
 					{database && table && schema ? (
 						<>
@@ -173,13 +175,6 @@ export function DbStudioPage() {
 						<DbEmptyState />
 					)}
 				</main>
-				{!isCollapsed && (
-					<DbSidebar
-						selectedDatabase={database}
-						selectedTable={table}
-						onSelect={handleSelectTable}
-					/>
-				)}
 			</div>
 		</div>
 	)
