@@ -3,10 +3,7 @@ import {
 	useNavigate,
 	useSearch
 } from '@tanstack/react-router'
-import {
-	PanelLeftClose,
-	PanelLeftOpen
-} from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { DbSidebar } from './db-sidebar'
 import { DbTableGrid } from './db-table-grid'
