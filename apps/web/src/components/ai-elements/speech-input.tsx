@@ -263,10 +263,6 @@ export const SpeechInput = ({
 
 	// Start MediaRecorder recording
 	const startMediaRecorder = useCallback(async () => {
-		console.log(
-			'[SpeechInput] startMediaRecorder called, hasCallback:',
-			!!onAudioRecordedRef.current
-		)
 		if (!onAudioRecordedRef.current) {
 			return
 		}
@@ -353,12 +349,6 @@ export const SpeechInput = ({
 	}, [])
 
 	const toggleListening = useCallback(() => {
-		console.log(
-			'[SpeechInput] toggleListening called, mode:',
-			mode,
-			'isListening:',
-			isListening
-		)
 		if (
 			mode === 'speech-recognition' &&
 			recognitionRef.current

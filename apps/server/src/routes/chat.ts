@@ -305,15 +305,37 @@ export function createChatRoutes(
 								'Invalid or already-claimed speechRef'
 							)
 						}
+						// Runtime-validate artifact fields against expected values
+						const VALID_SOURCES = ['microphone'] as const
+						const VALID_FLOWS = ['transcript-first'] as const
+						const VALID_NORMALIZED_BY = [
+							'client-mediabunny',
+							'server-ffmpeg',
+							'none'
+						] as const
+
+						const source = (
+							VALID_SOURCES as readonly string[]
+						).includes(artifact.source)
+							? (artifact.source as (typeof VALID_SOURCES)[number])
+							: 'microphone'
+						const flow = (
+							VALID_FLOWS as readonly string[]
+						).includes(artifact.flow)
+							? (artifact.flow as (typeof VALID_FLOWS)[number])
+							: 'transcript-first'
+						const normalizedBy = (
+							VALID_NORMALIZED_BY as readonly string[]
+						).includes(artifact.normalizedBy)
+							? (artifact.normalizedBy as (typeof VALID_NORMALIZED_BY)[number])
+							: 'none'
+
 						speechMeta = {
 							ref: artifact.id,
-							source: artifact.source as 'microphone',
-							flow: artifact.flow as 'transcript-first',
+							source,
+							flow,
 							mime: artifact.mime,
-							normalizedBy: artifact.normalizedBy as
-								| 'client-mediabunny'
-								| 'server-ffmpeg'
-								| 'none'
+							normalizedBy
 						}
 					}
 
@@ -341,11 +363,17 @@ export function createChatRoutes(
 
 					// Claim the speech artifact now that the event is persisted
 					if (speechMeta && eventStore) {
-						eventStore.speechArtifacts.claim(
-							speechMeta.ref,
-							row.id,
-							sessionId
-						)
+						const claimed =
+							eventStore.speechArtifacts.claim(
+								speechMeta.ref,
+								row.id,
+								sessionId
+							)
+						if (!claimed) {
+							console.warn(
+								`[chat] Speech artifact claim race: ref=${speechMeta.ref} sessionId=${sessionId} eventId=${row.id} — artifact was already claimed or expired`
+							)
+						}
 					}
 
 					// Dedupe hit: appendEvent returned an existing row

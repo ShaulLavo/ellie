@@ -17,7 +17,11 @@ export async function transcribeAudio(
 	try {
 		normalized = await normalizeToWav16kMono(audioBlob)
 		normalizedBy = 'client-mediabunny'
-	} catch {
+	} catch (err) {
+		console.warn(
+			'[speech-client] Audio normalization failed, sending raw blob:',
+			err instanceof Error ? err.message : String(err)
+		)
 		normalized = audioBlob
 	}
 

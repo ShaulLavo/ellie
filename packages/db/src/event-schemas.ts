@@ -1,5 +1,6 @@
 import * as v from 'valibot'
 import type { EventType } from '@ellie/schemas/events'
+import { speechMetadataSchema } from '@ellie/schemas'
 
 // ── Event types ─────────────────────────────────────────────────────────────
 
@@ -120,15 +121,7 @@ export const payloadSchemas: Record<
 			])
 		),
 		timestamp: v.number(),
-		speech: v.optional(
-			v.object({
-				ref: v.string(),
-				source: v.string(),
-				flow: v.string(),
-				mime: v.string(),
-				normalizedBy: v.string()
-			})
-		)
+		speech: v.optional(speechMetadataSchema)
 	}),
 	agent_start: v.object({}),
 	agent_end: v.object({

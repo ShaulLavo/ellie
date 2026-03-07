@@ -41,11 +41,21 @@ export function PromptInputWithCommands({
 
 	const handleAudioRecorded = useCallback(
 		async (audioBlob: Blob) => {
-			const result = await transcribeAudio(audioBlob)
-			if (speechRefRef) {
-				speechRefRef.current = result.speechRef
+			try {
+				const result = await transcribeAudio(audioBlob)
+				if (speechRefRef) {
+					speechRefRef.current = result.speechRef
+				}
+				return result.text
+			} catch (err) {
+				console.error(
+					'[PromptInput] Transcription failed:',
+					err instanceof Error
+						? err.message
+						: String(err)
+				)
+				return ''
 			}
-			return result.text
 		},
 		[speechRefRef]
 	)

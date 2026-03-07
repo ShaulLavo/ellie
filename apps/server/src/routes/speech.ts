@@ -26,6 +26,7 @@ import {
 } from './http-errors'
 
 const SPEECH_DRAFT_TTL_MS = 30 * 60 * 1000 // 30 minutes
+const STT_FETCH_TIMEOUT_MS = 10_000 // 10 seconds
 
 export function createSpeechRoutes(
 	eventStore: EventStore,
@@ -127,22 +128,38 @@ export function createSpeechRoutes(
 				`${sttBaseUrl}/transcribe`,
 				{
 					method: 'POST',
-					body: sttForm
+					body: sttForm,
+					signal: AbortSignal.timeout(STT_FETCH_TIMEOUT_MS)
 				}
 			)
 		} catch (err) {
+			const isTimeout =
+				err instanceof DOMException &&
+				err.name === 'TimeoutError'
+
 			if (traceRecorder && sttScope) {
 				traceRecorder.record(
 					sttScope,
 					'stt.error',
 					'speech',
 					{
-						error: 'STT service unreachable',
+						error: isTimeout
+							? 'STT request timed out'
+							: 'STT service unreachable',
 						detail:
 							err instanceof Error
 								? err.message
-								: String(err)
+								: String(err),
+						timeoutMs: isTimeout
+							? STT_FETCH_TIMEOUT_MS
+							: undefined
 					}
+				)
+			}
+
+			if (isTimeout) {
+				throw new ServiceUnavailableError(
+					`STT request timed out after ${STT_FETCH_TIMEOUT_MS}ms`
 				)
 			}
 			throw new ServiceUnavailableError(
@@ -212,23 +229,36 @@ export function createSpeechRoutes(
 		const blobPath = join(speechAudioDir, `${id}.wav`)
 		await Bun.write(blobPath, audioBytes)
 
-		// Create draft speech artifact
+		// Create draft speech artifact — clean up blob on failure
 		const now = Date.now()
-		eventStore.speechArtifacts.create({
-			id,
-			status: 'draft',
-			blobPath,
-			source,
-			flow: 'transcript-first',
-			mime: audioField.type || 'audio/wav',
-			size: audioBytes.byteLength,
-			normalizedBy,
-			transcriptText: sttResult.text,
-			durationMs: sttResult.duration_ms,
-			speechDetected: sttResult.speech_detected,
-			createdAt: now,
-			expiresAt: now + SPEECH_DRAFT_TTL_MS
-		})
+		try {
+			eventStore.speechArtifacts.create({
+				id,
+				status: 'draft',
+				blobPath,
+				source,
+				flow: 'transcript-first',
+				mime: audioField.type || 'audio/wav',
+				size: audioBytes.byteLength,
+				normalizedBy,
+				transcriptText: sttResult.text,
+				durationMs: sttResult.duration_ms,
+				speechDetected: sttResult.speech_detected,
+				createdAt: now,
+				expiresAt: now + SPEECH_DRAFT_TTL_MS
+			})
+		} catch (err) {
+			// Best-effort cleanup of the orphaned blob
+			try {
+				const { unlinkSync } = await import('node:fs')
+				unlinkSync(blobPath)
+			} catch {
+				// ignore cleanup errors
+			}
+			throw new InternalServerError(
+				`Failed to create speech artifact: ${err instanceof Error ? err.message : String(err)}`
+			)
+		}
 
 		if (traceRecorder && artifactScope) {
 			traceRecorder.record(

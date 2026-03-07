@@ -17,7 +17,7 @@ import {
 
 /**
  * Normalize an audio blob to 16 kHz mono WAV.
- * Falls back to returning the original blob on error.
+ * @throws {Error} If normalization fails (caller should fall back to raw blob).
  */
 export async function normalizeToWav16kMono(
 	blob: Blob
