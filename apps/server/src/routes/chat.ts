@@ -307,7 +307,9 @@ export function createChatRoutes(
 						}
 						// Runtime-validate artifact fields against expected values
 						const VALID_SOURCES = ['microphone'] as const
-						const VALID_FLOWS = ['transcript-first'] as const
+						const VALID_FLOWS = [
+							'transcript-first'
+						] as const
 						const VALID_NORMALIZED_BY = [
 							'client-mediabunny',
 							'server-ffmpeg',
