@@ -27,6 +27,7 @@ const RENDERABLE_TYPES: EventType[] = [
 	'tool_execution',
 	'memory_recall',
 	'memory_retain',
+	'session_rotated',
 	'error'
 ]
 

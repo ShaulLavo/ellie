@@ -895,6 +895,25 @@ export const PromptInputTextarea = ({
 				if (files.length > 0) {
 					event.preventDefault()
 					attachments.add(files)
+					return
+				}
+
+				// Long pasted text → convert to a virtual file attachment
+				const LONG_PASTE_THRESHOLD = 1024
+				const pastedText =
+					event.clipboardData?.getData('text/plain')
+				if (
+					pastedText &&
+					pastedText.length > LONG_PASTE_THRESHOLD
+				) {
+					event.preventDefault()
+					const blob = new Blob([pastedText], {
+						type: 'text/plain'
+					})
+					const file = new File([blob], 'Pasted text.txt', {
+						type: 'text/plain'
+					})
+					attachments.add([file])
 				}
 			},
 			[attachments]

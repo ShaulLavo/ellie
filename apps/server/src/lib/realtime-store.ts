@@ -60,6 +60,12 @@ export class RealtimeStore {
 		this.#currentSessionId = newSessionId
 		this.#store.setKv('currentSessionId', newSessionId)
 
+		// Persist a session_rotated event in the new session
+		this.appendEvent(newSessionId, 'session_rotated', {
+			previousSessionId: previous,
+			message: 'New day, new session'
+		})
+
 		this.#publish<RotationEvent>('current-session', {
 			type: 'rotated',
 			previousSessionId: previous,

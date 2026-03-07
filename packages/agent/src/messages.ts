@@ -72,8 +72,34 @@ function userToModelMessage(
 					mimeType
 				}
 			})
+		} else if (
+			'file' in c &&
+			'textContent' in c &&
+			c.textContent
+		) {
+			// Text file with embedded content — inline into conversation
+			const name = 'name' in c ? (c.name as string) : 'file'
+			const text = c.textContent as string
+			const MAX_INLINE = 50_000
+			if (text.length > MAX_INLINE) {
+				const truncated = text.slice(0, MAX_INLINE)
+				const fileRef =
+					'file' in c && c.file ? (c.file as string) : ''
+				const link = fileRef
+					? `\n\n(Content truncated at 50K of ${text.length} chars — full file: /api/uploads-rpc/${fileRef}/content)`
+					: `\n\n(Content truncated at 50K of ${text.length} chars)`
+				content.push({
+					type: 'text',
+					content: `--- ${name} ---\n${truncated}${link}`
+				})
+			} else {
+				content.push({
+					type: 'text',
+					content: `--- ${name} ---\n${text}`
+				})
+			}
 		} else if ('file' in c) {
-			// File-reference attachment — describe as text for the model
+			// Binary file-reference — describe as text for the model
 			const name = 'name' in c ? (c.name as string) : c.type
 			content.push({
 				type: 'text',

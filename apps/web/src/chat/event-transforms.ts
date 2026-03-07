@@ -157,6 +157,16 @@ export function eventToStored(
 		row.type === 'memory_retain'
 	) {
 		parts = extractMemoryParts(parsed)
+	} else if (row.type === 'session_rotated') {
+		parts = [
+			{
+				type: 'checkpoint',
+				message:
+					typeof parsed.message === 'string'
+						? parsed.message
+						: 'New day, new session'
+			}
+		]
 	} else if (row.type === 'error') {
 		parts = extractErrorParts(parsed)
 	} else {
@@ -222,6 +232,8 @@ export function eventToStored(
 	) {
 		sender = 'agent'
 	} else if (parsed.role === 'system') {
+		sender = 'system'
+	} else if (row.type === 'session_rotated') {
 		sender = 'system'
 	} else if (row.type === 'error') {
 		sender = 'agent'

@@ -69,8 +69,71 @@ const TEXT_MIME_PREFIXES = [
 	'application/toml',
 	'application/sql'
 ]
-function isTextMime(mime: string): boolean {
-	return TEXT_MIME_PREFIXES.some(p => mime.startsWith(p))
+
+/** Extensions browsers commonly misidentify (e.g. .ts → video/mp2t). */
+const TEXT_EXTENSIONS = new Set([
+	'.ts',
+	'.tsx',
+	'.js',
+	'.jsx',
+	'.mjs',
+	'.cjs',
+	'.json',
+	'.yaml',
+	'.yml',
+	'.toml',
+	'.xml',
+	'.md',
+	'.mdx',
+	'.txt',
+	'.csv',
+	'.tsv',
+	'.html',
+	'.htm',
+	'.css',
+	'.scss',
+	'.less',
+	'.py',
+	'.rb',
+	'.rs',
+	'.go',
+	'.java',
+	'.kt',
+	'.c',
+	'.h',
+	'.cpp',
+	'.hpp',
+	'.cs',
+	'.swift',
+	'.sh',
+	'.bash',
+	'.zsh',
+	'.fish',
+	'.sql',
+	'.graphql',
+	'.gql',
+	'.env',
+	'.ini',
+	'.cfg',
+	'.conf',
+	'.vue',
+	'.svelte',
+	'.astro'
+])
+
+function isTextContent(
+	mime: string,
+	filename?: string
+): boolean {
+	if (TEXT_MIME_PREFIXES.some(p => mime.startsWith(p)))
+		return true
+	if (filename) {
+		const ext = filename
+			.slice(filename.lastIndexOf('.'))
+			.toLowerCase()
+		if (TEXT_EXTENSIONS.has(ext)) return true
+	}
+	return false
 }
 
 export function createChatRoutes(
@@ -159,10 +222,11 @@ export function createChatRoutes(
 
 					// Build content parts: text + attachments
 					const contentParts: UserMessage['content'] = []
-					if (input.content.trim()) {
+					const trimmed = input.content.trim()
+					if (trimmed) {
 						contentParts.push({
 							type: 'text',
-							text: input.content
+							text: trimmed
 						})
 					}
 					if (input.attachments && uploadStore) {
@@ -183,16 +247,22 @@ export function createChatRoutes(
 									data: bytes.toString('base64'),
 									mimeType: att.mime
 								})
-							} else if (isTextMime(mime)) {
-								// Read text content so the model can read it
+							} else if (isTextContent(mime, att.name)) {
+								// Store as file attachment (renders as card in UI)
+								// but embed textContent so the model can read it
 								const bytes = await readUploadBytes(
 									uploadStore,
 									att.uploadId
 								)
-								const text = new TextDecoder().decode(bytes)
+								const textContent =
+									new TextDecoder().decode(bytes)
 								contentParts.push({
-									type: 'text',
-									text: `<file name="${att.name}">\n${text}\n</file>`
+									type: 'file',
+									file: att.uploadId,
+									mime: att.mime,
+									size: att.size,
+									name: att.name,
+									textContent
 								})
 							} else if (mime.startsWith('video/')) {
 								contentParts.push({

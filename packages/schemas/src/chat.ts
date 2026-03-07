@@ -40,6 +40,7 @@ export type ContentPart =
 			mime: string
 			size: number
 			name?: string
+			textContent?: string
 	  }
 	| {
 			type: 'tool-call'
@@ -70,6 +71,7 @@ export type ContentPart =
 			duration_ms?: number
 	  }
 	| { type: 'thinking'; text: string }
+	| { type: 'checkpoint'; message: string }
 	| {
 			type: 'artifact'
 			artifactType: ArtifactType
@@ -254,6 +256,8 @@ function formatPart(part: ContentPart): string {
 			return `[Audio: ${part.file}]`
 		case 'file':
 			return `[File: ${part.name ?? part.file}]`
+		case 'checkpoint':
+			return `[Checkpoint: ${part.message}]`
 		case 'artifact':
 			return `[Artifact: ${part.title ?? part.filename}]\n${part.content}`
 		default:

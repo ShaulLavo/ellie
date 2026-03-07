@@ -57,7 +57,8 @@ export const fileContentSchema = v.object({
 	file: v.string(),
 	mime: v.string(),
 	size: v.number(),
-	name: v.optional(v.string())
+	name: v.optional(v.string()),
+	textContent: v.optional(v.string())
 })
 
 export const toolCallSchema = v.object({

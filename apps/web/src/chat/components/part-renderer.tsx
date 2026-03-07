@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { BookOpenIcon, FileTextIcon } from 'lucide-react'
+import { SunHorizonIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
 import { env } from '@ellie/env/client'
 import {
@@ -11,6 +12,10 @@ import {
 	ReasoningTrigger,
 	ReasoningContent
 } from '@/components/ai-elements/reasoning'
+import {
+	Checkpoint,
+	CheckpointIcon
+} from '@/components/ai-elements/checkpoint'
 import { ToolCard } from '@/components/ai-elements/tool'
 import type { ToolResultPart } from '../utils'
 
@@ -194,8 +199,27 @@ export const PartRenderer = memo(
 						/>
 					</div>
 				)
-			case 'file':
-				return (
+			case 'file': {
+				const hasUpload = part.file && part.file.length > 0
+				const label = part.name ?? 'Attachment'
+				const sizeLabel =
+					part.size >= 1024
+						? `${(part.size / 1024).toFixed(1)} KB`
+						: `${part.size} B`
+				const inner = (
+					<>
+						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
+						<div className="min-w-0">
+							<span className="block truncate font-medium">
+								{label}
+							</span>
+							<span className="text-xs text-muted-foreground">
+								{sizeLabel}
+							</span>
+						</div>
+					</>
+				)
+				return hasUpload ? (
 					<a
 						href={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
 						target="_blank"
@@ -203,16 +227,24 @@ export const PartRenderer = memo(
 						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
 						download={part.name}
 					>
-						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
-						<div className="min-w-0">
-							<span className="block truncate font-medium">
-								{part.name ?? 'Attachment'}
-							</span>
-							<span className="text-xs text-muted-foreground">
-								{part.mime}
-							</span>
-						</div>
+						{inner}
 					</a>
+				) : (
+					<div className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm">
+						{inner}
+					</div>
+				)
+			}
+			case 'checkpoint':
+				return (
+					<Checkpoint>
+						<CheckpointIcon>
+							<SunHorizonIcon className="size-4 shrink-0" />
+						</CheckpointIcon>
+						<span className="shrink-0 text-xs">
+							{part.message}
+						</span>
+					</Checkpoint>
 				)
 			case 'artifact':
 				return (

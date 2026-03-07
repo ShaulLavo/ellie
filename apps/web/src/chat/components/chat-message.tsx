@@ -25,8 +25,11 @@ export const ChatMessageRow = memo(
 		toolResults?: Map<string, ToolResultPart>
 		consumedToolCallIds?: Set<string>
 	}) => {
-		// Memory messages render as standalone system-style entries
-		if (message.sender === 'memory') {
+		// Memory / system messages render as standalone entries
+		if (
+			message.sender === 'memory' ||
+			message.sender === 'system'
+		) {
 			return (
 				<div className="animate-message-in">
 					<div className="flex flex-col gap-2">

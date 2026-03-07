@@ -33,7 +33,9 @@ export const EVENT_TYPES = [
 	'session_exec_error',
 	// Memory events
 	'memory_recall',
-	'memory_retain'
+	'memory_retain',
+	// Session lifecycle
+	'session_rotated'
 ] as const satisfies readonly EventType[]
 
 export const eventTypeSchema = v.picklist(EVENT_TYPES)
@@ -48,7 +50,8 @@ export const DURABLE_EVENT_TYPES = [
 	'assistant_message',
 	'tool_execution',
 	'agent_start',
-	'run_closed'
+	'run_closed',
+	'session_rotated'
 ] as const satisfies readonly EventType[]
 
 const durableEventTypeSet = new Set<EventType>(
@@ -96,7 +99,8 @@ const fileContent = v.object({
 	type: v.literal('file'),
 	file: v.string(),
 	name: v.optional(v.string()),
-	mime: v.optional(v.string())
+	mime: v.optional(v.string()),
+	textContent: v.optional(v.string())
 })
 
 export const payloadSchemas: Record<
@@ -270,6 +274,11 @@ export const payloadSchemas: Record<
 			)
 		),
 		timestamp: v.number()
+	}),
+	// Session lifecycle
+	session_rotated: v.object({
+		previousSessionId: v.string(),
+		message: v.string()
 	}),
 	memory_retain: v.object({
 		parts: v.array(

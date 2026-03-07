@@ -166,6 +166,12 @@ export interface EventPayloadMap {
 		message: string
 	}
 
+	// --- Session lifecycle ---
+	session_rotated: {
+		previousSessionId: string
+		message: string
+	}
+
 	// --- Error ---
 	error: { message: string; code?: string }
 }
