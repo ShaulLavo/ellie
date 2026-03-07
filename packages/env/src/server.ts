@@ -84,6 +84,14 @@ const ServerEnvSchema = v.object({
 	/** Maximum raw output size per session_exec evaluation in bytes (default: 262144). */
 	AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES: v.optional(
 		v.string()
+	),
+
+	// ── Speech-to-text ──
+
+	/** Base URL of the Rust STT service (default: http://localhost:3456). */
+	STT_BASE_URL: v.optional(
+		v.pipe(v.string(), v.url()),
+		'http://localhost:3456'
 	)
 })
 
@@ -137,5 +145,6 @@ export const env: ServerEnv = v.parse(ServerEnvSchema, {
 	AGENT_SESSION_EXEC_TIMEOUT_MS:
 		Bun.env.AGENT_SESSION_EXEC_TIMEOUT_MS,
 	AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES:
-		Bun.env.AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES
+		Bun.env.AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES,
+	STT_BASE_URL: Bun.env.STT_BASE_URL
 })

@@ -1,4 +1,8 @@
-import { useState } from 'react'
+import {
+	useCallback,
+	useState,
+	type MutableRefObject
+} from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { SlashCommandMenu } from './slash-command-menu'
 import type { SlashCommand } from './slash-command-menu'
@@ -11,26 +15,55 @@ import {
 	usePromptInputController
 } from '@/components/ai-elements/prompt-input'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
+import { SpeechInput } from '@/components/ai-elements/speech-input'
 import {
 	GlobeIcon,
-	MicrophoneIcon,
 	PaperclipIcon
 } from '@phosphor-icons/react'
 import { AttachmentPreviews } from '@/components/attachment-previews'
 import { cn } from '@/lib/utils'
+import { transcribeAudio } from '@/lib/speech-client'
 
 export function PromptInputWithCommands({
 	commands,
 	onSubmit,
-	disabled
+	disabled,
+	speechRefRef
 }: {
 	commands: SlashCommand[]
 	onSubmit: (message: PromptInputMessage) => void
 	disabled: boolean
+	speechRefRef?: MutableRefObject<string | null>
 }) {
 	const controller = usePromptInputController()
 	const inputValue = controller.textInput.value
 	const [showSearch, setShowSearch] = useState(false)
+
+	const handleAudioRecorded = useCallback(
+		async (audioBlob: Blob) => {
+			try {
+				const result = await transcribeAudio(audioBlob)
+				if (speechRefRef) {
+					speechRefRef.current = result.speechRef
+				}
+				return result.text
+			} catch (err) {
+				console.error(
+					'[PromptInput] Transcription failed:',
+					err instanceof Error ? err.message : String(err)
+				)
+				return ''
+			}
+		},
+		[speechRefRef]
+	)
+
+	const handleTranscriptionChange = useCallback(
+		(text: string) => {
+			controller.textInput.setInput(text)
+		},
+		[controller]
+	)
 
 	const handleCommandSelect = (cmd: SlashCommand) => {
 		controller.textInput.clear()
@@ -128,23 +161,16 @@ export function PromptInputWithCommands({
 								)}
 							</AnimatePresence>
 						</button>
-						<button
-							type="button"
-							className="flex size-8 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-black/5 text-muted-foreground transition-all hover:text-foreground dark:bg-white/5"
-						>
-							<motion.div
-								whileHover={{
-									scale: 1.15,
-									transition: {
-										type: 'spring',
-										stiffness: 300,
-										damping: 10
-									}
-								}}
-							>
-								<MicrophoneIcon className="size-4" />
-							</motion.div>
-						</button>
+						<SpeechInput
+							forceMediaRecorder
+							onAudioRecorded={handleAudioRecorded}
+							onTranscriptionChange={
+								handleTranscriptionChange
+							}
+							variant="ghost"
+							size="icon"
+							className="size-8 rounded-lg border border-transparent bg-black/5 text-muted-foreground transition-all hover:text-foreground dark:bg-white/5"
+						/>
 					</PromptInputTools>
 					<PromptInputSubmit disabled={disabled} />
 				</PromptInputFooter>

@@ -22,6 +22,7 @@ import { createStatusRoutes } from './routes/status'
 import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
 import { createTerminalRoutes } from './routes/terminal'
+import { createSpeechRoutes } from './routes/speech'
 import { createTraceRoutes } from './routes/traces'
 import { API_INFO, API_TAGS } from './consts'
 import { init } from './init'
@@ -51,7 +52,8 @@ export const app = new Elysia()
 			ctx.sseState,
 			ctx.getAgentController,
 			ctx.ensureBootstrap,
-			ctx.uploadStore
+			ctx.uploadStore,
+			ctx.eventStore
 		)
 	)
 	.use(
@@ -79,6 +81,14 @@ export const app = new Elysia()
 			relativeLocation: true,
 			maxSize: 500 * 1024 * 1024 // 500 MB
 		})
+	)
+	.use(
+		createSpeechRoutes(
+			ctx.eventStore,
+			ctx.DATA_DIR,
+			ctx.sttBaseUrl,
+			ctx.traceRecorder
+		)
 	)
 	.use(createDevRoutes(ctx.DATA_DIR))
 	.use(createTraceRoutes(ctx.traceRecorder))

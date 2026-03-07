@@ -87,11 +87,14 @@ export type SpeechInputProps = ComponentProps<
 	onTranscriptionChange?: (text: string) => void
 	/**
 	 * Callback for when audio is recorded using MediaRecorder fallback.
-	 * This is called in browsers that don't support the Web Speech API (Firefox, Safari).
+	 * This is called in browsers that don't support the Web Speech API (Firefox, Safari),
+	 * or when `forceMediaRecorder` is true.
 	 * The callback receives an audio Blob that should be sent to a transcription service.
 	 * Return the transcribed text, which will be passed to onTranscriptionChange.
 	 */
 	onAudioRecorded?: (audioBlob: Blob) => Promise<string>
+	/** Force MediaRecorder mode even when Web Speech API is available. */
+	forceMediaRecorder?: boolean
 	lang?: string
 }
 
@@ -121,14 +124,25 @@ export const SpeechInput = ({
 	className,
 	onTranscriptionChange,
 	onAudioRecorded,
+	forceMediaRecorder,
 	lang = 'en-US',
 	...props
 }: SpeechInputProps) => {
 	const [isListening, setIsListening] = useState(false)
 	const [isProcessing, setIsProcessing] = useState(false)
-	const [mode] = useState<SpeechInputMode>(
-		detectSpeechInputMode
-	)
+	const [mode] = useState<SpeechInputMode>(() => {
+		if (forceMediaRecorder) {
+			if (
+				typeof window !== 'undefined' &&
+				'MediaRecorder' in window &&
+				'mediaDevices' in navigator
+			) {
+				return 'media-recorder'
+			}
+			return 'none'
+		}
+		return detectSpeechInputMode()
+	})
 	const [isRecognitionReady, setIsRecognitionReady] =
 		useState(false)
 	const recognitionRef = useRef<SpeechRecognition | null>(
@@ -317,7 +331,11 @@ export const SpeechInput = ({
 			mediaRecorderRef.current = mediaRecorder
 			mediaRecorder.start()
 			setIsListening(true)
-		} catch {
+		} catch (err) {
+			console.error(
+				'[SpeechInput] Failed to start recording:',
+				err
+			)
 			setIsListening(false)
 		}
 	}, [])
@@ -381,6 +399,7 @@ export const SpeechInput = ({
 
 			{/* Main record button */}
 			<Button
+				type="button"
 				className={cn(
 					'relative z-10 rounded-full transition-all duration-300',
 					isListening

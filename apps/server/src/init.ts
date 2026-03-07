@@ -35,6 +35,7 @@ export interface ServerContext {
 	traceRecorder: TraceRecorder
 	blobSink: TusBlobSink
 	sseState: SseState
+	sttBaseUrl: string
 	getAgentController: () => Promise<AgentController | null>
 	invalidateAgentCache: () => void
 	ensureBootstrap: (sessionId: string) => void
@@ -236,6 +237,8 @@ export async function init(): Promise<ServerContext> {
 		store.rotateSession(todaySessionId())
 	})
 
+	// TODO: speech artifact TTL cleanup (expire stale drafts, delete blobs)
+
 	// ── Bootstrap helper ──────────────────────────────────────────────────
 	const ensureBootstrap = (sessionId: string) =>
 		ensureBootstrapInjected({
@@ -258,6 +261,7 @@ export async function init(): Promise<ServerContext> {
 		traceRecorder,
 		blobSink,
 		sseState,
+		sttBaseUrl: env.STT_BASE_URL,
 		getAgentController: () => controllerFactory.get(),
 		invalidateAgentCache: () =>
 			controllerFactory.invalidate(),

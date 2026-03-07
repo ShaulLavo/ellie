@@ -16,6 +16,8 @@ import {
 } from '@ellie/schemas/hindsight'
 import { tryValibotSummary } from '@ellie/schemas'
 
+// Structural match for @ellie/trace TraceKind — kept local to avoid
+// adding @ellie/trace as a dependency of hindsight.
 type TraceKind =
 	| 'chat'
 	| 'follow-up'
@@ -24,6 +26,8 @@ type TraceKind =
 	| 'hindsight-retain-batch'
 	| 'hindsight-reflect'
 	| 'hindsight-narrative'
+	| 'speech'
+
 import type { Hindsight } from '../hindsight'
 import type {
 	BankConfig,

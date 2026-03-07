@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useChatDB } from './hooks/use-chat-db'
 import { useToolGrouping } from './hooks/use-tool-grouping'
@@ -34,6 +34,8 @@ export function ChatRoom({
 		useState(false)
 	const [showSessionInfo, setShowSessionInfo] =
 		useState(false)
+
+	const speechRefRef = useRef<string | null>(null)
 
 	const chat = useChatDB(sessionId)
 
@@ -72,7 +74,13 @@ export function ChatRoom({
 					? await uploadFiles(rawFiles)
 					: undefined
 
-			await chat.sendMessage(text, attachments)
+			const speechRef = speechRefRef.current
+			speechRefRef.current = null
+			await chat.sendMessage(
+				text,
+				attachments,
+				speechRef ?? undefined
+			)
 		},
 		[commands, chat]
 	)
@@ -131,6 +139,7 @@ export function ChatRoom({
 						commands={commands}
 						onSubmit={handleSubmit}
 						disabled={chat.connectionState !== 'connected'}
+						speechRefRef={speechRefRef}
 					/>
 				</PromptInputProvider>
 			</div>

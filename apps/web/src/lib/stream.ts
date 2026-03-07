@@ -93,7 +93,8 @@ export class StreamClient {
 			mime: string
 			size: number
 			name: string
-		}[]
+		}[],
+		speechRef?: string
 	): Promise<void> {
 		const { error } = await eden
 			.chat({
@@ -105,7 +106,8 @@ export class StreamClient {
 				attachments:
 					attachments && attachments.length > 0
 						? attachments
-						: undefined
+						: undefined,
+				speechRef
 			})
 		if (error) throw error
 	}

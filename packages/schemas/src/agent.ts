@@ -4,6 +4,7 @@
  */
 
 import * as v from 'valibot'
+import { speechMetadataSchema } from './speech'
 
 // ============================================================================
 // Content block schemas
@@ -113,7 +114,8 @@ export const userMessageSchema = v.object({
 			fileContentSchema
 		])
 	),
-	timestamp: v.number()
+	timestamp: v.number(),
+	speech: v.optional(speechMetadataSchema)
 })
 
 export const assistantMessageSchema = v.object({

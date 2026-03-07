@@ -13,6 +13,7 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import type { AgentController } from '../agent/controller'
+import type { EventStore } from '@ellie/db'
 import {
 	agentMessageSchema,
 	type UserMessage
@@ -141,7 +142,8 @@ export function createChatRoutes(
 	sseState: SseState,
 	getAgentController?: () => Promise<AgentController | null>,
 	ensureBootstrap?: (sessionId: string) => void,
-	uploadStore?: FileStore
+	uploadStore?: FileStore,
+	eventStore?: EventStore
 ) {
 	return (
 		new Elysia({ prefix: '/chat', tags: ['Chat'] })
@@ -292,6 +294,53 @@ export function createChatRoutes(
 						}
 					}
 
+					// Resolve speech metadata from speechRef (if provided)
+					let speechMeta: UserMessage['speech'] | undefined
+					if (input.speechRef && eventStore) {
+						const artifact = eventStore.speechArtifacts.get(
+							input.speechRef
+						)
+						if (!artifact || artifact.status !== 'draft') {
+							throw new BadRequestError(
+								'Invalid or already-claimed speechRef'
+							)
+						}
+						// Runtime-validate artifact fields against expected values
+						const VALID_SOURCES = ['microphone'] as const
+						const VALID_FLOWS = [
+							'transcript-first'
+						] as const
+						const VALID_NORMALIZED_BY = [
+							'client-mediabunny',
+							'server-ffmpeg',
+							'none'
+						] as const
+
+						const source = (
+							VALID_SOURCES as readonly string[]
+						).includes(artifact.source)
+							? (artifact.source as (typeof VALID_SOURCES)[number])
+							: 'microphone'
+						const flow = (
+							VALID_FLOWS as readonly string[]
+						).includes(artifact.flow)
+							? (artifact.flow as (typeof VALID_FLOWS)[number])
+							: 'transcript-first'
+						const normalizedBy = (
+							VALID_NORMALIZED_BY as readonly string[]
+						).includes(artifact.normalizedBy)
+							? (artifact.normalizedBy as (typeof VALID_NORMALIZED_BY)[number])
+							: 'none'
+
+						speechMeta = {
+							ref: artifact.id,
+							source,
+							flow,
+							mime: artifact.mime,
+							normalizedBy
+						}
+					}
+
 					// Persist user message BEFORE bootstrap so the client
 					// sees the user bubble first, then the synthetic tool call.
 					// Dedupe key: reject rapid-fire duplicate POSTs with the
@@ -307,11 +356,27 @@ export function createChatRoutes(
 						{
 							role: 'user',
 							content: contentParts,
-							timestamp: beforeAppend
+							timestamp: beforeAppend,
+							...(speechMeta ? { speech: speechMeta } : {})
 						},
 						undefined, // runId — backfilled later by controller
 						dedupeKey
 					)
+
+					// Claim the speech artifact now that the event is persisted
+					if (speechMeta && eventStore) {
+						const claimed =
+							eventStore.speechArtifacts.claim(
+								speechMeta.ref,
+								row.id,
+								sessionId
+							)
+						if (!claimed) {
+							console.warn(
+								`[chat] Speech artifact claim race: ref=${speechMeta.ref} sessionId=${sessionId} eventId=${row.id} — artifact was already claimed or expired`
+							)
+						}
+					}
 
 					// Dedupe hit: appendEvent returned an existing row
 					// (createdAt will be older than our beforeAppend timestamp)
