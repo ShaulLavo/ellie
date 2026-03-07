@@ -390,6 +390,9 @@
 	divide-color: transparent !important;
 	background-color: var(--background) !important;
 	border-radius: 0.75rem !important;
+	margin-top: 0 !important;
+	margin-bottom: 0 !important;
+	gap: 0 !important;
 }
 [data-streamdown='code-block'] > * + * {
 	border-top: none !important;
@@ -415,7 +418,19 @@
 }
 [data-streamdown='code-block-body'] {
 	border: none !important;
-	padding: 0.5rem !important;
+	padding: 0 !important;
+}
+/* Keep Streamdown code blocks at 14px (text-sm) instead of the
+   prose-sm default (0.8571em ≈ 12px). Target pre, code, and the
+   body div itself so no prose rule can shrink them. */
+[data-streamdown='code-block-body'],
+[data-streamdown='code-block-body'] pre,
+[data-streamdown='code-block-body'] code {
+	font-size: 0.875rem !important;
+}
+[data-streamdown='code-block-body'] pre {
+	margin: 0 !important;
+	padding: 0 !important;
 }
 [data-streamdown='code-block-body'] code > span::before {
 	content: counter(line, hebrew) !important;
