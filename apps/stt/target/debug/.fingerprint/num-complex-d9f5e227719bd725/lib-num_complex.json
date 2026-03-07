@@ -1,0 +1,27 @@
+{
+	"rustc": 16243257175721966122,
+	"features": "[\"default\", \"std\"]",
+	"declared_features": "[\"bytecheck\", \"bytemuck\", \"default\", \"libm\", \"rand\", \"rkyv\", \"serde\", \"std\"]",
+	"target": 10384458921827985759,
+	"profile": 8276155916380437441,
+	"path": 2115152355607642944,
+	"deps": [
+		[
+			5157631553186200874,
+			"num_traits",
+			false,
+			3395199217458899163
+		]
+	],
+	"local": [
+		{
+			"CheckDepInfo": {
+				"dep_info": "debug/.fingerprint/num-complex-d9f5e227719bd725/dep-lib-num_complex",
+				"checksum": false
+			}
+		}
+	],
+	"rustflags": [],
+	"config": 2069994364910194474,
+	"compile_kind": 0
+}

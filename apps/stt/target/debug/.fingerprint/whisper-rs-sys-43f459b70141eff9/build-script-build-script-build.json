@@ -1,0 +1,45 @@
+{
+	"rustc": 16243257175721966122,
+	"features": "[\"metal\"]",
+	"declared_features": "[\"coreml\", \"cuda\", \"force-debug\", \"hipblas\", \"metal\", \"openblas\", \"openmp\", \"vulkan\"]",
+	"target": 5408242616063297496,
+	"profile": 3033921117576893,
+	"path": 2831275247492183691,
+	"deps": [
+		[
+			7667230146095136825,
+			"cfg_if",
+			false,
+			4805887100522314200
+		],
+		[
+			8890816728183224965,
+			"cmake",
+			false,
+			13757324559490841625
+		],
+		[
+			9907446631595856440,
+			"bindgen",
+			false,
+			1210391451588372406
+		],
+		[
+			13866570822711233627,
+			"fs_extra",
+			false,
+			2092695808015754513
+		]
+	],
+	"local": [
+		{
+			"CheckDepInfo": {
+				"dep_info": "debug/.fingerprint/whisper-rs-sys-43f459b70141eff9/dep-build-script-build-script-build",
+				"checksum": false
+			}
+		}
+	],
+	"rustflags": [],
+	"config": 2069994364910194474,
+	"compile_kind": 0
+}

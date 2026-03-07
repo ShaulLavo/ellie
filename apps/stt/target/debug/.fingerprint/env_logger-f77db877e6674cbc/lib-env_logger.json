@@ -1,0 +1,51 @@
+{
+	"rustc": 16243257175721966122,
+	"features": "[\"auto-color\", \"color\", \"default\", \"humantime\", \"regex\"]",
+	"declared_features": "[\"auto-color\", \"color\", \"default\", \"humantime\", \"kv\", \"regex\", \"unstable-kv\"]",
+	"target": 8437500984922885737,
+	"profile": 8255941854203129366,
+	"path": 16292322114817014299,
+	"deps": [
+		[
+			815705504764238973,
+			"anstream",
+			false,
+			6366158822732183812
+		],
+		[
+			6553521288534196920,
+			"env_filter",
+			false,
+			5437287247232807467
+		],
+		[
+			7483871650937086505,
+			"anstyle",
+			false,
+			2299727957123786383
+		],
+		[
+			8417673557997437685,
+			"jiff",
+			false,
+			15533827398624002825
+		],
+		[
+			10630857666389190470,
+			"log",
+			false,
+			4207863850540214113
+		]
+	],
+	"local": [
+		{
+			"CheckDepInfo": {
+				"dep_info": "debug/.fingerprint/env_logger-f77db877e6674cbc/dep-lib-env_logger",
+				"checksum": false
+			}
+		}
+	],
+	"rustflags": [],
+	"config": 2069994364910194474,
+	"compile_kind": 0
+}

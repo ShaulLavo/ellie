@@ -236,6 +236,7 @@ func authGroq() error {
 	var key string
 	err := huh.NewInput().
 		Title("Enter your Groq API key").
+		Description("Get one at https://console.groq.com/keys").
 		Placeholder("gsk_...").
 		EchoMode(huh.EchoModePassword).
 		Value(&key).

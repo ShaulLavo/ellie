@@ -1,0 +1,39 @@
+{
+	"rustc": 16243257175721966122,
+	"features": "[]",
+	"declared_features": "[\"regex\"]",
+	"target": 12784177512204989155,
+	"profile": 3033921117576893,
+	"path": 9173429006267313463,
+	"deps": [
+		[
+			3430646239657634944,
+			"rustix",
+			false,
+			5089670709547025933
+		],
+		[
+			12170264697963848012,
+			"either",
+			false,
+			17135443716391785774
+		],
+		[
+			12662763953628080474,
+			"home",
+			false,
+			7915326043133696878
+		]
+	],
+	"local": [
+		{
+			"CheckDepInfo": {
+				"dep_info": "debug/.fingerprint/which-3598c173c31d7d03/dep-lib-which",
+				"checksum": false
+			}
+		}
+	],
+	"rustflags": [],
+	"config": 2069994364910194474,
+	"compile_kind": 0
+}

@@ -94,7 +94,10 @@ const TRACED_OPERATIONS = new Set([
 ])
 
 /** Map hindsight operation name to trace kind. */
-const HINDSIGHT_OP_TO_TRACE_KIND: Record<string, TraceKind> = {
+const HINDSIGHT_OP_TO_TRACE_KIND: Record<
+	string,
+	TraceKind
+> = {
 	recall: 'hindsight-recall',
 	retain: 'hindsight-retain',
 	retainBatch: 'hindsight-retain-batch',

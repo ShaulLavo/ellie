@@ -1,0 +1,33 @@
+{
+	"rustc": 16243257175721966122,
+	"features": "[\"_gpu\", \"default\", \"metal\"]",
+	"declared_features": "[\"_gpu\", \"coreml\", \"cuda\", \"default\", \"hipblas\", \"metal\", \"openblas\", \"openmp\", \"raw-api\", \"test-with-tiny-model\", \"vulkan\", \"whisper-cpp-log\", \"whisper-cpp-tracing\"]",
+	"target": 12777960116553310662,
+	"profile": 5347358027863023418,
+	"path": 1051633358075119355,
+	"deps": [
+		[
+			8530907653446448159,
+			"whisper_rs_sys",
+			false,
+			10029177242818669879
+		],
+		[
+			14538141733733377535,
+			"build_script_build",
+			false,
+			8408102672544341511
+		]
+	],
+	"local": [
+		{
+			"CheckDepInfo": {
+				"dep_info": "debug/.fingerprint/whisper-rs-1a7d3521ae5bfec4/dep-lib-whisper_rs",
+				"checksum": false
+			}
+		}
+	],
+	"rustflags": [],
+	"config": 2069994364910194474,
+	"compile_kind": 0
+}

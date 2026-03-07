@@ -1,0 +1,12 @@
+{
+	"version": "0.0.1",
+	"configurations": [
+		{
+			"name": "server",
+			"runtimeExecutable": "bun",
+			"runtimeArgs": ["run", "--hot", "src/server.ts"],
+			"cwd": "apps/server",
+			"port": 3000
+		}
+	]
+}
