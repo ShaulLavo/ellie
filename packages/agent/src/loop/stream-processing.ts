@@ -74,7 +74,8 @@ function createAbortBridge(
 			cleanup: undefined
 		}
 	const abortController = new AbortController()
-	const onAbort = () => abortController.abort()
+	const onAbort =
+		abortController.abort.bind(abortController)
 	signal.addEventListener('abort', onAbort, { once: true })
 	const cleanup = () =>
 		signal.removeEventListener('abort', onAbort)

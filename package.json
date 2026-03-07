@@ -17,16 +17,6 @@
 		"test": "turbo run test",
 		"studio": "cd packages/db && bunx drizzle-kit studio & cd packages/hindsight && bunx drizzle-kit studio --port 4984 &"
 	},
-	"dependencies": {
-		"@fontsource-variable/geist": "^5.2.8",
-		"@fontsource-variable/jetbrains-mono": "^5.2.8",
-		"@fontsource/geist-mono": "^5.2.7",
-		"@fontsource/google-sans-flex": "^5.2.2",
-		"@mozilla/readability": "^0.6.0",
-		"@tanstack/ai-ollama": "^0.5.0",
-		"defuddle": "github:ShaulLavo/defuddle",
-		"fast-ulid": "^1.2.1"
-	},
 	"devDependencies": {
 		"@tailwindcss/typography": "^0.5.19",
 		"@types/babel__core": "^7.20.5",
