@@ -54,6 +54,9 @@ data/
 # Go binaries
 apps/cli/bin/
 
+# Rust build artifacts
+apps/stt/target/
+
 # Misc
 .DS_Store
 *.pem
