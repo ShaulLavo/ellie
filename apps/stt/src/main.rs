@@ -42,8 +42,36 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let engine_state = Arc::new(Mutex::new(EngineState::new()));
+
+    // Auto-load model if configured
+    if let (Some(model_filename), Some(engine_kind_str)) =
+        (&config.auto_load_model, &config.auto_load_engine)
+    {
+        let model_path = config.models_dir.join(model_filename);
+        if !model_path.exists() {
+            log::warn!(
+                "Auto-load model not found: {} — skipping",
+                model_path.display()
+            );
+        } else {
+            let kind: engine::EngineKind = serde_json::from_str(&format!("\"{}\"", engine_kind_str))
+                .unwrap_or_else(|_| {
+                    log::error!("Invalid engine kind '{}', defaulting to whisper", engine_kind_str);
+                    engine::EngineKind::Whisper
+                });
+            log::info!("Auto-loading model {:?} from {}", kind, model_path.display());
+            let mut eng = engine_state.lock().unwrap();
+            if let Err(e) = eng.load(model_path, kind) {
+                log::error!("Failed to auto-load model: {}", e);
+            } else {
+                log::info!("Model auto-loaded successfully");
+            }
+        }
+    }
+
     let state = AppState {
-        engine: Arc::new(Mutex::new(EngineState::new())),
+        engine: engine_state,
         config: Arc::new(config.clone()),
     };
 

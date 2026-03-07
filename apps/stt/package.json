@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"setup": "bun run setup.ts",
-		"dev": "bun run setup && cargo run -- --models-dir ../../data/models/stt --vad-model ../../data/models/stt/silero_vad_v4.onnx",
+		"dev": "bun run setup && cargo run -- --models-dir ../../data/models/stt --vad-model ../../data/models/stt/silero_vad_v4.onnx --auto-load-model parakeet-tdt-0.6b-v3-int8 --auto-load-engine parakeet",
 		"build": "cargo build --release",
 		"test": "cargo test"
 	}

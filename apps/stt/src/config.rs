@@ -35,4 +35,12 @@ pub struct Config {
     /// VAD onset frames
     #[arg(long, env = "STT_VAD_ONSET", default_value = "2")]
     pub vad_onset: usize,
+
+    /// Auto-load this model filename on startup (e.g. "parakeet-tdt-0.6b-v3-int8")
+    #[arg(long, env = "STT_AUTO_LOAD_MODEL")]
+    pub auto_load_model: Option<String>,
+
+    /// Engine kind for auto-loaded model (e.g. "parakeet", "whisper", "moonshine")
+    #[arg(long, env = "STT_AUTO_LOAD_ENGINE")]
+    pub auto_load_engine: Option<String>,
 }
