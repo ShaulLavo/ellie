@@ -45,7 +45,9 @@ export async function normalizeToWav16kMono(
 	await conversion.execute()
 
 	if (!target.buffer) {
-		throw new Error('Audio normalization produced no output')
+		throw new Error(
+			'Audio normalization produced no output'
+		)
 	}
 	return new Blob([target.buffer], { type: 'audio/wav' })
 }

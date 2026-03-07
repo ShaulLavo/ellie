@@ -295,14 +295,11 @@ export function createChatRoutes(
 					}
 
 					// Resolve speech metadata from speechRef (if provided)
-					let speechMeta:
-						| UserMessage['speech']
-						| undefined
+					let speechMeta: UserMessage['speech'] | undefined
 					if (input.speechRef && eventStore) {
-						const artifact =
-							eventStore.speechArtifacts.get(
-								input.speechRef
-							)
+						const artifact = eventStore.speechArtifacts.get(
+							input.speechRef
+						)
 						if (!artifact || artifact.status !== 'draft') {
 							throw new BadRequestError(
 								'Invalid or already-claimed speechRef'
@@ -313,11 +310,10 @@ export function createChatRoutes(
 							source: artifact.source as 'microphone',
 							flow: artifact.flow as 'transcript-first',
 							mime: artifact.mime,
-							normalizedBy:
-								artifact.normalizedBy as
-									| 'client-mediabunny'
-									| 'server-ffmpeg'
-									| 'none'
+							normalizedBy: artifact.normalizedBy as
+								| 'client-mediabunny'
+								| 'server-ffmpeg'
+								| 'none'
 						}
 					}
 
@@ -337,9 +333,7 @@ export function createChatRoutes(
 							role: 'user',
 							content: contentParts,
 							timestamp: beforeAppend,
-							...(speechMeta
-								? { speech: speechMeta }
-								: {})
+							...(speechMeta ? { speech: speechMeta } : {})
 						},
 						undefined, // runId — backfilled later by controller
 						dedupeKey

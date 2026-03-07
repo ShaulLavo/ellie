@@ -247,8 +247,7 @@ export async function init(): Promise<ServerContext> {
 				`[server] expired ${expired} stale speech draft(s)`
 			)
 		}
-		const paths =
-			eventStore.speechArtifacts.deleteExpired()
+		const paths = eventStore.speechArtifacts.deleteExpired()
 		for (const p of paths) {
 			try {
 				rmSync(p)

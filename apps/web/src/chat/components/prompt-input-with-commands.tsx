@@ -1,4 +1,8 @@
-import { useCallback, useState, type MutableRefObject } from 'react'
+import {
+	useCallback,
+	useState,
+	type MutableRefObject
+} from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { SlashCommandMenu } from './slash-command-menu'
 import type { SlashCommand } from './slash-command-menu'

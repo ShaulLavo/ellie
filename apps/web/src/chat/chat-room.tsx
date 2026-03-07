@@ -76,7 +76,11 @@ export function ChatRoom({
 
 			const speechRef = speechRefRef.current
 			speechRefRef.current = null
-			await chat.sendMessage(text, attachments, speechRef ?? undefined)
+			await chat.sendMessage(
+				text,
+				attachments,
+				speechRef ?? undefined
+			)
 		},
 		[commands, chat]
 	)
