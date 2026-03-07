@@ -119,7 +119,16 @@ export const payloadSchemas: Record<
 				fileContent
 			])
 		),
-		timestamp: v.number()
+		timestamp: v.number(),
+		speech: v.optional(
+			v.object({
+				ref: v.string(),
+				source: v.string(),
+				flow: v.string(),
+				mime: v.string(),
+				normalizedBy: v.string()
+			})
+		)
 	}),
 	agent_start: v.object({}),
 	agent_end: v.object({

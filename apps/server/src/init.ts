@@ -35,6 +35,7 @@ export interface ServerContext {
 	traceRecorder: TraceRecorder
 	blobSink: TusBlobSink
 	sseState: SseState
+	sttBaseUrl: string
 	getAgentController: () => Promise<AgentController | null>
 	invalidateAgentCache: () => void
 	ensureBootstrap: (sessionId: string) => void
@@ -236,6 +237,27 @@ export async function init(): Promise<ServerContext> {
 		store.rotateSession(todaySessionId())
 	})
 
+	// ── Speech artifact TTL cleanup ──────────────────────────────────────
+	new Cron('*/15 * * * *', () => {
+		const expired = eventStore.speechArtifacts.expireDrafts(
+			Date.now()
+		)
+		if (expired > 0) {
+			console.log(
+				`[server] expired ${expired} stale speech draft(s)`
+			)
+		}
+		const paths =
+			eventStore.speechArtifacts.deleteExpired()
+		for (const p of paths) {
+			try {
+				rmSync(p)
+			} catch {
+				// File may already be gone
+			}
+		}
+	})
+
 	// ── Bootstrap helper ──────────────────────────────────────────────────
 	const ensureBootstrap = (sessionId: string) =>
 		ensureBootstrapInjected({
@@ -258,6 +280,7 @@ export async function init(): Promise<ServerContext> {
 		traceRecorder,
 		blobSink,
 		sseState,
+		sttBaseUrl: env.STT_BASE_URL,
 		getAgentController: () => controllerFactory.get(),
 		invalidateAgentCache: () =>
 			controllerFactory.invalidate(),

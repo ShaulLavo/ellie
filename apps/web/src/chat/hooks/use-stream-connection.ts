@@ -44,7 +44,8 @@ interface StreamConnectionResult {
 			mime: string
 			size: number
 			name: string
-		}[]
+		}[],
+		speechRef?: string
 	) => Promise<void>
 	clearSession: () => Promise<void>
 	retry: () => void
@@ -269,13 +270,15 @@ export function useStreamConnection(
 				mime: string
 				size: number
 				name: string
-			}[]
+			}[],
+			speechRef?: string
 		) => {
 			try {
 				await streamRef.current?.sendMessage(
 					text,
 					undefined,
-					attachments
+					attachments,
+					speechRef
 				)
 			} catch (err) {
 				console.error('[chat-db] Send failed:', err)

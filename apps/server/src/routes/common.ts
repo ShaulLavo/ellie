@@ -71,7 +71,8 @@ export function normalizeMessageInput(
 	return {
 		content,
 		role: body.role,
-		attachments: body.attachments
+		attachments: body.attachments,
+		speechRef: body.speechRef
 	}
 }
 

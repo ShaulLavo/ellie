@@ -52,6 +52,15 @@ function userToModelMessage(
 	msg: UserMessage
 ): ModelMessage {
 	const content: ContentPart[] = []
+
+	if (msg.speech?.flow === 'transcript-first') {
+		content.push({
+			type: 'text',
+			content:
+				'[the following message has been transcribed]'
+		})
+	}
+
 	for (const c of msg.content) {
 		if (c.type === 'text') {
 			content.push({ type: 'text', content: c.text })

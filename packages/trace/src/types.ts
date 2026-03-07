@@ -18,6 +18,7 @@ export type TraceKind =
 	| 'hindsight-retain-batch'
 	| 'hindsight-reflect'
 	| 'hindsight-narrative'
+	| 'speech'
 
 // ============================================================================
 // Trace event envelope

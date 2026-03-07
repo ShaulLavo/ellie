@@ -18,7 +18,8 @@ export const messageInputSchema = v.object({
 	role: v.optional(
 		v.picklist([`user`, `assistant`, `system`])
 	),
-	attachments: v.optional(v.array(attachmentInputSchema))
+	attachments: v.optional(v.array(attachmentInputSchema)),
+	speechRef: v.optional(v.string())
 })
 
 export type MessageInput = v.InferOutput<

@@ -85,6 +85,41 @@ export type AgentBootstrapStateRow =
 export type NewAgentBootstrapStateRow =
 	typeof agentBootstrapState.$inferInsert
 
+// -- Speech Artifacts ---------------------------------------------------------
+
+export const speechArtifacts = sqliteTable(
+	'speech_artifacts',
+	{
+		id: text('id').primaryKey().notNull(),
+		status: text('status').notNull().default('draft'),
+		blobPath: text('blob_path').notNull(),
+		source: text('source').notNull(),
+		flow: text('flow').notNull(),
+		mime: text('mime').notNull(),
+		size: integer('size').notNull(),
+		normalizedBy: text('normalized_by').notNull(),
+		transcriptText: text('transcript_text').notNull(),
+		durationMs: integer('duration_ms').notNull(),
+		speechDetected: integer('speech_detected', {
+			mode: 'boolean'
+		}).notNull(),
+		createdAt: integer('created_at').notNull(),
+		expiresAt: integer('expires_at').notNull(),
+		claimedAt: integer('claimed_at'),
+		claimedBySessionId: text('claimed_by_session_id'),
+		claimedByEventId: integer('claimed_by_event_id')
+	},
+	table => [
+		index('idx_speech_status').on(table.status),
+		index('idx_speech_expires').on(table.expiresAt)
+	]
+)
+
+export type SpeechArtifactRow =
+	typeof speechArtifacts.$inferSelect
+export type NewSpeechArtifactRow =
+	typeof speechArtifacts.$inferInsert
+
 // -- Key-Value store ----------------------------------------------------------
 
 export const kv = sqliteTable('kv', {

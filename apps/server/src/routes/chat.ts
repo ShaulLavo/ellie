@@ -13,6 +13,7 @@ import type {
 	SessionEvent
 } from '../lib/realtime-store'
 import type { AgentController } from '../agent/controller'
+import type { EventStore } from '@ellie/db'
 import {
 	agentMessageSchema,
 	type UserMessage
@@ -141,7 +142,8 @@ export function createChatRoutes(
 	sseState: SseState,
 	getAgentController?: () => Promise<AgentController | null>,
 	ensureBootstrap?: (sessionId: string) => void,
-	uploadStore?: FileStore
+	uploadStore?: FileStore,
+	eventStore?: EventStore
 ) {
 	return (
 		new Elysia({ prefix: '/chat', tags: ['Chat'] })
@@ -292,6 +294,33 @@ export function createChatRoutes(
 						}
 					}
 
+					// Resolve speech metadata from speechRef (if provided)
+					let speechMeta:
+						| UserMessage['speech']
+						| undefined
+					if (input.speechRef && eventStore) {
+						const artifact =
+							eventStore.speechArtifacts.get(
+								input.speechRef
+							)
+						if (!artifact || artifact.status !== 'draft') {
+							throw new BadRequestError(
+								'Invalid or already-claimed speechRef'
+							)
+						}
+						speechMeta = {
+							ref: artifact.id,
+							source: artifact.source as 'microphone',
+							flow: artifact.flow as 'transcript-first',
+							mime: artifact.mime,
+							normalizedBy:
+								artifact.normalizedBy as
+									| 'client-mediabunny'
+									| 'server-ffmpeg'
+									| 'none'
+						}
+					}
+
 					// Persist user message BEFORE bootstrap so the client
 					// sees the user bubble first, then the synthetic tool call.
 					// Dedupe key: reject rapid-fire duplicate POSTs with the
@@ -307,11 +336,23 @@ export function createChatRoutes(
 						{
 							role: 'user',
 							content: contentParts,
-							timestamp: beforeAppend
+							timestamp: beforeAppend,
+							...(speechMeta
+								? { speech: speechMeta }
+								: {})
 						},
 						undefined, // runId — backfilled later by controller
 						dedupeKey
 					)
+
+					// Claim the speech artifact now that the event is persisted
+					if (speechMeta && eventStore) {
+						eventStore.speechArtifacts.claim(
+							speechMeta.ref,
+							row.id,
+							sessionId
+						)
+					}
 
 					// Dedupe hit: appendEvent returned an existing row
 					// (createdAt will be older than our beforeAppend timestamp)

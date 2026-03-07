@@ -24,6 +24,7 @@ type TraceKind =
 	| 'hindsight-retain-batch'
 	| 'hindsight-reflect'
 	| 'hindsight-narrative'
+	| 'speech'
 import type { Hindsight } from '../hindsight'
 import type {
 	BankConfig,

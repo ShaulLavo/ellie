@@ -40,6 +40,7 @@ import {
 	parseEventRow,
 	reorderToolResults
 } from './history'
+import { SpeechArtifactStore } from './speech-store'
 
 export type { AgentMessage, EventType }
 
@@ -76,6 +77,7 @@ const MIGRATIONS_DIR = join(
 export class EventStore {
 	readonly db: ReturnType<typeof drizzle>
 	readonly sqlite: Database
+	readonly speechArtifacts: SpeechArtifactStore
 
 	constructor(dbPath: string, migrationsFolder?: string) {
 		this.sqlite = openDatabase(dbPath)
@@ -85,6 +87,8 @@ export class EventStore {
 		migrate(this.db, {
 			migrationsFolder: migrationsFolder ?? MIGRATIONS_DIR
 		})
+
+		this.speechArtifacts = new SpeechArtifactStore(this.db)
 	}
 
 	// ── Session CRUD ────────────────────────────────────────────────────────

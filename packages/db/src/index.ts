@@ -2,6 +2,7 @@
 export { openDatabase } from './init'
 export { LogFile } from './log'
 export { EventStore } from './event-store'
+export { SpeechArtifactStore } from './speech-store'
 export {
 	DURABLE_EVENT_TYPES,
 	isDurableEventType
@@ -20,5 +21,7 @@ export type {
 	EventRow,
 	NewEventRow,
 	AgentBootstrapStateRow,
-	NewAgentBootstrapStateRow
+	NewAgentBootstrapStateRow,
+	SpeechArtifactRow,
+	NewSpeechArtifactRow
 } from './schema'
