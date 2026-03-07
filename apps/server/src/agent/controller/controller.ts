@@ -14,7 +14,11 @@ import {
 	type AgentEvent,
 	type AgentMessage
 } from '@ellie/agent'
-import type { EventType, EventPayloadMap } from '@ellie/db'
+import type {
+	EventType,
+	EventPayloadMap,
+	EventStore
+} from '@ellie/db'
 import type {
 	TraceRecorder,
 	BlobSink,
@@ -58,6 +62,8 @@ export interface AgentControllerOptions {
 	traceRecorder?: TraceRecorder
 	/** Blob sink for overflow storage */
 	blobSink?: BlobSink
+	/** Event store for tool result caching */
+	eventStore?: EventStore
 }
 
 // ── Queued cross-session message ─────────────────────────────────────────────
@@ -116,7 +122,8 @@ export class AgentController {
 			getSessionId: () => this.boundSessionId,
 			traceRecorder: this.traceRecorder,
 			blobSink: this.blobSink,
-			getTraceScope: () => this.activeTraceScope
+			getTraceScope: () => this.activeTraceScope,
+			eventStore: options.eventStore
 		})
 
 		// Build toolSafety config — blob-backed overflow when available

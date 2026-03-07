@@ -1,6 +1,6 @@
 import type { AgentToolResult } from '@ellie/agent'
 import {
-	MAX_OUTPUT_CHARS,
+	MAX_CONTENT_CHARS,
 	USER_AGENT,
 	truncateText,
 	errorResult
@@ -107,7 +107,10 @@ export async function handleWikipedia(
 		markdown = markdown.slice(0, stripIdx).trim()
 	}
 
-	const truncated = truncateText(markdown, MAX_OUTPUT_CHARS)
+	const truncated = truncateText(
+		markdown,
+		MAX_CONTENT_CHARS
+	)
 
 	return {
 		content: [

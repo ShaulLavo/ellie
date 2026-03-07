@@ -1,6 +1,6 @@
 import type { AgentToolResult } from '@ellie/agent'
 import {
-	MAX_OUTPUT_CHARS,
+	MAX_CONTENT_CHARS,
 	USER_AGENT,
 	truncateText,
 	errorResult
@@ -152,7 +152,7 @@ export async function handleReddit(
 			'reddit'
 
 		const text = formatRedditListing(posts, sub)
-		const truncated = truncateText(text, MAX_OUTPUT_CHARS)
+		const truncated = truncateText(text, MAX_CONTENT_CHARS)
 
 		return {
 			content: [{ type: 'text', text: truncated }],
@@ -176,7 +176,7 @@ export async function handleReddit(
 	const comments = flattenComments(commentChildren)
 
 	const text = formatRedditThread(postData, comments)
-	const truncated = truncateText(text, MAX_OUTPUT_CHARS)
+	const truncated = truncateText(text, MAX_CONTENT_CHARS)
 
 	return {
 		content: [{ type: 'text', text: truncated }],

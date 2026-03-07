@@ -64,7 +64,8 @@ export class AgentControllerFactory {
 						? { guardrails }
 						: undefined,
 					traceRecorder: this.deps.traceRecorder,
-					blobSink: this.deps.blobSink
+					blobSink: this.deps.blobSink,
+					eventStore
 				})
 			: null
 		return this.cached

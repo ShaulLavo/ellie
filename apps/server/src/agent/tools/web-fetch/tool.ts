@@ -16,11 +16,12 @@ import type {
 	AgentToolResult
 } from '@ellie/agent'
 import {
-	MAX_OUTPUT_CHARS,
+	MAX_CONTENT_CHARS,
 	USER_AGENT,
 	truncateText,
 	errorResult,
-	isMediaType
+	isMediaType,
+	wrapExternalContent
 } from './common'
 import {
 	webFetchParams,
@@ -36,11 +37,17 @@ import {
 	isWikipediaUrl,
 	handleWikipedia
 } from './wikipedia'
+import { guardedFetch } from './fetch-guard'
+import { validateHostname, SsrFBlockedError } from './ssrf'
+import { getCachedFetchResult } from './fetch-cache'
+import type { EventStore } from '@ellie/db'
 
 /**
  * Create the web fetch tool.
  */
-export function createWebFetchTool(): AgentTool {
+export function createWebFetchTool(
+	eventStore?: EventStore
+): AgentTool {
 	return {
 		name: 'fetch_page',
 		description:
@@ -56,24 +63,42 @@ export function createWebFetchTool(): AgentTool {
 			const params = rawParams as WebFetchParams
 
 			try {
+				// Cache check — return recent result if available
+				// (already wrapped when originally stored)
+				if (eventStore) {
+					const cached = getCachedFetchResult(
+						eventStore,
+						params.url
+					)
+					if (cached) return cached
+				}
+
 				// Reddit — use JSON API directly (no browser needed)
 				if (isRedditUrl(params.url)) {
-					return handleReddit(params.url)
+					return wrapExternalContent(
+						await handleReddit(params.url)
+					)
 				}
 
 				// Wikipedia — use REST API (no browser needed)
 				if (isWikipediaUrl(params.url)) {
-					return handleWikipedia(params.url)
+					return wrapExternalContent(
+						await handleWikipedia(params.url)
+					)
 				}
 
-				const response = await fetch(params.url, {
-					headers: {
-						'User-Agent': USER_AGENT,
-						Accept:
-							'text/markdown, text/html;q=0.9, */*;q=0.8'
-					},
-					redirect: 'follow'
-				})
+				const { response, finalUrl } = await guardedFetch(
+					params.url,
+					{
+						init: {
+							headers: {
+								'User-Agent': USER_AGENT,
+								Accept:
+									'text/markdown, text/html;q=0.9, */*;q=0.8'
+							}
+						}
+					}
+				)
 
 				if (!response.ok) {
 					return errorResult(
@@ -86,13 +111,15 @@ export function createWebFetchTool(): AgentTool {
 
 				// PDF — fetch raw bytes
 				if (contentType.includes('application/pdf')) {
-					return handlePdf(response, params.url)
+					return wrapExternalContent(
+						await handlePdf(response, finalUrl)
+					)
 				}
 
-				// Media — URL reference
+				// Media — URL reference (not wrapping — no text content to inject)
 				if (isMediaType(contentType)) {
 					return handleMedia(
-						params.url,
+						finalUrl,
 						contentType,
 						response.headers.get('content-length')
 					)
@@ -102,27 +129,38 @@ export function createWebFetchTool(): AgentTool {
 				if (contentType.includes('text/markdown')) {
 					const raw = await response.text()
 					if (raw.trim()) {
-						const text = truncateText(raw, MAX_OUTPUT_CHARS)
+						const text = truncateText(
+							raw,
+							MAX_CONTENT_CHARS
+						)
 						const tokenCount = response.headers.get(
 							'x-markdown-tokens'
 						)
-						return {
+						return wrapExternalContent({
 							content: [{ type: 'text', text }],
 							details: {
-								url: params.url,
+								url: finalUrl,
 								contentType: 'text/markdown',
 								...(tokenCount && {
 									tokenCount: parseInt(tokenCount, 10)
 								})
 							}
-						}
+						})
 					}
 					// Empty markdown — fall through to browser
 				}
 
-				// HTML — headless Chrome via worker
-				return handleBrowser(params.url)
+				// HTML — validate URL before passing to Puppeteer worker
+				await validateHostname(new URL(params.url).hostname)
+				return wrapExternalContent(
+					await handleBrowser(params.url)
+				)
 			} catch (err) {
+				if (err instanceof SsrFBlockedError) {
+					return errorResult(
+						`Blocked by SSRF policy: ${err.message}`
+					)
+				}
 				const msg =
 					err instanceof Error ? err.message : String(err)
 				return errorResult(msg)

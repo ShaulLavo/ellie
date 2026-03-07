@@ -35,6 +35,7 @@
 		"comlink": "^4.4.2",
 		"croner": "^6.0.7",
 		"defuddle": "github:ShaulLavo/defuddle",
+		"drizzle-orm": "^0.45.1",
 		"elysia": "^1.4.25",
 		"fast-ulid": "^1.2.1",
 		"linkedom": "^0.18.12",

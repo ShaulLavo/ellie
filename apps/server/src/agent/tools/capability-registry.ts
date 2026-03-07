@@ -10,6 +10,7 @@
  */
 
 import type { AgentTool } from '@ellie/agent'
+import type { EventStore } from '@ellie/db'
 import type { TraceRecorder, BlobSink } from '@ellie/trace'
 import {
 	createTracedToolWrapper,
@@ -39,6 +40,8 @@ export interface ToolRegistryConfig {
 	getTraceScope?: () =>
 		| import('@ellie/trace').TraceScope
 		| undefined
+	/** Event store for tool result caching (web fetch deduplication). */
+	eventStore?: EventStore
 }
 
 export interface ToolRegistry {
@@ -68,7 +71,7 @@ export function createToolRegistry(
 		...createWorkspaceTools(config.workspaceDir),
 		createShellTool(config.workspaceDir),
 		createRipgrepTool(config.workspaceDir),
-		createWebFetchTool()
+		createWebFetchTool(config.eventStore)
 	]
 
 	// Traced versions for direct agent-loop use

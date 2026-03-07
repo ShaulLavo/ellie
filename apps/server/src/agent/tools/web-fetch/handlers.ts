@@ -5,7 +5,7 @@
 import pdf2md from '@opendocsg/pdf2md'
 import type { AgentToolResult } from '@ellie/agent'
 import {
-	MAX_OUTPUT_CHARS,
+	MAX_CONTENT_CHARS,
 	truncateText,
 	formatBytes
 } from './common'
@@ -23,7 +23,7 @@ export async function handleBrowser(
 	if (result.content) parts.push(result.content)
 
 	const text = parts.join('\n\n')
-	const truncated = truncateText(text, MAX_OUTPUT_CHARS)
+	const truncated = truncateText(text, MAX_CONTENT_CHARS)
 
 	return {
 		content: [
@@ -47,7 +47,10 @@ export async function handlePdf(
 ): Promise<AgentToolResult> {
 	const buffer = await response.arrayBuffer()
 	const markdown = await pdf2md(buffer)
-	const truncated = truncateText(markdown, MAX_OUTPUT_CHARS)
+	const truncated = truncateText(
+		markdown,
+		MAX_CONTENT_CHARS
+	)
 
 	return {
 		content: [

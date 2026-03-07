@@ -438,14 +438,13 @@ export function createChatRoutes(
 					let unsubRotation: (() => void) | undefined
 					if (isCurrent) {
 						const ac = new AbortController()
+						const abort = ac.abort.bind(ac)
 						request.signal.addEventListener(
 							'abort',
-							() => ac.abort(),
+							abort,
 							{ once: true }
 						)
-						unsubRotation = store.subscribeToRotation(() =>
-							ac.abort()
-						)
+						unsubRotation = store.subscribeToRotation(abort)
 						effectiveRequest = new Request(request.url, {
 							signal: ac.signal
 						})
