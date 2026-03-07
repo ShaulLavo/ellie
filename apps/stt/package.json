@@ -3,7 +3,8 @@
 	"version": "0.1.0",
 	"private": true,
 	"scripts": {
-		"dev": "cargo run",
+		"setup": "bun run setup.ts",
+		"dev": "bun run setup && cargo run -- --models-dir ../../data/models/stt --vad-model ../../data/models/stt/silero_vad_v4.onnx",
 		"build": "cargo build --release",
 		"test": "cargo test"
 	}

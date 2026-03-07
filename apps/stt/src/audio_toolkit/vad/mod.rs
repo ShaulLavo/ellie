@@ -22,6 +22,7 @@ pub trait VoiceActivityDetector: Send + Sync {
         Ok(self.push_frame(frame)?.is_speech())
     }
 
+    #[allow(dead_code)]
     fn reset(&mut self) {}
 }
 

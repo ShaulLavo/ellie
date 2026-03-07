@@ -25,21 +25,26 @@ pub fn decode_wav(bytes: &[u8]) -> Result<(Vec<f32>, u32)> {
     let sample_rate = spec.sample_rate;
     let channels = spec.channels as usize;
 
-    let samples: Vec<f32> = match spec.sample_format {
+    // Read all interleaved samples as f32
+    let interleaved: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => reader
             .samples::<f32>()
-            .step_by(channels)
             .map(|s| s.context("WAV sample read error"))
             .collect::<Result<Vec<_>>>()?,
         hound::SampleFormat::Int => {
             let max = (1i64 << (spec.bits_per_sample - 1)) as f32;
             reader
                 .samples::<i32>()
-                .step_by(channels)
                 .map(|s| s.context("WAV sample read error").map(|v| v as f32 / max))
                 .collect::<Result<Vec<_>>>()?
         }
     };
+
+    // Downmix to mono by averaging all channels (matches Handy's recorder behavior)
+    let samples: Vec<f32> = interleaved
+        .chunks_exact(channels)
+        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
+        .collect();
 
     Ok((samples, sample_rate))
 }
@@ -65,22 +70,29 @@ pub fn run_vad_pipeline(samples: Vec<f32>, source_rate: u32, config: &PipelineCo
     let mut speech: Vec<f32> = Vec::new();
 
     // Feed all samples through resampler → VAD
+    // On VAD error, treat frame as speech (safe fallback, matches Handy's behavior)
     resampler.push(&samples, |frame| {
-        if let Ok(vad_frame) = vad.push_frame(frame) {
-            if let VadFrame::Speech(s) = vad_frame {
-                speech.extend_from_slice(s);
-            }
+        match vad.push_frame(frame).unwrap_or(VadFrame::Speech(frame)) {
+            VadFrame::Speech(s) => speech.extend_from_slice(s),
+            VadFrame::Noise => {}
         }
     });
 
     // Flush remaining samples
     resampler.finish(|frame| {
-        if let Ok(vad_frame) = vad.push_frame(frame) {
-            if let VadFrame::Speech(s) = vad_frame {
-                speech.extend_from_slice(s);
-            }
+        match vad.push_frame(frame).unwrap_or(VadFrame::Speech(frame)) {
+            VadFrame::Speech(s) => speech.extend_from_slice(s),
+            VadFrame::Noise => {}
         }
     });
+
+    // Pad short audio to avoid Whisper hallucinations (matches Handy's behavior)
+    // Whisper performs poorly on sub-1-second clips, so pad to 1.25 seconds
+    const MIN_SAMPLES: usize = WHISPER_SAMPLE_RATE as usize; // 16000 = 1 second
+    const PAD_SAMPLES: usize = (WHISPER_SAMPLE_RATE as usize) * 5 / 4; // 20000 = 1.25 seconds
+    if !speech.is_empty() && speech.len() < MIN_SAMPLES {
+        speech.resize(PAD_SAMPLES, 0.0);
+    }
 
     Ok(speech)
 }

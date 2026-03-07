@@ -171,7 +171,7 @@ pub async fn transcribe_handler(
     })?;
 
     // Apply text post-processing (matching Handy's pipeline)
-    let threshold = params.word_correction_threshold.unwrap_or(0.5);
+    let threshold = params.word_correction_threshold.unwrap_or(0.18);
     let corrected = if let Some(ref words) = params.custom_words {
         if !words.is_empty() {
             apply_custom_words(&raw_text, words, threshold)
