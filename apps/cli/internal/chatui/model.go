@@ -1114,18 +1114,16 @@ func (m Model) renderInput() string {
 		style = inputBorderFocused
 	}
 
-	// Content width inside the border (border=1 + padding=1 on each side = -4)
-	contentWidth := m.width - 4 - 2 // extra -2 for border padding
+	var sections []string
 
-	var parts []string
-
-	// Attachment bar (above textarea)
+	// Attachment bar (outside the border, above the input box)
 	if len(m.attachments) > 0 {
-		bar := renderAttachmentBar(m.attachments, m.attachmentCursor, m.focus == focusAttachments, contentWidth)
-		parts = append(parts, bar)
+		barWidth := m.width - 4 // match border content width
+		bar := renderAttachmentBar(m.attachments, m.attachmentCursor, m.focus == focusAttachments, barWidth)
+		sections = append(sections, bar)
 	}
 
-	// Textarea
+	// Textarea (inside the border)
 	view := m.textarea.View()
 	if m.ghostSuggestion != "" && m.focus == focusEditor {
 		// The textarea pads each line with spaces to its full width.
@@ -1139,9 +1137,10 @@ func (m Model) renderInput() string {
 			view = strings.TrimRight(view, " ") + ghost
 		}
 	}
-	parts = append(parts, view)
 
-	return style.Width(m.width - 4).Render(strings.Join(parts, "\n"))
+	sections = append(sections, style.Width(m.width-4).Render(view))
+
+	return strings.Join(sections, "\n")
 }
 
 // updateGhost computes inline autocomplete for slash commands.

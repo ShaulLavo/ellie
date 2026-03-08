@@ -95,12 +95,15 @@ func mimeCategory(mimeType string) string {
 
 // parseFilePaths attempts to extract valid file paths from pasted text.
 // Returns nil if any candidate is not a valid existing file path.
-// Handles space-separated, newline-separated, and quoted paths.
+// Handles shell-escaped, space-separated, newline-separated, and quoted paths.
 func parseFilePaths(text string) []string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
 	}
+
+	// Strip file:// URL prefix (some terminals paste this on drag)
+	text = strings.TrimPrefix(text, "file://")
 
 	var candidates []string
 
@@ -112,19 +115,19 @@ func parseFilePaths(text string) []string {
 			if line == "" {
 				continue
 			}
-			candidates = append(candidates, unquote(line))
+			line = strings.TrimPrefix(line, "file://")
+			candidates = append(candidates, cleanPath(line))
 		}
 	} else {
-		// Single line: could be one path or space-separated paths.
-		// Try the whole thing as one path first.
-		single := unquote(text)
+		// Single line: could be one path or space-separated shell-escaped paths.
+		// First try the whole thing as one path (unquote + shell-unescape).
+		single := cleanPath(text)
 		if _, err := os.Stat(single); err == nil {
 			return []string{single}
 		}
-		// Try space-separated (terminals separate multiple dragged files with spaces)
-		// But be careful: a single path might contain spaces. So we try to be smart:
-		// Split by spaces, then try to recombine greedily.
-		candidates = splitSmartPaths(text)
+		// Try splitting on unescaped spaces (terminals separate dragged files
+		// with actual spaces, while spaces *within* paths are backslash-escaped).
+		candidates = splitShellPaths(text)
 	}
 
 	if len(candidates) == 0 {
@@ -143,85 +146,70 @@ func parseFilePaths(text string) []string {
 	return valid
 }
 
-// splitSmartPaths tries to split space-separated paths, handling quoted paths.
-// It processes tokens left-to-right, combining with spaces when the combined
-// path exists as a file.
-func splitSmartPaths(text string) []string {
-	// If the text contains quoted segments, handle them specially
+// splitShellPaths splits text on unescaped spaces, treating `\ ` as a literal
+// space within a path. This matches how macOS terminals paste multiple dragged
+// file paths: spaces between paths are literal, spaces within paths are escaped.
+func splitShellPaths(text string) []string {
 	var paths []string
-	remaining := text
-
-	for remaining != "" {
-		remaining = strings.TrimLeft(remaining, " \t")
-		if remaining == "" {
-			break
+	var current strings.Builder
+	i := 0
+	for i < len(text) {
+		if text[i] == '\\' && i+1 < len(text) {
+			// Escaped character — include the literal char (skip the backslash)
+			current.WriteByte(text[i+1])
+			i += 2
+			continue
 		}
-
-		// Check for quoted path
-		if remaining[0] == '\'' || remaining[0] == '"' {
-			quote := remaining[0]
-			end := strings.IndexByte(remaining[1:], quote)
-			if end >= 0 {
-				paths = append(paths, remaining[1:1+end])
-				remaining = remaining[2+end:]
-				continue
+		if text[i] == ' ' || text[i] == '\t' {
+			// Unescaped space — path boundary
+			if current.Len() > 0 {
+				paths = append(paths, current.String())
+				current.Reset()
 			}
+			i++
+			continue
 		}
-
-		// Unquoted: find the next space
-		spaceIdx := strings.IndexByte(remaining, ' ')
-		if spaceIdx < 0 {
-			paths = append(paths, remaining)
-			break
-		}
-
-		token := remaining[:spaceIdx]
-		remaining = remaining[spaceIdx+1:]
-
-		// Check if token alone is a valid file
-		if _, err := os.Stat(token); err == nil {
-			paths = append(paths, token)
-		} else {
-			// Maybe the path contains spaces — try combining with next tokens
-			combined := token
-			found := false
-			rest := remaining
-			for rest != "" {
-				nextSpace := strings.IndexByte(rest, ' ')
-				var next string
-				if nextSpace < 0 {
-					next = rest
-					rest = ""
-				} else {
-					next = rest[:nextSpace]
-					rest = rest[nextSpace+1:]
-				}
-				combined += " " + next
-				if _, err := os.Stat(combined); err == nil {
-					paths = append(paths, combined)
-					remaining = rest
-					found = true
-					break
-				}
-			}
-			if !found {
-				// Can't resolve — return the token and let validation fail
-				paths = append(paths, token)
-			}
-		}
+		current.WriteByte(text[i])
+		i++
+	}
+	if current.Len() > 0 {
+		paths = append(paths, current.String())
 	}
 	return paths
 }
 
-// unquote strips surrounding single or double quotes.
-func unquote(s string) string {
+// shellUnescape removes shell backslash escaping from a string.
+// E.g., `my\ file\ \(1\).png` → `my file (1).png`.
+func shellUnescape(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	i := 0
+	for i < len(s) {
+		if s[i] == '\\' && i+1 < len(s) {
+			b.WriteByte(s[i+1])
+			i += 2
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
+}
+
+// cleanPath strips quotes, shell-escaping, and trims whitespace from a path.
+func cleanPath(s string) string {
 	s = strings.TrimSpace(s)
+	// Strip surrounding quotes
 	if len(s) >= 2 {
 		if (s[0] == '\'' && s[len(s)-1] == '\'') || (s[0] == '"' && s[len(s)-1] == '"') {
 			return s[1 : len(s)-1]
 		}
 	}
-	return s
+	// Remove shell escaping
+	return shellUnescape(s)
 }
 
 // newPendingAttachment creates a PendingAttachment from a validated file path.
