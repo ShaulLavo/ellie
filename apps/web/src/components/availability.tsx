@@ -1129,21 +1129,17 @@ function DraggableTimeSpan({
 		// Re-calculate local constraints for resize (using passed props or logic)
 		// We can trust the parent passed correct minStart/maxEnd for neighbors
 
-		const handlePointerMove = (ev: PointerEvent) => {
-			if (!containerRef.current) return
-
+		const computeResizedEdges = (clientY: number) => {
+			if (!containerRef.current) return null
 			const containerHeight =
 				containerRef.current.clientHeight
 			const pixelsPerMinute = containerHeight / totalMinutes
-			const deltaY = ev.clientY - initialY
+			const deltaY = clientY - initialY
 			const deltaMinutes =
 				Math.round(
 					deltaY / pixelsPerMinute / timeIncrements
 				) * timeIncrements
-
-			if (deltaMinutes === 0) return
-
-			const clamped = clampResizeEdge(
+			return clampResizeEdge(
 				edge,
 				initialStart,
 				initialEnd,
@@ -1152,8 +1148,12 @@ function DraggableTimeSpan({
 				maxEnd,
 				timeIncrements
 			)
+		}
 
-			// During drag: don't merge (isComplete = false)
+		const handlePointerMove = (ev: PointerEvent) => {
+			const clamped = computeResizedEdges(ev.clientY)
+			if (!clamped) return
+
 			onResize(
 				span.id,
 				minutesToTime(clamped.newStart),
@@ -1165,28 +1165,8 @@ function DraggableTimeSpan({
 		const handlePointerUp = (ev: PointerEvent) => {
 			target.releasePointerCapture(ev.pointerId)
 
-			// Final commit with clamping logic repeated
-			if (containerRef.current) {
-				const containerHeight =
-					containerRef.current.clientHeight
-				const pixelsPerMinute =
-					containerHeight / totalMinutes
-				const deltaY = ev.clientY - initialY
-				const deltaMinutes =
-					Math.round(
-						deltaY / pixelsPerMinute / timeIncrements
-					) * timeIncrements
-
-				const clamped = clampResizeEdge(
-					edge,
-					initialStart,
-					initialEnd,
-					deltaMinutes,
-					minStart,
-					maxEnd,
-					timeIncrements
-				)
-
+			const clamped = computeResizedEdges(ev.clientY)
+			if (clamped) {
 				onResize(
 					span.id,
 					minutesToTime(clamped.newStart),

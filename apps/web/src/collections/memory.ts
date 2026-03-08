@@ -177,7 +177,7 @@ export function getFactsCollection(
 // ── Entities collections (paginated) ───────────────────────────────────────
 
 const entitiesCollections = new Map<
-	number,
+	string,
 	ReturnType<typeof createEntitiesCollectionInner>
 >()
 
@@ -207,11 +207,12 @@ export function getEntitiesCollection(
 	bankId: string,
 	page: number
 ) {
-	let collection = entitiesCollections.get(page)
+	const key = `entities-${bankId}-${page}`
+	let collection = entitiesCollections.get(key)
 	if (!collection) {
 		collection = createEntitiesCollectionInner(bankId, page)
 		evictOldest(entitiesCollections, MAX_CACHED_PAGES)
-		entitiesCollections.set(page, collection)
+		entitiesCollections.set(key, collection)
 	}
 	return collection
 }

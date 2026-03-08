@@ -14,11 +14,12 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { readFileSync, rmSync } from 'fs'
 import { Hindsight } from '@ellie/hindsight'
-import type {
-	HindsightConfig,
-	RecallOptions
-} from '@ellie/hindsight'
+import type { RecallOptions } from '@ellie/hindsight'
 import { scoreCase } from './scoring'
+import {
+	hashEmbed,
+	createNoopAdapter
+} from './eval-helpers'
 import type {
 	EvalCase,
 	EvalRunConfig,
@@ -30,74 +31,10 @@ import type {
 
 const EVAL_EMBED_DIMS = 16
 
-/**
- * Hash-based embedding for deterministic eval runs.
- * NOT semantically meaningful — produces consistent vectors for identical text.
- */
 function deterministicEmbed(
 	text: string
 ): Promise<number[]> {
-	const vec = Array.from<number>({
-		length: EVAL_EMBED_DIMS
-	}).fill(0)
-	for (let i = 0; i < text.length; i++) {
-		vec[i % EVAL_EMBED_DIMS]! += text.charCodeAt(i) / 1000
-	}
-	const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
-	return Promise.resolve(
-		norm > 0 ? vec.map(v => v / norm) : vec
-	)
-}
-
-// ── Mock adapter ──────────────────────────────────────────────────────────
-
-/**
- * Minimal mock adapter for eval — retain uses pre-extracted facts so
- * the LLM is never called. Required by the Hindsight constructor.
- */
-function createEvalAdapter(): HindsightConfig['adapter'] {
-	return {
-		kind: 'text' as const,
-		name: 'eval-noop',
-		model: 'eval-noop',
-		chatStream() {
-			return {
-				async *[Symbol.asyncIterator]() {
-					yield {
-						type: 'TEXT_MESSAGE_START' as const,
-						messageId: 'eval',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-					yield {
-						type: 'TEXT_MESSAGE_CONTENT' as const,
-						messageId: 'eval',
-						delta: '{}',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-					yield {
-						type: 'TEXT_MESSAGE_END' as const,
-						messageId: 'eval',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-					yield {
-						type: 'RUN_FINISHED' as const,
-						runId: 'eval',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-				}
-			}
-		},
-		structuredOutput() {
-			return Promise.resolve({
-				data: {},
-				rawResponse: '{}'
-			})
-		}
-	} as unknown as NonNullable<HindsightConfig['adapter']>
+	return Promise.resolve(hashEmbed(text, EVAL_EMBED_DIMS))
 }
 
 // ── Fixture loading ───────────────────────────────────────────────────────
@@ -165,7 +102,7 @@ async function runSingleCase(
 		dbPath,
 		embed,
 		embeddingDimensions,
-		adapter: createEvalAdapter()
+		adapter: createNoopAdapter()
 	})
 
 	try {

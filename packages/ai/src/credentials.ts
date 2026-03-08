@@ -160,48 +160,20 @@ export async function loadAnthropicCredential(
 	)
 }
 
-/**
- * Read the groq credential from the credential map.
- * Groq only supports API key auth.
- */
-export async function loadGroqCredential(
-	path: string
-): Promise<GroqCredential | null> {
-	const map = await loadCredentialMap(path)
-	if (!map) return null
-
-	if (!isMultiProvider(map)) return null
-
-	const raw = map.groq
-	if (
-		raw &&
-		typeof raw === 'object' &&
-		'type' in raw &&
-		(raw as Record<string, unknown>).type === 'api_key' &&
-		'key' in raw &&
-		typeof (raw as Record<string, unknown>).key === 'string'
-	) {
-		return {
-			type: 'api_key',
-			key: (raw as Record<string, unknown>).key as string
-		}
-	}
-	return null
-}
+// ── Generic provider credential ops ──────────────────────────────────────────
 
 /**
- * Read the brave credential from the credential map.
- * Brave Search only supports API key auth.
+ * Load an API-key-only provider credential from the multi-provider map.
  */
-export async function loadBraveCredential(
-	path: string
-): Promise<BraveCredential | null> {
+async function loadApiKeyProvider(
+	path: string,
+	providerKey: string
+): Promise<ApiKeyCredential | null> {
 	const map = await loadCredentialMap(path)
 	if (!map) return null
-
 	if (!isMultiProvider(map)) return null
 
-	const raw = map.brave
+	const raw = map[providerKey]
 	if (
 		raw &&
 		typeof raw === 'object' &&
@@ -252,142 +224,23 @@ async function readExistingCredentialMap(
 }
 
 /**
- * Set the groq credential in the credential map file.
+ * Set a provider credential in the credential map file.
  * Preserves all other provider entries.
- */
-export async function setGroqCredential(
-	path: string,
-	credential: GroqCredential
-): Promise<{ ok: true } | { ok: false; error: string }> {
-	const result = await readExistingCredentialMap(path)
-	if (!result.ok) return result
-
-	const map = result.map
-	map.groq = credential
-	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
-	try {
-		await chmod(path, 0o600)
-	} catch {
-		// chmod may fail on some platforms; best-effort
-	}
-	return { ok: true }
-}
-
-/**
- * Remove only the groq key from the credential map.
- * Preserves all other entries.
- */
-export async function clearGroqCredential(
-	path: string
-): Promise<boolean> {
-	const file = Bun.file(path)
-	if (!(await file.exists())) return false
-
-	try {
-		const raw = await file.text()
-		const parsed = JSON.parse(raw)
-		if (
-			typeof parsed !== 'object' ||
-			parsed === null ||
-			!('groq' in parsed)
-		) {
-			return false
-		}
-		const map = parsed as CredentialMap
-		delete map.groq
-		await Bun.write(
-			path,
-			JSON.stringify(map, null, 2) + '\n'
-		)
-		try {
-			await chmod(path, 0o600)
-		} catch {
-			// best-effort
-		}
-		return true
-	} catch {
-		return false
-	}
-}
-
-/**
- * Set the brave credential in the credential map file.
- * Preserves all other provider entries.
- */
-export async function setBraveCredential(
-	path: string,
-	credential: BraveCredential
-): Promise<{ ok: true } | { ok: false; error: string }> {
-	const result = await readExistingCredentialMap(path)
-	if (!result.ok) return result
-
-	const map = result.map
-	map.brave = credential
-	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
-	try {
-		await chmod(path, 0o600)
-	} catch {
-		// chmod may fail on some platforms; best-effort
-	}
-	return { ok: true }
-}
-
-/**
- * Remove only the brave key from the credential map.
- * Preserves all other entries.
- */
-export async function clearBraveCredential(
-	path: string
-): Promise<boolean> {
-	const file = Bun.file(path)
-	if (!(await file.exists())) return false
-
-	try {
-		const raw = await file.text()
-		const parsed = JSON.parse(raw)
-		if (
-			typeof parsed !== 'object' ||
-			parsed === null ||
-			!('brave' in parsed)
-		) {
-			return false
-		}
-		const map = parsed as CredentialMap
-		delete map.brave
-		await Bun.write(
-			path,
-			JSON.stringify(map, null, 2) + '\n'
-		)
-		try {
-			await chmod(path, 0o600)
-		} catch {
-			// best-effort
-		}
-		return true
-	} catch {
-		return false
-	}
-}
-
-/**
- * Set the anthropic credential in the credential map file.
- * Preserves all other provider entries.
- * Creates the file if it doesn't exist.
- * Returns an error message if the file contains invalid JSON.
  *
  * Note: the read-modify-write is not atomic. This is intentional —
  * this is a single-user local config file and concurrent writers
  * are not a realistic concern.
  */
-export async function setAnthropicCredential(
+async function setProviderCredential(
 	path: string,
-	credential: AnthropicCredential
+	providerKey: string,
+	credential: unknown
 ): Promise<{ ok: true } | { ok: false; error: string }> {
 	const result = await readExistingCredentialMap(path)
 	if (!result.ok) return result
 
 	const map = result.map
-	map.anthropic = credential
+	map[providerKey] = credential
 	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
 	try {
 		await chmod(path, 0o600)
@@ -398,11 +251,12 @@ export async function setAnthropicCredential(
 }
 
 /**
- * Remove only the anthropic key from the credential map.
+ * Remove a provider key from the credential map.
  * Preserves all other entries. Returns whether anything was removed.
  */
-export async function clearAnthropicCredential(
-	path: string
+async function clearProviderCredential(
+	path: string,
+	providerKey: string
 ): Promise<boolean> {
 	const file = Bun.file(path)
 	if (!(await file.exists())) return false
@@ -413,12 +267,12 @@ export async function clearAnthropicCredential(
 		if (
 			typeof parsed !== 'object' ||
 			parsed === null ||
-			!('anthropic' in parsed)
+			!(providerKey in parsed)
 		) {
 			return false
 		}
 		const map = parsed as CredentialMap
-		delete map.anthropic
+		delete map[providerKey]
 		await Bun.write(
 			path,
 			JSON.stringify(map, null, 2) + '\n'
@@ -433,3 +287,35 @@ export async function clearAnthropicCredential(
 		return false
 	}
 }
+
+// ── Provider-specific exports ────────────────────────────────────────────────
+
+export const loadGroqCredential = (path: string) =>
+	loadApiKeyProvider(path, 'groq')
+
+export const loadBraveCredential = (path: string) =>
+	loadApiKeyProvider(path, 'brave')
+
+export const setGroqCredential = (
+	path: string,
+	credential: GroqCredential
+) => setProviderCredential(path, 'groq', credential)
+
+export const setBraveCredential = (
+	path: string,
+	credential: BraveCredential
+) => setProviderCredential(path, 'brave', credential)
+
+export const setAnthropicCredential = (
+	path: string,
+	credential: AnthropicCredential
+) => setProviderCredential(path, 'anthropic', credential)
+
+export const clearGroqCredential = (path: string) =>
+	clearProviderCredential(path, 'groq')
+
+export const clearBraveCredential = (path: string) =>
+	clearProviderCredential(path, 'brave')
+
+export const clearAnthropicCredential = (path: string) =>
+	clearProviderCredential(path, 'anthropic')

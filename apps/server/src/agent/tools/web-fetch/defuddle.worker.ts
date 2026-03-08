@@ -187,44 +187,45 @@ const USER_AGENT =
 let browserInstance: Browser | null = null
 let browserLaunchPromise: Promise<Browser> | null = null
 
-async function getBrowser(): Promise<Browser> {
-	if (browserInstance?.connected) return browserInstance
+async function launchBrowser(): Promise<Browser> {
+	try {
+		const browser = await puppeteer.launch({
+			executablePath: findChrome(),
+			headless: true,
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage'
+			]
+		})
+
+		browserInstance = browser
+		browserLaunchPromise = null
+
+		const proc = browser.process()
+		if (proc?.pid) {
+			writePidFile(proc.pid)
+		}
+
+		browser.on('disconnected', () => {
+			browserInstance = null
+			removePidFile()
+		})
+
+		return browser
+	} catch (err) {
+		browserLaunchPromise = null
+		throw err
+	}
+}
+
+function getBrowser(): Promise<Browser> {
+	if (browserInstance?.connected)
+		return Promise.resolve(browserInstance)
 
 	if (!browserLaunchPromise) {
-		// Kill any orphaned browser from a previous server run
 		killOrphanedBrowser()
-
-		browserLaunchPromise = (async () => {
-			try {
-				const browser = await puppeteer.launch({
-					executablePath: findChrome(),
-					headless: true,
-					args: [
-						'--no-sandbox',
-						'--disable-setuid-sandbox',
-						'--disable-dev-shm-usage'
-					]
-				})
-
-				browserInstance = browser
-				browserLaunchPromise = null
-
-				const proc = browser.process()
-				if (proc?.pid) {
-					writePidFile(proc.pid)
-				}
-
-				browser.on('disconnected', () => {
-					browserInstance = null
-					removePidFile()
-				})
-
-				return browser
-			} catch (err) {
-				browserLaunchPromise = null
-				throw err
-			}
-		})()
+		browserLaunchPromise = launchBrowser()
 	}
 
 	return browserLaunchPromise

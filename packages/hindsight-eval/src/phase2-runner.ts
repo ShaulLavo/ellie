@@ -15,7 +15,6 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { Hindsight } from '@ellie/hindsight'
-import type { HindsightConfig } from '@ellie/hindsight'
 import {
 	generateRollingIngestDataset,
 	generateTemporalNarrativeDataset,
@@ -31,6 +30,10 @@ import {
 	generateVerificationRunJson,
 	generateComparisonReport
 } from './phase2-report'
+import {
+	hashEmbed,
+	createNoopAdapter
+} from './eval-helpers'
 import type {
 	GateResult,
 	Phase2ComparisonReport,
@@ -48,63 +51,9 @@ const DATASET_SEED = 42
 function deterministicEmbed(
 	text: string
 ): Promise<number[]> {
-	const vec = Array.from<number>({
-		length: EVAL_EMBED_DIMS
-	}).fill(0)
-	for (let i = 0; i < text.length; i++) {
-		// Incorporate character position to differentiate anagrams (e.g. "ab" vs "ba")
-		vec[i % EVAL_EMBED_DIMS]! +=
-			(text.charCodeAt(i) * (i + 1)) / 1000
-	}
-	const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
 	return Promise.resolve(
-		norm > 0 ? vec.map(v => v / norm) : vec
+		hashEmbed(text, EVAL_EMBED_DIMS, true)
 	)
-}
-
-function createNoopAdapter(): HindsightConfig['adapter'] {
-	return {
-		kind: 'text' as const,
-		name: 'eval-noop',
-		model: 'eval-noop',
-		chatStream() {
-			return {
-				async *[Symbol.asyncIterator]() {
-					yield {
-						type: 'TEXT_MESSAGE_START' as const,
-						messageId: 'eval',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-					yield {
-						type: 'TEXT_MESSAGE_CONTENT' as const,
-						messageId: 'eval',
-						delta: '{}',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-					yield {
-						type: 'TEXT_MESSAGE_END' as const,
-						messageId: 'eval',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-					yield {
-						type: 'RUN_FINISHED' as const,
-						runId: 'eval',
-						timestamp: Date.now(),
-						model: 'eval-noop'
-					}
-				}
-			}
-		},
-		structuredOutput() {
-			return Promise.resolve({
-				data: {},
-				rawResponse: '{}'
-			})
-		}
-	} as unknown as NonNullable<HindsightConfig['adapter']>
 }
 
 // ── Ingest Runner ───────────────────────────────────────────────────────

@@ -2,11 +2,7 @@ import { ulid } from 'fast-ulid'
 import { eq, and, sql } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
-import type {
-	RetainResult,
-	MemoryUnit,
-	LinkType
-} from './types'
+import type { RetainResult, MemoryUnit } from './types'
 import {
 	TEMPORAL_LINK_WINDOW_HOURS,
 	computeTemporalLinks,
@@ -445,7 +441,7 @@ export function insertSemanticHitsForMemory(
 	memoryId: string,
 	hits: Array<{ id: string; distance: number }>,
 	skipIds: Set<string>,
-	createdAt: number,
+	createdAt: number = Date.now(),
 	output: RetainResult['links']
 ): void {
 	for (const hit of hits) {
@@ -511,49 +507,6 @@ export function createSemanticLinksFromVectors(
 	}
 }
 
-export function insertSemanticLinksFromHits(
-	hdb: HindsightDatabase,
-	bankId: string,
-	memoryId: string,
-	hits: Array<{ id: string; distance: number }>,
-	skipIds: Set<string>,
-	links: RetainResult['links']
-): void {
-	for (const hit of hits) {
-		if (hit.id === memoryId || skipIds.has(hit.id)) continue
-
-		const similarity = 1 - hit.distance
-		if (similarity < SEMANTIC_LINK_THRESHOLD) continue
-
-		const memRow = hdb.db
-			.select({ bankId: hdb.schema.memoryUnits.bankId })
-			.from(hdb.schema.memoryUnits)
-			.where(eq(hdb.schema.memoryUnits.id, hit.id))
-			.get()
-		if (memRow?.bankId !== bankId) continue
-
-		hdb.db
-			.insert(hdb.schema.memoryLinks)
-			.values({
-				id: ulid(),
-				bankId,
-				sourceId: memoryId,
-				targetId: hit.id,
-				linkType: 'semantic',
-				weight: similarity,
-				createdAt: Date.now()
-			})
-			.onConflictDoNothing()
-			.run()
-
-		links.push({
-			sourceId: memoryId,
-			targetId: hit.id,
-			linkType: 'semantic' as LinkType
-		})
-	}
-}
-
 export async function createSemanticLinks(
 	hdb: HindsightDatabase,
 	memoryVec: EmbeddingStore,
@@ -575,12 +528,13 @@ export async function createSemanticLinks(
 			row.content,
 			SEMANTIC_LINK_TOP_K + 1
 		)
-		insertSemanticLinksFromHits(
+		insertSemanticHitsForMemory(
 			hdb,
 			bankId,
 			memoryId,
 			hits,
 			newIdSet,
+			Date.now(),
 			links
 		)
 	}
