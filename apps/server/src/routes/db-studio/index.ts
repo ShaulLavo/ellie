@@ -100,7 +100,11 @@ function queryTableRows(
 			)
 			.get(...filterParams) as { cnt: number }
 		totalRows = countRow.cnt
-	} catch {
+	} catch (err) {
+		console.warn(
+			'[db-studio] COUNT query failed:',
+			err instanceof Error ? err.message : err
+		)
 		totalRows = 0
 	}
 
@@ -120,7 +124,11 @@ function queryTableRows(
 			.all(...filterParams, ps, offset) as Array<
 			Record<string, unknown>
 		>
-	} catch {
+	} catch (err) {
+		console.warn(
+			'[db-studio] SELECT query failed:',
+			err instanceof Error ? err.message : err
+		)
 		rows = []
 	}
 

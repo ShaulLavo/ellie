@@ -28,7 +28,7 @@ import {
 	type SseState
 } from './common'
 import { errorSchema } from './schemas/common-schemas'
-import { BadRequestError } from './http-errors'
+import { BadRequestError, HttpError } from './http-errors'
 
 function createRunSseStream(
 	store: RealtimeStore,
@@ -116,6 +116,7 @@ export function createAgentRoutes(
 				try {
 					controller.steer(sessionId, message)
 				} catch (err) {
+					if (err instanceof HttpError) throw err
 					throw new BadRequestError(
 						err instanceof Error
 							? err.message
@@ -148,6 +149,7 @@ export function createAgentRoutes(
 				try {
 					controller.abort(sessionId)
 				} catch (err) {
+					if (err instanceof HttpError) throw err
 					throw new BadRequestError(
 						err instanceof Error
 							? err.message

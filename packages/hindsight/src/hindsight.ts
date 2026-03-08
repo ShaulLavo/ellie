@@ -150,6 +150,13 @@ const HARDCODED_DEFAULTS: Required<BankConfig> = {
  * - **consolidate(bankId)** — Convert raw facts into durable observations
  * - Mental models — user-curated summaries with freshness tracking
  */
+/** Domain error for resource-not-found conditions in the Hindsight core. */
+export class HindsightNotFoundError extends Error {
+	constructor(message: string) {
+		super(message)
+	}
+}
+
 export class Hindsight {
 	private readonly hdb: HindsightDatabase
 	private readonly memoryVec: EmbeddingStore
@@ -433,7 +440,10 @@ export class Hindsight {
 		config: BankConfig
 	): Bank {
 		const bank = this.getBankById(bankId)
-		if (!bank) throw new Error(`Bank ${bankId} not found`)
+		if (!bank)
+			throw new HindsightNotFoundError(
+				`Bank ${bankId} not found`
+			)
 
 		const existing = this.getBankConfigRaw(bankId)
 		const merged = {
@@ -457,7 +467,10 @@ export class Hindsight {
 		traits: Partial<DispositionTraits>
 	): Bank {
 		const bank = this.getBankById(bankId)
-		if (!bank) throw new Error(`Bank ${bankId} not found`)
+		if (!bank)
+			throw new HindsightNotFoundError(
+				`Bank ${bankId} not found`
+			)
 
 		const merged: DispositionTraits = {
 			...bank.disposition,
@@ -483,7 +496,10 @@ export class Hindsight {
 
 	setMission(bankId: string, mission: string): Bank {
 		const bank = this.getBankById(bankId)
-		if (!bank) throw new Error(`Bank ${bankId} not found`)
+		if (!bank)
+			throw new HindsightNotFoundError(
+				`Bank ${bankId} not found`
+			)
 
 		const now = Date.now()
 		this.hdb.db
@@ -499,7 +515,10 @@ export class Hindsight {
 		updates: { name?: string; mission?: string }
 	): Bank {
 		const bank = this.getBankById(bankId)
-		if (!bank) throw new Error(`Bank ${bankId} not found`)
+		if (!bank)
+			throw new HindsightNotFoundError(
+				`Bank ${bankId} not found`
+			)
 
 		const patch: Partial<
 			typeof this.hdb.schema.banks.$inferInsert
@@ -523,7 +542,10 @@ export class Hindsight {
 		newInfo: string
 	): Promise<{ mission: string }> {
 		const bank = this.getBankById(bankId)
-		if (!bank) throw new Error(`Bank ${bankId} not found`)
+		if (!bank)
+			throw new HindsightNotFoundError(
+				`Bank ${bankId} not found`
+			)
 
 		const prompt = `You are helping maintain an agent mission statement.
 

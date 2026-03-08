@@ -38,6 +38,7 @@ import {
 } from './schemas/chat-schemas'
 import {
 	BadRequestError,
+	HttpError,
 	NotFoundError,
 	ServiceUnavailableError
 } from './http-errors'
@@ -424,8 +425,7 @@ export function createChatRoutes(
 							row.id
 						)
 					} catch (err) {
-						if (err instanceof ServiceUnavailableError)
-							throw err
+						if (err instanceof HttpError) throw err
 						throw new BadRequestError(
 							err instanceof Error
 								? err.message

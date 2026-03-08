@@ -28,7 +28,10 @@ type TraceKind =
 	| 'hindsight-narrative'
 	| 'speech'
 
-import type { Hindsight } from '../hindsight'
+import {
+	HindsightNotFoundError,
+	type Hindsight
+} from '../hindsight'
 import type {
 	BankConfig,
 	DispositionTraits,
@@ -766,6 +769,7 @@ function resolveValidationSummary(
 function errorStatus(error: unknown): number {
 	if (error instanceof HindsightHttpError)
 		return error.status
+	if (error instanceof HindsightNotFoundError) return 404
 	if (error instanceof SyntaxError) return 400
 	return 500
 }
