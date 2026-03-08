@@ -105,10 +105,7 @@ describe('ChannelManager', () => {
 		manager.register(p2)
 		const list = manager.listProviders()
 		expect(list).toHaveLength(2)
-		expect(list.map(p => p.id).sort()).toEqual([
-			'a',
-			'b'
-		])
+		expect(list.map(p => p.id).sort()).toEqual(['a', 'b'])
 	})
 
 	// ── Settings persistence ────────────────────────────────
@@ -119,10 +116,7 @@ describe('ChannelManager', () => {
 			foo: 'bar'
 		}
 		manager.saveSettings('test', 'default', settings)
-		const loaded = manager.loadSettings(
-			'test',
-			'default'
-		)
+		const loaded = manager.loadSettings('test', 'default')
 		expect(loaded).toEqual(settings)
 	})
 
@@ -146,9 +140,7 @@ describe('ChannelManager', () => {
 	})
 
 	test('listSavedAccounts returns empty for unknown channel', () => {
-		expect(
-			manager.listSavedAccounts('unknown')
-		).toEqual([])
+		expect(manager.listSavedAccounts('unknown')).toEqual([])
 	})
 
 	test('deleteAccountData removes the account dir', () => {
@@ -167,10 +159,7 @@ describe('ChannelManager', () => {
 	// ── Boot ─────────────────────────────────────────────────
 
 	test('bootAll calls provider.boot when settings exist', async () => {
-		const provider = createMockProvider(
-			'test',
-			'Test'
-		)
+		const provider = createMockProvider('test', 'Test')
 		manager.register(provider)
 		manager.saveSettings('test', 'default', {
 			mode: 'self'
@@ -182,10 +171,7 @@ describe('ChannelManager', () => {
 	})
 
 	test('bootAll skips provider without saved accounts', async () => {
-		const provider = createMockProvider(
-			'test',
-			'Test'
-		)
+		const provider = createMockProvider('test', 'Test')
 		manager.register(provider)
 
 		await manager.bootAll()
@@ -193,10 +179,7 @@ describe('ChannelManager', () => {
 	})
 
 	test('bootAll does not throw on provider boot failure', async () => {
-		const provider = createMockProvider(
-			'test',
-			'Test'
-		)
+		const provider = createMockProvider('test', 'Test')
 		provider.boot = async () => {
 			throw new Error('boot failed')
 		}
@@ -289,25 +272,20 @@ describe('ChannelManager', () => {
 
 		// Controller was called
 		expect(handleMessageCalls).toHaveLength(1)
-		expect(handleMessageCalls[0].text).toBe(
-			'Hello Ellie'
-		)
+		expect(handleMessageCalls[0].text).toBe('Hello Ellie')
 
 		// Delivery was registered
 		expect(registerCalls).toHaveLength(1)
 		expect(registerCalls[0].runId).toBe('run-123')
-		expect(
-			registerCalls[0].target.channelId
-		).toBe('whatsapp')
-		expect(
-			registerCalls[0].target.conversationId
-		).toBe('1234@s.whatsapp.net')
+		expect(registerCalls[0].target.channelId).toBe(
+			'whatsapp'
+		)
+		expect(registerCalls[0].target.conversationId).toBe(
+			'1234@s.whatsapp.net'
+		)
 
 		// user_message was persisted with source
-		const events = store.queryRunEvents(
-			'test-session',
-			''
-		)
+		const events = store.queryRunEvents('test-session', '')
 		// Query all events in session instead
 		const allEvents = eventStore.query({
 			sessionId: 'test-session'

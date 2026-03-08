@@ -2,21 +2,24 @@ import * as v from 'valibot'
 
 // ── Channel schemas ─────────────────────────────────────────────────────────
 
-export const channelRuntimeStatusSchema = v.variant('state', [
-	v.object({ state: v.literal('disconnected') }),
-	v.object({
-		state: v.literal('connecting'),
-		detail: v.optional(v.string())
-	}),
-	v.object({
-		state: v.literal('connected'),
-		connectedAt: v.number()
-	}),
-	v.object({
-		state: v.literal('error'),
-		error: v.string()
-	})
-])
+export const channelRuntimeStatusSchema = v.variant(
+	'state',
+	[
+		v.object({ state: v.literal('disconnected') }),
+		v.object({
+			state: v.literal('connecting'),
+			detail: v.optional(v.string())
+		}),
+		v.object({
+			state: v.literal('connected'),
+			connectedAt: v.number()
+		}),
+		v.object({
+			state: v.literal('error'),
+			error: v.string()
+		})
+	]
+)
 
 export const channelListItemSchema = v.object({
 	id: v.string(),
@@ -35,7 +38,9 @@ export const channelStatusResponseSchema = v.object({
 		v.object({
 			accountId: v.string(),
 			status: channelRuntimeStatusSchema,
-			settings: v.optional(v.record(v.string(), v.unknown()))
+			settings: v.optional(
+				v.record(v.string(), v.unknown())
+			)
 		})
 	)
 })

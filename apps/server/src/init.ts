@@ -280,9 +280,7 @@ export async function init(): Promise<ServerContext> {
 	})
 
 	// Watch current session for channel delivery
-	deliveryRegistry.watchSession(
-		store.getCurrentSessionId()
-	)
+	deliveryRegistry.watchSession(store.getCurrentSessionId())
 	// Re-subscribe on daily session rotation
 	store.subscribeToRotation(event => {
 		deliveryRegistry.watchSession(event.newSessionId)

@@ -138,9 +138,7 @@ describe('ChannelDeliveryRegistry', () => {
 		await new Promise(r => setTimeout(r, 50))
 
 		expect(sentMessages).toHaveLength(1)
-		expect(sentMessages[0].text).toBe(
-			'Hello from Ellie!'
-		)
+		expect(sentMessages[0].text).toBe('Hello from Ellie!')
 		expect(sentMessages[0].target).toEqual(target)
 	})
 

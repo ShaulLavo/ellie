@@ -13,7 +13,10 @@ import type {
 	ChannelRuntimeStatus,
 	ChannelDeliveryTarget
 } from '../../core/types'
-import { markdownToWhatsApp, chunkMessage } from './formatting'
+import {
+	markdownToWhatsApp,
+	chunkMessage
+} from './formatting'
 
 // ── WhatsApp-specific settings ──────────────────────────────────────────────
 
@@ -133,9 +136,7 @@ export class WhatsAppProvider implements ChannelProvider {
 								)
 								resolve(update.qr as string)
 							}
-							if (
-								update.connection === 'open'
-							) {
+							if (update.connection === 'open') {
 								sock.ev.off(
 									'connection.update',
 									onConnectionUpdate
@@ -222,9 +223,7 @@ export class WhatsAppProvider implements ChannelProvider {
 		target: ChannelDeliveryTarget,
 		text: string
 	): Promise<void> {
-		const account = this.#accounts.get(
-			target.accountId
-		)
+		const account = this.#accounts.get(target.accountId)
 		if (!account?.sock) {
 			throw new Error(
 				`WhatsApp account ${target.accountId} not connected`
@@ -322,9 +321,8 @@ export class WhatsAppProvider implements ChannelProvider {
 		}
 
 		if (connection === 'close') {
-			const statusCode = (
-				lastDisconnect?.error as any
-			)?.output?.statusCode as number | undefined
+			const statusCode = (lastDisconnect?.error as any)
+				?.output?.statusCode as number | undefined
 
 			if (statusCode === DisconnectReason.loggedOut) {
 				// Logged out — clear auth state, don't reconnect
@@ -337,10 +335,7 @@ export class WhatsAppProvider implements ChannelProvider {
 				// Clean auth dir
 				if (this.#manager) {
 					const authDir = join(
-						this.#manager.accountDir(
-							'whatsapp',
-							accountId
-						),
+						this.#manager.accountDir('whatsapp', accountId),
 						'auth'
 					)
 					if (existsSync(authDir)) {
@@ -353,17 +348,14 @@ export class WhatsAppProvider implements ChannelProvider {
 
 				// Reject loginWait if pending
 				if (account.loginReject) {
-					account.loginReject(
-						new Error('Logged out')
-					)
+					account.loginReject(new Error('Logged out'))
 					account.loginResolve = undefined
 					account.loginReject = undefined
 				}
 			} else {
 				// Reconnect with exponential backoff
 				const reason =
-					lastDisconnect?.error?.message ??
-					'unknown'
+					lastDisconnect?.error?.message ?? 'unknown'
 				console.log(
 					`[whatsapp] Account ${accountId} disconnected (${reason}), reconnecting in ${account.reconnectDelay}ms`
 				)
@@ -372,12 +364,9 @@ export class WhatsAppProvider implements ChannelProvider {
 					detail: `Reconnecting (${reason})`
 				}
 
-				account.reconnectTimer = setTimeout(
-					() => {
-						this.#reconnect(accountId, account)
-					},
-					account.reconnectDelay
-				)
+				account.reconnectTimer = setTimeout(() => {
+					this.#reconnect(accountId, account)
+				}, account.reconnectDelay)
 				account.reconnectDelay = Math.min(
 					account.reconnectDelay * 2,
 					MAX_RECONNECT_DELAY
@@ -404,9 +393,7 @@ export class WhatsAppProvider implements ChannelProvider {
 			account.status = {
 				state: 'error',
 				error:
-					err instanceof Error
-						? err.message
-						: String(err)
+					err instanceof Error ? err.message : String(err)
 			}
 		}
 	}
@@ -463,8 +450,7 @@ export class WhatsAppProvider implements ChannelProvider {
 				account.settings.phoneMode === 'companion'
 			) {
 				// Companion mode: only accept from owner
-				if (jid !== account.settings.ownerJid)
-					continue
+				if (jid !== account.settings.ownerJid) continue
 			}
 
 			// Extract text content
@@ -478,8 +464,7 @@ export class WhatsAppProvider implements ChannelProvider {
 					accountId,
 					conversationId: jid,
 					senderId: jid,
-					senderName:
-						msg.pushName ?? undefined,
+					senderName: msg.pushName ?? undefined,
 					text,
 					timestamp: Date.now()
 				})

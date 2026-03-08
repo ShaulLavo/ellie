@@ -66,10 +66,7 @@ export class ChannelManager {
 		return join(this.#dataDir, 'channels', channelId)
 	}
 
-	accountDir(
-		channelId: string,
-		accountId: string
-	): string {
+	accountDir(channelId: string, accountId: string): string {
 		return join(this.channelDir(channelId), accountId)
 	}
 
@@ -128,9 +125,7 @@ export class ChannelManager {
 
 	async bootAll(): Promise<void> {
 		for (const provider of this.#providers.values()) {
-			const accounts = this.listSavedAccounts(
-				provider.id
-			)
+			const accounts = this.listSavedAccounts(provider.id)
 			if (accounts.length === 0) continue
 			try {
 				await provider.boot(this)
@@ -161,8 +156,7 @@ export class ChannelManager {
 	async ingestMessage(
 		msg: ChannelInboundMessage
 	): Promise<void> {
-		const sessionId =
-			this.#store.getCurrentSessionId()
+		const sessionId = this.#store.getCurrentSessionId()
 		this.#store.ensureSession(sessionId)
 
 		// Dedupe key: reject duplicate messages in the same ~2s window
@@ -176,7 +170,9 @@ export class ChannelManager {
 			'user_message',
 			{
 				role: 'user' as const,
-				content: [{ type: 'text' as const, text: msg.text }],
+				content: [
+					{ type: 'text' as const, text: msg.text }
+				],
 				timestamp: msg.timestamp,
 				source: {
 					kind: msg.channelId,
@@ -211,11 +207,15 @@ export class ChannelManager {
 		)
 
 		// Register delivery target so reply routes back through this channel
-		this.#deliveryRegistry.register(result.runId, sessionId, {
-			channelId: msg.channelId,
-			accountId: msg.accountId,
-			conversationId: msg.conversationId
-		})
+		this.#deliveryRegistry.register(
+			result.runId,
+			sessionId,
+			{
+				channelId: msg.channelId,
+				accountId: msg.accountId,
+				conversationId: msg.conversationId
+			}
+		)
 
 		// Ensure we're watching this session for run completions
 		this.#deliveryRegistry.watchSession(sessionId)

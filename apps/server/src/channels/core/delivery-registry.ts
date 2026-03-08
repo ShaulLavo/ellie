@@ -28,9 +28,7 @@ export class ChannelDeliveryRegistry {
 
 	constructor(opts: {
 		store: RealtimeStore
-		getProvider: (
-			id: string
-		) => ChannelProvider | undefined
+		getProvider: (id: string) => ChannelProvider | undefined
 	}) {
 		this.#store = opts.store
 		this.#getProvider = opts.getProvider

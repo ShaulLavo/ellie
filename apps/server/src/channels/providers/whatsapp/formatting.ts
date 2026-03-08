@@ -18,13 +18,10 @@ export function markdownToWhatsApp(text: string): string {
 
 	// Preserve code blocks first (don't transform inside them)
 	const codeBlocks: string[] = []
-	result = result.replace(
-		/```[\s\S]*?```/g,
-		match => {
-			codeBlocks.push(match)
-			return `\x00CB${codeBlocks.length - 1}\x00`
-		}
-	)
+	result = result.replace(/```[\s\S]*?```/g, match => {
+		codeBlocks.push(match)
+		return `\x00CB${codeBlocks.length - 1}\x00`
+	})
 
 	// Preserve inline code
 	const inlineCode: string[] = []
@@ -34,10 +31,7 @@ export function markdownToWhatsApp(text: string): string {
 	})
 
 	// **bold** or __bold__ → *bold*
-	result = result.replace(
-		/\*\*(.+?)\*\*/g,
-		'*$1*'
-	)
+	result = result.replace(/\*\*(.+?)\*\*/g, '*$1*')
 	result = result.replace(/__(.+?)__/g, '*$1*')
 
 	// ~~strikethrough~~ → ~strikethrough~
@@ -50,10 +44,7 @@ export function markdownToWhatsApp(text: string): string {
 	)
 
 	// # headers → *bold headers*
-	result = result.replace(
-		/^#{1,6}\s+(.+)$/gm,
-		'*$1*'
-	)
+	result = result.replace(/^#{1,6}\s+(.+)$/gm, '*$1*')
 
 	// Restore inline code
 	result = result.replace(
@@ -85,9 +76,7 @@ export function chunkMessage(
 	let current = ''
 
 	for (const line of lines) {
-		const candidate = current
-			? `${current}\n${line}`
-			: line
+		const candidate = current ? `${current}\n${line}` : line
 
 		if (candidate.length > maxLen && current) {
 			// Current chunk is full, start a new one

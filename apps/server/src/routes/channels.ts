@@ -30,13 +30,11 @@ export function createChannelRoutes(
 		.get(
 			'',
 			() => {
-				return channelManager
-					.listProviders()
-					.map(p => ({
-						id: p.id,
-						displayName: p.displayName,
-						status: p.getStatus('default')
-					}))
+				return channelManager.listProviders().map(p => ({
+					id: p.id,
+					displayName: p.displayName,
+					status: p.getStatus('default')
+				}))
 			},
 			{
 				response: { 200: channelListResponseSchema }
@@ -54,15 +52,12 @@ export function createChannelRoutes(
 						`Channel not found: ${params.channelId}`
 					)
 				}
-				const accounts =
-					channelManager.listSavedAccounts(
-						params.channelId
-					)
+				const accounts = channelManager.listSavedAccounts(
+					params.channelId
+				)
 				// Always include "default" even if no settings yet
 				const accountIds =
-					accounts.length > 0
-						? accounts
-						: ['default']
+					accounts.length > 0 ? accounts : ['default']
 				return {
 					id: provider.id,
 					displayName: provider.displayName,

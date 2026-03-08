@@ -6,27 +6,19 @@ import {
 
 describe('markdownToWhatsApp', () => {
 	test('converts **bold** to *bold*', () => {
-		expect(markdownToWhatsApp('**hello**')).toBe(
-			'*hello*'
-		)
+		expect(markdownToWhatsApp('**hello**')).toBe('*hello*')
 	})
 
 	test('converts __bold__ to *bold*', () => {
-		expect(markdownToWhatsApp('__hello__')).toBe(
-			'*hello*'
-		)
+		expect(markdownToWhatsApp('__hello__')).toBe('*hello*')
 	})
 
 	test('preserves _italic_ as-is', () => {
-		expect(markdownToWhatsApp('_hello_')).toBe(
-			'_hello_'
-		)
+		expect(markdownToWhatsApp('_hello_')).toBe('_hello_')
 	})
 
 	test('converts ~~strikethrough~~ to ~strikethrough~', () => {
-		expect(markdownToWhatsApp('~~hello~~')).toBe(
-			'~hello~'
-		)
+		expect(markdownToWhatsApp('~~hello~~')).toBe('~hello~')
 	})
 
 	test('preserves `inline code`', () => {
@@ -52,17 +44,15 @@ describe('markdownToWhatsApp', () => {
 
 	test('converts [text](url) to text (url)', () => {
 		expect(
-			markdownToWhatsApp('[click here](https://example.com)')
+			markdownToWhatsApp(
+				'[click here](https://example.com)'
+			)
 		).toBe('click here (https://example.com)')
 	})
 
 	test('converts # headers to *bold*', () => {
-		expect(markdownToWhatsApp('# Title')).toBe(
-			'*Title*'
-		)
-		expect(markdownToWhatsApp('### Sub')).toBe(
-			'*Sub*'
-		)
+		expect(markdownToWhatsApp('# Title')).toBe('*Title*')
+		expect(markdownToWhatsApp('### Sub')).toBe('*Sub*')
 	})
 
 	test('handles mixed formatting', () => {
@@ -76,9 +66,7 @@ describe('markdownToWhatsApp', () => {
 
 describe('chunkMessage', () => {
 	test('returns single chunk for short text', () => {
-		expect(chunkMessage('hello', 100)).toEqual([
-			'hello'
-		])
+		expect(chunkMessage('hello', 100)).toEqual(['hello'])
 	})
 
 	test('returns single chunk when text equals max length', () => {
