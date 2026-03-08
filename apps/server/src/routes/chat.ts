@@ -38,7 +38,8 @@ import {
 } from './schemas/chat-schemas'
 import {
 	BadRequestError,
-	NotFoundError
+	NotFoundError,
+	ServiceUnavailableError
 } from './http-errors'
 import type { FileStore } from '@ellie/tus'
 
@@ -402,14 +403,19 @@ export function createChatRoutes(
 						| undefined
 					try {
 						const controller = await getAgentController?.()
-						result = controller
-							? await controller.handleMessage(
-									sessionId,
-									input.content,
-									row.id
-								)
-							: undefined
+						if (!controller) {
+							throw new ServiceUnavailableError(
+								'Agent is not available — check API credentials'
+							)
+						}
+						result = await controller.handleMessage(
+							sessionId,
+							input.content,
+							row.id
+						)
 					} catch (err) {
+						if (err instanceof ServiceUnavailableError)
+							throw err
 						throw new BadRequestError(
 							err instanceof Error
 								? err.message
