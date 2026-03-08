@@ -194,21 +194,21 @@ async function getBrowser(): Promise<Browser> {
 		// Kill any orphaned browser from a previous server run
 		killOrphanedBrowser()
 
-		browserLaunchPromise = puppeteer
-			.launch({
-				executablePath: findChrome(),
-				headless: true,
-				args: [
-					'--no-sandbox',
-					'--disable-setuid-sandbox',
-					'--disable-dev-shm-usage'
-				]
-			})
-			.then((browser: Browser) => {
+		browserLaunchPromise = (async () => {
+			try {
+				const browser = await puppeteer.launch({
+					executablePath: findChrome(),
+					headless: true,
+					args: [
+						'--no-sandbox',
+						'--disable-setuid-sandbox',
+						'--disable-dev-shm-usage'
+					]
+				})
+
 				browserInstance = browser
 				browserLaunchPromise = null
 
-				// Track the browser PID so we can clean up after crashes
 				const proc = browser.process()
 				if (proc?.pid) {
 					writePidFile(proc.pid)
@@ -220,14 +220,14 @@ async function getBrowser(): Promise<Browser> {
 				})
 
 				return browser
-			})
-			.catch((err: unknown) => {
+			} catch (err) {
 				browserLaunchPromise = null
 				throw err
-			})
+			}
+		})()
 	}
 
-	return browserLaunchPromise!
+	return browserLaunchPromise
 }
 
 // ── HTML safety guards ──────────────────────────────────────────────────

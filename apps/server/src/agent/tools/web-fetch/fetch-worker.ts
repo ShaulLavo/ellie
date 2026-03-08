@@ -46,7 +46,7 @@ function getFetchWorker(): {
 }
 
 /** Call a worker method with a timeout, abort signal, and worker-death detection. */
-export async function callWorker<T>(
+export function callWorker<T>(
 	fn: (proxy: Comlink.Remote<FetchWorkerApi>) => Promise<T>,
 	signal?: AbortSignal
 ): Promise<T> {
