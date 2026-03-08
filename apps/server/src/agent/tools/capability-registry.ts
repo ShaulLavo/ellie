@@ -20,6 +20,7 @@ import { createWorkspaceTools } from './workspace-tools'
 import { createShellTool } from './shell-tool'
 import { createRipgrepTool } from './ripgrep-tool'
 import { createWebFetchTool } from './web-fetch/tool'
+import { createWebSearchTool } from './web-search/tool'
 import {
 	createSessionExecTool,
 	createExecTool
@@ -42,6 +43,8 @@ export interface ToolRegistryConfig {
 		| undefined
 	/** Event store for tool result caching (web fetch deduplication). */
 	eventStore?: EventStore
+	/** Path to .credentials.json for API key loading. */
+	credentialsPath?: string
 }
 
 export interface ToolRegistry {
@@ -67,11 +70,15 @@ export function createToolRegistry(
 	config: ToolRegistryConfig
 ): ToolRegistry {
 	// Raw tools — no trace wrapping (used inside REPL HTTP handler)
+	const webSearch = createWebSearchTool(
+		config.credentialsPath
+	)
 	const rawBasicTools: AgentTool[] = [
 		...createWorkspaceTools(config.workspaceDir),
 		createShellTool(config.workspaceDir),
 		createRipgrepTool(config.workspaceDir),
-		createWebFetchTool(config.eventStore)
+		createWebFetchTool(config.eventStore),
+		...(webSearch ? [webSearch] : [])
 	]
 
 	// Traced versions for direct agent-loop use

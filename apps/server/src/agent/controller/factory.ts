@@ -65,7 +65,8 @@ export class AgentControllerFactory {
 						: undefined,
 					traceRecorder: this.deps.traceRecorder,
 					blobSink: this.deps.blobSink,
-					eventStore
+					eventStore,
+					credentialsPath
 				})
 			: null
 		return this.cached

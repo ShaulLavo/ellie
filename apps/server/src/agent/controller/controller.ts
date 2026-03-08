@@ -64,6 +64,8 @@ export interface AgentControllerOptions {
 	blobSink?: BlobSink
 	/** Event store for tool result caching */
 	eventStore?: EventStore
+	/** Path to .credentials.json for API key loading */
+	credentialsPath?: string
 }
 
 // ── Queued cross-session message ─────────────────────────────────────────────
@@ -123,7 +125,8 @@ export class AgentController {
 			traceRecorder: this.traceRecorder,
 			blobSink: this.blobSink,
 			getTraceScope: () => this.activeTraceScope,
-			eventStore: options.eventStore
+			eventStore: options.eventStore,
+			credentialsPath: options.credentialsPath
 		})
 
 		// Build toolSafety config — blob-backed overflow when available
