@@ -20,6 +20,7 @@ import {
 	USER_AGENT,
 	truncateText,
 	errorResult,
+	extractErrorBody,
 	isMediaType,
 	wrapExternalContent
 } from './common'
@@ -42,6 +43,9 @@ import { validateHostname, SsrFBlockedError } from './ssrf'
 import { getCachedFetchResult } from './fetch-cache'
 import type { EventStore } from '@ellie/db'
 
+/** Per-request timeout for the initial HTTP fetch (not the browser). */
+const FETCH_TIMEOUT_MS = 5 * 60_000 // 5 minutes
+
 /**
  * Create the web fetch tool.
  */
@@ -58,7 +62,8 @@ export function createWebFetchTool(
 		parameters: webFetchParams,
 		execute: async (
 			_toolCallId,
-			rawParams
+			rawParams,
+			signal
 		): Promise<AgentToolResult> => {
 			const params = rawParams as WebFetchParams
 
@@ -76,14 +81,14 @@ export function createWebFetchTool(
 				// Reddit — use JSON API directly (no browser needed)
 				if (isRedditUrl(params.url)) {
 					return wrapExternalContent(
-						await handleReddit(params.url)
+						await handleReddit(params.url, signal)
 					)
 				}
 
 				// Wikipedia — use REST API (no browser needed)
 				if (isWikipediaUrl(params.url)) {
 					return wrapExternalContent(
-						await handleWikipedia(params.url)
+						await handleWikipedia(params.url, signal)
 					)
 				}
 
@@ -96,14 +101,18 @@ export function createWebFetchTool(
 								Accept:
 									'text/markdown, text/html;q=0.9, */*;q=0.8'
 							}
-						}
+						},
+						timeoutMs: FETCH_TIMEOUT_MS,
+						signal
 					}
 				)
 
 				if (!response.ok) {
-					return errorResult(
-						`HTTP ${response.status} ${response.statusText}`
-					)
+					const body = await extractErrorBody(response)
+					const msg = body
+						? `HTTP ${response.status} ${response.statusText}\n${body}`
+						: `HTTP ${response.status} ${response.statusText}`
+					return errorResult(msg)
 				}
 
 				const contentType =
@@ -153,7 +162,7 @@ export function createWebFetchTool(
 				// HTML — validate URL before passing to Puppeteer worker
 				await validateHostname(new URL(params.url).hostname)
 				return wrapExternalContent(
-					await handleBrowser(params.url)
+					await handleBrowser(params.url, signal)
 				)
 			} catch (err) {
 				if (err instanceof SsrFBlockedError) {

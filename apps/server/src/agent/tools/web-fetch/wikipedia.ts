@@ -69,12 +69,14 @@ const WIKI_STRIP_SECTIONS =
 	/^#{2,3} (References|See also|External links|Further reading|Notes|Citations|Sources)$/im
 
 export async function handleWikipedia(
-	url: string
+	url: string,
+	signal?: AbortSignal
 ): Promise<AgentToolResult> {
 	const { apiUrl, title: fallbackTitle } =
 		toWikipediaExtractsUrl(url)
 	const res = await fetch(apiUrl, {
-		headers: { 'User-Agent': USER_AGENT }
+		headers: { 'User-Agent': USER_AGENT },
+		...(signal ? { signal } : {})
 	})
 	if (!res.ok) {
 		return errorResult(

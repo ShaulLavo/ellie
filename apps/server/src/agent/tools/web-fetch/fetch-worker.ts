@@ -45,10 +45,16 @@ function getFetchWorker(): {
 	return { proxy: _proxy, worker: _worker }
 }
 
-/** Call a worker method with a timeout and worker-death detection. */
+/** Call a worker method with a timeout, abort signal, and worker-death detection. */
 export async function callWorker<T>(
-	fn: (proxy: Comlink.Remote<FetchWorkerApi>) => Promise<T>
+	fn: (proxy: Comlink.Remote<FetchWorkerApi>) => Promise<T>,
+	signal?: AbortSignal
 ): Promise<T> {
+	// Fast-fail if already aborted
+	if (signal?.aborted) {
+		throw new DOMException('Aborted', 'AbortError')
+	}
+
 	const { proxy, worker } = getFetchWorker()
 
 	return new Promise<T>((resolve, reject) => {
@@ -65,12 +71,23 @@ export async function callWorker<T>(
 			once: true
 		})
 
+		// Listen for external abort signal
+		const onAbort = () => {
+			clearTimeout(timer)
+			worker.removeEventListener('error', onError)
+			reject(new DOMException('Aborted', 'AbortError'))
+		}
+		signal?.addEventListener('abort', onAbort, {
+			once: true
+		})
+
 		fn(proxy)
 			.then(resolve)
 			.catch(reject)
 			.finally(() => {
 				clearTimeout(timer)
 				worker.removeEventListener('error', onError)
+				signal?.removeEventListener('abort', onAbort)
 			})
 	})
 }

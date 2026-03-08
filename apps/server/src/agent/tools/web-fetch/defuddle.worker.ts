@@ -10,7 +10,6 @@ import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import type { Browser } from 'puppeteer-core'
 
-puppeteer.use(StealthPlugin())
 import { Defuddle } from 'defuddle/node'
 import { parseHTML } from 'linkedom'
 import { Readability } from '@mozilla/readability'
@@ -24,6 +23,8 @@ import {
 } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+
+puppeteer.use(StealthPlugin())
 
 // ── PID file for orphan cleanup ──────────────────────────────────────
 
@@ -229,6 +230,105 @@ async function getBrowser(): Promise<Browser> {
 	return browserLaunchPromise!
 }
 
+// ── HTML safety guards ──────────────────────────────────────────────────
+
+const MAX_DEFUDDLE_CHARS = 2_000_000 // 2 MB — Defuddle handles well
+const MAX_READABILITY_CHARS = 20_000_000 // 20 MB — Readability handles well
+const MAX_NESTING_DEPTH = 3_000
+
+const VOID_TAGS = new Set([
+	'area',
+	'base',
+	'br',
+	'col',
+	'embed',
+	'hr',
+	'img',
+	'input',
+	'link',
+	'meta',
+	'param',
+	'source',
+	'track',
+	'wbr'
+])
+
+/**
+ * Cheap heuristic to detect pathologically nested HTML that could
+ * blow up the stack in Defuddle/Readability/linkedom.
+ * Not a parser — tuned to catch attacker-controlled "<div><div>..." cases.
+ * Adapted from OpenClaw.
+ */
+function exceedsNestingDepth(
+	html: string,
+	maxDepth: number
+): boolean {
+	let depth = 0
+	const len = html.length
+	for (let i = 0; i < len; i++) {
+		if (html.charCodeAt(i) !== 60) continue // '<'
+		const next = html.charCodeAt(i + 1)
+		if (next === 33 || next === 63) continue // <! or <?
+
+		const closing = next === 47 // '/'
+		const nameStart = closing ? i + 2 : i + 1
+
+		let j = nameStart
+		while (
+			j < len &&
+			html.charCodeAt(j) !== 32 &&
+			html.charCodeAt(j) !== 62 &&
+			html.charCodeAt(j) !== 47 &&
+			html.charCodeAt(j) !== 10 &&
+			html.charCodeAt(j) !== 13
+		) {
+			j++
+		}
+
+		const tagName = html.slice(nameStart, j).toLowerCase()
+		if (!tagName) continue
+
+		if (closing) {
+			depth = Math.max(0, depth - 1)
+			continue
+		}
+		if (VOID_TAGS.has(tagName)) continue
+
+		// Best-effort self-closing detection
+		let selfClosing = false
+		for (let k = j; k < len && k < j + 200; k++) {
+			if (html.charCodeAt(k) === 62) {
+				if (html.charCodeAt(k - 1) === 47)
+					selfClosing = true
+				break
+			}
+		}
+		if (selfClosing) continue
+
+		depth++
+		if (depth > maxDepth) return true
+	}
+	return false
+}
+
+/**
+ * Strip HTML to plain text — fallback for pathological HTML
+ * that's too large or deeply nested for DOM parsing.
+ */
+function stripHtmlToText(html: string): string {
+	return html
+		.replace(/<script[\s\S]*?<\/script>/gi, '')
+		.replace(/<style[\s\S]*?<\/style>/gi, '')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&amp;/g, '&')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/\s+/g, ' ')
+		.trim()
+}
+
 // ── Content extraction ──────────────────────────────────────────────────
 
 const MIN_WORD_COUNT = 10
@@ -268,25 +368,42 @@ function parseWithReadability(html: string, _url: string) {
 }
 
 async function parseHtml(html: string, url: string) {
-	const defuddled = await Defuddle(html, url, {
-		markdown: true
-	})
-	const defuddleResult = {
-		title: defuddled.title || null,
-		author: defuddled.author || null,
-		wordCount: defuddled.wordCount ?? 0,
-		content: defuddled.content || ''
+	const tooDeep = exceedsNestingDepth(
+		html,
+		MAX_NESTING_DEPTH
+	)
+
+	// Beyond all DOM parser limits — strip tags
+	if (html.length > MAX_READABILITY_CHARS || tooDeep) {
+		const text = stripHtmlToText(html)
+		return {
+			title: null,
+			author: null,
+			wordCount: text.split(/\s+/).filter(Boolean).length,
+			content: text
+		}
 	}
 
-	if (defuddleResult.wordCount >= MIN_WORD_COUNT)
-		return defuddleResult
+	// Within Defuddle's range — try it first
+	if (html.length <= MAX_DEFUDDLE_CHARS) {
+		const defuddled = await Defuddle(html, url, {
+			markdown: true
+		})
+		const defuddleResult = {
+			title: defuddled.title || null,
+			author: defuddled.author || null,
+			wordCount: defuddled.wordCount ?? 0,
+			content: defuddled.content || ''
+		}
 
-	// Fallback to Readability when Defuddle scores poorly
-	const readable = parseWithReadability(html, url)
-	if (readable.wordCount > defuddleResult.wordCount)
-		return readable
+		if (defuddleResult.wordCount >= MIN_WORD_COUNT)
+			return defuddleResult
 
-	return defuddleResult
+		// Defuddle scored poorly — fall through to Readability
+	}
+
+	// 2–20 MB or Defuddle fallback — Readability only
+	return parseWithReadability(html, url)
 }
 
 // ── Worker API ─────────────────────────────────────────────────────────

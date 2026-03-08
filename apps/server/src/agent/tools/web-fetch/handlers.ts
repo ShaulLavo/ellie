@@ -12,9 +12,13 @@ import {
 import { callWorker } from './fetch-worker'
 
 export async function handleBrowser(
-	url: string
+	url: string,
+	signal?: AbortSignal
 ): Promise<AgentToolResult> {
-	const result = await callWorker(w => w.fetchPage(url))
+	const result = await callWorker(
+		w => w.fetchPage(url),
+		signal
+	)
 
 	const parts: string[] = []
 	if (result.title) parts.push(`# ${result.title}`)

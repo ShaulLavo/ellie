@@ -127,11 +127,13 @@ function flattenComments(
 }
 
 export async function handleReddit(
-	url: string
+	url: string,
+	signal?: AbortSignal
 ): Promise<AgentToolResult> {
 	const jsonUrl = toRedditJsonUrl(url)
 	const res = await fetch(jsonUrl, {
-		headers: { 'User-Agent': USER_AGENT }
+		headers: { 'User-Agent': USER_AGENT },
+		...(signal ? { signal } : {})
 	})
 	if (!res.ok) {
 		return errorResult(

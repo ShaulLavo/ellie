@@ -40,6 +40,52 @@ export function formatBytes(bytes: number): string {
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// ── Error body extraction ────────────────────────────────────────────────
+
+const MAX_ERROR_BODY_CHARS = 2_000
+
+/**
+ * Extract readable text from an error HTTP response body.
+ * Strips HTML tags so the agent gets a useful message instead of raw markup.
+ * Returns null if the body is empty or unreadable.
+ */
+export async function extractErrorBody(
+	response: Response
+): Promise<string | null> {
+	try {
+		const raw = await response.text()
+		if (!raw.trim()) return null
+
+		const ct = response.headers.get('content-type') ?? ''
+
+		// Plain text / JSON — return as-is (truncated)
+		if (!ct.includes('html')) {
+			return (
+				raw.slice(0, MAX_ERROR_BODY_CHARS).trim() || null
+			)
+		}
+
+		// HTML — strip tags to get readable text
+		const stripped = raw
+			.replace(/<script[\s\S]*?<\/script>/gi, '')
+			.replace(/<style[\s\S]*?<\/style>/gi, '')
+			.replace(/<[^>]+>/g, ' ')
+			.replace(/&nbsp;/g, ' ')
+			.replace(/&amp;/g, '&')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/\s+/g, ' ')
+			.trim()
+
+		return stripped
+			? stripped.slice(0, MAX_ERROR_BODY_CHARS)
+			: null
+	} catch {
+		return null
+	}
+}
+
 // ── External content wrapping ───────────────────────────────────────────
 
 const MARKER_START = '<<<EXTERNAL_UNTRUSTED_CONTENT>>>'
