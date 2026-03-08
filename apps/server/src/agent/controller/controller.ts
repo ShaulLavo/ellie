@@ -325,7 +325,7 @@ export class AgentController {
 					{ sessionId, runId },
 					err
 				)
-				this.writeErrorEvent(sessionId, runId)
+				this.writeErrorEvent(sessionId, runId, err)
 			})
 		})
 
@@ -622,7 +622,7 @@ export class AgentController {
 					{ sessionId, runId: newRunId },
 					err
 				)
-				this.writeErrorEvent(sessionId, newRunId)
+				this.writeErrorEvent(sessionId, newRunId, err)
 			})
 		})
 	}
@@ -650,12 +650,65 @@ export class AgentController {
 
 	private writeErrorEvent(
 		sessionId: string,
-		runId: string
+		runId: string,
+		error?: unknown
 	): void {
+		const errorMessage =
+			error instanceof Error
+				? error.message
+				: String(error ?? 'Unknown error')
+
 		this.trace('controller.write_error_event', {
 			sessionId,
-			runId
+			runId,
+			errorMessage
 		})
+
+		// Write a visible error assistant_message so the client sees the failure
+		try {
+			this.store.appendEvent(
+				sessionId,
+				'assistant_message',
+				{
+					message: {
+						role: 'assistant' as const,
+						content: [
+							{ type: 'text' as const, text: errorMessage }
+						],
+						provider: 'system',
+						model: 'system',
+						usage: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							totalTokens: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0
+							}
+						},
+						stopReason: 'error' as const,
+						errorMessage,
+						timestamp: Date.now()
+					},
+					streaming: false
+				},
+				runId
+			)
+		} catch (err) {
+			handleControllerError(
+				(type, payload) => this.trace(type, payload),
+				`write_error_message_failed session=${sessionId} runId=${runId}`,
+				'controller.write_error_message_failed',
+				{ sessionId, runId },
+				err
+			)
+		}
+
 		try {
 			this.store.closeAgentRun(sessionId, runId)
 		} catch (err) {

@@ -475,10 +475,6 @@ export class Agent {
 		} catch (err: unknown) {
 			const errorMessage =
 				err instanceof Error ? err.message : String(err)
-			console.error(
-				`[agent] _runLoop CAUGHT ERROR after ${eventCount} events: ${errorMessage}`
-			)
-
 			const errorMsg: AgentMessage = {
 				role: 'assistant',
 				content: [{ type: 'text', text: errorMessage }],
