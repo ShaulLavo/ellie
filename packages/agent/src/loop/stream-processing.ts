@@ -240,6 +240,80 @@ function handleStreamError(
 }
 
 // ---------------------------------------------------------------------------
+// Trace: prompt snapshot
+// ---------------------------------------------------------------------------
+
+/** Record a prompt.snapshot trace event, offloading to blob when large. */
+async function tracePromptSnapshot(
+	sctx: StreamContext,
+	llmMessages: ReturnType<typeof toModelMessages>
+): Promise<void> {
+	const { config, currentContext: context } = sctx
+	const snapshotPayload = {
+		systemPrompt: context.systemPrompt,
+		messages: llmMessages,
+		tools: context.tools?.map(t => ({
+			name: t.name,
+			description: t.description,
+			parameters: t.parameters
+		})),
+		model: config.model.id,
+		provider: config.model.provider,
+		thinkingLevel: config.thinkingLevel,
+		temperature: config.temperature,
+		maxTokens: config.maxTokens,
+		messageCount: llmMessages.length
+	}
+
+	if (
+		!config.traceRecorder ||
+		!config.toolSafety?.traceScope
+	) {
+		emitTrace(config, 'agent_context', snapshotPayload)
+		return
+	}
+
+	const scope = config.toolSafety.traceScope
+	const serialized = JSON.stringify(snapshotPayload)
+	let blobRefs: BlobRef[] | undefined
+	let inlinePayload: Record<string, unknown> =
+		snapshotPayload
+
+	if (
+		config.toolSafety.blobSink &&
+		shouldBlob(serialized)
+	) {
+		try {
+			const blobRef =
+				await config.toolSafety.blobSink.write({
+					traceId: scope.traceId,
+					spanId: scope.spanId,
+					role: 'prompt_snapshot',
+					content: serialized,
+					mimeType: 'application/json',
+					ext: 'json'
+				})
+			blobRefs = [blobRef]
+			inlinePayload = {
+				...snapshotPayload,
+				messages: `[${llmMessages.length} messages — see blob]`,
+				_preview: serialized.slice(0, 2048)
+			}
+		} catch {
+			// Best-effort blob — fall through with full inline payload
+		}
+	}
+
+	config.traceRecorder.record(
+		scope,
+		'prompt.snapshot',
+		'model',
+		inlinePayload,
+		blobRefs
+	)
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -283,76 +357,7 @@ export async function processAgentStream(
 	const { abortController, cleanup } =
 		createAbortBridge(signal)
 
-	// Trace the full context being sent to the API
-	// Emitted before buildStreamSource so prompt.snapshot precedes model.request
-	const snapshotPayload = {
-		systemPrompt: sctx.currentContext.systemPrompt,
-		messages: llmMessages,
-		tools: context.tools?.map(t => ({
-			name: t.name,
-			description: t.description,
-			parameters: t.parameters
-		})),
-		model: config.model.id,
-		provider: config.model.provider,
-		thinkingLevel: config.thinkingLevel,
-		temperature: config.temperature,
-		maxTokens: config.maxTokens,
-		messageCount: llmMessages.length
-	}
-
-	if (
-		config.traceRecorder &&
-		config.toolSafety?.traceScope
-	) {
-		const scope = config.toolSafety.traceScope
-		const serialized = JSON.stringify(snapshotPayload)
-		let blobRefs: BlobRef[] | undefined
-		let inlinePayload: Record<string, unknown> =
-			snapshotPayload
-
-		if (
-			config.toolSafety.blobSink &&
-			shouldBlob(serialized)
-		) {
-			try {
-				const blobRef =
-					await config.toolSafety.blobSink.write({
-						traceId: scope.traceId,
-						spanId: scope.spanId,
-						role: 'prompt_snapshot',
-						content: serialized,
-						mimeType: 'application/json',
-						ext: 'json'
-					})
-				blobRefs = [blobRef]
-				// Keep a 2KB preview inline
-				inlinePayload = {
-					...snapshotPayload,
-					messages: `[${llmMessages.length} messages — see blob]`,
-					_preview: serialized.slice(0, 2048)
-				}
-			} catch (blobErr) {
-				// Best-effort blob — fall through with full inline payload
-				console.warn(
-					'[stream-processing] prompt.snapshot blob write failed:',
-					blobErr instanceof Error
-						? blobErr.message
-						: String(blobErr)
-				)
-			}
-		}
-
-		config.traceRecorder.record(
-			scope,
-			'prompt.snapshot',
-			'model',
-			inlinePayload,
-			blobRefs
-		)
-	} else {
-		emitTrace(config, 'agent_context', snapshotPayload)
-	}
+	await tracePromptSnapshot(sctx, llmMessages)
 
 	const streamSource = buildStreamSource(
 		sctx,

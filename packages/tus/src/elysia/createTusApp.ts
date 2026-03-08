@@ -74,8 +74,7 @@ export type CreateTusAppOptions = {
 
 // ── Factory ────────────────────────────────────────────────────────────────
 
-function mountTusRoutes(
-	app: InstanceType<typeof Elysia>,
+function createTusPlugin(
 	prefix: string,
 	tusServer: TusServer
 ) {
@@ -85,7 +84,7 @@ function mountTusRoutes(
 		detail: { tags: ['Uploads'], summary }
 	})
 
-	return app
+	return new Elysia()
 		.options(prefix, handle, tag('tus OPTIONS (discovery)'))
 		.post(prefix, handle, tag('tus POST (create upload)'))
 		.head(
@@ -105,8 +104,7 @@ function mountTusRoutes(
 		)
 }
 
-function mountRpcRoutes(
-	app: InstanceType<typeof Elysia>,
+function createRpcPlugin(
 	rpcPrefix: string,
 	datastore: DataStore,
 	tusServer: TusServer
@@ -115,7 +113,7 @@ function mountRpcRoutes(
 		detail: { tags: ['Uploads'], summary }
 	})
 
-	return app
+	return new Elysia()
 		.get(
 			`${rpcPrefix}/list`,
 			async () => {
@@ -124,8 +122,7 @@ function mountRpcRoutes(
 				const keys = await datastore.configstore.list()
 				const uploads: Upload[] = []
 				for (const key of keys) {
-					const info =
-						await datastore.configstore.get(key)
+					const info = await datastore.configstore.get(key)
 					if (info) uploads.push(info)
 				}
 				return { uploads }
@@ -142,7 +139,9 @@ function mountRpcRoutes(
 					return { error: 'Upload not found' }
 				}
 			},
-			tag('Get upload info by ID (admin/operational helper)')
+			tag(
+				'Get upload info by ID (admin/operational helper)'
+			)
 		)
 		.get(
 			`${rpcPrefix}/:id/content`,
@@ -230,16 +229,13 @@ export function createTusApp(options: CreateTusAppOptions) {
 		namingFunction: options.namingFunction
 	})
 
-	let app = new Elysia()
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	app = mountTusRoutes(app as any, prefix, tusServer) as typeof app
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	app = mountRpcRoutes(
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		app as any,
-		rpcPrefix,
-		options.datastore,
-		tusServer
-	) as typeof app
-	return app
+	return new Elysia()
+		.use(createTusPlugin(prefix, tusServer))
+		.use(
+			createRpcPlugin(
+				rpcPrefix,
+				options.datastore,
+				tusServer
+			)
+		)
 }
