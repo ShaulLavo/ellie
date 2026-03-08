@@ -461,7 +461,7 @@ export type AttachmentHoverCardTriggerProps =
 
 export const AttachmentHoverCardTrigger = (
 	props: AttachmentHoverCardTriggerProps
-) => <HoverCardTrigger {...props} />
+) => <HoverCardTrigger render={<div />} {...props} />
 
 export type AttachmentHoverCardContentProps =
 	ComponentProps<typeof HoverCardContent>

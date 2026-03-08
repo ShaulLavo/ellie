@@ -2,7 +2,7 @@ import {
 	useCallback,
 	useEffect,
 	useState,
-	type MutableRefObject
+	type RefObject
 } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { SlashCommandMenu } from './slash-command-menu'
@@ -13,15 +13,30 @@ import {
 	PromptInputFooter,
 	PromptInputTools,
 	PromptInputSubmit,
-	usePromptInputController
+	PromptInputHeader,
+	usePromptInputController,
+	usePromptInputAttachments
 } from '@/components/ai-elements/prompt-input'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import { MicRecordButton } from '@/components/ai-elements/mic-record-button'
 import {
 	GlobeIcon,
-	PaperclipIcon
+	PaperclipIcon,
+	UploadSimpleIcon
 } from '@phosphor-icons/react'
-import { AttachmentPreviews } from '@/components/attachment-previews'
+import { useFileDragOver } from '../../hooks/use-file-drag-over'
+import {
+	Attachments,
+	Attachment,
+	AttachmentPreview,
+	AttachmentInfo,
+	AttachmentRemove,
+	AttachmentHoverCard,
+	AttachmentHoverCardTrigger,
+	AttachmentHoverCardContent,
+	getAttachmentLabel,
+	getMediaCategory
+} from '@/components/ai-elements/attachments'
 import { cn } from '@/lib/utils'
 import { transcribeAudio } from '@/lib/speech-client'
 
@@ -34,7 +49,7 @@ export function PromptInputWithCommands({
 	commands: SlashCommand[]
 	onSubmit: (message: PromptInputMessage) => void
 	disabled: boolean
-	speechRefRef?: MutableRefObject<string | null>
+	speechRefRef?: RefObject<string | null>
 }) {
 	const controller = usePromptInputController()
 	const inputValue = controller.textInput.value
@@ -81,6 +96,9 @@ export function PromptInputWithCommands({
 		cmd.action()
 	}
 
+	const isFileDragging = useFileDragOver()
+	const [isDragOver, setIsDragOver] = useState(false)
+
 	return (
 		<div className="relative">
 			<SlashCommandMenu
@@ -88,8 +106,74 @@ export function PromptInputWithCommands({
 				inputValue={inputValue}
 				onSelect={handleCommandSelect}
 			/>
-			<PromptInput onSubmit={onSubmit}>
-				<AttachmentPreviews />
+
+			{/* Drop zone overlay — positioned over the entire PromptInput */}
+			<AnimatePresence>
+				{isFileDragging && (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						transition={{ duration: 0.15 }}
+						onDragOver={e => {
+							e.preventDefault()
+							setIsDragOver(true)
+						}}
+						onDragLeave={() => setIsDragOver(false)}
+						onDrop={e => {
+							e.preventDefault()
+							setIsDragOver(false)
+							if (e.dataTransfer?.files?.length) {
+								controller.attachments.add(
+									Array.from(e.dataTransfer.files)
+								)
+							}
+						}}
+						className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary bg-background"
+					>
+						{/* Aura — edge glows from all 4 sides, like file-upload.tsx */}
+						<div
+							className={cn(
+								'pointer-events-none absolute inset-0 transition-opacity duration-300',
+								isDragOver ? 'opacity-100' : 'opacity-60'
+							)}
+						>
+							<div className="absolute inset-x-0 top-0 h-[20%] bg-linear-to-b from-primary/10 to-transparent" />
+							<div className="absolute inset-x-0 bottom-0 h-[20%] bg-linear-to-t from-primary/10 to-transparent" />
+							<div className="absolute inset-y-0 left-0 w-[20%] bg-linear-to-r from-primary/10 to-transparent" />
+							<div className="absolute inset-y-0 right-0 w-[20%] bg-linear-to-l from-primary/10 to-transparent" />
+							<div className="absolute inset-[20%] animate-pulse rounded-lg bg-primary/5 transition-all duration-300" />
+						</div>
+
+						<motion.div
+							initial={{ y: 6, opacity: 0, scale: 0.9 }}
+							animate={{
+								y: 0,
+								opacity: 1,
+								scale: isDragOver ? 1.1 : 1
+							}}
+							transition={{
+								type: 'spring',
+								stiffness: 300,
+								damping: 22,
+								delay: 0.04
+							}}
+							className="flex flex-col items-center gap-1.5"
+						>
+							<UploadSimpleIcon
+								weight="duotone"
+								className="size-7 text-primary"
+							/>
+							<span className="text-sm font-medium text-primary">
+								Drop it like it's hot
+							</span>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			<PromptInput onSubmit={onSubmit} multiple>
+				<PromptInputAttachments />
 				<PromptInputTextarea placeholder="Type a message..." />
 				<PromptInputFooter>
 					<PromptInputTools>
@@ -223,5 +307,68 @@ export function PromptInputWithCommands({
 				</PromptInputFooter>
 			</PromptInput>
 		</div>
+	)
+}
+
+function PromptInputAttachments() {
+	const { files, remove } = usePromptInputAttachments()
+
+	if (files.length === 0) return null
+
+	return (
+		<PromptInputHeader>
+			<Attachments variant="inline">
+				{files.map(file => {
+					const mediaCategory = getMediaCategory(file)
+					const label = getAttachmentLabel(file)
+
+					return (
+						<AttachmentHoverCard key={file.id}>
+							<AttachmentHoverCardTrigger>
+								<Attachment
+									data={file}
+									onRemove={() => remove(file.id)}
+								>
+									<div className="relative size-5 shrink-0">
+										<div className="absolute inset-0 transition-opacity group-hover:opacity-0">
+											<AttachmentPreview />
+										</div>
+										<AttachmentRemove className="absolute inset-0" />
+									</div>
+									<AttachmentInfo />
+								</Attachment>
+							</AttachmentHoverCardTrigger>
+							<AttachmentHoverCardContent>
+								<div className="space-y-3">
+									{mediaCategory === 'image' &&
+										file.type === 'file' &&
+										file.url && (
+											<div className="flex max-h-96 w-80 items-center justify-center overflow-hidden rounded-md border">
+												<img
+													alt={label}
+													className="max-h-full max-w-full object-contain"
+													height={384}
+													src={file.url}
+													width={320}
+												/>
+											</div>
+										)}
+									<div className="space-y-1 px-0.5">
+										<h4 className="font-semibold text-sm leading-none">
+											{label}
+										</h4>
+										{file.mediaType && (
+											<p className="font-mono text-muted-foreground text-xs">
+												{file.mediaType}
+											</p>
+										)}
+									</div>
+								</div>
+							</AttachmentHoverCardContent>
+						</AttachmentHoverCard>
+					)
+				})}
+			</Attachments>
+		</PromptInputHeader>
 	)
 }
