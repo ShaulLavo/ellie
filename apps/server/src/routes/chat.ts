@@ -42,6 +42,7 @@ import {
 	ServiceUnavailableError
 } from './http-errors'
 import type { FileStore } from '@ellie/tus'
+import { join } from 'node:path'
 
 /** Read a TUS upload into a Buffer. */
 async function readUploadBytes(
@@ -235,6 +236,10 @@ export function createChatRoutes(
 					if (input.attachments && uploadStore) {
 						for (const att of input.attachments) {
 							const mime = att.mime
+							const filePath = join(
+								uploadStore.directory,
+								att.uploadId
+							)
 							if (mime.startsWith('image/')) {
 								// Read image data as base64 so the model can see it
 								const bytes = await readUploadBytes(
@@ -247,6 +252,7 @@ export function createChatRoutes(
 									mime: att.mime,
 									size: att.size,
 									name: att.name,
+									path: filePath,
 									data: bytes.toString('base64'),
 									mimeType: att.mime
 								})
@@ -265,6 +271,7 @@ export function createChatRoutes(
 									mime: att.mime,
 									size: att.size,
 									name: att.name,
+									path: filePath,
 									textContent
 								})
 							} else if (mime.startsWith('video/')) {
@@ -273,7 +280,8 @@ export function createChatRoutes(
 									file: att.uploadId,
 									mime: att.mime,
 									size: att.size,
-									name: att.name
+									name: att.name,
+									path: filePath
 								})
 							} else if (mime.startsWith('audio/')) {
 								contentParts.push({
@@ -281,7 +289,8 @@ export function createChatRoutes(
 									file: att.uploadId,
 									mime: att.mime,
 									size: att.size,
-									name: att.name
+									name: att.name,
+									path: filePath
 								})
 							} else {
 								contentParts.push({
@@ -289,7 +298,8 @@ export function createChatRoutes(
 									file: att.uploadId,
 									mime: att.mime,
 									size: att.size,
-									name: att.name
+									name: att.name,
+									path: filePath
 								})
 							}
 						}

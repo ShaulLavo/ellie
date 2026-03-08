@@ -113,13 +113,17 @@ function userToModelMessage(
 			const name = 'name' in c ? (c.name as string) : c.type
 			const mime = 'mime' in c ? (c.mime as string) : ''
 			const size = 'size' in c ? (c.size as number) : 0
+			const filePath = 'path' in c ? (c.path as string) : ''
 			const sizeStr = size > 0 ? formatBytes(size) : ''
 			const details = [mime, sizeStr]
 				.filter(Boolean)
 				.join(', ')
+			const pathNote = filePath
+				? ` Available at: ${filePath}`
+				: ''
 			content.push({
 				type: 'text',
-				content: `[User attached ${c.type}: ${name}${details ? ` (${details})` : ''}. Binary content not shown — you can acknowledge the file or ask follow-up questions about it.]`
+				content: `[User attached ${c.type}: ${name}${details ? ` (${details})` : ''}.${pathNote}]`
 			})
 		}
 	}

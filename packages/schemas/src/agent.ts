@@ -33,6 +33,7 @@ export const imageFileContentSchema = v.object({
 	mime: v.string(),
 	size: v.number(),
 	name: v.optional(v.string()),
+	path: v.optional(v.string()),
 	data: v.optional(v.string()),
 	mimeType: v.optional(v.string())
 })
@@ -42,7 +43,8 @@ export const videoFileContentSchema = v.object({
 	file: v.string(),
 	mime: v.string(),
 	size: v.number(),
-	name: v.optional(v.string())
+	name: v.optional(v.string()),
+	path: v.optional(v.string())
 })
 
 export const audioFileContentSchema = v.object({
@@ -50,7 +52,8 @@ export const audioFileContentSchema = v.object({
 	file: v.string(),
 	mime: v.string(),
 	size: v.number(),
-	name: v.optional(v.string())
+	name: v.optional(v.string()),
+	path: v.optional(v.string())
 })
 
 export const fileContentSchema = v.object({
@@ -59,6 +62,7 @@ export const fileContentSchema = v.object({
 	mime: v.string(),
 	size: v.number(),
 	name: v.optional(v.string()),
+	path: v.optional(v.string()),
 	textContent: v.optional(v.string())
 })
 
