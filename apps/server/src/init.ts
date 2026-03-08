@@ -18,6 +18,7 @@ import {
 import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { startTei } from './lib/tei'
+import { startStt } from './lib/stt'
 import { resolveGroqAdapter } from './adapters'
 import type { SseState } from './routes/common'
 import { initTraceRuntime } from './trace/init-trace'
@@ -200,6 +201,9 @@ export async function init(): Promise<ServerContext> {
 
 	// ── TEI (embeddings & reranking) ──────────────────────────────────────
 	await startTei()
+
+	// ── STT (speech-to-text) ──────────────────────────────────────────────
+	await startStt()
 
 	// ── Hindsight (memory) ────────────────────────────────────────────────
 	const { hindsight } = await initHindsight(
