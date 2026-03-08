@@ -25,6 +25,7 @@ import { createDevRoutes } from './routes/dev'
 import { createTerminalRoutes } from './routes/terminal'
 import { createSpeechRoutes } from './routes/speech'
 import { createTraceRoutes } from './routes/traces'
+import { createChannelRoutes } from './routes/channels'
 import { API_INFO, API_TAGS } from './consts'
 import { init } from './init'
 
@@ -82,6 +83,7 @@ export const app = new Elysia()
 			ctx.invalidateAgentCache
 		)
 	)
+	.use(createChannelRoutes(ctx.channelManager))
 	.use(
 		createTusApp({
 			datastore: ctx.uploadStore,

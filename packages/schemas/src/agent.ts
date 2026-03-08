@@ -106,6 +106,15 @@ const usageSchema = v.object({
 // Message schemas
 // ============================================================================
 
+export const channelSourceSchema = v.object({
+	kind: v.string(),
+	channelId: v.string(),
+	accountId: v.string(),
+	conversationId: v.string(),
+	senderId: v.string(),
+	senderName: v.optional(v.string())
+})
+
 export const userMessageSchema = v.object({
 	role: v.literal('user'),
 	content: v.array(
@@ -119,7 +128,8 @@ export const userMessageSchema = v.object({
 		])
 	),
 	timestamp: v.number(),
-	speech: v.optional(speechMetadataSchema)
+	speech: v.optional(speechMetadataSchema),
+	source: v.optional(channelSourceSchema)
 })
 
 export const assistantMessageSchema = v.object({
@@ -179,6 +189,11 @@ export type ImageContent = v.InferOutput<
 export type ToolCall = v.InferOutput<typeof toolCallSchema>
 export type StopReason = v.InferOutput<
 	typeof stopReasonSchema
+>
+
+// Channel source
+export type ChannelSource = v.InferOutput<
+	typeof channelSourceSchema
 >
 
 // Messages

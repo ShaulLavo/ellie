@@ -22,6 +22,11 @@ import { startStt } from './lib/stt'
 import { resolveGroqAdapter } from './adapters'
 import type { SseState } from './routes/common'
 import { initTraceRuntime } from './trace/init-trace'
+import {
+	ChannelManager,
+	ChannelDeliveryRegistry
+} from './channels/core'
+import { WhatsAppProvider } from './channels/providers/whatsapp'
 
 export interface ServerContext {
 	port: number
@@ -41,6 +46,7 @@ export interface ServerContext {
 	invalidateAgentCache: () => void
 	ensureBootstrap: (sessionId: string) => void
 	isBootstrapInjected: () => boolean
+	channelManager: ChannelManager
 }
 
 // ── Phase sub-context types ──────────────────────────────────────────────
@@ -252,6 +258,36 @@ export async function init(): Promise<ServerContext> {
 			workspaceDir
 		})
 
+	// ── Channels ─────────────────────────────────────────────────────────
+	const deliveryRegistry = new ChannelDeliveryRegistry({
+		store,
+		getProvider: id => channelManager.getProvider(id)
+	})
+
+	const channelManager = new ChannelManager({
+		dataDir: DATA_DIR,
+		store,
+		getAgentController: () => controllerFactory.get(),
+		ensureBootstrap,
+		deliveryRegistry
+	})
+
+	channelManager.register(new WhatsAppProvider())
+
+	// Boot channels with saved settings (non-blocking)
+	channelManager.bootAll().catch(err => {
+		console.error('[server] Channel boot error:', err)
+	})
+
+	// Watch current session for channel delivery
+	deliveryRegistry.watchSession(
+		store.getCurrentSessionId()
+	)
+	// Re-subscribe on daily session rotation
+	store.subscribeToRotation(event => {
+		deliveryRegistry.watchSession(event.newSessionId)
+	})
+
 	return {
 		port,
 		DATA_DIR,
@@ -271,6 +307,7 @@ export async function init(): Promise<ServerContext> {
 			controllerFactory.invalidate(),
 		ensureBootstrap,
 		isBootstrapInjected: () =>
-			isBootstrapInjected(eventStore)
+			isBootstrapInjected(eventStore),
+		channelManager
 	}
 }

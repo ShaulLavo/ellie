@@ -19,6 +19,10 @@ export const API_TAGS = [
 	{
 		name: 'Uploads',
 		description: 'Tus upload management'
+	},
+	{
+		name: 'Channels',
+		description: 'External messaging channels'
 	}
 ] as const
 
