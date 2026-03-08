@@ -444,7 +444,7 @@ export class Agent {
 		}
 
 		let partial: AgentMessage | null = null
-		let eventCount = 0
+		let _eventCount = 0
 
 		try {
 			const stream = messages
@@ -463,7 +463,7 @@ export class Agent {
 					)
 
 			for await (const event of stream) {
-				eventCount++
+				_eventCount++
 				partial = this._applyStreamEvent(event, partial)
 				this.emit(event)
 			}
