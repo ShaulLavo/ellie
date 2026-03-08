@@ -571,7 +571,7 @@ function TooltipTrigger({
 			if (currentTooltip?.id === id) {
 				suppressNextFocusRef.current = true
 				hideImmediate()
-				Promise.resolve().then(() => {
+				queueMicrotask(() => {
 					suppressNextFocusRef.current = false
 				})
 			}

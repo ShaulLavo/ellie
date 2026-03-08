@@ -711,14 +711,14 @@ export const PromptInput = ({
 				isSubmittingRef.current = true
 
 				const form = event.currentTarget
+				function getFormText() {
+					const formData = new FormData(form)
+					return (formData.get('message') as string) || ''
+				}
+
 				const text = controller
 					? controller.textInput.value
-					: (() => {
-							const formData = new FormData(form)
-							return (
-								(formData.get('message') as string) || ''
-							)
-						})()
+					: getFormText()
 
 				// Clear controller text immediately to prevent duplicate reads
 				controller?.textInput.clear()

@@ -562,23 +562,20 @@ function normalizeHash(text: string): string {
 		.slice(0, 16)
 }
 
-function withTimeout<T>(
+async function withTimeout<T>(
 	promise: Promise<T>,
 	ms: number
 ): Promise<T> {
-	return new Promise<T>((resolve, reject) => {
-		const timer = setTimeout(
+	let timer: ReturnType<typeof setTimeout>
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(
 			() => reject(new Error(`Timeout after ${ms}ms`)),
 			ms
 		)
-		promise
-			.then(v => {
-				clearTimeout(timer)
-				resolve(v)
-			})
-			.catch(e => {
-				clearTimeout(timer)
-				reject(e)
-			})
 	})
+	try {
+		return await Promise.race([promise, timeout])
+	} finally {
+		clearTimeout(timer!)
+	}
 }

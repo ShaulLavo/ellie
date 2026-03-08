@@ -37,11 +37,13 @@ describe('EventStream', () => {
 		const stream = createTestStream()
 
 		const events: TestEvent[] = []
-		const iterPromise = (async () => {
+		async function consumeEvents() {
 			for await (const event of stream) {
 				events.push(event)
 			}
-		})()
+		}
+
+		const iterPromise = consumeEvents()
 
 		// Push after iteration starts
 		await Bun.sleep(10)
@@ -137,11 +139,13 @@ describe('EventStream', () => {
 		const stream = createTestStream()
 		const events: TestEvent[] = []
 
-		const iterPromise = (async () => {
+		async function consumeEvents() {
 			for await (const event of stream) {
 				events.push(event)
 			}
-		})()
+		}
+
+		const iterPromise = consumeEvents()
 
 		for (let i = 0; i < 5; i++) {
 			await Bun.sleep(5)

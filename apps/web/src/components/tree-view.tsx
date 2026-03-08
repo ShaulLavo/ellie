@@ -295,7 +295,7 @@ export function TreeView({
 		}
 		setLoading(true)
 		setError(null)
-		;(async () => {
+		async function fetchTree() {
 			try {
 				const data = await getTree()
 				setTreeData(data as TreeData)
@@ -304,7 +304,8 @@ export function TreeView({
 			} finally {
 				setLoading(false)
 			}
-		})()
+		}
+		fetchTree()
 	}, [open, getTree])
 
 	const handleSwitch = async () => {

@@ -111,7 +111,7 @@ export function toStreamGenerator<
 ): AsyncGenerator<unknown> {
 	const HEARTBEAT_MS = 30_000
 
-	return (async function* streamGenerator() {
+	async function* streamGenerator() {
 		sseState.activeClients++
 
 		const queue: TEvent[] = [...initialEvents]
@@ -192,5 +192,7 @@ export function toStreamGenerator<
 				sseState.activeClients - 1
 			)
 		}
-	})()
+	}
+
+	return streamGenerator()
 }

@@ -42,6 +42,30 @@ export function resetStreamState(state: StreamState): void {
 	state.currentToolRowIds.clear()
 }
 
+/** Persist a DB write with standardized error handling. */
+function persistSafe(
+	deps: StreamPersistenceDeps,
+	sessionId: string,
+	runId: string,
+	label: string,
+	errorType: 'persist_failed' | 'update_failed',
+	fn: () => void,
+	severity?: 'warn'
+): void {
+	try {
+		fn()
+	} catch (err) {
+		handleControllerError(
+			deps.trace,
+			`${errorType} type=${label} session=${sessionId} runId=${runId}`,
+			`controller.${errorType}`,
+			{ sessionId, runId, dbType: label.split(' ')[0]! },
+			err,
+			severity
+		)
+	}
+}
+
 /**
  * Handle a streaming AgentEvent by persisting to the DB.
  * Returns true if the event was handled, false if it should
@@ -56,102 +80,101 @@ export function handleStreamingEvent(
 ): boolean {
 	if (event.type === 'message_start') {
 		if (event.message.role !== 'assistant') return true
-		try {
-			const row = deps.store.appendEvent(
-				sessionId,
-				'assistant_message',
-				{
-					message: event.message as AssistantMessage,
-					streaming: true
-				},
-				runId
-			)
-			state.currentMessageRowId = row.id
-		} catch (err) {
-			handleControllerError(
-				deps.trace,
-				`persist_failed type=assistant_message session=${sessionId} runId=${runId}`,
-				'controller.persist_failed',
-				{ sessionId, runId, dbType: 'assistant_message' },
-				err
-			)
-		}
+		persistSafe(
+			deps,
+			sessionId,
+			runId,
+			'assistant_message',
+			'persist_failed',
+			() => {
+				const row = deps.store.appendEvent(
+					sessionId,
+					'assistant_message',
+					{
+						message: event.message as AssistantMessage,
+						streaming: true
+					},
+					runId
+				)
+				state.currentMessageRowId = row.id
+			}
+		)
 		return true
 	}
 
 	if (event.type === 'message_update') {
 		if (event.message.role !== 'assistant') return true
 		if (!state.currentMessageRowId) return true
-		try {
-			deps.store.updateEvent(
-				state.currentMessageRowId,
-				{
-					message: event.message as AssistantMessage,
-					streaming: true
-				},
-				sessionId
-			)
-		} catch (err) {
-			handleControllerError(
-				deps.trace,
-				`update_failed type=assistant_message (delta) session=${sessionId} runId=${runId}`,
-				'controller.update_failed',
-				{ sessionId, runId, dbType: 'assistant_message' },
-				err,
-				'warn'
-			)
-		}
+		persistSafe(
+			deps,
+			sessionId,
+			runId,
+			'assistant_message (delta)',
+			'update_failed',
+			() => {
+				deps.store.updateEvent(
+					state.currentMessageRowId!,
+					{
+						message: event.message as AssistantMessage,
+						streaming: true
+					},
+					sessionId
+				)
+			},
+			'warn'
+		)
 		return true
 	}
 
 	if (event.type === 'message_end') {
 		if (event.message.role !== 'assistant') return true
 		if (!state.currentMessageRowId) return true
-		try {
-			deps.store.updateEvent(
-				state.currentMessageRowId,
-				{
-					message: event.message as AssistantMessage,
-					streaming: false
-				},
-				sessionId
-			)
-		} catch (err) {
-			handleControllerError(
-				deps.trace,
-				`update_failed type=assistant_message (final) session=${sessionId} runId=${runId}`,
-				'controller.update_failed',
-				{ sessionId, runId, dbType: 'assistant_message' },
-				err
-			)
-		}
+		persistSafe(
+			deps,
+			sessionId,
+			runId,
+			'assistant_message (final)',
+			'update_failed',
+			() => {
+				deps.store.updateEvent(
+					state.currentMessageRowId!,
+					{
+						message: event.message as AssistantMessage,
+						streaming: false
+					},
+					sessionId
+				)
+			}
+		)
 		state.currentMessageRowId = null
 		return true
 	}
 
 	if (event.type === 'tool_execution_start') {
-		try {
-			const row = deps.store.appendEvent(
-				sessionId,
-				'tool_execution',
-				{
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-					args: event.args,
-					status: 'running' as const
-				},
-				runId
-			)
-			state.currentToolRowIds.set(event.toolCallId, row.id)
-		} catch (err) {
-			handleControllerError(
-				deps.trace,
-				`persist_failed type=tool_execution session=${sessionId} runId=${runId}`,
-				'controller.persist_failed',
-				{ sessionId, runId, dbType: 'tool_execution' },
-				err
-			)
-		}
+		persistSafe(
+			deps,
+			sessionId,
+			runId,
+			'tool_execution',
+			'persist_failed',
+			() => {
+				const row = deps.store.appendEvent(
+					sessionId,
+					'tool_execution',
+					{
+						toolCallId: event.toolCallId,
+						toolName: event.toolName,
+						args: event.args,
+						status: 'running' as const
+					},
+					runId
+				)
+				state.currentToolRowIds.set(
+					event.toolCallId,
+					row.id
+				)
+			}
+		)
 		return true
 	}
 
@@ -160,28 +183,27 @@ export function handleStreamingEvent(
 			event.toolCallId
 		)
 		if (!rowId) return true
-		try {
-			deps.store.updateEvent(
-				rowId,
-				{
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-					args: event.args,
-					result: event.partialResult,
-					status: 'running' as const
-				},
-				sessionId
-			)
-		} catch (err) {
-			handleControllerError(
-				deps.trace,
-				`update_failed type=tool_execution (delta) session=${sessionId} runId=${runId}`,
-				'controller.update_failed',
-				{ sessionId, runId, dbType: 'tool_execution' },
-				err,
-				'warn'
-			)
-		}
+		persistSafe(
+			deps,
+			sessionId,
+			runId,
+			'tool_execution (delta)',
+			'update_failed',
+			() => {
+				deps.store.updateEvent(
+					rowId,
+					{
+						toolCallId: event.toolCallId,
+						toolName: event.toolName,
+						args: event.args,
+						result: event.partialResult,
+						status: 'running' as const
+					},
+					sessionId
+				)
+			},
+			'warn'
+		)
 		return true
 	}
 
@@ -190,30 +212,29 @@ export function handleStreamingEvent(
 			event.toolCallId
 		)
 		if (!rowId) return true
-		try {
-			deps.store.updateEvent(
-				rowId,
-				{
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-					result: event.result,
-					isError: event.isError,
-					status: event.isError
-						? ('error' as const)
-						: ('complete' as const),
-					elapsedMs: event.elapsedMs
-				},
-				sessionId
-			)
-		} catch (err) {
-			handleControllerError(
-				deps.trace,
-				`update_failed type=tool_execution (final) session=${sessionId} runId=${runId}`,
-				'controller.update_failed',
-				{ sessionId, runId, dbType: 'tool_execution' },
-				err
-			)
-		}
+		persistSafe(
+			deps,
+			sessionId,
+			runId,
+			'tool_execution (final)',
+			'update_failed',
+			() => {
+				deps.store.updateEvent(
+					rowId,
+					{
+						toolCallId: event.toolCallId,
+						toolName: event.toolName,
+						result: event.result,
+						isError: event.isError,
+						status: event.isError
+							? ('error' as const)
+							: ('complete' as const),
+						elapsedMs: event.elapsedMs
+					},
+					sessionId
+				)
+			}
+		)
 		state.currentToolRowIds.delete(event.toolCallId)
 		return true
 	}

@@ -881,9 +881,7 @@ async function triggerMentalModelRefreshes(
 			reflectFn,
 			rerank,
 			bankProfile
-		)
-			.then(() => {})
-			.catch(() => {})
+		).catch(() => {})
 		refreshed++
 	}
 

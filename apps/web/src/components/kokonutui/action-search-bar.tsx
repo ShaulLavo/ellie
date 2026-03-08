@@ -22,7 +22,7 @@ import {
 	WaveTriangle,
 	GridFour
 } from '@phosphor-icons/react'
-import useDebounce from '@/hooks/use-debounce'
+import { useDebounce } from '@/hooks/use-debounce'
 
 interface Action {
 	id: string

@@ -35,7 +35,7 @@ export function agentLoop(
 	const stream = createAgentStream()
 	const emit = createEmitter(stream, config)
 
-	;(async () => {
+	async function run() {
 		try {
 			const newMessages: AgentMessage[] = [...prompts]
 			const currentContext: AgentContext = {
@@ -76,7 +76,9 @@ export function agentLoop(
 				err instanceof Error ? err : new Error(String(err))
 			)
 		}
-	})()
+	}
+
+	run()
 
 	return stream
 }
@@ -110,7 +112,7 @@ export function agentLoopContinue(
 	const stream = createAgentStream()
 	const emit = createEmitter(stream, config)
 
-	;(async () => {
+	async function run() {
 		try {
 			const newMessages: AgentMessage[] = []
 			const currentContext: AgentContext = { ...context }
@@ -143,7 +145,9 @@ export function agentLoopContinue(
 				err instanceof Error ? err : new Error(String(err))
 			)
 		}
-	})()
+	}
+
+	run()
 
 	return stream
 }

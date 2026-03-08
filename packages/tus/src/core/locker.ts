@@ -137,13 +137,12 @@ class MemoryLock implements Lock {
 
 		await lock.requestRelease?.()
 
-		return await new Promise((resolve, reject) => {
-			setTimeout(() => {
-				this.acquireLock(id, requestRelease, signal)
-					.then(resolve)
-					.catch(reject)
-			}, 25)
-		})
+		await new Promise(resolve => setTimeout(resolve, 25))
+		return await this.acquireLock(
+			id,
+			requestRelease,
+			signal
+		)
 	}
 
 	async unlock(): Promise<void> {

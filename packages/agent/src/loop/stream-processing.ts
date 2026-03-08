@@ -420,16 +420,6 @@ export async function processAgentStream(
 			}
 
 			processChunk(chunk, state, emit, config)
-
-			if (
-				!state.emittedStart &&
-				(chunk.type === 'RUN_STARTED' ||
-					chunk.type === 'TEXT_MESSAGE_START' ||
-					chunk.type === 'STEP_STARTED' ||
-					chunk.type === 'TOOL_CALL_START')
-			) {
-				state.emittedStart = true
-			}
 		}
 	} catch (err: unknown) {
 		handleStreamError(
@@ -534,6 +524,7 @@ function processChunk(
 		chunk.type === 'TOOL_CALL_START'
 	if (!emittedStart && startsMessage) {
 		emit({ type: 'message_start', message: { ...partial } })
+		state.emittedStart = true
 	}
 
 	switch (chunk.type) {

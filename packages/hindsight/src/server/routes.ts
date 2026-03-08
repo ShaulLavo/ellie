@@ -39,6 +39,15 @@ import type {
 	RetainOptions
 } from '../types'
 
+/** Typed HTTP error for Hindsight routes — carries its own status code. */
+class HindsightHttpError extends Error {
+	readonly status: number
+	constructor(status: number, message: string) {
+		super(message)
+		this.status = status
+	}
+}
+
 type RpcInput = Record<string, unknown> | undefined | null
 type ProcedureHandler = (
 	input: unknown,
@@ -182,7 +191,10 @@ function createBankHandlers(
 		createBank: async (raw: unknown) => {
 			const input = raw as RpcInput
 			if (!input?.name || typeof input.name !== 'string') {
-				throw new Error("Missing 'name' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'name' field"
+				)
 			}
 			return hs.createBank(input.name, {
 				description: input.description as
@@ -200,7 +212,8 @@ function createBankHandlers(
 
 		getBank: async (_input: unknown, params) => {
 			const bank = hs.getBankById(params.bankId)
-			if (!bank) throw new Error('Bank not found')
+			if (!bank)
+				throw new HindsightHttpError(404, 'Bank not found')
 			return bank
 		},
 
@@ -220,7 +233,10 @@ function createBankHandlers(
 				!input?.content ||
 				typeof input.content !== 'string'
 			) {
-				throw new Error("Missing 'content' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'content' field"
+				)
 			}
 			return hs.retain(
 				params.bankId,
@@ -235,7 +251,10 @@ function createBankHandlers(
 				!Array.isArray(input?.contents) ||
 				input.contents.length === 0
 			) {
-				throw new Error("Missing or empty 'contents' array")
+				throw new HindsightHttpError(
+					400,
+					"Missing or empty 'contents' array"
+				)
 			}
 			return hs.retainBatch(
 				params.bankId,
@@ -250,7 +269,10 @@ function createBankHandlers(
 				!input?.query ||
 				typeof input.query !== 'string'
 			) {
-				throw new Error("Missing 'query' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'query' field"
+				)
 			}
 			return hs.recall(
 				params.bankId,
@@ -265,7 +287,10 @@ function createBankHandlers(
 				!input?.query ||
 				typeof input.query !== 'string'
 			) {
-				throw new Error("Missing 'query' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'query' field"
+				)
 			}
 			return hs.reflect(
 				params.bankId,
@@ -297,7 +322,11 @@ function createBankHandlers(
 				params.bankId,
 				params.memoryId
 			)
-			if (!detail) throw new Error('Memory unit not found')
+			if (!detail)
+				throw new HindsightHttpError(
+					404,
+					'Memory unit not found'
+				)
 			return detail
 		},
 
@@ -325,7 +354,11 @@ function createEntityAndEpisodeHandlers(
 				params.bankId,
 				params.entityId
 			)
-			if (!detail) throw new Error('Entity not found')
+			if (!detail)
+				throw new HindsightHttpError(
+					404,
+					'Entity not found'
+				)
 			return detail
 		},
 
@@ -348,7 +381,10 @@ function createEntityAndEpisodeHandlers(
 				!input?.anchorMemoryId ||
 				typeof input.anchorMemoryId !== 'string'
 			) {
-				throw new Error("Missing 'anchorMemoryId' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'anchorMemoryId' field"
+				)
 			}
 
 			const validDirections = [
@@ -364,7 +400,8 @@ function createEntityAndEpisodeHandlers(
 				input.direction != null &&
 				direction === undefined
 			) {
-				throw new Error(
+				throw new HindsightHttpError(
+					400,
 					`Invalid 'direction': must be one of ${validDirections.join(', ')}`
 				)
 			}
@@ -385,7 +422,10 @@ function createExtensionHandlers(
 		locationRecord: async (raw: unknown, params) => {
 			const input = raw as RpcInput
 			if (!input?.path || typeof input.path !== 'string') {
-				throw new Error("Missing 'path' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'path' field"
+				)
 			}
 			const context = input.context as
 				| Record<string, unknown>
@@ -394,7 +434,10 @@ function createExtensionHandlers(
 				!context?.memoryId ||
 				typeof context.memoryId !== 'string'
 			) {
-				throw new Error("Missing 'context.memoryId' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'context.memoryId' field"
+				)
 			}
 			const scope = input.scope as
 				| { profile?: string; project?: string }
@@ -447,7 +490,10 @@ function createExtensionHandlers(
 		locationStats: async (raw: unknown, params) => {
 			const input = raw as RpcInput
 			if (!input?.path || typeof input.path !== 'string') {
-				throw new Error("Missing 'path' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'path' field"
+				)
 			}
 			const scope = input.scope as
 				| { profile?: string; project?: string }
@@ -457,7 +503,8 @@ function createExtensionHandlers(
 				input.path,
 				scope
 			)
-			if (!stats) throw new Error('Path not found')
+			if (!stats)
+				throw new HindsightHttpError(404, 'Path not found')
 			return stats
 		},
 
@@ -467,7 +514,10 @@ function createExtensionHandlers(
 				!input?.description ||
 				typeof input.description !== 'string'
 			) {
-				throw new Error("Missing 'description' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'description' field"
+				)
 			}
 			return hs.retainVisual({
 				bankId: params.bankId,
@@ -499,7 +549,10 @@ function createExtensionHandlers(
 				!input?.query ||
 				typeof input.query !== 'string'
 			) {
-				throw new Error("Missing 'query' field")
+				throw new HindsightHttpError(
+					400,
+					"Missing 'query' field"
+				)
 			}
 			return hs.visualFind(
 				params.bankId,
@@ -711,19 +764,9 @@ function resolveValidationSummary(
 }
 
 function errorStatus(error: unknown): number {
+	if (error instanceof HindsightHttpError)
+		return error.status
 	if (error instanceof SyntaxError) return 400
-	const message =
-		error instanceof Error
-			? error.message.toLowerCase()
-			: String(error).toLowerCase()
-	if (message.includes(`not found`)) return 404
-	if (
-		message.includes(`missing`) ||
-		message.includes(`empty`) ||
-		message.includes(`invalid`)
-	) {
-		return 400
-	}
 	return 500
 }
 
@@ -743,7 +786,10 @@ export function createHindsightApp(
 	) => {
 		const handler = handlers[name]
 		if (!handler)
-			throw new Error(`Handler '${name}' not found`)
+			throw new HindsightHttpError(
+				500,
+				`Handler '${name}' not found`
+			)
 
 		if (!trace || !TRACED_OPERATIONS.has(name)) {
 			return handler(input, params)

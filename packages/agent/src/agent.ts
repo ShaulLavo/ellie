@@ -229,40 +229,48 @@ export class Agent {
 		)
 	}
 
-	private dequeueSteeringMessages(): AgentMessage[] {
-		if (this.steeringQueueIdx >= this.steeringQueue.length)
-			return []
+	private dequeueFrom(
+		which: 'steering' | 'followUp'
+	): AgentMessage[] {
+		const queue =
+			which === 'steering'
+				? this.steeringQueue
+				: this.followUpQueue
+		const idx =
+			which === 'steering'
+				? this.steeringQueueIdx
+				: this.followUpQueueIdx
+		const mode =
+			which === 'steering'
+				? this.steeringMode
+				: this.followUpMode
 
-		if (this.steeringMode === 'one-at-a-time') {
-			const first =
-				this.steeringQueue[this.steeringQueueIdx++]
-			this.compactQueue('steering')
+		if (idx >= queue.length) return []
+
+		if (mode === 'one-at-a-time') {
+			const first = queue[idx]
+			if (which === 'steering') this.steeringQueueIdx++
+			else this.followUpQueueIdx++
+			this.compactQueue(which)
 			return [first]
 		}
-		const remaining = this.steeringQueue.slice(
-			this.steeringQueueIdx
-		)
-		this.steeringQueue = []
-		this.steeringQueueIdx = 0
+		const remaining = queue.slice(idx)
+		if (which === 'steering') {
+			this.steeringQueue = []
+			this.steeringQueueIdx = 0
+		} else {
+			this.followUpQueue = []
+			this.followUpQueueIdx = 0
+		}
 		return remaining
 	}
 
-	private dequeueFollowUpMessages(): AgentMessage[] {
-		if (this.followUpQueueIdx >= this.followUpQueue.length)
-			return []
+	private dequeueSteeringMessages(): AgentMessage[] {
+		return this.dequeueFrom('steering')
+	}
 
-		if (this.followUpMode === 'one-at-a-time') {
-			const first =
-				this.followUpQueue[this.followUpQueueIdx++]
-			this.compactQueue('followUp')
-			return [first]
-		}
-		const remaining = this.followUpQueue.slice(
-			this.followUpQueueIdx
-		)
-		this.followUpQueue = []
-		this.followUpQueueIdx = 0
-		return remaining
+	private dequeueFollowUpMessages(): AgentMessage[] {
+		return this.dequeueFrom('followUp')
 	}
 
 	private compactQueue(which: 'steering' | 'followUp') {

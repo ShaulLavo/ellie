@@ -63,7 +63,10 @@ async function withTracedMemory<T>(
 	const run = () => fn(memory)
 	return deps.traceRecorder && traceScope
 		? hindsightTraceStore.run(
-				createMemoryTraceCtx(deps.traceRecorder!, traceScope),
+				createMemoryTraceCtx(
+					deps.traceRecorder!,
+					traceScope
+				),
 				run
 			)
 		: run()

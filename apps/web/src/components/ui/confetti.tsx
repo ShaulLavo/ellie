@@ -91,13 +91,14 @@ const ConfettiComponent = forwardRef<ConfettiRef, Props>(
 
 		useEffect(() => {
 			if (!manualstart) {
-				;(async () => {
+				async function autoFire() {
 					try {
 						await fire()
 					} catch (error) {
 						console.error('Confetti effect error:', error)
 					}
-				})()
+				}
+				autoFire()
 			}
 		}, [manualstart, fire])
 
