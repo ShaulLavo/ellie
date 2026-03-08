@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
+	qrterminal "github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -59,6 +60,7 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 			huh.NewOption("Anthropic", "anthropic"),
 			huh.NewOption("Groq", "groq"),
 			huh.NewOption("Brave Search", "brave"),
+			huh.NewOption("WhatsApp", "whatsapp"),
 		).
 		Value(&provider).
 		Run()
@@ -73,6 +75,8 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 		return authGroq()
 	case "brave":
 		return authBraveSearch()
+	case "whatsapp":
+		return authWhatsApp()
 	}
 	return nil
 }
@@ -99,6 +103,9 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 	if err := printProviderStatus("Brave Search", "/api/auth/brave/status"); err != nil {
 		return err
 	}
+
+	// Channel statuses (non-fatal if server doesn't support channels yet)
+	_ = printChannelStatuses()
 
 	fmt.Println()
 	return nil
@@ -170,6 +177,7 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 			huh.NewOption("Anthropic", "anthropic"),
 			huh.NewOption("Groq", "groq"),
 			huh.NewOption("Brave Search", "brave"),
+			huh.NewOption("WhatsApp", "whatsapp"),
 			huh.NewOption("All providers", "all"),
 		).
 		Value(&target).
@@ -202,6 +210,8 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 		return clearProvider("Groq", "/api/auth/groq/clear")
 	case "brave":
 		return clearProvider("Brave Search", "/api/auth/brave/clear")
+	case "whatsapp":
+		return clearChannel("WhatsApp", "whatsapp")
 	case "all":
 		if err := clearProvider("Anthropic", "/api/auth/anthropic/clear"); err != nil {
 			return err
@@ -209,7 +219,11 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 		if err := clearProvider("Groq", "/api/auth/groq/clear"); err != nil {
 			return err
 		}
-		return clearProvider("Brave Search", "/api/auth/brave/clear")
+		if err := clearProvider("Brave Search", "/api/auth/brave/clear"); err != nil {
+			return err
+		}
+		_ = clearChannel("WhatsApp", "whatsapp") // non-fatal
+		return nil
 	}
 	return nil
 }
@@ -491,5 +505,166 @@ func authOAuth(mode string) error {
 
 	fmt.Println(styleOk.Render("Authentication successful!"))
 	fmt.Println(styleDim.Render(exchangeResp.Message))
+	return nil
+}
+
+// ── whatsapp auth flow ────────────────────────────────────────────────────────
+
+func authWhatsApp() error {
+	// Step 1: Ask phone mode
+	var phoneMode string
+	err := huh.NewSelect[string]().
+		Title("WhatsApp phone mode").
+		Description("'Self' uses your personal number (self-chat only).\n'Companion' uses a separate phone (DMs from your number only).").
+		Options(
+			huh.NewOption("Self (personal number)", "self"),
+			huh.NewOption("Companion (separate phone)", "companion"),
+		).
+		Value(&phoneMode).
+		Run()
+	if err != nil {
+		return errSilent
+	}
+
+	settings := map[string]any{"phoneMode": phoneMode}
+
+	// Step 2: If companion, ask owner phone number
+	if phoneMode == "companion" {
+		var ownerPhone string
+		err = huh.NewInput().
+			Title("Owner phone number (E.164 format)").
+			Description("The phone number that will send messages to this WhatsApp account").
+			Placeholder("+1234567890").
+			Value(&ownerPhone).
+			Run()
+		if err != nil || strings.TrimSpace(ownerPhone) == "" {
+			fmt.Fprintln(os.Stderr, "Cancelled.")
+			return errSilent
+		}
+		// Normalize: strip + and spaces, append @s.whatsapp.net
+		normalized := strings.ReplaceAll(strings.TrimSpace(ownerPhone), " ", "")
+		normalized = strings.TrimPrefix(normalized, "+")
+		settings["ownerJid"] = normalized + "@s.whatsapp.net"
+	}
+
+	// Step 3: POST login/start
+	body, _ := json.Marshal(map[string]any{
+		"accountId": "default",
+		"settings":  settings,
+	})
+	resp, err := httpClient.Post(baseURL()+"/api/channels/whatsapp/login/start", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("cannot reach server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return serverError(resp)
+	}
+
+	var loginResp struct {
+		QR string `json:"qr"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
+		return fmt.Errorf("invalid response: %w", err)
+	}
+
+	// Step 4: Render QR in terminal (if QR provided)
+	if loginResp.QR != "" {
+		fmt.Println()
+		fmt.Println(styleBold.Render("Scan this QR code with WhatsApp on your phone:"))
+		fmt.Println()
+		qrterminal.GenerateHalfBlock(loginResp.QR, qrterminal.L, os.Stdout)
+		fmt.Println()
+	} else {
+		fmt.Println(styleDim.Render("Restoring existing session..."))
+	}
+
+	// Step 5: Long-poll login/wait (90s timeout)
+	fmt.Println(styleDim.Render("Waiting for WhatsApp to connect..."))
+	waitClient := &http.Client{Timeout: 90 * time.Second}
+	waitBody, _ := json.Marshal(map[string]any{"accountId": "default"})
+	resp2, err := waitClient.Post(baseURL()+"/api/channels/whatsapp/login/wait", "application/json", bytes.NewReader(waitBody))
+	if err != nil {
+		return fmt.Errorf("login timed out or failed: %w", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != 200 {
+		return serverError(resp2)
+	}
+
+	fmt.Println(styleOk.Render("WhatsApp linked successfully!"))
+	return nil
+}
+
+// ── channel helpers ───────────────────────────────────────────────────────────
+
+func printChannelStatuses() error {
+	resp, err := httpClient.Get(baseURL() + "/api/channels")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil // silently skip if not supported
+	}
+
+	var channels []struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"displayName"`
+		Status      struct {
+			State       string  `json:"state"`
+			ConnectedAt float64 `json:"connectedAt,omitempty"`
+			Error       string  `json:"error,omitempty"`
+			Detail      string  `json:"detail,omitempty"`
+		} `json:"status"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&channels); err != nil {
+		return nil
+	}
+
+	for _, ch := range channels {
+		fmt.Println()
+		fmt.Println(styleBold.Render("  " + ch.DisplayName))
+		switch ch.Status.State {
+		case "connected":
+			t := time.UnixMilli(int64(ch.Status.ConnectedAt))
+			fmt.Println("    Status:  ", styleOk.Render("Connected"))
+			fmt.Println("    Since:   ", t.Format(time.RFC3339))
+		case "connecting":
+			detail := ch.Status.Detail
+			if detail == "" {
+				detail = "connecting..."
+			}
+			fmt.Println("    Status:  ", styleDim.Render(detail))
+		case "error":
+			fmt.Println("    Status:  ", styleErr.Render("Error: "+ch.Status.Error))
+		default:
+			fmt.Println("    Not configured")
+		}
+	}
+	return nil
+}
+
+func clearChannel(name string, channelId string) error {
+	body, _ := json.Marshal(map[string]any{"accountId": "default"})
+	resp, err := httpClient.Post(baseURL()+"/api/channels/"+channelId+"/logout", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("cannot reach server at %s", baseURL())
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		fmt.Println("No " + name + " connection found.")
+		return nil
+	}
+
+	if resp.StatusCode != 200 {
+		return serverError(resp)
+	}
+
+	fmt.Println(styleOk.Render(name + " disconnected and credentials removed."))
 	return nil
 }
