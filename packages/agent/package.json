@@ -17,6 +17,7 @@
 		"@ellie/ai": "workspace:*",
 		"@ellie/schemas": "workspace:*",
 		"@ellie/trace": "workspace:*",
+		"@ellie/utils": "workspace:*",
 		"valibot": "^1.2.0"
 	},
 	"devDependencies": {

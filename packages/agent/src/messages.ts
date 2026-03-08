@@ -14,6 +14,7 @@ import type {
 	TextContent,
 	ToolCall
 } from './types'
+import { formatBytes } from '@ellie/utils'
 
 /**
  * Convert a single Message to a TanStack AI ModelMessage.
@@ -99,20 +100,26 @@ function userToModelMessage(
 					: `\n\n(Content truncated at 50K of ${text.length} chars)`
 				content.push({
 					type: 'text',
-					content: `--- ${name} ---\n${truncated}${link}`
+					content: `[User attached file: ${name}]\n${truncated}${link}`
 				})
 			} else {
 				content.push({
 					type: 'text',
-					content: `--- ${name} ---\n${text}`
+					content: `[User attached file: ${name}]\n${text}`
 				})
 			}
 		} else if ('file' in c) {
 			// Binary file-reference — describe as text for the model
 			const name = 'name' in c ? (c.name as string) : c.type
+			const mime = 'mime' in c ? (c.mime as string) : ''
+			const size = 'size' in c ? (c.size as number) : 0
+			const sizeStr = size > 0 ? formatBytes(size) : ''
+			const details = [mime, sizeStr]
+				.filter(Boolean)
+				.join(', ')
 			content.push({
 				type: 'text',
-				content: `[Attached ${c.type}: ${name}]`
+				content: `[User attached ${c.type}: ${name}${details ? ` (${details})` : ''}. Binary content not shown — you can acknowledge the file or ask follow-up questions about it.]`
 			})
 		}
 	}
