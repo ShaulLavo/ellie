@@ -49,6 +49,9 @@ export type AnthropicCredential =
 /** Groq only supports API key authentication. */
 export type GroqCredential = ApiKeyCredential
 
+/** Brave Search only supports API key authentication. */
+export type BraveCredential = ApiKeyCredential
+
 export type CredentialMap = Record<string, unknown>
 
 function isMultiProvider(
@@ -187,6 +190,35 @@ export async function loadGroqCredential(
 }
 
 /**
+ * Read the brave credential from the credential map.
+ * Brave Search only supports API key auth.
+ */
+export async function loadBraveCredential(
+	path: string
+): Promise<BraveCredential | null> {
+	const map = await loadCredentialMap(path)
+	if (!map) return null
+
+	if (!isMultiProvider(map)) return null
+
+	const raw = map.brave
+	if (
+		raw &&
+		typeof raw === 'object' &&
+		'type' in raw &&
+		(raw as Record<string, unknown>).type === 'api_key' &&
+		'key' in raw &&
+		typeof (raw as Record<string, unknown>).key === 'string'
+	) {
+		return {
+			type: 'api_key',
+			key: (raw as Record<string, unknown>).key as string
+		}
+	}
+	return null
+}
+
+/**
  * Read and validate an existing credential map file.
  * Returns the parsed map, or an error result if the file is invalid.
  */
@@ -263,6 +295,65 @@ export async function clearGroqCredential(
 		}
 		const map = parsed as CredentialMap
 		delete map.groq
+		await Bun.write(
+			path,
+			JSON.stringify(map, null, 2) + '\n'
+		)
+		try {
+			await chmod(path, 0o600)
+		} catch {
+			// best-effort
+		}
+		return true
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Set the brave credential in the credential map file.
+ * Preserves all other provider entries.
+ */
+export async function setBraveCredential(
+	path: string,
+	credential: BraveCredential
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const result = await readExistingCredentialMap(path)
+	if (!result.ok) return result
+
+	const map = result.map
+	map.brave = credential
+	await Bun.write(path, JSON.stringify(map, null, 2) + '\n')
+	try {
+		await chmod(path, 0o600)
+	} catch {
+		// chmod may fail on some platforms; best-effort
+	}
+	return { ok: true }
+}
+
+/**
+ * Remove only the brave key from the credential map.
+ * Preserves all other entries.
+ */
+export async function clearBraveCredential(
+	path: string
+): Promise<boolean> {
+	const file = Bun.file(path)
+	if (!(await file.exists())) return false
+
+	try {
+		const raw = await file.text()
+		const parsed = JSON.parse(raw)
+		if (
+			typeof parsed !== 'object' ||
+			parsed === null ||
+			!('brave' in parsed)
+		) {
+			return false
+		}
+		const map = parsed as CredentialMap
+		delete map.brave
 		await Bun.write(
 			path,
 			JSON.stringify(map, null, 2) + '\n'

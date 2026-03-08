@@ -20,7 +20,11 @@ import {
 	loadGroqCredential,
 	setGroqCredential,
 	clearGroqCredential,
-	type GroqCredential
+	type GroqCredential,
+	loadBraveCredential,
+	setBraveCredential,
+	clearBraveCredential,
+	type BraveCredential
 } from '@ellie/ai/credentials'
 import {
 	oauthAuthorize,
@@ -43,7 +47,11 @@ import {
 	groqAuthStatusResponseSchema,
 	groqAuthClearResponseSchema,
 	groqAuthApiKeyBodySchema,
-	groqAuthApiKeyResponseSchema
+	groqAuthApiKeyResponseSchema,
+	braveAuthStatusResponseSchema,
+	braveAuthClearResponseSchema,
+	braveAuthApiKeyBodySchema,
+	braveAuthApiKeyResponseSchema
 } from './schemas/auth-schemas'
 import {
 	BadRequestError,
@@ -561,6 +569,161 @@ export function createGroqAuthRoutes(
 					body: groqAuthApiKeyBodySchema,
 					response: {
 						200: groqAuthApiKeyResponseSchema,
+						400: errorSchema,
+						401: errorSchema,
+						403: errorSchema,
+						500: errorSchema
+					}
+				}
+			)
+	)
+}
+
+// ── Brave auth routes ────────────────────────────────────────────────────────
+
+/**
+ * Validate a Brave Search API key via a test search.
+ * Returns an error string if invalid, or null if acceptable.
+ */
+async function validateBraveApiKey(
+	key: string
+): Promise<string | null> {
+	try {
+		const res = await fetch(
+			'https://api.search.brave.com/res/v1/web/search?q=test&count=1',
+			{
+				method: 'GET',
+				headers: {
+					Accept: 'application/json',
+					'X-Subscription-Token': key
+				}
+			}
+		)
+		if (res.status === 401 || res.status === 403) {
+			return `Invalid API key (${res.status} from Brave)`
+		}
+		return null
+	} catch (err) {
+		console.warn(
+			'[auth] Brave API key validation network error:',
+			err instanceof Error ? err.message : err
+		)
+		return null
+	}
+}
+
+export function createBraveAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return (
+		new Elysia({
+			prefix: '/api/auth/brave',
+			tags: ['Auth']
+		})
+			.onBeforeHandle(({ request, server }) => {
+				const ip = server?.requestIP(request)
+				const addr = ip?.address
+				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
+					throw new ForbiddenError(
+						'Auth routes are only available from localhost'
+					)
+				}
+			})
+
+			// ── GET /status ────────────────────────────────────────
+			.get(
+				'/status',
+				async () => {
+					const envKey = process.env.BRAVE_API_KEY
+					if (envKey) {
+						return {
+							mode: 'api_key' as const,
+							source: 'env_api_key' as const,
+							configured: true,
+							preview: keyPreview(envKey)
+						}
+					}
+
+					const cred =
+						await loadBraveCredential(credentialsPath)
+					if (!cred) {
+						return {
+							mode: null,
+							source: 'none' as const,
+							configured: false
+						}
+					}
+
+					return {
+						mode: 'api_key' as const,
+						source: 'file' as const,
+						configured: true,
+						preview: keyPreview(cred.key)
+					}
+				},
+				{
+					response: {
+						200: braveAuthStatusResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /clear ────────────────────────────────────────
+			.post(
+				'/clear',
+				async () => {
+					const cleared =
+						await clearBraveCredential(credentialsPath)
+					if (cleared) onCredentialChange?.()
+					return { cleared }
+				},
+				{
+					response: {
+						200: braveAuthClearResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /api-key ──────────────────────────────────────
+			.post(
+				'/api-key',
+				async ({ body }) => {
+					const { key, validate = true } = body
+
+					if (validate) {
+						const invalid = await validateBraveApiKey(
+							key.trim()
+						)
+						if (invalid) {
+							throw new UnauthorizedError(invalid)
+						}
+					}
+
+					const cred: BraveCredential = {
+						type: 'api_key',
+						key: key.trim()
+					}
+					const result = await setBraveCredential(
+						credentialsPath,
+						cred
+					)
+					if (!result.ok) {
+						throw new InternalServerError(result.error)
+					}
+
+					onCredentialChange?.()
+					return {
+						ok: true as const,
+						mode: 'api_key' as const
+					}
+				},
+				{
+					body: braveAuthApiKeyBodySchema,
+					response: {
+						200: braveAuthApiKeyResponseSchema,
 						400: errorSchema,
 						401: errorSchema,
 						403: errorSchema,

@@ -87,3 +87,26 @@ export const groqAuthApiKeyResponseSchema = v.object({
 	ok: v.literal(true),
 	mode: v.literal('api_key')
 })
+
+// ── Brave auth schemas ──────────────────────────────────────────────────────
+
+export const braveAuthStatusResponseSchema = v.object({
+	mode: v.nullable(v.literal('api_key')),
+	source: v.picklist(['env_api_key', 'file', 'none']),
+	configured: v.boolean(),
+	preview: v.optional(v.string())
+})
+
+export const braveAuthClearResponseSchema = v.object({
+	cleared: v.boolean()
+})
+
+export const braveAuthApiKeyBodySchema = v.object({
+	key: v.pipe(v.string(), v.nonEmpty()),
+	validate: v.optional(v.boolean())
+})
+
+export const braveAuthApiKeyResponseSchema = v.object({
+	ok: v.literal(true),
+	mode: v.literal('api_key')
+})

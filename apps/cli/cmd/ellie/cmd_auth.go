@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +13,35 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
+
+// serverError builds a human-readable error from a non-200 server response.
+// It tries to parse JSON {"error":"..."} and adds context for common codes.
+func serverError(resp *http.Response) error {
+	body, _ := io.ReadAll(resp.Body)
+
+	// Try to extract a message from JSON body
+	msg := strings.TrimSpace(string(body))
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(body, &parsed) == nil && parsed.Error != "" {
+		msg = parsed.Error
+	}
+
+	switch resp.StatusCode {
+	case 404:
+		return fmt.Errorf("server returned 404 — the server may not be running or is missing this route (%s)", baseURL())
+	case 403:
+		return fmt.Errorf("forbidden — auth routes are only available from localhost")
+	case 500:
+		return fmt.Errorf("server error: %s", msg)
+	default:
+		if msg != "" {
+			return fmt.Errorf("server returned %d: %s", resp.StatusCode, msg)
+		}
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+}
 
 // ── auth (interactive wizard) ────────────────────────────────────────────────
 
@@ -28,6 +58,7 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 		Options(
 			huh.NewOption("Anthropic", "anthropic"),
 			huh.NewOption("Groq", "groq"),
+			huh.NewOption("Brave Search", "brave"),
 		).
 		Value(&provider).
 		Run()
@@ -40,6 +71,8 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 		return authAnthropic()
 	case "groq":
 		return authGroq()
+	case "brave":
+		return authBraveSearch()
 	}
 	return nil
 }
@@ -63,6 +96,9 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 	if err := printProviderStatus("Groq", "/api/auth/groq/status"); err != nil {
 		return err
 	}
+	if err := printProviderStatus("Brave Search", "/api/auth/brave/status"); err != nil {
+		return err
+	}
 
 	fmt.Println()
 	return nil
@@ -77,8 +113,7 @@ func printProviderStatus(name string, path string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(body))
+		return serverError(resp)
 	}
 
 	var status struct {
@@ -134,6 +169,7 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 		Options(
 			huh.NewOption("Anthropic", "anthropic"),
 			huh.NewOption("Groq", "groq"),
+			huh.NewOption("Brave Search", "brave"),
 			huh.NewOption("All providers", "all"),
 		).
 		Value(&target).
@@ -164,11 +200,16 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 		return clearProvider("Anthropic", "/api/auth/anthropic/clear")
 	case "groq":
 		return clearProvider("Groq", "/api/auth/groq/clear")
+	case "brave":
+		return clearProvider("Brave Search", "/api/auth/brave/clear")
 	case "all":
 		if err := clearProvider("Anthropic", "/api/auth/anthropic/clear"); err != nil {
 			return err
 		}
-		return clearProvider("Groq", "/api/auth/groq/clear")
+		if err := clearProvider("Groq", "/api/auth/groq/clear"); err != nil {
+			return err
+		}
+		return clearProvider("Brave Search", "/api/auth/brave/clear")
 	}
 	return nil
 }
@@ -182,8 +223,7 @@ func clearProvider(name string, path string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(body))
+		return serverError(resp)
 	}
 
 	var result struct {
@@ -264,11 +304,49 @@ func authGroq() error {
 	}
 
 	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(respBody))
+		return serverError(resp)
 	}
 
 	fmt.Println(styleOk.Render("Groq API key saved successfully."))
+	return nil
+}
+
+func authBraveSearch() error {
+	var key string
+	err := huh.NewInput().
+		Title("Enter your Brave Search API key").
+		Description("Get one at https://brave.com/search/api/").
+		Placeholder("BSA...").
+		EchoMode(huh.EchoModePassword).
+		Value(&key).
+		Run()
+	if err != nil || strings.TrimSpace(key) == "" {
+		fmt.Fprintln(os.Stderr, "Cancelled.")
+		return errSilent
+	}
+
+	fmt.Println(styleDim.Render("Validating key..."))
+
+	body, _ := json.Marshal(map[string]any{
+		"key":      strings.TrimSpace(key),
+		"validate": true,
+	})
+
+	resp, err := httpClient.Post(baseURL()+"/api/auth/brave/api-key", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("cannot reach server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		return fmt.Errorf("invalid API key — check the key and try again")
+	}
+
+	if resp.StatusCode != 200 {
+		return serverError(resp)
+	}
+
+	fmt.Println(styleOk.Render("Brave Search API key saved successfully."))
 	return nil
 }
 
@@ -303,8 +381,7 @@ func authApiKey() error {
 	}
 
 	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(respBody))
+		return serverError(resp)
 	}
 
 	fmt.Println(styleOk.Render("API key saved successfully."))
@@ -335,8 +412,7 @@ func authToken() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(respBody))
+		return serverError(resp)
 	}
 
 	fmt.Println(styleOk.Render("Token saved successfully."))
@@ -353,8 +429,7 @@ func authOAuth(mode string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s", string(respBody))
+		return serverError(resp)
 	}
 
 	var authResp struct {
@@ -402,8 +477,7 @@ func authOAuth(mode string) error {
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp2.Body)
-		return fmt.Errorf("%s", string(respBody))
+		return serverError(resp2)
 	}
 
 	var exchangeResp struct {

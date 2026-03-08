@@ -12,7 +12,8 @@ import { Elysia } from 'elysia'
 import { createAgentRoutes } from './routes/agent'
 import {
 	createAuthRoutes,
-	createGroqAuthRoutes
+	createGroqAuthRoutes,
+	createBraveAuthRoutes
 } from './routes/auth'
 import { createChatRoutes } from './routes/chat'
 import { errorSchema } from './routes/schemas/common-schemas'
@@ -71,6 +72,12 @@ export const app = new Elysia()
 	)
 	.use(
 		createGroqAuthRoutes(
+			ctx.CREDENTIALS_PATH,
+			ctx.invalidateAgentCache
+		)
+	)
+	.use(
+		createBraveAuthRoutes(
 			ctx.CREDENTIALS_PATH,
 			ctx.invalidateAgentCache
 		)
