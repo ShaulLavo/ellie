@@ -66,13 +66,19 @@ export function useStreamConnection(
 		useState<SessionStats>(EMPTY_STATS)
 	const [isAgentRunning, setIsAgentRunning] =
 		useState(false)
+	const [currentSessionId, setCurrentSessionId] =
+		useState(sessionId)
+
+	// Reset derived state during render when sessionId changes (avoids cascading renders from effect).
+	if (currentSessionId !== sessionId) {
+		setCurrentSessionId(sessionId)
+		setSessionStats(EMPTY_STATS)
+		setIsAgentRunning(false)
+	}
 
 	const streamRef = useRef<StreamClient | null>(null)
 
 	useEffect(() => {
-		setSessionStats(EMPTY_STATS)
-		setIsAgentRunning(false)
-
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events, sessionChanged) {
 				const messageEvents = events.filter(e =>
@@ -202,7 +208,9 @@ export function useStreamConnection(
 						})
 					} else {
 						setStreamingMessage(null)
-						syncWrite([stored])
+						if (stored.parts.length > 0 || stored.text) {
+							syncWrite([stored])
+						}
 
 						const delta = computeStatsFromEvents([event])
 						setSessionStats(prev => ({

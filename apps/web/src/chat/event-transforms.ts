@@ -198,7 +198,7 @@ export function eventToStored(
 	// - thinking: extracted above for separate display
 	// - toolCall: agent-internal camelCase format, already rendered via tool_execution events
 	//   EXCEPT during streaming, where we surface them as tool-call parts with streaming flag
-	const filteredParts: ContentPart[] = []
+	let filteredParts: ContentPart[] = []
 	for (const p of parts) {
 		if (p.type === 'thinking') continue
 		const raw = p as Record<string, unknown>
@@ -217,6 +217,15 @@ export function eventToStored(
 			continue
 		}
 		filteredParts.push(p)
+	}
+
+	// Strip empty text parts from finalized (non-streaming) messages.
+	// When toolCall blocks are filtered out, empty text blocks may remain
+	// and create ghost message bubbles in the UI.
+	if (!isMessageStreaming) {
+		filteredParts = filteredParts.filter(
+			p => p.type !== 'text' || p.text.trim().length > 0
+		)
 	}
 
 	// Determine sender from event type or payload
