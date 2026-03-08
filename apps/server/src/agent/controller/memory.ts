@@ -34,10 +34,39 @@ export interface MemoryDeps {
 	) => void
 	/** Trace recorder for memory operation spans. */
 	traceRecorder?: TraceRecorder
-	/** Active trace scope for correlating memory spans. */
-	traceScope?: TraceScope
+	/** Active trace scope for correlating memory spans.
+	 *  Getter avoids stale references when scope changes per-run. */
+	getTraceScope: () => TraceScope | undefined
 	/** Blob sink for large recall/retain payloads. */
 	blobSink?: BlobSink
+}
+
+/**
+ * Run a memory operation with optional tracing.
+ * Wraps the orchestrator with a traced facade and runs the
+ * operation inside the hindsight trace store when trace deps are available.
+ */
+async function withTracedMemory<T>(
+	deps: MemoryDeps,
+	fn: (memory: MemoryOrchestrator) => Promise<T>
+): Promise<T> {
+	const traceScope = deps.getTraceScope()
+	const memory =
+		deps.traceRecorder && traceScope
+			? wrapMemoryOrchestrator(deps.memory!, {
+					recorder: deps.traceRecorder,
+					parentScope: traceScope,
+					blobSink: deps.blobSink
+				})
+			: deps.memory!
+
+	const run = () => fn(memory)
+	return deps.traceRecorder && traceScope
+		? hindsightTraceStore.run(
+				createMemoryTraceCtx(deps.traceRecorder!, traceScope),
+				run
+			)
+		: run()
 }
 
 /**
@@ -52,42 +81,31 @@ export async function runRecall(
 ): Promise<void> {
 	if (!deps.memory) return
 
-	// Wrap with traced facade when trace deps are available
-	const memory =
-		deps.traceRecorder && deps.traceScope
-			? wrapMemoryOrchestrator(deps.memory, {
-					recorder: deps.traceRecorder,
-					parentScope: deps.traceScope,
-					blobSink: deps.blobSink
-				})
-			: deps.memory
-
 	try {
-		const runMemoryRecall = () => memory.recall(query)
-		const result =
-			deps.traceRecorder && deps.traceScope
-				? await hindsightTraceStore.run(
-						createMemoryTraceCtx(
-							deps.traceRecorder!,
-							deps.traceScope!
-						),
-						runMemoryRecall
-					)
-				: await runMemoryRecall()
+		const result = await withTracedMemory(deps, m =>
+			m.recall(query)
+		)
 		if (!result) return
 
 		if (result.contextBlock) {
 			deps.agent.state.systemPrompt =
 				deps.baseSystemPrompt + '\n\n' + result.contextBlock
 		}
+
+		// Emit memory_recall event so the client can show recall status
+		deps.store.appendEvent(
+			sessionId,
+			'memory_recall',
+			result.payload,
+			runId
+		)
 	} catch (err) {
 		handleControllerError(
 			deps.trace,
 			`memory_recall_failed session=${sessionId} runId=${runId}`,
 			'controller.memory_recall_failed',
 			{ sessionId, runId },
-			err,
-			'warn'
+			err
 		)
 	}
 }
@@ -104,30 +122,19 @@ export async function runRetain(
 ): Promise<number> {
 	if (!deps.memory) return 0
 
-	// Wrap with traced facade when trace deps are available
-	const memory =
-		deps.traceRecorder && deps.traceScope
-			? wrapMemoryOrchestrator(deps.memory, {
-					recorder: deps.traceRecorder,
-					parentScope: deps.traceScope,
-					blobSink: deps.blobSink
-				})
-			: deps.memory
-
 	try {
-		const runMemoryRetain = () =>
-			memory.evaluateRetain(sessionId, force)
-		const result =
-			deps.traceRecorder && deps.traceScope
-				? await hindsightTraceStore.run(
-						createMemoryTraceCtx(
-							deps.traceRecorder!,
-							deps.traceScope!
-						),
-						runMemoryRetain
-					)
-				: await runMemoryRetain()
+		const result = await withTracedMemory(deps, m =>
+			m.evaluateRetain(sessionId, force)
+		)
 		if (!result) return 0
+
+		// Emit memory_retain event so the client can show retain status
+		deps.store.appendEvent(
+			sessionId,
+			'memory_retain',
+			result,
+			runId
+		)
 
 		return result.parts[0]?.factsStored ?? 0
 	} catch (err) {
@@ -136,8 +143,7 @@ export async function runRetain(
 			`memory_retain_failed session=${sessionId} runId=${runId}`,
 			'controller.memory_retain_failed',
 			{ sessionId, runId },
-			err,
-			'warn'
+			err
 		)
 		return 0
 	}

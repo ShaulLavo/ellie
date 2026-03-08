@@ -122,6 +122,7 @@ function createMockMemory(
 			_sessionId: string,
 			_force?: boolean
 		) {
+			if (retainResult === null) return null
 			return (
 				retainResult ?? {
 					parts: [
@@ -348,7 +349,7 @@ describe('AgentController', () => {
 		}
 	})
 
-	test('memory diagnostics stay out of the durable session DB', async () => {
+	test('memory recall events are persisted to the session DB', async () => {
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -381,13 +382,12 @@ describe('AgentController', () => {
 
 			expect(types).toContain('agent_start')
 			expect(types).toContain('run_closed')
-			expect(types).not.toContain('memory_recall')
-			expect(types).not.toContain('memory_retain')
+			expect(types).toContain('memory_recall')
 		} finally {
 		}
 	})
 
-	test('memory recall payload is not persisted to the session DB', async () => {
+	test('memory recall event contains payload with query and parts', async () => {
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -415,12 +415,49 @@ describe('AgentController', () => {
 				types: ['memory_recall']
 			})
 
-			expect(recallEvents).toHaveLength(0)
+			expect(recallEvents).toHaveLength(1)
+			const payload = JSON.parse(recallEvents[0].payload)
+			expect(payload.query).toBe('test query')
+			expect(payload.parts).toBeDefined()
 		} finally {
 		}
 	})
 
-	test('memory retain payload is not persisted to the session DB', async () => {
+	test('no memory_retain event when retain returns null', async () => {
+		store.ensureSession('session-1')
+		store.appendEvent('session-1', 'user_message', {
+			role: 'user',
+			content: [{ type: 'text', text: 'Hello' }],
+			timestamp: Date.now()
+		})
+
+		const memoryController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			dataDir: tmpDir,
+			memory: createMockMemory(undefined, null)
+		})
+
+		try {
+			await memoryController.handleMessage(
+				'session-1',
+				'Hello'
+			)
+
+			await new Promise(r => setTimeout(r, 1000))
+
+			const retainEvents = eventStore.query({
+				sessionId: 'session-1',
+				types: ['memory_retain']
+			})
+
+			// Retain returns null when thresholds are not met
+			expect(retainEvents).toHaveLength(0)
+		} finally {
+		}
+	})
+
+	test('memory_retain event is persisted when retain triggers', async () => {
 		store.ensureSession('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -448,7 +485,10 @@ describe('AgentController', () => {
 				types: ['memory_retain']
 			})
 
-			expect(retainEvents).toHaveLength(0)
+			expect(retainEvents).toHaveLength(1)
+			const payload = JSON.parse(retainEvents[0].payload)
+			expect(payload.trigger).toBe('turn_count')
+			expect(payload.parts[0].factsStored).toBe(2)
 		} finally {
 		}
 	})

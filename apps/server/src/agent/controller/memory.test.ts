@@ -34,7 +34,18 @@ describe('runRecall tracing', () => {
 			runId: 'run-1'
 		})
 		const deps = {
-			store: {} as RealtimeStore,
+			store: {
+				appendEvent: () => ({
+					id: -1,
+					sessionId: 'session-1',
+					seq: -1,
+					runId: null,
+					type: 'memory_recall',
+					payload: '{}',
+					dedupeKey: null,
+					createdAt: Date.now()
+				})
+			} as unknown as RealtimeStore,
 			memory: {
 				async recall(query: string) {
 					const ctx = hindsightTraceStore.getStore()
@@ -111,7 +122,7 @@ describe('runRecall tracing', () => {
 			baseSystemPrompt: 'base prompt',
 			trace: () => {},
 			traceRecorder: recorder,
-			traceScope: scope
+			getTraceScope: () => scope
 		}
 
 		await runRecall(deps, 'session-1', 'alpha', 'run-1')

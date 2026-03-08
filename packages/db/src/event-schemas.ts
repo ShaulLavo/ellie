@@ -52,7 +52,9 @@ export const DURABLE_EVENT_TYPES = [
 	'tool_execution',
 	'agent_start',
 	'run_closed',
-	'session_rotated'
+	'session_rotated',
+	'memory_recall',
+	'memory_retain'
 ] as const satisfies readonly EventType[]
 
 const durableEventTypeSet = new Set<EventType>(

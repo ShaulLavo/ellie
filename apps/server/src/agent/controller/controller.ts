@@ -440,12 +440,9 @@ export class AgentController {
 				baseSystemPrompt: this.baseSystemPrompt,
 				trace: (type, payload) => this.trace(type, payload),
 				traceRecorder: this.traceRecorder,
-				traceScope: this.activeTraceScope,
+				getTraceScope: () => this.activeTraceScope,
 				blobSink: this.blobSink
 			}
-		} else {
-			// Update traceScope each access since it changes per-run
-			this.#memoryDeps.traceScope = this.activeTraceScope
 		}
 		return this.#memoryDeps
 	}
