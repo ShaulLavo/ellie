@@ -768,6 +768,12 @@ func (m Model) handleSnapshot(events []EventRow) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleAppend(ev EventRow) (tea.Model, tea.Cmd) {
+	// Deduplicate: skip if this event ID is already known (snapshot/append race).
+	for _, existing := range m.allEvents {
+		if existing.ID == ev.ID {
+			return m, nil
+		}
+	}
 	m.allEvents = append(m.allEvents, ev)
 
 	// Agent lifecycle
@@ -833,7 +839,7 @@ func (m Model) handleAppend(ev EventRow) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	m.messages = append(m.messages, stored)
+	m.upsertMessage(stored)
 	m.refreshViewport()
 	if animCmd != nil {
 		return m, animCmd
