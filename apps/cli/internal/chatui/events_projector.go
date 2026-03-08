@@ -15,6 +15,7 @@ var renderableTypes = map[string]bool{
 	"memory_recall":     true,
 	"memory_retain":     true,
 	"error":             true,
+	"session_rotated":   true,
 }
 
 // Agent lifecycle event types.
@@ -111,6 +112,13 @@ func EventToStored(row EventRow) StoredMessage {
 
 	case "error":
 		parts = extractErrorParts(parsed)
+
+	case "session_rotated":
+		msg := "New day, new session"
+		if s, ok := parsed["message"].(string); ok && s != "" {
+			msg = s
+		}
+		parts = []ContentPart{{Type: PartCheckpoint, Message: msg}}
 
 	default:
 		parts = extractMessageParts(parsed)
@@ -339,6 +347,8 @@ func resolveSender(eventType string, parsed map[string]interface{}) MessageSende
 		return SenderSystem
 	case eventType == "error":
 		return SenderAgent
+	case eventType == "session_rotated":
+		return SenderSystem
 	case len(eventType) > 5 && eventType[:5] == "tool_":
 		return SenderAgent
 	case len(eventType) > 7 && eventType[:7] == "memory_":

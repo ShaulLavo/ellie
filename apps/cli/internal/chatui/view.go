@@ -9,22 +9,25 @@ import (
 
 // Styles for the chat TUI — rebuilt by rebuildViewStyles() on theme change.
 var (
-	statusLineStyle   lipgloss.Style
-	connectedStyle    lipgloss.Style
-	connectingStyle   lipgloss.Style
-	errorStyle        lipgloss.Style
-	disconnectedStyle lipgloss.Style
-	userStyle         lipgloss.Style
-	agentStyle        lipgloss.Style
-	memoryStyle       lipgloss.Style
-	systemStyle       lipgloss.Style
-	toolCallStyle     lipgloss.Style
-	toolResultStyle   lipgloss.Style
-	thinkingStyle     lipgloss.Style
-	dimStyle          lipgloss.Style
-	inputBorder       lipgloss.Style
-	inputBorderFocused lipgloss.Style
-	footerStyle       lipgloss.Style
+	statusLineStyle        lipgloss.Style
+	connectedStyle         lipgloss.Style
+	connectingStyle        lipgloss.Style
+	errorStyle             lipgloss.Style
+	disconnectedStyle      lipgloss.Style
+	userStyle              lipgloss.Style
+	agentStyle             lipgloss.Style
+	memoryStyle            lipgloss.Style
+	systemStyle            lipgloss.Style
+	toolCallStyle          lipgloss.Style
+	toolResultStyle        lipgloss.Style
+	thinkingStyle          lipgloss.Style
+	dimStyle               lipgloss.Style
+	inputBorder            lipgloss.Style
+	inputBorderFocused     lipgloss.Style
+	footerStyle            lipgloss.Style
+	attachmentStyle        lipgloss.Style
+	attachmentSelectedStyle lipgloss.Style
+	attachmentHintStyle    lipgloss.Style
 )
 
 func rebuildViewStyles() {
@@ -71,6 +74,14 @@ func rebuildViewStyles() {
 
 	footerStyle = lipgloss.NewStyle().
 		Foreground(colorMuted)
+
+	attachmentStyle = lipgloss.NewStyle().
+		Foreground(colorMuted)
+	attachmentSelectedStyle = lipgloss.NewStyle().
+		Foreground(colorAccent).
+		Bold(true)
+	attachmentHintStyle = lipgloss.NewStyle().
+		Foreground(colorDim)
 }
 
 // renderStatusLine renders the top status bar.
@@ -151,6 +162,11 @@ func renderMessages(m *Model, width int) string {
 
 // renderMessage renders a single chat message.
 func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[string]*chatAnim) string {
+	// Checkpoint messages render as standalone dividers without a sender label.
+	if len(msg.Parts) == 1 && msg.Parts[0].Type == PartCheckpoint {
+		return renderPart(msg.Parts[0], tg, width, anims)
+	}
+
 	var b strings.Builder
 
 	// Sender label
@@ -304,6 +320,18 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 		}
 		return dimStyle.Render(fmt.Sprintf("  📎 Artifact: %s (%s)", title, part.ArtifactType))
 
+	case PartCheckpoint:
+		msg := part.Message
+		if msg == "" {
+			msg = "New day, new session"
+		}
+		label := "  ☀ " + msg + " "
+		lineLen := width - lipgloss.Width(label)
+		if lineLen < 2 {
+			lineLen = 2
+		}
+		return dimStyle.Render(label + strings.Repeat("─", lineLen))
+
 	case PartThinking:
 		return "" // Already rendered at message level
 
@@ -343,6 +371,63 @@ func renderFooter(m *Model, width int) string {
 	return footerStyle.Width(width).Render(
 		"  " + strings.Join(parts, "  │  "),
 	)
+}
+
+// renderAttachmentBar renders the attachment pills above the textarea.
+// In normal mode it shows pills with a "↑ to select" hint.
+// In selection mode it highlights the selected pill and shows navigation hints.
+func renderAttachmentBar(attachments []PendingAttachment, cursor int, selected bool, width int) string {
+	if len(attachments) == 0 {
+		return ""
+	}
+
+	// Build sequential numbering per label category
+	labelCounts := make(map[string]int)
+	type pill struct {
+		label string
+		num   int
+	}
+	pills := make([]pill, len(attachments))
+	for i, a := range attachments {
+		lbl := attachmentPillLabel(a)
+		labelCounts[lbl]++
+		pills[i] = pill{label: lbl, num: labelCounts[lbl]}
+	}
+
+	var b strings.Builder
+	for i, p := range pills {
+		text := fmt.Sprintf("[%s #%d]", p.label, p.num)
+		if selected && i == cursor {
+			b.WriteString(attachmentSelectedStyle.Render(text))
+		} else {
+			b.WriteString(attachmentStyle.Render(text))
+		}
+		if i < len(pills)-1 {
+			b.WriteString(" ")
+		}
+	}
+
+	// Add hint text
+	if selected {
+		hint := "→ to next ← to prev · Delete to remove · Esc to cancel"
+		// Only add hint if it fits
+		pillsWidth := lipgloss.Width(b.String())
+		remaining := width - pillsWidth - 2
+		if remaining > 10 {
+			b.WriteString("  ")
+			b.WriteString(attachmentHintStyle.Render(hint))
+		}
+	} else {
+		hint := "(↑ to select)"
+		pillsWidth := lipgloss.Width(b.String())
+		remaining := width - pillsWidth - 2
+		if remaining >= lipgloss.Width(hint) {
+			b.WriteString("  ")
+			b.WriteString(attachmentHintStyle.Render(hint))
+		}
+	}
+
+	return b.String()
 }
 
 // formatModelName strips common prefixes/suffixes for display.

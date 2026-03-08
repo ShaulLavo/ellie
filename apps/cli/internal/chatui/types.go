@@ -38,6 +38,7 @@ const (
 	PartVideo        ContentPartType = "video"
 	PartAudio        ContentPartType = "audio"
 	PartFile         ContentPartType = "file"
+	PartCheckpoint   ContentPartType = "checkpoint"
 )
 
 // ContentPart is a union type for renderable content parts.
@@ -75,6 +76,9 @@ type ContentPart struct {
 	Content      string `json:"content,omitempty"`
 	Filename     string `json:"filename,omitempty"`
 	Title        string `json:"title,omitempty"`
+
+	// checkpoint
+	Message string `json:"message,omitempty"`
 
 	// image/video/audio/file
 	File string `json:"file,omitempty"`
@@ -134,6 +138,23 @@ type SessionEntry struct {
 type StatusResponse struct {
 	ConnectedClients int  `json:"connectedClients"`
 	NeedsBootstrap   bool `json:"needsBootstrap"`
+}
+
+// PendingAttachment is a file queued for upload when the message is sent.
+type PendingAttachment struct {
+	FilePath string // absolute local path
+	Name     string // display filename (basename)
+	Mime     string // MIME type (from extension)
+	Size     int64  // file size in bytes
+	Category string // "image", "video", "audio", "text", "file"
+}
+
+// AttachmentResult is the upload result sent alongside the message.
+type AttachmentResult struct {
+	UploadID string `json:"uploadId"`
+	Mime     string `json:"mime"`
+	Size     int64  `json:"size"`
+	Name     string `json:"name"`
 }
 
 // DialogKind identifies which dialog is active.

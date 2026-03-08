@@ -67,7 +67,7 @@ func RunOneShot(ctx context.Context, cfg OneShotConfig, prompt string) (*OneShot
 	}
 
 	// Send the user message.
-	if err := client.SendMessage(ctx, cfg.SessionID, prompt); err != nil {
+	if err := client.SendMessage(ctx, cfg.SessionID, prompt, nil); err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 

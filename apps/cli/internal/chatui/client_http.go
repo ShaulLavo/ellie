@@ -3,24 +3,30 @@ package chatui
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
 // HTTPClient handles REST API calls to the Ellie server.
 type HTTPClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL      string
+	client       *http.Client // short-timeout client for API calls
+	uploadClient *http.Client // no timeout for file uploads (controlled via ctx)
 }
 
 // NewHTTPClient creates a REST client pointing at baseURL.
 func NewHTTPClient(baseURL string) *HTTPClient {
 	return &HTTPClient{
-		baseURL: baseURL,
-		client:  &http.Client{Timeout: 10 * time.Second},
+		baseURL:      baseURL,
+		client:       &http.Client{Timeout: 10 * time.Second},
+		uploadClient: &http.Client{},
 	}
 }
 
@@ -88,11 +94,15 @@ func (c *HTTPClient) GetCurrentSession(ctx context.Context) (*SessionEntry, erro
 	return &out, nil
 }
 
-// SendMessage posts a user message to the current session.
-func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string) error {
-	body, _ := json.Marshal(map[string]string{
+// SendMessage posts a user message to the current session, optionally with attachments.
+func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string, attachments []AttachmentResult) error {
+	payload := map[string]interface{}{
 		"content": content,
-	})
+	}
+	if len(attachments) > 0 {
+		payload["attachments"] = attachments
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/"+sessionID+"/messages", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create send request: %w", err)
@@ -108,6 +118,91 @@ func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string)
 		return fmt.Errorf("send message returned %d: %s", resp.StatusCode, respBody)
 	}
 	return nil
+}
+
+// UploadFile uploads a local file via the TUS protocol and returns the result.
+// Two-step: POST to create the upload, PATCH to send the file body.
+func (c *HTTPClient) UploadFile(ctx context.Context, filePath string) (AttachmentResult, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return AttachmentResult{}, fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return AttachmentResult{}, fmt.Errorf("stat file: %w", err)
+	}
+
+	name := filepath.Base(filePath)
+	mime := detectMime(name)
+
+	// Encode TUS metadata: "filename <b64>,mimeType <b64>"
+	meta := fmt.Sprintf("filename %s,mimeType %s",
+		base64.StdEncoding.EncodeToString([]byte(name)),
+		base64.StdEncoding.EncodeToString([]byte(mime)),
+	)
+
+	tusURL := strings.TrimRight(c.baseURL, "/") + "/api/uploads"
+
+	// 1. POST — create upload
+	createReq, err := http.NewRequestWithContext(ctx, "POST", tusURL, nil)
+	if err != nil {
+		return AttachmentResult{}, fmt.Errorf("create upload request: %w", err)
+	}
+	createReq.Header.Set("Tus-Resumable", "1.0.0")
+	createReq.Header.Set("Upload-Length", fmt.Sprintf("%d", info.Size()))
+	createReq.Header.Set("Upload-Metadata", meta)
+	createReq.Header.Set("Content-Length", "0")
+
+	createResp, err := c.uploadClient.Do(createReq)
+	if err != nil {
+		return AttachmentResult{}, fmt.Errorf("upload create failed: %w", err)
+	}
+	defer createResp.Body.Close()
+	if createResp.StatusCode < 200 || createResp.StatusCode >= 300 {
+		return AttachmentResult{}, fmt.Errorf("upload create returned %d", createResp.StatusCode)
+	}
+
+	location := createResp.Header.Get("Location")
+	if location == "" {
+		return AttachmentResult{}, fmt.Errorf("upload create: no Location header")
+	}
+
+	// Extract uploadId from location path
+	parts := strings.Split(location, "/")
+	uploadID := parts[len(parts)-1]
+
+	// Build absolute PATCH URL
+	patchURL := location
+	if !strings.HasPrefix(patchURL, "http") {
+		patchURL = strings.TrimRight(c.baseURL, "/") + patchURL
+	}
+
+	// 2. PATCH — send file body
+	patchReq, err := http.NewRequestWithContext(ctx, "PATCH", patchURL, f)
+	if err != nil {
+		return AttachmentResult{}, fmt.Errorf("create patch request: %w", err)
+	}
+	patchReq.Header.Set("Tus-Resumable", "1.0.0")
+	patchReq.Header.Set("Upload-Offset", "0")
+	patchReq.Header.Set("Content-Type", "application/offset+octet-stream")
+
+	patchResp, err := c.uploadClient.Do(patchReq)
+	if err != nil {
+		return AttachmentResult{}, fmt.Errorf("upload patch failed: %w", err)
+	}
+	defer patchResp.Body.Close()
+	if patchResp.StatusCode < 200 || patchResp.StatusCode >= 300 {
+		return AttachmentResult{}, fmt.Errorf("upload patch returned %d", patchResp.StatusCode)
+	}
+
+	return AttachmentResult{
+		UploadID: uploadID,
+		Mime:     mime,
+		Size:     info.Size(),
+		Name:     name,
+	}, nil
 }
 
 // ClearSession clears the current session via POST /chat/:sessionId/clear.

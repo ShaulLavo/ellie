@@ -23,6 +23,13 @@ type KeyMap struct {
 		FocusEditor key.Binding
 	}
 
+	Attachments struct {
+		Left   key.Binding
+		Right  key.Binding
+		Remove key.Binding
+		Cancel key.Binding
+	}
+
 	// Global bindings
 	Quit     key.Binding
 	Commands key.Binding
@@ -114,6 +121,23 @@ func DefaultKeyMap() KeyMap {
 	km.Chat.FocusEditor = key.NewBinding(
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "editor"),
+	)
+
+	km.Attachments.Left = key.NewBinding(
+		key.WithKeys("left"),
+		key.WithHelp("←", "prev"),
+	)
+	km.Attachments.Right = key.NewBinding(
+		key.WithKeys("right"),
+		key.WithHelp("→", "next"),
+	)
+	km.Attachments.Remove = key.NewBinding(
+		key.WithKeys("delete", "backspace"),
+		key.WithHelp("del", "remove"),
+	)
+	km.Attachments.Cancel = key.NewBinding(
+		key.WithKeys("esc", "down", "enter"),
+		key.WithHelp("esc", "back"),
 	)
 
 	return km

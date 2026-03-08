@@ -20,6 +20,7 @@ type focusState int
 const (
 	focusEditor focusState = iota
 	focusChat
+	focusAttachments
 )
 
 // Model is the top-level Bubble Tea model for the chat TUI.
@@ -92,6 +93,10 @@ type Model struct {
 
 	// Inline autocomplete ghost for slash commands.
 	ghostSuggestion string
+
+	// Pending file attachments.
+	attachments      []PendingAttachment
+	attachmentCursor int
 }
 
 // NewModel creates a new chat TUI model.
@@ -184,7 +189,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleMouseMsg(msg)
 
 	case tea.PasteMsg:
-		if m.focus == focusEditor && m.dialog == nil {
+		if m.dialog != nil {
+			return m, nil
+		}
+		// Check if pasted content is file path(s) — add as attachments.
+		if paths := parseFilePaths(msg.Content); len(paths) > 0 {
+			for _, p := range paths {
+				m.attachments = append(m.attachments, newPendingAttachment(p))
+			}
+			m.resizeComponents()
+			return m, nil
+		}
+		// Regular text paste
+		if m.focus == focusEditor {
 			m.textarea.InsertString(msg.Content)
 			m.history.UpdateDraft(m.textarea.Value())
 			m.adjustTextareaHeight()
@@ -219,6 +236,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.toggleTheme()
 
 		case key.Matches(msg, m.keys.Escape):
+			if m.focus == focusAttachments {
+				m.focus = focusEditor
+				m.textarea.Focus()
+				return m, nil
+			}
 			if m.focus == focusChat {
 				m.focus = focusEditor
 				m.textarea.Focus()
@@ -246,10 +268,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Focus-specific handling
-		if m.focus == focusEditor {
+		switch m.focus {
+		case focusEditor:
 			return m.updateEditor(msg)
+		case focusAttachments:
+			return m.updateAttachments(msg)
+		default:
+			return m.updateChat(msg)
 		}
-		return m.updateChat(msg)
 
 	// ── SSE events ────────────────────────────────────────────
 
@@ -471,10 +497,24 @@ func (m Model) updateEditor(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Editor.HistoryPrev):
+		// Enter attachment selection if we have attachments and input is empty/at start
+		if len(m.attachments) > 0 && (m.textarea.Value() == "" || isAtEditorStart(m.textarea)) {
+			m.focus = focusAttachments
+			m.attachmentCursor = len(m.attachments) - 1
+			m.textarea.Blur()
+			return m, nil
+		}
 		return m.handleHistoryUp(msg)
 
 	case key.Matches(msg, m.keys.Editor.HistoryNext):
 		return m.handleHistoryDown(msg)
+	}
+
+	// Backspace on empty input removes last attachment
+	if key.Matches(msg, m.keys.Attachments.Remove) && m.textarea.Value() == "" && len(m.attachments) > 0 {
+		m.attachments = m.attachments[:len(m.attachments)-1]
+		m.resizeComponents()
+		return m, nil
 	}
 
 	// Pass to textarea
@@ -503,16 +543,21 @@ func (m Model) handleSend() (tea.Model, tea.Cmd) {
 	}
 
 	text := strings.TrimSpace(value)
-	if text == "" {
+	hasAttachments := len(m.attachments) > 0
+
+	// Nothing to send
+	if text == "" && !hasAttachments {
 		return m, nil
 	}
 
-	// Check for slash command
-	if cmd := matchSlashCommand(text); cmd != nil {
-		m.textarea.Reset()
-		m.history.Reset()
-		m.ghostSuggestion = ""
-		return m.executeCommand(cmd)
+	// Check for slash command (only when no attachments)
+	if !hasAttachments {
+		if cmd := matchSlashCommand(text); cmd != nil {
+			m.textarea.Reset()
+			m.history.Reset()
+			m.ghostSuggestion = ""
+			return m.executeCommand(cmd)
+		}
 	}
 
 	// Cannot send if not connected
@@ -521,13 +566,23 @@ func (m Model) handleSend() (tea.Model, tea.Cmd) {
 	}
 
 	// Save to history and clear
-	m.history.Add(text)
+	if text != "" {
+		m.history.Add(text)
+	}
 	m.textarea.Reset()
 	m.textarea.SetHeight(1)
+
+	// Grab attachments and clear them
+	pendingFiles := m.attachments
+	m.attachments = nil
+	m.attachmentCursor = 0
+	m.focus = focusEditor
+	m.textarea.Focus()
+
 	m.resizeComponents()
 	m.autoScroll = true
 
-	return m, m.sendMessage(text)
+	return m, m.sendMessage(text, pendingFiles...)
 }
 
 // handleHistoryUp navigates up in prompt history.
@@ -559,6 +614,46 @@ func (m Model) handleHistoryDown(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.textarea, cmd = m.textarea.Update(msg)
 	return m, cmd
+}
+
+// ─── Attachment selection handling ─────────────────────────────────
+
+func (m Model) updateAttachments(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Attachments.Right):
+		if m.attachmentCursor < len(m.attachments)-1 {
+			m.attachmentCursor++
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.Attachments.Left):
+		if m.attachmentCursor > 0 {
+			m.attachmentCursor--
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.Attachments.Remove):
+		if len(m.attachments) > 0 {
+			m.attachments = append(m.attachments[:m.attachmentCursor], m.attachments[m.attachmentCursor+1:]...)
+			if len(m.attachments) == 0 {
+				// No attachments left — return to editor
+				m.attachmentCursor = 0
+				m.focus = focusEditor
+				m.textarea.Focus()
+			} else if m.attachmentCursor >= len(m.attachments) {
+				// Clamp cursor to last item
+				m.attachmentCursor = len(m.attachments) - 1
+			}
+			m.resizeComponents()
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.Attachments.Cancel):
+		m.focus = focusEditor
+		m.textarea.Focus()
+		return m, nil
+	}
+	return m, nil
 }
 
 // ─── Chat viewport handling ───────────────────────────────────────
@@ -905,9 +1000,23 @@ func (m *Model) StartSSELoop(ctx context.Context, send func(tea.Msg)) {
 	m.sseClient.RunLoop(ctx, send)
 }
 
-func (m Model) sendMessage(text string) tea.Cmd {
+func (m Model) sendMessage(text string, files ...PendingAttachment) tea.Cmd {
+	httpClient := m.httpClient
+	sessionID := m.sessionID
 	return func() tea.Msg {
-		err := m.httpClient.SendMessage(context.Background(), m.sessionID, text)
+		ctx := context.Background()
+
+		// Upload files via TUS
+		var results []AttachmentResult
+		for _, f := range files {
+			r, err := httpClient.UploadFile(ctx, f.FilePath)
+			if err != nil {
+				return sendDoneMsg{err: fmt.Errorf("upload %s: %w", f.Name, err)}
+			}
+			results = append(results, r)
+		}
+
+		err := httpClient.SendMessage(ctx, sessionID, text, results)
 		return sendDoneMsg{err: err}
 	}
 }
@@ -965,7 +1074,7 @@ func (m *Model) resizeComponents() {
 
 	statusH := 1 // status line
 	footerH := 1 // footer
-	inputH := 3  // textarea with border
+	inputH := lipgloss.Height(m.renderInput())
 	vpHeight := m.height - statusH - footerH - inputH
 	if vpHeight < 1 {
 		vpHeight = 1
@@ -1001,9 +1110,22 @@ func (m *Model) adjustTextareaHeight() {
 
 func (m Model) renderInput() string {
 	style := inputBorder
-	if m.focus == focusEditor {
+	if m.focus == focusEditor || m.focus == focusAttachments {
 		style = inputBorderFocused
 	}
+
+	// Content width inside the border (border=1 + padding=1 on each side = -4)
+	contentWidth := m.width - 4 - 2 // extra -2 for border padding
+
+	var parts []string
+
+	// Attachment bar (above textarea)
+	if len(m.attachments) > 0 {
+		bar := renderAttachmentBar(m.attachments, m.attachmentCursor, m.focus == focusAttachments, contentWidth)
+		parts = append(parts, bar)
+	}
+
+	// Textarea
 	view := m.textarea.View()
 	if m.ghostSuggestion != "" && m.focus == focusEditor {
 		// The textarea pads each line with spaces to its full width.
@@ -1017,7 +1139,9 @@ func (m Model) renderInput() string {
 			view = strings.TrimRight(view, " ") + ghost
 		}
 	}
-	return style.Width(m.width - 4).Render(view)
+	parts = append(parts, view)
+
+	return style.Width(m.width - 4).Render(strings.Join(parts, "\n"))
 }
 
 // updateGhost computes inline autocomplete for slash commands.
