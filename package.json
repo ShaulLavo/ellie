@@ -7,7 +7,7 @@
 	],
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "turbo run dev --filter='!cli'",
+		"dev": "turbo run dev --filter='!cli' --filter='!stt'",
 		"dev:cli": "turbo run dev --filter=cli",
 		"ellie": "apps/cli/bin/ellie",
 		"lint": "oxlint --ignore-path .gitignore apps packages",

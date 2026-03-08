@@ -520,6 +520,9 @@
   .z-20 {
     z-index: 20;
   }
+  .z-30 {
+    z-index: 30;
+  }
   .z-50 {
     z-index: 50;
   }
@@ -1637,6 +1640,9 @@
   .max-h-\[min\(calc\(--spacing\(72\)---spacing\(9\)\)\,calc\(var\(--available-height\)---spacing\(9\)\)\)\] {
     max-height: min(calc(calc(var(--spacing) * 72) - calc(var(--spacing) * 9)), calc(var(--available-height) - calc(var(--spacing) * 9)));
   }
+  .max-h-full {
+    max-height: 100%;
+  }
   .max-h-max {
     max-height: max-content;
   }
@@ -1666,9 +1672,6 @@
   }
   .w-0\.5 {
     width: calc(var(--spacing) * 0.5);
-  }
-  .w-1\.5 {
-    width: calc(var(--spacing) * 1.5);
   }
   .w-2 {
     width: calc(var(--spacing) * 2);
@@ -1801,9 +1804,6 @@
   }
   .max-w-\[100px\] {
     max-width: 100px;
-  }
-  .max-w-\[120px\] {
-    max-width: 120px;
   }
   .max-w-\[calc\(100\%-2rem\)\] {
     max-width: calc(100% - 2rem);
@@ -2768,12 +2768,6 @@
       background-color: color-mix(in oklab, var(--foreground) 20%, transparent);
     }
   }
-  .bg-foreground\/50 {
-    background-color: var(--foreground);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--foreground) 50%, transparent);
-    }
-  }
   .bg-gray-50\/50 {
     background-color: color-mix(in srgb, oklch(98.5% 0.002 247.839) 50%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -2993,6 +2987,13 @@
   .bg-zinc-950 {
     background-color: var(--color-zinc-950);
   }
+  .bg-linear-to-b {
+    --tw-gradient-position: to bottom;
+    @supports (background-image: linear-gradient(in lab, red, red)) {
+      --tw-gradient-position: to bottom in oklab;
+    }
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
   .bg-linear-to-l {
     --tw-gradient-position: to left;
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -3004,6 +3005,13 @@
     --tw-gradient-position: to right;
     @supports (background-image: linear-gradient(in lab, red, red)) {
       --tw-gradient-position: to right in oklab;
+    }
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
+  .bg-linear-to-t {
+    --tw-gradient-position: to top;
+    @supports (background-image: linear-gradient(in lab, red, red)) {
+      --tw-gradient-position: to top in oklab;
     }
     background-image: linear-gradient(var(--tw-gradient-stops));
   }
@@ -3068,6 +3076,13 @@
   }
   .from-neutral-950 {
     --tw-gradient-from: var(--color-neutral-950);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+  .from-primary\/10 {
+    --tw-gradient-from: var(--primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-gradient-from: color-mix(in oklab, var(--primary) 10%, transparent);
+    }
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
   .from-primary\/30 {
@@ -3319,6 +3334,9 @@
   }
   .px-0 {
     padding-inline: calc(var(--spacing) * 0);
+  }
+  .px-0\.5 {
+    padding-inline: calc(var(--spacing) * 0.5);
   }
   .px-1 {
     padding-inline: calc(var(--spacing) * 1);
@@ -4320,6 +4338,13 @@
       }
     }
   }
+  .group-hover\:opacity-0 {
+    &:is(:where(.group):hover *) {
+      @media (hover: hover) {
+        opacity: 0%;
+      }
+    }
+  }
   .group-hover\:opacity-100 {
     &:is(:where(.group):hover *) {
       @media (hover: hover) {
@@ -4347,13 +4372,6 @@
     &:is(:where(.group):hover *) {
       @media (hover: hover) {
         animation-play-state: paused;
-      }
-    }
-  }
-  .group-hover\/attachment\:opacity-100 {
-    &:is(:where(.group\/attachment):hover *) {
-      @media (hover: hover) {
-        opacity: 100%;
       }
     }
   }
@@ -7853,6 +7871,11 @@
   .\[\&_h4\]\:mt-2 {
     & h4 {
       margin-top: calc(var(--spacing) * 2);
+    }
+  }
+  .\[\&_hr\]\:my-4 {
+    & hr {
+      margin-block: calc(var(--spacing) * 4);
     }
   }
   .\[\&_p\]\:my-2 {
