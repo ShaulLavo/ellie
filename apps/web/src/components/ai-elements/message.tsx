@@ -33,7 +33,6 @@ import {
 	useState
 } from 'react'
 import { Streamdown } from 'streamdown'
-import { useAnimatedText } from '@/hooks/use-animated-text'
 import { streamdownPlugins } from '@/hooks/use-streamdown-plugins'
 
 export type MessageProps =
@@ -371,7 +370,7 @@ export const MessageResponse = memo(
 	({ className, ...props }: MessageResponseProps) => (
 		<Streamdown
 			className={cn(
-				'prose prose-sm dark:prose-invert max-w-none size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-2 [&_h1]:mt-3 [&_h2]:mt-3 [&_h3]:mt-3 [&_h4]:mt-2',
+				'prose prose-sm dark:prose-invert max-w-none size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-2 [&_h1]:mt-3 [&_h2]:mt-3 [&_h3]:mt-3 [&_h4]:mt-2 [&_hr]:my-4',
 				className
 			)}
 			plugins={streamdownPlugins}
@@ -379,7 +378,8 @@ export const MessageResponse = memo(
 		/>
 	),
 	(prevProps, nextProps) =>
-		prevProps.children === nextProps.children
+		prevProps.children === nextProps.children &&
+		prevProps.isAnimating === nextProps.isAnimating
 )
 
 MessageResponse.displayName = 'MessageResponse'
@@ -396,17 +396,20 @@ export const StreamingMessageResponse = ({
 	children,
 	isStreaming,
 	...props
-}: StreamingMessageResponseProps) => {
-	const animatedText = useAnimatedText(
-		children,
-		isStreaming
-	)
-	return (
-		<MessageResponse {...props}>
-			{animatedText}
-		</MessageResponse>
-	)
-}
+}: StreamingMessageResponseProps) => (
+	<MessageResponse
+		animated={{
+			animation: 'blurIn',
+			duration: 200,
+			easing: 'ease-out'
+		}}
+		isAnimating={isStreaming}
+		caret={isStreaming ? 'block' : undefined}
+		{...props}
+	>
+		{children}
+	</MessageResponse>
+)
 
 export type MessageToolbarProps = ComponentProps<'div'>
 

@@ -233,6 +233,7 @@ export const ReasoningContent = memo(
 		children,
 		...props
 	}: ReasoningContentProps) => {
+		const { isStreaming } = useReasoning()
 		const contentRef = useRef<HTMLDivElement>(null)
 
 		useEffect(() => {
@@ -278,7 +279,12 @@ export const ReasoningContent = memo(
 				)}
 				{...props}
 			>
-				<Streamdown plugins={streamdownPlugins} {...props}>
+				<Streamdown
+					plugins={streamdownPlugins}
+					animated={{ animation: 'fadeIn', duration: 150 }}
+					isAnimating={isStreaming}
+					{...props}
+				>
 					{children}
 				</Streamdown>
 			</CollapsibleContent>

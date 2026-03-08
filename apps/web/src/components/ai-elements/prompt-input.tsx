@@ -14,6 +14,7 @@ import type {
 	FormEventHandler,
 	HTMLAttributes,
 	KeyboardEventHandler,
+	MouseEvent,
 	PropsWithChildren,
 	ReactNode,
 	RefObject
@@ -1152,7 +1153,7 @@ export const PromptInputSubmit = ({
 	}
 
 	const handleClick: typeof onClick = useCallback(
-		e => {
+		(e: MouseEvent<HTMLButtonElement>) => {
 			if (!isGenerating || !onStop) {
 				onClick?.(e)
 				return

@@ -88,9 +88,6 @@ export const ChatMessageRow = memo(
 								consumedToolCallIds={consumedToolCallIds}
 							/>
 						))}
-						{message.isStreaming && (
-							<span className="inline-block w-1.5 h-4 bg-foreground/50 rounded-sm animate-pulse" />
-						)}
 					</div>
 				</MessageContent>
 				{message.text && !message.isStreaming && (
