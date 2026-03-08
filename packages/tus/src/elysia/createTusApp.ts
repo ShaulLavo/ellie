@@ -74,6 +74,145 @@ export type CreateTusAppOptions = {
 
 // ── Factory ────────────────────────────────────────────────────────────────
 
+function mountTusRoutes(
+	app: InstanceType<typeof Elysia>,
+	prefix: string,
+	tusServer: TusServer
+) {
+	const handle = ({ request }: { request: Request }) =>
+		tusServer.handle(request)
+	const tag = (summary: string) => ({
+		detail: { tags: ['Uploads'], summary }
+	})
+
+	return app
+		.options(prefix, handle, tag('tus OPTIONS (discovery)'))
+		.post(prefix, handle, tag('tus POST (create upload)'))
+		.head(
+			`${prefix}/:id`,
+			handle,
+			tag('tus HEAD (upload status)')
+		)
+		.patch(
+			`${prefix}/:id`,
+			handle,
+			tag('tus PATCH (resume upload)')
+		)
+		.delete(
+			`${prefix}/:id`,
+			handle,
+			tag('tus DELETE (terminate upload)')
+		)
+}
+
+function mountRpcRoutes(
+	app: InstanceType<typeof Elysia>,
+	rpcPrefix: string,
+	datastore: DataStore,
+	tusServer: TusServer
+) {
+	const tag = (summary: string) => ({
+		detail: { tags: ['Uploads'], summary }
+	})
+
+	return app
+		.get(
+			`${rpcPrefix}/list`,
+			async () => {
+				if (!hasConfigStore(datastore))
+					return { uploads: [] }
+				const keys = await datastore.configstore.list()
+				const uploads: Upload[] = []
+				for (const key of keys) {
+					const info =
+						await datastore.configstore.get(key)
+					if (info) uploads.push(info)
+				}
+				return { uploads }
+			},
+			tag('List all uploads (admin/operational helper)')
+		)
+		.get(
+			`${rpcPrefix}/:id`,
+			async ({ params, set }) => {
+				try {
+					return await datastore.getUpload(params.id)
+				} catch {
+					set.status = 404
+					return { error: 'Upload not found' }
+				}
+			},
+			tag('Get upload info by ID (admin/operational helper)')
+		)
+		.get(
+			`${rpcPrefix}/:id/content`,
+			async ({ params, set }) => {
+				let upload: Awaited<
+					ReturnType<typeof datastore.getUpload>
+				>
+				try {
+					upload = await datastore.getUpload(params.id)
+				} catch {
+					set.status = 404
+					return { error: 'Upload not found' }
+				}
+
+				const ds = datastore as unknown as {
+					read: (id: string) => NodeJS.ReadableStream
+				}
+				if (typeof ds.read !== 'function') {
+					set.status = 501
+					return {
+						error:
+							'Datastore does not support content reads'
+					}
+				}
+
+				try {
+					const stream = ds.read(params.id)
+					const contentType =
+						(upload.metadata as Record<string, string>)
+							?.mimeType ??
+						(upload.metadata as Record<string, string>)
+							?.contentType ??
+						'application/octet-stream'
+					set.headers['content-type'] = contentType
+					if (upload.size) {
+						set.headers['content-length'] = String(
+							upload.size
+						)
+					}
+					return stream
+				} catch (readErr) {
+					set.status = 500
+					return {
+						error: `Failed to read upload content: ${readErr instanceof Error ? readErr.message : String(readErr)}`
+					}
+				}
+			},
+			tag('Get upload content by ID')
+		)
+		.post(
+			`${rpcPrefix}/cleanup-expired`,
+			async ({ set }) => {
+				try {
+					const count =
+						await tusServer.cleanUpExpiredUploads()
+					return { deleted: count }
+				} catch (e) {
+					set.status = 500
+					return {
+						error:
+							e instanceof Error
+								? e.message
+								: 'Cleanup failed'
+					}
+				}
+			},
+			tag('Clean up expired incomplete uploads')
+		)
+}
+
 export function createTusApp(options: CreateTusAppOptions) {
 	const prefix = options.prefix ?? '/api/uploads'
 	const rpcPrefix = `${prefix}-rpc`
@@ -91,187 +230,16 @@ export function createTusApp(options: CreateTusAppOptions) {
 		namingFunction: options.namingFunction
 	})
 
-	return (
-		new Elysia()
-
-			// ── Native tus routes ────────────────────────────────────────────
-			.options(
-				prefix,
-				({ request }) => tusServer.handle(request),
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'tus OPTIONS (discovery)'
-					}
-				}
-			)
-			.post(
-				prefix,
-				({ request }) => tusServer.handle(request),
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'tus POST (create upload)'
-					}
-				}
-			)
-			.head(
-				`${prefix}/:id`,
-				({ request }) => tusServer.handle(request),
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'tus HEAD (upload status)'
-					}
-				}
-			)
-			.patch(
-				`${prefix}/:id`,
-				({ request }) => tusServer.handle(request),
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'tus PATCH (resume upload)'
-					}
-				}
-			)
-			.delete(
-				`${prefix}/:id`,
-				({ request }) => tusServer.handle(request),
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'tus DELETE (terminate upload)'
-					}
-				}
-			)
-
-			// ── RPC helper routes ────────────────────────────────────────────
-
-			.get(
-				`${rpcPrefix}/list`,
-				async () => {
-					const store = options.datastore
-					if (!hasConfigStore(store)) {
-						return { uploads: [] }
-					}
-					const keys = await store.configstore.list()
-					const uploads: Upload[] = []
-					for (const key of keys) {
-						const info = await store.configstore.get(key)
-						if (info) uploads.push(info)
-					}
-					return { uploads }
-				},
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary:
-							'List all uploads (admin/operational helper)'
-					}
-				}
-			)
-
-			.get(
-				`${rpcPrefix}/:id`,
-				async ({ params, set }) => {
-					try {
-						const upload =
-							await options.datastore.getUpload(params.id)
-						return upload
-					} catch {
-						set.status = 404
-						return { error: 'Upload not found' }
-					}
-				},
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary:
-							'Get upload info by ID (admin/operational helper)'
-					}
-				}
-			)
-
-			.get(
-				`${rpcPrefix}/:id/content`,
-				async ({ params, set }) => {
-					let upload: Awaited<
-						ReturnType<typeof options.datastore.getUpload>
-					>
-					try {
-						upload = await options.datastore.getUpload(
-							params.id
-						)
-					} catch {
-						set.status = 404
-						return { error: 'Upload not found' }
-					}
-
-					const ds = options.datastore as unknown as {
-						read: (id: string) => NodeJS.ReadableStream
-					}
-					if (typeof ds.read !== 'function') {
-						set.status = 501
-						return {
-							error:
-								'Datastore does not support content reads'
-						}
-					}
-
-					try {
-						const stream = ds.read(params.id)
-						const contentType =
-							(upload.metadata as Record<string, string>)
-								?.mimeType ??
-							(upload.metadata as Record<string, string>)
-								?.contentType ??
-							'application/octet-stream'
-						set.headers['content-type'] = contentType
-						if (upload.size) {
-							set.headers['content-length'] = String(
-								upload.size
-							)
-						}
-						return stream
-					} catch (readErr) {
-						set.status = 500
-						return {
-							error: `Failed to read upload content: ${readErr instanceof Error ? readErr.message : String(readErr)}`
-						}
-					}
-				},
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'Get upload content by ID'
-					}
-				}
-			)
-
-			.post(
-				`${rpcPrefix}/cleanup-expired`,
-				async ({ set }) => {
-					try {
-						const count =
-							await tusServer.cleanUpExpiredUploads()
-						return { deleted: count }
-					} catch (e) {
-						set.status = 500
-						return {
-							error:
-								e instanceof Error
-									? e.message
-									: 'Cleanup failed'
-						}
-					}
-				},
-				{
-					detail: {
-						tags: ['Uploads'],
-						summary: 'Clean up expired incomplete uploads'
-					}
-				}
-			)
-	)
+	let app = new Elysia()
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	app = mountTusRoutes(app as any, prefix, tusServer) as typeof app
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	app = mountRpcRoutes(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		app as any,
+		rpcPrefix,
+		options.datastore,
+		tusServer
+	) as typeof app
+	return app
 }
