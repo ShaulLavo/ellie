@@ -81,18 +81,18 @@ export function wrapToolsForTanStack(
 	blobSink?: BlobSink,
 	traceScope?: TraceScope
 ) {
-	for (const tool of tools) {
+	const safeTools = tools.filter(tool => {
 		if (ANTHROPIC_RESERVED_TOOL_NAMES.has(tool.name)) {
-			throw new Error(
-				`Tool name "${tool.name}" collides with an Anthropic built-in server tool. ` +
-					`TanStack AI will silently convert it, bypassing our execute function. ` +
-					`Rename the tool to avoid this collision. ` +
-					`Reserved names: ${[...ANTHROPIC_RESERVED_TOOL_NAMES].join(', ')}`
+			console.warn(
+				`[tool-bridge] Skipping tool "${tool.name}" — collides with Anthropic reserved server tool. ` +
+					`Rename to avoid silent interception. Reserved: ${[...ANTHROPIC_RESERVED_TOOL_NAMES].join(', ')}`
 			)
+			return false
 		}
-	}
+		return true
+	})
 
-	return tools.map(tool => ({
+	return safeTools.map(tool => ({
 		name: tool.name,
 		description: tool.description,
 		inputSchema: tool.parameters,

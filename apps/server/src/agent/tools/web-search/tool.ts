@@ -277,7 +277,7 @@ export function createWebSearchTool(
 	}
 
 	return {
-		name: 'web_search',
+		name: 'search_web',
 		description:
 			'Search the web using Brave Search API. ' +
 			'Supports region-specific and localized search via country and language parameters. ' +
