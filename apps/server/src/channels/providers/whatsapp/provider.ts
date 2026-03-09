@@ -94,8 +94,9 @@ export class WhatsAppProvider implements ChannelProvider {
 				manager.accountDir('whatsapp', accountId),
 				'auth'
 			)
-			const hasCreds =
-				existsSync(join(authDir, 'creds.json'))
+			const hasCreds = existsSync(
+				join(authDir, 'creds.json')
+			)
 			if (!hasCreds) continue
 			try {
 				await this.#connectAccount(accountId, settings)
@@ -183,10 +184,7 @@ export class WhatsAppProvider implements ChannelProvider {
 
 							// Listen for the first QR or connection result
 							const onConnectionUpdate = (
-								update: Record<
-									string,
-									unknown
-								>
+								update: Record<string, unknown>
 							) => {
 								if (update.qr) {
 									clearTimeout(timeout)
@@ -194,14 +192,9 @@ export class WhatsAppProvider implements ChannelProvider {
 										'connection.update',
 										onConnectionUpdate
 									)
-									resolve(
-										update.qr as string
-									)
+									resolve(update.qr as string)
 								}
-								if (
-									update.connection ===
-									'open'
-								) {
+								if (update.connection === 'open') {
 									clearTimeout(timeout)
 									sock.ev.off(
 										'connection.update',
@@ -210,10 +203,7 @@ export class WhatsAppProvider implements ChannelProvider {
 									// Already connected (restored creds), no QR needed
 									resolve('')
 								}
-								if (
-									update.connection ===
-									'close'
-								) {
+								if (update.connection === 'close') {
 									clearTimeout(timeout)
 									sock.ev.off(
 										'connection.update',
