@@ -170,12 +170,13 @@ describe('ChannelManager', () => {
 		expect(provider.bootCalls[0]).toBe(manager)
 	})
 
-	test('bootAll skips provider without saved accounts', async () => {
+	test('bootAll calls boot even without saved accounts', async () => {
 		const provider = createMockProvider('test', 'Test')
 		manager.register(provider)
 
 		await manager.bootAll()
-		expect(provider.bootCalls).toHaveLength(0)
+		// boot is always called so providers can set their manager reference
+		expect(provider.bootCalls).toHaveLength(1)
 	})
 
 	test('bootAll does not throw on provider boot failure', async () => {
@@ -194,7 +195,7 @@ describe('ChannelManager', () => {
 
 	// ── Multiple providers ───────────────────────────────────
 
-	test('multiple providers coexist independently', async () => {
+	test('multiple providers both get booted', async () => {
 		const p1 = createMockProvider('wa', 'WhatsApp')
 		const p2 = createMockProvider('tg', 'Telegram')
 		manager.register(p1)
@@ -203,11 +204,10 @@ describe('ChannelManager', () => {
 		manager.saveSettings('wa', 'default', {
 			mode: 'self'
 		})
-		// tg has no saved settings
 
 		await manager.bootAll()
 		expect(p1.bootCalls).toHaveLength(1)
-		expect(p2.bootCalls).toHaveLength(0)
+		expect(p2.bootCalls).toHaveLength(1)
 	})
 
 	// ── Ingestion ────────────────────────────────────────────

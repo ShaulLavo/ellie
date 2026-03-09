@@ -125,8 +125,6 @@ export class ChannelManager {
 
 	async bootAll(): Promise<void> {
 		for (const provider of this.#providers.values()) {
-			const accounts = this.listSavedAccounts(provider.id)
-			if (accounts.length === 0) continue
 			try {
 				await provider.boot(this)
 			} catch (err) {
