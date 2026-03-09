@@ -25,16 +25,50 @@ const decoder = new TextDecoder()
 
 const bridges = new Map<string, Subprocess>()
 
+const CLI_DIR = resolve(import.meta.dir, '../../../cli')
+const IS_DEV = process.env.NODE_ENV === 'development'
+
+/** Rebuild Go CLI binaries. Returns a promise that resolves when done. */
+async function rebuildCliBinaries() {
+	const targets = [
+		{ out: 'bin/ellie', pkg: './cmd/ellie' },
+		{ out: 'bin/pty-bridge', pkg: './cmd/pty-bridge' }
+	]
+	const builds = targets.map(async ({ out, pkg }) => {
+		const proc = Bun.spawn(
+			['go', 'build', '-o', out, pkg],
+			{
+				cwd: CLI_DIR,
+				stdout: 'ignore',
+				stderr: 'pipe'
+			}
+		)
+		const exitCode = await proc.exited
+		if (exitCode !== 0) {
+			const msg = await new Response(proc.stderr).text()
+			console.error(
+				`[terminal] go build ${pkg} failed:\n${msg}`
+			)
+		}
+	})
+	await Promise.all(builds)
+	console.log('[terminal] CLI binaries rebuilt')
+}
+
+// In dev mode, rebuild binaries in the background. The promise gates
+// WebSocket connections so the first connect waits for the build.
+const devBuildReady = IS_DEV
+	? rebuildCliBinaries()
+	: Promise.resolve()
+
 export function createTerminalRoutes(paths?: {
 	bridge?: string
 	cli?: string
 }) {
 	const bridgePath =
-		paths?.bridge ??
-		resolve(import.meta.dir, '../../../cli/bin/pty-bridge')
+		paths?.bridge ?? resolve(CLI_DIR, 'bin/pty-bridge')
 	const cliPath =
-		paths?.cli ??
-		resolve(import.meta.dir, '../../../cli/bin/ellie')
+		paths?.cli ?? resolve(CLI_DIR, 'bin/ellie')
 
 	return new Elysia({ tags: ['Terminal'] }).ws(
 		'/ws/terminal',
@@ -53,7 +87,8 @@ export function createTerminalRoutes(paths?: {
 
 			response: t.String(),
 
-			open(ws) {
+			async open(ws) {
+				await devBuildReady
 				const proc = Bun.spawn([bridgePath, cliPath], {
 					stdin: 'pipe',
 					stdout: 'pipe',
