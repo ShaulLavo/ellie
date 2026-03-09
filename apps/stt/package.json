@@ -4,7 +4,6 @@
 	"private": true,
 	"scripts": {
 		"setup": "bun run setup.ts",
-		"dev": "bun run dev.ts",
 		"build": "cargo build --release",
 		"test": "cargo test"
 	}

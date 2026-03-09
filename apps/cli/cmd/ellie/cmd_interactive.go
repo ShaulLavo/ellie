@@ -102,6 +102,8 @@ func (m interactiveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case cmdDoneMsg:
+		// exec commands (chat, auth) take over the terminal — the user
+		// already saw any output/errors. Just return to menu silently.
 		m.state = stateMenu
 		return m, nil
 

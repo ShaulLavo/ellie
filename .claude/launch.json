@@ -6,7 +6,10 @@
 			"runtimeExecutable": "bun",
 			"runtimeArgs": ["run", "--hot", "src/server.ts"],
 			"cwd": "apps/server",
-			"port": 3000
+			"port": 3000,
+			"env": {
+				"NODE_ENV": "development"
+			}
 		}
 	]
 }
