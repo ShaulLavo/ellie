@@ -21,6 +21,10 @@ export const API_TAGS = [
 		description: 'Tus upload management'
 	},
 	{
+		name: 'Speech',
+		description: 'Speech-to-text and text-to-speech'
+	},
+	{
 		name: 'Channels',
 		description: 'External messaging channels'
 	}

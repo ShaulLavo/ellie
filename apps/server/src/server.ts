@@ -24,6 +24,7 @@ import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
 import { createTerminalRoutes } from './routes/terminal'
 import { createSpeechRoutes } from './routes/speech'
+import { createTtsRoutes } from './routes/tts'
 import { createTraceRoutes } from './routes/traces'
 import { createChannelRoutes } from './routes/channels'
 import { API_INFO, API_TAGS } from './consts'
@@ -99,6 +100,7 @@ export const app = new Elysia()
 			ctx.traceRecorder
 		)
 	)
+	.use(createTtsRoutes(ctx.blobSink, ctx.traceRecorder))
 	.use(createDevRoutes(ctx.DATA_DIR))
 	.use(createTraceRoutes(ctx.traceRecorder))
 	.use(createDbStudioRoutes(ctx.DATA_DIR))
@@ -180,3 +182,13 @@ export const app = new Elysia()
 export type App = typeof app
 
 app.listen(ctx.port)
+
+// ── Graceful shutdown (close WhatsApp sockets before hot-reload / exit) ──
+async function shutdown() {
+	await ctx.channelManager.shutdownAll()
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
+// Bun --hot sends SIGUSR2 before reload
+process.on('SIGUSR2', shutdown)

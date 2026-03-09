@@ -27,6 +27,12 @@ bun run --hot apps/server/src/server.ts
 bun test --filter './packages/*' --filter './apps/server/*'
 ```
 
+## Speech
+
+- STT uses `STT_BASE_URL` for transcription.
+- ElevenLabs TTS uses `ELEVENLABS_API_KEY` (or `XI_API_KEY`).
+- Optional TTS defaults: `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `TTS_TIMEOUT_MS`, `TTS_MAX_TEXT_LENGTH`.
+
 ## Architecture
 
 - **Event sourcing**: all state changes stored as events in SQLite via `EventStore`

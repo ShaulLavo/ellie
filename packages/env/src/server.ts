@@ -92,7 +92,42 @@ const ServerEnvSchema = v.object({
 	STT_BASE_URL: v.optional(
 		v.pipe(v.string(), v.url()),
 		'http://localhost:3456'
-	)
+	),
+
+	// ── Text-to-speech (ElevenLabs) ──
+
+	/** ElevenLabs API key. Falls back to XI_API_KEY when unset. */
+	ELEVENLABS_API_KEY: v.optional(v.string()),
+	/** Optional ElevenLabs API base URL override. */
+	ELEVENLABS_BASE_URL: v.optional(v.string()),
+	/** Default ElevenLabs voice ID. */
+	ELEVENLABS_VOICE_ID: v.optional(v.string()),
+	/** Default ElevenLabs model ID. */
+	ELEVENLABS_MODEL_ID: v.optional(v.string()),
+	/** Optional default ElevenLabs seed. */
+	ELEVENLABS_SEED: v.optional(v.string()),
+	/** Optional default text normalization mode: auto, on, off. */
+	ELEVENLABS_APPLY_TEXT_NORMALIZATION: v.optional(
+		v.string()
+	),
+	/** Optional default language code (2-letter ISO 639-1). */
+	ELEVENLABS_LANGUAGE_CODE: v.optional(v.string()),
+	/** Optional default ElevenLabs stability. */
+	ELEVENLABS_VOICE_STABILITY: v.optional(v.string()),
+	/** Optional default ElevenLabs similarity boost. */
+	ELEVENLABS_VOICE_SIMILARITY_BOOST: v.optional(v.string()),
+	/** Optional default ElevenLabs style. */
+	ELEVENLABS_VOICE_STYLE: v.optional(v.string()),
+	/** Optional default ElevenLabs speaker boost flag. */
+	ELEVENLABS_VOICE_USE_SPEAKER_BOOST: v.optional(
+		v.string()
+	),
+	/** Optional default ElevenLabs speed. */
+	ELEVENLABS_VOICE_SPEED: v.optional(v.string()),
+	/** Hard cap for text sent to TTS. */
+	TTS_MAX_TEXT_LENGTH: v.optional(v.string()),
+	/** TTS request timeout in milliseconds. */
+	TTS_TIMEOUT_MS: v.optional(v.string())
 })
 
 // ============================================================================
@@ -146,5 +181,24 @@ export const env: ServerEnv = v.parse(ServerEnvSchema, {
 		Bun.env.AGENT_SESSION_EXEC_TIMEOUT_MS,
 	AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES:
 		Bun.env.AGENT_SESSION_EXEC_MAX_OUTPUT_BYTES,
-	STT_BASE_URL: Bun.env.STT_BASE_URL
+	STT_BASE_URL: Bun.env.STT_BASE_URL,
+	ELEVENLABS_API_KEY: Bun.env.ELEVENLABS_API_KEY,
+	ELEVENLABS_BASE_URL: Bun.env.ELEVENLABS_BASE_URL,
+	ELEVENLABS_VOICE_ID: Bun.env.ELEVENLABS_VOICE_ID,
+	ELEVENLABS_MODEL_ID: Bun.env.ELEVENLABS_MODEL_ID,
+	ELEVENLABS_SEED: Bun.env.ELEVENLABS_SEED,
+	ELEVENLABS_APPLY_TEXT_NORMALIZATION:
+		Bun.env.ELEVENLABS_APPLY_TEXT_NORMALIZATION,
+	ELEVENLABS_LANGUAGE_CODE:
+		Bun.env.ELEVENLABS_LANGUAGE_CODE,
+	ELEVENLABS_VOICE_STABILITY:
+		Bun.env.ELEVENLABS_VOICE_STABILITY,
+	ELEVENLABS_VOICE_SIMILARITY_BOOST:
+		Bun.env.ELEVENLABS_VOICE_SIMILARITY_BOOST,
+	ELEVENLABS_VOICE_STYLE: Bun.env.ELEVENLABS_VOICE_STYLE,
+	ELEVENLABS_VOICE_USE_SPEAKER_BOOST:
+		Bun.env.ELEVENLABS_VOICE_USE_SPEAKER_BOOST,
+	ELEVENLABS_VOICE_SPEED: Bun.env.ELEVENLABS_VOICE_SPEED,
+	TTS_MAX_TEXT_LENGTH: Bun.env.TTS_MAX_TEXT_LENGTH,
+	TTS_TIMEOUT_MS: Bun.env.TTS_TIMEOUT_MS
 })
