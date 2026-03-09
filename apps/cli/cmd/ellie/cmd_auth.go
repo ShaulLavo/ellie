@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -11,9 +12,15 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
-	qrterminal "github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
 )
+
+// waitForEnter pauses until the user presses Enter.
+// Used after errors so the message stays visible before the TUI redraws.
+func waitForEnter() {
+	fmt.Println(styleDim.Render("\nPress Enter to continue..."))
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
 
 // serverError builds a human-readable error from a non-200 server response.
 // It tries to parse JSON {"error":"..."} and adds context for common codes.
@@ -515,10 +522,10 @@ func authWhatsApp() error {
 	var phoneMode string
 	err := huh.NewSelect[string]().
 		Title("WhatsApp phone mode").
-		Description("'Self' uses your personal number (self-chat only).\n'Companion' uses a separate phone (DMs from your number only).").
+		Description("How should the agent connect to WhatsApp?").
 		Options(
-			huh.NewOption("Self (personal number)", "self"),
-			huh.NewOption("Companion (separate phone)", "companion"),
+			huh.NewOption("Use my number (talk to yourself, the agent replies in self-chat)", "self"),
+			huh.NewOption("Give the agent its own number (uses a second phone/SIM)", "companion"),
 		).
 		Value(&phoneMode).
 		Run()
@@ -532,8 +539,8 @@ func authWhatsApp() error {
 	if phoneMode == "companion" {
 		var ownerPhone string
 		err = huh.NewInput().
-			Title("Owner phone number (E.164 format)").
-			Description("The phone number that will send messages to this WhatsApp account").
+			Title("Your phone number (E.164 format)").
+			Description("the agent will only respond to messages from this number").
 			Placeholder("+1234567890").
 			Value(&ownerPhone).
 			Run()
@@ -547,55 +554,73 @@ func authWhatsApp() error {
 		settings["ownerJid"] = normalized + "@s.whatsapp.net"
 	}
 
-	// Step 3: POST login/start
+	// Step 3: POST login/start (longer timeout — Baileys needs time to connect)
+	fmt.Println(styleDim.Render("Connecting to WhatsApp..."))
+	loginClient := &http.Client{Timeout: 30 * time.Second}
 	body, _ := json.Marshal(map[string]any{
 		"accountId": "default",
 		"settings":  settings,
 	})
-	resp, err := httpClient.Post(baseURL()+"/api/channels/whatsapp/login/start", "application/json", bytes.NewReader(body))
+	resp, err := loginClient.Post(baseURL()+"/api/channels/whatsapp/login/start", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("cannot reach server: %w", err)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Failed to connect: "+err.Error()))
+		waitForEnter()
+		return errSilent
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return serverError(resp)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Server error: "+serverError(resp).Error()))
+		waitForEnter()
+		return errSilent
 	}
 
 	var loginResp struct {
-		QR string `json:"qr"`
+		QR         string `json:"qr"`
+		QRTerminal string `json:"qrTerminal"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
-		return fmt.Errorf("invalid response: %w", err)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Invalid response: "+err.Error()))
+		waitForEnter()
+		return errSilent
 	}
 
-	// Step 4: Render QR in terminal (if QR provided)
-	if loginResp.QR != "" {
+	// Step 4: Print QR in terminal (server renders it for us)
+	if loginResp.QRTerminal != "" {
 		fmt.Println()
 		fmt.Println(styleBold.Render("Scan this QR code with WhatsApp on your phone:"))
+		fmt.Print(loginResp.QRTerminal)
+	} else if loginResp.QR != "" {
 		fmt.Println()
-		qrterminal.GenerateHalfBlock(loginResp.QR, qrterminal.L, os.Stdout)
-		fmt.Println()
+		fmt.Println(styleBold.Render("Scan this QR code with WhatsApp on your phone:"))
+		fmt.Println(styleDim.Render("(QR available but terminal rendering unavailable)"))
 	} else {
 		fmt.Println(styleDim.Render("Restoring existing session..."))
 	}
 
-	// Step 5: Long-poll login/wait (90s timeout)
+	// Step 5: Long-poll login/wait (5.5 min — outlast the server's 5 min timeout)
 	fmt.Println(styleDim.Render("Waiting for WhatsApp to connect..."))
-	waitClient := &http.Client{Timeout: 90 * time.Second}
+	waitClient := &http.Client{Timeout: 330 * time.Second}
 	waitBody, _ := json.Marshal(map[string]any{"accountId": "default"})
 	resp2, err := waitClient.Post(baseURL()+"/api/channels/whatsapp/login/wait", "application/json", bytes.NewReader(waitBody))
 	if err != nil {
-		return fmt.Errorf("login timed out or failed: %w", err)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Login timed out or failed: "+err.Error()))
+		waitForEnter()
+		return errSilent
 	}
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != 200 {
-		return serverError(resp2)
+		fmt.Fprintln(os.Stderr, styleErr.Render("Login failed: "+serverError(resp2).Error()))
+		waitForEnter()
+		return errSilent
 	}
 
-	fmt.Println(styleOk.Render("WhatsApp linked successfully!"))
-	return nil
+	fmt.Println()
+	fmt.Println(styleOk.Render("WhatsApp connected! You're all set."))
+	fmt.Println()
+	waitForEnter()
+	return errSilent
 }
 
 // ── channel helpers ───────────────────────────────────────────────────────────

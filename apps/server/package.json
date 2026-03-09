@@ -8,7 +8,7 @@
 		".": "./src/server.ts"
 	},
 	"scripts": {
-		"dev": "bun run --hot src/server.ts",
+		"dev": "NODE_ENV=development bun run --hot src/server.ts",
 		"test": "bun test",
 		"check-types": "tsgo --noEmit"
 	},
@@ -53,7 +53,9 @@
 		"@babel/plugin-transform-typescript": "^7.28.6",
 		"@repo/typescript-config": "workspace:*",
 		"@types/hapi__boom": "^9.0.1",
+		"@types/qrcode": "^1.5.6",
 		"babel-plugin-react-compiler": "^1.0.0",
-		"bun-types": "latest"
+		"bun-types": "latest",
+		"qrcode": "^1.5.4"
 	}
 }

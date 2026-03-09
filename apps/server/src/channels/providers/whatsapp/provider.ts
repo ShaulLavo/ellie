@@ -1,9 +1,13 @@
 import makeWASocket, {
 	DisconnectReason,
+	fetchLatestBaileysVersion,
+	makeCacheableSignalKeyStore,
 	useMultiFileAuthState,
 	type WASocket,
 	type WAMessage
 } from '@whiskeysockets/baileys'
+import type { ILogger } from '@whiskeysockets/baileys/lib/Utils/logger'
+import QRCode from 'qrcode'
 import { join } from 'node:path'
 import { mkdirSync, rmSync, existsSync } from 'node:fs'
 import type { ChannelProvider } from '../../core/provider'
@@ -17,6 +21,21 @@ import {
 	markdownToWhatsApp,
 	chunkMessage
 } from './formatting'
+
+// ── Silent logger (satisfies Baileys ILogger without pino dep) ──────────────
+
+const noop = () => {}
+const silentLogger: ILogger = {
+	level: 'silent',
+	child() {
+		return silentLogger
+	},
+	trace: noop,
+	debug: noop,
+	info: noop,
+	warn: noop,
+	error: noop
+}
 
 // ── WhatsApp-specific settings ──────────────────────────────────────────────
 
@@ -33,6 +52,8 @@ interface WhatsAppAccount {
 	sock: WASocket | null
 	settings: WhatsAppSettings
 	status: ChannelRuntimeStatus
+	/** True during loginStart — suppresses auto-reconnect on close */
+	loggingIn: boolean
 	/** Resolvers for the loginWait promise */
 	loginResolve?: (value: unknown) => void
 	loginReject?: (reason: unknown) => void
@@ -68,6 +89,14 @@ export class WhatsAppProvider implements ChannelProvider {
 				accountId
 			) as WhatsAppSettings | null
 			if (!settings) continue
+			// Only auto-connect if auth state exists (creds.json from a previous login)
+			const authDir = join(
+				manager.accountDir('whatsapp', accountId),
+				'auth'
+			)
+			const hasCreds =
+				existsSync(join(authDir, 'creds.json'))
+			if (!hasCreds) continue
 			try {
 				await this.#connectAccount(accountId, settings)
 			} catch (err) {
@@ -105,8 +134,25 @@ export class WhatsAppProvider implements ChannelProvider {
 
 		// Disconnect existing account if any
 		const existing = this.#accounts.get(accountId)
-		if (existing?.sock) {
-			existing.sock.end(undefined)
+		if (existing) {
+			if (existing.reconnectTimer) {
+				clearTimeout(existing.reconnectTimer)
+			}
+			if (existing.sock) {
+				existing.sock.end(undefined)
+			}
+			this.#accounts.delete(accountId)
+		}
+
+		// Clear auth so Baileys starts fresh with a QR (not stale creds)
+		if (this.#manager) {
+			const authDir = join(
+				this.#manager.accountDir('whatsapp', accountId),
+				'auth'
+			)
+			if (existsSync(authDir)) {
+				rmSync(authDir, { recursive: true, force: true })
+			}
 		}
 
 		// Set up account state with a pending QR promise
@@ -114,48 +160,99 @@ export class WhatsAppProvider implements ChannelProvider {
 			sock: null,
 			settings: waSettings,
 			status: { state: 'connecting' },
+			loggingIn: true,
 			reconnectDelay: MIN_RECONNECT_DELAY
 		}
 		this.#accounts.set(accountId, account)
 
-		// Connect and wait for the first QR code
-		const qrPromise = new Promise<string>(
-			(resolve, reject) => {
-				this.#createSocket(accountId, account)
-					.then(sock => {
-						account.sock = sock
-
-						// Listen for the first QR
-						const onConnectionUpdate = (
-							update: Record<string, unknown>
-						) => {
-							if (update.qr) {
-								sock.ev.off(
-									'connection.update',
-									onConnectionUpdate
-								)
-								resolve(update.qr as string)
-							}
-							if (update.connection === 'open') {
-								sock.ev.off(
-									'connection.update',
-									onConnectionUpdate
-								)
-								// Already connected (restored creds), no QR needed
-								resolve('')
-							}
-						}
-						sock.ev.on(
-							'connection.update',
-							onConnectionUpdate
+		// Connect and wait for the first QR code (with timeout)
+		try {
+			const qr = await new Promise<string>(
+				(resolve, reject) => {
+					const timeout = setTimeout(() => {
+						reject(
+							new Error(
+								'Timed out waiting for WhatsApp QR code. Check your network connection.'
+							)
 						)
-					})
-					.catch(reject)
-			}
-		)
+					}, 20_000)
 
-		const qr = await qrPromise
-		return { qr }
+					this.#createSocket(accountId, account)
+						.then(sock => {
+							account.sock = sock
+
+							// Listen for the first QR or connection result
+							const onConnectionUpdate = (
+								update: Record<
+									string,
+									unknown
+								>
+							) => {
+								if (update.qr) {
+									clearTimeout(timeout)
+									sock.ev.off(
+										'connection.update',
+										onConnectionUpdate
+									)
+									resolve(
+										update.qr as string
+									)
+								}
+								if (
+									update.connection ===
+									'open'
+								) {
+									clearTimeout(timeout)
+									sock.ev.off(
+										'connection.update',
+										onConnectionUpdate
+									)
+									// Already connected (restored creds), no QR needed
+									resolve('')
+								}
+								if (
+									update.connection ===
+									'close'
+								) {
+									clearTimeout(timeout)
+									sock.ev.off(
+										'connection.update',
+										onConnectionUpdate
+									)
+									reject(
+										new Error(
+											'WhatsApp connection failed. Try again.'
+										)
+									)
+								}
+							}
+							sock.ev.on(
+								'connection.update',
+								onConnectionUpdate
+							)
+						})
+						.catch(err => {
+							clearTimeout(timeout)
+							reject(err)
+						})
+				}
+			)
+			account.loggingIn = false
+			const qrTerminal = qr
+				? await QRCode.toString(qr, { type: 'utf8' })
+				: ''
+			return { qr, qrTerminal }
+		} catch (err) {
+			// Login failed — clean up so no reconnect loop persists
+			if (account.reconnectTimer) {
+				clearTimeout(account.reconnectTimer)
+			}
+			if (account.sock) {
+				account.sock.end(undefined)
+			}
+			this.#accounts.delete(accountId)
+			throw err
+		}
 	}
 
 	async loginWait(accountId: string): Promise<unknown> {
@@ -171,7 +268,7 @@ export class WhatsAppProvider implements ChannelProvider {
 			return { ok: true, alreadyConnected: true }
 		}
 
-		// Wait for connection to open (max 60s)
+		// Wait for connection to open (5 min — give user time to scan)
 		return new Promise((resolve, reject) => {
 			account.loginResolve = resolve
 			account.loginReject = reject
@@ -180,7 +277,7 @@ export class WhatsAppProvider implements ChannelProvider {
 				account.loginResolve = undefined
 				account.loginReject = undefined
 				reject(new Error('Login timed out'))
-			}, 60_000)
+			}, 5 * 60_000)
 
 			// Store original resolve to clear timeout
 			const origResolve = resolve
@@ -260,10 +357,36 @@ export class WhatsAppProvider implements ChannelProvider {
 		const { state, saveCreds } =
 			await useMultiFileAuthState(authDir)
 
+		const { version } = await fetchLatestBaileysVersion()
+
 		const sock = makeWASocket({
-			auth: state,
-			printQRInTerminal: false
+			auth: {
+				creds: state.creds,
+				keys: makeCacheableSignalKeyStore(
+					state.keys,
+					silentLogger
+				)
+			},
+			version,
+			logger: silentLogger,
+			printQRInTerminal: false,
+			browser: ['Ellie', 'server', '1.0'],
+			syncFullHistory: false,
+			markOnlineOnConnect: false
 		})
+
+		// Prevent unhandled WebSocket errors from crashing the process (Bun compat)
+		const ws = sock.ws as unknown as {
+			on?: (event: string, fn: (err: Error) => void) => void
+		}
+		if (typeof ws?.on === 'function') {
+			ws.on('error', (err: Error) => {
+				console.error(
+					`[whatsapp] WebSocket error for ${accountId}:`,
+					err
+				)
+			})
+		}
 
 		sock.ev.on('creds.update', saveCreds)
 
@@ -321,6 +444,9 @@ export class WhatsAppProvider implements ChannelProvider {
 		}
 
 		if (connection === 'close') {
+			// During loginStart, don't reconnect — loginStart handles its own cleanup
+			if (account.loggingIn) return
+
 			const statusCode = (lastDisconnect?.error as any)
 				?.output?.statusCode as number | undefined
 
@@ -406,6 +532,7 @@ export class WhatsAppProvider implements ChannelProvider {
 			sock: null,
 			settings,
 			status: { state: 'connecting' },
+			loggingIn: false,
 			reconnectDelay: MIN_RECONNECT_DELAY
 		}
 		this.#accounts.set(accountId, account)
