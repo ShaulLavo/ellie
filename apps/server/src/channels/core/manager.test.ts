@@ -240,7 +240,10 @@ describe('ChannelManager', () => {
 							text,
 							eventId
 						})
-						return { runId: 'run-123' }
+						return {
+							runId: 'run-123',
+							routed: 'prompt'
+						}
 					}
 				}) as any,
 			ensureBootstrap: () => {},
@@ -256,6 +259,7 @@ describe('ChannelManager', () => {
 						target
 					})
 				},
+				registerPending: () => {},
 				watchSession: () => {}
 			} as any
 		})
@@ -285,8 +289,6 @@ describe('ChannelManager', () => {
 		)
 
 		// user_message was persisted with source
-		const events = store.queryRunEvents('test-session', '')
-		// Query all events in session instead
 		const allEvents = eventStore.query({
 			sessionId: 'test-session'
 		})

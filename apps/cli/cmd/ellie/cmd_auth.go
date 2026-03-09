@@ -518,43 +518,112 @@ func authOAuth(mode string) error {
 // ── whatsapp auth flow ────────────────────────────────────────────────────────
 
 func authWhatsApp() error {
-	// Step 1: Ask phone mode
-	var phoneMode string
+	// Step 1: Phone setup — personal number or separate phone?
+	var phoneSetup string
 	err := huh.NewSelect[string]().
-		Title("WhatsApp phone mode").
-		Description("How should the agent connect to WhatsApp?").
+		Title("WhatsApp phone setup").
+		Description("Which phone will the agent use?").
 		Options(
-			huh.NewOption("Use my number (talk to yourself, the agent replies in self-chat)", "self"),
-			huh.NewOption("Give the agent its own number (uses a second phone/SIM)", "companion"),
+			huh.NewOption("This is my personal number (self-chat)", "personal"),
+			huh.NewOption("Separate phone just for the agent", "separate"),
 		).
-		Value(&phoneMode).
+		Value(&phoneSetup).
 		Run()
 	if err != nil {
 		return errSilent
 	}
 
-	settings := map[string]any{"phoneMode": phoneMode}
+	settings := map[string]any{
+		"selfChatMode": false,
+		"dmPolicy":     "allowlist",
+		"allowFrom":    []string{},
+		"groupPolicy":  "disabled",
+	}
 
-	// Step 2: If companion, ask owner phone number
-	if phoneMode == "companion" {
+	if phoneSetup == "personal" {
+		// Step 2a: Ask for their phone number
 		var ownerPhone string
 		err = huh.NewInput().
-			Title("Your phone number (E.164 format)").
-			Description("the agent will only respond to messages from this number").
-			Placeholder("+1234567890").
+			Title("Your phone number").
+			Description("E.164 format — the agent will only respond to you").
+			Placeholder("+15551234567").
 			Value(&ownerPhone).
 			Run()
 		if err != nil || strings.TrimSpace(ownerPhone) == "" {
 			fmt.Fprintln(os.Stderr, "Cancelled.")
 			return errSilent
 		}
-		// Normalize: strip + and spaces, append @s.whatsapp.net
-		normalized := strings.ReplaceAll(strings.TrimSpace(ownerPhone), " ", "")
-		normalized = strings.TrimPrefix(normalized, "+")
-		settings["ownerJid"] = normalized + "@s.whatsapp.net"
+		normalized := normalizeE164(ownerPhone)
+		if normalized == "" {
+			fmt.Fprintln(os.Stderr, styleErr.Render("Invalid phone number."))
+			waitForEnter()
+			return errSilent
+		}
+		settings["selfChatMode"] = true
+		settings["dmPolicy"] = "allowlist"
+		settings["allowFrom"] = []string{normalized}
+	} else {
+		// Step 2b: DM policy
+		var dmPolicy string
+		err = huh.NewSelect[string]().
+			Title("Who can message the agent?").
+			Description("Controls which DMs the agent will respond to").
+			Options(
+				huh.NewOption("Only specific numbers (allowlist)", "allowlist"),
+				huh.NewOption("Anyone (open)", "open"),
+				huh.NewOption("Disabled (ignore all DMs)", "disabled"),
+			).
+			Value(&dmPolicy).
+			Run()
+		if err != nil {
+			return errSilent
+		}
+		settings["dmPolicy"] = dmPolicy
+
+		// Step 3b: If allowlist, ask for allowed numbers
+		if dmPolicy == "allowlist" {
+			var allowFromRaw string
+			err = huh.NewInput().
+				Title("Allowed phone numbers").
+				Description("Comma-separated, E.164 format").
+				Placeholder("+15551234567, +15559876543").
+				Value(&allowFromRaw).
+				Run()
+			if err != nil {
+				return errSilent
+			}
+			var allowFrom []string
+			for _, raw := range strings.Split(allowFromRaw, ",") {
+				n := normalizeE164(raw)
+				if n != "" {
+					allowFrom = append(allowFrom, n)
+				}
+			}
+			if len(allowFrom) == 0 {
+				fmt.Fprintln(os.Stderr, styleErr.Render("At least one phone number is required for allowlist mode."))
+				waitForEnter()
+				return errSilent
+			}
+			settings["allowFrom"] = allowFrom
+		}
 	}
 
-	// Step 3: POST login/start (longer timeout — Baileys needs time to connect)
+	// Step 4: Group policy
+	var groupPolicy string
+	err = huh.NewSelect[string]().
+		Title("Allow messages from WhatsApp groups?").
+		Options(
+			huh.NewOption("No (disabled)", "disabled"),
+			huh.NewOption("Yes (open)", "open"),
+		).
+		Value(&groupPolicy).
+		Run()
+	if err != nil {
+		return errSilent
+	}
+	settings["groupPolicy"] = groupPolicy
+
+	// Step 5: POST login/start
 	fmt.Println(styleDim.Render("Connecting to WhatsApp..."))
 	loginClient := &http.Client{Timeout: 30 * time.Second}
 	body, _ := json.Marshal(map[string]any{
@@ -585,20 +654,24 @@ func authWhatsApp() error {
 		return errSilent
 	}
 
-	// Step 4: Print QR in terminal (server renders it for us)
+	// Step 6: Print QR in terminal (server renders it for us)
+	scanPrompt := "Scan this QR code with WhatsApp on the agent's phone:"
+	if phoneSetup == "personal" {
+		scanPrompt = "Scan this QR code with WhatsApp on your phone:"
+	}
 	if loginResp.QRTerminal != "" {
 		fmt.Println()
-		fmt.Println(styleBold.Render("Scan this QR code with WhatsApp on your phone:"))
+		fmt.Println(styleBold.Render(scanPrompt))
 		fmt.Print(loginResp.QRTerminal)
 	} else if loginResp.QR != "" {
 		fmt.Println()
-		fmt.Println(styleBold.Render("Scan this QR code with WhatsApp on your phone:"))
+		fmt.Println(styleBold.Render(scanPrompt))
 		fmt.Println(styleDim.Render("(QR available but terminal rendering unavailable)"))
 	} else {
 		fmt.Println(styleDim.Render("Restoring existing session..."))
 	}
 
-	// Step 5: Long-poll login/wait (5.5 min — outlast the server's 5 min timeout)
+	// Step 7: Long-poll login/wait (5.5 min — outlast the server's 5 min timeout)
 	fmt.Println(styleDim.Render("Waiting for WhatsApp to connect..."))
 	waitClient := &http.Client{Timeout: 330 * time.Second}
 	waitBody, _ := json.Marshal(map[string]any{"accountId": "default"})
@@ -621,6 +694,27 @@ func authWhatsApp() error {
 	fmt.Println()
 	waitForEnter()
 	return errSilent
+}
+
+// normalizeE164 strips non-digit chars (except leading +) and ensures + prefix.
+// Returns "" if the input has no digits.
+func normalizeE164(number string) string {
+	trimmed := strings.TrimSpace(number)
+	// Strip everything except digits and leading +
+	var digits strings.Builder
+	for i, r := range trimmed {
+		if r == '+' && i == 0 {
+			continue // handle separately
+		}
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	d := digits.String()
+	if d == "" {
+		return ""
+	}
+	return "+" + d
 }
 
 // ── channel helpers ───────────────────────────────────────────────────────────

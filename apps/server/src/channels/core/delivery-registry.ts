@@ -5,20 +5,41 @@ import type {
 import type { ChannelDeliveryTarget } from './types'
 import type { ChannelProvider } from './provider'
 
+function targetKey(t: ChannelDeliveryTarget): string {
+	return `${t.channelId}:${t.accountId}:${t.conversationId}`
+}
+
 interface PendingDelivery {
 	sessionId: string
-	target: ChannelDeliveryTarget
+	targets: Map<string, ChannelDeliveryTarget>
 }
+
+interface PendingRowEntry {
+	sessionId: string
+	target: ChannelDeliveryTarget
+	createdAt: number
+}
+
+const PENDING_ROW_TTL = 10 * 60_000 // 10 minutes
+const PENDING_ROW_MAX = 500
 
 /**
  * In-memory registry that tracks channel-triggered runs and routes
  * assistant replies back through the originating channel provider.
  *
- * Only runs initiated by a channel inbound message are registered here;
+ * Supports multiple contributing external targets per run and
+ * row-based pending binding for follow-up/queued messages whose
+ * runId is not yet known.
+ *
+ * Only runs with channel contributors are registered here;
  * web/CLI runs never enter this registry.
  */
 export class ChannelDeliveryRegistry {
 	readonly #pending = new Map<string, PendingDelivery>()
+	readonly #pendingByRow = new Map<
+		number,
+		PendingRowEntry
+	>()
 	readonly #store: RealtimeStore
 	readonly #getProvider: (
 		id: string
@@ -34,16 +55,55 @@ export class ChannelDeliveryRegistry {
 		this.#getProvider = opts.getProvider
 	}
 
-	/** Register a delivery target for a channel-triggered run. */
+	/** Register a delivery target for a channel-triggered run. Additive — multiple targets per run are supported. */
 	register(
 		runId: string,
 		sessionId: string,
 		target: ChannelDeliveryTarget
 	): void {
-		this.#pending.set(runId, { sessionId, target })
+		const key = targetKey(target)
+		const existing = this.#pending.get(runId)
+		if (existing) {
+			existing.targets.set(key, target)
+		} else {
+			this.#pending.set(runId, {
+				sessionId,
+				targets: new Map([[key, target]])
+			})
+		}
 	}
 
-	/** Subscribe to a session's events for run_closed detection. Idempotent per sessionId. */
+	/**
+	 * Register a delivery target against a user_message row whose runId
+	 * is not yet known (follow-up or queued path). When the row's runId
+	 * is backfilled via updateEventRunId, the target is auto-promoted
+	 * to a run-level registration.
+	 */
+	registerPending(
+		rowId: number,
+		sessionId: string,
+		target: ChannelDeliveryTarget
+	): void {
+		this.#pendingByRow.set(rowId, {
+			sessionId,
+			target,
+			createdAt: Date.now()
+		})
+		this.#sweepStalePending()
+	}
+
+	/** Remove stale pending entries that were never promoted. */
+	#sweepStalePending(): void {
+		if (this.#pendingByRow.size <= PENDING_ROW_MAX) return
+		const now = Date.now()
+		for (const [rowId, entry] of this.#pendingByRow) {
+			if (now - entry.createdAt > PENDING_ROW_TTL) {
+				this.#pendingByRow.delete(rowId)
+			}
+		}
+	}
+
+	/** Subscribe to a session's events for run_closed detection and runId backfill. Idempotent per sessionId. */
 	watchSession(sessionId: string): void {
 		if (this.#watchedSessions.has(sessionId)) return
 		this.#watchedSessions.add(sessionId)
@@ -51,11 +111,34 @@ export class ChannelDeliveryRegistry {
 		const unsub = this.#store.subscribeToSession(
 			sessionId,
 			(event: SessionEvent) => {
+				// runId backfill on a pending row → promote to run-level
+				if (event.type === 'update') {
+					const row = event.event
+					if (!row.runId) return
+					const pending = this.#pendingByRow.get(row.id)
+					if (!pending) return
+					this.#pendingByRow.delete(row.id)
+					this.register(
+						row.runId,
+						pending.sessionId,
+						pending.target
+					)
+					return
+				}
+
+				// run_closed → deliver
 				if (event.type !== 'append') return
 				if (event.event.type !== 'run_closed') return
 				const runId = event.event.runId
 				if (!runId) return
-				this.#handleRunClosed(runId, sessionId)
+				this.#handleRunClosed(runId, sessionId).catch(
+					err => {
+						console.error(
+							'[delivery] handleRunClosed failed:',
+							err
+						)
+					}
+				)
 			}
 		)
 		this.#unsubscribers.push(unsub)
@@ -75,18 +158,19 @@ export class ChannelDeliveryRegistry {
 		)
 		if (!text) return
 
-		const provider = this.#getProvider(
-			delivery.target.channelId
-		)
-		if (!provider) return
+		// Fan out to every distinct contributing target
+		for (const target of delivery.targets.values()) {
+			const provider = this.#getProvider(target.channelId)
+			if (!provider) continue
 
-		try {
-			await provider.sendMessage(delivery.target, text)
-		} catch (err) {
-			console.error(
-				`[delivery] Failed to send reply via ${delivery.target.channelId}:`,
-				err
-			)
+			try {
+				await provider.sendMessage(target, text)
+			} catch (err) {
+				console.error(
+					`[delivery] Failed to send reply via ${target.channelId}:`,
+					err
+				)
+			}
 		}
 	}
 
@@ -102,9 +186,21 @@ export class ChannelDeliveryRegistry {
 		const texts: string[] = []
 		for (const row of rows) {
 			if (row.type !== 'assistant_message') continue
-			const parsed = JSON.parse(row.payload)
+			let parsed: Record<string, unknown>
+			try {
+				parsed = JSON.parse(row.payload)
+			} catch {
+				continue
+			}
 			if (parsed.streaming) continue
-			const message = parsed.message
+			const message = parsed.message as
+				| {
+						content?: Array<{
+							type: string
+							text?: string
+						}>
+				  }
+				| undefined
 			if (!message?.content) continue
 			for (const block of message.content) {
 				if (block.type === 'text' && block.text) {
@@ -120,5 +216,6 @@ export class ChannelDeliveryRegistry {
 		this.#unsubscribers.length = 0
 		this.#watchedSessions.clear()
 		this.#pending.clear()
+		this.#pendingByRow.clear()
 	}
 }

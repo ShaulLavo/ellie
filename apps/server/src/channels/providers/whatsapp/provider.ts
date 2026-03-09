@@ -3,6 +3,7 @@ import makeWASocket, {
 	fetchLatestBaileysVersion,
 	makeCacheableSignalKeyStore,
 	useMultiFileAuthState,
+	downloadMediaMessage,
 	type WASocket,
 	type WAMessage
 } from '@whiskeysockets/baileys'
@@ -10,6 +11,7 @@ import type { ILogger } from '@whiskeysockets/baileys/lib/Utils/logger'
 import QRCode from 'qrcode'
 import { join } from 'node:path'
 import { mkdirSync, rmSync, existsSync } from 'node:fs'
+import { env } from '@ellie/env/server'
 import type { ChannelProvider } from '../../core/provider'
 import type { ChannelManager } from '../../core/manager'
 import type {
@@ -21,6 +23,11 @@ import {
 	markdownToWhatsApp,
 	chunkMessage
 } from './formatting'
+import {
+	normalizeE164,
+	jidToE164,
+	type JidToE164Options
+} from './normalize'
 
 // ── Silent logger (satisfies Baileys ILogger without pino dep) ──────────────
 
@@ -37,13 +44,20 @@ const silentLogger: ILogger = {
 	error: noop
 }
 
-// ── WhatsApp-specific settings ──────────────────────────────────────────────
+// ── WhatsApp-specific settings (aligned with openclaw) ──────────────────────
+
+export type DmPolicy = 'allowlist' | 'open' | 'disabled'
+export type GroupPolicy = 'open' | 'disabled'
 
 export interface WhatsAppSettings extends ChannelAccountSettings {
-	/** 'self' = personal number (self-chat only), 'companion' = separate phone */
-	phoneMode: 'self' | 'companion'
-	/** Required for companion mode: owner's JID (e.g. "14155552671@s.whatsapp.net") */
-	ownerJid?: string
+	/** Is the bot running on the owner's personal WhatsApp number? */
+	selfChatMode: boolean
+	/** Who can DM the agent: 'allowlist' (default), 'open', 'disabled' */
+	dmPolicy: DmPolicy
+	/** E.164 numbers allowed to message the agent (e.g. ["+15551234567"]) */
+	allowFrom: string[]
+	/** Group message handling: 'open' (default) or 'disabled' */
+	groupPolicy: GroupPolicy
 }
 
 // ── Per-account runtime state ───────────────────────────────────────────────
@@ -60,6 +74,8 @@ interface WhatsAppAccount {
 	/** Backoff state for reconnection */
 	reconnectDelay: number
 	reconnectTimer?: ReturnType<typeof setTimeout>
+	/** Baileys auth directory path (for LID reverse mapping lookups) */
+	authDir: string
 }
 
 const MIN_RECONNECT_DELAY = 1_000
@@ -67,9 +83,11 @@ const MAX_RECONNECT_DELAY = 60_000
 
 /**
  * WhatsApp channel provider using Baileys.
- * Supports two phone modes:
- * - self: linked personal number, only self-chat messages accepted
- * - companion: separate linked phone, only owner's DMs accepted
+ *
+ * Access control (aligned with openclaw):
+ * - dmPolicy: 'allowlist' gates DMs via allowFrom[], 'open' allows all, 'disabled' blocks all
+ * - selfChatMode: when true, own JID is always allowed (personal number setup)
+ * - groupPolicy: 'open' allows group messages, 'disabled' blocks them
  */
 export class WhatsAppProvider implements ChannelProvider {
 	readonly id = 'whatsapp'
@@ -157,12 +175,19 @@ export class WhatsAppProvider implements ChannelProvider {
 		}
 
 		// Set up account state with a pending QR promise
+		const authDir = this.#manager
+			? join(
+					this.#manager.accountDir('whatsapp', accountId),
+					'auth'
+				)
+			: ''
 		const account: WhatsAppAccount = {
 			sock: null,
 			settings: waSettings,
 			status: { state: 'connecting' },
 			loggingIn: true,
-			reconnectDelay: MIN_RECONNECT_DELAY
+			reconnectDelay: MIN_RECONNECT_DELAY,
+			authDir
 		}
 		this.#accounts.set(accountId, account)
 
@@ -317,6 +342,14 @@ export class WhatsAppProvider implements ChannelProvider {
 			)
 		}
 
+		// Typing indicator before reply (matching openclaw)
+		await account.sock
+			.sendPresenceUpdate(
+				'composing',
+				target.conversationId
+			)
+			.catch(() => {})
+
 		const formatted = markdownToWhatsApp(text)
 		const chunks = chunkMessage(formatted)
 
@@ -468,6 +501,15 @@ export class WhatsAppProvider implements ChannelProvider {
 					account.loginResolve = undefined
 					account.loginReject = undefined
 				}
+			} else if (
+				statusCode === DisconnectReason.connectionReplaced
+			) {
+				// Another session took over (e.g. hot reload) — stop quietly, keep auth
+				console.log(
+					`[whatsapp] Account ${accountId} replaced by another session, stopping`
+				)
+				account.status = { state: 'disconnected' }
+				account.sock = null
 			} else {
 				// Reconnect with exponential backoff
 				const reason =
@@ -518,12 +560,19 @@ export class WhatsAppProvider implements ChannelProvider {
 		accountId: string,
 		settings: WhatsAppSettings
 	): Promise<void> {
+		const authDir = this.#manager
+			? join(
+					this.#manager.accountDir('whatsapp', accountId),
+					'auth'
+				)
+			: ''
 		const account: WhatsAppAccount = {
 			sock: null,
 			settings,
 			status: { state: 'connecting' },
 			loggingIn: false,
-			reconnectDelay: MIN_RECONNECT_DELAY
+			reconnectDelay: MIN_RECONNECT_DELAY,
+			authDir
 		}
 		this.#accounts.set(accountId, account)
 
@@ -536,7 +585,7 @@ export class WhatsAppProvider implements ChannelProvider {
 
 	// ── Internal: message handling ──────────────────────────────────────
 
-	#handleMessagesUpsert(
+	async #handleMessagesUpsert(
 		accountId: string,
 		account: WhatsAppAccount,
 		sock: WASocket,
@@ -544,35 +593,109 @@ export class WhatsAppProvider implements ChannelProvider {
 			messages: WAMessage[]
 			type: string
 		}
-	): void {
+	): Promise<void> {
 		if (event.type !== 'notify') return
+
+		// Options for jidToE164: pass auth dir so @lid JIDs can be resolved
+		// via Baileys' reverse mapping files (matching openclaw)
+		const jidOpts: JidToE164Options | undefined =
+			account.authDir
+				? { authDir: account.authDir }
+				: undefined
 
 		for (const msg of event.messages) {
 			const jid = msg.key.remoteJid
 			if (!jid) continue
 
-			// Ignore group messages
-			if (jid.endsWith('@g.us')) continue
-			// Ignore broadcast
+			// Always block broadcast (no log — too noisy)
 			if (jid === 'status@broadcast') continue
 			// Echo suppression: ignore own outgoing messages
 			if (msg.key.fromMe) continue
 
-			// Mode-based sender gating
-			if (account.settings.phoneMode === 'self') {
-				// Self mode: only accept from own JID (self-chat)
-				const selfJid = sock.user?.id
-				if (!selfJid || jid !== selfJid) continue
-			} else if (
-				account.settings.phoneMode === 'companion'
-			) {
-				// Companion mode: only accept from owner
-				if (jid !== account.settings.ownerJid) continue
+			const isGroup = jid.endsWith('@g.us')
+
+			// Resolve sender E.164 (handles both @s.whatsapp.net and @lid via auth dir)
+			const senderE164 = jidToE164(jid, jidOpts)
+
+			const label = msg.pushName ?? senderE164 ?? jid
+
+			// ── Access control (aligned with openclaw) ────────────
+			if (isGroup) {
+				if (account.settings.groupPolicy === 'disabled') {
+					console.log(
+						`[whatsapp] Blocked group message from ${label} (groupPolicy: disabled)`
+					)
+					continue
+				}
+				// groupPolicy 'open' → allow through
+			} else {
+				if (account.settings.dmPolicy === 'disabled') {
+					console.log(
+						`[whatsapp] Blocked DM from ${label} (dmPolicy: disabled)`
+					)
+					continue
+				}
+
+				if (account.settings.dmPolicy === 'allowlist') {
+					// Self-chat detection: compare E.164 (works for both @s.whatsapp.net and resolved @lid)
+					const selfE164 = sock.user?.id
+						? jidToE164(sock.user.id, jidOpts)
+						: null
+					const isSelf =
+						account.settings.selfChatMode &&
+						selfE164 &&
+						senderE164 &&
+						selfE164 === senderE164
+
+					if (isSelf) {
+						// Allowed — self-chat
+					} else {
+						// Check allowFrom list (needs E.164)
+						if (!senderE164) {
+							console.log(
+								`[whatsapp] Blocked DM from unresolved JID ${jid} — cannot match against allowFrom`
+							)
+							continue
+						}
+						const normalized = normalizeE164(senderE164)
+						const allowed = account.settings.allowFrom.some(
+							n => normalizeE164(n) === normalized
+						)
+						if (!allowed) {
+							console.log(
+								`[whatsapp] Blocked DM from ${label} (${normalized}) — not in allowFrom`
+							)
+							continue
+						}
+					}
+				}
+				// dmPolicy 'open' → allow all DMs through
 			}
 
-			// Extract text content
-			const text = this.#extractText(msg.message)
+			// Extract text content (or transcribe voice)
+			let text = this.#extractText(msg.message)
+
+			if (!text && msg.message?.audioMessage) {
+				try {
+					text = await this.#transcribeAudio(msg)
+				} catch (err) {
+					console.error(
+						`[whatsapp] Voice transcription failed for ${label}:`,
+						err
+					)
+				}
+			}
+
 			if (!text) continue
+
+			console.log(
+				`[whatsapp] Accepted ${isGroup ? 'group' : 'DM'} from ${label}: ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}`
+			)
+
+			// Typing indicator — let sender know we're processing
+			sock
+				.sendPresenceUpdate('composing', jid)
+				.catch(() => {})
 
 			// Route to channel manager
 			this.#manager
@@ -587,7 +710,7 @@ export class WhatsAppProvider implements ChannelProvider {
 				})
 				.catch(err => {
 					console.error(
-						`[whatsapp] Failed to ingest message from ${jid}:`,
+						`[whatsapp] Failed to ingest message from ${label}:`,
 						err
 					)
 				})
@@ -617,5 +740,109 @@ export class WhatsAppProvider implements ChannelProvider {
 		if (caption) return caption
 
 		return null
+	}
+
+	// ── Internal: voice message transcription ──────────────────────────
+
+	async #transcribeAudio(
+		msg: WAMessage
+	): Promise<string | null> {
+		const buffer = (await downloadMediaMessage(
+			msg,
+			'buffer',
+			{}
+		)) as Buffer
+
+		console.log(
+			`[whatsapp] Downloaded voice: ${buffer.length} bytes`
+		)
+
+		// WhatsApp voice = OGG Opus → convert to WAV for STT
+		const wavBuffer = await this.#oggToWav(buffer)
+
+		console.log(
+			`[whatsapp] Converted to WAV: ${wavBuffer.length} bytes`
+		)
+
+		const form = new FormData()
+		form.append(
+			'audio',
+			new Blob([new Uint8Array(wavBuffer)], {
+				type: 'audio/wav'
+			}),
+			'voice.wav'
+		)
+
+		const res = await fetch(
+			`${env.STT_BASE_URL}/transcribe`,
+			{
+				method: 'POST',
+				body: form,
+				signal: AbortSignal.timeout(15_000)
+			}
+		)
+		if (!res.ok) {
+			const body = await res.text().catch(() => '')
+			throw new Error(
+				`STT responded ${res.status}: ${body}`
+			)
+		}
+
+		const result = (await res.json()) as {
+			text: string
+			speech_detected: boolean
+		}
+		if (!result.speech_detected || !result.text?.trim()) {
+			return null
+		}
+		return result.text.trim()
+	}
+
+	async #oggToWav(ogg: Buffer): Promise<Buffer> {
+		// Write to temp file — ffmpeg can't write valid WAV headers
+		// to a pipe (can't seek back for RIFF size field)
+		const tmpIn = `/tmp/wa-voice-${Date.now()}.ogg`
+		const tmpOut = `/tmp/wa-voice-${Date.now()}.wav`
+		try {
+			await Bun.write(tmpIn, new Uint8Array(ogg))
+
+			const proc = Bun.spawn(
+				[
+					'ffmpeg',
+					'-loglevel',
+					'error',
+					'-y',
+					'-i',
+					tmpIn,
+					'-acodec',
+					'pcm_s16le',
+					'-ar',
+					'16000',
+					'-ac',
+					'1',
+					tmpOut
+				],
+				{ stderr: 'pipe' }
+			)
+
+			const stderrBuf = await new Response(
+				proc.stderr
+			).text()
+			const exitCode = await proc.exited
+			if (exitCode !== 0) {
+				throw new Error(
+					`ffmpeg exit ${exitCode}: ${stderrBuf.trim()}`
+				)
+			}
+
+			const wavFile = Bun.file(tmpOut)
+			if (!(await wavFile.exists())) {
+				throw new Error('ffmpeg produced no output')
+			}
+			return Buffer.from(await wavFile.arrayBuffer())
+		} finally {
+			rmSync(tmpIn, { force: true })
+			rmSync(tmpOut, { force: true })
+		}
 	}
 }

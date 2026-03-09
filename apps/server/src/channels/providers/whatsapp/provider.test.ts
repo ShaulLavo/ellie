@@ -60,7 +60,10 @@ describe('WhatsAppProvider', () => {
 	test('updateSettings is safe for unknown account', () => {
 		// Should not throw
 		provider.updateSettings('nonexistent', {
-			phoneMode: 'self'
+			selfChatMode: true,
+			dmPolicy: 'allowlist',
+			allowFrom: [],
+			groupPolicy: 'disabled'
 		})
 	})
 

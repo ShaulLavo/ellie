@@ -205,17 +205,39 @@ export class ChannelManager {
 		)
 
 		// Register delivery target so reply routes back through this channel
-		this.#deliveryRegistry.register(
-			result.runId,
-			sessionId,
-			{
-				channelId: msg.channelId,
-				accountId: msg.accountId,
-				conversationId: msg.conversationId
-			}
-		)
+		const deliveryTarget = {
+			channelId: msg.channelId,
+			accountId: msg.accountId,
+			conversationId: msg.conversationId
+		}
 
-		// Ensure we're watching this session for run completions
+		if (result.routed === 'prompt') {
+			// Idle — runId is the actual answering run
+			this.#deliveryRegistry.register(
+				result.runId,
+				sessionId,
+				deliveryTarget
+			)
+		} else if (result.routed === 'followUp') {
+			// Same-session follow-up — register pending only.
+			// The drain run will backfill the runId and promote it.
+			// (Don't register against activeRunId — that run may be
+			// answering a different conversation's message.)
+			this.#deliveryRegistry.registerPending(
+				row.id,
+				sessionId,
+				deliveryTarget
+			)
+		} else {
+			// Queued cross-session — bind when runId is backfilled
+			this.#deliveryRegistry.registerPending(
+				row.id,
+				sessionId,
+				deliveryTarget
+			)
+		}
+
+		// Ensure we're watching this session for run completions + backfills
 		this.#deliveryRegistry.watchSession(sessionId)
 	}
 }
