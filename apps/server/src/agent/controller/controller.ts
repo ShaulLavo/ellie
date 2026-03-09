@@ -105,6 +105,9 @@ export class AgentController {
 	/** Cross-session message queue — processed FIFO when agent becomes idle */
 	private crossSessionQueue: QueuedMessage[] = []
 
+	/** Row IDs of follow-up user_messages awaiting runId backfill */
+	private pendingFollowUpRows: number[] = []
+
 	constructor(
 		store: RealtimeStore,
 		options: AgentControllerOptions
@@ -196,7 +199,7 @@ export class AgentController {
 
 	private bindToSession(sessionId: string): void {
 		this.store.ensureSession(sessionId)
-		const history = this.loadHistory(sessionId)
+		const history = this.loadHistoryForAgent(sessionId)
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
 		this.boundSessionId = sessionId
@@ -208,7 +211,7 @@ export class AgentController {
 			return this.agent.state.messages.length > 0
 		}
 		if (this.agent.state.messages.length === 0) {
-			const history = this.loadHistory(sessionId)
+			const history = this.loadHistoryForAgent(sessionId)
 			if (history.length > 0) {
 				this.agent.replaceMessages(history)
 				return true
@@ -226,12 +229,14 @@ export class AgentController {
 	): Promise<{
 		runId: string
 		routed: 'prompt' | 'followUp' | 'queued'
+		activeRunId?: string
 		traceId?: string
 	}> {
 		this.store.ensureSession(sessionId)
 
 		const runId = ulid()
 		let routed: 'prompt' | 'followUp' | 'queued' = 'prompt'
+		let activeRunId: string | undefined
 		let traceId: string | undefined
 
 		await this.withLock(async () => {
@@ -244,6 +249,10 @@ export class AgentController {
 						timestamp: Date.now()
 					})
 					routed = 'followUp'
+					activeRunId = this.agent.runId
+					if (userMessageRowId) {
+						this.pendingFollowUpRows.push(userMessageRowId)
+					}
 				} else {
 					this.crossSessionQueue.push({
 						sessionId,
@@ -314,7 +323,7 @@ export class AgentController {
 			// is called. Reload history so the agent has the full
 			// content parts (including image data from attachments).
 			{
-				const history = this.loadHistory(sessionId)
+				const history = this.loadHistoryForAgent(sessionId)
 				this.agent.replaceMessages(history)
 			}
 			this.agent.continue().catch(err => {
@@ -329,7 +338,7 @@ export class AgentController {
 			})
 		})
 
-		return { runId, routed, traceId }
+		return { runId, routed, activeRunId, traceId }
 	}
 
 	// ── Control passthrough ──────────────────────────────────────────────────
@@ -420,13 +429,19 @@ export class AgentController {
 	// ── Queries ──────────────────────────────────────────────────────────────
 
 	loadHistory(sessionId: string): AgentMessage[] {
-		return this.store.listAgentMessages(
-			sessionId
-		) as AgentMessage[]
+		return this.store.listAgentMessages(sessionId)
 	}
 
 	hasSession(sessionId: string): boolean {
 		return this.store.hasSession(sessionId)
+	}
+
+	// ── Internal: source note injection ──────────────────────────────────────
+
+	private loadHistoryForAgent(
+		sessionId: string
+	): AgentMessage[] {
+		return this.loadHistory(sessionId)
 	}
 
 	// ── Internal: dependency bundles for extracted modules ────────────────────
@@ -587,6 +602,32 @@ export class AgentController {
 			}
 			const newRunId = ulid()
 			this.agent.runId = newRunId
+
+			// Backfill pending follow-up user_message rows with this run's id.
+			// This publishes 'update' events that the delivery registry
+			// watches for, promoting pending row-based targets to run-level.
+			const rows = this.pendingFollowUpRows.splice(0)
+			for (const rowId of rows) {
+				try {
+					this.store.updateEventRunId(
+						rowId,
+						newRunId,
+						sessionId
+					)
+				} catch (err) {
+					handleControllerError(
+						(type, payload) => this.trace(type, payload),
+						`backfill_followup_failed session=${sessionId} runId=${newRunId} rowId=${rowId}`,
+						'controller.backfill_followup_failed',
+						{
+							sessionId,
+							runId: newRunId,
+							rowId
+						},
+						err
+					)
+				}
+			}
 
 			// Create root trace scope for the follow-up run
 			if (this.traceRecorder) {

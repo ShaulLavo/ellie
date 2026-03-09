@@ -81,8 +81,22 @@ export function useStreamConnection(
 	useEffect(() => {
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events, sessionChanged) {
-				const messageEvents = events.filter(e =>
-					RENDERABLE_TYPES.includes(e.type as EventType)
+				// Keep only the last session_rotated event (duplicates may exist from hot-reload)
+				let lastRotatedIdx = -1
+				for (let i = events.length - 1; i >= 0; i--) {
+					if (events[i].type === 'session_rotated') {
+						lastRotatedIdx = i
+						break
+					}
+				}
+
+				const messageEvents = events.filter(
+					(e, i) =>
+						RENDERABLE_TYPES.includes(
+							e.type as EventType
+						) &&
+						(e.type !== 'session_rotated' ||
+							i === lastRotatedIdx)
 				)
 				const msgs = messageEvents
 					.map(eventToStored)

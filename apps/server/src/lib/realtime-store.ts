@@ -61,10 +61,17 @@ export class RealtimeStore {
 		this.#store.setKv('currentSessionId', newSessionId)
 
 		// Persist a session_rotated event in the new session
-		this.appendEvent(newSessionId, 'session_rotated', {
-			previousSessionId: previous,
-			message: 'New day, new session'
-		})
+		// Use dedupeKey to prevent duplicates (e.g. from hot-reload recreating Cron)
+		this.appendEvent(
+			newSessionId,
+			'session_rotated',
+			{
+				previousSessionId: previous,
+				message: 'New day, new session'
+			},
+			undefined,
+			`session_rotated:${newSessionId}`
+		)
 
 		this.#publish<RotationEvent>('current-session', {
 			type: 'rotated',
