@@ -17,174 +17,317 @@ import {
 	channelLogoutBodySchema,
 	channelIdParamsSchema
 } from './schemas/channel-schemas'
-import { NotFoundError } from './http-errors'
+import {
+	NotFoundError,
+	BadRequestError
+} from './http-errors'
+import * as v from 'valibot'
+import { whatsappSettingsSchema } from '../channels/providers/whatsapp/settings-schema'
+import {
+	listPairingRequests,
+	approvePairingCode
+} from '../channels/providers/whatsapp/pairing-store'
+import {
+	readAllowFrom,
+	addAllowFrom,
+	removeAllowFrom,
+	mergedAllowFrom
+} from '../channels/providers/whatsapp/allowfrom-store'
+import { normalizeE164 } from '../channels/providers/whatsapp/normalize'
+import type { WhatsAppSettings } from '../channels/providers/whatsapp/provider'
+
+/** Validate and normalize WhatsApp settings, returning validated+defaulted output. */
+function validateWhatsAppSettings(
+	settings: Record<string, unknown>
+): Record<string, unknown> {
+	const result = v.safeParse(
+		whatsappSettingsSchema,
+		settings
+	)
+	if (!result.success) {
+		throw new BadRequestError(
+			`Invalid WhatsApp settings: ${result.issues.map(i => i.message).join(', ')}`
+		)
+	}
+	return result.output as Record<string, unknown>
+}
 
 export function createChannelRoutes(
 	channelManager: ChannelManager
 ) {
-	return new Elysia({
-		prefix: '/api/channels',
-		tags: ['Channels']
-	})
+	return (
+		new Elysia({
+			prefix: '/api/channels',
+			tags: ['Channels']
+		})
 
-		.get(
-			'',
-			() => {
-				return channelManager.listProviders().map(p => ({
-					id: p.id,
-					displayName: p.displayName,
-					status: p.getStatus('default')
-				}))
-			},
-			{
-				response: { 200: channelListResponseSchema }
-			}
-		)
-
-		.get(
-			'/:channelId/status',
-			({ params }) => {
-				const provider = channelManager.getProvider(
-					params.channelId
-				)
-				if (!provider) {
-					throw new NotFoundError(
-						`Channel not found: ${params.channelId}`
-					)
-				}
-				const accounts = channelManager.listSavedAccounts(
-					params.channelId
-				)
-				// Always include "default" even if no settings yet
-				const accountIds =
-					accounts.length > 0 ? accounts : ['default']
-				return {
-					id: provider.id,
-					displayName: provider.displayName,
-					accounts: accountIds.map(accountId => ({
-						accountId,
-						status: provider.getStatus(accountId),
-						settings:
-							channelManager.loadSettings(
-								params.channelId,
-								accountId
-							) ?? undefined
+			.get(
+				'',
+				() => {
+					return channelManager.listProviders().map(p => ({
+						id: p.id,
+						displayName: p.displayName,
+						status: p.getStatus('default')
 					}))
+				},
+				{
+					response: { 200: channelListResponseSchema }
 				}
-			},
-			{
-				params: channelIdParamsSchema,
-				response: {
-					200: channelStatusResponseSchema,
-					404: errorSchema
-				}
-			}
-		)
+			)
 
-		.post(
-			'/:channelId/login/start',
-			async ({ params, body }) => {
-				const provider = channelManager.getProvider(
-					params.channelId
-				)
-				if (!provider) {
+			.get(
+				'/:channelId/status',
+				({ params }) => {
+					const provider = channelManager.getProvider(
+						params.channelId
+					)
+					if (!provider) {
+						throw new NotFoundError(
+							`Channel not found: ${params.channelId}`
+						)
+					}
+					const accounts = channelManager.listSavedAccounts(
+						params.channelId
+					)
+					// Always include "default" even if no settings yet
+					const accountIds =
+						accounts.length > 0 ? accounts : ['default']
+					return {
+						id: provider.id,
+						displayName: provider.displayName,
+						accounts: accountIds.map(accountId => ({
+							accountId,
+							status: provider.getStatus(accountId),
+							settings:
+								channelManager.loadSettings(
+									params.channelId,
+									accountId
+								) ?? undefined
+						}))
+					}
+				},
+				{
+					params: channelIdParamsSchema,
+					response: {
+						200: channelStatusResponseSchema,
+						404: errorSchema
+					}
+				}
+			)
+
+			.post(
+				'/:channelId/login/start',
+				async ({ params, body }) => {
+					const provider = channelManager.getProvider(
+						params.channelId
+					)
+					if (!provider) {
+						throw new NotFoundError(
+							`Channel not found: ${params.channelId}`
+						)
+					}
+					// Validate and normalize settings for WhatsApp
+					const settings =
+						params.channelId === 'whatsapp'
+							? validateWhatsAppSettings(body.settings)
+							: body.settings
+					// Save settings before starting login
+					channelManager.saveSettings(
+						params.channelId,
+						body.accountId,
+						settings
+					)
+					const result = await provider.loginStart(
+						body.accountId,
+						settings
+					)
+					return result as Record<string, unknown>
+				},
+				{
+					params: channelIdParamsSchema,
+					body: channelLoginStartBodySchema,
+					response: { 404: errorSchema }
+				}
+			)
+
+			.post(
+				'/:channelId/login/wait',
+				async ({ params, body }) => {
+					const provider = channelManager.getProvider(
+						params.channelId
+					)
+					if (!provider) {
+						throw new NotFoundError(
+							`Channel not found: ${params.channelId}`
+						)
+					}
+					const result = await provider.loginWait(
+						body.accountId
+					)
+					return result as Record<string, unknown>
+				},
+				{
+					params: channelIdParamsSchema,
+					body: channelLoginWaitBodySchema,
+					response: { 404: errorSchema }
+				}
+			)
+
+			.post(
+				'/:channelId/settings',
+				({ params, body }) => {
+					const provider = channelManager.getProvider(
+						params.channelId
+					)
+					if (!provider) {
+						throw new NotFoundError(
+							`Channel not found: ${params.channelId}`
+						)
+					}
+					const settings =
+						params.channelId === 'whatsapp'
+							? validateWhatsAppSettings(body.settings)
+							: body.settings
+					channelManager.saveSettings(
+						params.channelId,
+						body.accountId,
+						settings
+					)
+					provider.updateSettings(body.accountId, settings)
+					return { ok: true }
+				},
+				{
+					params: channelIdParamsSchema,
+					body: channelSettingsBodySchema,
+					response: { 404: errorSchema }
+				}
+			)
+
+			.post(
+				'/:channelId/logout',
+				async ({ params, body }) => {
+					const provider = channelManager.getProvider(
+						params.channelId
+					)
+					if (!provider) {
+						throw new NotFoundError(
+							`Channel not found: ${params.channelId}`
+						)
+					}
+					await provider.logout(body.accountId)
+					channelManager.deleteAccountData(
+						params.channelId,
+						body.accountId
+					)
+					return { ok: true }
+				},
+				{
+					params: channelIdParamsSchema,
+					body: channelLogoutBodySchema,
+					response: { 404: errorSchema }
+				}
+			)
+
+			// ── WhatsApp pairing management ─────────────────────────────────
+
+			.get('/whatsapp/pairing/list', ({ query }) => {
+				const accountId =
+					(query as Record<string, string>).accountId ??
+					'default'
+				return listPairingRequests({
+					dataDir: channelManager.dataDir,
+					accountId
+				})
+			})
+
+			.post('/whatsapp/pairing/approve', ({ body }) => {
+				const { accountId = 'default', code } = body as {
+					accountId?: string
+					code: string
+				}
+				if (!code) {
+					throw new BadRequestError('Missing pairing code')
+				}
+				const result = approvePairingCode({
+					dataDir: channelManager.dataDir,
+					accountId,
+					code
+				})
+				if (!result) {
 					throw new NotFoundError(
-						`Channel not found: ${params.channelId}`
+						'No pending request with that code'
 					)
 				}
-				// Save settings before starting login
-				channelManager.saveSettings(
-					params.channelId,
-					body.accountId,
-					body.settings
+				// Add to runtime allowFrom store
+				addAllowFrom(
+					channelManager.dataDir,
+					accountId,
+					result.id
 				)
-				const result = await provider.loginStart(
-					body.accountId,
-					body.settings
-				)
-				return result as Record<string, unknown>
-			},
-			{
-				params: channelIdParamsSchema,
-				body: channelLoginStartBodySchema,
-				response: { 404: errorSchema }
-			}
-		)
+				return {
+					ok: true,
+					senderId: result.id
+				}
+			})
 
-		.post(
-			'/:channelId/login/wait',
-			async ({ params, body }) => {
-				const provider = channelManager.getProvider(
-					params.channelId
-				)
-				if (!provider) {
-					throw new NotFoundError(
-						`Channel not found: ${params.channelId}`
+			// ── WhatsApp allowFrom management ───────────────────────────────
+
+			.get('/whatsapp/allow/list', ({ query }) => {
+				const accountId =
+					(query as Record<string, string>).accountId ??
+					'default'
+				const settings = channelManager.loadSettings(
+					'whatsapp',
+					accountId
+				) as WhatsAppSettings | null
+				return {
+					config: settings?.allowFrom ?? [],
+					runtime: readAllowFrom(
+						channelManager.dataDir,
+						accountId
+					),
+					merged: mergedAllowFrom(
+						settings?.allowFrom ?? [],
+						channelManager.dataDir,
+						accountId
 					)
 				}
-				const result = await provider.loginWait(
-					body.accountId
-				)
-				return result as Record<string, unknown>
-			},
-			{
-				params: channelIdParamsSchema,
-				body: channelLoginWaitBodySchema,
-				response: { 404: errorSchema }
-			}
-		)
+			})
 
-		.post(
-			'/:channelId/settings',
-			({ params, body }) => {
-				const provider = channelManager.getProvider(
-					params.channelId
-				)
-				if (!provider) {
-					throw new NotFoundError(
-						`Channel not found: ${params.channelId}`
-					)
+			.post('/whatsapp/allow/add', ({ body }) => {
+				const { accountId = 'default', number } = body as {
+					accountId?: string
+					number: string
 				}
-				channelManager.saveSettings(
-					params.channelId,
-					body.accountId,
-					body.settings
+				if (!number) {
+					throw new BadRequestError('Missing phone number')
+				}
+				const normalized = normalizeE164(number)
+				if (!normalized || normalized.length < 2) {
+					throw new BadRequestError('Invalid phone number')
+				}
+				addAllowFrom(
+					channelManager.dataDir,
+					accountId,
+					normalized
 				)
-				provider.updateSettings(
-					body.accountId,
-					body.settings
+				return { ok: true, normalized }
+			})
+
+			.post('/whatsapp/allow/remove', ({ body }) => {
+				const { accountId = 'default', number } = body as {
+					accountId?: string
+					number: string
+				}
+				if (!number) {
+					throw new BadRequestError('Missing phone number')
+				}
+				removeAllowFrom(
+					channelManager.dataDir,
+					accountId,
+					number
 				)
 				return { ok: true }
-			},
-			{
-				params: channelIdParamsSchema,
-				body: channelSettingsBodySchema,
-				response: { 404: errorSchema }
-			}
-		)
-
-		.post(
-			'/:channelId/logout',
-			async ({ params, body }) => {
-				const provider = channelManager.getProvider(
-					params.channelId
-				)
-				if (!provider) {
-					throw new NotFoundError(
-						`Channel not found: ${params.channelId}`
-					)
-				}
-				await provider.logout(body.accountId)
-				channelManager.deleteAccountData(
-					params.channelId,
-					body.accountId
-				)
-				return { ok: true }
-			},
-			{
-				params: channelIdParamsSchema,
-				body: channelLogoutBodySchema,
-				response: { 404: errorSchema }
-			}
-		)
+			})
+	)
 }

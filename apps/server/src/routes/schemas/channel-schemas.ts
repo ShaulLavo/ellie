@@ -2,24 +2,24 @@ import * as v from 'valibot'
 
 // ── Channel schemas ─────────────────────────────────────────────────────────
 
-export const channelRuntimeStatusSchema = v.variant(
-	'state',
-	[
-		v.object({ state: v.literal('disconnected') }),
-		v.object({
-			state: v.literal('connecting'),
-			detail: v.optional(v.string())
-		}),
-		v.object({
-			state: v.literal('connected'),
-			connectedAt: v.number()
-		}),
-		v.object({
-			state: v.literal('error'),
-			error: v.string()
-		})
-	]
-)
+export const channelRuntimeStatusSchema = v.object({
+	state: v.picklist([
+		'disconnected',
+		'connecting',
+		'connected',
+		'error'
+	]),
+	detail: v.optional(v.string()),
+	error: v.optional(v.string()),
+	connectedAt: v.optional(v.number()),
+	reconnectAttempts: v.optional(v.number(), 0),
+	lastConnectedAt: v.optional(v.number()),
+	lastDisconnect: v.optional(v.string()),
+	lastMessageAt: v.optional(v.number()),
+	lastEventAt: v.optional(v.number()),
+	lastError: v.optional(v.string()),
+	selfId: v.optional(v.string())
+})
 
 export const channelListItemSchema = v.object({
 	id: v.string(),
