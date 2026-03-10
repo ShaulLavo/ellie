@@ -41,7 +41,9 @@ export const EVENT_TYPES = [
 	// Session lifecycle
 	'session_rotated',
 	// Channel delivery confirmation
-	'channel_delivered'
+	'channel_delivered',
+	// TTS post-processing
+	'assistant_audio'
 ] as const satisfies readonly EventType[]
 
 export const eventTypeSchema = v.picklist(EVENT_TYPES)
@@ -60,7 +62,8 @@ export const DURABLE_EVENT_TYPES = [
 	'session_rotated',
 	'memory_recall',
 	'memory_retain',
-	'channel_delivered'
+	'channel_delivered',
+	'assistant_audio'
 ] as const satisfies readonly EventType[]
 
 const durableEventTypeSet = new Set<EventType>(
@@ -317,5 +320,12 @@ export const payloadSchemas: Record<
 		seqFrom: v.number(),
 		seqTo: v.number(),
 		timestamp: v.number()
+	}),
+	// TTS post-processing
+	assistant_audio: v.object({
+		uploadId: v.string(),
+		mime: v.string(),
+		size: v.number(),
+		synthesizedText: v.string()
 	})
 }

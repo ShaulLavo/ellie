@@ -182,6 +182,14 @@ export interface EventPayloadMap {
 		conversationId: string
 		deliveredAt: number
 	}
+
+	// --- TTS post-processing ---
+	assistant_audio: {
+		uploadId: string
+		mime: string
+		size: number
+		synthesizedText: string
+	}
 }
 
 // ── Derived helpers ─────────────────────────────────────────────────────────

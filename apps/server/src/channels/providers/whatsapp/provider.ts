@@ -770,8 +770,11 @@ export class WhatsAppProvider implements ChannelProvider {
 			// During loginStart, don't reconnect — loginStart handles its own cleanup
 			if (account.loggingIn) return
 
-			const statusCode = (lastDisconnect?.error as any)
-				?.output?.statusCode as number | undefined
+			const statusCode = (
+				lastDisconnect?.error as
+					| { output?: { statusCode?: number } }
+					| undefined
+			)?.output?.statusCode
 
 			if (statusCode === DisconnectReason.loggedOut) {
 				// Logged out — clear auth state, don't reconnect
@@ -1051,13 +1054,16 @@ export class WhatsAppProvider implements ChannelProvider {
 			if (!text && msg.message?.audioMessage) {
 				try {
 					text = await this.#transcribeAudio(msg)
+					if (!text) {
+						text =
+							'(Voice message could not be transcribed)'
+					}
 				} catch (err) {
 					console.error(
 						`[whatsapp] Voice transcription failed for ${label}:`,
 						err
 					)
-					// Fall back to media placeholder
-					text = '<media:audio>'
+					text = '(Voice message could not be transcribed)'
 				}
 			}
 

@@ -27,6 +27,7 @@ import {
 	ChannelDeliveryRegistry
 } from './channels/core'
 import { WhatsAppProvider } from './channels/providers/whatsapp'
+import { TtsPostProcessor } from './lib/tts-post-processor'
 
 export interface ServerContext {
 	port: number
@@ -280,7 +281,10 @@ export async function init(): Promise<ServerContext> {
 		new ChannelDeliveryRegistry({
 			store,
 			getProvider: (id: string) =>
-				channelManager.getProvider(id)
+				channelManager.getProvider(id),
+			dataDir: DATA_DIR,
+			credentialsPath: CREDENTIALS_PATH,
+			getTtsConfig: () => ({ mode: 'tagged' })
 		})
 
 	const channelManager: ChannelManager = new ChannelManager(
@@ -307,7 +311,17 @@ export async function init(): Promise<ServerContext> {
 	// Re-subscribe on daily session rotation
 	store.subscribeToRotation(event => {
 		deliveryRegistry.watchSession(event.newSessionId)
+		ttsPostProcessor.watchSession(event.newSessionId)
 	})
+
+	// ── TTS post-processor (web frontend [[tts]] → audio) ────────────
+	const ttsPostProcessor = new TtsPostProcessor({
+		store,
+		blobSink,
+		credentialsPath: CREDENTIALS_PATH,
+		dataDir: DATA_DIR
+	})
+	ttsPostProcessor.watchSession(store.getCurrentSessionId())
 
 	// ── Crash recovery (must run after delivery registry is watching) ───
 	// Phase 1: Close stale runs — run_closed events trigger delivery

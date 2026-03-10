@@ -20,6 +20,7 @@ import {
 	retain as retainImpl,
 	retainBatch as retainBatchImpl
 } from './retain'
+import { extractFactsFromContent } from './retain-extract'
 import { recall as recallImpl } from './recall'
 import { WorkingMemoryStore } from './working-memory'
 import { clamp } from './util'
@@ -585,6 +586,66 @@ Instructions:
 	}
 
 	// ── Core operations ─────────────────────────────────────────────────
+
+	/**
+	 * Extract facts from content without storing them.
+	 * Returns facts in the `RetainOptions.facts` format so they can be
+	 * passed directly to `retain()` to skip repeated LLM extraction.
+	 */
+	async extract(
+		bankId: string,
+		content: RetainContentInput,
+		options?: Pick<
+			RetainOptions,
+			'mode' | 'customGuidelines' | 'context' | 'eventDate'
+		>
+	): Promise<NonNullable<RetainOptions['facts']>> {
+		const normalizedContent =
+			typeof content === 'string'
+				? content
+				: JSON.stringify(content)
+		const cfg = this.resolveConfig(bankId)
+		const mode = options?.mode ?? cfg.extractionMode
+		const customGuidelines =
+			options?.customGuidelines ??
+			cfg.customGuidelines ??
+			undefined
+		const context = options?.context ?? undefined
+		const eventDateMs = options?.eventDate
+			? typeof options.eventDate === 'number'
+				? options.eventDate
+				: new Date(options.eventDate).getTime()
+			: Date.now()
+
+		const extracted = await extractFactsFromContent(
+			this.adapter,
+			normalizedContent,
+			{ mode, customGuidelines },
+			context ?? null,
+			eventDateMs
+		)
+
+		return extracted.map(f => ({
+			content: f.content,
+			factType: f.factType,
+			confidence: f.confidence,
+			occurredStart: f.occurredStart
+				? new Date(f.occurredStart).getTime()
+				: null,
+			occurredEnd: f.occurredEnd
+				? new Date(f.occurredEnd).getTime()
+				: null,
+			entities: f.entities.map(e => e.name),
+			tags: f.tags,
+			causalRelations: f.causalRelations.length > 0
+				? f.causalRelations.map(r => ({
+						targetIndex: r.targetIndex,
+						relationType: r.relationType,
+						strength: r.strength
+					}))
+				: undefined
+		}))
+	}
 
 	async retain(
 		bankId: string,

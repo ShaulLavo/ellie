@@ -10,7 +10,6 @@ import {
 	PaintBrushIcon,
 	DownloadSimpleIcon,
 	FloppyDiskIcon,
-	DotIcon,
 	CircleNotchIcon
 } from '@phosphor-icons/react'
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
@@ -70,13 +69,9 @@ function RunningView({ part }: { part: ImageGenPart }) {
 			</div>
 			<div className="space-y-0">
 				{PHASES.map((phase, i) => {
-					const isCompleted = completed.has(
-						phase.id
-					)
-					const isActive =
-						activePhase === phase.id
-					const isPending =
-						!isCompleted && !isActive
+					const isCompleted = completed.has(phase.id)
+					const isActive = activePhase === phase.id
+					const isPending = !isCompleted && !isActive
 
 					const status: StepStatus = isCompleted
 						? 'complete'
@@ -87,9 +82,7 @@ function RunningView({ part }: { part: ImageGenPart }) {
 					// Only show phases that are completed, active, or the next pending one
 					if (
 						isPending &&
-						!completed.has(
-							PHASES[i - 1]?.id ?? ''
-						) &&
+						!completed.has(PHASES[i - 1]?.id ?? '') &&
 						i > 0
 					)
 						return null
@@ -100,23 +93,12 @@ function RunningView({ part }: { part: ImageGenPart }) {
 							icon={phase.icon}
 							label={phase.label}
 							status={status}
-							isLast={
-								i === PHASES.length - 1 ||
-								isPending
-							}
-							step={
-								isActive ? part.step : undefined
-							}
+							isLast={i === PHASES.length - 1 || isPending}
+							step={isActive ? part.step : undefined}
 							totalSteps={
-								isActive
-									? part.totalSteps
-									: undefined
+								isActive ? part.totalSteps : undefined
 							}
-							detail={
-								isActive
-									? part.detail
-									: undefined
-							}
+							detail={isActive ? part.detail : undefined}
 						/>
 					)
 				})}
@@ -177,8 +159,7 @@ function Step({
 			<div className="flex-1 space-y-1 overflow-hidden pb-2">
 				<div className="font-mono text-[11px] leading-tight">
 					{label}
-					{hasSteps &&
-						` ${step}/${totalSteps}`}
+					{hasSteps && ` ${step}/${totalSteps}`}
 				</div>
 				{hasSteps && percent != null && (
 					<div className="h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -218,13 +199,9 @@ function CompletedView({ part }: { part: ImageGenPart }) {
 					<MetaBadge
 						label={`${recipe.width}x${recipe.height}`}
 					/>
-					<MetaBadge
-						label={`${recipe.steps}steps`}
-					/>
+					<MetaBadge label={`${recipe.steps}steps`} />
 					<MetaBadge label={`cfg${recipe.cfg}`} />
-					<MetaBadge
-						label={`seed:${recipe.seed}`}
-					/>
+					<MetaBadge label={`seed:${recipe.seed}`} />
 					<MetaBadge
 						label={`${(recipe.durationMs / 1000).toFixed(1)}s`}
 					/>

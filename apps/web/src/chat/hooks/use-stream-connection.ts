@@ -24,6 +24,7 @@ import {
 const RENDERABLE_TYPES: EventType[] = [
 	'user_message',
 	'assistant_message',
+	'assistant_audio',
 	'tool_execution',
 	'memory_recall',
 	'memory_retain',
@@ -222,9 +223,8 @@ export function useStreamConnection(
 						})
 					} else {
 						setStreamingMessage(null)
-						if (stored.parts.length > 0 || stored.text) {
-							syncWrite([stored])
-						}
+						// Always write — even when empty (TTS post-processor clears text after synthesis)
+						syncWrite([stored])
 
 						const delta = computeStatsFromEvents([event])
 						setSessionStats(prev => ({

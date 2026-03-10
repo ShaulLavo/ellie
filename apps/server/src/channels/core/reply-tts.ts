@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import {
 	elevenLabsTTS,
+	type ElevenLabsTtsConfig,
 	type ElevenLabsTtsOverrides
 } from '../../lib/tts'
 import type { ChannelReplyPayload } from './reply-payload'
@@ -17,6 +18,9 @@ export interface TtsPayloadOptions {
 
 	/** ElevenLabs voice ID override */
 	voiceId?: string
+
+	/** Pre-resolved TTS config (with API key already resolved from credentials). */
+	config?: ElevenLabsTtsConfig
 
 	/** Temp directory for writing audio files. Default: os.tmpdir() */
 	tmpDir?: string
@@ -122,6 +126,7 @@ export async function synthesizeToPayload(
 	const synthStart = Date.now()
 	const result = await elevenLabsTTS({
 		text: truncated,
+		config: options.config,
 		overrides
 	})
 	console.info('[tts] Synthesis complete', {

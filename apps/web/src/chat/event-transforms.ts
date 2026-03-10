@@ -115,6 +115,86 @@ function extractToolCallParts(
 	]
 }
 
+/** Extract content parts from a generate_image tool_execution event. */
+function extractImageGenParts(
+	parsed: Record<string, unknown>,
+	status: string
+): ContentPart[] {
+	const toolCallId =
+		(parsed.toolCallId as string) ?? 'unknown'
+	const details = (parsed.result as Record<string, unknown>)
+		?.details as Record<string, unknown> | undefined
+
+	if (status === 'complete' || status === 'error') {
+		if (
+			status === 'complete' &&
+			details &&
+			details.success === true
+		) {
+			return [
+				{
+					type: 'image-generation',
+					toolCallId,
+					status: 'complete',
+					uploadId: details.uploadId as string | undefined,
+					filePath: details.filePath as string | undefined,
+					recipe: details.recipe as
+						| {
+								model: string
+								width: number
+								height: number
+								steps: number
+								cfg: number
+								seed: number
+								durationMs: number
+								loras?: Array<{
+									name: string
+									strength?: number
+								}>
+						  }
+						| undefined,
+					elapsedMs: details.elapsedMs as number | undefined
+				}
+			]
+		}
+
+		// Error or failed completion
+		const errorText = details?.error
+			? String(details.error)
+			: status === 'error'
+				? 'Image generation failed'
+				: undefined
+		return [
+			{
+				type: 'image-generation',
+				toolCallId,
+				status: 'error',
+				error: errorText
+			}
+		]
+	}
+
+	// Running / in-progress
+	const runDetails =
+		(details as Record<string, unknown>) ?? {}
+	return [
+		{
+			type: 'image-generation',
+			toolCallId,
+			status: 'running',
+			phase: runDetails.phase as string | undefined,
+			step: runDetails.step as number | undefined,
+			totalSteps: runDetails.totalSteps as
+				| number
+				| undefined,
+			detail: runDetails.detail as string | undefined,
+			completedPhases: runDetails.completedPhases as
+				| string[]
+				| undefined
+		}
+	]
+}
+
 /** Convert an EventRow into a StoredChatMessage (no Date allocation). */
 export function eventToStored(
 	row: EventRow
@@ -141,7 +221,13 @@ export function eventToStored(
 		parts = extractMessageParts(msg)
 	} else if (row.type === 'tool_execution') {
 		const status = parsed.status as string
-		if (status === 'complete' || status === 'error') {
+		const toolName = parsed.toolName as string
+		if (toolName === 'generate_image') {
+			parts = extractImageGenParts(parsed, status)
+		} else if (
+			status === 'complete' ||
+			status === 'error'
+		) {
 			parts = extractToolResultParts({
 				toolName: parsed.toolName,
 				toolCallId: parsed.toolCallId,
@@ -169,6 +255,21 @@ export function eventToStored(
 		]
 	} else if (row.type === 'error') {
 		parts = extractErrorParts(parsed)
+	} else if (row.type === 'assistant_audio') {
+		// TTS post-processor synthesized audio → render as voice message
+		const uploadId = parsed.uploadId as string | undefined
+		if (uploadId) {
+			parts = [
+				{
+					type: 'audio',
+					file: uploadId,
+					mime: (parsed.mime as string) ?? 'audio/ogg',
+					size: (parsed.size as number) ?? 0
+				}
+			]
+		} else {
+			parts = []
+		}
 	} else {
 		parts = extractMessageParts(parsed)
 	}
@@ -228,6 +329,15 @@ export function eventToStored(
 		)
 	}
 
+	// Strip [[tts]] / [[tts:...]] directives from displayed text
+	for (const p of filteredParts) {
+		if (p.type === 'text') {
+			p.text = p.text
+				.replace(/\[\[tts(?::[^\]]*?)?\]\]/gi, '')
+				.trim()
+		}
+	}
+
 	// Determine sender from event type or payload
 	let sender: MessageSender | undefined
 	if (
@@ -237,6 +347,7 @@ export function eventToStored(
 		sender = 'user'
 	} else if (
 		row.type === 'assistant_message' ||
+		row.type === 'assistant_audio' ||
 		parsed.role === 'assistant'
 	) {
 		sender = 'agent'

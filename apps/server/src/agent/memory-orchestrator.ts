@@ -275,11 +275,17 @@ export class MemoryOrchestrator {
 		const documentId = `${sessionId}:${seqFrom}-${seqTo}`
 		const content = JSON.stringify(transcript)
 
-		// Retain into all banks in parallel
+		// Extract facts once, then retain into all banks in parallel
+		// (avoids duplicate LLM extraction calls across banks)
+		const facts = await this.hindsight.extract(
+			bankIds[0],
+			content
+		)
 		const results = await Promise.allSettled(
 			bankIds.map(bankId =>
 				this.hindsight.retain(bankId, content, {
-					documentId
+					documentId,
+					facts
 				})
 			)
 		)

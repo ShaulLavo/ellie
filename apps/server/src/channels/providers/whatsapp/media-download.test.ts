@@ -32,14 +32,14 @@ function makeWAMessage(
 	return {
 		key: { remoteJid: '123@s.whatsapp.net', id: 'msg1' },
 		message: messageFields
-	} as any
+	} as never
 }
 
 describe('downloadInboundMedia', () => {
 	test('returns undefined when no message', async () => {
 		const result = await downloadInboundMedia({
 			key: { remoteJid: '123@s.whatsapp.net' }
-		} as any)
+		} as never)
 		expect(result).toBeUndefined()
 	})
 

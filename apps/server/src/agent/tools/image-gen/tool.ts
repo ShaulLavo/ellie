@@ -319,26 +319,42 @@ export function createImageGenTool(
 				}
 			}
 
+			// Normalize recipe to web-friendly shape
+			const r = result.recipe
+			const webRecipe = {
+				model: r.model,
+				width: r.width,
+				height: r.height,
+				steps: r.steps,
+				cfg: r.cfg_scale,
+				seed: r.seed,
+				durationMs: result.durationMs,
+				loras: r.loras?.map(l => ({
+					name: l.name,
+					strength: l.strength_model
+				}))
+			}
+
 			return {
 				content: [
 					{
 						type: 'text',
 						text:
 							`Image generated successfully.\n` +
-							`Model: ${result.recipe.model}\n` +
-							`Dimensions: ${result.recipe.width}x${result.recipe.height}\n` +
-							`Steps: ${result.recipe.steps}, CFG: ${result.recipe.cfg_scale}\n` +
-							`Seed: ${result.recipe.seed}\n` +
+							`Model: ${webRecipe.model}\n` +
+							`Dimensions: ${webRecipe.width}x${webRecipe.height}\n` +
+							`Steps: ${webRecipe.steps}, CFG: ${webRecipe.cfg}\n` +
+							`Seed: ${webRecipe.seed}\n` +
 							`Duration: ${(result.durationMs / 1000).toFixed(1)}s\n` +
 							`The image has been automatically attached to your reply.`
 					}
 				],
 				details: {
 					success: true,
-					recipe: result.recipe,
+					recipe: webRecipe,
 					uploadId: result.uploadId,
 					filePath: result.filePath,
-					durationMs: result.durationMs
+					elapsedMs: result.durationMs
 				}
 			}
 		}

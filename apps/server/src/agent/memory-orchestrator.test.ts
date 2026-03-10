@@ -66,6 +66,13 @@ function createMockHindsight(overrides?: {
 				}
 			)
 		},
+		async extract(
+			_bankId: string,
+			_content: string,
+			_options?: unknown
+		) {
+			return []
+		},
 		async retain(
 			_bankId: string,
 			_content: string,

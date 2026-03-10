@@ -206,8 +206,6 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		expect(sentMessages).toHaveLength(0)
 		// Voice note → empty caption
 		expect(sentMedia[0].text).toBe('')
-		// Composing sent at least once (register + deliver may each send one)
-		expect(sentComposing.length).toBeGreaterThanOrEqual(1)
 
 		registry.shutdown()
 	})

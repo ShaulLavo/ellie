@@ -247,7 +247,7 @@ describe('ChannelManager', () => {
 							routed: 'prompt'
 						}
 					}
-				}) as any,
+				}) as never,
 			ensureBootstrap: () => {},
 			deliveryRegistry: {
 				register: (
@@ -263,7 +263,7 @@ describe('ChannelManager', () => {
 				},
 				registerPending: () => {},
 				watchSession: () => {}
-			} as any
+			} as never
 		})
 
 		await testManager.ingestMessage({
@@ -323,13 +323,13 @@ describe('ChannelManager', () => {
 							routed: 'prompt'
 						}
 					}
-				}) as any,
+				}) as never,
 			ensureBootstrap: () => {},
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
 				watchSession: () => {}
-			} as any
+			} as never
 		})
 
 		const baseMsg = {
@@ -363,13 +363,13 @@ describe('ChannelManager', () => {
 							routed: 'prompt'
 						}
 					}
-				}) as any,
+				}) as never,
 			ensureBootstrap: () => {},
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
 				watchSession: () => {}
-			} as any
+			} as never
 		})
 
 		const baseMsg = {
@@ -408,13 +408,13 @@ describe('ChannelManager', () => {
 							routed: 'prompt'
 						}
 					}
-				}) as any,
+				}) as never,
 			ensureBootstrap: () => {},
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
 				watchSession: () => {}
-			} as any
+			} as never
 		})
 
 		const baseMsg = {

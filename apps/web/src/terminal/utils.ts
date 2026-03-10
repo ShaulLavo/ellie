@@ -52,7 +52,7 @@ export const lightTermTheme = {
 
 // OSC 11 pattern: \x1b]11;#rrggbb\x07  (BEL terminator)
 // or              \x1b]11;#rrggbb\x1b\\ (ST terminator)
-// eslint-disable-next-line no-control-regex
+// eslint-disable-next-line no-control-regex -- intentional terminal escape sequences
 const OSC11_RE = new RegExp(
 	'\\x1b\\]11;(#[0-9a-fA-F]{6})(?:\\x07|\\x1b\\\\)',
 	'g'

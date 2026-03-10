@@ -54,4 +54,6 @@ export interface ChannelDeliveryTarget {
 	channelId: string
 	accountId: string
 	conversationId: string
+	/** MIME type of inbound media (e.g. 'audio/ogg; codecs=opus'). Used by auto-TTS 'inbound' mode. */
+	inboundMediaType?: string
 }

@@ -47,14 +47,16 @@ export function markdownToWhatsApp(text: string): string {
 	result = result.replace(/^#{1,6}\s+(.+)$/gm, '*$1*')
 
 	// Restore inline code
+	const icPattern = new RegExp('\\x00IC(\\d+)\\x00', 'g')
 	result = result.replace(
-		/\x00IC(\d+)\x00/g,
+		icPattern,
 		(_, idx) => inlineCode[Number(idx)]
 	)
 
 	// Restore code blocks
+	const cbPattern = new RegExp('\\x00CB(\\d+)\\x00', 'g')
 	result = result.replace(
-		/\x00CB(\d+)\x00/g,
+		cbPattern,
 		(_, idx) => codeBlocks[Number(idx)]
 	)
 

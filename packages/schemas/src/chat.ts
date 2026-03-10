@@ -79,6 +79,33 @@ export type ContentPart =
 			filename: string
 			title?: string
 	  }
+	| {
+			type: 'image-generation'
+			toolCallId: string
+			status: 'running' | 'complete' | 'error'
+			phase?: string
+			step?: number
+			totalSteps?: number
+			detail?: string
+			completedPhases?: string[]
+			uploadId?: string
+			filePath?: string
+			recipe?: {
+				model: string
+				width: number
+				height: number
+				steps: number
+				cfg: number
+				seed: number
+				durationMs: number
+				loras?: Array<{
+					name: string
+					strength?: number
+				}>
+			}
+			elapsedMs?: number
+			error?: string
+	  }
 
 export type ArtifactType =
 	| 'html'
@@ -260,6 +287,12 @@ function formatPart(part: ContentPart): string {
 			return `[Checkpoint: ${part.message}]`
 		case 'artifact':
 			return `[Artifact: ${part.title ?? part.filename}]\n${part.content}`
+		case 'image-generation':
+			if (part.status === 'complete')
+				return `[Image Generated${part.uploadId ? `: ${part.uploadId}` : ''}]`
+			if (part.status === 'error')
+				return `[Image Generation Failed: ${part.error ?? 'unknown'}]`
+			return `[Generating Image: ${part.phase ?? 'starting'}${part.step != null ? ` ${part.step}/${part.totalSteps}` : ''}]`
 		default:
 			return `[Unknown: ${(part as ContentPart).type}]`
 	}

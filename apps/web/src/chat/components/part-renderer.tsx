@@ -17,7 +17,15 @@ import {
 	CheckpointIcon
 } from '@/components/ai-elements/checkpoint'
 import { ToolCard } from '@/components/ai-elements/tool'
+import { ImageGenProgress } from './image-gen-progress'
+import { VoiceMessage } from './voice-message'
 import type { ToolResultPart } from '../utils'
+
+const API_BASE = env.API_BASE_URL.replace(/\/$/, '')
+/** Build upload content URL, encoding the ID for path-style blob IDs (e.g. trace/…/file.mp3). */
+function uploadUrl(fileId: string): string {
+	return `${API_BASE}/api/uploads-rpc/${encodeURIComponent(fileId)}/content`
+}
 
 export const PartRenderer = memo(
 	({
@@ -169,7 +177,7 @@ export const PartRenderer = memo(
 				return (
 					<div className="my-2 max-w-sm">
 						<img
-							src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+							src={uploadUrl(part.file)}
 							alt={
 								(part as ContentPart & { name?: string })
 									.name ?? 'Image'
@@ -183,7 +191,7 @@ export const PartRenderer = memo(
 				return (
 					<div className="my-2 max-w-sm">
 						<video
-							src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+							src={uploadUrl(part.file)}
 							controls
 							className="max-h-80 rounded-lg"
 						/>
@@ -192,10 +200,10 @@ export const PartRenderer = memo(
 			case 'audio':
 				return (
 					<div className="my-2">
-						<audio
-							src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
-							controls
-							className="w-full max-w-sm"
+						<VoiceMessage
+							src={uploadUrl(part.file)}
+							duration={part.duration}
+							waveform={part.waveform}
 						/>
 					</div>
 				)
@@ -221,7 +229,7 @@ export const PartRenderer = memo(
 				)
 				return hasUpload ? (
 					<a
-						href={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${part.file}/content`}
+						href={uploadUrl(part.file)}
 						target="_blank"
 						rel="noopener noreferrer"
 						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
@@ -257,6 +265,8 @@ export const PartRenderer = memo(
 						</pre>
 					</div>
 				)
+			case 'image-generation':
+				return <ImageGenProgress part={part} />
 			default:
 				return null
 		}

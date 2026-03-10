@@ -261,7 +261,13 @@ export async function executeImageGeneration(
 		console.info(
 			`[image-gen] ${label}: ${status}${detail ? ` — ${detail}` : ''}${step != null ? ` (${step}/${totalSteps})` : ''}`
 		)
-		deps.onProgress?.(label, status, detail, step, totalSteps)
+		deps.onProgress?.(
+			label,
+			status,
+			detail,
+			step,
+			totalSteps
+		)
 	}
 
 	try {

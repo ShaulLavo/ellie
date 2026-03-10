@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 
 // Persist across HMR re-evaluations
 export const queryClient: QueryClient = ((
-	globalThis as any
+	globalThis as unknown as Record<string, QueryClient>
 ).__queryClient ??= new QueryClient({
 	defaultOptions: {
 		queries: {

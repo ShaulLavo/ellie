@@ -271,7 +271,7 @@ describe('EventStore', () => {
 					payload: {
 						role: 'invalid',
 						content: 'not-an-array'
-					} as any
+					} as never
 				})
 			).toThrow()
 		})
@@ -1105,7 +1105,7 @@ describe('EventStore', () => {
 					payload: {
 						parts: 'not-an-array',
 						query: 123
-					} as any
+					} as never
 				})
 			).toThrow()
 		})

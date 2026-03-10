@@ -397,9 +397,7 @@ export class EventStore {
 	 * Find channel-originated runs that closed but were never delivered.
 	 * Returns the channel source info needed to reconstruct delivery targets.
 	 */
-	findUndeliveredChannelRuns(
-		maxAgeMs: number
-	): Array<{
+	findUndeliveredChannelRuns(maxAgeMs: number): Array<{
 		sessionId: string
 		runId: string
 		channelId: string

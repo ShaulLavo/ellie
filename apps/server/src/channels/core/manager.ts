@@ -227,7 +227,10 @@ export class ChannelManager {
 		const deliveryTarget = {
 			channelId: msg.channelId,
 			accountId: msg.accountId,
-			conversationId: msg.conversationId
+			conversationId: msg.conversationId,
+			...(msg.mediaType && {
+				inboundMediaType: msg.mediaType
+			})
 		}
 
 		if (result.routed === 'prompt') {
