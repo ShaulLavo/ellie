@@ -19,6 +19,11 @@ type FileStoreOptions = {
 	expirationPeriodInMilliseconds?: number
 }
 
+type ReadOptions = {
+	start?: number
+	end?: number
+}
+
 const FILE_DOESNT_EXIST = 'ENOENT'
 
 export class FileStore extends DataStore {
@@ -61,9 +66,16 @@ export class FileStore extends DataStore {
 		return file
 	}
 
-	read(file_id: string): fs.ReadStream {
+	read(
+		file_id: string,
+		options?: ReadOptions
+	): fs.ReadStream {
 		return fs.createReadStream(
-			path.join(this.directory, file_id)
+			path.join(this.directory, file_id),
+			{
+				start: options?.start,
+				end: options?.end
+			}
 		)
 	}
 

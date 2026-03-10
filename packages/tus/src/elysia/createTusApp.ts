@@ -24,6 +24,18 @@ interface ConfigStoreCapable {
 	}
 }
 
+type ReadOptions = {
+	start?: number
+	end?: number
+}
+
+interface ReadableStore {
+	read: (
+		id: string,
+		options?: ReadOptions
+	) => NodeJS.ReadableStream
+}
+
 function hasConfigStore(
 	s: DataStore
 ): s is DataStore & ConfigStoreCapable {
@@ -42,6 +54,68 @@ function hasConfigStore(
 		typeof cs.list === 'function' &&
 		typeof cs.get === 'function'
 	)
+}
+
+function hasReadableStore(
+	s: DataStore
+): s is DataStore & ReadableStore {
+	if (!('read' in s)) return false
+	return typeof s.read === 'function'
+}
+
+type ByteRange = {
+	start: number
+	end: number
+}
+
+function parseByteRange(
+	rangeHeader: string | null,
+	size: number
+): ByteRange | 'invalid' | null {
+	if (!rangeHeader) return null
+	if (size <= 0) return 'invalid'
+	if (!rangeHeader.startsWith('bytes=')) return 'invalid'
+
+	const rangeValue = rangeHeader
+		.slice('bytes='.length)
+		.trim()
+	if (rangeValue.length === 0 || rangeValue.includes(',')) {
+		return 'invalid'
+	}
+
+	const [startText, endText] = rangeValue.split('-', 2)
+	if (startText === undefined || endText === undefined) {
+		return 'invalid'
+	}
+	if (startText === '' && endText === '') return 'invalid'
+
+	if (startText === '') {
+		const suffixLength = Number.parseInt(endText, 10)
+		if (
+			!Number.isInteger(suffixLength) ||
+			suffixLength <= 0
+		) {
+			return 'invalid'
+		}
+		const start = Math.max(size - suffixLength, 0)
+		return { start, end: size - 1 }
+	}
+
+	const start = Number.parseInt(startText, 10)
+	if (
+		!Number.isInteger(start) ||
+		start < 0 ||
+		start >= size
+	) {
+		return 'invalid'
+	}
+	if (endText === '') return { start, end: size - 1 }
+
+	const end = Number.parseInt(endText, 10)
+	if (!Number.isInteger(end) || end < start)
+		return 'invalid'
+
+	return { start, end: Math.min(end, size - 1) }
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -145,7 +219,7 @@ function createRpcPlugin(
 		)
 		.get(
 			`${rpcPrefix}/:id/content`,
-			async ({ params, set }) => {
+			async ({ params, request, set }) => {
 				let upload: Awaited<
 					ReturnType<typeof datastore.getUpload>
 				>
@@ -156,10 +230,7 @@ function createRpcPlugin(
 					return { error: 'Upload not found' }
 				}
 
-				const ds = datastore as unknown as {
-					read: (id: string) => NodeJS.ReadableStream
-				}
-				if (typeof ds.read !== 'function') {
+				if (!hasReadableStore(datastore)) {
 					set.status = 501
 					return {
 						error:
@@ -168,20 +239,46 @@ function createRpcPlugin(
 				}
 
 				try {
-					const stream = ds.read(params.id)
 					const contentType =
 						(upload.metadata as Record<string, string>)
 							?.mimeType ??
 						(upload.metadata as Record<string, string>)
 							?.contentType ??
 						'application/octet-stream'
+					const totalSize =
+						upload.offset || upload.size || 0
+					const range = parseByteRange(
+						request.headers.get('range'),
+						totalSize
+					)
+
 					set.headers['content-type'] = contentType
-					if (upload.size) {
-						set.headers['content-length'] = String(
-							upload.size
-						)
+					set.headers['accept-ranges'] = 'bytes'
+
+					if (range === 'invalid') {
+						set.status = 416
+						set.headers['content-range'] =
+							`bytes */${totalSize}`
+						set.headers['content-length'] = '0'
+						return ''
 					}
-					return stream
+
+					if (range) {
+						const contentLength =
+							range.end - range.start + 1
+						set.status = 206
+						set.headers['content-range'] =
+							`bytes ${range.start}-${range.end}/${totalSize}`
+						set.headers['content-length'] =
+							String(contentLength)
+						return datastore.read(params.id, range)
+					}
+
+					if (totalSize > 0) {
+						set.headers['content-length'] =
+							String(totalSize)
+					}
+					return datastore.read(params.id)
 				} catch (readErr) {
 					set.status = 500
 					return {

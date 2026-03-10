@@ -7,10 +7,11 @@
 			"runtimeArgs": ["run", "--hot", "src/server.ts"],
 			"cwd": "apps/server",
 			"port": 3000,
+			"autoPort": false,
 			"env": {
 				"NODE_ENV": "development"
 			}
 		}
 	],
-	"autoVerify": false
+	"autoVerify": true
 }

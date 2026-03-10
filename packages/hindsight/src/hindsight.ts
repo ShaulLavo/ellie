@@ -637,13 +637,14 @@ Instructions:
 				: null,
 			entities: f.entities.map(e => e.name),
 			tags: f.tags,
-			causalRelations: f.causalRelations.length > 0
-				? f.causalRelations.map(r => ({
-						targetIndex: r.targetIndex,
-						relationType: r.relationType,
-						strength: r.strength
-					}))
-				: undefined
+			causalRelations:
+				f.causalRelations.length > 0
+					? f.causalRelations.map(r => ({
+							targetIndex: r.targetIndex,
+							relationType: r.relationType,
+							strength: r.strength
+						}))
+					: undefined
 		}))
 	}
 

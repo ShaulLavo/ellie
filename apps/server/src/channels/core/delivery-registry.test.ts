@@ -39,7 +39,11 @@ describe('ChannelDeliveryRegistry', () => {
 	let sentMedia: Array<{
 		target: ChannelDeliveryTarget
 		caption: string
-		media: { buffer: Buffer; mimetype: string; fileName?: string }
+		media: {
+			buffer: Buffer
+			mimetype: string
+			fileName?: string
+		}
 	}>
 
 	const mockProvider: ChannelProvider = {

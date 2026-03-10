@@ -188,6 +188,12 @@ export class ChannelDeliveryRegistry {
 		sessionId: string
 	): Promise<void> {
 		const delivery = this.#pending.get(runId)
+		console.log('[delivery] handleRunClosed', {
+			runId,
+			sessionId,
+			hasDelivery: !!delivery,
+			pendingKeys: [...this.#pending.keys()]
+		})
 		if (!delivery) return // Not a channel-triggered run
 		this.#pending.delete(runId)
 
@@ -195,6 +201,13 @@ export class ChannelDeliveryRegistry {
 			sessionId,
 			runId
 		)
+		console.log('[delivery] extractedPayload', {
+			runId,
+			hasPayload: !!payload,
+			text: payload?.text?.slice(0, 120),
+			mediaRefs: payload?.mediaRefs,
+			audioAsVoice: payload?.audioAsVoice
+		})
 		if (!payload) return
 
 		// Derive inboundAudio from targets (any audio inbound triggers 'inbound' mode)
@@ -209,6 +222,12 @@ export class ChannelDeliveryRegistry {
 			payload,
 			hasAudioInbound
 		)
+		console.log('[delivery] afterAutoTts', {
+			runId,
+			text: payload?.text?.slice(0, 120),
+			mediaRefs: payload?.mediaRefs,
+			audioAsVoice: payload?.audioAsVoice
+		})
 
 		// Always strip [[tts...]] directives from delivery text (auto-TTS or not)
 		if (payload.text) {
@@ -242,10 +261,9 @@ export class ChannelDeliveryRegistry {
 			// Resolve ElevenLabs config with credentials file fallback
 			const config = resolveElevenLabsTtsConfig()
 			if (!config.apiKey && this.#credentialsPath) {
-				config.apiKey =
-					await resolveElevenLabsApiKeyAsync(
-						this.#credentialsPath
-					)
+				config.apiKey = await resolveElevenLabsApiKeyAsync(
+					this.#credentialsPath
+				)
 			}
 			return await maybeApplyTtsToPayload({
 				payload,
