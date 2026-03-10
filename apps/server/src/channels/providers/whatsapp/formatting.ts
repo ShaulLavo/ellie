@@ -62,8 +62,9 @@ export function markdownToWhatsApp(text: string): string {
 }
 
 /**
- * Split a message into chunks at line boundaries, each ≤ maxLen characters.
- * If a single line exceeds maxLen, it gets its own chunk (may exceed the limit).
+ * Split a message into chunks, each ≤ maxLen characters.
+ * Tries newline break first, then whitespace (word boundary), then hard-breaks.
+ * Guarantees every chunk ≤ maxLen (matching openclaw's chunkText).
  */
 export function chunkMessage(
 	text: string,
@@ -71,23 +72,34 @@ export function chunkMessage(
 ): string[] {
 	if (text.length <= maxLen) return [text]
 
-	const lines = text.split('\n')
 	const chunks: string[] = []
-	let current = ''
+	let remaining = text
 
-	for (const line of lines) {
-		const candidate = current ? `${current}\n${line}` : line
+	while (remaining.length > maxLen) {
+		const window = remaining.slice(0, maxLen)
 
-		if (candidate.length > maxLen && current) {
-			// Current chunk is full, start a new one
-			chunks.push(current)
-			current = line
-		} else {
-			current = candidate
+		// Try to break at the last newline within the window
+		const newlineIdx = window.lastIndexOf('\n')
+		if (newlineIdx > 0) {
+			chunks.push(remaining.slice(0, newlineIdx))
+			remaining = remaining.slice(newlineIdx + 1)
+			continue
 		}
+
+		// Try to break at the last whitespace within the window
+		const spaceIdx = window.lastIndexOf(' ')
+		if (spaceIdx > 0) {
+			chunks.push(remaining.slice(0, spaceIdx))
+			remaining = remaining.slice(spaceIdx + 1)
+			continue
+		}
+
+		// Hard-break at exactly maxLen
+		chunks.push(remaining.slice(0, maxLen))
+		remaining = remaining.slice(maxLen)
 	}
 
-	if (current) chunks.push(current)
+	if (remaining) chunks.push(remaining)
 
 	return chunks
 }

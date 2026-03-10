@@ -5,7 +5,8 @@ import makeWASocket, {
 	useMultiFileAuthState,
 	downloadMediaMessage,
 	type WASocket,
-	type WAMessage
+	type WAMessage,
+	type AnyMessageContent
 } from '@whiskeysockets/baileys'
 import type { ILogger } from '@whiskeysockets/baileys/lib/Utils/logger'
 import QRCode from 'qrcode'
@@ -24,10 +25,40 @@ import {
 	chunkMessage
 } from './formatting'
 import {
-	normalizeE164,
 	jidToE164,
 	type JidToE164Options
 } from './normalize'
+import { checkInboundAccessControl } from './access-control'
+import {
+	resolveRequireMention,
+	type WhatsAppGroupConfig
+} from './group-config'
+import {
+	extractMentionedJids,
+	extractReplyToSenderJid,
+	checkBotMention
+} from './mention-detection'
+import { resolveMentionGating } from './mention-gating'
+import {
+	recordGroupHistory,
+	buildContextText,
+	type GroupHistoryEntry
+} from './group-history'
+import {
+	extractText,
+	extractMediaPlaceholder,
+	extractLocationData,
+	formatLocationText,
+	describeReplyContext
+} from './extract'
+import { downloadInboundMedia } from './media-download'
+import { saveInboundMedia } from './media-store'
+import {
+	createInboundDebouncer,
+	type InboundDebouncer
+} from './inbound-debounce'
+import * as v from 'valibot'
+import { whatsappSettingsSchema } from './settings-schema'
 
 // ── Silent logger (satisfies Baileys ILogger without pino dep) ──────────────
 
@@ -46,18 +77,57 @@ const silentLogger: ILogger = {
 
 // ── WhatsApp-specific settings (aligned with openclaw) ──────────────────────
 
-export type DmPolicy = 'allowlist' | 'open' | 'disabled'
-export type GroupPolicy = 'open' | 'disabled'
+export type DmPolicy =
+	| 'pairing'
+	| 'allowlist'
+	| 'open'
+	| 'disabled'
+export type GroupPolicy = 'allowlist' | 'open' | 'disabled'
 
 export interface WhatsAppSettings extends ChannelAccountSettings {
 	/** Is the bot running on the owner's personal WhatsApp number? */
 	selfChatMode: boolean
-	/** Who can DM the agent: 'allowlist' (default), 'open', 'disabled' */
+	/** Who can DM the agent: 'pairing' (default), 'allowlist', 'open', 'disabled' */
 	dmPolicy: DmPolicy
 	/** E.164 numbers allowed to message the agent (e.g. ["+15551234567"]) */
 	allowFrom: string[]
-	/** Group message handling: 'open' (default) or 'disabled' */
+	/** Group message handling: 'open' (default), 'allowlist', or 'disabled' */
 	groupPolicy: GroupPolicy
+	/** E.164 numbers allowed to trigger in groups (used when groupPolicy: 'allowlist') */
+	groupAllowFrom: string[]
+	/** Per-group configuration keyed by group JID (use "*" for wildcard default) */
+	groups: Record<string, WhatsAppGroupConfig>
+	/** Max unmentioned group messages to buffer as context (default: 50, 0 disables) */
+	historyLimit: number
+	/** Whether to send read receipts (blue ticks) for processed messages (default: true) */
+	sendReadReceipts: boolean
+	/** Inbound debounce window in ms — batches rapid messages from same sender (default: 0 = disabled) */
+	debounceMs: number
+	/** Max inbound media file size in MB (default: 50) */
+	mediaMaxMb: number
+}
+
+const SETTINGS_DEFAULTS: WhatsAppSettings = {
+	selfChatMode: false,
+	dmPolicy: 'pairing',
+	allowFrom: [],
+	groupPolicy: 'disabled',
+	groupAllowFrom: [],
+	groups: {},
+	historyLimit: 50,
+	sendReadReceipts: true,
+	debounceMs: 0,
+	mediaMaxMb: 50
+}
+
+/** Merge raw settings with defaults so every field is safe to access. */
+export function withDefaults(
+	raw: ChannelAccountSettings
+): WhatsAppSettings {
+	return {
+		...SETTINGS_DEFAULTS,
+		...raw
+	} as WhatsAppSettings
 }
 
 // ── Per-account runtime state ───────────────────────────────────────────────
@@ -76,18 +146,37 @@ interface WhatsAppAccount {
 	reconnectTimer?: ReturnType<typeof setTimeout>
 	/** Baileys auth directory path (for LID reverse mapping lookups) */
 	authDir: string
+	/** Timestamp when connection was established — for pairing grace period */
+	connectedAtMs: number | null
 }
 
 const MIN_RECONNECT_DELAY = 1_000
 const MAX_RECONNECT_DELAY = 60_000
 
+function defaultStatus(): ChannelRuntimeStatus {
+	return { state: 'disconnected', reconnectAttempts: 0 }
+}
+
+function resolveMessageId(
+	result: unknown
+): string | undefined {
+	if (
+		typeof result === 'object' &&
+		result &&
+		'key' in result
+	) {
+		return (
+			String(
+				(result as { key?: { id?: string } }).key?.id ?? ''
+			) || undefined
+		)
+	}
+	return undefined
+}
+
 /**
  * WhatsApp channel provider using Baileys.
- *
- * Access control (aligned with openclaw):
- * - dmPolicy: 'allowlist' gates DMs via allowFrom[], 'open' allows all, 'disabled' blocks all
- * - selfChatMode: when true, own JID is always allowed (personal number setup)
- * - groupPolicy: 'open' allows group messages, 'disabled' blocks them
+ * Access control delegated to access-control.ts module.
  */
 export class WhatsAppProvider implements ChannelProvider {
 	readonly id = 'whatsapp'
@@ -95,6 +184,11 @@ export class WhatsAppProvider implements ChannelProvider {
 
 	#manager: ChannelManager | null = null
 	readonly #accounts = new Map<string, WhatsAppAccount>()
+	readonly #groupHistories = new Map<
+		string,
+		GroupHistoryEntry[]
+	>()
+	readonly #debouncers = new Map<string, InboundDebouncer>()
 
 	// ── ChannelProvider lifecycle ────────────────────────────────────────
 
@@ -102,11 +196,26 @@ export class WhatsAppProvider implements ChannelProvider {
 		this.#manager = manager
 		const accounts = manager.listSavedAccounts('whatsapp')
 		for (const accountId of accounts) {
-			const settings = manager.loadSettings(
+			const raw = manager.loadSettings(
 				'whatsapp',
 				accountId
-			) as WhatsAppSettings | null
-			if (!settings) continue
+			)
+			if (!raw) continue
+			// Validate and fill defaults via Valibot schema
+			const result = v.safeParse(
+				whatsappSettingsSchema,
+				raw
+			)
+			if (!result.success) {
+				console.error(
+					`[whatsapp] Invalid settings for ${accountId}, skipping:`,
+					result.issues
+				)
+				continue
+			}
+			// Re-save with defaults filled in (backward compat for pre-validation files)
+			const settings = withDefaults(result.output)
+			manager.saveSettings('whatsapp', accountId, settings)
 			// Only auto-connect if auth state exists (creds.json from a previous login)
 			const authDir = join(
 				manager.accountDir('whatsapp', accountId),
@@ -128,6 +237,10 @@ export class WhatsAppProvider implements ChannelProvider {
 	}
 
 	async shutdown(): Promise<void> {
+		for (const [, debouncer] of this.#debouncers) {
+			debouncer.dispose()
+		}
+		this.#debouncers.clear()
 		for (const [, account] of this.#accounts) {
 			if (account.reconnectTimer) {
 				clearTimeout(account.reconnectTimer)
@@ -135,21 +248,21 @@ export class WhatsAppProvider implements ChannelProvider {
 			if (account.sock) {
 				account.sock.end(undefined)
 			}
-			account.status = { state: 'disconnected' }
+			account.status = defaultStatus()
 		}
 		this.#accounts.clear()
 	}
 
 	getStatus(accountId: string): ChannelRuntimeStatus {
 		const account = this.#accounts.get(accountId)
-		return account?.status ?? { state: 'disconnected' }
+		return account?.status ?? defaultStatus()
 	}
 
 	async loginStart(
 		accountId: string,
 		settings: ChannelAccountSettings
 	): Promise<unknown> {
-		const waSettings = settings as WhatsAppSettings
+		const waSettings = withDefaults(settings)
 
 		// Disconnect existing account if any
 		const existing = this.#accounts.get(accountId)
@@ -184,10 +297,14 @@ export class WhatsAppProvider implements ChannelProvider {
 		const account: WhatsAppAccount = {
 			sock: null,
 			settings: waSettings,
-			status: { state: 'connecting' },
+			status: {
+				...defaultStatus(),
+				state: 'connecting'
+			},
 			loggingIn: true,
 			reconnectDelay: MIN_RECONNECT_DELAY,
-			authDir
+			authDir,
+			connectedAtMs: null
 		}
 		this.#accounts.set(accountId, account)
 
@@ -327,14 +444,14 @@ export class WhatsAppProvider implements ChannelProvider {
 	): void {
 		const account = this.#accounts.get(accountId)
 		if (account) {
-			account.settings = settings as WhatsAppSettings
+			account.settings = withDefaults(settings)
 		}
 	}
 
 	async sendMessage(
 		target: ChannelDeliveryTarget,
 		text: string
-	): Promise<void> {
+	): Promise<{ messageId?: string }> {
 		const account = this.#accounts.get(target.accountId)
 		if (!account?.sock) {
 			throw new Error(
@@ -353,12 +470,174 @@ export class WhatsAppProvider implements ChannelProvider {
 		const formatted = markdownToWhatsApp(text)
 		const chunks = chunkMessage(formatted)
 
+		let lastMessageId: string | undefined
 		for (const chunk of chunks) {
-			await account.sock.sendMessage(
+			const result = await account.sock.sendMessage(
 				target.conversationId,
 				{ text: chunk }
 			)
+			lastMessageId = resolveMessageId(result)
 		}
+
+		// Track outbound activity
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+
+		return { messageId: lastMessageId }
+	}
+
+	async sendMedia(
+		target: ChannelDeliveryTarget,
+		text: string,
+		media: {
+			buffer: Buffer
+			mimetype: string
+			fileName?: string
+		}
+	): Promise<{ messageId?: string }> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) {
+			throw new Error(
+				`WhatsApp account ${target.accountId} not connected`
+			)
+		}
+
+		const { buffer, mimetype, fileName } = media
+		let payload: AnyMessageContent
+
+		if (mimetype.startsWith('image/')) {
+			payload = {
+				image: buffer,
+				caption: text || undefined,
+				mimetype
+			}
+		} else if (mimetype.startsWith('audio/')) {
+			payload = { audio: buffer, ptt: true, mimetype }
+		} else if (mimetype.startsWith('video/')) {
+			payload = {
+				video: buffer,
+				caption: text || undefined,
+				mimetype
+			}
+		} else {
+			payload = {
+				document: buffer,
+				fileName: fileName ?? 'file',
+				caption: text || undefined,
+				mimetype
+			}
+		}
+
+		const result = await account.sock.sendMessage(
+			target.conversationId,
+			payload
+		)
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+
+		return { messageId: resolveMessageId(result) }
+	}
+
+	async sendPoll(
+		target: ChannelDeliveryTarget,
+		poll: {
+			question: string
+			options: string[]
+			maxSelections?: number
+		}
+	): Promise<{ messageId?: string }> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) {
+			throw new Error(
+				`WhatsApp account ${target.accountId} not connected`
+			)
+		}
+
+		const result = await account.sock.sendMessage(
+			target.conversationId,
+			{
+				poll: {
+					name: poll.question,
+					values: poll.options,
+					selectableCount: poll.maxSelections ?? 1
+				}
+			} as AnyMessageContent
+		)
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+
+		return { messageId: resolveMessageId(result) }
+	}
+
+	async sendReaction(
+		target: ChannelDeliveryTarget,
+		messageId: string,
+		emoji: string,
+		fromMe?: boolean
+	): Promise<void> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) {
+			throw new Error(
+				`WhatsApp account ${target.accountId} not connected`
+			)
+		}
+
+		await account.sock.sendMessage(target.conversationId, {
+			react: {
+				text: emoji,
+				key: {
+					remoteJid: target.conversationId,
+					id: messageId,
+					fromMe: fromMe ?? false
+				}
+			}
+		} as AnyMessageContent)
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+	}
+
+	async sendComposing(
+		target: ChannelDeliveryTarget
+	): Promise<void> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) return
+		await account.sock
+			.sendPresenceUpdate(
+				'composing',
+				target.conversationId
+			)
+			.catch(() => {})
+	}
+
+	isReady(accountId: string): {
+		ok: boolean
+		reason: string
+	} {
+		const account = this.#accounts.get(accountId)
+		if (!account) {
+			return { ok: false, reason: 'account-not-found' }
+		}
+		if (!account.sock) {
+			return { ok: false, reason: 'not-connected' }
+		}
+		if (account.status.state !== 'connected') {
+			return {
+				ok: false,
+				reason: `state-${account.status.state}`
+			}
+		}
+		return { ok: true, reason: 'ok' }
 	}
 
 	// ── Internal: socket creation ───────────────────────────────────────
@@ -449,9 +728,30 @@ export class WhatsAppProvider implements ChannelProvider {
 		}
 
 		if (connection === 'open') {
+			const now = Date.now()
+			account.connectedAtMs = now
+
+			// Resolve self-id from live socket
+			const sock = account.sock
+			const jidOpts: JidToE164Options | undefined =
+				account.authDir
+					? { authDir: account.authDir }
+					: undefined
+			const selfJid = sock?.user?.id ?? undefined
+			const selfE164 = selfJid
+				? jidToE164(selfJid, jidOpts)
+				: null
+
 			account.status = {
 				state: 'connected',
-				connectedAt: Date.now()
+				connectedAt: now,
+				reconnectAttempts: 0,
+				lastConnectedAt: now,
+				lastEventAt: now,
+				selfId: selfE164 ?? selfJid ?? undefined,
+				// Preserve existing diagnostic fields
+				lastMessageAt: account.status.lastMessageAt,
+				lastError: account.status.lastError
 			}
 			account.reconnectDelay = MIN_RECONNECT_DELAY
 			console.log(
@@ -478,7 +778,14 @@ export class WhatsAppProvider implements ChannelProvider {
 				console.log(
 					`[whatsapp] Account ${accountId} logged out`
 				)
-				account.status = { state: 'disconnected' }
+				account.status = {
+					...account.status,
+					state: 'disconnected',
+					reconnectAttempts: 0,
+					lastDisconnect: 'logged-out',
+					lastEventAt: Date.now(),
+					selfId: undefined
+				}
 				account.sock = null
 
 				// Clean auth dir
@@ -508,7 +815,13 @@ export class WhatsAppProvider implements ChannelProvider {
 				console.log(
 					`[whatsapp] Account ${accountId} replaced by another session, stopping`
 				)
-				account.status = { state: 'disconnected' }
+				account.status = {
+					...account.status,
+					state: 'disconnected',
+					reconnectAttempts: 0,
+					lastDisconnect: 'connection-replaced',
+					lastEventAt: Date.now()
+				}
 				account.sock = null
 			} else {
 				// Reconnect with exponential backoff
@@ -518,8 +831,14 @@ export class WhatsAppProvider implements ChannelProvider {
 					`[whatsapp] Account ${accountId} disconnected (${reason}), reconnecting in ${account.reconnectDelay}ms`
 				)
 				account.status = {
+					...account.status,
 					state: 'connecting',
-					detail: `Reconnecting (${reason})`
+					detail: `Reconnecting (${reason})`,
+					reconnectAttempts:
+						(account.status.reconnectAttempts ?? 0) + 1,
+					lastDisconnect: reason,
+					lastError: reason,
+					lastEventAt: Date.now()
 				}
 
 				account.reconnectTimer = setTimeout(() => {
@@ -544,14 +863,18 @@ export class WhatsAppProvider implements ChannelProvider {
 			)
 			account.sock = sock
 		} catch (err) {
+			const errorMsg =
+				err instanceof Error ? err.message : String(err)
 			console.error(
 				`[whatsapp] Reconnect failed for ${accountId}:`,
 				err
 			)
 			account.status = {
+				...account.status,
 				state: 'error',
-				error:
-					err instanceof Error ? err.message : String(err)
+				error: errorMsg,
+				lastError: errorMsg,
+				lastEventAt: Date.now()
 			}
 		}
 	}
@@ -569,10 +892,14 @@ export class WhatsAppProvider implements ChannelProvider {
 		const account: WhatsAppAccount = {
 			sock: null,
 			settings,
-			status: { state: 'connecting' },
+			status: {
+				...defaultStatus(),
+				state: 'connecting'
+			},
 			loggingIn: false,
 			reconnectDelay: MIN_RECONNECT_DELAY,
-			authDir
+			authDir,
+			connectedAtMs: null
 		}
 		this.#accounts.set(accountId, account)
 
@@ -585,6 +912,23 @@ export class WhatsAppProvider implements ChannelProvider {
 
 	// ── Internal: message handling ──────────────────────────────────────
 
+	#getDebouncer(
+		accountId: string,
+		account: WhatsAppAccount
+	): InboundDebouncer {
+		let debouncer = this.#debouncers.get(accountId)
+		if (!debouncer) {
+			debouncer = createInboundDebouncer({
+				debounceMs: account.settings.debounceMs ?? 0,
+				onFlush: msg =>
+					this.#manager?.ingestMessage(msg) ??
+					Promise.resolve()
+			})
+			this.#debouncers.set(accountId, debouncer)
+		}
+		return debouncer
+	}
+
 	async #handleMessagesUpsert(
 		accountId: string,
 		account: WhatsAppAccount,
@@ -594,7 +938,9 @@ export class WhatsAppProvider implements ChannelProvider {
 			type: string
 		}
 	): Promise<void> {
-		if (event.type !== 'notify') return
+		// Accept both 'notify' (real-time) and 'append' (history/offline)
+		if (event.type !== 'notify' && event.type !== 'append')
+			return
 
 		// Options for jidToE164: pass auth dir so @lid JIDs can be resolved
 		// via Baileys' reverse mapping files (matching openclaw)
@@ -614,67 +960,94 @@ export class WhatsAppProvider implements ChannelProvider {
 
 			const isGroup = jid.endsWith('@g.us')
 
+			// For groups, the actual sender is in msg.key.participant (not remoteJid which is the group JID)
+			const participantJid =
+				msg.key.participant ?? undefined
+			const senderJid = isGroup
+				? (participantJid ?? jid)
+				: jid
+
 			// Resolve sender E.164 (handles both @s.whatsapp.net and @lid via auth dir)
-			const senderE164 = jidToE164(jid, jidOpts)
+			const senderE164 = jidToE164(senderJid, jidOpts)
 
-			const label = msg.pushName ?? senderE164 ?? jid
+			const label = msg.pushName ?? senderE164 ?? senderJid
 
-			// ── Access control (aligned with openclaw) ────────────
-			if (isGroup) {
-				if (account.settings.groupPolicy === 'disabled') {
-					console.log(
-						`[whatsapp] Blocked group message from ${label} (groupPolicy: disabled)`
-					)
-					continue
-				}
-				// groupPolicy 'open' → allow through
-			} else {
-				if (account.settings.dmPolicy === 'disabled') {
-					console.log(
-						`[whatsapp] Blocked DM from ${label} (dmPolicy: disabled)`
-					)
-					continue
-				}
+			// ── Access control (via dedicated module) ─────────────
+			const selfE164 = sock.user?.id
+				? jidToE164(sock.user.id, jidOpts)
+				: null
 
-				if (account.settings.dmPolicy === 'allowlist') {
-					// Self-chat detection: compare E.164 (works for both @s.whatsapp.net and resolved @lid)
-					const selfE164 = sock.user?.id
-						? jidToE164(sock.user.id, jidOpts)
-						: null
-					const isSelf =
-						account.settings.selfChatMode &&
-						selfE164 &&
-						senderE164 &&
-						selfE164 === senderE164
+			const messageTimestampMs = msg.messageTimestamp
+				? Number(msg.messageTimestamp) * 1000
+				: undefined
 
-					if (isSelf) {
-						// Allowed — self-chat
-					} else {
-						// Check allowFrom list (needs E.164)
-						if (!senderE164) {
-							console.log(
-								`[whatsapp] Blocked DM from unresolved JID ${jid} — cannot match against allowFrom`
-							)
-							continue
-						}
-						const normalized = normalizeE164(senderE164)
-						const allowed = account.settings.allowFrom.some(
-							n => normalizeE164(n) === normalized
-						)
-						if (!allowed) {
-							console.log(
-								`[whatsapp] Blocked DM from ${label} (${normalized}) — not in allowFrom`
-							)
-							continue
-						}
-					}
-				}
-				// dmPolicy 'open' → allow all DMs through
+			const acResult = await checkInboundAccessControl({
+				settings: account.settings,
+				selfE164,
+				senderE164,
+				isGroup,
+				pushName: msg.pushName ?? undefined,
+				isFromMe: msg.key.fromMe ?? false,
+				messageTimestampMs,
+				connectedAtMs: account.connectedAtMs ?? undefined,
+				remoteJid: jid,
+				sendPairingReply: text =>
+					sock.sendMessage(jid, { text }).then(() => {}),
+				dataDir: this.#manager?.dataDir,
+				accountId
+			})
+
+			if (!acResult.allowed) {
+				console.log(
+					`[whatsapp] Blocked ${isGroup ? 'group' : 'DM'} from ${label}`
+				)
+				continue
 			}
 
-			// Extract text content (or transcribe voice)
-			let text = this.#extractText(msg.message)
+			// ── Read receipts ─────────────────────────────────────
+			const sendReceipts =
+				account.settings.sendReadReceipts ?? true
+			if (
+				acResult.shouldMarkRead &&
+				sendReceipts &&
+				msg.key.id
+			) {
+				sock
+					.readMessages([
+						{
+							remoteJid: jid,
+							id: msg.key.id,
+							participant: msg.key.participant ?? undefined,
+							fromMe: false
+						}
+					])
+					.catch(() => {})
+			}
 
+			// History/offline catch-up: marked read above, but don't trigger agent
+			if (event.type === 'append') continue
+
+			// ── Text extraction (unified pipeline) ────────────────
+			let text = extractText(msg.message)
+
+			// Location augmentation
+			const location = extractLocationData(msg.message)
+			const locationText = location
+				? formatLocationText(location)
+				: null
+			if (locationText) {
+				text = [text, locationText]
+					.filter(Boolean)
+					.join('\n')
+					.trim()
+			}
+
+			// Media placeholder fallback (before STT — audio gets transcribed instead)
+			if (!text && !msg.message?.audioMessage) {
+				text = extractMediaPlaceholder(msg.message) ?? null
+			}
+
+			// Voice → STT (only when no text extracted and audio exists)
 			if (!text && msg.message?.audioMessage) {
 				try {
 					text = await this.#transcribeAudio(msg)
@@ -683,63 +1056,161 @@ export class WhatsAppProvider implements ChannelProvider {
 						`[whatsapp] Voice transcription failed for ${label}:`,
 						err
 					)
+					// Fall back to media placeholder
+					text = '<media:audio>'
 				}
 			}
 
 			if (!text) continue
 
+			// ── Quoted-message context ────────────────────────────
+			const replyContext = describeReplyContext(
+				msg.message,
+				jidOpts
+			)
+			if (replyContext) {
+				const quotedLabel =
+					replyContext.senderE164 ?? replyContext.sender
+				const quotedPreview =
+					replyContext.body.length > 200
+						? replyContext.body.slice(0, 200) + '…'
+						: replyContext.body
+				text = `[Replying to ${quotedLabel}: "${quotedPreview}"]\n${text}`
+			}
+
+			// ── Media download ────────────────────────────────────
+			let mediaPath: string | undefined
+			let mediaType: string | undefined
+			let mediaFileName: string | undefined
+			try {
+				const media = await downloadInboundMedia(msg)
+				if (media && this.#manager?.dataDir) {
+					const maxBytes =
+						(account.settings.mediaMaxMb ?? 50) *
+						1024 *
+						1024
+					const saved = await saveInboundMedia({
+						buffer: media.buffer,
+						mimetype: media.mimetype,
+						fileName: media.fileName,
+						dataDir: this.#manager.dataDir,
+						maxBytes
+					})
+					if (saved) {
+						mediaPath = saved.path
+						mediaType = media.mimetype
+						mediaFileName = media.fileName
+					}
+				}
+			} catch (err) {
+				console.log(
+					`[whatsapp] Inbound media download failed: ${err}`
+				)
+			}
+
+			// ── Group mention gating ──────────────────────────────
+			if (isGroup) {
+				const groups = account.settings.groups ?? {}
+				const requireMention = resolveRequireMention(
+					groups,
+					jid
+				)
+
+				const mentionedJids = extractMentionedJids(
+					msg.message
+				)
+				const replyToSenderJid = extractReplyToSenderJid(
+					msg.message
+				)
+				const selfJid = sock.user?.id ?? null
+
+				const mentionCheck = checkBotMention({
+					mentionedJids,
+					selfJid,
+					selfE164,
+					replyToSenderJid,
+					body: text,
+					jidOpts
+				})
+
+				const gate = resolveMentionGating({
+					requireMention,
+					wasMentioned: mentionCheck.wasMentioned,
+					implicitMention: mentionCheck.implicitMention
+				})
+
+				if (!gate.shouldProcess) {
+					const historyLimit =
+						account.settings.historyLimit ?? 50
+					if (historyLimit > 0) {
+						const senderLabel =
+							msg.pushName && senderE164
+								? `${msg.pushName} (${senderE164})`
+								: (msg.pushName ?? senderE164 ?? senderJid)
+						recordGroupHistory(
+							this.#groupHistories,
+							jid,
+							{
+								sender: senderLabel,
+								body: text,
+								timestamp: messageTimestampMs
+							},
+							historyLimit
+						)
+					}
+					console.log(
+						`[whatsapp] Group message stored for context (no mention) in ${jid}`
+					)
+					continue
+				}
+
+				// Bot was mentioned — prepend history context
+				text = buildContextText(
+					this.#groupHistories,
+					jid,
+					text
+				)
+			}
+
 			console.log(
 				`[whatsapp] Accepted ${isGroup ? 'group' : 'DM'} from ${label}: ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}`
 			)
+
+			// Track inbound message in status
+			account.status = {
+				...account.status,
+				lastMessageAt: Date.now(),
+				lastEventAt: Date.now()
+			}
 
 			// Typing indicator — let sender know we're processing
 			sock
 				.sendPresenceUpdate('composing', jid)
 				.catch(() => {})
 
-			// Route to channel manager
-			this.#manager
-				?.ingestMessage({
-					channelId: 'whatsapp',
-					accountId,
-					conversationId: jid,
-					senderId: jid,
-					senderName: msg.pushName ?? undefined,
-					text,
-					timestamp: Date.now()
-				})
-				.catch(err => {
-					console.error(
-						`[whatsapp] Failed to ingest message from ${label}:`,
-						err
-					)
-				})
+			// Reuse timestamp computed for access control, fallback to server time
+			const timestamp = messageTimestampMs ?? Date.now()
+
+			// Route through debouncer → channel manager
+			const dedupeKey = `${accountId}:${jid}:${senderJid}`
+			const debouncer = this.#getDebouncer(
+				accountId,
+				account
+			)
+			debouncer.enqueue(dedupeKey, {
+				channelId: 'whatsapp',
+				accountId,
+				conversationId: jid,
+				senderId: senderE164 ?? senderJid,
+				senderName: msg.pushName ?? undefined,
+				text,
+				externalId: msg.key.id ?? undefined,
+				timestamp,
+				mediaPath,
+				mediaType,
+				mediaFileName
+			})
 		}
-	}
-
-	#extractText(
-		message: WAMessage['message']
-	): string | null {
-		if (!message) return null
-
-		// Direct text message
-		if (typeof message.conversation === 'string') {
-			return message.conversation
-		}
-
-		// Extended text (e.g. with link preview)
-		if (message.extendedTextMessage?.text) {
-			return message.extendedTextMessage.text
-		}
-
-		// Image/video/document with caption
-		const caption =
-			message.imageMessage?.caption ??
-			message.videoMessage?.caption ??
-			message.documentMessage?.caption
-		if (caption) return caption
-
-		return null
 	}
 
 	// ── Internal: voice message transcription ──────────────────────────

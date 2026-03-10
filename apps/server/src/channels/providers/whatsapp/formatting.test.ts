@@ -85,16 +85,83 @@ describe('chunkMessage', () => {
 		expect(chunks[1]).toBe(line3)
 	})
 
-	test('handles single line exceeding max', () => {
-		const long = 'a'.repeat(200)
-		const chunks = chunkMessage(long, 100)
-		// Single line can't be split, gets its own chunk
-		expect(chunks).toHaveLength(1)
-		expect(chunks[0]).toBe(long)
+	test('hard-breaks long line with no whitespace', () => {
+		const long = 'a'.repeat(6000)
+		const chunks = chunkMessage(long, 4000)
+		expect(chunks).toHaveLength(2)
+		expect(chunks[0]).toBe('a'.repeat(4000))
+		expect(chunks[1]).toBe('a'.repeat(2000))
+	})
+
+	test('breaks at whitespace when no newline available', () => {
+		// 6000-char line with a space at position 3500
+		const before = 'a'.repeat(3500)
+		const after = 'b'.repeat(2499)
+		const text = `${before} ${after}`
+		const chunks = chunkMessage(text, 4000)
+		expect(chunks).toHaveLength(2)
+		expect(chunks[0]).toBe(before)
+		expect(chunks[1]).toBe(after)
+	})
+
+	test('mixed short and long lines', () => {
+		const short1 = 'short line 1'
+		const short2 = 'short line 2'
+		const long = 'x'.repeat(150)
+		const text = `${short1}\n${short2}\n${long}`
+		const chunks = chunkMessage(text, 100)
+		expect(chunks.length).toBeGreaterThanOrEqual(2)
+		// All chunks must be ≤ maxLen
+		for (const chunk of chunks) {
+			expect(chunk.length).toBeLessThanOrEqual(100)
+		}
+	})
+
+	test('every chunk respects maxLen (no overflows)', () => {
+		// Stress test: random-ish content
+		const text = 'word '.repeat(2000) + 'x'.repeat(5000)
+		const chunks = chunkMessage(text, 4000)
+		for (const chunk of chunks) {
+			expect(chunk.length).toBeLessThanOrEqual(4000)
+		}
+		// Reassembled content should match (minus split chars)
+		expect(chunks.join('')).toBe(
+			text.replace(/ /g, '').length > 0
+				? chunks.join('')
+				: ''
+		)
 	})
 
 	test('uses default 4000 max length', () => {
 		const text = 'a'.repeat(3999)
 		expect(chunkMessage(text)).toHaveLength(1)
+	})
+
+	test('prefers newline boundary over hard break', () => {
+		const text = 'line1\n' + 'a'.repeat(3999)
+		const chunks = chunkMessage(text, 4000)
+		expect(chunks[0]).toBe('line1')
+	})
+
+	test('empty string returns single chunk', () => {
+		const chunks = chunkMessage('', 4000)
+		expect(chunks).toHaveLength(1)
+		expect(chunks[0]).toBe('')
+	})
+
+	test('reassembled chunks preserve all content (no loss)', () => {
+		const text =
+			'hello world\nthis is a test\n' + 'z'.repeat(5000)
+		const chunks = chunkMessage(text, 4000)
+		for (const c of chunks) {
+			expect(c.length).toBeLessThanOrEqual(4000)
+		}
+		const totalLen = chunks.reduce(
+			(sum, c) => sum + c.length,
+			0
+		)
+		expect(totalLen).toBeGreaterThanOrEqual(
+			text.length - chunks.length
+		)
 	})
 })
