@@ -1,3 +1,4 @@
+import type { EventStore } from '@ellie/db'
 import type {
 	RealtimeStore,
 	SessionEvent
@@ -165,6 +166,7 @@ export class ChannelDeliveryRegistry {
 
 			try {
 				await provider.sendMessage(target, text)
+				this.#markDelivered(sessionId, runId, target)
 			} catch (err) {
 				console.error(
 					`[delivery] Failed to send reply via ${target.channelId}:`,
@@ -209,6 +211,102 @@ export class ChannelDeliveryRegistry {
 			}
 		}
 		return texts.length > 0 ? texts.join('\n') : null
+	}
+
+	/** Persist a channel_delivered marker event (idempotent via dedupeKey). */
+	#markDelivered(
+		sessionId: string,
+		runId: string,
+		target: ChannelDeliveryTarget
+	): void {
+		try {
+			this.#store.appendEvent(
+				sessionId,
+				'channel_delivered',
+				{
+					channelId: target.channelId,
+					accountId: target.accountId,
+					conversationId: target.conversationId,
+					deliveredAt: Date.now()
+				},
+				runId,
+				`channel_delivered:${runId}:${targetKey(target)}`
+			)
+		} catch (err) {
+			console.warn(
+				'[delivery] Failed to persist channel_delivered marker:',
+				err
+			)
+		}
+	}
+
+	/**
+	 * Recover channel runs that closed but were never delivered
+	 * (e.g. server crashed before sendMessage completed).
+	 * Safe to call multiple times — delivery markers are idempotent.
+	 */
+	async recoverUndelivered(
+		eventStore: EventStore,
+		maxAgeMs = 30 * 60_000
+	): Promise<number> {
+		const undelivered =
+			eventStore.findUndeliveredChannelRuns(maxAgeMs)
+		if (undelivered.length === 0) return 0
+
+		console.log(
+			`[delivery] Recovering ${undelivered.length} undelivered channel run(s)`
+		)
+
+		let recovered = 0
+		for (const row of undelivered) {
+			try {
+				const target: ChannelDeliveryTarget = {
+					channelId: row.channelId,
+					accountId: row.accountId,
+					conversationId: row.conversationId
+				}
+
+				const text =
+					this.#extractFinalAssistantText(
+						row.sessionId,
+						row.runId
+					)
+				if (!text) {
+					console.warn(
+						`[delivery] No reply text for run ${row.runId}, skipping`
+					)
+					continue
+				}
+
+				const provider = this.#getProvider(
+					target.channelId
+				)
+				if (!provider) {
+					console.warn(
+						`[delivery] Provider ${target.channelId} not available, skipping`
+					)
+					continue
+				}
+
+				await provider.sendMessage(target, text)
+				this.#markDelivered(
+					row.sessionId,
+					row.runId,
+					target
+				)
+				recovered++
+			} catch (err) {
+				console.error(
+					`[delivery] Recovery failed for run ${row.runId}:`,
+					err
+				)
+			}
+		}
+
+		console.log(
+			`[delivery] Recovered ${recovered} delivery(ies)`
+		)
+		return recovered
 	}
 
 	shutdown(): void {

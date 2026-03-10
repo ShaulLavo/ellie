@@ -39,7 +39,9 @@ export const EVENT_TYPES = [
 	'memory_recall',
 	'memory_retain',
 	// Session lifecycle
-	'session_rotated'
+	'session_rotated',
+	// Channel delivery confirmation
+	'channel_delivered'
 ] as const satisfies readonly EventType[]
 
 export const eventTypeSchema = v.picklist(EVENT_TYPES)
@@ -57,7 +59,8 @@ export const DURABLE_EVENT_TYPES = [
 	'run_closed',
 	'session_rotated',
 	'memory_recall',
-	'memory_retain'
+	'memory_retain',
+	'channel_delivered'
 ] as const satisfies readonly EventType[]
 
 const durableEventTypeSet = new Set<EventType>(
@@ -287,6 +290,13 @@ export const payloadSchemas: Record<
 	session_rotated: v.object({
 		previousSessionId: v.string(),
 		message: v.string()
+	}),
+	// Channel delivery confirmation
+	channel_delivered: v.object({
+		channelId: v.string(),
+		accountId: v.string(),
+		conversationId: v.string(),
+		deliveredAt: v.number()
 	}),
 	memory_retain: v.object({
 		parts: v.array(

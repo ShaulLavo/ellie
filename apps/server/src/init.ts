@@ -96,8 +96,12 @@ function cleanupLegacyData(dataDir: string): void {
 }
 
 /**
- * Creates EventStore + RealtimeStore and recovers any stale runs
- * left over from a previous crash.
+ * Creates EventStore + RealtimeStore and recovers stale streaming
+ * state (tools stuck as 'running', messages stuck as 'streaming').
+ *
+ * NOTE: Stale run recovery (appending run_closed events) is deferred
+ * to recoverStaleRuns() so it runs after the delivery registry is
+ * watching — enabling channel delivery for crash-recovered runs.
  */
 function initStores(dataDir: string): StoresContext {
 	const eventStore = new EventStore(`${dataDir}/events.db`)
@@ -108,8 +112,27 @@ function initStores(dataDir: string): StoresContext {
 		initialSessionId
 	)
 
-	// Startup recovery — close runs that were still open when the
-	// server last exited.
+	// Recover stale streaming events (tools stuck as 'running',
+	// messages stuck as 'streaming') from a previous crash.
+	const recovered = eventStore.recoverStaleStreamingEvents()
+	if (recovered.tools || recovered.messages) {
+		console.log(
+			`[server] recovered stale streaming events: ${recovered.tools} tool(s), ${recovered.messages} message(s)`
+		)
+	}
+
+	return { eventStore, store }
+}
+
+/**
+ * Close runs that were still open when the server last exited.
+ * Called AFTER the delivery registry is watching so that the
+ * emitted run_closed events trigger channel delivery.
+ */
+function recoverStaleRuns(
+	eventStore: EventStore,
+	store: RealtimeStore
+): void {
 	const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000)
 	for (const { sessionId, runId } of staleRuns) {
 		try {
@@ -128,17 +151,11 @@ function initStores(dataDir: string): StoresContext {
 			)
 		}
 	}
-
-	// Recover stale streaming events (tools stuck as 'running',
-	// messages stuck as 'streaming') from a previous crash.
-	const recovered = eventStore.recoverStaleStreamingEvents()
-	if (recovered.tools || recovered.messages) {
+	if (staleRuns.length > 0) {
 		console.log(
-			`[server] recovered stale streaming events: ${recovered.tools} tool(s), ${recovered.messages} message(s)`
+			`[server] recovered ${staleRuns.length} stale run(s)`
 		)
 	}
-
-	return { eventStore, store }
 }
 
 /**
@@ -278,10 +295,12 @@ export async function init(): Promise<ServerContext> {
 
 	channelManager.register(new WhatsAppProvider())
 
-	// Boot channels with saved settings (non-blocking)
-	channelManager.bootAll().catch((err: unknown) => {
+	// Boot channels (awaited so providers are ready for recovery)
+	try {
+		await channelManager.bootAll()
+	} catch (err) {
 		console.error('[server] Channel boot error:', err)
-	})
+	}
 
 	// Watch current session for channel delivery
 	deliveryRegistry.watchSession(store.getCurrentSessionId())
@@ -289,6 +308,21 @@ export async function init(): Promise<ServerContext> {
 	store.subscribeToRotation(event => {
 		deliveryRegistry.watchSession(event.newSessionId)
 	})
+
+	// ── Crash recovery (must run after delivery registry is watching) ───
+	// Phase 1: Close stale runs — run_closed events trigger delivery
+	// via the subscription above (handles crash-during-agent-run)
+	recoverStaleRuns(eventStore, store)
+	// Phase 2: Re-deliver runs that closed before the crash but
+	// whose delivery never completed (handles crash-during-delivery)
+	deliveryRegistry
+		.recoverUndelivered(eventStore)
+		.catch((err: unknown) => {
+			console.error(
+				'[server] Delivery recovery error:',
+				err
+			)
+		})
 
 	return {
 		port,

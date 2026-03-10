@@ -391,6 +391,60 @@ export class EventStore {
 		}
 	}
 
+	// ── Undelivered channel run recovery ─────────────────────────────────
+
+	/**
+	 * Find channel-originated runs that closed but were never delivered.
+	 * Returns the channel source info needed to reconstruct delivery targets.
+	 */
+	findUndeliveredChannelRuns(
+		maxAgeMs: number
+	): Array<{
+		sessionId: string
+		runId: string
+		channelId: string
+		accountId: string
+		conversationId: string
+	}> {
+		const cutoff = Date.now() - maxAgeMs
+
+		const rows = this.sqlite
+			.query(
+				`SELECT DISTINCT
+					um.session_id  AS sessionId,
+					um.run_id      AS runId,
+					json_extract(um.payload, '$.source.channelId')      AS channelId,
+					json_extract(um.payload, '$.source.accountId')      AS accountId,
+					json_extract(um.payload, '$.source.conversationId') AS conversationId
+				FROM events um
+				INNER JOIN events rc
+					ON rc.session_id = um.session_id
+					AND rc.run_id    = um.run_id
+					AND rc.type      = 'run_closed'
+				WHERE um.type = 'user_message'
+					AND um.run_id IS NOT NULL
+					AND json_extract(um.payload, '$.source.channelId') IS NOT NULL
+					AND um.created_at >= ?
+					AND NOT EXISTS (
+						SELECT 1 FROM events cd
+						WHERE cd.session_id = um.session_id
+							AND cd.run_id     = um.run_id
+							AND cd.type       = 'channel_delivered'
+							AND json_extract(cd.payload, '$.channelId')      = json_extract(um.payload, '$.source.channelId')
+							AND json_extract(cd.payload, '$.accountId')      = json_extract(um.payload, '$.source.accountId')
+							AND json_extract(cd.payload, '$.conversationId') = json_extract(um.payload, '$.source.conversationId')
+					)`
+			)
+			.all(cutoff) as Array<{
+			sessionId: string
+			runId: string
+			channelId: string
+			accountId: string
+			conversationId: string
+		}>
+		return rows
+	}
+
 	// ── Bootstrap state ──────────────────────────────────────────────────
 
 	getBootstrapState(

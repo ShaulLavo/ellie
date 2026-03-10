@@ -174,6 +174,14 @@ export interface EventPayloadMap {
 
 	// --- Error ---
 	error: { message: string; code?: string }
+
+	// --- Channel delivery ---
+	channel_delivered: {
+		channelId: string
+		accountId: string
+		conversationId: string
+		deliveredAt: number
+	}
 }
 
 // ── Derived helpers ─────────────────────────────────────────────────────────
