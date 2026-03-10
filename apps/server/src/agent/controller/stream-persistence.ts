@@ -42,6 +42,64 @@ export function resetStreamState(state: StreamState): void {
 	state.currentToolRowIds.clear()
 }
 
+function toUploadContentUrl(uploadId: string): string {
+	return `/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`
+}
+
+function normalizeMediaDirectiveText(text: string): string {
+	const lines = text.split('\n')
+	const output: string[] = []
+	let inFence = false
+
+	for (const line of lines) {
+		if (/^\s*```/.test(line)) {
+			inFence = !inFence
+			output.push(line)
+			continue
+		}
+
+		if (inFence) {
+			output.push(line)
+			continue
+		}
+
+		const mediaMatch = line.match(/^(\s*MEDIA:\s*)(.+)$/i)
+		if (!mediaMatch) {
+			output.push(line)
+			continue
+		}
+
+		const [, prefix, rawRef] = mediaMatch
+		const ref = rawRef.trim()
+		const uploadMatch = ref.match(/^upload:(.+)$/i)
+		if (!uploadMatch?.[1]) {
+			output.push(line)
+			continue
+		}
+
+		output.push(
+			`${prefix}${toUploadContentUrl(uploadMatch[1])}`
+		)
+	}
+
+	return output.join('\n')
+}
+
+function normalizeAssistantMessage(
+	message: AssistantMessage
+): AssistantMessage {
+	return {
+		...message,
+		content: message.content.map(part => {
+			if (part.type !== 'text') return part
+			return {
+				...part,
+				text: normalizeMediaDirectiveText(part.text)
+			}
+		})
+	}
+}
+
 /** Persist a DB write with standardized error handling. */
 function persistSafe(
 	deps: StreamPersistenceDeps,
@@ -91,7 +149,9 @@ export function handleStreamingEvent(
 					sessionId,
 					'assistant_message',
 					{
-						message: event.message as AssistantMessage,
+						message: normalizeAssistantMessage(
+							event.message as AssistantMessage
+						),
 						streaming: true
 					},
 					runId
@@ -115,7 +175,9 @@ export function handleStreamingEvent(
 				deps.store.updateEvent(
 					state.currentMessageRowId!,
 					{
-						message: event.message as AssistantMessage,
+						message: normalizeAssistantMessage(
+							event.message as AssistantMessage
+						),
 						streaming: true
 					},
 					sessionId
@@ -139,7 +201,9 @@ export function handleStreamingEvent(
 				deps.store.updateEvent(
 					state.currentMessageRowId!,
 					{
-						message: event.message as AssistantMessage,
+						message: normalizeAssistantMessage(
+							event.message as AssistantMessage
+						),
 						streaming: false
 					},
 					sessionId

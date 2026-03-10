@@ -14,7 +14,6 @@ import type { ToolResultPart } from '../utils'
 import { formatTime } from '../utils'
 import { PartRenderer } from './part-renderer'
 import { CopyButton } from './copy-button'
-import { SpeakButton } from './speak-button'
 
 export const ChatMessageRow = memo(
 	({
@@ -93,7 +92,6 @@ export const ChatMessageRow = memo(
 				</MessageContent>
 				{message.text && !message.isStreaming && (
 					<MessageActions className="opacity-0 group-hover:opacity-100 transition-opacity group-[.is-user]:ml-auto">
-						{!isUser && <SpeakButton text={message.text} />}
 						<CopyButton text={message.text} />
 					</MessageActions>
 				)}

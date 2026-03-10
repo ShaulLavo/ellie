@@ -108,9 +108,10 @@ export function createToolRegistry(
 			getParentScope: config.getTraceScope
 		}
 
-		basicDirectTools = rawBasicTools.map(t =>
-			createTracedToolWrapper(t, traceOpts)
-		)
+		basicDirectTools = [
+			...rawBasicTools,
+			...rawDirectOnlyTools
+		].map(t => createTracedToolWrapper(t, traceOpts))
 	}
 
 	// Exec tools get RAW tools + trace deps (not traced wrappers —

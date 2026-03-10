@@ -12,6 +12,7 @@ export type ContentPart =
 	| {
 			type: 'image'
 			file: string
+			url?: string
 			mime: string
 			size: number
 			thumb?: string
@@ -21,6 +22,7 @@ export type ContentPart =
 	| {
 			type: 'video'
 			file: string
+			url?: string
 			mime: string
 			size: number
 			thumb?: string
@@ -29,6 +31,7 @@ export type ContentPart =
 	| {
 			type: 'audio'
 			file: string
+			url?: string
 			mime: string
 			size: number
 			waveform?: string
@@ -37,6 +40,7 @@ export type ContentPart =
 	| {
 			type: 'file'
 			file: string
+			url?: string
 			mime: string
 			size: number
 			name?: string
@@ -83,6 +87,7 @@ export type ContentPart =
 			type: 'media-directive'
 			ref: string
 			uploadId?: string
+			url?: string
 			mediaKind: 'image' | 'audio' | 'video' | 'file'
 			error?: string
 	  }
@@ -95,7 +100,21 @@ export type ContentPart =
 			totalSteps?: number
 			detail?: string
 			completedPhases?: string[]
+			entries?: Array<{
+				id: string
+				phase: string
+				label: string
+				status:
+					| 'started'
+					| 'running'
+					| 'completed'
+					| 'failed'
+				detail?: string
+				step?: number
+				totalSteps?: number
+			}>
 			uploadId?: string
+			url?: string
 			recipe?: {
 				model: string
 				width: number

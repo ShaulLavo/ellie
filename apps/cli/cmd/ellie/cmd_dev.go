@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -29,6 +30,36 @@ func killPort(port string) {
 	}
 }
 
+// killExistingEllie kills all processes from a previous ellie dev session.
+// This prevents zombie server/watcher processes from accumulating.
+func killExistingEllie() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	myPID := fmt.Sprintf("%d", os.Getpid())
+
+	// Patterns that match processes spawned by "ellie dev"
+	patterns := []string{
+		"bun.*server\\.ts",    // bun run --hot src/server.ts
+		"tailwindcss.*watch",  // bunx @tailwindcss/cli --watch
+		"turbo.*run.*dev",     // turbo run dev
+	}
+
+	for _, pattern := range patterns {
+		out, err := exec.Command("pgrep", "-f", pattern).Output()
+		if err != nil || len(out) == 0 {
+			continue
+		}
+		for _, pid := range strings.Fields(strings.TrimSpace(string(out))) {
+			if pid == myPID {
+				continue
+			}
+			_ = exec.Command("kill", pid).Run()
+		}
+	}
+}
+
 func runDev(cmd *cobra.Command, args []string) error {
 	root, err := findMonorepoRoot()
 	if err != nil {
@@ -40,6 +71,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	killExistingEllie()
 	killPort("3000")
 
 	fmt.Println(styleBold.Render("Starting dev server..."))

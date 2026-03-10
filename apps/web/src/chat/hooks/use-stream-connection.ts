@@ -244,13 +244,35 @@ export function useStreamConnection(
 					}
 
 					const streaming = parsed.streaming as boolean
+
+					// Check raw text for [[tts]] — voice-only messages
+					// should never show text, even while streaming.
+					const rawParts = (parsed.content ??
+						parsed.parts) as
+						| { type: string; text?: string }[]
+						| undefined
+					const rawText =
+						rawParts
+							?.filter(p => p.type === 'text')
+							.map(p => p.text ?? '')
+							.join('') ?? ''
+					const isTts = /\[\[tts(?::[^\]]*?)?\]\]/i.test(
+						rawText
+					)
+
 					const stored = eventToStored(event)
 
 					if (streaming) {
-						setStreamingMessage({
-							...stored,
-							isStreaming: true
-						})
+						if (isTts) {
+							// [[tts]] detected — hide streaming text entirely.
+							// Audio will arrive via a separate assistant_audio event.
+							setStreamingMessage(null)
+						} else {
+							setStreamingMessage({
+								...stored,
+								isStreaming: true
+							})
+						}
 					} else {
 						setStreamingMessage(null)
 						// Skip empty messages — [[tts]] suppresses text in display,

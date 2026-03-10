@@ -186,6 +186,7 @@ export interface EventPayloadMap {
 	// --- TTS post-processing ---
 	assistant_audio: {
 		uploadId: string
+		url: string
 		mime: string
 		size: number
 		synthesizedText: string

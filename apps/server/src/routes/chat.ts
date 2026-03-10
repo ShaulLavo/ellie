@@ -62,6 +62,10 @@ async function readUploadBytes(
 	return Buffer.concat(chunks)
 }
 
+function buildUploadUrl(uploadId: string): string {
+	return `/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`
+}
+
 /** Check if a MIME type represents text-based content the model can read. */
 const TEXT_MIME_PREFIXES = [
 	'text/',
@@ -250,6 +254,7 @@ export function createChatRoutes(
 								contentParts.push({
 									type: 'image',
 									file: att.uploadId,
+									url: buildUploadUrl(att.uploadId),
 									mime: att.mime,
 									size: att.size,
 									name: att.name,
@@ -269,6 +274,7 @@ export function createChatRoutes(
 								contentParts.push({
 									type: 'file',
 									file: att.uploadId,
+									url: buildUploadUrl(att.uploadId),
 									mime: att.mime,
 									size: att.size,
 									name: att.name,
@@ -279,6 +285,7 @@ export function createChatRoutes(
 								contentParts.push({
 									type: 'video',
 									file: att.uploadId,
+									url: buildUploadUrl(att.uploadId),
 									mime: att.mime,
 									size: att.size,
 									name: att.name,
@@ -288,6 +295,7 @@ export function createChatRoutes(
 								contentParts.push({
 									type: 'audio',
 									file: att.uploadId,
+									url: buildUploadUrl(att.uploadId),
 									mime: att.mime,
 									size: att.size,
 									name: att.name,
@@ -297,6 +305,7 @@ export function createChatRoutes(
 								contentParts.push({
 									type: 'file',
 									file: att.uploadId,
+									url: buildUploadUrl(att.uploadId),
 									mime: att.mime,
 									size: att.size,
 									name: att.name,

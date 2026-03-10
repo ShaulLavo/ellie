@@ -138,6 +138,21 @@ function extractUploadIdFromMediaRef(
 	return uploadId.length > 0 ? uploadId : undefined
 }
 
+function extractRenderableMediaUrl(
+	ref: string
+): string | undefined {
+	const trimmed = ref.trim()
+	if (/^https?:\/\//i.test(trimmed)) return trimmed
+	if (
+		/^\/api\/uploads-rpc\/.+\/content(?:[?#].*)?$/i.test(
+			trimmed
+		)
+	) {
+		return trimmed
+	}
+	return undefined
+}
+
 function parseDisplayDirectives(text: string): {
 	text: string
 	mediaParts: Extract<
@@ -177,6 +192,7 @@ function parseDisplayDirectives(text: string): {
 						type: 'media-directive',
 						ref,
 						uploadId,
+						url: extractRenderableMediaUrl(ref),
 						mediaKind: classifyMediaRef(ref)
 					})
 				}
@@ -273,6 +289,22 @@ function extractImageGenParts(
 					toolCallId,
 					status: 'complete',
 					uploadId: details.uploadId as string | undefined,
+					url: details.url as string | undefined,
+					entries: details.entries as
+						| Array<{
+								id: string
+								phase: string
+								label: string
+								status:
+									| 'started'
+									| 'running'
+									| 'completed'
+									| 'failed'
+								detail?: string
+								step?: number
+								totalSteps?: number
+						  }>
+						| undefined,
 					recipe: details.recipe as
 						| {
 								model: string
@@ -304,7 +336,23 @@ function extractImageGenParts(
 				type: 'image-generation',
 				toolCallId,
 				status: 'error',
-				error: errorText
+				error: errorText,
+				url: details?.url as string | undefined,
+				entries: details?.entries as
+					| Array<{
+							id: string
+							phase: string
+							label: string
+							status:
+								| 'started'
+								| 'running'
+								| 'completed'
+								| 'failed'
+							detail?: string
+							step?: number
+							totalSteps?: number
+					  }>
+					| undefined
 			}
 		]
 	}
@@ -323,6 +371,21 @@ function extractImageGenParts(
 				| number
 				| undefined,
 			detail: runDetails.detail as string | undefined,
+			entries: runDetails.entries as
+				| Array<{
+						id: string
+						phase: string
+						label: string
+						status:
+							| 'started'
+							| 'running'
+							| 'completed'
+							| 'failed'
+						detail?: string
+						step?: number
+						totalSteps?: number
+				  }>
+				| undefined,
 			completedPhases: runDetails.completedPhases as
 				| string[]
 				| undefined
@@ -398,6 +461,7 @@ export function eventToStored(
 				{
 					type: 'audio',
 					file: uploadId,
+					url: parsed.url as string | undefined,
 					mime: (parsed.mime as string) ?? 'audio/ogg',
 					size: (parsed.size as number) ?? 0
 				}

@@ -6,7 +6,6 @@ import {
 } from 'lucide-react'
 import { SunHorizonIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
-import { env } from '@ellie/env/client'
 import {
 	MessageResponse,
 	StreamingMessageResponse
@@ -24,12 +23,6 @@ import { ToolCard } from '@/components/ai-elements/tool'
 import { ImageGenProgress } from './image-gen-progress'
 import { VoiceMessage } from './voice-message'
 import type { ToolResultPart } from '../utils'
-
-const API_BASE = env.API_BASE_URL.replace(/\/$/, '')
-/** Build upload content URL, encoding the ID for path-style blob IDs (e.g. trace/…/file.mp3). */
-function uploadUrl(fileId: string): string {
-	return `${API_BASE}/api/uploads-rpc/${encodeURIComponent(fileId)}/content`
-}
 
 export const PartRenderer = memo(
 	({
@@ -178,10 +171,11 @@ export const PartRenderer = memo(
 				)
 			}
 			case 'image':
+				if (!part.url) return null
 				return (
 					<div className="my-2 max-w-sm">
 						<img
-							src={uploadUrl(part.file)}
+							src={part.url}
 							alt={
 								(part as ContentPart & { name?: string })
 									.name ?? 'Image'
@@ -192,27 +186,29 @@ export const PartRenderer = memo(
 					</div>
 				)
 			case 'video':
+				if (!part.url) return null
 				return (
 					<div className="my-2 max-w-sm">
 						<video
-							src={uploadUrl(part.file)}
+							src={part.url}
 							controls
 							className="max-h-80 rounded-lg"
 						/>
 					</div>
 				)
 			case 'audio':
+				if (!part.url) return null
 				return (
 					<div className="my-2">
 						<VoiceMessage
-							src={uploadUrl(part.file)}
+							src={part.url}
 							duration={part.duration}
 							waveform={part.waveform}
 						/>
 					</div>
 				)
 			case 'file': {
-				const hasUpload = part.file && part.file.length > 0
+				const hasUpload = !!part.url
 				const label = part.name ?? 'Attachment'
 				const sizeLabel =
 					part.size >= 1024
@@ -233,7 +229,7 @@ export const PartRenderer = memo(
 				)
 				return hasUpload ? (
 					<a
-						href={uploadUrl(part.file)}
+						href={part.url}
 						target="_blank"
 						rel="noopener noreferrer"
 						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
@@ -248,7 +244,7 @@ export const PartRenderer = memo(
 				)
 			}
 			case 'media-directive': {
-				if (part.error || !part.uploadId) {
+				if (part.error || !part.url) {
 					return (
 						<div className="my-2 flex max-w-sm items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
 							<AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
@@ -268,7 +264,7 @@ export const PartRenderer = memo(
 					return (
 						<div className="my-2 max-w-sm">
 							<img
-								src={uploadUrl(part.uploadId)}
+								src={part.url}
 								alt="Attached media"
 								className="max-h-80 rounded-lg object-contain"
 								loading="lazy"
@@ -281,7 +277,7 @@ export const PartRenderer = memo(
 					return (
 						<div className="my-2 max-w-sm">
 							<video
-								src={uploadUrl(part.uploadId)}
+								src={part.url}
 								controls
 								className="max-h-80 rounded-lg"
 							/>
@@ -292,16 +288,14 @@ export const PartRenderer = memo(
 				if (part.mediaKind === 'audio') {
 					return (
 						<div className="my-2">
-							<VoiceMessage
-								src={uploadUrl(part.uploadId)}
-							/>
+							<VoiceMessage src={part.url} />
 						</div>
 					)
 				}
 
 				return (
 					<a
-						href={uploadUrl(part.uploadId)}
+						href={part.url}
 						target="_blank"
 						rel="noopener noreferrer"
 						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"

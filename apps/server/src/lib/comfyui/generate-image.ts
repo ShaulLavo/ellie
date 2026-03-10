@@ -67,6 +67,7 @@ export interface GenerationResult {
 	success: boolean
 	recipe: ImageRecipe
 	uploadId?: string
+	url?: string
 	mime?: string
 	durationMs: number
 	error?: string
@@ -269,7 +270,11 @@ export async function executeImageGeneration(
 
 	try {
 		// Auto-setup: install ComfyUI + required models if needed
-		onProgress('setup', 'started')
+		onProgress(
+			'setup',
+			'started',
+			'Preparing ComfyUI and required models...'
+		)
 		const setupResult = await ensureComfyReady(client, {
 			checkpoint: recipe.checkpoint,
 			loraFilenames: resolvedLoras.map(l => l.name),
@@ -295,7 +300,7 @@ export async function executeImageGeneration(
 			}
 		}
 
-		onProgress('setup', 'completed')
+		onProgress('setup', 'completed', 'Setup complete')
 
 		// Download remaining models in the background
 		downloadRemainingModelsInBackground({
@@ -303,17 +308,17 @@ export async function executeImageGeneration(
 		})
 
 		// Queue the prompt
-		onProgress('queue', 'started')
+		onProgress('queue', 'started', 'Queueing workflow...')
 		const { prompt_id, client_id } =
 			await client.queuePrompt(workflow)
 		console.info(
 			`[image-gen] Queued prompt ${prompt_id} for model ${selectedModel}`
 		)
 
-		onProgress('queue', 'completed')
+		onProgress('queue', 'completed', 'Prompt queued')
 
 		// Wait for completion with real-time progress
-		onProgress('denoising', 'started')
+		onProgress('denoising', 'started', 'Sampling image...')
 		const history = await client.waitForCompletion(
 			prompt_id,
 			client_id,
@@ -327,7 +332,11 @@ export async function executeImageGeneration(
 				)
 			}
 		)
-		onProgress('denoising', 'completed')
+		onProgress(
+			'denoising',
+			'completed',
+			'Sampling complete'
+		)
 
 		// Find output images
 		const outputs = Object.values(history.outputs)
@@ -354,7 +363,11 @@ export async function executeImageGeneration(
 		const outputImage = imageOutput.images[0]
 
 		// Fetch image bytes
-		onProgress('fetch', 'started')
+		onProgress(
+			'fetch',
+			'started',
+			'Downloading output image...'
+		)
 		const { data, mime } = await client.getOutputImage(
 			outputImage.filename,
 			outputImage.subfolder,
@@ -367,7 +380,11 @@ export async function executeImageGeneration(
 		const ext = mime === 'image/png' ? 'png' : 'jpg'
 
 		// Store via BlobSink — file lands at ${dataDir}/uploads/${uploadId}
-		onProgress('save', 'started')
+		onProgress(
+			'save',
+			'started',
+			'Saving generated image...'
+		)
 		const blobRef = await blobSink.write({
 			traceId: runId,
 			spanId: 'image-gen',
@@ -377,7 +394,7 @@ export async function executeImageGeneration(
 			ext
 		})
 
-		onProgress('save', 'completed')
+		onProgress('save', 'completed', 'Saved generated image')
 
 		console.info(
 			`[image-gen] Complete: ${mime} ${imageBuffer.length} bytes in ${(durationMs / 1000).toFixed(1)}s`
@@ -396,6 +413,7 @@ export async function executeImageGeneration(
 			success: true,
 			recipe,
 			uploadId: blobRef.uploadId,
+			url: blobRef.url,
 			mime,
 			durationMs
 		}

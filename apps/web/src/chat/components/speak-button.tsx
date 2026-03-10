@@ -4,7 +4,6 @@ import {
 	Loader2Icon,
 	Volume2Icon
 } from 'lucide-react'
-import { env } from '@ellie/env/client'
 import { MessageAction } from '@/components/ai-elements/message'
 import { synthesizeSpeech } from '@/lib/tts-client'
 
@@ -36,7 +35,7 @@ export function SpeakButton({ text }: { text: string }) {
 		setError(null)
 		try {
 			const result = await synthesizeSpeech(text)
-			const src = `${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${result.uploadId}/content`
+			const src = result.audio.url
 			const audio = new Audio(src)
 			audioRef.current = audio
 			setAudioSrc(src)

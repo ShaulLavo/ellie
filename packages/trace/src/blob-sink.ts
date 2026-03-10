@@ -106,6 +106,7 @@ export class TusBlobSink implements BlobSink {
 
 		return {
 			uploadId: storagePath,
+			url: `/api/uploads-rpc/${encodeURIComponent(storagePath)}/content`,
 			storagePath,
 			mimeType,
 			sizeBytes,

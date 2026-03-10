@@ -5,6 +5,14 @@
  * Called from generate_image — makes image generation zero-config.
  */
 
+import {
+	cp,
+	mkdir,
+	readdir,
+	rename,
+	rm
+} from 'node:fs/promises'
+import { join } from 'node:path'
 import type { ComfyUIClient } from './client'
 import {
 	CHECKPOINTS,
@@ -163,6 +171,8 @@ export async function ensureComfyReady(
 }
 
 const noop: ProgressFn = () => {}
+const MODEL_DOWNLOAD_MAX_ATTEMPTS = 3
+const MODEL_DOWNLOAD_RETRY_DELAY_MS = 3000
 
 async function doEnsureComfyReady(
 	client: ComfyUIClient,
@@ -201,7 +211,10 @@ async function doEnsureComfyReady(
 				installed,
 				skipped,
 				failed,
-				error: 'Required checkpoint download failed'
+				error: buildModelFailureMessage(
+					failed,
+					'Required checkpoint download failed'
+				)
 			}
 		}
 
@@ -334,6 +347,7 @@ async function doEnsureComfyReady(
 
 	// ── Install ComfyUI ────────────────────────────────────────────────
 	let workspace = await getComfyWorkspace()
+	let preservedModelsPath: string | null = null
 
 	if (workspace) {
 		const healthy = await isWorkspaceHealthy(workspace)
@@ -342,6 +356,10 @@ async function doEnsureComfyReady(
 				'Auto-setup',
 				'running',
 				'ComfyUI install is broken (missing deps), reinstalling...'
+			)
+			preservedModelsPath = await preserveWorkspaceModels(
+				workspace,
+				stepProgress
 			)
 			await run(['rm', '-rf', workspace])
 			workspace = null
@@ -403,6 +421,11 @@ async function doEnsureComfyReady(
 			'running',
 			`ComfyUI installed at ${workspace}`
 		)
+		await restoreWorkspaceModels(
+			workspace,
+			preservedModelsPath,
+			stepProgress
+		)
 	}
 
 	// ── Download required models ─────────────────────────────────────
@@ -443,7 +466,10 @@ async function doEnsureComfyReady(
 			installed,
 			skipped,
 			failed,
-			error: 'Required checkpoint download failed'
+			error: buildModelFailureMessage(
+				failed,
+				'Required checkpoint download failed'
+			)
 		}
 	}
 
@@ -474,6 +500,143 @@ async function doEnsureComfyReady(
 	)
 
 	return { ready: true, installed, skipped, failed }
+}
+
+export function summarizeDownloadError(
+	stdout: string,
+	stderr: string
+): string {
+	return (stderr || stdout).slice(-200).trim()
+}
+
+export function isRetryableDownloadError(
+	detail: string
+): boolean {
+	const lower = detail.toLowerCase()
+	return (
+		lower.includes('readtimeout') ||
+		lower.includes('timed out') ||
+		lower.includes('connection reset') ||
+		lower.includes('temporarily unavailable') ||
+		lower.includes('connection aborted') ||
+		lower.includes('remote disconnected')
+	)
+}
+
+async function downloadModelWithRetry(
+	args: string[],
+	progress: ProgressFn,
+	label: string,
+	modelName: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	let lastError = 'download failed'
+
+	for (
+		let attempt = 1;
+		attempt <= MODEL_DOWNLOAD_MAX_ATTEMPTS;
+		attempt++
+	) {
+		const result = await run(args, { stdin: '\n' })
+		if (result.ok) {
+			return { ok: true }
+		}
+
+		lastError = summarizeDownloadError(
+			result.stdout,
+			result.stderr
+		)
+		const canRetry =
+			attempt < MODEL_DOWNLOAD_MAX_ATTEMPTS &&
+			isRetryableDownloadError(lastError)
+
+		if (!canRetry) {
+			return { ok: false, error: lastError }
+		}
+
+		progress(
+			label,
+			'running',
+			`${modelName} — download timed out, retrying (${attempt + 1}/${MODEL_DOWNLOAD_MAX_ATTEMPTS})...`
+		)
+		await Bun.sleep(MODEL_DOWNLOAD_RETRY_DELAY_MS * attempt)
+	}
+
+	return { ok: false, error: lastError }
+}
+
+function buildModelFailureMessage(
+	failed: string[],
+	fallback: string
+): string {
+	const lastFailure = failed.at(-1)
+	if (!lastFailure) return fallback
+	return `${fallback}: ${lastFailure}`
+}
+
+async function preserveWorkspaceModels(
+	workspace: string,
+	progress: ProgressFn
+): Promise<string | null> {
+	const modelsPath = join(workspace, 'models')
+	const hasModels = await Bun.file(modelsPath).exists()
+	if (!hasModels) return null
+
+	const backupPath = `${workspace}.__models_backup__`
+	await rm(backupPath, { force: true, recursive: true })
+	await rename(modelsPath, backupPath)
+	progress(
+		'Auto-setup',
+		'running',
+		'Preserved existing models before repair'
+	)
+	return backupPath
+}
+
+async function restoreWorkspaceModels(
+	workspace: string,
+	backupPath: string | null,
+	progress: ProgressFn
+): Promise<void> {
+	if (!backupPath) return
+	const backupExists = await Bun.file(backupPath).exists()
+	if (!backupExists) return
+
+	const modelsPath = join(workspace, 'models')
+	const hasModels = await Bun.file(modelsPath).exists()
+
+	if (!hasModels) {
+		await rename(backupPath, modelsPath)
+		progress(
+			'Auto-setup',
+			'running',
+			'Restored preserved models after repair'
+		)
+		return
+	}
+
+	const existingEntries = await readdir(modelsPath)
+	if (existingEntries.length === 0) {
+		await rm(modelsPath, { force: true, recursive: true })
+		await rename(backupPath, modelsPath)
+		progress(
+			'Auto-setup',
+			'running',
+			'Restored preserved models after repair'
+		)
+		return
+	}
+
+	await mkdir(modelsPath, { recursive: true })
+	await cp(backupPath, modelsPath, {
+		force: false,
+		recursive: true
+	})
+	await rm(backupPath, { force: true, recursive: true })
+	progress(
+		'Auto-setup',
+		'running',
+		'Merged preserved models into repaired workspace'
+	)
 }
 
 // ── Model download logic ─────────────────────────────────────────────────────
@@ -530,16 +693,18 @@ async function ensureModels(
 			) {
 				args.push('--set-civitai-api-token', civitaiToken)
 			}
-			const result = await run(args, { stdin: '\n' })
+			const result = await downloadModelWithRetry(
+				args,
+				progress,
+				'Downloading models',
+				ckptEntry.name
+			)
 			if (!result.ok) {
-				const errDetail = (result.stderr || result.stdout)
-					.slice(-200)
-					.trim()
 				failed.push(ckptEntry.name)
 				progress(
 					'Downloading models',
 					'running',
-					`${ckptEntry.name} — FAILED: ${errDetail}`
+					`${ckptEntry.name} — FAILED: ${result.error}`
 				)
 				return false
 			}
@@ -593,16 +758,18 @@ async function ensureModels(
 		) {
 			args.push('--set-civitai-api-token', civitaiToken)
 		}
-		const result = await run(args, { stdin: '\n' })
+		const result = await downloadModelWithRetry(
+			args,
+			progress,
+			'Downloading LoRAs',
+			loraEntry.name
+		)
 		if (!result.ok) {
-			const errDetail = (result.stderr || result.stdout)
-				.slice(-200)
-				.trim()
 			failed.push(loraEntry.name)
 			progress(
 				'Downloading LoRAs',
 				'running',
-				`${loraEntry.name} — FAILED: ${errDetail}`
+				`${loraEntry.name} — FAILED: ${result.error}`
 			)
 		} else {
 			installed.push(loraEntry.name)
@@ -668,7 +835,7 @@ async function ensureModels(
 				'running',
 				`Downloading ${model.name}...`
 			)
-			const result = await run(
+			const retried = await downloadModelWithRetry(
 				[
 					'comfy',
 					'model',
@@ -678,17 +845,16 @@ async function ensureModels(
 					'--relative-path',
 					model.dest
 				],
-				{ stdin: '\n' }
+				progress,
+				'Installing ELLA',
+				model.name
 			)
-			if (!result.ok) {
-				const errDetail = (result.stderr || result.stdout)
-					.slice(-200)
-					.trim()
+			if (!retried.ok) {
 				failed.push(model.name)
 				progress(
 					'Installing ELLA',
 					'running',
-					`${model.name} — FAILED: ${errDetail}`
+					`${model.name} — FAILED: ${retried.error}`
 				)
 			} else {
 				installed.push(model.name)

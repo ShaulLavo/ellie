@@ -322,6 +322,7 @@ export class TtsPostProcessor {
 			'assistant_audio',
 			{
 				uploadId: blobRef.uploadId,
+				url: blobRef.url,
 				mime: result.mime,
 				size: result.audio.length,
 				synthesizedText: ttsText

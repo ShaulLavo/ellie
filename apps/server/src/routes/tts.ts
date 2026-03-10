@@ -62,6 +62,7 @@ const ttsProvidersSchema = v.object({
 
 const ttsConvertResponseSchema = v.object({
 	uploadId: v.string(),
+	url: v.string(),
 	provider: v.literal('elevenlabs'),
 	outputFormat: v.string(),
 	mime: v.string(),
@@ -70,6 +71,7 @@ const ttsConvertResponseSchema = v.object({
 	audio: v.object({
 		type: v.literal('audio'),
 		file: v.string(),
+		url: v.string(),
 		mime: v.string(),
 		size: v.number()
 	})
@@ -195,6 +197,7 @@ export function createTtsRoutes(
 
 					return {
 						uploadId: blobRef.uploadId,
+						url: blobRef.url,
 						provider: result.provider,
 						outputFormat: result.outputFormat,
 						mime: result.mime,
@@ -203,6 +206,7 @@ export function createTtsRoutes(
 						audio: {
 							type: 'audio' as const,
 							file: blobRef.uploadId,
+							url: blobRef.url,
 							mime: result.mime,
 							size: result.audio.length
 						}

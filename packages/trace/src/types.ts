@@ -69,6 +69,8 @@ export interface TraceEventEnvelope {
 export interface BlobRef {
 	/** TUS upload ID — canonical blob identity. */
 	uploadId: string
+	/** Canonical content URL for reading the blob over HTTP. */
+	url: string
 	/** Internal storage path: trace/<traceId>/<spanId>/<role>/<ulid>.<ext> */
 	storagePath: string
 	/** MIME type of the blob content. */

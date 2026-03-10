@@ -1,20 +1,26 @@
 import { memo } from 'react'
 import {
 	CheckCircleIcon,
-	XCircleIcon,
-	ImageIcon
+	ImageIcon,
+	XCircleIcon
 } from 'lucide-react'
 import {
+	CaretDownIcon,
+	CircleNotchIcon,
+	CloudArrowDownIcon,
 	GearSixIcon,
+	ImageSquareIcon,
 	QueueIcon,
-	PaintBrushIcon,
-	DownloadSimpleIcon,
-	FloppyDiskIcon,
-	CircleNotchIcon
+	WarningCircleIcon
 } from '@phosphor-icons/react'
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
-import { env } from '@ellie/env/client'
+import { ChainOfThoughtStep } from '@/components/ai-elements/chain-of-thought'
+import {
+	Task,
+	TaskContent,
+	TaskTrigger
+} from '@/components/ai-elements/task'
 import { cn } from '@/lib/utils'
 
 type ImageGenPart = Extract<
@@ -22,230 +28,220 @@ type ImageGenPart = Extract<
 	{ type: 'image-generation' }
 >
 
-/** Ordered pipeline phases with display info. */
-const PHASES: Array<{
-	id: string
-	label: string
-	icon: PhosphorIcon
-}> = [
-	{ id: 'setup', label: 'Setting up', icon: GearSixIcon },
-	{ id: 'queue', label: 'Queuing', icon: QueueIcon },
-	{
-		id: 'denoising',
-		label: 'Generating',
-		icon: PaintBrushIcon
-	},
-	{
-		id: 'fetch',
-		label: 'Downloading',
-		icon: DownloadSimpleIcon
-	},
-	{ id: 'save', label: 'Saving', icon: FloppyDiskIcon }
-]
+type ProgressEntry = NonNullable<
+	ImageGenPart['entries']
+>[number]
 
 export const ImageGenProgress = memo(
 	({ part }: { part: ImageGenPart }) => {
-		if (part.status === 'complete') {
-			return <CompletedView part={part} />
-		}
-		if (part.status === 'error') {
-			return <ErrorView part={part} />
-		}
-		return <RunningView part={part} />
+		const entries = part.entries ?? []
+		const currentEntry = entries.at(-1)
+		const summary = buildSummary(part, currentEntry)
+
+		return (
+			<Task
+				className="my-2 max-w-xl rounded-lg border border-border/50 bg-card/50 p-3"
+				defaultOpen={part.status === 'running'}
+			>
+				<TaskTrigger
+					className="w-full"
+					title="Generating image"
+				>
+					<div className="flex w-full items-start gap-3 text-left">
+						<div className="mt-0.5">
+							{part.status === 'error' ? (
+								<XCircleIcon className="size-4 text-destructive" />
+							) : part.status === 'complete' ? (
+								<CheckCircleIcon className="size-4 text-emerald-500" />
+							) : (
+								<CircleNotchIcon className="size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						<div className="min-w-0 flex-1">
+							<div className="font-mono text-[11px] tracking-wide text-foreground">
+								Generating image
+							</div>
+							<div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+								{summary}
+							</div>
+						</div>
+						<CaretDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+					</div>
+				</TaskTrigger>
+				<TaskContent className="mt-0">
+					<div className="space-y-3">
+						{entries.length > 0 ? (
+							<div className="space-y-3">
+								{entries.map((entry, index) => (
+									<ChainOfThoughtStep
+										key={entry.id}
+										icon={iconForEntry(entry)}
+										label={
+											<div className="font-mono text-[11px] leading-tight">
+												{entry.label}
+												{renderStepCount(entry)}
+											</div>
+										}
+										description={formatEntryDescription(
+											entry
+										)}
+										status={visualStatusForEntry(
+											part,
+											entry,
+											index,
+											entries.length
+										)}
+									/>
+								))}
+							</div>
+						) : (
+							<div className="font-mono text-[10px] text-muted-foreground">
+								No progress events yet.
+							</div>
+						)}
+
+						{part.status === 'error' && part.error && (
+							<div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 font-mono text-[10px] text-destructive">
+								{part.error}
+							</div>
+						)}
+
+						{part.status === 'complete' && (
+							<div className="space-y-2">
+								{part.url && (
+									<img
+										src={part.url}
+										alt="Generated image"
+										className="max-h-80 rounded-lg object-contain"
+										loading="lazy"
+									/>
+								)}
+								{part.recipe && (
+									<div className="flex flex-wrap gap-1">
+										<MetaBadge label={part.recipe.model} />
+										<MetaBadge
+											label={`${part.recipe.width}x${part.recipe.height}`}
+										/>
+										<MetaBadge
+											label={`${part.recipe.steps}steps`}
+										/>
+										<MetaBadge
+											label={`cfg${part.recipe.cfg}`}
+										/>
+										<MetaBadge
+											label={`seed:${part.recipe.seed}`}
+										/>
+										<MetaBadge
+											label={`${(part.recipe.durationMs / 1000).toFixed(1)}s`}
+										/>
+										{part.recipe.loras?.map(lora => (
+											<MetaBadge
+												key={lora.name}
+												label={`lora:${lora.name}`}
+											/>
+										))}
+									</div>
+								)}
+							</div>
+						)}
+					</div>
+				</TaskContent>
+			</Task>
+		)
 	}
 )
 
-function RunningView({ part }: { part: ImageGenPart }) {
-	const completed = new Set(part.completedPhases ?? [])
-	const activePhase = part.phase
-
+function buildSummary(
+	part: ImageGenPart,
+	currentEntry?: ProgressEntry
+): string {
+	if (part.status === 'error') {
+		return part.error ?? 'Image generation failed'
+	}
+	if (part.status === 'complete') {
+		if (part.elapsedMs != null) {
+			return `Completed in ${(part.elapsedMs / 1000).toFixed(1)}s`
+		}
+		return 'Completed'
+	}
+	if (!currentEntry) {
+		return 'Waiting for progress updates...'
+	}
 	return (
-		<div className="my-2 max-w-sm space-y-0 rounded-lg border border-border/50 p-3">
-			<div className="mb-2 flex items-center gap-2">
-				<ImageIcon className="size-4 text-muted-foreground" />
-				<span className="font-mono text-[11px] tracking-wide text-foreground">
-					Generating image
-				</span>
-			</div>
-			<div className="space-y-0">
-				{PHASES.map((phase, i) => {
-					const isCompleted = completed.has(phase.id)
-					const isActive = activePhase === phase.id
-					const isPending = !isCompleted && !isActive
-
-					const status: StepStatus = isCompleted
-						? 'complete'
-						: isActive
-							? 'active'
-							: 'pending'
-
-					// Only show phases that are completed, active, or the next pending one
-					if (
-						isPending &&
-						!completed.has(PHASES[i - 1]?.id ?? '') &&
-						i > 0
-					)
-						return null
-
-					return (
-						<Step
-							key={phase.id}
-							icon={phase.icon}
-							label={phase.label}
-							status={status}
-							isLast={i === PHASES.length - 1 || isPending}
-							step={isActive ? part.step : undefined}
-							totalSteps={
-								isActive ? part.totalSteps : undefined
-							}
-							detail={isActive ? part.detail : undefined}
-						/>
-					)
-				})}
-			</div>
-		</div>
+		formatEntryDescription(currentEntry) ??
+		currentEntry.label
 	)
 }
 
-type StepStatus = 'complete' | 'active' | 'pending'
-
-const statusStyles: Record<StepStatus, string> = {
-	active: 'text-foreground',
-	complete: 'text-muted-foreground',
-	pending: 'text-muted-foreground/50'
+function visualStatusForEntry(
+	part: ImageGenPart,
+	entry: ProgressEntry,
+	index: number,
+	totalEntries: number
+): 'complete' | 'active' | 'pending' {
+	if (entry.status === 'failed') {
+		return 'active'
+	}
+	if (
+		part.status === 'running' &&
+		index === totalEntries - 1
+	) {
+		return 'active'
+	}
+	if (
+		part.status === 'error' &&
+		index === totalEntries - 1
+	) {
+		return 'active'
+	}
+	return 'complete'
 }
 
-function Step({
-	icon: Icon,
-	label,
-	status,
-	isLast,
-	step,
-	totalSteps,
-	detail
-}: {
-	icon: PhosphorIcon
-	label: string
-	status: StepStatus
-	isLast: boolean
-	step?: number
-	totalSteps?: number
-	detail?: string
-}) {
-	const hasSteps = step != null && totalSteps != null
-	const percent = hasSteps
-		? Math.round((step! / totalSteps!) * 100)
-		: undefined
-
-	return (
-		<div
-			className={cn(
-				'flex gap-2 text-sm',
-				statusStyles[status],
-				status !== 'pending' &&
-					'fade-in-0 slide-in-from-top-1 animate-in'
-			)}
-		>
-			<div className="relative mt-0.5 flex flex-col items-center">
-				{status === 'active' ? (
-					<CircleNotchIcon className="size-3.5 animate-spin" />
-				) : (
-					<Icon className="size-3.5" />
-				)}
-				{!isLast && (
-					<div className="mt-0.5 w-px flex-1 bg-border" />
-				)}
-			</div>
-			<div className="flex-1 space-y-1 overflow-hidden pb-2">
-				<div className="font-mono text-[11px] leading-tight">
-					{label}
-					{hasSteps && ` ${step}/${totalSteps}`}
-				</div>
-				{hasSteps && percent != null && (
-					<div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-						<div
-							className="h-full rounded-full bg-primary transition-all duration-300"
-							style={{
-								width: `${percent}%`
-							}}
-						/>
-					</div>
-				)}
-				{detail && (
-					<div className="font-mono text-[10px] text-muted-foreground">
-						{detail}
-					</div>
-				)}
-			</div>
-		</div>
-	)
+function formatEntryDescription(
+	entry: ProgressEntry
+): string | undefined {
+	const detail = entry.detail?.trim()
+	const count = renderStepCount(entry)
+	if (detail && count) return `${detail} ${count}`
+	return detail ?? count ?? undefined
 }
 
-function CompletedView({ part }: { part: ImageGenPart }) {
-	const recipe = part.recipe
-	return (
-		<div className="my-2 max-w-sm">
-			{part.uploadId && (
-				<img
-					src={`${env.API_BASE_URL.replace(/\/$/, '')}/api/uploads-rpc/${encodeURIComponent(part.uploadId)}/content`}
-					alt="Generated image"
-					className="max-h-80 rounded-lg object-contain"
-					loading="lazy"
-				/>
-			)}
-			{recipe && (
-				<div className="mt-1.5 flex flex-wrap gap-1">
-					<MetaBadge label={recipe.model} />
-					<MetaBadge
-						label={`${recipe.width}x${recipe.height}`}
-					/>
-					<MetaBadge label={`${recipe.steps}steps`} />
-					<MetaBadge label={`cfg${recipe.cfg}`} />
-					<MetaBadge label={`seed:${recipe.seed}`} />
-					<MetaBadge
-						label={`${(recipe.durationMs / 1000).toFixed(1)}s`}
-					/>
-					{recipe.loras?.map(l => (
-						<MetaBadge
-							key={l.name}
-							label={`lora:${l.name}`}
-						/>
-					))}
-				</div>
-			)}
-			{part.elapsedMs != null && !recipe && (
-				<div className="mt-1 flex items-center gap-1.5">
-					<CheckCircleIcon className="size-3 text-muted-foreground" />
-					<span className="font-mono text-[10px] text-muted-foreground">
-						{(part.elapsedMs / 1000).toFixed(1)}s
-					</span>
-				</div>
-			)}
-		</div>
-	)
+function renderStepCount(
+	entry: ProgressEntry
+): string | undefined {
+	if (entry.step == null || entry.totalSteps == null) {
+		return undefined
+	}
+	return `(${entry.step}/${entry.totalSteps})`
 }
 
-function ErrorView({ part }: { part: ImageGenPart }) {
-	return (
-		<div className="my-2 flex max-w-sm items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-			<XCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
-			<div className="min-w-0">
-				<span className="font-mono text-[11px] text-destructive">
-					Image generation failed
-				</span>
-				{part.error && (
-					<span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
-						{part.error}
-					</span>
-				)}
-			</div>
-		</div>
-	)
+function iconForEntry(entry: ProgressEntry): PhosphorIcon {
+	if (entry.status === 'failed') {
+		return WarningCircleIcon
+	}
+
+	switch (entry.phase) {
+		case 'setup':
+			return GearSixIcon
+		case 'queue':
+			return QueueIcon
+		case 'denoising':
+			return ImageSquareIcon
+		case 'fetch':
+		case 'save':
+			return CloudArrowDownIcon
+		default:
+			return ImageIcon
+	}
 }
 
 function MetaBadge({ label }: { label: string }) {
 	return (
-		<span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+		<span
+			className={cn(
+				'rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground'
+			)}
+		>
 			{label}
 		</span>
 	)

@@ -289,8 +289,8 @@ export function createImageGenTool(
 				}
 			}
 
-			// Throttled progress adapter: bridges ProgressFn → onUpdate
-			const onProgress = createThrottledProgress(onUpdate)
+			// Progress adapter: preserves the full visible timeline for the UI.
+			const progress = createThrottledProgress(onUpdate)
 
 			const result = await executeImageGeneration(
 				rawParams as GenerateImageArgs,
@@ -299,9 +299,10 @@ export function createImageGenTool(
 					sessionId,
 					runId,
 					dataDir: deps.dataDir,
-					onProgress
+					onProgress: progress.onProgress
 				}
 			)
+			const progressSnapshot = progress.getSnapshot()
 
 			if (!result.success) {
 				return {
@@ -314,7 +315,10 @@ export function createImageGenTool(
 					details: {
 						success: false,
 						error: result.error,
-						recipe: result.recipe
+						recipe: result.recipe,
+						entries: progressSnapshot.entries,
+						completedPhases:
+							progressSnapshot.completedPhases
 					}
 				}
 			}
@@ -353,7 +357,10 @@ export function createImageGenTool(
 					success: true,
 					recipe: webRecipe,
 					uploadId: result.uploadId,
-					elapsedMs: result.durationMs
+					url: result.url,
+					elapsedMs: result.durationMs,
+					entries: progressSnapshot.entries,
+					completedPhases: progressSnapshot.completedPhases
 				}
 			}
 		}
@@ -364,21 +371,63 @@ export function createImageGenTool(
 
 const DENOISING_THROTTLE_MS = 500
 
+type ImageProgressStatus =
+	| 'started'
+	| 'running'
+	| 'completed'
+	| 'failed'
+
+interface ImageProgressEntry {
+	id: string
+	phase: string
+	label: string
+	status: ImageProgressStatus
+	detail?: string
+	step?: number
+	totalSteps?: number
+}
+
+interface ImageProgressTracker {
+	onProgress?: ProgressFn
+	getSnapshot: () => {
+		entries: ImageProgressEntry[]
+		completedPhases: string[]
+	}
+}
+
 function createThrottledProgress(
 	onUpdate?: AgentToolUpdateCallback
-): ProgressFn | undefined {
-	if (!onUpdate) return undefined
+): ImageProgressTracker {
+	if (!onUpdate) {
+		return {
+			onProgress: undefined,
+			getSnapshot: () => ({
+				entries: [],
+				completedPhases: []
+			})
+		}
+	}
 
 	let lastDenoisingUpdate = 0
 	const completedPhases: string[] = []
+	const entries: ImageProgressEntry[] = []
+	let entryCounter = 0
 
-	return (label, status, detail, step, totalSteps) => {
+	const onProgress: ProgressFn = (
+		label,
+		status,
+		detail,
+		step,
+		totalSteps
+	) => {
+		const phase = mapProgressPhase(label)
+
 		// Track completed phases for timeline display
 		if (
 			status === 'completed' &&
-			!completedPhases.includes(label)
+			!completedPhases.includes(phase)
 		) {
-			completedPhases.push(label)
+			completedPhases.push(phase)
 		}
 
 		// Throttle denoising running updates to avoid flooding SSE
@@ -389,6 +438,16 @@ function createThrottledProgress(
 			lastDenoisingUpdate = now
 		}
 
+		recordProgressEntry(entries, {
+			label,
+			phase,
+			status,
+			detail,
+			step,
+			totalSteps,
+			nextId: () => `image-progress-${++entryCounter}`
+		})
+
 		onUpdate({
 			content: [
 				{
@@ -397,13 +456,144 @@ function createThrottledProgress(
 				}
 			],
 			details: {
-				phase: label,
+				phase,
 				status,
 				detail,
 				step,
 				totalSteps,
-				completedPhases: [...completedPhases]
+				completedPhases: [...completedPhases],
+				entries: [...entries]
 			}
 		})
+	}
+
+	return {
+		onProgress,
+		getSnapshot: () => ({
+			entries: [...entries],
+			completedPhases: [...completedPhases]
+		})
+	}
+}
+
+function mapProgressPhase(label: string): string {
+	switch (label) {
+		case 'Auto-setup':
+		case 'Downloading models':
+		case 'Launching ComfyUI':
+		case 'setup':
+			return 'setup'
+		case 'queue':
+			return 'queue'
+		case 'denoising':
+			return 'denoising'
+		case 'fetch':
+			return 'fetch'
+		case 'save':
+			return 'save'
+		default:
+			return label
+	}
+}
+
+function recordProgressEntry(
+	entries: ImageProgressEntry[],
+	update: {
+		label: string
+		phase: string
+		status: ImageProgressStatus
+		detail?: string
+		step?: number
+		totalSteps?: number
+		nextId: () => string
+	}
+): void {
+	const {
+		label,
+		phase,
+		status,
+		detail,
+		step,
+		totalSteps,
+		nextId
+	} = update
+
+	if (
+		!shouldShowProgressEntry(
+			label,
+			detail,
+			step,
+			totalSteps
+		)
+	) {
+		return
+	}
+
+	const normalizedLabel = formatProgressLabel(label)
+	const lastEntry = entries.at(-1)
+	const shouldUpdateLast =
+		label === 'denoising' &&
+		status === 'running' &&
+		lastEntry?.label === normalizedLabel
+
+	if (shouldUpdateLast && lastEntry) {
+		lastEntry.status = status
+		lastEntry.detail = detail
+		lastEntry.step = step
+		lastEntry.totalSteps = totalSteps
+		return
+	}
+
+	if (
+		lastEntry &&
+		lastEntry.label === normalizedLabel &&
+		lastEntry.status === status &&
+		lastEntry.detail === detail &&
+		lastEntry.step === step &&
+		lastEntry.totalSteps === totalSteps
+	) {
+		return
+	}
+
+	entries.push({
+		id: nextId(),
+		phase,
+		label: normalizedLabel,
+		status,
+		detail,
+		step,
+		totalSteps
+	})
+}
+
+function shouldShowProgressEntry(
+	label: string,
+	detail?: string,
+	step?: number,
+	totalSteps?: number
+): boolean {
+	if (detail) return true
+	if (label === 'denoising') return true
+	return step != null && totalSteps != null
+}
+
+function formatProgressLabel(label: string): string {
+	switch (label) {
+		case 'Auto-setup':
+			return 'Auto-setup'
+		case 'Downloading models':
+			return 'Downloading models'
+		case 'Launching ComfyUI':
+			return 'Launching ComfyUI'
+		case 'queue':
+			return 'Queue prompt'
+		case 'denoising':
+			return 'Generating image'
+		case 'fetch':
+			return 'Downloading output image'
+		case 'save':
+			return 'Saving generated image'
+		default:
+			return label
 	}
 }

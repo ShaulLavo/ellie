@@ -4,6 +4,7 @@ const baseUrl = env.API_BASE_URL.replace(/\/$/, '')
 
 export interface SynthesizeSpeechResult {
 	uploadId: string
+	url: string
 	provider: 'elevenlabs'
 	outputFormat: string
 	mime: string
@@ -12,6 +13,7 @@ export interface SynthesizeSpeechResult {
 	audio: {
 		type: 'audio'
 		file: string
+		url: string
 		mime: string
 		size: number
 	}

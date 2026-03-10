@@ -30,6 +30,7 @@ export const imageContentSchema = v.object({
 export const imageFileContentSchema = v.object({
 	type: v.literal('image'),
 	file: v.string(),
+	url: v.optional(v.string()),
 	mime: v.string(),
 	size: v.number(),
 	name: v.optional(v.string()),
@@ -41,6 +42,7 @@ export const imageFileContentSchema = v.object({
 export const videoFileContentSchema = v.object({
 	type: v.literal('video'),
 	file: v.string(),
+	url: v.optional(v.string()),
 	mime: v.string(),
 	size: v.number(),
 	name: v.optional(v.string()),
@@ -50,6 +52,7 @@ export const videoFileContentSchema = v.object({
 export const audioFileContentSchema = v.object({
 	type: v.literal('audio'),
 	file: v.string(),
+	url: v.optional(v.string()),
 	mime: v.string(),
 	size: v.number(),
 	name: v.optional(v.string()),
@@ -59,6 +62,7 @@ export const audioFileContentSchema = v.object({
 export const fileContentSchema = v.object({
 	type: v.literal('file'),
 	file: v.string(),
+	url: v.optional(v.string()),
 	mime: v.string(),
 	size: v.number(),
 	name: v.optional(v.string()),
