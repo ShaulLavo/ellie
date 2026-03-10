@@ -36,6 +36,7 @@ function makeMockBlobSink(
 	return {
 		write: async opts => ({
 			uploadId: `upload-${Date.now()}`,
+			url: `/blobs/upload-${Date.now()}`,
 			storagePath: `trace/${opts.traceId}/${opts.spanId}/${opts.role}/blob.${opts.ext}`,
 			mimeType: opts.mimeType,
 			sizeBytes: Buffer.isBuffer(opts.content)
@@ -76,6 +77,7 @@ describe('truncateToolResultWithBlob', () => {
 				writtenOpts = opts
 				return {
 					uploadId: 'overflow-blob-1',
+					url: '/blobs/overflow-blob-1',
 					storagePath: `trace/${opts.traceId}/${opts.spanId}/${opts.role}/blob.txt`,
 					mimeType: 'text/plain',
 					sizeBytes: Buffer.isBuffer(opts.content)
@@ -147,6 +149,7 @@ describe('truncateToolResultWithBlob', () => {
 		const sink = makeMockBlobSink({
 			write: async opts => ({
 				uploadId: 'my-blob-id',
+				url: '/blobs/my-blob-id',
 				storagePath: 'path',
 				mimeType: 'text/plain',
 				sizeBytes: 100,

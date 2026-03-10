@@ -114,6 +114,7 @@ describe('TraceRecorder', () => {
 		recorder.record(scope, 'test', 'test', {}, [
 			{
 				uploadId: 'up-1',
+				url: '/blobs/up-1',
 				storagePath: 'trace/x/y/z.txt',
 				mimeType: 'text/plain',
 				sizeBytes: 100,
