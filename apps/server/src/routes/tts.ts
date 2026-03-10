@@ -9,7 +9,7 @@ import {
 import {
 	ELEVENLABS_MODELS,
 	elevenLabsTTS,
-	resolveElevenLabsApiKey,
+	resolveElevenLabsApiKeyAsync,
 	resolveElevenLabsTtsConfig
 } from '../lib/tts'
 
@@ -77,7 +77,8 @@ const ttsConvertResponseSchema = v.object({
 
 export function createTtsRoutes(
 	blobSink: BlobSink,
-	traceRecorder?: TraceRecorder
+	traceRecorder?: TraceRecorder,
+	credentialsPath?: string
 ) {
 	return new Elysia({
 		prefix: '/api/tts',
@@ -85,11 +86,16 @@ export function createTtsRoutes(
 	})
 		.get(
 			'/status',
-			() => {
+			async () => {
 				const config = resolveElevenLabsTtsConfig()
+				const apiKey = credentialsPath
+					? await resolveElevenLabsApiKeyAsync(
+							credentialsPath
+						)
+					: config.apiKey
 				return {
 					provider: 'elevenlabs' as const,
-					configured: Boolean(resolveElevenLabsApiKey()),
+					configured: Boolean(apiKey),
 					voiceId: config.voiceId,
 					modelId: config.modelId,
 					baseUrl: config.baseUrl,
@@ -103,10 +109,14 @@ export function createTtsRoutes(
 		)
 		.get(
 			'/providers',
-			() => {
-				const configured = Boolean(
-					resolveElevenLabsApiKey()
-				)
+			async () => {
+				const configured = credentialsPath
+					? Boolean(
+							await resolveElevenLabsApiKeyAsync(
+								credentialsPath
+							)
+						)
+					: Boolean(resolveElevenLabsTtsConfig().apiKey)
 				return {
 					providers: [
 						{
@@ -129,6 +139,12 @@ export function createTtsRoutes(
 			'/convert',
 			async ({ body }) => {
 				const config = resolveElevenLabsTtsConfig()
+				if (credentialsPath && !config.apiKey) {
+					config.apiKey =
+						await resolveElevenLabsApiKeyAsync(
+							credentialsPath
+						)
+				}
 				if (!config.apiKey) {
 					throw new ServiceUnavailableError(
 						'ElevenLabs is not configured'

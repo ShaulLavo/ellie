@@ -13,7 +13,8 @@ import { createAgentRoutes } from './routes/agent'
 import {
 	createAuthRoutes,
 	createGroqAuthRoutes,
-	createBraveAuthRoutes
+	createBraveAuthRoutes,
+	createElevenLabsAuthRoutes
 } from './routes/auth'
 import { createChatRoutes } from './routes/chat'
 import { errorSchema } from './routes/schemas/common-schemas'
@@ -84,6 +85,7 @@ export const app = new Elysia()
 			ctx.invalidateAgentCache
 		)
 	)
+	.use(createElevenLabsAuthRoutes(ctx.CREDENTIALS_PATH))
 	.use(createChannelRoutes(ctx.channelManager))
 	.use(
 		createTusApp({
@@ -100,7 +102,13 @@ export const app = new Elysia()
 			ctx.traceRecorder
 		)
 	)
-	.use(createTtsRoutes(ctx.blobSink, ctx.traceRecorder))
+	.use(
+		createTtsRoutes(
+			ctx.blobSink,
+			ctx.traceRecorder,
+			ctx.CREDENTIALS_PATH
+		)
+	)
 	.use(createDevRoutes(ctx.DATA_DIR))
 	.use(createTraceRoutes(ctx.traceRecorder))
 	.use(createDbStudioRoutes(ctx.DATA_DIR))

@@ -1,4 +1,5 @@
 import { env, type ServerEnv } from '@ellie/env/server'
+import { loadElevenLabsCredential } from '@ellie/ai/credentials'
 
 const DEFAULT_ELEVENLABS_BASE_URL =
 	'https://api.elevenlabs.io'
@@ -176,6 +177,22 @@ export function resolveElevenLabsApiKey(
 	serverEnv: Pick<ServerEnv, 'ELEVENLABS_API_KEY'> = env
 ): string | undefined {
 	return serverEnv.ELEVENLABS_API_KEY || Bun.env.XI_API_KEY
+}
+
+/**
+ * Async variant that also checks the credential store file.
+ * Priority: env vars → credential file.
+ */
+export async function resolveElevenLabsApiKeyAsync(
+	credentialsPath: string,
+	serverEnv: Pick<ServerEnv, 'ELEVENLABS_API_KEY'> = env
+): Promise<string | undefined> {
+	const envKey = resolveElevenLabsApiKey(serverEnv)
+	if (envKey) return envKey
+
+	const cred =
+		await loadElevenLabsCredential(credentialsPath)
+	return cred?.key
 }
 
 export function resolveElevenLabsTtsConfig(

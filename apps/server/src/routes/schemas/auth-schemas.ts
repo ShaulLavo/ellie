@@ -110,3 +110,26 @@ export const braveAuthApiKeyResponseSchema = v.object({
 	ok: v.literal(true),
 	mode: v.literal('api_key')
 })
+
+// ── ElevenLabs auth schemas ─────────────────────────────────────────────────
+
+export const elevenlabsAuthStatusResponseSchema = v.object({
+	mode: v.nullable(v.literal('api_key')),
+	source: v.picklist(['env_api_key', 'file', 'none']),
+	configured: v.boolean(),
+	preview: v.optional(v.string())
+})
+
+export const elevenlabsAuthClearResponseSchema = v.object({
+	cleared: v.boolean()
+})
+
+export const elevenlabsAuthApiKeyBodySchema = v.object({
+	key: v.pipe(v.string(), v.nonEmpty()),
+	validate: v.optional(v.boolean())
+})
+
+export const elevenlabsAuthApiKeyResponseSchema = v.object({
+	ok: v.literal(true),
+	mode: v.literal('api_key')
+})

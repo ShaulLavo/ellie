@@ -24,7 +24,11 @@ import {
 	loadBraveCredential,
 	setBraveCredential,
 	clearBraveCredential,
-	type BraveCredential
+	type BraveCredential,
+	loadElevenLabsCredential,
+	setElevenLabsCredential,
+	clearElevenLabsCredential,
+	type ElevenLabsCredential
 } from '@ellie/ai/credentials'
 import {
 	oauthAuthorize,
@@ -51,7 +55,11 @@ import {
 	braveAuthStatusResponseSchema,
 	braveAuthClearResponseSchema,
 	braveAuthApiKeyBodySchema,
-	braveAuthApiKeyResponseSchema
+	braveAuthApiKeyResponseSchema,
+	elevenlabsAuthStatusResponseSchema,
+	elevenlabsAuthClearResponseSchema,
+	elevenlabsAuthApiKeyBodySchema,
+	elevenlabsAuthApiKeyResponseSchema
 } from './schemas/auth-schemas'
 import {
 	BadRequestError,
@@ -724,6 +732,162 @@ export function createBraveAuthRoutes(
 					body: braveAuthApiKeyBodySchema,
 					response: {
 						200: braveAuthApiKeyResponseSchema,
+						400: errorSchema,
+						401: errorSchema,
+						403: errorSchema,
+						500: errorSchema
+					}
+				}
+			)
+	)
+}
+
+// ── ElevenLabs auth routes ──────────────────────────────────────────────────
+
+/**
+ * Validate an ElevenLabs API key via GET /v1/voices.
+ * Returns an error string if invalid, or null if acceptable.
+ */
+async function validateElevenLabsApiKey(
+	key: string
+): Promise<string | null> {
+	try {
+		const res = await fetch(
+			'https://api.elevenlabs.io/v1/voices',
+			{
+				method: 'GET',
+				headers: {
+					'xi-api-key': key
+				}
+			}
+		)
+		if (res.status === 401) {
+			return 'Invalid API key (401 from ElevenLabs)'
+		}
+		return null
+	} catch (err) {
+		console.warn(
+			'[auth] ElevenLabs API key validation network error:',
+			err instanceof Error ? err.message : err
+		)
+		return null
+	}
+}
+
+export function createElevenLabsAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return (
+		new Elysia({
+			prefix: '/api/auth/elevenlabs',
+			tags: ['Auth']
+		})
+			.onBeforeHandle(({ request, server }) => {
+				const ip = server?.requestIP(request)
+				const addr = ip?.address
+				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
+					throw new ForbiddenError(
+						'Auth routes are only available from localhost'
+					)
+				}
+			})
+
+			// ── GET /status ────────────────────────────────────────
+			.get(
+				'/status',
+				async () => {
+					const envKey =
+						process.env.ELEVENLABS_API_KEY ||
+						process.env.XI_API_KEY
+					if (envKey) {
+						return {
+							mode: 'api_key' as const,
+							source: 'env_api_key' as const,
+							configured: true,
+							preview: keyPreview(envKey)
+						}
+					}
+
+					const cred =
+						await loadElevenLabsCredential(credentialsPath)
+					if (!cred) {
+						return {
+							mode: null,
+							source: 'none' as const,
+							configured: false
+						}
+					}
+
+					return {
+						mode: 'api_key' as const,
+						source: 'file' as const,
+						configured: true,
+						preview: keyPreview(cred.key)
+					}
+				},
+				{
+					response: {
+						200: elevenlabsAuthStatusResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /clear ────────────────────────────────────────
+			.post(
+				'/clear',
+				async () => {
+					const cleared =
+						await clearElevenLabsCredential(credentialsPath)
+					if (cleared) onCredentialChange?.()
+					return { cleared }
+				},
+				{
+					response: {
+						200: elevenlabsAuthClearResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /api-key ──────────────────────────────────────
+			.post(
+				'/api-key',
+				async ({ body }) => {
+					const { key, validate = true } = body
+
+					if (validate) {
+						const invalid = await validateElevenLabsApiKey(
+							key.trim()
+						)
+						if (invalid) {
+							throw new UnauthorizedError(invalid)
+						}
+					}
+
+					const cred: ElevenLabsCredential = {
+						type: 'api_key',
+						key: key.trim()
+					}
+					const result = await setElevenLabsCredential(
+						credentialsPath,
+						cred
+					)
+					if (!result.ok) {
+						throw new InternalServerError(result.error)
+					}
+
+					onCredentialChange?.()
+					return {
+						ok: true as const,
+						mode: 'api_key' as const
+					}
+				},
+				{
+					body: elevenlabsAuthApiKeyBodySchema,
+					response: {
+						200: elevenlabsAuthApiKeyResponseSchema,
 						400: errorSchema,
 						401: errorSchema,
 						403: errorSchema,

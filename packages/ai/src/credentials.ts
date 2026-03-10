@@ -52,6 +52,9 @@ export type GroqCredential = ApiKeyCredential
 /** Brave Search only supports API key authentication. */
 export type BraveCredential = ApiKeyCredential
 
+/** ElevenLabs only supports API key authentication. */
+export type ElevenLabsCredential = ApiKeyCredential
+
 export type CredentialMap = Record<string, unknown>
 
 function isMultiProvider(
@@ -62,6 +65,26 @@ function isMultiProvider(
 		json !== null &&
 		!('type' in json)
 	)
+}
+
+function stringField(
+	raw: Record<string, unknown>,
+	...keys: string[]
+): string | null {
+	for (const k of keys) {
+		if (typeof raw[k] === 'string') return raw[k]
+	}
+	return null
+}
+
+function numberField(
+	raw: Record<string, unknown>,
+	...keys: string[]
+): number | null {
+	for (const k of keys) {
+		if (typeof raw[k] === 'number') return raw[k]
+	}
+	return null
 }
 
 /**
@@ -83,31 +106,23 @@ export function normalizeAnthropicCredential(
 		return { type: 'token', token: raw.token, expires }
 	}
 	if (type === 'oauth') {
-		const access =
-			typeof raw.access === 'string'
-				? raw.access
-				: typeof raw.access_token === 'string'
-					? raw.access_token
-					: null
-		const refresh =
-			typeof raw.refresh === 'string'
-				? raw.refresh
-				: typeof raw.refresh_token === 'string'
-					? raw.refresh_token
-					: null
-		const expires =
-			typeof raw.expires === 'number'
-				? raw.expires
-				: typeof raw.expires_at === 'number'
-					? raw.expires_at
-					: null
+		const access = stringField(
+			raw,
+			'access',
+			'access_token'
+		)
+		const refresh = stringField(
+			raw,
+			'refresh',
+			'refresh_token'
+		)
+		const expires = numberField(
+			raw,
+			'expires',
+			'expires_at'
+		)
 		if (access && refresh && expires !== null) {
-			return {
-				type: 'oauth',
-				access,
-				refresh,
-				expires
-			}
+			return { type: 'oauth', access, refresh, expires }
 		}
 	}
 	return null
@@ -316,6 +331,17 @@ export const clearGroqCredential = (path: string) =>
 
 export const clearBraveCredential = (path: string) =>
 	clearProviderCredential(path, 'brave')
+
+export const loadElevenLabsCredential = (path: string) =>
+	loadApiKeyProvider(path, 'elevenlabs')
+
+export const setElevenLabsCredential = (
+	path: string,
+	credential: ElevenLabsCredential
+) => setProviderCredential(path, 'elevenlabs', credential)
+
+export const clearElevenLabsCredential = (path: string) =>
+	clearProviderCredential(path, 'elevenlabs')
 
 export const clearAnthropicCredential = (path: string) =>
 	clearProviderCredential(path, 'anthropic')
