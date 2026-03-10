@@ -71,6 +71,18 @@ func init() {
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authClearCmd)
+
+	rootCmd.AddCommand(pairCmd)
+	pairCmd.AddCommand(pairListCmd)
+	pairCmd.AddCommand(pairApproveCmd)
+
+	rootCmd.AddCommand(allowCmd)
+	allowCmd.AddCommand(allowListCmd)
+	allowCmd.AddCommand(allowAddCmd)
+	allowCmd.AddCommand(allowRemoveCmd)
+
+	rootCmd.AddCommand(configCmd)
+	configCmd.AddCommand(configWhatsAppCmd)
 }
 
 func main() {

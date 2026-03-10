@@ -67,6 +67,7 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 			huh.NewOption("Anthropic", "anthropic"),
 			huh.NewOption("Groq", "groq"),
 			huh.NewOption("Brave Search", "brave"),
+			huh.NewOption("ElevenLabs (TTS)", "elevenlabs"),
 			huh.NewOption("WhatsApp", "whatsapp"),
 		).
 		Value(&provider).
@@ -82,6 +83,8 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 		return authGroq()
 	case "brave":
 		return authBraveSearch()
+	case "elevenlabs":
+		return authElevenLabs()
 	case "whatsapp":
 		return authWhatsApp()
 	}
@@ -108,6 +111,9 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := printProviderStatus("Brave Search", "/api/auth/brave/status"); err != nil {
+		return err
+	}
+	if err := printProviderStatus("ElevenLabs", "/api/auth/elevenlabs/status"); err != nil {
 		return err
 	}
 
@@ -184,6 +190,7 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 			huh.NewOption("Anthropic", "anthropic"),
 			huh.NewOption("Groq", "groq"),
 			huh.NewOption("Brave Search", "brave"),
+			huh.NewOption("ElevenLabs", "elevenlabs"),
 			huh.NewOption("WhatsApp", "whatsapp"),
 			huh.NewOption("All providers", "all"),
 		).
@@ -217,6 +224,8 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 		return clearProvider("Groq", "/api/auth/groq/clear")
 	case "brave":
 		return clearProvider("Brave Search", "/api/auth/brave/clear")
+	case "elevenlabs":
+		return clearProvider("ElevenLabs", "/api/auth/elevenlabs/clear")
 	case "whatsapp":
 		return clearChannel("WhatsApp", "whatsapp")
 	case "all":
@@ -227,6 +236,9 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if err := clearProvider("Brave Search", "/api/auth/brave/clear"); err != nil {
+			return err
+		}
+		if err := clearProvider("ElevenLabs", "/api/auth/elevenlabs/clear"); err != nil {
 			return err
 		}
 		_ = clearChannel("WhatsApp", "whatsapp") // non-fatal
@@ -368,6 +380,45 @@ func authBraveSearch() error {
 	}
 
 	fmt.Println(styleOk.Render("Brave Search API key saved successfully."))
+	return nil
+}
+
+func authElevenLabs() error {
+	var key string
+	err := huh.NewInput().
+		Title("Enter your ElevenLabs API key").
+		Description("Get one at https://elevenlabs.io/app/settings/api-keys").
+		Placeholder("sk_...").
+		EchoMode(huh.EchoModePassword).
+		Value(&key).
+		Run()
+	if err != nil || strings.TrimSpace(key) == "" {
+		fmt.Fprintln(os.Stderr, "Cancelled.")
+		return errSilent
+	}
+
+	fmt.Println(styleDim.Render("Validating key..."))
+
+	body, _ := json.Marshal(map[string]any{
+		"key":      strings.TrimSpace(key),
+		"validate": true,
+	})
+
+	resp, err := httpClient.Post(baseURL()+"/api/auth/elevenlabs/api-key", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("cannot reach server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		return fmt.Errorf("invalid API key — check the key and try again")
+	}
+
+	if resp.StatusCode != 200 {
+		return serverError(resp)
+	}
+
+	fmt.Println(styleOk.Render("ElevenLabs API key saved successfully."))
 	return nil
 }
 
@@ -533,12 +584,8 @@ func authWhatsApp() error {
 		return errSilent
 	}
 
-	settings := map[string]any{
-		"selfChatMode": false,
-		"dmPolicy":     "allowlist",
-		"allowFrom":    []string{},
-		"groupPolicy":  "disabled",
-	}
+	// Minimal settings — server fills defaults via Valibot schema
+	settings := map[string]any{}
 
 	if phoneSetup == "personal" {
 		// Step 2a: Ask for their phone number
@@ -569,6 +616,7 @@ func authWhatsApp() error {
 			Title("Who can message the agent?").
 			Description("Controls which DMs the agent will respond to").
 			Options(
+				huh.NewOption("Pairing (strangers get a code, you approve)", "pairing"),
 				huh.NewOption("Only specific numbers (allowlist)", "allowlist"),
 				huh.NewOption("Anyone (open)", "open"),
 				huh.NewOption("Disabled (ignore all DMs)", "disabled"),
@@ -580,8 +628,9 @@ func authWhatsApp() error {
 		}
 		settings["dmPolicy"] = dmPolicy
 
-		// Step 3b: If allowlist, ask for allowed numbers
-		if dmPolicy == "allowlist" {
+		if dmPolicy == "pairing" {
+			// No allowFrom needed — pairing flow handles approval
+		} else if dmPolicy == "allowlist" {
 			var allowFromRaw string
 			err = huh.NewInput().
 				Title("Allowed phone numbers").
@@ -605,6 +654,8 @@ func authWhatsApp() error {
 				return errSilent
 			}
 			settings["allowFrom"] = allowFrom
+		} else if dmPolicy == "open" {
+			settings["allowFrom"] = []string{"*"}
 		}
 	}
 
@@ -614,7 +665,8 @@ func authWhatsApp() error {
 		Title("Allow messages from WhatsApp groups?").
 		Options(
 			huh.NewOption("No (disabled)", "disabled"),
-			huh.NewOption("Yes (open)", "open"),
+			huh.NewOption("Only specific senders (allowlist)", "allowlist"),
+			huh.NewOption("Yes — anyone with @mention (open)", "open"),
 		).
 		Value(&groupPolicy).
 		Run()
@@ -623,7 +675,50 @@ func authWhatsApp() error {
 	}
 	settings["groupPolicy"] = groupPolicy
 
-	// Step 5: POST login/start
+	// Step 4b: If group allowlist, ask for allowed numbers
+	if groupPolicy == "allowlist" {
+		var groupAllowFromRaw string
+		err = huh.NewInput().
+			Title("Allowed group senders").
+			Description("Comma-separated phone numbers (E.164) allowed to trigger in groups").
+			Placeholder("+15551234567, +15559876543").
+			Value(&groupAllowFromRaw).
+			Run()
+		if err != nil {
+			return errSilent
+		}
+		var groupAllowFrom []string
+		for _, raw := range strings.Split(groupAllowFromRaw, ",") {
+			n := normalizeE164(raw)
+			if n != "" {
+				groupAllowFrom = append(groupAllowFrom, n)
+			}
+		}
+		if len(groupAllowFrom) == 0 {
+			fmt.Fprintln(os.Stderr, styleErr.Render("At least one phone number is required for group allowlist mode."))
+			waitForEnter()
+			return errSilent
+		}
+		settings["groupAllowFrom"] = groupAllowFrom
+	}
+
+	// Step 5: Read receipts
+	var readReceipts bool = true
+	err = huh.NewConfirm().
+		Title("Send read receipts?").
+		Description("Show blue ticks when the bot reads messages").
+		Affirmative("Yes").
+		Negative("No").
+		Value(&readReceipts).
+		Run()
+	if err != nil {
+		return errSilent
+	}
+	if !readReceipts {
+		settings["sendReadReceipts"] = false
+	}
+
+	// Step 6: POST login/start
 	fmt.Println(styleDim.Render("Connecting to WhatsApp..."))
 	loginClient := &http.Client{Timeout: 30 * time.Second}
 	body, _ := json.Marshal(map[string]any{
@@ -734,10 +829,16 @@ func printChannelStatuses() error {
 		ID          string `json:"id"`
 		DisplayName string `json:"displayName"`
 		Status      struct {
-			State       string  `json:"state"`
-			ConnectedAt float64 `json:"connectedAt,omitempty"`
-			Error       string  `json:"error,omitempty"`
-			Detail      string  `json:"detail,omitempty"`
+			State             string  `json:"state"`
+			ConnectedAt       float64 `json:"connectedAt,omitempty"`
+			Error             string  `json:"error,omitempty"`
+			Detail            string  `json:"detail,omitempty"`
+			ReconnectAttempts int     `json:"reconnectAttempts,omitempty"`
+			LastConnectedAt   float64 `json:"lastConnectedAt,omitempty"`
+			LastDisconnect    string  `json:"lastDisconnect,omitempty"`
+			LastMessageAt     float64 `json:"lastMessageAt,omitempty"`
+			LastError         string  `json:"lastError,omitempty"`
+			SelfId            string  `json:"selfId,omitempty"`
 		} `json:"status"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&channels); err != nil {
@@ -749,22 +850,72 @@ func printChannelStatuses() error {
 		fmt.Println(styleBold.Render("  " + ch.DisplayName))
 		switch ch.Status.State {
 		case "connected":
-			t := time.UnixMilli(int64(ch.Status.ConnectedAt))
 			fmt.Println("    Status:  ", styleOk.Render("Connected"))
-			fmt.Println("    Since:   ", t.Format(time.RFC3339))
-		case "connecting":
-			detail := ch.Status.Detail
-			if detail == "" {
-				detail = "connecting..."
+			if ch.Status.SelfId != "" {
+				fmt.Println("    Self:    ", ch.Status.SelfId)
 			}
-			fmt.Println("    Status:  ", styleDim.Render(detail))
+			if ch.Status.ConnectedAt > 0 {
+				t := time.UnixMilli(int64(ch.Status.ConnectedAt))
+				fmt.Println("    Since:   ", t.Format(time.RFC3339))
+			}
+			if ch.Status.LastMessageAt > 0 {
+				ago := time.Since(time.UnixMilli(int64(ch.Status.LastMessageAt)))
+				fmt.Println("    Last msg:", formatDuration(ago))
+			}
+		case "connecting":
+			if ch.Status.ReconnectAttempts > 0 {
+				fmt.Printf("    Status:   %s\n", styleDim.Render(fmt.Sprintf("Reconnecting (attempt %d)", ch.Status.ReconnectAttempts)))
+			} else {
+				detail := ch.Status.Detail
+				if detail == "" {
+					detail = "connecting..."
+				}
+				fmt.Println("    Status:  ", styleDim.Render(detail))
+			}
+			if ch.Status.LastConnectedAt > 0 {
+				t := time.UnixMilli(int64(ch.Status.LastConnectedAt))
+				fmt.Println("    Last connected:", t.Format(time.RFC3339))
+			}
+			if ch.Status.LastError != "" {
+				fmt.Println("    Last error:    ", ch.Status.LastError)
+			}
 		case "error":
 			fmt.Println("    Status:  ", styleErr.Render("Error: "+ch.Status.Error))
+			if ch.Status.LastConnectedAt > 0 {
+				t := time.UnixMilli(int64(ch.Status.LastConnectedAt))
+				fmt.Println("    Last connected:", t.Format(time.RFC3339))
+			}
 		default:
 			fmt.Println("    Not configured")
 		}
 	}
 	return nil
+}
+
+// formatDuration returns a human-readable relative time string.
+func formatDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		m := int(d.Minutes())
+		if m == 1 {
+			return "1 min ago"
+		}
+		return fmt.Sprintf("%d min ago", m)
+	case d < 24*time.Hour:
+		h := int(d.Hours())
+		if h == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", h)
+	default:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	}
 }
 
 func clearChannel(name string, channelId string) error {
