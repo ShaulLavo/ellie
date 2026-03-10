@@ -76,6 +76,24 @@ describe('parseReplyDirectives', () => {
 		expect(result.mediaRefs).toEqual(['/tmp/test.mp3'])
 	})
 
+	test('upload MEDIA ref passes through unchanged', () => {
+		const result = parseReplyDirectives(
+			'MEDIA:upload:trace/run/generated/image.png'
+		)
+		expect(result.mediaRefs).toEqual([
+			'upload:trace/run/generated/image.png'
+		])
+	})
+
+	test('uploads-rpc MEDIA ref passes through unchanged', () => {
+		const result = parseReplyDirectives(
+			'MEDIA:/api/uploads-rpc/trace%2Frun%2Fimage.png/content'
+		)
+		expect(result.mediaRefs).toEqual([
+			'/api/uploads-rpc/trace%2Frun%2Fimage.png/content'
+		])
+	})
+
 	test('case-insensitive audio_as_voice', () => {
 		const result = parseReplyDirectives(
 			'hi [[AUDIO_AS_VOICE]]'

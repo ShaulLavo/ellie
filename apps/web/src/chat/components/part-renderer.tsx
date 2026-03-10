@@ -292,7 +292,9 @@ export const PartRenderer = memo(
 				if (part.mediaKind === 'audio') {
 					return (
 						<div className="my-2">
-							<VoiceMessage src={uploadUrl(part.uploadId)} />
+							<VoiceMessage
+								src={uploadUrl(part.uploadId)}
+							/>
 						</div>
 					)
 				}

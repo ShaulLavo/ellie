@@ -112,10 +112,29 @@ function classifyMediaRef(
 function extractUploadIdFromMediaRef(
 	ref: string
 ): string | undefined {
+	const trimmed = ref.trim()
+	const uploadPrefixMatch = trimmed.match(/^upload:(.+)$/i)
+	if (uploadPrefixMatch?.[1]) {
+		return uploadPrefixMatch[1]
+	}
+
+	const uploadContentMatch = trimmed.match(
+		/\/api\/uploads-rpc\/([^/?#]+)\/content(?:[?#].*)?$/i
+	)
+	if (uploadContentMatch?.[1]) {
+		try {
+			return decodeURIComponent(uploadContentMatch[1])
+		} catch {
+			return uploadContentMatch[1]
+		}
+	}
+
 	const marker = '/uploads/'
-	const markerIndex = ref.indexOf(marker)
+	const markerIndex = trimmed.indexOf(marker)
 	if (markerIndex === -1) return undefined
-	const uploadId = ref.slice(markerIndex + marker.length)
+	const uploadId = trimmed.slice(
+		markerIndex + marker.length
+	)
 	return uploadId.length > 0 ? uploadId : undefined
 }
 
@@ -126,6 +145,12 @@ function parseDisplayDirectives(text: string): {
 		{ type: 'media-directive' }
 	>[]
 } {
+	// [[tts]] means "voice, not text" — suppress ALL text so the frontend
+	// never renders it. The assistant_audio event provides the audio player.
+	if (/\[\[tts(?::[^\]]*?)?\]\]/i.test(text)) {
+		return { text: '', mediaParts: [] }
+	}
+
 	const lines = text.split('\n')
 	const output: string[] = []
 	const mediaParts: Extract<
@@ -143,21 +168,16 @@ function parseDisplayDirectives(text: string): {
 
 		if (!inFence) {
 			if (/^\s*MEDIA:\s*/i.test(line)) {
-				const ref = line.replace(/^\s*MEDIA:\s*/i, '').trim()
+				const ref = line
+					.replace(/^\s*MEDIA:\s*/i, '')
+					.trim()
 				if (ref.length > 0) {
-					const uploadId =
-						extractUploadIdFromMediaRef(ref)
+					const uploadId = extractUploadIdFromMediaRef(ref)
 					mediaParts.push({
 						type: 'media-directive',
 						ref,
 						uploadId,
-						mediaKind: classifyMediaRef(ref),
-						...(uploadId
-							? {}
-							: {
-									error:
-										'This media path is local to the server and cannot be rendered directly in the web app.'
-								})
+						mediaKind: classifyMediaRef(ref)
 					})
 				}
 				continue
@@ -253,7 +273,6 @@ function extractImageGenParts(
 					toolCallId,
 					status: 'complete',
 					uploadId: details.uploadId as string | undefined,
-					filePath: details.filePath as string | undefined,
 					recipe: details.recipe as
 						| {
 								model: string
@@ -390,7 +409,7 @@ export function eventToStored(
 		parts = extractMessageParts(parsed)
 	}
 
-	const text = parts
+	let text = parts
 		.filter(
 			(p): p is Extract<ContentPart, { type: 'text' }> =>
 				p.type === 'text'
@@ -465,6 +484,15 @@ export function eventToStored(
 	filteredParts = displayParts.filter(
 		p => p.type !== 'text' || p.text.trim().length > 0
 	)
+
+	// Recompute text from display-processed parts (e.g. [[tts]] suppresses all text)
+	text = filteredParts
+		.filter(
+			(p): p is Extract<ContentPart, { type: 'text' }> =>
+				p.type === 'text'
+		)
+		.map(p => p.text)
+		.join('\n')
 
 	// Determine sender from event type or payload
 	let sender: MessageSender | undefined

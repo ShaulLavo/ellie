@@ -7,7 +7,7 @@ import {
 	useState
 } from 'react'
 import type { StoredChatMessage } from '@/collections/chat-messages'
-import { StreamClient } from '@/lib/stream'
+import { StreamClient, type EventRow } from '@/lib/stream'
 import {
 	type SessionStats,
 	EMPTY_STATS,
@@ -19,6 +19,48 @@ import {
 	isAgentRunOpen,
 	eventToStored
 } from '../event-transforms'
+
+function isStreamingAssistantEvent(event: {
+	type: string
+	payload: unknown
+}): boolean {
+	if (event.type !== 'assistant_message') return false
+	try {
+		const parsed =
+			typeof event.payload === 'string'
+				? JSON.parse(event.payload)
+				: event.payload
+		return (
+			(parsed as Record<string, unknown>).streaming === true
+		)
+	} catch {
+		return false
+	}
+}
+
+function getOpenStreamingAssistantEvent(
+	events: EventRow[]
+): EventRow | undefined {
+	const closedRunIds = new Set(
+		events
+			.filter(
+				event =>
+					event.type === 'run_closed' && event.runId != null
+			)
+			.map(event => event.runId as string)
+	)
+
+	for (let i = events.length - 1; i >= 0; i--) {
+		const event = events[i]
+		if (!event || !isStreamingAssistantEvent(event))
+			continue
+		if (event.runId && closedRunIds.has(event.runId))
+			continue
+		return event
+	}
+
+	return undefined
+}
 
 /** Event types that produce renderable chat messages. */
 const RENDERABLE_TYPES: EventType[] = [
@@ -96,6 +138,7 @@ export function useStreamConnection(
 						RENDERABLE_TYPES.includes(
 							e.type as EventType
 						) &&
+						!isStreamingAssistantEvent(e) &&
 						(e.type !== 'session_rotated' ||
 							i === lastRotatedIdx)
 				)
@@ -114,21 +157,8 @@ export function useStreamConnection(
 				}
 				syncReplaceAll(msgs)
 
-				const streamingEvent = events.find(e => {
-					if (e.type !== 'assistant_message') return false
-					try {
-						const p =
-							typeof e.payload === 'string'
-								? JSON.parse(e.payload)
-								: e.payload
-						return (
-							(p as Record<string, unknown>).streaming ===
-							true
-						)
-					} catch {
-						return false
-					}
-				})
+				const streamingEvent =
+					getOpenStreamingAssistantEvent(events)
 				if (streamingEvent) {
 					const stored = eventToStored(streamingEvent)
 					setStreamingMessage({
@@ -148,6 +178,7 @@ export function useStreamConnection(
 					setIsAgentRunning(true)
 				} else if (AGENT_END_TYPES.has(event.type)) {
 					setIsAgentRunning(false)
+					setStreamingMessage(null)
 				}
 
 				if (event.type === 'assistant_message') {
@@ -222,8 +253,11 @@ export function useStreamConnection(
 						})
 					} else {
 						setStreamingMessage(null)
-						// Always write — even when empty (TTS post-processor clears text after synthesis)
-						syncWrite([stored])
+						// Skip empty messages — [[tts]] suppresses text in display,
+						// and the audio player arrives via a separate assistant_audio event.
+						if (stored.parts.length > 0 || stored.text) {
+							syncWrite([stored])
+						}
 
 						const delta = computeStatsFromEvents([event])
 						setSessionStats(prev => ({

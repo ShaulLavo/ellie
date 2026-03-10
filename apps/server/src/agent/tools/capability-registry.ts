@@ -25,14 +25,19 @@ import {
 	createSessionExecTool,
 	createExecTool
 } from './session-exec'
+import { createImageGenTool } from './image-gen/tool'
 
 // ── Types ───────────────────────────────────────────────────────────────
 
 export interface ToolRegistryConfig {
 	/** Workspace directory for file I/O tools. */
 	workspaceDir: string
+	/** Data directory for generated artifacts and image-gen tracing. */
+	dataDir: string
 	/** Returns the currently bound session ID (for REPL isolation). */
 	getSessionId: () => string | null
+	/** Returns the currently active run ID. */
+	getRunId: () => string | null
 	/** Trace recorder for wrapping tools with traced facades. */
 	traceRecorder?: TraceRecorder
 	/** Blob sink for traced overflow. */
@@ -80,9 +85,22 @@ export function createToolRegistry(
 		createWebFetchTool(config.eventStore),
 		...(webSearch ? [webSearch] : [])
 	]
+	const rawDirectOnlyTools: AgentTool[] = config.blobSink
+		? [
+				createImageGenTool({
+					blobSink: config.blobSink,
+					dataDir: config.dataDir,
+					getSessionId: config.getSessionId,
+					getRunId: config.getRunId
+				})
+			]
+		: []
 
 	// Traced versions for direct agent-loop use
-	let basicDirectTools: AgentTool[] = rawBasicTools
+	let basicDirectTools: AgentTool[] = [
+		...rawBasicTools,
+		...rawDirectOnlyTools
+	]
 	if (config.traceRecorder && config.getTraceScope) {
 		const traceOpts = {
 			recorder: config.traceRecorder,

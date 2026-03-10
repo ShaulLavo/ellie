@@ -124,7 +124,9 @@ export class AgentController {
 		this.baseSystemPrompt = systemPrompt
 		const registry = createToolRegistry({
 			workspaceDir: options.workspaceDir,
+			dataDir: options.dataDir,
 			getSessionId: () => this.boundSessionId,
+			getRunId: () => this.agent.runId ?? null,
 			traceRecorder: this.traceRecorder,
 			blobSink: this.blobSink,
 			getTraceScope: () => this.activeTraceScope,

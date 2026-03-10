@@ -23,6 +23,46 @@ import type { TtsPostProcessor } from '../../lib/tts-post-processor'
 
 /** Check for any [[tts...]] directive in text. */
 const TTS_DIRECTIVE_RE = /\[\[tts(?::[^\]]*?)?\]\]/i
+const UPLOAD_REF_PREFIX = 'upload:'
+
+function toUploadRef(uploadId: string): string {
+	return `${UPLOAD_REF_PREFIX}${uploadId}`
+}
+
+function extractUploadIdFromMediaRef(
+	ref: string
+): string | undefined {
+	const trimmed = ref.trim()
+	const uploadPrefixMatch = trimmed.match(/^upload:(.+)$/i)
+	if (uploadPrefixMatch?.[1]) {
+		return uploadPrefixMatch[1]
+	}
+
+	const uploadContentMatch = trimmed.match(
+		/\/api\/uploads-rpc\/([^/?#]+)\/content(?:[?#].*)?$/i
+	)
+	if (uploadContentMatch?.[1]) {
+		try {
+			return decodeURIComponent(uploadContentMatch[1])
+		} catch {
+			return uploadContentMatch[1]
+		}
+	}
+
+	const uploadsMarker = '/uploads/'
+	const uploadsIndex = trimmed.indexOf(uploadsMarker)
+	if (uploadsIndex === -1) return undefined
+	const uploadId = trimmed.slice(
+		uploadsIndex + uploadsMarker.length
+	)
+	return uploadId.length > 0 ? uploadId : undefined
+}
+
+function normalizeMediaRef(ref: string): string {
+	const uploadId = extractUploadIdFromMediaRef(ref)
+	if (uploadId) return toUploadRef(uploadId)
+	return ref.replace(/\/+$/, '')
+}
 
 export interface TtsConfig {
 	mode: TtsAutoMode
@@ -219,8 +259,7 @@ export class ChannelDeliveryRegistry {
 				...delivery.targets.values()
 			].some(
 				t =>
-					t.inboundMediaType?.startsWith('audio/') ??
-					false
+					t.inboundMediaType?.startsWith('audio/') ?? false
 			)
 			payload = await this.#applyAutoTts(
 				payload,
@@ -238,13 +277,6 @@ export class ChannelDeliveryRegistry {
 						.trim() || undefined
 			}
 		}
-
-		console.log('[delivery] delivering', {
-			runId,
-			hasMedia: !!payload.mediaRefs?.length,
-			audioAsVoice: payload.audioAsVoice,
-			textLen: payload.text?.length ?? 0
-		})
 
 		// Fan out to every distinct contributing target
 		await this.#deliverPayload(
@@ -290,27 +322,9 @@ export class ChannelDeliveryRegistry {
 					| undefined
 				if (!uploadId) continue
 
-				// Resolve the blob file path under uploads dir
-				const uploadsDir = this.#dataDir
-					? path.join(this.#dataDir, 'uploads')
-					: null
-				if (!uploadsDir) break
-				const audioPath = path.join(
-					uploadsDir,
-					uploadId
-				)
-
-				console.log(
-					'[delivery] Using TtsPostProcessor audio',
-					{
-						runId,
-						uploadId,
-						audioPath
-					}
-				)
 				return {
 					text: undefined,
-					mediaRefs: [audioPath],
+					mediaRefs: [toUploadRef(uploadId)],
 					audioAsVoice: true
 				}
 			}
@@ -383,9 +397,12 @@ export class ChannelDeliveryRegistry {
 					typeof provider.sendMedia === 'function'
 				) {
 					const ref = payload.mediaRefs[0]
-					const media = await resolveMedia(ref, {
-						localRoots: this.#mediaLocalRoots()
-					})
+					const media = await resolveMedia(
+						this.#resolveMediaRef(ref),
+						{
+							localRoots: this.#mediaLocalRoots()
+						}
+					)
 					await provider.sendMedia(target, caption, {
 						buffer: media.buffer,
 						mimetype: media.mimetype,
@@ -413,6 +430,17 @@ export class ChannelDeliveryRegistry {
 		// os.tmpdir() for TTS temp files
 		roots.push(require('node:os').tmpdir())
 		return roots
+	}
+
+	#resolveMediaRef(ref: string): string {
+		const uploadId = extractUploadIdFromMediaRef(ref)
+		if (!uploadId) return ref
+		if (!this.#dataDir) {
+			throw new Error(
+				'Cannot resolve upload media without dataDir'
+			)
+		}
+		return path.join(this.#dataDir, 'uploads', uploadId)
 	}
 
 	#extractFinalAssistantText(
@@ -452,14 +480,14 @@ export class ChannelDeliveryRegistry {
 		return texts.length > 0 ? texts.join('\n') : null
 	}
 
-	/** Extract file paths from completed generate_image tool_execution events. */
+	/** Extract upload refs from completed generate_image tool_execution events. */
 	#extractImageGenMedia(
 		rows: Array<{
 			type: string
 			payload: string
 		}>
 	): string[] {
-		const paths: string[] = []
+		const refs: string[] = []
 		for (const row of rows) {
 			if (row.type !== 'tool_execution') continue
 			let parsed: Record<string, unknown>
@@ -481,12 +509,12 @@ export class ChannelDeliveryRegistry {
 				| Record<string, unknown>
 				| undefined
 			if (!details || details.success !== true) continue
-			const filePath = details.filePath as
+			const uploadId = details.uploadId as
 				| string
 				| undefined
-			if (filePath) paths.push(filePath)
+			if (uploadId) refs.push(toUploadRef(uploadId))
 		}
-		return paths
+		return refs
 	}
 
 	/** Build a ChannelReplyPayload from run events (text + auto-appended media). */
@@ -515,14 +543,12 @@ export class ChannelDeliveryRegistry {
 
 		// Merge: auto-generated refs first, then MEDIA: refs from text, deduplicated
 		const allRefs = [...autoMedia]
-		const seen = new Set(
-			autoMedia.map(r => r.replace(/\/+$/, ''))
-		)
+		const seen = new Set(autoMedia.map(normalizeMediaRef))
 		for (const ref of payload.mediaRefs ?? []) {
-			const normalized = ref.replace(/\/+$/, '')
+			const normalized = normalizeMediaRef(ref)
 			if (!seen.has(normalized)) {
 				seen.add(normalized)
-				allRefs.push(ref)
+				allRefs.push(normalized)
 			}
 		}
 
@@ -620,9 +646,12 @@ export class ChannelDeliveryRegistry {
 					typeof provider.sendMedia === 'function'
 				) {
 					const ref = payload.mediaRefs[0]
-					const media = await resolveMedia(ref, {
-						localRoots: this.#mediaLocalRoots()
-					})
+					const media = await resolveMedia(
+						this.#resolveMediaRef(ref),
+						{
+							localRoots: this.#mediaLocalRoots()
+						}
+					)
 					await provider.sendMedia(target, recoverCaption, {
 						buffer: media.buffer,
 						mimetype: media.mimetype,

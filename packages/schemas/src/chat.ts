@@ -96,7 +96,6 @@ export type ContentPart =
 			detail?: string
 			completedPhases?: string[]
 			uploadId?: string
-			filePath?: string
 			recipe?: {
 				model: string
 				width: number

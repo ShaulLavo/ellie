@@ -495,5 +495,4 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 		registry.shutdown()
 	})
-
 })

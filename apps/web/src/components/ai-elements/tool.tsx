@@ -331,7 +331,12 @@ export const ToolOutput = ({
 		)
 	} else if (typeof output === 'string') {
 		Output = (
-			<CodeBlock className="border-0" code={output} language="json" small />
+			<CodeBlock
+				className="border-0"
+				code={output}
+				language="json"
+				small
+			/>
 		)
 	}
 

@@ -353,7 +353,6 @@ export function createImageGenTool(
 					success: true,
 					recipe: webRecipe,
 					uploadId: result.uploadId,
-					filePath: result.filePath,
 					elapsedMs: result.durationMs
 				}
 			}

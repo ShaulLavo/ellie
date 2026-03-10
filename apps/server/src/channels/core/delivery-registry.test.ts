@@ -12,7 +12,12 @@ import type { ChannelProvider } from './provider'
 import type { ChannelDeliveryTarget } from './types'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import {
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync
+} from 'fs'
 
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'delivery-test-'))
@@ -885,6 +890,10 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		// Completed tool_execution for generate_image
+		const uploadId = 'upload-123.png'
+		const uploadedPath = join(dir, 'uploads', uploadId)
+		mkdirSync(join(dir, 'uploads'), { recursive: true })
+		writeFileSync(uploadedPath, new Uint8Array(imgContent))
 		store.appendEvent(
 			sessionId,
 			'tool_execution',
@@ -902,8 +911,7 @@ describe('ChannelDeliveryRegistry', () => {
 					],
 					details: {
 						success: true,
-						filePath: imgPath,
-						uploadId: 'upload-123'
+						uploadId
 					}
 				}
 			},

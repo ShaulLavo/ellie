@@ -3,7 +3,6 @@
  * Adapted from claw/bot — uses BlobSink + EventStore instead of ingestFile + FeedManager.
  */
 
-import * as path from 'node:path'
 import type { BlobSink } from '@ellie/trace'
 import { ComfyUIClient } from './client'
 import {
@@ -68,8 +67,6 @@ export interface GenerationResult {
 	success: boolean
 	recipe: ImageRecipe
 	uploadId?: string
-	/** Absolute path to the generated image on disk (for MEDIA: directive). */
-	filePath?: string
 	mime?: string
 	durationMs: number
 	error?: string
@@ -380,13 +377,6 @@ export async function executeImageGeneration(
 			ext
 		})
 
-		// Derive the on-disk path from TUS store for MEDIA: directive
-		const filePath = path.join(
-			dataDir,
-			'uploads',
-			blobRef.uploadId
-		)
-
 		onProgress('save', 'completed')
 
 		console.info(
@@ -406,7 +396,6 @@ export async function executeImageGeneration(
 			success: true,
 			recipe,
 			uploadId: blobRef.uploadId,
-			filePath,
 			mime,
 			durationMs
 		}
