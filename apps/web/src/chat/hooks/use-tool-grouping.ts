@@ -36,6 +36,7 @@ export function useToolGrouping(
 
 		// Collect non-streaming tool-call IDs (from tool_execution events)
 		const executingIds = new Set<string>()
+		const specialExecutionIds = new Set<string>()
 		for (const msg of allMessages) {
 			for (const part of msg.parts) {
 				if (
@@ -44,6 +45,12 @@ export function useToolGrouping(
 					!part.streaming
 				) {
 					executingIds.add(part.toolCallId)
+				}
+				if (
+					part.type === 'image-generation' &&
+					part.toolCallId
+				) {
+					specialExecutionIds.add(part.toolCallId)
 				}
 			}
 		}
@@ -60,6 +67,13 @@ export function useToolGrouping(
 				if (
 					part.streaming &&
 					executingIds.has(part.toolCallId)
+				) {
+					set.add(part.toolCallId)
+				}
+				// Mark streaming tool-calls replaced by special tool UIs
+				if (
+					part.streaming &&
+					specialExecutionIds.has(part.toolCallId)
 				) {
 					set.add(part.toolCallId)
 				}

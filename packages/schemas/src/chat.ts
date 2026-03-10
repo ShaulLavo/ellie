@@ -80,6 +80,13 @@ export type ContentPart =
 			title?: string
 	  }
 	| {
+			type: 'media-directive'
+			ref: string
+			uploadId?: string
+			mediaKind: 'image' | 'audio' | 'video' | 'file'
+			error?: string
+	  }
+	| {
 			type: 'image-generation'
 			toolCallId: string
 			status: 'running' | 'complete' | 'error'
@@ -287,6 +294,10 @@ function formatPart(part: ContentPart): string {
 			return `[Checkpoint: ${part.message}]`
 		case 'artifact':
 			return `[Artifact: ${part.title ?? part.filename}]\n${part.content}`
+		case 'media-directive':
+			return part.error
+				? `[Media Unavailable: ${part.ref}]`
+				: `[Media: ${part.uploadId ?? part.ref}]`
 		case 'image-generation':
 			if (part.status === 'complete')
 				return `[Image Generated${part.uploadId ? `: ${part.uploadId}` : ''}]`

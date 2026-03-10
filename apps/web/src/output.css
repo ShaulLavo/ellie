@@ -16,8 +16,10 @@
     --color-orange-500: oklch(70.5% 0.213 47.604);
     --color-orange-700: oklch(55.3% 0.195 38.402);
     --color-orange-900: oklch(40.8% 0.123 38.172);
+    --color-amber-400: oklch(82.8% 0.189 84.429);
     --color-amber-500: oklch(76.9% 0.188 70.08);
     --color-amber-600: oklch(66.6% 0.179 58.318);
+    --color-amber-700: oklch(55.5% 0.163 48.998);
     --color-yellow-100: oklch(97.3% 0.071 103.193);
     --color-yellow-400: oklch(85.2% 0.199 91.936);
     --color-yellow-500: oklch(79.5% 0.184 86.047);
@@ -2466,6 +2468,12 @@
   .border-\[\#1F9CFE\]\/30 {
     border-color: color-mix(in oklab, #1F9CFE 30%, transparent);
   }
+  .border-amber-500\/30 {
+    border-color: color-mix(in srgb, oklch(76.9% 0.188 70.08) 30%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-amber-500) 30%, transparent);
+    }
+  }
   .border-black\/10 {
     border-color: color-mix(in srgb, #000 10%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -2663,6 +2671,12 @@
   }
   .bg-amber-500 {
     background-color: var(--color-amber-500);
+  }
+  .bg-amber-500\/5 {
+    background-color: color-mix(in srgb, oklch(76.9% 0.188 70.08) 5%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-amber-500) 5%, transparent);
+    }
   }
   .bg-background {
     background-color: var(--background);
@@ -3705,6 +3719,12 @@
   }
   .text-accent-foreground {
     color: var(--accent-foreground);
+  }
+  .text-amber-600 {
+    color: var(--color-amber-600);
+  }
+  .text-amber-700 {
+    color: var(--color-amber-700);
   }
   .text-background {
     color: var(--background);
@@ -7192,6 +7212,11 @@
       color: var(--shiki-dark) !important;
     }
   }
+  .dark\:text-amber-400 {
+    &:is(.dark *) {
+      color: var(--color-amber-400);
+    }
+  }
   .dark\:text-black {
     &:is(.dark *) {
       color: var(--color-black);
@@ -7916,6 +7941,11 @@
     & p {
       --tw-leading: var(--leading-relaxed);
       line-height: var(--leading-relaxed);
+    }
+  }
+  .\[\&_pre\]\:p-2 {
+    & pre {
+      padding: calc(var(--spacing) * 2);
     }
   }
   .\[\&_svg\]\:pointer-events-none {

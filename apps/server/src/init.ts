@@ -134,7 +134,9 @@ function recoverStaleRuns(
 	eventStore: EventStore,
 	store: RealtimeStore
 ): void {
-	const staleRuns = eventStore.findStaleRuns(5 * 60 * 1000)
+	// On startup there is no live worker that can continue an open run,
+	// so every unclosed run is stale immediately.
+	const staleRuns = eventStore.findStaleRuns(0)
 	for (const { sessionId, runId } of staleRuns) {
 		try {
 			store.appendEvent(
@@ -322,6 +324,9 @@ export async function init(): Promise<ServerContext> {
 		dataDir: DATA_DIR
 	})
 	ttsPostProcessor.watchSession(store.getCurrentSessionId())
+
+	// Let delivery registry await TtsPostProcessor audio instead of racing
+	deliveryRegistry.setTtsPostProcessor(ttsPostProcessor)
 
 	// ── Crash recovery (must run after delivery registry is watching) ───
 	// Phase 1: Close stale runs — run_closed events trigger delivery

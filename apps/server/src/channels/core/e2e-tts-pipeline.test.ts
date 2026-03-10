@@ -496,36 +496,4 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		registry.shutdown()
 	})
 
-	test('getTtsConfig backward compat with getTtsAutoMode', async () => {
-		// Test the deprecated getTtsAutoMode still works
-		const registry = new ChannelDeliveryRegistry({
-			store,
-			getProvider: id =>
-				id === 'test' ? mockProvider : undefined,
-			getTtsAutoMode: () => 'always'
-		})
-		const sessionId = 'test-session'
-		const runId = 'run-compat'
-		const target: ChannelDeliveryTarget = {
-			channelId: 'test',
-			accountId: 'default',
-			conversationId: 'conv-compat'
-		}
-
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
-
-		emitRunWithText(
-			sessionId,
-			runId,
-			'Testing backward compatibility with getTtsAutoMode.'
-		)
-
-		await new Promise(r => setTimeout(r, 100))
-
-		expect(mockSynthesize).toHaveBeenCalledTimes(1)
-		expect(sentMedia).toHaveLength(1)
-
-		registry.shutdown()
-	})
 })

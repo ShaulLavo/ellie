@@ -203,8 +203,9 @@ export const ToolInput = ({
 		<h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
 			Parameters
 		</h4>
-		<div className="rounded-md bg-muted/50">
+		<div className="rounded-md bg-muted/50 [&_pre]:p-2">
 			<CodeBlock
+				className="border-0"
 				code={JSON.stringify(input, null, 2)}
 				language="json"
 				small
@@ -322,6 +323,7 @@ export const ToolOutput = ({
 	) {
 		Output = (
 			<CodeBlock
+				className="border-0"
 				code={JSON.stringify(output, null, 2)}
 				language="json"
 				small
@@ -329,7 +331,7 @@ export const ToolOutput = ({
 		)
 	} else if (typeof output === 'string') {
 		Output = (
-			<CodeBlock code={output} language="json" small />
+			<CodeBlock className="border-0" code={output} language="json" small />
 		)
 	}
 
@@ -340,7 +342,7 @@ export const ToolOutput = ({
 			</h4>
 			<div
 				className={cn(
-					'overflow-x-auto rounded-md text-xs [&_table]:w-full',
+					'overflow-x-auto rounded-md text-xs [&_table]:w-full [&_pre]:p-2',
 					errorText
 						? 'bg-destructive/10 text-destructive'
 						: 'bg-muted/50 text-foreground'

@@ -73,6 +73,122 @@ function extractMessageParts(
 	return []
 }
 
+function classifyMediaRef(
+	ref: string
+): Extract<
+	ContentPart,
+	{ type: 'media-directive' }
+>['mediaKind'] {
+	const lower = ref.toLowerCase()
+	if (
+		lower.endsWith('.png') ||
+		lower.endsWith('.jpg') ||
+		lower.endsWith('.jpeg') ||
+		lower.endsWith('.gif') ||
+		lower.endsWith('.webp') ||
+		lower.endsWith('.svg')
+	) {
+		return 'image'
+	}
+	if (
+		lower.endsWith('.mp3') ||
+		lower.endsWith('.ogg') ||
+		lower.endsWith('.opus') ||
+		lower.endsWith('.wav') ||
+		lower.endsWith('.m4a')
+	) {
+		return 'audio'
+	}
+	if (
+		lower.endsWith('.mp4') ||
+		lower.endsWith('.mov') ||
+		lower.endsWith('.webm')
+	) {
+		return 'video'
+	}
+	return 'file'
+}
+
+function extractUploadIdFromMediaRef(
+	ref: string
+): string | undefined {
+	const marker = '/uploads/'
+	const markerIndex = ref.indexOf(marker)
+	if (markerIndex === -1) return undefined
+	const uploadId = ref.slice(markerIndex + marker.length)
+	return uploadId.length > 0 ? uploadId : undefined
+}
+
+function parseDisplayDirectives(text: string): {
+	text: string
+	mediaParts: Extract<
+		ContentPart,
+		{ type: 'media-directive' }
+	>[]
+} {
+	const lines = text.split('\n')
+	const output: string[] = []
+	const mediaParts: Extract<
+		ContentPart,
+		{ type: 'media-directive' }
+	>[] = []
+	let inFence = false
+
+	for (const line of lines) {
+		if (/^\s*```/.test(line)) {
+			inFence = !inFence
+			output.push(line)
+			continue
+		}
+
+		if (!inFence) {
+			if (/^\s*MEDIA:\s*/i.test(line)) {
+				const ref = line.replace(/^\s*MEDIA:\s*/i, '').trim()
+				if (ref.length > 0) {
+					const uploadId =
+						extractUploadIdFromMediaRef(ref)
+					mediaParts.push({
+						type: 'media-directive',
+						ref,
+						uploadId,
+						mediaKind: classifyMediaRef(ref),
+						...(uploadId
+							? {}
+							: {
+									error:
+										'This media path is local to the server and cannot be rendered directly in the web app.'
+								})
+					})
+				}
+				continue
+			}
+			const cleaned = line
+				.replace(/\[\[tts(?::[^\]]*?)?\]\]/gi, '')
+				.trim()
+			if (cleaned.length === 0 && line.trim().length > 0)
+				continue
+			output.push(cleaned)
+			continue
+		}
+
+		output.push(line)
+	}
+
+	const collapsed: string[] = []
+	let previousBlank = false
+	for (const line of output) {
+		const isBlank = line.trim().length === 0
+		if (isBlank && previousBlank) continue
+		collapsed.push(line)
+		previousBlank = isBlank
+	}
+
+	return {
+		text: collapsed.join('\n').trim(),
+		mediaParts
+	}
+}
+
 /** Extract content parts from a tool_execution event payload (result view). */
 function extractToolResultParts(
 	parsed: Record<string, unknown>
@@ -330,13 +446,25 @@ export function eventToStored(
 	}
 
 	// Strip [[tts]] / [[tts:...]] directives from displayed text
+	const displayParts: ContentPart[] = []
 	for (const p of filteredParts) {
 		if (p.type === 'text') {
-			p.text = p.text
-				.replace(/\[\[tts(?::[^\]]*?)?\]\]/gi, '')
-				.trim()
+			const parsedText = parseDisplayDirectives(p.text)
+			if (parsedText.text.trim().length > 0) {
+				displayParts.push({
+					...p,
+					text: parsedText.text
+				})
+			}
+			displayParts.push(...parsedText.mediaParts)
+			continue
 		}
+		displayParts.push(p)
 	}
+
+	filteredParts = displayParts.filter(
+		p => p.type !== 'text' || p.text.trim().length > 0
+	)
 
 	// Determine sender from event type or payload
 	let sender: MessageSender | undefined

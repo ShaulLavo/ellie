@@ -19,6 +19,10 @@ import {
 	resolveElevenLabsTtsConfig,
 	resolveElevenLabsApiKeyAsync
 } from '../../lib/tts'
+import type { TtsPostProcessor } from '../../lib/tts-post-processor'
+
+/** Check for any [[tts...]] directive in text. */
+const TTS_DIRECTIVE_RE = /\[\[tts(?::[^\]]*?)?\]\]/i
 
 export interface TtsConfig {
 	mode: TtsAutoMode
@@ -69,6 +73,7 @@ export class ChannelDeliveryRegistry {
 	readonly #getTtsConfig?: () => TtsConfig | undefined
 	readonly #watchedSessions = new Set<string>()
 	readonly #unsubscribers: Array<() => void> = []
+	#ttsPostProcessor?: TtsPostProcessor
 
 	constructor(opts: {
 		store: RealtimeStore
@@ -79,19 +84,17 @@ export class ChannelDeliveryRegistry {
 		credentialsPath?: string
 		/** Returns TTS config for auto-TTS in delivery pipeline. */
 		getTtsConfig?: () => TtsConfig | undefined
-		/** @deprecated Use getTtsConfig instead. */
-		getTtsAutoMode?: () => TtsAutoMode
 	}) {
 		this.#store = opts.store
 		this.#getProvider = opts.getProvider
 		this.#dataDir = opts.dataDir
 		this.#credentialsPath = opts.credentialsPath
-		// Support both new getTtsConfig and deprecated getTtsAutoMode
-		this.#getTtsConfig =
-			opts.getTtsConfig ??
-			(opts.getTtsAutoMode
-				? () => ({ mode: opts.getTtsAutoMode!() })
-				: undefined)
+		this.#getTtsConfig = opts.getTtsConfig
+	}
+
+	/** Inject TtsPostProcessor so delivery can await its audio instead of racing. */
+	setTtsPostProcessor(tpp: TtsPostProcessor): void {
+		this.#ttsPostProcessor = tpp
 	}
 
 	/** Register a delivery target for a channel-triggered run. Additive — multiple targets per run are supported. */
@@ -188,12 +191,6 @@ export class ChannelDeliveryRegistry {
 		sessionId: string
 	): Promise<void> {
 		const delivery = this.#pending.get(runId)
-		console.log('[delivery] handleRunClosed', {
-			runId,
-			sessionId,
-			hasDelivery: !!delivery,
-			pendingKeys: [...this.#pending.keys()]
-		})
 		if (!delivery) return // Not a channel-triggered run
 		this.#pending.delete(runId)
 
@@ -201,35 +198,37 @@ export class ChannelDeliveryRegistry {
 			sessionId,
 			runId
 		)
-		console.log('[delivery] extractedPayload', {
-			runId,
-			hasPayload: !!payload,
-			text: payload?.text?.slice(0, 120),
-			mediaRefs: payload?.mediaRefs,
-			audioAsVoice: payload?.audioAsVoice
-		})
 		if (!payload) return
 
-		// Derive inboundAudio from targets (any audio inbound triggers 'inbound' mode)
-		const hasAudioInbound = [
-			...delivery.targets.values()
-		].some(
-			t => t.inboundMediaType?.startsWith('audio/') ?? false
-		)
+		const textHasTts =
+			!!payload.text && TTS_DIRECTIVE_RE.test(payload.text)
 
-		// Apply auto-TTS if configured
-		payload = await this.#applyAutoTts(
-			payload,
-			hasAudioInbound
-		)
-		console.log('[delivery] afterAutoTts', {
-			runId,
-			text: payload?.text?.slice(0, 120),
-			mediaRefs: payload?.mediaRefs,
-			audioAsVoice: payload?.audioAsVoice
-		})
+		if (textHasTts && this.#ttsPostProcessor) {
+			// [[tts]] detected — let TtsPostProcessor synthesize audio FIRST,
+			// then use its output. This avoids the race where we'd send text
+			// to WhatsApp and the post-processor would clear it after the fact.
+			payload = await this.#resolveFromPostProcessor(
+				payload,
+				runId,
+				sessionId
+			)
+		} else {
+			// No [[tts]] directive, or no post-processor — use inline auto-TTS
+			// (handles 'always' and 'inbound' modes)
+			const hasAudioInbound = [
+				...delivery.targets.values()
+			].some(
+				t =>
+					t.inboundMediaType?.startsWith('audio/') ??
+					false
+			)
+			payload = await this.#applyAutoTts(
+				payload,
+				hasAudioInbound
+			)
+		}
 
-		// Always strip [[tts...]] directives from delivery text (auto-TTS or not)
+		// Always strip [[tts...]] directives from delivery text
 		if (payload.text) {
 			payload = {
 				...payload,
@@ -240,6 +239,13 @@ export class ChannelDeliveryRegistry {
 			}
 		}
 
+		console.log('[delivery] delivering', {
+			runId,
+			hasMedia: !!payload.mediaRefs?.length,
+			audioAsVoice: payload.audioAsVoice,
+			textLen: payload.text?.length ?? 0
+		})
+
 		// Fan out to every distinct contributing target
 		await this.#deliverPayload(
 			payload,
@@ -247,6 +253,81 @@ export class ChannelDeliveryRegistry {
 			sessionId,
 			runId
 		)
+	}
+
+	/**
+	 * Await TtsPostProcessor audio and resolve it for channel delivery.
+	 * Returns a voice-note payload if audio was produced, otherwise
+	 * falls back to the original text payload.
+	 */
+	async #resolveFromPostProcessor(
+		payload: ChannelReplyPayload,
+		runId: string,
+		sessionId: string
+	): Promise<ChannelReplyPayload> {
+		try {
+			// Wait for TtsPostProcessor to finish synthesis (deduped internally)
+			await this.#ttsPostProcessor!.processRun(
+				runId,
+				sessionId
+			)
+
+			// Read the assistant_audio event it produced
+			const rows = this.#store.queryRunEvents(
+				sessionId,
+				runId
+			)
+			for (const row of rows) {
+				if (row.type !== 'assistant_audio') continue
+				let parsed: Record<string, unknown>
+				try {
+					parsed = JSON.parse(row.payload)
+				} catch {
+					continue
+				}
+				const uploadId = parsed.uploadId as
+					| string
+					| undefined
+				if (!uploadId) continue
+
+				// Resolve the blob file path under uploads dir
+				const uploadsDir = this.#dataDir
+					? path.join(this.#dataDir, 'uploads')
+					: null
+				if (!uploadsDir) break
+				const audioPath = path.join(
+					uploadsDir,
+					uploadId
+				)
+
+				console.log(
+					'[delivery] Using TtsPostProcessor audio',
+					{
+						runId,
+						uploadId,
+						audioPath
+					}
+				)
+				return {
+					text: undefined,
+					mediaRefs: [audioPath],
+					audioAsVoice: true
+				}
+			}
+
+			// TtsPostProcessor ran but produced no audio — fall back to text
+			console.warn(
+				'[delivery] TtsPostProcessor produced no audio, falling back to text',
+				{ runId }
+			)
+			return payload
+		} catch (err) {
+			console.error(
+				'[delivery] TtsPostProcessor failed, falling back to text:',
+				err
+			)
+			return payload
+		}
 	}
 
 	/** Apply auto-TTS to a payload if configured. Non-fatal on error. */

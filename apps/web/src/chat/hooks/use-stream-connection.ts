@@ -103,17 +103,16 @@ export function useStreamConnection(
 					.map(eventToStored)
 					.filter(m => m.parts.length > 0 || m.text)
 
+				// Snapshots are canonical full state. Always replace the local
+				// collection so stale rows left over from disconnects/crashes
+				// do not linger in the UI.
 				if (sessionChanged) {
 					// Session rotated — full replace and reset UI state
 					setStreamingMessage(null)
 					setSessionStats(EMPTY_STATS)
 					setIsAgentRunning(false)
-					syncReplaceAll(msgs)
-				} else {
-					if (msgs.length > 0) {
-						syncWrite(msgs)
-					}
 				}
+				syncReplaceAll(msgs)
 
 				const streamingEvent = events.find(e => {
 					if (e.type !== 'assistant_message') return false
@@ -282,7 +281,7 @@ export function useStreamConnection(
 			stream.disconnect()
 			streamRef.current = null
 		}
-	}, [sessionId, syncWrite, syncReplaceAll])
+	}, [sessionId, syncReplaceAll, syncWrite])
 
 	const sendMessage = useCallback(
 		async (

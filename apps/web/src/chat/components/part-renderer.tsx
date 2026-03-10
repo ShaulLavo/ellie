@@ -1,5 +1,9 @@
 import { memo } from 'react'
-import { BookOpenIcon, FileTextIcon } from 'lucide-react'
+import {
+	AlertTriangleIcon,
+	BookOpenIcon,
+	FileTextIcon
+} from 'lucide-react'
 import { SunHorizonIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
 import { env } from '@ellie/env/client'
@@ -241,6 +245,75 @@ export const PartRenderer = memo(
 					<div className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm">
 						{inner}
 					</div>
+				)
+			}
+			case 'media-directive': {
+				if (part.error || !part.uploadId) {
+					return (
+						<div className="my-2 flex max-w-sm items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+							<AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
+							<div className="min-w-0">
+								<div className="font-mono text-[11px] text-amber-700 dark:text-amber-400">
+									Media could not be rendered
+								</div>
+								<div className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">
+									{part.ref}
+								</div>
+							</div>
+						</div>
+					)
+				}
+
+				if (part.mediaKind === 'image') {
+					return (
+						<div className="my-2 max-w-sm">
+							<img
+								src={uploadUrl(part.uploadId)}
+								alt="Attached media"
+								className="max-h-80 rounded-lg object-contain"
+								loading="lazy"
+							/>
+						</div>
+					)
+				}
+
+				if (part.mediaKind === 'video') {
+					return (
+						<div className="my-2 max-w-sm">
+							<video
+								src={uploadUrl(part.uploadId)}
+								controls
+								className="max-h-80 rounded-lg"
+							/>
+						</div>
+					)
+				}
+
+				if (part.mediaKind === 'audio') {
+					return (
+						<div className="my-2">
+							<VoiceMessage src={uploadUrl(part.uploadId)} />
+						</div>
+					)
+				}
+
+				return (
+					<a
+						href={uploadUrl(part.uploadId)}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
+					>
+						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
+						<div className="min-w-0">
+							<span className="block truncate font-medium">
+								Attached media
+							</span>
+							<span className="text-xs text-muted-foreground">
+								{part.uploadId}
+							</span>
+						</div>
+					</a>
 				)
 			}
 			case 'checkpoint':

@@ -76,3 +76,10 @@ scorecard.png
 apps/cli/cli
 apps/cli/ellie
 /ellie
+
+# Playwright MCP
+.playwright-mcp/
+
+# Misc generated files
+apps/server/override.txt
+apps/server/requirements.compiled
