@@ -41,13 +41,17 @@ describe('ChannelDeliveryRegistry', () => {
 		displayName: 'Test',
 		boot: async () => {},
 		shutdown: async () => {},
-		getStatus: () => ({ state: 'disconnected' }),
+		getStatus: () => ({
+			state: 'disconnected' as const,
+			reconnectAttempts: 0
+		}),
 		loginStart: async () => ({}),
 		loginWait: async () => ({}),
 		logout: async () => {},
 		updateSettings: () => {},
 		sendMessage: async (target, text) => {
 			sentMessages.push({ target, text })
+			return {}
 		}
 	}
 

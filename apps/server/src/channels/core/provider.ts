@@ -43,5 +43,45 @@ export interface ChannelProvider {
 	sendMessage(
 		target: ChannelDeliveryTarget,
 		text: string
+	): Promise<{ messageId?: string }>
+
+	/** Send a media message (optional — not all channels support it) */
+	sendMedia?(
+		target: ChannelDeliveryTarget,
+		text: string,
+		media: {
+			buffer: Buffer
+			mimetype: string
+			fileName?: string
+		}
+	): Promise<{ messageId?: string }>
+
+	/** Send a poll (optional — not all channels support it) */
+	sendPoll?(
+		target: ChannelDeliveryTarget,
+		poll: {
+			question: string
+			options: string[]
+			maxSelections?: number
+		}
+	): Promise<{ messageId?: string }>
+
+	/** Send a reaction (optional — not all channels support it) */
+	sendReaction?(
+		target: ChannelDeliveryTarget,
+		messageId: string,
+		emoji: string,
+		fromMe?: boolean
 	): Promise<void>
+
+	/** Send "composing" typing indicator (optional) */
+	sendComposing?(
+		target: ChannelDeliveryTarget
+	): Promise<void>
+
+	/** Check if the account is ready to send messages (optional) */
+	isReady?(accountId: string): {
+		ok: boolean
+		reason: string
+	}
 }

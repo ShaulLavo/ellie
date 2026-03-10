@@ -4,11 +4,31 @@ export interface ChannelAccountSettings {
 }
 
 /** Runtime status for a channel account */
-export type ChannelRuntimeStatus =
-	| { state: 'disconnected' }
-	| { state: 'connecting'; detail?: string }
-	| { state: 'connected'; connectedAt: number }
-	| { state: 'error'; error: string }
+export interface ChannelRuntimeStatus {
+	state:
+		| 'disconnected'
+		| 'connecting'
+		| 'connected'
+		| 'error'
+	detail?: string
+	error?: string
+	/** Epoch ms when connection opened */
+	connectedAt?: number
+	/** Consecutive reconnect attempts (resets on connect) */
+	reconnectAttempts: number
+	/** Epoch ms of most recent successful connect */
+	lastConnectedAt?: number
+	/** Reason string from last disconnect */
+	lastDisconnect?: string
+	/** Epoch ms of last inbound message processed */
+	lastMessageAt?: number
+	/** Epoch ms of last Baileys event */
+	lastEventAt?: number
+	/** Most recent error message */
+	lastError?: string
+	/** Bot's own E.164 or JID */
+	selfId?: string
+}
 
 /** Inbound message from any channel */
 export interface ChannelInboundMessage {
@@ -19,6 +39,14 @@ export interface ChannelInboundMessage {
 	senderName?: string
 	text: string
 	timestamp: number
+	/** Channel-specific message ID (e.g. WhatsApp msg.key.id). When present, used as dedupe key instead of content hash. */
+	externalId?: string
+	/** Local file path to downloaded media (image, video, document, etc.) */
+	mediaPath?: string
+	/** MIME type of the downloaded media */
+	mediaType?: string
+	/** Original file name of the media (if available) */
+	mediaFileName?: string
 }
 
 /** Delivery target — stored in registry, used to route replies back */

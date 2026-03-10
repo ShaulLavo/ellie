@@ -259,23 +259,27 @@ export async function init(): Promise<ServerContext> {
 		})
 
 	// ── Channels ─────────────────────────────────────────────────────────
-	const deliveryRegistry = new ChannelDeliveryRegistry({
-		store,
-		getProvider: id => channelManager.getProvider(id)
-	})
+	const deliveryRegistry: ChannelDeliveryRegistry =
+		new ChannelDeliveryRegistry({
+			store,
+			getProvider: (id: string) =>
+				channelManager.getProvider(id)
+		})
 
-	const channelManager = new ChannelManager({
-		dataDir: DATA_DIR,
-		store,
-		getAgentController: () => controllerFactory.get(),
-		ensureBootstrap,
-		deliveryRegistry
-	})
+	const channelManager: ChannelManager = new ChannelManager(
+		{
+			dataDir: DATA_DIR,
+			store,
+			getAgentController: () => controllerFactory.get(),
+			ensureBootstrap,
+			deliveryRegistry
+		}
+	)
 
 	channelManager.register(new WhatsAppProvider())
 
 	// Boot channels with saved settings (non-blocking)
-	channelManager.bootAll().catch(err => {
+	channelManager.bootAll().catch((err: unknown) => {
 		console.error('[server] Channel boot error:', err)
 	})
 

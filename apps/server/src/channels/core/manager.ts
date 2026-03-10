@@ -25,6 +25,11 @@ export interface ChannelManagerOptions {
 	deliveryRegistry: ChannelDeliveryRegistry
 }
 
+/** Dedupe cache TTL — entries older than this are pruned (matching OpenCLAW) */
+const DEDUPE_TTL_MS = 20 * 60_000
+/** Dedupe cache max entries — oldest are evicted when exceeded */
+const DEDUPE_MAX_SIZE = 5_000
+
 /**
  * Central channel orchestrator.
  * Holds the provider registry, persists/loads settings, and provides
@@ -37,6 +42,8 @@ export class ChannelManager {
 	readonly #getAgentController: () => Promise<AgentController | null>
 	readonly #ensureBootstrap: (sessionId: string) => void
 	readonly #deliveryRegistry: ChannelDeliveryRegistry
+	/** In-memory dedupe cache with TTL + max-size eviction (matching OpenCLAW) */
+	readonly #seenDedupeKeys = new Map<string, number>()
 
 	constructor(opts: ChannelManagerOptions) {
 		this.#dataDir = opts.dataDir
@@ -58,6 +65,10 @@ export class ChannelManager {
 
 	listProviders(): ChannelProvider[] {
 		return [...this.#providers.values()]
+	}
+
+	get dataDir(): string {
+		return this.#dataDir
 	}
 
 	// ── Settings persistence ──────────────────────────────────────────
@@ -157,12 +168,23 @@ export class ChannelManager {
 		const sessionId = this.#store.getCurrentSessionId()
 		this.#store.ensureSession(sessionId)
 
-		// Dedupe key: reject duplicate messages in the same ~2s window
-		const dedupeWindow = Math.floor(Date.now() / 2000)
-		const contentHash = hash(msg.text)
-		const dedupeKey = `channel_msg:${msg.channelId}:${msg.conversationId}:${dedupeWindow}:${contentHash}`
+		// Dedupe key: use externalId (e.g. WhatsApp msg ID) when available,
+		// otherwise fall back to content hash with a 2s window based on message timestamp
+		const dedupeKey = msg.externalId
+			? `channel_msg:${msg.channelId}:${msg.conversationId}:${msg.externalId}`
+			: `channel_msg:${msg.channelId}:${msg.conversationId}:${Math.floor(msg.timestamp / 2000)}:${hash(msg.text)}`
 
-		const beforeAppend = Date.now()
+		// Fast in-memory dedupe check with TTL (no DB round-trip for repeated messages)
+		const now = Date.now()
+		const existingTs = this.#seenDedupeKeys.get(dedupeKey)
+		if (
+			existingTs !== undefined &&
+			now - existingTs < DEDUPE_TTL_MS
+		)
+			return
+		this.#seenDedupeKeys.set(dedupeKey, now)
+		this.#pruneDedupeCache(now)
+
 		const row = this.#store.appendEvent(
 			sessionId,
 			'user_message',
@@ -184,9 +206,6 @@ export class ChannelManager {
 			undefined,
 			dedupeKey
 		)
-
-		// Dedupe hit: appendEvent returned an existing row
-		if (row.createdAt < beforeAppend) return
 
 		this.#ensureBootstrap(sessionId)
 
@@ -239,5 +258,26 @@ export class ChannelManager {
 
 		// Ensure we're watching this session for run completions + backfills
 		this.#deliveryRegistry.watchSession(sessionId)
+	}
+
+	// ── Dedupe cache maintenance ─────────────────────────────────────
+
+	#pruneDedupeCache(now: number): void {
+		// TTL eviction
+		const cutoff = now - DEDUPE_TTL_MS
+		for (const [key, ts] of this.#seenDedupeKeys) {
+			if (ts < cutoff) this.#seenDedupeKeys.delete(key)
+		}
+		// Size cap — evict oldest (Map iteration order = insertion order)
+		if (this.#seenDedupeKeys.size > DEDUPE_MAX_SIZE) {
+			const excess =
+				this.#seenDedupeKeys.size - DEDUPE_MAX_SIZE
+			let removed = 0
+			for (const key of this.#seenDedupeKeys.keys()) {
+				if (removed >= excess) break
+				this.#seenDedupeKeys.delete(key)
+				removed++
+			}
+		}
 	}
 }

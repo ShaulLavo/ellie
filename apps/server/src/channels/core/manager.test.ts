@@ -3,8 +3,7 @@ import {
 	expect,
 	test,
 	beforeEach,
-	afterEach,
-	mock
+	afterEach
 } from 'bun:test'
 import { ChannelManager } from './manager'
 import { ChannelDeliveryRegistry } from './delivery-registry'
@@ -42,12 +41,15 @@ function createMockProvider(
 			bootCalls.push(manager)
 		},
 		shutdown: async () => {},
-		getStatus: () => ({ state: 'disconnected' }),
+		getStatus: () => ({
+			state: 'disconnected' as const,
+			reconnectAttempts: 0
+		}),
 		loginStart: async () => ({}),
 		loginWait: async () => ({}),
 		logout: async () => {},
 		updateSettings: () => {},
-		sendMessage: async () => {}
+		sendMessage: async () => ({})
 	}
 }
 
@@ -305,6 +307,131 @@ describe('ChannelManager', () => {
 			senderId: '1234@s.whatsapp.net',
 			senderName: 'Alice'
 		})
+	})
+
+	test('ingestMessage deduplicates by externalId', async () => {
+		let handleCount = 0
+		const testManager = new ChannelManager({
+			dataDir: dir,
+			store,
+			getAgentController: async () =>
+				({
+					handleMessage: async () => {
+						handleCount++
+						return {
+							runId: 'run-1',
+							routed: 'prompt'
+						}
+					}
+				}) as any,
+			ensureBootstrap: () => {},
+			deliveryRegistry: {
+				register: () => {},
+				registerPending: () => {},
+				watchSession: () => {}
+			} as any
+		})
+
+		const baseMsg = {
+			channelId: 'whatsapp',
+			accountId: 'default',
+			conversationId: '123@s.whatsapp.net',
+			senderId: '+15550001111',
+			text: 'Hello',
+			timestamp: Date.now(),
+			externalId: 'WAMID_001'
+		}
+
+		await testManager.ingestMessage(baseMsg)
+		await testManager.ingestMessage(baseMsg)
+
+		// Second call is a dedupe hit — controller only called once
+		expect(handleCount).toBe(1)
+	})
+
+	test('ingestMessage accepts different externalIds with same text', async () => {
+		let handleCount = 0
+		const testManager = new ChannelManager({
+			dataDir: dir,
+			store,
+			getAgentController: async () =>
+				({
+					handleMessage: async () => {
+						handleCount++
+						return {
+							runId: `run-${handleCount}`,
+							routed: 'prompt'
+						}
+					}
+				}) as any,
+			ensureBootstrap: () => {},
+			deliveryRegistry: {
+				register: () => {},
+				registerPending: () => {},
+				watchSession: () => {}
+			} as any
+		})
+
+		const baseMsg = {
+			channelId: 'whatsapp',
+			accountId: 'default',
+			conversationId: '123@s.whatsapp.net',
+			senderId: '+15550001111',
+			text: 'Hello',
+			timestamp: Date.now()
+		}
+
+		await testManager.ingestMessage({
+			...baseMsg,
+			externalId: 'WAMID_001'
+		})
+		await testManager.ingestMessage({
+			...baseMsg,
+			externalId: 'WAMID_002'
+		})
+
+		// Both accepted — different externalIds
+		expect(handleCount).toBe(2)
+	})
+
+	test('ingestMessage without externalId uses hash-based dedupe', async () => {
+		let handleCount = 0
+		const testManager = new ChannelManager({
+			dataDir: dir,
+			store,
+			getAgentController: async () =>
+				({
+					handleMessage: async () => {
+						handleCount++
+						return {
+							runId: `run-${handleCount}`,
+							routed: 'prompt'
+						}
+					}
+				}) as any,
+			ensureBootstrap: () => {},
+			deliveryRegistry: {
+				register: () => {},
+				registerPending: () => {},
+				watchSession: () => {}
+			} as any
+		})
+
+		const baseMsg = {
+			channelId: 'test',
+			accountId: 'default',
+			conversationId: 'conv-1',
+			senderId: 'sender-1',
+			text: 'Hello',
+			timestamp: Date.now()
+			// no externalId
+		}
+
+		await testManager.ingestMessage(baseMsg)
+		await testManager.ingestMessage(baseMsg)
+
+		// Same content in same 2s window — deduplicated
+		expect(handleCount).toBe(1)
 	})
 
 	test('ingestMessage drops message when agent not available', async () => {
