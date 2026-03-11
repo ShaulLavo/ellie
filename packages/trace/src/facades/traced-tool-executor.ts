@@ -196,9 +196,7 @@ function createTracedOnUpdate(
 			status,
 			detail: details.detail as string | undefined,
 			step: details.step as number | undefined,
-			totalSteps: details.totalSteps as
-				| number
-				| undefined,
+			totalSteps: details.totalSteps as number | undefined,
 			completedPhases: details.completedPhases as
 				| string[]
 				| undefined
