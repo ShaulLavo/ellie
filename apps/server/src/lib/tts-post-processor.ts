@@ -251,9 +251,15 @@ export class TtsPostProcessor {
 			}
 		)
 
-		// 4. Prepare text for synthesis (strip all [[tts...]] tags)
+		// 4. Prepare text for synthesis (strip all [[tts...]] tags and MEDIA: lines)
 		TTS_TAG_RE.lastIndex = 0
 		let ttsText = text.replace(TTS_TAG_RE, '').trim()
+		// Strip MEDIA: directive lines (URLs are not speakable)
+		ttsText = ttsText
+			.split('\n')
+			.filter(line => !/^\s*media:\s*/i.test(line))
+			.join('\n')
+			.trim()
 		ttsText = stripMarkdownForTts(ttsText)
 		ttsText = truncateForTts(ttsText)
 

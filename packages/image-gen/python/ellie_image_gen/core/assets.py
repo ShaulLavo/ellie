@@ -41,6 +41,11 @@ def download_file(url: str, dest_path: str, civitai_token: str | None = None,
     downloaded = 0
     chunk_size = 8 * 1024 * 1024
 
+    def _fmt_size(b: int) -> str:
+        if b < 1024 * 1024:
+            return f"{b / 1024:.0f}KB"
+        return f"{b / (1024 * 1024):.0f}MB"
+
     tmp_path = str(dest) + ".tmp"
     try:
         with open(tmp_path, "wb") as f:
@@ -49,7 +54,7 @@ def download_file(url: str, dest_path: str, civitai_token: str | None = None,
                 downloaded += len(chunk)
                 if total > 0:
                     _progress(phase,
-                              f"{label} — {downloaded / (1024*1024):.0f}MB / {total / (1024*1024):.0f}MB",
+                              f"{label} — {_fmt_size(downloaded)} / {_fmt_size(total)}",
                               bytesDone=downloaded, bytesTotal=total)
 
         os.rename(tmp_path, str(dest))
