@@ -133,3 +133,26 @@ export const elevenlabsAuthApiKeyResponseSchema = v.object({
 	ok: v.literal(true),
 	mode: v.literal('api_key')
 })
+
+// ── CivitAI auth schemas ────────────────────────────────────────────────────
+
+export const civitaiAuthStatusResponseSchema = v.object({
+	mode: v.nullable(v.literal('api_key')),
+	source: v.picklist(['env_api_key', 'file', 'none']),
+	configured: v.boolean(),
+	preview: v.optional(v.string())
+})
+
+export const civitaiAuthClearResponseSchema = v.object({
+	cleared: v.boolean()
+})
+
+export const civitaiAuthApiKeyBodySchema = v.object({
+	key: v.pipe(v.string(), v.nonEmpty()),
+	validate: v.optional(v.boolean())
+})
+
+export const civitaiAuthApiKeyResponseSchema = v.object({
+	ok: v.literal(true),
+	mode: v.literal('api_key')
+})

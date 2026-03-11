@@ -295,7 +295,8 @@ export async function init(): Promise<ServerContext> {
 			store,
 			getAgentController: () => controllerFactory.get(),
 			ensureBootstrap,
-			deliveryRegistry
+			deliveryRegistry,
+			uploadStore
 		}
 	)
 
@@ -329,6 +330,12 @@ export async function init(): Promise<ServerContext> {
 	deliveryRegistry.setTtsPostProcessor(ttsPostProcessor)
 
 	// ── Crash recovery (must run after delivery registry is watching) ───
+	// Wait for channel sockets to be fully connected before delivering
+	try {
+		await channelManager.waitForReady()
+	} catch (err) {
+		console.warn('[server] Channel readiness timeout:', err)
+	}
 	// Phase 1: Close stale runs — run_closed events trigger delivery
 	// via the subscription above (handles crash-during-agent-run)
 	recoverStaleRuns(eventStore, store)

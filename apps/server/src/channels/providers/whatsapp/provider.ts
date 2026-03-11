@@ -148,6 +148,10 @@ interface WhatsAppAccount {
 	authDir: string
 	/** Timestamp when connection was established — for pairing grace period */
 	connectedAtMs: number | null
+	/** Resolves when the socket reaches connection='open' (used by waitForReady) */
+	readyResolve?: () => void
+	/** Promise that resolves when the account is connected */
+	readyPromise?: Promise<void>
 }
 
 const MIN_RECONNECT_DELAY = 1_000
@@ -640,6 +644,30 @@ export class WhatsAppProvider implements ChannelProvider {
 		return { ok: true, reason: 'ok' }
 	}
 
+	async waitForReady(timeoutMs = 30_000): Promise<void> {
+		const promises: Promise<void>[] = []
+		for (const account of this.#accounts.values()) {
+			if (account.status.state === 'connected') continue
+			if (account.readyPromise) {
+				promises.push(account.readyPromise)
+			}
+		}
+		if (promises.length === 0) return
+
+		const timeout = new Promise<void>((_, reject) =>
+			setTimeout(
+				() =>
+					reject(
+						new Error(
+							`WhatsApp connection timed out after ${timeoutMs}ms`
+						)
+					),
+				timeoutMs
+			)
+		)
+		await Promise.race([Promise.all(promises), timeout])
+	}
+
 	// ── Internal: socket creation ───────────────────────────────────────
 
 	async #createSocket(
@@ -764,6 +792,12 @@ export class WhatsAppProvider implements ChannelProvider {
 				account.loginResolve = undefined
 				account.loginReject = undefined
 			}
+
+			// Resolve boot readiness promise (used by waitForReady)
+			if (account.readyResolve) {
+				account.readyResolve()
+				account.readyResolve = undefined
+			}
 		}
 
 		if (connection === 'close') {
@@ -790,6 +824,12 @@ export class WhatsAppProvider implements ChannelProvider {
 					selfId: undefined
 				}
 				account.sock = null
+
+				// Resolve readiness so waitForReady doesn't hang
+				if (account.readyResolve) {
+					account.readyResolve()
+					account.readyResolve = undefined
+				}
 
 				// Clean auth dir
 				if (this.#manager) {
@@ -904,6 +944,12 @@ export class WhatsAppProvider implements ChannelProvider {
 			authDir,
 			connectedAtMs: null
 		}
+
+		// Create a promise that resolves when connection='open' fires
+		account.readyPromise = new Promise<void>(resolve => {
+			account.readyResolve = resolve
+		})
+
 		this.#accounts.set(accountId, account)
 
 		const sock = await this.#createSocket(

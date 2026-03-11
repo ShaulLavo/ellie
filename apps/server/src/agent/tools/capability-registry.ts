@@ -91,7 +91,8 @@ export function createToolRegistry(
 					blobSink: config.blobSink,
 					dataDir: config.dataDir,
 					getSessionId: config.getSessionId,
-					getRunId: config.getRunId
+					getRunId: config.getRunId,
+					credentialsPath: config.credentialsPath
 				})
 			]
 		: []

@@ -81,9 +81,14 @@ type ContentPart struct {
 	Message string `json:"message,omitempty"`
 
 	// image/video/audio/file
-	File string `json:"file,omitempty"`
-	Mime string `json:"mime,omitempty"`
-	Size int    `json:"size,omitempty"`
+	File     string `json:"file,omitempty"`
+	URL      string `json:"url,omitempty"`
+	UploadID string `json:"uploadId,omitempty"`
+	Mime     string `json:"mime,omitempty"`
+	Size     int    `json:"size,omitempty"`
+
+	// audio (assistant_audio)
+	SynthesizedText string `json:"synthesizedText,omitempty"`
 }
 
 // MemoryItem is a recalled memory fact.

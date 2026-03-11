@@ -91,6 +91,11 @@ type Model struct {
 	activeAnims    map[string]*chatAnim // toolCallID or "thinking" → anim
 	thinkingAnimID string               // key for the thinking anim
 
+	// Audio playback state: the uploadID of the currently playing audio.
+	audioPlayingID string
+	// sendFn is Program.Send, used for audio completion callbacks.
+	sendFn func(tea.Msg)
+
 	// Inline autocomplete ghost for slash commands.
 	ghostSuggestion string
 
@@ -405,6 +410,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	// ── Audio playback ───────────────────────────────────────────
+	case audioPlayMsg:
+		return m, m.downloadAndPlay(msg.UploadID)
+
+	case audioStopMsg:
+		player.Stop()
+		m.audioPlayingID = ""
+		m.invalidateAudioCache()
+		m.refreshViewport()
+		return m, nil
+
+	case audioStateMsg:
+		if msg.Done || msg.Err != nil {
+			m.audioPlayingID = ""
+		} else {
+			m.audioPlayingID = msg.UploadID
+		}
+		m.invalidateAudioCache()
+		m.refreshViewport()
+		return m, nil
 	}
 
 	return m, tea.Batch(cmds...)
@@ -667,6 +693,8 @@ func (m Model) updateChat(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch {
+	case key.Matches(msg, m.keys.Chat.PlayAudio):
+		return m.handlePlayAudio()
 	case key.Matches(msg, m.keys.Chat.Up):
 		m.viewport.ScrollUp(1)
 	case key.Matches(msg, m.keys.Chat.Down):
@@ -1003,6 +1031,7 @@ func (m *Model) startSSE() tea.Cmd {
 // StartSSELoop starts the SSE event loop. Called from cmd_chat after
 // the program is created, since we need Program.Send.
 func (m *Model) StartSSELoop(ctx context.Context, send func(tea.Msg)) {
+	m.sendFn = send
 	m.sseClient.RunLoop(ctx, send)
 }
 
@@ -1166,9 +1195,88 @@ func (m *Model) updateGhost() {
 }
 
 func (m *Model) cleanup() {
+	player.Stop()
 	m.sseClient.Disconnect()
 	if m.sseCancel != nil {
 		m.sseCancel()
+	}
+}
+
+// handlePlayAudio toggles audio playback for the last audio part.
+func (m Model) handlePlayAudio() (tea.Model, tea.Cmd) {
+	// If currently playing, stop.
+	if m.audioPlayingID != "" {
+		player.Stop()
+		m.audioPlayingID = ""
+		m.invalidateAudioCache()
+		m.refreshViewport()
+		return m, nil
+	}
+
+	// Find the last audio part across all messages.
+	var lastUploadID string
+	allMsgs := m.messages
+	if m.streamingMsg != nil {
+		allMsgs = append(allMsgs, *m.streamingMsg)
+	}
+	for i := len(allMsgs) - 1; i >= 0; i-- {
+		for j := len(allMsgs[i].Parts) - 1; j >= 0; j-- {
+			if allMsgs[i].Parts[j].Type == PartAudio && allMsgs[i].Parts[j].UploadID != "" {
+				lastUploadID = allMsgs[i].Parts[j].UploadID
+				break
+			}
+		}
+		if lastUploadID != "" {
+			break
+		}
+	}
+
+	if lastUploadID == "" {
+		return m, nil
+	}
+
+	return m, func() tea.Msg {
+		return audioPlayMsg{UploadID: lastUploadID}
+	}
+}
+
+// downloadAndPlay downloads audio and starts playback.
+func (m Model) downloadAndPlay(uploadID string) tea.Cmd {
+	httpClient := m.httpClient
+	sendFn := m.sendFn
+	return func() tea.Msg {
+		ctx := context.Background()
+		data, err := httpClient.DownloadMedia(ctx, uploadID)
+		if err != nil {
+			return audioStateMsg{UploadID: uploadID, Err: err}
+		}
+
+		// Detect MIME type — default to ogg for TTS output.
+		mime := "audio/ogg"
+
+		err = player.Play(data, mime, uploadID, func() {
+			// Notify BubbleTea that playback is done.
+			if sendFn != nil {
+				sendFn(audioStateMsg{UploadID: uploadID, Done: true})
+			}
+		})
+		if err != nil {
+			return audioStateMsg{UploadID: uploadID, Err: err}
+		}
+
+		return audioStateMsg{UploadID: uploadID, Done: false}
+	}
+}
+
+// invalidateAudioCache clears render cache for messages containing audio parts.
+func (m *Model) invalidateAudioCache() {
+	for _, msg := range m.messages {
+		for _, part := range msg.Parts {
+			if part.Type == PartAudio {
+				delete(m.msgRenderCache, msg.ID)
+				break
+			}
+		}
 	}
 }
 

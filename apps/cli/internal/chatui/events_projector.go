@@ -14,6 +14,7 @@ var renderableTypes = map[string]bool{
 	"tool_execution":    true,
 	"memory_recall":     true,
 	"memory_retain":     true,
+	"assistant_audio":   true,
 	"error":             true,
 	"session_rotated":   true,
 }
@@ -109,6 +110,9 @@ func EventToStored(row EventRow) StoredMessage {
 
 	case "memory_recall", "memory_retain":
 		parts = extractMemoryParts(parsed)
+
+	case "assistant_audio":
+		parts = extractAudioParts(parsed)
 
 	case "error":
 		parts = extractErrorParts(parsed)
@@ -328,6 +332,21 @@ func extractMemoryParts(parsed map[string]interface{}) []ContentPart {
 	return nil
 }
 
+func extractAudioParts(parsed map[string]interface{}) []ContentPart {
+	var size int
+	if v, ok := parsed["size"].(float64); ok {
+		size = int(v)
+	}
+	return []ContentPart{{
+		Type:            PartAudio,
+		UploadID:        jsonStr(parsed, "uploadId"),
+		URL:             jsonStr(parsed, "url"),
+		Mime:            jsonStr(parsed, "mime"),
+		Size:            size,
+		SynthesizedText: jsonStr(parsed, "synthesizedText"),
+	}}
+}
+
 func extractErrorParts(parsed map[string]interface{}) []ContentPart {
 	msg := "An unexpected error occurred"
 	if s, ok := parsed["message"].(string); ok {
@@ -341,7 +360,7 @@ func resolveSender(eventType string, parsed map[string]interface{}) MessageSende
 	switch {
 	case eventType == "user_message" || role == "user":
 		return SenderUser
-	case eventType == "assistant_message" || role == "assistant":
+	case eventType == "assistant_message" || eventType == "assistant_audio" || role == "assistant":
 		return SenderAgent
 	case role == "system":
 		return SenderSystem

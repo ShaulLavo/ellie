@@ -83,3 +83,10 @@ apps/cli/ellie
 # Misc generated files
 apps/server/override.txt
 apps/server/requirements.compiled
+
+# Diffusers (Python venv, downloaded models, pycache)
+.data/diffusers-venv/
+.data/diffusers-models/
+__pycache__/
+*.pyc
+*.egg-info/

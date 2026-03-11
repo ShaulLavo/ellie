@@ -205,6 +205,28 @@ func (c *HTTPClient) UploadFile(ctx context.Context, filePath string) (Attachmen
 	}, nil
 }
 
+// DownloadMedia fetches raw media bytes from /api/uploads-rpc/:uploadId/content.
+func (c *HTTPClient) DownloadMedia(ctx context.Context, uploadID string) ([]byte, error) {
+	url := c.baseURL + "/api/uploads-rpc/" + uploadID + "/content"
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create download request: %w", err)
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download media failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download media returned %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read media body: %w", err)
+	}
+	return data, nil
+}
+
 // ClearSession clears the current session via POST /chat/:sessionId/clear.
 func (c *HTTPClient) ClearSession(ctx context.Context, sessionID string) error {
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/"+sessionID+"/clear", nil)

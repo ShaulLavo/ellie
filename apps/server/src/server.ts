@@ -14,7 +14,8 @@ import {
 	createAuthRoutes,
 	createGroqAuthRoutes,
 	createBraveAuthRoutes,
-	createElevenLabsAuthRoutes
+	createElevenLabsAuthRoutes,
+	createCivitaiAuthRoutes
 } from './routes/auth'
 import { createChatRoutes } from './routes/chat'
 import { errorSchema } from './routes/schemas/common-schemas'
@@ -86,6 +87,7 @@ export const app = new Elysia()
 		)
 	)
 	.use(createElevenLabsAuthRoutes(ctx.CREDENTIALS_PATH))
+	.use(createCivitaiAuthRoutes(ctx.CREDENTIALS_PATH))
 	.use(createChannelRoutes(ctx.channelManager))
 	.use(
 		createTusApp({

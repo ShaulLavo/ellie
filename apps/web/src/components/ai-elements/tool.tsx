@@ -17,7 +17,7 @@ import {
 	WrenchIcon,
 	XCircleIcon
 } from '@phosphor-icons/react'
-import { AILoader } from '@/components/ai-loader'
+import { LoadingAnimation } from '@/components/kokonutui/ai-loading'
 import { isValidElement, useRef, useEffect } from 'react'
 import { useCollapsibleScroll } from '@/hooks/use-collapsible-scroll'
 
@@ -31,10 +31,7 @@ export const Tool = ({
 	...props
 }: ToolProps) => (
 	<Collapsible
-		className={cn(
-			'group not-prose mb-4 w-full rounded-md border',
-			className
-		)}
+		className={cn('group not-prose mb-4 w-full', className)}
 		{...props}
 	/>
 )
@@ -74,8 +71,12 @@ const statusIcons: Record<ToolPart['state'], ReactNode> = {
 	'approval-responded': (
 		<CheckCircleIcon className="size-3 text-muted-foreground" />
 	),
-	'input-available': <AILoader className="size-4" />,
-	'input-streaming': <AILoader className="size-4" />,
+	'input-available': (
+		<LoadingAnimation className="size-4" progress={100} />
+	),
+	'input-streaming': (
+		<LoadingAnimation className="size-4" progress={100} />
+	),
 	'output-available': (
 		<CheckCircleIcon className="size-3 text-muted-foreground" />
 	),
@@ -203,7 +204,7 @@ export const ToolInput = ({
 		<h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
 			Parameters
 		</h4>
-		<div className="rounded-md bg-muted/50 [&_pre]:p-2">
+		<div className="[&_pre]:p-2">
 			<CodeBlock
 				className="border-0"
 				code={JSON.stringify(input, null, 2)}
@@ -342,15 +343,15 @@ export const ToolOutput = ({
 
 	return (
 		<div className={cn('space-y-2', className)} {...props}>
-			<h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-				{errorText ? 'Error' : 'Result'}
-			</h4>
+			{errorText && (
+				<h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+					Error
+				</h4>
+			)}
 			<div
 				className={cn(
-					'overflow-x-auto rounded-md text-xs [&_table]:w-full [&_pre]:p-2',
-					errorText
-						? 'bg-destructive/10 text-destructive'
-						: 'bg-muted/50 text-foreground'
+					'overflow-x-auto text-xs [&_table]:w-full [&_pre]:p-2',
+					errorText ? 'text-destructive' : 'text-foreground'
 				)}
 			>
 				{errorText && <div>{errorText}</div>}

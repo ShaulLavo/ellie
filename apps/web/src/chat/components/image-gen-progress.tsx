@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import {
 	CheckCircleIcon,
 	ImageIcon,
@@ -6,11 +6,10 @@ import {
 } from 'lucide-react'
 import {
 	CaretDownIcon,
-	CircleNotchIcon,
 	CloudArrowDownIcon,
+	DownloadSimpleIcon,
 	GearSixIcon,
 	ImageSquareIcon,
-	QueueIcon,
 	WarningCircleIcon
 } from '@phosphor-icons/react'
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
@@ -21,6 +20,7 @@ import {
 	TaskContent,
 	TaskTrigger
 } from '@/components/ai-elements/task'
+import { LoadingAnimation } from '@/components/kokonutui/ai-loading'
 import { cn } from '@/lib/utils'
 
 type ImageGenPart = Extract<
@@ -32,15 +32,51 @@ type ProgressEntry = NonNullable<
 	ImageGenPart['entries']
 >[number]
 
+/** Groups consecutive entries that share the same phase into one row. */
+interface PhaseGroup {
+	/** First entry id — used as React key */
+	id: string
+	phase: string
+	/** Most recent entry in the group (has latest step/detail) */
+	latest: ProgressEntry
+	/** All entries in this group */
+	entries: ProgressEntry[]
+}
+
+function groupByPhase(
+	entries: ProgressEntry[]
+): PhaseGroup[] {
+	const groups: PhaseGroup[] = []
+	for (const entry of entries) {
+		const last = groups.at(-1)
+		if (last && last.phase === entry.phase) {
+			last.latest = entry
+			last.entries.push(entry)
+		} else {
+			groups.push({
+				id: entry.id,
+				phase: entry.phase,
+				latest: entry,
+				entries: [entry]
+			})
+		}
+	}
+	return groups
+}
+
 export const ImageGenProgress = memo(
 	({ part }: { part: ImageGenPart }) => {
 		const entries = part.entries ?? []
 		const currentEntry = entries.at(-1)
 		const summary = buildSummary(part, currentEntry)
+		const groups = useMemo(
+			() => groupByPhase(entries),
+			[entries]
+		)
 
 		return (
 			<Task
-				className="my-2 max-w-xl rounded-lg border border-border/50 bg-card/50 p-3"
+				className="my-2 max-w-xl"
 				defaultOpen={part.status === 'running'}
 			>
 				<TaskTrigger
@@ -54,7 +90,10 @@ export const ImageGenProgress = memo(
 							) : part.status === 'complete' ? (
 								<CheckCircleIcon className="size-4 text-emerald-500" />
 							) : (
-								<CircleNotchIcon className="size-4 animate-spin text-muted-foreground" />
+								<LoadingAnimation
+									className="size-4"
+									progress={100}
+								/>
 							)}
 						</div>
 						<div className="min-w-0 flex-1">
@@ -70,28 +109,51 @@ export const ImageGenProgress = memo(
 				</TaskTrigger>
 				<TaskContent className="mt-0">
 					<div className="space-y-3">
-						{entries.length > 0 ? (
+						{groups.length > 0 ? (
 							<div className="space-y-3">
-								{entries.map((entry, index) => (
+								{groups.map((group, gi) => (
 									<ChainOfThoughtStep
-										key={entry.id}
-										icon={iconForEntry(entry)}
+										key={group.id}
+										icon={iconForPhase(
+											group.phase,
+											group.latest
+										)}
 										label={
 											<div className="font-mono text-[11px] leading-tight">
-												{entry.label}
-												{renderStepCount(entry)}
+												{stripStepSuffix(
+													group.latest.label
+												)}
+												{group.latest.step != null &&
+													group.latest.totalSteps !=
+														null && (
+														<span className="ml-1 text-muted-foreground">
+															{group.latest.step}/
+															{group.latest.totalSteps}
+														</span>
+													)}
 											</div>
 										}
-										description={formatEntryDescription(
-											entry
-										)}
-										status={visualStatusForEntry(
+										description={
+											group.latest.detail?.trim() ||
+											undefined
+										}
+										status={groupVisualStatus(
 											part,
-											entry,
-											index,
-											entries.length
+											group,
+											gi,
+											groups.length
 										)}
-									/>
+									>
+										{group.latest.step != null &&
+											group.latest.totalSteps != null && (
+												<StepProgressBar
+													step={group.latest.step}
+													totalSteps={
+														group.latest.totalSteps
+													}
+												/>
+											)}
+									</ChainOfThoughtStep>
 								))}
 							</div>
 						) : (
@@ -101,7 +163,7 @@ export const ImageGenProgress = memo(
 						)}
 
 						{part.status === 'error' && part.error && (
-							<div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 font-mono text-[10px] text-destructive">
+							<div className="font-mono text-[10px] text-destructive">
 								{part.error}
 							</div>
 						)}
@@ -151,6 +213,50 @@ export const ImageGenProgress = memo(
 	}
 )
 
+function StepProgressBar({
+	step,
+	totalSteps
+}: {
+	step: number
+	totalSteps: number
+}) {
+	const pct = Math.min(
+		100,
+		Math.round((step / totalSteps) * 100)
+	)
+	const isDone = step >= totalSteps
+
+	return (
+		<div className="flex items-center gap-2.5">
+			<div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted/80">
+				<div
+					className={cn(
+						'absolute inset-y-0 left-0 rounded-full transition-[width] duration-300 ease-out',
+						isDone
+							? 'bg-emerald-500'
+							: 'bg-gradient-to-r from-blue-500 to-violet-500'
+					)}
+					style={{ width: `${pct}%` }}
+				/>
+				{!isDone && (
+					<div
+						className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-transparent to-white/25 transition-[width] duration-300 ease-out"
+						style={{ width: `${pct}%` }}
+					/>
+				)}
+			</div>
+			<span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+				{step}/{totalSteps}
+			</span>
+		</div>
+	)
+}
+
+/** Remove trailing " X/Y" from labels since we render step counts separately. */
+function stripStepSuffix(label: string): string {
+	return label.replace(/\s+\d+\/\d+$/, '')
+}
+
 function buildSummary(
 	part: ImageGenPart,
 	currentEntry?: ProgressEntry
@@ -167,67 +273,54 @@ function buildSummary(
 	if (!currentEntry) {
 		return 'Waiting for progress updates...'
 	}
-	return (
-		formatEntryDescription(currentEntry) ??
-		currentEntry.label
-	)
+	const detail = currentEntry.detail?.trim()
+	return detail ?? currentEntry.label
 }
 
-function visualStatusForEntry(
+function groupVisualStatus(
 	part: ImageGenPart,
-	entry: ProgressEntry,
-	index: number,
-	totalEntries: number
+	group: PhaseGroup,
+	groupIndex: number,
+	totalGroups: number
 ): 'complete' | 'active' | 'pending' {
-	if (entry.status === 'failed') {
-		return 'active'
-	}
+	// If the latest entry in the group is explicitly completed
+	if (group.latest.status === 'completed') return 'complete'
+	if (group.latest.status === 'failed') return 'active'
+
+	// If step data exists and step reached totalSteps, it's done
 	if (
-		part.status === 'running' &&
-		index === totalEntries - 1
+		group.latest.step != null &&
+		group.latest.totalSteps != null &&
+		group.latest.step >= group.latest.totalSteps
 	) {
-		return 'active'
+		return 'complete'
 	}
-	if (
-		part.status === 'error' &&
-		index === totalEntries - 1
-	) {
+
+	// If it's not the last group, later groups exist so this one is done
+	if (groupIndex < totalGroups - 1) return 'complete'
+
+	// Last group while still running
+	if (part.status === 'running' || part.status === 'error')
 		return 'active'
-	}
+
 	return 'complete'
 }
 
-function formatEntryDescription(
+function iconForPhase(
+	phase: string,
 	entry: ProgressEntry
-): string | undefined {
-	const detail = entry.detail?.trim()
-	const count = renderStepCount(entry)
-	if (detail && count) return `${detail} ${count}`
-	return detail ?? count ?? undefined
-}
-
-function renderStepCount(
-	entry: ProgressEntry
-): string | undefined {
-	if (entry.step == null || entry.totalSteps == null) {
-		return undefined
-	}
-	return `(${entry.step}/${entry.totalSteps})`
-}
-
-function iconForEntry(entry: ProgressEntry): PhosphorIcon {
+): PhosphorIcon {
 	if (entry.status === 'failed') {
 		return WarningCircleIcon
 	}
 
-	switch (entry.phase) {
+	switch (phase) {
 		case 'setup':
 			return GearSixIcon
-		case 'queue':
-			return QueueIcon
+		case 'download':
+			return DownloadSimpleIcon
 		case 'denoising':
 			return ImageSquareIcon
-		case 'fetch':
 		case 'save':
 			return CloudArrowDownIcon
 		default:

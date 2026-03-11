@@ -84,4 +84,11 @@ export interface ChannelProvider {
 		ok: boolean
 		reason: string
 	}
+
+	/**
+	 * Wait until all booted accounts are connected and ready to send.
+	 * Resolves immediately if already connected. Rejects on timeout.
+	 * Used by crash recovery to ensure delivery doesn't race socket open.
+	 */
+	waitForReady?(timeoutMs?: number): Promise<void>
 }

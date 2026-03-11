@@ -116,6 +116,7 @@ func renderStatusLine(m *Model, width int) string {
 }
 
 // renderMessages renders the chat viewport content.
+// audioPlayingID is threaded through for audio play/stop indication.
 func renderMessages(m *Model, width int) string {
 	contentWidth := width - 2
 
@@ -133,17 +134,18 @@ func renderMessages(m *Model, width int) string {
 		if tg.HiddenMessageIDs[msg.ID] {
 			continue
 		}
-		// Check if this message has any active animations (skip cache if so).
+		// Check if this message has any active animations or playing audio (skip cache if so).
 		hasActiveAnim := messageHasActiveAnim(msg, m.activeAnims)
+		hasAudioState := m.audioPlayingID != "" && messageHasAudio(msg)
 		// Use cached render for non-streaming, finalized messages without active anims.
-		if !msg.IsStreaming && !hasActiveAnim {
+		if !msg.IsStreaming && !hasActiveAnim && !hasAudioState {
 			if cached, ok := m.msgRenderCache[msg.ID]; ok {
 				b.WriteString(cached)
 				b.WriteString("\n")
 				continue
 			}
 		}
-		rendered := renderMessage(msg, tg, contentWidth, m.activeAnims)
+		rendered := renderMessage(msg, tg, contentWidth, m.activeAnims, m.audioPlayingID)
 		if !msg.IsStreaming && !hasActiveAnim {
 			m.msgRenderCache[msg.ID] = rendered
 		}
@@ -153,7 +155,7 @@ func renderMessages(m *Model, width int) string {
 
 	// Render streaming message (never cached).
 	if m.streamingMsg != nil {
-		b.WriteString(renderMessage(*m.streamingMsg, tg, contentWidth, m.activeAnims))
+		b.WriteString(renderMessage(*m.streamingMsg, tg, contentWidth, m.activeAnims, m.audioPlayingID))
 		b.WriteString("\n")
 	}
 
@@ -161,10 +163,10 @@ func renderMessages(m *Model, width int) string {
 }
 
 // renderMessage renders a single chat message.
-func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[string]*chatAnim) string {
+func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[string]*chatAnim, audioPlayingID string) string {
 	// Checkpoint messages render as standalone dividers without a sender label.
 	if len(msg.Parts) == 1 && msg.Parts[0].Type == PartCheckpoint {
-		return renderPart(msg.Parts[0], tg, width, anims)
+		return renderPart(msg.Parts[0], tg, width, anims, audioPlayingID)
 	}
 
 	var b strings.Builder
@@ -183,7 +185,7 @@ func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[stri
 
 	// Content parts
 	for _, part := range msg.Parts {
-		rendered := renderPart(part, tg, width, anims)
+		rendered := renderPart(part, tg, width, anims, audioPlayingID)
 		if rendered != "" {
 			b.WriteString(rendered)
 			b.WriteString("\n")
@@ -219,7 +221,7 @@ func renderSenderLabel(sender MessageSender) string {
 	}
 }
 
-func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*chatAnim) string {
+func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*chatAnim, audioPlayingID string) string {
 	switch part.Type {
 	case PartText:
 		w := width
@@ -331,6 +333,21 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 			lineLen = 2
 		}
 		return dimStyle.Render(label + strings.Repeat("─", lineLen))
+
+	case PartAudio:
+		label := "Voice message"
+		if part.SynthesizedText != "" {
+			// Show a short preview of the synthesized text.
+			preview := part.SynthesizedText
+			if len(preview) > 60 {
+				preview = preview[:60] + "..."
+			}
+			label = preview
+		}
+		if audioPlayingID != "" && part.UploadID == audioPlayingID {
+			return dimStyle.Render("  \u266b ") + dimStyle.Render(label) + " " + toolCallStyle.Render("["+"\u25a0"+" Stop]")
+		}
+		return dimStyle.Render("  \u266b ") + dimStyle.Render(label) + " " + toolCallStyle.Render("["+"\u25b6"+" Play]")
 
 	case PartThinking:
 		return "" // Already rendered at message level
@@ -507,6 +524,16 @@ func wrapText(text string, width int) string {
 		}
 	}
 	return result.String()
+}
+
+// messageHasAudio returns true if any part in the message is an audio part.
+func messageHasAudio(msg StoredMessage) bool {
+	for _, part := range msg.Parts {
+		if part.Type == PartAudio {
+			return true
+		}
+	}
+	return false
 }
 
 // messageHasActiveAnim returns true if any tool call in the message has an active animation.

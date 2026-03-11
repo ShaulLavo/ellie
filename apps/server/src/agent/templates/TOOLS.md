@@ -16,6 +16,43 @@ No tools documented yet.
 
 ---
 
+## Research & Information Seeking
+
+When your human asks you to look something up — news, a topic, a product, anything — **go deep, not wide.**
+
+Don't just search and list titles. That's what Google does. You're better than that.
+
+**The pattern:**
+
+1. Search to get the landscape
+2. Pick the most interesting/relevant results (use your judgement — that's why you have opinions)
+3. Fetch and actually read them
+4. Come back with a synthesized take — what matters, what's noise, what's surprising
+
+**Use `exec` for this.** It's the perfect fit: search, loop through results, fetch the good ones, build up your understanding, then present it. One tool call, not ten back-and-forth rounds.
+
+```ts
+// Example: researching a topic
+const search = await search_web({ query: "..." })
+const results = search.results
+
+// Pick the interesting ones (you decide what's worth reading)
+const worth_reading = results.filter(r => /* your judgement */)
+
+const articles = []
+for (const r of worth_reading) {
+  const content = await fetch_page({ url: r.url })
+  articles.push({ title: r.title, url: r.url, content })
+}
+
+// Now you have the actual content — synthesize and print
+print(JSON.stringify(articles))
+```
+
+The goal: your human asks a question, you come back with an informed answer — not a list of links.
+
+---
+
 ## Exec Modes
 
 You have three tiers of execution capability. Choose the right one for the task:
@@ -93,3 +130,5 @@ print(result)
 | Iteratively explore a dataset | `session_exec` |
 | Build up analysis state across steps | `session_exec` |
 | Debug something step by step | `session_exec` |
+| Research a topic (search → read → synthesize) | `exec` |
+| Compare info across multiple web pages | `exec` |

@@ -28,18 +28,22 @@ export interface StreamState {
 	currentMessageRowId: number | null
 	/** Map of toolCallId → row ID for in-flight tool_execution rows */
 	currentToolRowIds: Map<string, number>
+	/** Upload IDs from completed image-gen tool executions in this run */
+	pendingImageGenUploads: string[]
 }
 
 export function createStreamState(): StreamState {
 	return {
 		currentMessageRowId: null,
-		currentToolRowIds: new Map()
+		currentToolRowIds: new Map(),
+		pendingImageGenUploads: []
 	}
 }
 
 export function resetStreamState(state: StreamState): void {
 	state.currentMessageRowId = null
 	state.currentToolRowIds.clear()
+	state.pendingImageGenUploads.length = 0
 }
 
 function toUploadContentUrl(uploadId: string): string {
@@ -98,6 +102,59 @@ function normalizeAssistantMessage(
 			}
 		})
 	}
+}
+
+/**
+ * Auto-inject MEDIA directives for image-gen uploads into the assistant message.
+ * Appends normalized MEDIA lines for any uploads not already referenced in the text.
+ */
+function injectImageGenMedia(
+	message: AssistantMessage,
+	uploadIds: string[]
+): AssistantMessage {
+	// Collect all upload IDs already referenced in the message text
+	const existingRefs = new Set<string>()
+	for (const part of message.content) {
+		if (part.type !== 'text') continue
+		for (const id of uploadIds) {
+			if (part.text.includes(id)) {
+				existingRefs.add(id)
+			}
+		}
+	}
+
+	const missing = uploadIds.filter(
+		id => !existingRefs.has(id)
+	)
+	if (missing.length === 0) return message
+
+	// Build MEDIA lines (already normalized to /api/uploads-rpc/.../content URLs)
+	const mediaLines = missing
+		.map(id => `MEDIA: ${toUploadContentUrl(id)}`)
+		.join('\n')
+
+	// Append to the last text part, or add a new text part
+	const content = [...message.content]
+	const lastTextIdx = content.findLastIndex(
+		p => p.type === 'text'
+	)
+	if (lastTextIdx >= 0) {
+		const lastText = content[lastTextIdx] as {
+			type: 'text'
+			text: string
+		}
+		content[lastTextIdx] = {
+			...lastText,
+			text: `${lastText.text}\n${mediaLines}`
+		}
+	} else {
+		content.push({
+			type: 'text' as const,
+			text: mediaLines
+		})
+	}
+
+	return { ...message, content }
 }
 
 /** Persist a DB write with standardized error handling. */
@@ -198,14 +255,22 @@ export function handleStreamingEvent(
 			'assistant_message (final)',
 			'update_failed',
 			() => {
+				let message = normalizeAssistantMessage(
+					event.message as AssistantMessage
+				)
+
+				// Auto-inject MEDIA directives for pending image-gen uploads
+				if (state.pendingImageGenUploads.length > 0) {
+					message = injectImageGenMedia(
+						message,
+						state.pendingImageGenUploads
+					)
+					state.pendingImageGenUploads.length = 0
+				}
+
 				deps.store.updateEvent(
 					state.currentMessageRowId!,
-					{
-						message: normalizeAssistantMessage(
-							event.message as AssistantMessage
-						),
-						streaming: false
-					},
+					{ message, streaming: false },
 					sessionId
 				)
 			}
@@ -300,6 +365,22 @@ export function handleStreamingEvent(
 			}
 		)
 		state.currentToolRowIds.delete(event.toolCallId)
+
+		// Track successful image-gen uploads for auto-injection into assistant message
+		if (
+			event.toolName === 'generate_image' &&
+			!event.isError
+		) {
+			const details = (
+				event.result as {
+					details?: { success?: boolean; uploadId?: string }
+				}
+			)?.details
+			if (details?.success && details.uploadId) {
+				state.pendingImageGenUploads.push(details.uploadId)
+			}
+		}
+
 		return true
 	}
 

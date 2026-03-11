@@ -55,6 +55,9 @@ export type BraveCredential = ApiKeyCredential
 /** ElevenLabs only supports API key authentication. */
 export type ElevenLabsCredential = ApiKeyCredential
 
+/** CivitAI only supports API key authentication. */
+export type CivitaiCredential = ApiKeyCredential
+
 export type CredentialMap = Record<string, unknown>
 
 function isMultiProvider(
@@ -342,6 +345,17 @@ export const setElevenLabsCredential = (
 
 export const clearElevenLabsCredential = (path: string) =>
 	clearProviderCredential(path, 'elevenlabs')
+
+export const loadCivitaiCredential = (path: string) =>
+	loadApiKeyProvider(path, 'civitai')
+
+export const setCivitaiCredential = (
+	path: string,
+	credential: CivitaiCredential
+) => setProviderCredential(path, 'civitai', credential)
+
+export const clearCivitaiCredential = (path: string) =>
+	clearProviderCredential(path, 'civitai')
 
 export const clearAnthropicCredential = (path: string) =>
 	clearProviderCredential(path, 'anthropic')

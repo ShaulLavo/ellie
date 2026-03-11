@@ -1,0 +1,1 @@
+"""Ellie image generation service."""

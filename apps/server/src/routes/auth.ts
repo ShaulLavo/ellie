@@ -28,7 +28,11 @@ import {
 	loadElevenLabsCredential,
 	setElevenLabsCredential,
 	clearElevenLabsCredential,
-	type ElevenLabsCredential
+	type ElevenLabsCredential,
+	loadCivitaiCredential,
+	setCivitaiCredential,
+	clearCivitaiCredential,
+	type CivitaiCredential
 } from '@ellie/ai/credentials'
 import {
 	oauthAuthorize,
@@ -59,7 +63,11 @@ import {
 	elevenlabsAuthStatusResponseSchema,
 	elevenlabsAuthClearResponseSchema,
 	elevenlabsAuthApiKeyBodySchema,
-	elevenlabsAuthApiKeyResponseSchema
+	elevenlabsAuthApiKeyResponseSchema,
+	civitaiAuthStatusResponseSchema,
+	civitaiAuthClearResponseSchema,
+	civitaiAuthApiKeyBodySchema,
+	civitaiAuthApiKeyResponseSchema
 } from './schemas/auth-schemas'
 import {
 	BadRequestError,
@@ -888,6 +896,160 @@ export function createElevenLabsAuthRoutes(
 					body: elevenlabsAuthApiKeyBodySchema,
 					response: {
 						200: elevenlabsAuthApiKeyResponseSchema,
+						400: errorSchema,
+						401: errorSchema,
+						403: errorSchema,
+						500: errorSchema
+					}
+				}
+			)
+	)
+}
+
+// ── CivitAI auth routes ─────────────────────────────────────────────────────
+
+/**
+ * Validate a CivitAI API key via GET /api/v1/models?limit=1.
+ * Returns an error string if invalid, or null if acceptable.
+ */
+async function validateCivitaiApiKey(
+	key: string
+): Promise<string | null> {
+	try {
+		const res = await fetch(
+			'https://civitai.com/api/v1/models?limit=1',
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${key}`
+				}
+			}
+		)
+		if (res.status === 401) {
+			return 'Invalid API key (401 from CivitAI)'
+		}
+		return null
+	} catch (err) {
+		console.warn(
+			'[auth] CivitAI API key validation network error:',
+			err instanceof Error ? err.message : err
+		)
+		return null
+	}
+}
+
+export function createCivitaiAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return (
+		new Elysia({
+			prefix: '/api/auth/civitai',
+			tags: ['Auth']
+		})
+			.onBeforeHandle(({ request, server }) => {
+				const ip = server?.requestIP(request)
+				const addr = ip?.address
+				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
+					throw new ForbiddenError(
+						'Auth routes are only available from localhost'
+					)
+				}
+			})
+
+			// ── GET /status ────────────────────────────────────────
+			.get(
+				'/status',
+				async () => {
+					const envKey = process.env.CIVITAI_TOKEN
+					if (envKey) {
+						return {
+							mode: 'api_key' as const,
+							source: 'env_api_key' as const,
+							configured: true,
+							preview: keyPreview(envKey)
+						}
+					}
+
+					const cred =
+						await loadCivitaiCredential(credentialsPath)
+					if (!cred) {
+						return {
+							mode: null,
+							source: 'none' as const,
+							configured: false
+						}
+					}
+
+					return {
+						mode: 'api_key' as const,
+						source: 'file' as const,
+						configured: true,
+						preview: keyPreview(cred.key)
+					}
+				},
+				{
+					response: {
+						200: civitaiAuthStatusResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /clear ────────────────────────────────────────
+			.post(
+				'/clear',
+				async () => {
+					const cleared =
+						await clearCivitaiCredential(credentialsPath)
+					if (cleared) onCredentialChange?.()
+					return { cleared }
+				},
+				{
+					response: {
+						200: civitaiAuthClearResponseSchema,
+						403: errorSchema
+					}
+				}
+			)
+
+			// ── POST /api-key ──────────────────────────────────────
+			.post(
+				'/api-key',
+				async ({ body }) => {
+					const { key, validate = true } = body
+
+					if (validate) {
+						const invalid = await validateCivitaiApiKey(
+							key.trim()
+						)
+						if (invalid) {
+							throw new UnauthorizedError(invalid)
+						}
+					}
+
+					const cred: CivitaiCredential = {
+						type: 'api_key',
+						key: key.trim()
+					}
+					const result = await setCivitaiCredential(
+						credentialsPath,
+						cred
+					)
+					if (!result.ok) {
+						throw new InternalServerError(result.error)
+					}
+
+					onCredentialChange?.()
+					return {
+						ok: true as const,
+						mode: 'api_key' as const
+					}
+				},
+				{
+					body: civitaiAuthApiKeyBodySchema,
+					response: {
+						200: civitaiAuthApiKeyResponseSchema,
 						400: errorSchema,
 						401: errorSchema,
 						403: errorSchema,

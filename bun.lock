@@ -32,6 +32,7 @@
         "@ellie/db": "workspace:*",
         "@ellie/env": "workspace:*",
         "@ellie/hindsight": "workspace:*",
+        "@ellie/image-gen": "workspace:*",
         "@ellie/schemas": "workspace:*",
         "@ellie/trace": "workspace:*",
         "@ellie/tus": "workspace:*",
@@ -280,6 +281,18 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/image-gen": {
+      "name": "@ellie/image-gen",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ellie/schemas": "workspace:*",
+        "@ellie/trace": "workspace:*",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "bun-types": "latest",
+      },
+    },
     "packages/schemas": {
       "name": "@ellie/schemas",
       "version": "0.1.0",
@@ -461,6 +474,8 @@
     "@ellie/hindsight": ["@ellie/hindsight@workspace:packages/hindsight"],
 
     "@ellie/hindsight-eval": ["@ellie/hindsight-eval@workspace:packages/hindsight-eval"],
+
+    "@ellie/image-gen": ["@ellie/image-gen@workspace:packages/image-gen"],
 
     "@ellie/schemas": ["@ellie/schemas@workspace:packages/schemas"],
 

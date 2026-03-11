@@ -18,6 +18,7 @@
 		"@ellie/db": "workspace:*",
 		"@ellie/env": "workspace:*",
 		"@ellie/hindsight": "workspace:*",
+		"@ellie/image-gen": "workspace:*",
 		"@ellie/schemas": "workspace:*",
 		"@ellie/trace": "workspace:*",
 		"@ellie/tus": "workspace:*",

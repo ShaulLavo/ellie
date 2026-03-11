@@ -232,21 +232,41 @@ export const PartRenderer = memo(
 						href={part.url}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
+						className="my-2 flex max-w-xs items-center gap-2 text-sm transition-colors hover:text-accent-foreground"
 						download={part.name}
 					>
 						{inner}
 					</a>
 				) : (
-					<div className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm">
+					<div className="my-2 flex max-w-xs items-center gap-2 text-sm">
 						{inner}
 					</div>
 				)
 			}
 			case 'media-directive': {
-				if (part.error || !part.url) {
+				const resolvedUrl =
+					part.url ||
+					(part.uploadId
+						? `/api/uploads-rpc/${encodeURIComponent(part.uploadId)}/content`
+						: undefined)
+				const resolvedKind =
+					part.mediaKind ||
+					(/\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)(\b|$)/i.test(
+						part.uploadId ?? part.ref ?? ''
+					)
+						? 'image'
+						: /\.(mp4|webm|mov|avi|mkv)(\b|$)/i.test(
+									part.uploadId ?? part.ref ?? ''
+							  )
+							? 'video'
+							: /\.(mp3|wav|ogg|flac|aac|m4a)(\b|$)/i.test(
+										part.uploadId ?? part.ref ?? ''
+								  )
+								? 'audio'
+								: 'file')
+				if (part.error || !resolvedUrl) {
 					return (
-						<div className="my-2 flex max-w-sm items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+						<div className="my-2 flex max-w-sm items-start gap-2">
 							<AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
 							<div className="min-w-0">
 								<div className="font-mono text-[11px] text-amber-700 dark:text-amber-400">
@@ -260,11 +280,11 @@ export const PartRenderer = memo(
 					)
 				}
 
-				if (part.mediaKind === 'image') {
+				if (resolvedKind === 'image') {
 					return (
 						<div className="my-2 max-w-sm">
 							<img
-								src={part.url}
+								src={resolvedUrl}
 								alt="Attached media"
 								className="max-h-80 rounded-lg object-contain"
 								loading="lazy"
@@ -273,11 +293,11 @@ export const PartRenderer = memo(
 					)
 				}
 
-				if (part.mediaKind === 'video') {
+				if (resolvedKind === 'video') {
 					return (
 						<div className="my-2 max-w-sm">
 							<video
-								src={part.url}
+								src={resolvedUrl}
 								controls
 								className="max-h-80 rounded-lg"
 							/>
@@ -285,20 +305,20 @@ export const PartRenderer = memo(
 					)
 				}
 
-				if (part.mediaKind === 'audio') {
+				if (resolvedKind === 'audio') {
 					return (
 						<div className="my-2">
-							<VoiceMessage src={part.url} />
+							<VoiceMessage src={resolvedUrl} />
 						</div>
 					)
 				}
 
 				return (
 					<a
-						href={part.url}
+						href={resolvedUrl}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="my-2 flex max-w-xs items-center gap-2 rounded-lg border border-border/50 p-3 text-sm transition-colors hover:bg-accent/50"
+						className="my-2 flex max-w-xs items-center gap-2 text-sm transition-colors hover:text-accent-foreground"
 					>
 						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
 						<div className="min-w-0">
@@ -325,7 +345,7 @@ export const PartRenderer = memo(
 				)
 			case 'artifact':
 				return (
-					<div className="rounded-lg border border-border/50 p-3 text-sm">
+					<div className="text-sm">
 						<span className="font-medium">
 							{part.title ?? part.filename}
 						</span>

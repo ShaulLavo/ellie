@@ -68,6 +68,7 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 			huh.NewOption("Groq", "groq"),
 			huh.NewOption("Brave Search", "brave"),
 			huh.NewOption("ElevenLabs (TTS)", "elevenlabs"),
+			huh.NewOption("CivitAI (Image Gen)", "civitai"),
 			huh.NewOption("WhatsApp", "whatsapp"),
 		).
 		Value(&provider).
@@ -85,6 +86,8 @@ func runAuthWizard(cmd *cobra.Command, args []string) error {
 		return authBraveSearch()
 	case "elevenlabs":
 		return authElevenLabs()
+	case "civitai":
+		return authCivitAI()
 	case "whatsapp":
 		return authWhatsApp()
 	}
@@ -114,6 +117,9 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := printProviderStatus("ElevenLabs", "/api/auth/elevenlabs/status"); err != nil {
+		return err
+	}
+	if err := printProviderStatus("CivitAI", "/api/auth/civitai/status"); err != nil {
 		return err
 	}
 
@@ -191,6 +197,7 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 			huh.NewOption("Groq", "groq"),
 			huh.NewOption("Brave Search", "brave"),
 			huh.NewOption("ElevenLabs", "elevenlabs"),
+			huh.NewOption("CivitAI", "civitai"),
 			huh.NewOption("WhatsApp", "whatsapp"),
 			huh.NewOption("All providers", "all"),
 		).
@@ -226,6 +233,8 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 		return clearProvider("Brave Search", "/api/auth/brave/clear")
 	case "elevenlabs":
 		return clearProvider("ElevenLabs", "/api/auth/elevenlabs/clear")
+	case "civitai":
+		return clearProvider("CivitAI", "/api/auth/civitai/clear")
 	case "whatsapp":
 		return clearChannel("WhatsApp", "whatsapp")
 	case "all":
@@ -239,6 +248,9 @@ func runAuthClear(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if err := clearProvider("ElevenLabs", "/api/auth/elevenlabs/clear"); err != nil {
+			return err
+		}
+		if err := clearProvider("CivitAI", "/api/auth/civitai/clear"); err != nil {
 			return err
 		}
 		_ = clearChannel("WhatsApp", "whatsapp") // non-fatal
@@ -419,6 +431,44 @@ func authElevenLabs() error {
 	}
 
 	fmt.Println(styleOk.Render("ElevenLabs API key saved successfully."))
+	return nil
+}
+
+func authCivitAI() error {
+	var key string
+	err := huh.NewInput().
+		Title("Enter your CivitAI API key").
+		Description("Get one at https://civitai.com/user/account (API Keys section)").
+		EchoMode(huh.EchoModePassword).
+		Value(&key).
+		Run()
+	if err != nil || strings.TrimSpace(key) == "" {
+		fmt.Fprintln(os.Stderr, "Cancelled.")
+		return errSilent
+	}
+
+	fmt.Println(styleDim.Render("Validating key..."))
+
+	body, _ := json.Marshal(map[string]any{
+		"key":      strings.TrimSpace(key),
+		"validate": true,
+	})
+
+	resp, err := httpClient.Post(baseURL()+"/api/auth/civitai/api-key", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("cannot reach server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		return fmt.Errorf("invalid API key — check the key and try again")
+	}
+
+	if resp.StatusCode != 200 {
+		return serverError(resp)
+	}
+
+	fmt.Println(styleOk.Render("CivitAI API key saved successfully."))
 	return nil
 }
 

@@ -21,6 +21,7 @@ type KeyMap struct {
 		Home        key.Binding
 		End         key.Binding
 		FocusEditor key.Binding
+		PlayAudio   key.Binding
 	}
 
 	Attachments struct {
@@ -121,6 +122,10 @@ func DefaultKeyMap() KeyMap {
 	km.Chat.FocusEditor = key.NewBinding(
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "editor"),
+	)
+	km.Chat.PlayAudio = key.NewBinding(
+		key.WithKeys("p"),
+		key.WithHelp("p", "play/stop audio"),
 	)
 
 	km.Attachments.Left = key.NewBinding(

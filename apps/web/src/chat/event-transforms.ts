@@ -80,29 +80,37 @@ function classifyMediaRef(
 	{ type: 'media-directive' }
 >['mediaKind'] {
 	const lower = ref.toLowerCase()
+
+	// Upload content URLs ending in image extensions (e.g. .png)
+	// The path may contain /content suffix after the extension
+	const pathWithoutQuery = lower.split('?')[0] ?? lower
+	const pathToCheck = pathWithoutQuery.endsWith('/content')
+		? pathWithoutQuery.slice(0, -'/content'.length)
+		: pathWithoutQuery
+
 	if (
-		lower.endsWith('.png') ||
-		lower.endsWith('.jpg') ||
-		lower.endsWith('.jpeg') ||
-		lower.endsWith('.gif') ||
-		lower.endsWith('.webp') ||
-		lower.endsWith('.svg')
+		pathToCheck.endsWith('.png') ||
+		pathToCheck.endsWith('.jpg') ||
+		pathToCheck.endsWith('.jpeg') ||
+		pathToCheck.endsWith('.gif') ||
+		pathToCheck.endsWith('.webp') ||
+		pathToCheck.endsWith('.svg')
 	) {
 		return 'image'
 	}
 	if (
-		lower.endsWith('.mp3') ||
-		lower.endsWith('.ogg') ||
-		lower.endsWith('.opus') ||
-		lower.endsWith('.wav') ||
-		lower.endsWith('.m4a')
+		pathToCheck.endsWith('.mp3') ||
+		pathToCheck.endsWith('.ogg') ||
+		pathToCheck.endsWith('.opus') ||
+		pathToCheck.endsWith('.wav') ||
+		pathToCheck.endsWith('.m4a')
 	) {
 		return 'audio'
 	}
 	if (
-		lower.endsWith('.mp4') ||
-		lower.endsWith('.mov') ||
-		lower.endsWith('.webm')
+		pathToCheck.endsWith('.mp4') ||
+		pathToCheck.endsWith('.mov') ||
+		pathToCheck.endsWith('.webm')
 	) {
 		return 'video'
 	}

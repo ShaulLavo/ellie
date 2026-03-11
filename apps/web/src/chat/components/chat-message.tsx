@@ -55,7 +55,7 @@ export const ChatMessageRow = memo(
 				from={isUser ? 'user' : 'assistant'}
 				className="animate-message-in"
 			>
-				<div className="flex items-baseline gap-1.5 text-[10.5px] text-muted-foreground mb-1 group-[.is-user]:justify-end">
+				<div className="flex items-baseline gap-1.5 text-[10.5px] text-muted-foreground group-[.is-user]:justify-end">
 					{message.sender && (
 						<span className="font-medium text-foreground/60">
 							{message.sender}

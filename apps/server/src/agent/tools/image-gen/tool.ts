@@ -1,5 +1,5 @@
 /**
- * generate_image tool — Generate images using Stable Diffusion via ComfyUI.
+ * generate_image tool — Generate images using Stable Diffusion via Diffusers.
  *
  * Follows the AgentTool pattern (like shell-tool.ts).
  * Images are stored via BlobSink. Progress flows through the onUpdate callback
@@ -13,12 +13,13 @@ import type {
 	AgentToolUpdateCallback
 } from '@ellie/agent'
 import type { BlobSink } from '@ellie/trace'
+import { loadCivitaiCredential } from '@ellie/ai/credentials'
 import {
 	executeImageGeneration,
 	MODEL_PRESETS,
-	type GenerateImageArgs
-} from '../../../lib/comfyui'
-import type { ProgressFn } from '../../../lib/comfyui'
+	type GenerateImageRequest,
+	type ProgressFn
+} from '@ellie/image-gen'
 
 // ── Schema ──────────────────────────────────────────────────────────────
 
@@ -41,13 +42,16 @@ const imageGenParams = v.object({
 	prompt: v.pipe(
 		v.string(),
 		v.description(
-			'Text description of the image to generate. Be specific and detailed. ' +
-				"SD 1.5 models respond well to comma-separated tags (e.g. 'portrait of a woman, soft lighting, bokeh, 4k'). " +
-				'SDXL handles natural language better. ' +
+			'Text description of the image to generate. Be specific and detailed.\n' +
+				'SD 1.5 PROMPTING: Use comma-separated tags with photographic terms for best results. ' +
+				"Include: subject, camera (e.g. 'nikon d850, 85mm, f1.6'), film stock (e.g. 'kodak portra 400, cinestill 800'), " +
+				"lighting (e.g. 'dramatic lighting, rimlight, three point studio light, golden hour'), " +
+				"and quality tokens (e.g. 'rich colors, hyper realistic, lifelike texture, film grain').\n" +
+				'SDXL handles natural language better.\n' +
 				'With ELLA enabled, use full natural-language sentences for best results.'
 		)
 	),
-	negative_prompt: v.optional(
+	negativePrompt: v.optional(
 		v.pipe(
 			v.string(),
 			v.description(
@@ -62,7 +66,7 @@ const imageGenParams = v.object({
 			v.description(modelDescription)
 		)
 	),
-	use_ella: v.optional(
+	useElla: v.optional(
 		v.pipe(
 			v.boolean(),
 			v.description(
@@ -70,7 +74,7 @@ const imageGenParams = v.object({
 			)
 		)
 	),
-	ella_model: v.optional(
+	ellaModel: v.optional(
 		v.pipe(
 			v.string(),
 			v.description(
@@ -78,7 +82,7 @@ const imageGenParams = v.object({
 			)
 		)
 	),
-	t5_encoder: v.optional(
+	t5Encoder: v.optional(
 		v.pipe(
 			v.string(),
 			v.description(
@@ -86,7 +90,7 @@ const imageGenParams = v.object({
 			)
 		)
 	),
-	t5_max_length: v.optional(
+	t5MaxLength: v.optional(
 		v.pipe(
 			v.number(),
 			v.description(
@@ -118,7 +122,7 @@ const imageGenParams = v.object({
 			)
 		)
 	),
-	cfg_scale: v.optional(
+	cfgScale: v.optional(
 		v.pipe(
 			v.number(),
 			v.description(
@@ -126,31 +130,21 @@ const imageGenParams = v.object({
 			)
 		)
 	),
-	sampler_name: v.optional(
+	sampler: v.optional(
 		v.pipe(
 			v.picklist([
 				'euler',
 				'euler_ancestral',
 				'heun',
-				'heunpp2',
 				'dpm_2',
 				'dpm_2_ancestral',
 				'lms',
-				'dpm_fast',
-				'dpm_adaptive',
 				'dpmpp_2s_ancestral',
 				'dpmpp_sde',
-				'dpmpp_sde_gpu',
 				'dpmpp_2m',
 				'dpmpp_2m_sde',
-				'dpmpp_2m_sde_gpu',
-				'dpmpp_3m_sde',
-				'dpmpp_3m_sde_gpu',
-				'ddpm',
-				'lcm',
 				'ddim',
-				'uni_pc',
-				'uni_pc_bh2'
+				'uni_pc'
 			]),
 			v.description(
 				'Sampling algorithm. Each model uses its recommended sampler by default.'
@@ -159,15 +153,7 @@ const imageGenParams = v.object({
 	),
 	scheduler: v.optional(
 		v.pipe(
-			v.picklist([
-				'normal',
-				'karras',
-				'exponential',
-				'sgm_uniform',
-				'simple',
-				'ddim_uniform',
-				'beta'
-			]),
+			v.picklist(['normal', 'karras']),
 			v.description(
 				"Noise schedule. 'normal' = default, 'karras' = generally better quality."
 			)
@@ -189,7 +175,7 @@ const imageGenParams = v.object({
 			)
 		)
 	),
-	batch_size: v.optional(
+	batchSize: v.optional(
 		v.pipe(
 			v.number(),
 			v.description(
@@ -207,7 +193,7 @@ const imageGenParams = v.object({
 							"LoRA name — use a preset name ('perfection') or full filename."
 						)
 					),
-					strength_model: v.optional(
+					strengthModel: v.optional(
 						v.pipe(
 							v.number(),
 							v.description(
@@ -215,11 +201,11 @@ const imageGenParams = v.object({
 							)
 						)
 					),
-					strength_clip: v.optional(
+					strengthClip: v.optional(
 						v.pipe(
 							v.number(),
 							v.description(
-								'LoRA influence on CLIP weights. Usually same as strength_model.'
+								'LoRA influence on CLIP weights. Usually same as strengthModel.'
 							)
 						)
 					)
@@ -227,14 +213,6 @@ const imageGenParams = v.object({
 			),
 			v.description(
 				"LoRAs to apply. Available presets: 'perfection' (fixes anatomy). Multiple can be stacked."
-			)
-		)
-	),
-	filename_prefix: v.optional(
-		v.pipe(
-			v.string(),
-			v.description(
-				"Prefix for saved filename in ComfyUI. Default: 'ComfyUI'"
 			)
 		)
 	)
@@ -247,6 +225,7 @@ export interface ImageGenToolDeps {
 	dataDir: string
 	getSessionId: () => string | null
 	getRunId: () => string | null
+	credentialsPath?: string
 }
 
 export function createImageGenTool(
@@ -255,7 +234,7 @@ export function createImageGenTool(
 	return {
 		name: 'generate_image',
 		description:
-			'Generate images using Stable Diffusion via ComfyUI. ' +
+			'Generate images using Stable Diffusion via Diffusers. ' +
 			'Returns a complete reproducible recipe (every parameter including seed) with the generated image.\n\n' +
 			'QUICK START: Just provide a prompt. Everything else has sensible defaults.\n\n' +
 			'MODEL GUIDE:\n' +
@@ -264,7 +243,13 @@ export function createImageGenTool(
 			"- General realistic: 'realizum' (warm, natural)\n" +
 			"- Artistic/creative: 'perfectdeliberate' (illustration-photo blend)\n" +
 			"- High-res/complex scenes: 'sdxl' (1024px, better anatomy, no ELLA)\n" +
-			'- Complex prompts needing precise understanding: any SD 1.5 model + use_ella=true\n\n' +
+			'- Complex prompts needing precise understanding: any SD 1.5 model + useElla=true\n\n' +
+			'SD 1.5 PHOTOREALISM TIPS:\n' +
+			'- Use photographic terms: camera model/lens (nikon d850, 85mm, f1.6), film stock (kodak portra 400, cinestill 800)\n' +
+			'- Include lighting: dramatic lighting, rimlight, three point studio light, golden hour\n' +
+			'- Quality tokens: rich colors, hyper realistic, lifelike texture, film grain, sharp focus\n' +
+			"- Best samplers for photorealism: dpmpp_2m_sde or dpmpp_sde with scheduler 'karras'\n" +
+			'- Use 25-30 steps minimum, cfgScale 5-7 for realistic models\n\n' +
 			'REPRODUCIBILITY: Every generation returns a full recipe with seed. ' +
 			'To recreate exactly: use the same seed and all returned parameters.',
 		label: 'Generating image',
@@ -289,16 +274,24 @@ export function createImageGenTool(
 				}
 			}
 
-			// Progress adapter: preserves the full visible timeline for the UI.
 			const progress = createThrottledProgress(onUpdate)
 
+			let civitaiToken = process.env.CIVITAI_TOKEN
+			if (!civitaiToken && deps.credentialsPath) {
+				const cred = await loadCivitaiCredential(
+					deps.credentialsPath
+				)
+				if (cred) civitaiToken = cred.key
+			}
+
 			const result = await executeImageGeneration(
-				rawParams as GenerateImageArgs,
+				rawParams as GenerateImageRequest,
 				{
 					blobSink: deps.blobSink,
 					sessionId,
 					runId,
 					dataDir: deps.dataDir,
+					civitaiToken,
 					onProgress: progress.onProgress
 				}
 			)
@@ -315,7 +308,7 @@ export function createImageGenTool(
 					details: {
 						success: false,
 						error: result.error,
-						recipe: result.recipe,
+						recipe: result.request,
 						entries: progressSnapshot.entries,
 						completedPhases:
 							progressSnapshot.completedPhases
@@ -323,19 +316,18 @@ export function createImageGenTool(
 				}
 			}
 
-			// Normalize recipe to web-friendly shape
-			const r = result.recipe
+			const r = result.request
 			const webRecipe = {
 				model: r.model,
 				width: r.width,
 				height: r.height,
 				steps: r.steps,
-				cfg: r.cfg_scale,
+				cfg: r.cfgScale,
 				seed: r.seed,
 				durationMs: result.durationMs,
 				loras: r.loras?.map(l => ({
 					name: l.name,
-					strength: l.strength_model
+					strength: l.strengthModel
 				}))
 			}
 
@@ -350,7 +342,8 @@ export function createImageGenTool(
 							`Steps: ${webRecipe.steps}, CFG: ${webRecipe.cfg}\n` +
 							`Seed: ${webRecipe.seed}\n` +
 							`Duration: ${(result.durationMs / 1000).toFixed(1)}s\n` +
-							`The image has been automatically attached to your reply.`
+							`Upload ID: ${result.uploadId}\n` +
+							`The image has been saved and will be automatically included in your reply.`
 					}
 				],
 				details: {
@@ -422,7 +415,6 @@ function createThrottledProgress(
 	) => {
 		const phase = mapProgressPhase(label)
 
-		// Track completed phases for timeline display
 		if (
 			status === 'completed' &&
 			!completedPhases.includes(phase)
@@ -430,7 +422,6 @@ function createThrottledProgress(
 			completedPhases.push(phase)
 		}
 
-		// Throttle denoising running updates to avoid flooding SSE
 		if (label === 'denoising' && status === 'running') {
 			const now = Date.now()
 			if (now - lastDenoisingUpdate < DENOISING_THROTTLE_MS)
@@ -478,17 +469,14 @@ function createThrottledProgress(
 
 function mapProgressPhase(label: string): string {
 	switch (label) {
-		case 'Auto-setup':
-		case 'Downloading models':
-		case 'Launching ComfyUI':
 		case 'setup':
+		case 'download':
+		case 'load':
+		case 'lora':
+		case 'ella':
 			return 'setup'
-		case 'queue':
-			return 'queue'
 		case 'denoising':
 			return 'denoising'
-		case 'fetch':
-			return 'fetch'
 		case 'save':
 			return 'save'
 		default:
@@ -579,20 +567,20 @@ function shouldShowProgressEntry(
 
 function formatProgressLabel(label: string): string {
 	switch (label) {
-		case 'Auto-setup':
-			return 'Auto-setup'
-		case 'Downloading models':
-			return 'Downloading models'
-		case 'Launching ComfyUI':
-			return 'Launching ComfyUI'
-		case 'queue':
-			return 'Queue prompt'
+		case 'setup':
+			return 'Setting up environment'
+		case 'download':
+			return 'Downloading'
+		case 'load':
+			return 'Loading model'
+		case 'lora':
+			return 'Loading LoRA'
+		case 'ella':
+			return 'Loading ELLA'
 		case 'denoising':
 			return 'Generating image'
-		case 'fetch':
-			return 'Downloading output image'
 		case 'save':
-			return 'Saving generated image'
+			return 'Saving image'
 		default:
 			return label
 	}
