@@ -353,6 +353,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('tagged mode triggers TTS only when [[tts]] tag present', async () => {
 		const registry = createRegistry('tagged')
+		attachTtsPostProcessor(registry)
 		const sessionId = 'test-session'
 		const runId = 'run-tagged'
 		const target: ChannelDeliveryTarget = {

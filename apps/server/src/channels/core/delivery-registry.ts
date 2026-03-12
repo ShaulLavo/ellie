@@ -5,238 +5,34 @@ import type {
 } from '../../lib/realtime-store'
 import type { ChannelDeliveryTarget } from './types'
 import type { ChannelProvider } from './provider'
-import * as path from 'node:path'
-import {
-	buildReplyPayload,
-	type ChannelReplyPayload
-} from './reply-payload'
-import {
-	synthesizeToPayload,
-	stripMarkdownForTts,
-	truncateForTts
-} from './reply-tts'
+import type { ChannelReplyPayload } from './reply-payload'
 import { resolveMedia } from './media-resolver'
+import type { TtsPostProcessor } from '../../lib/tts-post-processor'
 import {
-	maybeApplyTtsToPayload,
-	type TtsAutoMode
-} from './auto-tts'
+	TTS_DIRECTIVE_RE,
+	PENDING_ROW_TTL,
+	PENDING_ROW_MAX,
+	COMPOSING_COOLDOWN_MS,
+	parseRowPayload,
+	targetKey,
+	checkpointKey,
+	buildOutboundItems,
+	type TtsConfig,
+	type OutboundItem,
+	type PendingDelivery,
+	type PendingRowEntry
+} from './delivery-helpers'
 import {
-	resolveElevenLabsTtsConfig,
-	resolveElevenLabsApiKeyAsync,
-	type ElevenLabsTtsConfig,
-	type ElevenLabsTtsOverrides
-} from '../../lib/tts'
+	extractReplyPayloads,
+	resolveMediaRef,
+	mediaLocalRoots
+} from './delivery-extract'
 import {
-	parseTtsDirectiveParams,
-	type TtsPostProcessor
-} from '../../lib/tts-post-processor'
-import { loadTtsPreferences } from '../../lib/tts-preferences'
+	preparePayloadsForDelivery,
+	type DeliveryTtsDeps
+} from './delivery-tts'
 
-/** Check for any [[tts...]] directive in text. */
-const TTS_DIRECTIVE_RE = /\[\[tts(?::[^\]]*?)?\]\]/i
-const TTS_DIRECTIVE_GLOBAL_RE =
-	/\[\[tts(?::([^\]]*?))?\]\]/gi
-const UPLOAD_REF_PREFIX = 'upload:'
-
-function toUploadRef(uploadId: string): string {
-	return `${UPLOAD_REF_PREFIX}${uploadId}`
-}
-
-function extractUploadIdFromMediaRef(
-	ref: string
-): string | undefined {
-	const trimmed = ref.trim()
-	const uploadPrefixMatch = trimmed.match(/^upload:(.+)$/i)
-	if (uploadPrefixMatch?.[1]) {
-		return uploadPrefixMatch[1]
-	}
-
-	const uploadContentMatch = trimmed.match(
-		/\/api\/uploads-rpc\/([^/?#]+)\/content(?:[?#].*)?$/i
-	)
-	if (uploadContentMatch?.[1]) {
-		try {
-			return decodeURIComponent(uploadContentMatch[1])
-		} catch {
-			return uploadContentMatch[1]
-		}
-	}
-
-	const uploadsMarker = '/uploads/'
-	const uploadsIndex = trimmed.indexOf(uploadsMarker)
-	if (uploadsIndex === -1) return undefined
-	const uploadId = trimmed.slice(
-		uploadsIndex + uploadsMarker.length
-	)
-	return uploadId.length > 0 ? uploadId : undefined
-}
-
-function normalizeMediaRef(ref: string): string {
-	const uploadId = extractUploadIdFromMediaRef(ref)
-	if (uploadId) return toUploadRef(uploadId)
-	return ref.replace(/\/+$/, '')
-}
-
-function appendUniqueMediaRef(
-	refs: string[],
-	seen: Set<string>,
-	ref: string | undefined
-): void {
-	if (!ref) return
-	const normalized = normalizeMediaRef(ref)
-	if (seen.has(normalized)) return
-	seen.add(normalized)
-	refs.push(normalized)
-}
-
-function extractToolUploadRefs(
-	details: Record<string, unknown> | undefined
-): string[] {
-	if (!details || details.success !== true) return []
-
-	const refs: string[] = []
-	const seen = new Set<string>()
-	const uploadId =
-		typeof details.uploadId === 'string'
-			? details.uploadId
-			: undefined
-	appendUniqueMediaRef(
-		refs,
-		seen,
-		uploadId ? toUploadRef(uploadId) : undefined
-	)
-
-	const images = Array.isArray(details.images)
-		? details.images
-		: []
-	for (const image of images) {
-		if (!image || typeof image !== 'object') continue
-		const imageUploadId = (image as { uploadId?: unknown })
-			.uploadId
-		if (typeof imageUploadId !== 'string') continue
-		appendUniqueMediaRef(
-			refs,
-			seen,
-			toUploadRef(imageUploadId)
-		)
-	}
-
-	return refs
-}
-
-export interface TtsConfig {
-	mode: TtsAutoMode
-	inboundAudio?: boolean
-}
-
-function targetKey(t: ChannelDeliveryTarget): string {
-	return `${t.channelId}:${t.accountId}:${t.conversationId}`
-}
-
-// ── Outbound item model ─────────────────────────────────────────────────
-
-/** A single atomic send operation with stable identity for checkpointing. */
-interface OutboundItem {
-	replyIndex: number
-	payloadIndex: number
-	attachmentIndex: number
-	kind: 'message' | 'media' | 'audio_voice'
-	/** Caption (media) or message text. */
-	text: string
-	/** Media ref to resolve and send. */
-	mediaRef?: string
-}
-
-function checkpointKey(item: {
-	replyIndex: number
-	payloadIndex: number
-	attachmentIndex: number
-}): string {
-	return `${item.replyIndex}:${item.payloadIndex}:${item.attachmentIndex}`
-}
-
-/** Split prepared payloads into individual outbound items. */
-function buildOutboundItems(
-	replyIndex: number,
-	preparedPayloads: ChannelReplyPayload[]
-): OutboundItem[] {
-	const items: OutboundItem[] = []
-	for (const [
-		payloadIndex,
-		payload
-	] of preparedPayloads.entries()) {
-		if (payload.mediaRefs?.length) {
-			const kind: OutboundItem['kind'] =
-				payload.audioAsVoice ? 'audio_voice' : 'media'
-			const caption = payload.audioAsVoice
-				? ''
-				: (payload.text ?? '')
-			for (const [ai, ref] of payload.mediaRefs.entries()) {
-				items.push({
-					replyIndex,
-					payloadIndex,
-					attachmentIndex: ai,
-					kind,
-					text: ai === 0 ? caption : '',
-					mediaRef: ref
-				})
-			}
-		} else if (payload.text) {
-			items.push({
-				replyIndex,
-				payloadIndex,
-				attachmentIndex: 0,
-				kind: 'message',
-				text: payload.text
-			})
-		}
-	}
-	return items
-}
-
-// ── Internal state types ────────────────────────────────────────────────
-
-interface PendingDelivery {
-	sessionId: string
-	targets: Map<string, PendingTargetDelivery>
-	inFlight: Promise<void>
-}
-
-interface PendingTargetDelivery {
-	target: ChannelDeliveryTarget
-	/** Checkpoint keys for items already sent (live path). */
-	deliveredKeys: Set<string>
-	lastComposingAt: number
-}
-
-interface PendingRowEntry {
-	sessionId: string
-	target: ChannelDeliveryTarget
-	createdAt: number
-}
-
-interface ExtractedReplyPayload {
-	assistantRowId: number
-	payload: ChannelReplyPayload
-	isLastAssistantReply: boolean
-}
-
-const PENDING_ROW_TTL = 10 * 60_000 // 10 minutes
-const PENDING_ROW_MAX = 500
-const COMPOSING_COOLDOWN_MS = 3_000
-
-function parseRowPayload(
-	row: Pick<EventRow, 'payload'>
-): Record<string, unknown> | null {
-	try {
-		return JSON.parse(row.payload) as Record<
-			string,
-			unknown
-		>
-	} catch {
-		return null
-	}
-}
+export type { TtsConfig } from './delivery-helpers'
 
 /**
  * In-memory registry that tracks channel-triggered runs and routes
@@ -263,11 +59,9 @@ export class ChannelDeliveryRegistry {
 		id: string
 	) => ChannelProvider | undefined
 	readonly #dataDir?: string
-	readonly #credentialsPath?: string
-	readonly #getTtsConfig?: () => TtsConfig | undefined
+	readonly #ttsDeps: DeliveryTtsDeps
 	readonly #watchedSessions = new Set<string>()
 	readonly #unsubscribers: Array<() => void> = []
-	#ttsPostProcessor?: TtsPostProcessor
 
 	constructor(opts: {
 		store: RealtimeStore
@@ -282,13 +76,16 @@ export class ChannelDeliveryRegistry {
 		this.#store = opts.store
 		this.#getProvider = opts.getProvider
 		this.#dataDir = opts.dataDir
-		this.#credentialsPath = opts.credentialsPath
-		this.#getTtsConfig = opts.getTtsConfig
+		this.#ttsDeps = {
+			credentialsPath: opts.credentialsPath,
+			getTtsConfig: opts.getTtsConfig,
+			store: opts.store
+		}
 	}
 
 	/** Inject TtsPostProcessor so delivery can await its audio instead of racing. */
 	setTtsPostProcessor(tpp: TtsPostProcessor): void {
-		this.#ttsPostProcessor = tpp
+		this.#ttsDeps.ttsPostProcessor = tpp
 	}
 
 	/** Register a delivery target for a channel-triggered run. Additive — multiple targets per run are supported. */
@@ -507,230 +304,6 @@ export class ChannelDeliveryRegistry {
 		this.#pending.delete(runId)
 	}
 
-	async #preparePayloadsForDelivery(
-		payload: ChannelReplyPayload,
-		sessionId: string,
-		runId: string,
-		inboundAudio: boolean,
-		useRunTtsPostProcessor: boolean
-	): Promise<ChannelReplyPayload[]> {
-		const textHasTts =
-			!!payload.text && TTS_DIRECTIVE_RE.test(payload.text)
-		if (textHasTts) {
-			return await this.#prepareExplicitTtsPayloads(
-				payload,
-				useRunTtsPostProcessor,
-				runId,
-				sessionId
-			)
-		}
-		const autoTtsPayload = await this.#applyAutoTts(
-			payload,
-			inboundAudio
-		)
-		return [this.#stripTtsDirectives(autoTtsPayload)]
-	}
-
-	async #prepareExplicitTtsPayloads(
-		payload: ChannelReplyPayload,
-		useRunTtsPostProcessor: boolean,
-		runId: string,
-		sessionId: string
-	): Promise<ChannelReplyPayload[]> {
-		const basePayload = this.#stripTtsDirectives(payload)
-		if (useRunTtsPostProcessor && this.#ttsPostProcessor) {
-			try {
-				await this.#ttsPostProcessor.processRun(
-					runId,
-					sessionId
-				)
-				const audioPayload =
-					this.#extractAssistantAudioPayload(
-						sessionId,
-						runId
-					)
-				if (audioPayload) {
-					if (basePayload.mediaRefs?.length) {
-						return [basePayload, audioPayload]
-					}
-					return [audioPayload]
-				}
-				console.warn(
-					'[delivery] TtsPostProcessor produced no audio, falling back to direct synthesis',
-					{ runId }
-				)
-			} catch (err) {
-				console.error(
-					'[delivery] TtsPostProcessor failed, falling back to direct synthesis:',
-					err
-				)
-			}
-		}
-
-		try {
-			const audioPayload =
-				await this.#synthesizeExplicitTtsPayload(
-					payload.text
-				)
-			if (!audioPayload) return [basePayload]
-			if (basePayload.mediaRefs?.length) {
-				return [basePayload, audioPayload]
-			}
-			return [audioPayload]
-		} catch (err) {
-			console.error(
-				'[delivery] Explicit TTS synthesis failed, falling back to text:',
-				err
-			)
-			return [basePayload]
-		}
-	}
-
-	async #synthesizeExplicitTtsPayload(
-		text: string | undefined
-	): Promise<ChannelReplyPayload | null> {
-		if (!text) return null
-		const ttsText = this.#toSpeakableTtsText(text)
-		if (ttsText.length < 10) return null
-		const config = await this.#resolveTtsConfig()
-		const overrides =
-			await this.#buildExplicitTtsOverrides(text)
-		return await synthesizeToPayload(ttsText, {
-			preferOpus: true,
-			config,
-			overrides
-		})
-	}
-
-	async #resolveTtsConfig(): Promise<ElevenLabsTtsConfig> {
-		const config = resolveElevenLabsTtsConfig()
-		if (!config.apiKey && this.#credentialsPath) {
-			config.apiKey = await resolveElevenLabsApiKeyAsync(
-				this.#credentialsPath
-			)
-		}
-		return config
-	}
-
-	async #buildExplicitTtsOverrides(
-		text: string
-	): Promise<ElevenLabsTtsOverrides> {
-		const directiveOverrides =
-			this.#extractDirectiveOverrides(text)
-		if (!this.#dataDir) return directiveOverrides
-
-		const prefs = await loadTtsPreferences(this.#dataDir)
-		return {
-			...(prefs.voiceId && { voiceId: prefs.voiceId }),
-			...(prefs.modelId && { modelId: prefs.modelId }),
-			...directiveOverrides,
-			voiceSettings: {
-				...prefs.voiceSettings,
-				...directiveOverrides.voiceSettings
-			}
-		}
-	}
-
-	#extractDirectiveOverrides(
-		text: string
-	): ElevenLabsTtsOverrides {
-		TTS_DIRECTIVE_GLOBAL_RE.lastIndex = 0
-		let merged: ElevenLabsTtsOverrides = {}
-		let match: RegExpExecArray | null
-		while (
-			(match = TTS_DIRECTIVE_GLOBAL_RE.exec(text)) !== null
-		) {
-			const parsed = parseTtsDirectiveParams(match[1])
-			merged = {
-				...merged,
-				...parsed,
-				voiceSettings: {
-					...merged.voiceSettings,
-					...parsed.voiceSettings
-				}
-			}
-		}
-		return merged
-	}
-
-	#toSpeakableTtsText(text: string): string {
-		TTS_DIRECTIVE_GLOBAL_RE.lastIndex = 0
-		const withoutDirectives = text
-			.replace(TTS_DIRECTIVE_GLOBAL_RE, '')
-			.split('\n')
-			.filter(line => !/^\s*media:\s*/i.test(line))
-			.join('\n')
-			.trim()
-		return truncateForTts(
-			stripMarkdownForTts(withoutDirectives)
-		)
-	}
-
-	#extractAssistantAudioPayload(
-		sessionId: string,
-		runId: string
-	): ChannelReplyPayload | null {
-		const rows = this.#store.queryRunEvents(
-			sessionId,
-			runId
-		)
-		for (const row of rows) {
-			if (row.type !== 'assistant_audio') continue
-			let parsed: Record<string, unknown>
-			try {
-				parsed = JSON.parse(row.payload)
-			} catch {
-				continue
-			}
-			const uploadId = parsed.uploadId as string | undefined
-			if (!uploadId) continue
-			return {
-				text: undefined,
-				mediaRefs: [toUploadRef(uploadId)],
-				audioAsVoice: true
-			}
-		}
-		return null
-	}
-
-	#stripTtsDirectives(
-		payload: ChannelReplyPayload
-	): ChannelReplyPayload {
-		if (!payload.text) return payload
-		return {
-			...payload,
-			text:
-				payload.text
-					.replace(TTS_DIRECTIVE_GLOBAL_RE, '')
-					.trim() || undefined
-		}
-	}
-
-	/** Apply auto-TTS to a payload if configured. Non-fatal on error. */
-	async #applyAutoTts(
-		payload: ChannelReplyPayload,
-		inboundAudio: boolean
-	): Promise<ChannelReplyPayload> {
-		const ttsConfig = this.#getTtsConfig?.()
-		if (!ttsConfig || ttsConfig.mode === 'off')
-			return payload
-		try {
-			const config = await this.#resolveTtsConfig()
-			return await maybeApplyTtsToPayload({
-				payload,
-				mode: ttsConfig.mode,
-				inboundAudio,
-				ttsOptions: { preferOpus: true, config }
-			})
-		} catch (err) {
-			console.warn(
-				'[delivery] Auto-TTS failed, delivering text-only:',
-				err
-			)
-			return payload
-		}
-	}
-
 	// ── Core delivery loop (per-item checkpointing) ──────────────────────
 
 	/**
@@ -781,7 +354,8 @@ export class ChannelDeliveryRegistry {
 		const delivery = this.#pending.get(runId)
 		if (!delivery) return
 
-		const replyPayloads = this.#extractReplyPayloads(
+		const replyPayloads = extractReplyPayloads(
+			this.#store,
 			sessionId,
 			runId
 		)
@@ -826,16 +400,16 @@ export class ChannelDeliveryRegistry {
 
 					let payloads = preparedCache.get(replyIndex)
 					if (!payloads) {
-						payloads =
-							await this.#preparePayloadsForDelivery(
-								reply.payload,
-								sessionId,
-								runId,
-								targetState.target.inboundMediaType?.startsWith(
-									'audio/'
-								) ?? false,
-								isRunClosed && reply.isLastAssistantReply
-							)
+						payloads = await preparePayloadsForDelivery(
+							reply.payload,
+							sessionId,
+							runId,
+							targetState.target.inboundMediaType?.startsWith(
+								'audio/'
+							) ?? false,
+							isRunClosed && reply.isLastAssistantReply,
+							this.#ttsDeps
+						)
 						preparedCache.set(replyIndex, payloads)
 					}
 
@@ -884,8 +458,8 @@ export class ChannelDeliveryRegistry {
 			typeof provider.sendMedia === 'function'
 		) {
 			const media = await resolveMedia(
-				this.#resolveMediaRef(item.mediaRef),
-				{ localRoots: this.#mediaLocalRoots() }
+				resolveMediaRef(item.mediaRef, this.#dataDir),
+				{ localRoots: mediaLocalRoots(this.#dataDir) }
 			)
 			await provider.sendMedia(target, item.text, {
 				buffer: media.buffer,
@@ -935,157 +509,6 @@ export class ChannelDeliveryRegistry {
 		}
 	}
 
-	/** Allowed local roots for media resolution. */
-	#mediaLocalRoots(): string[] {
-		const roots: string[] = []
-		if (this.#dataDir) {
-			roots.push(path.join(this.#dataDir, 'uploads'))
-		}
-		// os.tmpdir() for TTS temp files
-		roots.push(require('node:os').tmpdir())
-		return roots
-	}
-
-	#resolveMediaRef(ref: string): string {
-		const uploadId = extractUploadIdFromMediaRef(ref)
-		if (!uploadId) return ref
-		if (!this.#dataDir) {
-			throw new Error(
-				'Cannot resolve upload media without dataDir'
-			)
-		}
-		return path.join(this.#dataDir, 'uploads', uploadId)
-	}
-
-	/** Build ordered reply payloads from completed assistant messages in a run. */
-	#extractReplyPayloads(
-		sessionId: string,
-		runId: string
-	): ExtractedReplyPayload[] {
-		const rows = this.#store.queryRunEvents(
-			sessionId,
-			runId
-		)
-		const extracted: Array<{
-			assistantRowId: number
-			payload: ChannelReplyPayload
-		}> = []
-		const pendingAutoMedia: string[] = []
-		const pendingSeen = new Set<string>()
-
-		for (const row of rows) {
-			if (row.type === 'tool_execution') {
-				const parsed = parseRowPayload(row)
-				if (!parsed) continue
-				const result = parsed.result as
-					| Record<string, unknown>
-					| undefined
-				const details = result?.details as
-					| Record<string, unknown>
-					| undefined
-				for (const ref of extractToolUploadRefs(details)) {
-					appendUniqueMediaRef(
-						pendingAutoMedia,
-						pendingSeen,
-						ref
-					)
-				}
-				continue
-			}
-
-			if (row.type !== 'assistant_message') continue
-
-			const parsed = parseRowPayload(row)
-			if (!parsed) continue
-			if (parsed.streaming) continue
-
-			const rawText =
-				this.#extractAssistantMessageText(parsed)
-			const payload = rawText
-				? buildReplyPayload(rawText)
-				: {
-						text: undefined,
-						mediaRefs: undefined,
-						audioAsVoice: undefined
-					}
-			const mediaRefs: string[] = []
-			const seen = new Set<string>()
-			for (const ref of pendingAutoMedia) {
-				appendUniqueMediaRef(mediaRefs, seen, ref)
-			}
-			for (const ref of payload.mediaRefs ?? []) {
-				appendUniqueMediaRef(mediaRefs, seen, ref)
-			}
-			pendingAutoMedia.length = 0
-			pendingSeen.clear()
-
-			const replyPayload: ChannelReplyPayload = {
-				text: payload.text,
-				mediaRefs:
-					mediaRefs.length > 0 ? mediaRefs : undefined,
-				audioAsVoice: payload.audioAsVoice
-			}
-			if (!replyPayload.text && !replyPayload.mediaRefs) {
-				continue
-			}
-			extracted.push({
-				assistantRowId: row.id,
-				payload: replyPayload
-			})
-		}
-
-		if (pendingAutoMedia.length > 0) {
-			if (extracted.length === 0) {
-				extracted.push({
-					assistantRowId: 0,
-					payload: {
-						mediaRefs: [...pendingAutoMedia]
-					}
-				})
-			} else {
-				const last = extracted.at(-1)!
-				const mediaRefs = [
-					...(last.payload.mediaRefs ?? [])
-				]
-				const seen = new Set(
-					mediaRefs.map(normalizeMediaRef)
-				)
-				for (const ref of pendingAutoMedia) {
-					appendUniqueMediaRef(mediaRefs, seen, ref)
-				}
-				last.payload.mediaRefs = mediaRefs
-			}
-		}
-
-		return extracted.map((entry, index) => ({
-			assistantRowId: entry.assistantRowId,
-			payload: entry.payload,
-			isLastAssistantReply: index === extracted.length - 1
-		}))
-	}
-
-	#extractAssistantMessageText(
-		payload: Record<string, unknown>
-	): string | null {
-		const message = payload.message as
-			| {
-					content?: Array<{
-						type: string
-						text?: string
-					}>
-			  }
-			| undefined
-		if (!message?.content) return null
-		const texts: string[] = []
-		for (const block of message.content) {
-			if (block.type === 'text' && block.text) {
-				texts.push(block.text)
-			}
-		}
-		if (texts.length === 0) return null
-		return texts.join('\n')
-	}
-
 	/**
 	 * Recover channel runs that closed but have unsent outbound items
 	 * (e.g. server crashed mid-delivery).
@@ -1126,7 +549,8 @@ export class ChannelDeliveryRegistry {
 					checkpoints.map(c => checkpointKey(c))
 				)
 
-				const replyPayloads = this.#extractReplyPayloads(
+				const replyPayloads = extractReplyPayloads(
+					this.#store,
 					row.sessionId,
 					row.runId
 				)
@@ -1141,14 +565,14 @@ export class ChannelDeliveryRegistry {
 					replyIndex,
 					reply
 				] of replyPayloads.entries()) {
-					const payloads =
-						await this.#preparePayloadsForDelivery(
-							reply.payload,
-							row.sessionId,
-							row.runId,
-							false,
-							reply.isLastAssistantReply
-						)
+					const payloads = await preparePayloadsForDelivery(
+						reply.payload,
+						row.sessionId,
+						row.runId,
+						false,
+						reply.isLastAssistantReply,
+						this.#ttsDeps
+					)
 					for (const item of buildOutboundItems(
 						replyIndex,
 						payloads

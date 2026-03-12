@@ -279,7 +279,8 @@ export function inferMimeTypeFromOutputFormat(
 	outputFormat: string
 ): string {
 	if (outputFormat.startsWith('mp3')) return 'audio/mpeg'
-	if (outputFormat.startsWith('opus')) return 'audio/ogg; codecs=opus'
+	if (outputFormat.startsWith('opus'))
+		return 'audio/ogg; codecs=opus'
 	if (outputFormat.startsWith('pcm')) return 'audio/wav'
 	return 'application/octet-stream'
 }
