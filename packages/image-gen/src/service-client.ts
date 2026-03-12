@@ -8,11 +8,18 @@ import type { ProgressFn } from './auto-setup'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface ServiceGenerateImage {
+	imagePath: string
+	width: number
+	height: number
+}
+
 export interface ServiceGenerateResult {
 	imagePath: string
 	width: number
 	height: number
 	seed: number
+	images: ServiceGenerateImage[]
 }
 
 // ── Client ───────────────────────────────────────────────────────────────────
@@ -104,11 +111,21 @@ export async function serviceGenerate(
 					break
 			}
 		} else if (eventType === 'result') {
+			const images = (event.images as
+				| ServiceGenerateImage[]
+				| undefined) ?? [
+				{
+					imagePath: event.imagePath as string,
+					width: event.width as number,
+					height: event.height as number
+				}
+			]
 			return {
 				imagePath: event.imagePath as string,
 				width: event.width as number,
 				height: event.height as number,
-				seed: event.seed as number
+				seed: event.seed as number,
+				images
 			}
 		} else if (eventType === 'error') {
 			const code = event.code as string | undefined

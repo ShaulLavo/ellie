@@ -7,15 +7,26 @@ export type ToolResultPart = Extract<
 	{ type: 'tool-result' }
 >
 
+function mergeOrderedMessages(
+	messages: StoredChatMessage[],
+	streamingMessage: StoredChatMessage | null
+) {
+	if (!streamingMessage) return messages
+
+	const dedupedMessages = messages.filter(
+		msg => msg.id !== streamingMessage.id
+	)
+	return [...dedupedMessages, streamingMessage].toSorted(
+		(a, b) => a.seq - b.seq
+	)
+}
+
 export function useToolGrouping(
 	messages: StoredChatMessage[],
 	streamingMessage: StoredChatMessage | null
 ) {
 	const allMessages = useMemo(
-		() =>
-			streamingMessage
-				? [...messages, streamingMessage]
-				: messages,
+		() => mergeOrderedMessages(messages, streamingMessage),
 		[messages, streamingMessage]
 	)
 

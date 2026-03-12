@@ -232,15 +232,24 @@ export class MemoryOrchestrator {
 	): Promise<MemoryRetainPayload | null> {
 		const bankIds = this.resolveBankIds()
 		const turns = this.collectUnprocessedTurns(sessionId)
-		if (turns.length === 0) {
-			return null
-		}
 
-		// Determine trigger
+		// Diagnostic: log retain evaluation for debugging
 		const totalChars = turns.reduce(
 			(sum, t) => sum + t.content.length,
 			0
 		)
+		console.log(
+			`[retain] evaluating session=${sessionId} turns=${turns.length} totalChars=${totalChars} force=${!!force}`
+		)
+
+		if (turns.length === 0) {
+			console.log(
+				`[retain] skipped: no unprocessed turns for session=${sessionId}`
+			)
+			return null
+		}
+
+		// Determine trigger
 		const lastTurn = turns[turns.length - 1]
 		const hasImmediateTurn = turns.some(
 			t => t.content.length >= IMMEDIATE_TURN_CHARS
@@ -260,6 +269,9 @@ export class MemoryOrchestrator {
 		} else if (hasImmediateTurn) {
 			trigger = 'immediate_turn'
 		} else {
+			console.log(
+				`[retain] skipped: thresholds not met turns=${turns.length}/${MAX_TURNS_PER_CHUNK} chars=${totalChars}/${MAX_CHARS_PER_CHUNK} immediate=${hasImmediateTurn}`
+			)
 			return null // Thresholds not met
 		}
 
@@ -277,9 +289,15 @@ export class MemoryOrchestrator {
 
 		// Extract facts once, then retain into all banks in parallel
 		// (avoids duplicate LLM extraction calls across banks)
+		console.log(
+			`[retain] triggered=${trigger} session=${sessionId} seqRange=${seqFrom}-${seqTo} extracting facts...`
+		)
 		const facts = await this.hindsight.extract(
 			bankIds[0],
 			content
+		)
+		console.log(
+			`[retain] extracted ${facts.length} facts, retaining into ${bankIds.length} banks...`
 		)
 		const results = await Promise.allSettled(
 			bankIds.map(bankId =>
@@ -412,12 +430,30 @@ export class MemoryOrchestrator {
 			types: ['user_message', 'assistant_message']
 		})
 
-		return rows
-			.map(rowToTranscriptTurn)
-			.filter(
-				(t): t is TranscriptTurn =>
-					t !== null && t.content.length > 0
-			)
+		const mapped = rows.map(row => {
+			const turn = rowToTranscriptTurn(row)
+			if (!turn) {
+				const parsed = JSON.parse(row.payload) as Record<
+					string,
+					unknown
+				>
+				console.log(
+					`[retain] filtered out row seq=${row.seq} type=${row.type} streaming=${parsed.streaming}`
+				)
+			}
+			return turn
+		})
+
+		const turns = mapped.filter(
+			(t): t is TranscriptTurn =>
+				t !== null && t.content.length > 0
+		)
+
+		console.log(
+			`[retain] collectUnprocessedTurns session=${sessionId} cursor=${minCursor} rawRows=${rows.length} validTurns=${turns.length}`
+		)
+
+		return turns
 	}
 
 	private cursorKey(

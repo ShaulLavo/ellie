@@ -441,6 +441,17 @@ html.dark
 	background-color: oklch(0.14 0.01 260) !important;
 }
 
+/* ─── List Overrides ─── */
+[data-streamdown='unordered-list'],
+[data-streamdown='ordered-list'] {
+	margin-top: 0.25em !important;
+	margin-bottom: 0.25em !important;
+}
+[data-streamdown='list-item'] {
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+}
+
 /* ─── Prompt Input Glow ─── */
 [data-slot='input-group']:has(
 	[data-slot='input-group-control']:focus-visible

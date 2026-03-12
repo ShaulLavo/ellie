@@ -29,6 +29,7 @@ export function CopyButton({ text }: { text: string }) {
 		<MessageAction
 			tooltip={copied ? 'Copied!' : 'Copy'}
 			onClick={handleCopy}
+			className="size-6"
 		>
 			{copied ? (
 				<CheckIcon className="size-3.5" />

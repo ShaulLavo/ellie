@@ -38,17 +38,31 @@ function isStreamingAssistantEvent(event: {
 	}
 }
 
+function isRenderableMessage(
+	message: StoredChatMessage
+): boolean {
+	return (
+		message.parts.length > 0 ||
+		!!message.text ||
+		!!message.thinking
+	)
+}
+
+function toStreamingAssistantMessage(
+	event: EventRow
+): StoredChatMessage | null {
+	const stored = eventToStored(event)
+	if (!isRenderableMessage(stored)) return null
+	return {
+		...stored,
+		isStreaming: true
+	}
+}
+
 function getOpenStreamingAssistantEvent(
 	events: EventRow[]
 ): EventRow | undefined {
-	const closedRunIds = new Set(
-		events
-			.filter(
-				event =>
-					event.type === 'run_closed' && event.runId != null
-			)
-			.map(event => event.runId as string)
-	)
+	const closedRunIds = getClosedRunIds(events)
 
 	for (let i = events.length - 1; i >= 0; i--) {
 		const event = events[i]
@@ -60,6 +74,53 @@ function getOpenStreamingAssistantEvent(
 	}
 
 	return undefined
+}
+
+function getClosedRunIds(events: EventRow[]): Set<string> {
+	return new Set(
+		events
+			.filter(
+				event =>
+					event.type === 'run_closed' && event.runId != null
+			)
+			.map(event => event.runId as string)
+	)
+}
+
+function isClosedRunEvent(
+	event: EventRow,
+	closedRunIds: Set<string>
+): boolean {
+	if (!event.runId) return false
+	return closedRunIds.has(event.runId)
+}
+
+function shouldRenderInSnapshot(
+	event: EventRow,
+	lastRotatedIdx: number,
+	closedRunIds: Set<string>
+): boolean {
+	if (!RENDERABLE_TYPES.includes(event.type as EventType)) {
+		return false
+	}
+	if (
+		event.type === 'session_rotated' &&
+		event.seq !== lastRotatedIdx
+	) {
+		return false
+	}
+	if (!isStreamingAssistantEvent(event)) return true
+	return isClosedRunEvent(event, closedRunIds)
+}
+
+function finalizeStreamingMessage(
+	message: StoredChatMessage | null
+): StoredChatMessage | null {
+	if (!message) return null
+	return {
+		...message,
+		isStreaming: false
+	}
 }
 
 /** Event types that produce renderable chat messages. */
@@ -120,6 +181,12 @@ export function useStreamConnection(
 	}
 
 	const streamRef = useRef<StreamClient | null>(null)
+	const streamingMessageRef =
+		useRef<StoredChatMessage | null>(null)
+
+	useEffect(() => {
+		streamingMessageRef.current = streamingMessage
+	}, [streamingMessage])
 
 	useEffect(() => {
 		const stream = new StreamClient(sessionId, {
@@ -128,23 +195,32 @@ export function useStreamConnection(
 				let lastRotatedIdx = -1
 				for (let i = events.length - 1; i >= 0; i--) {
 					if (events[i].type === 'session_rotated') {
-						lastRotatedIdx = i
+						lastRotatedIdx = events[i].seq
 						break
 					}
 				}
+				const closedRunIds = getClosedRunIds(events)
 
-				const messageEvents = events.filter(
-					(e, i) =>
-						RENDERABLE_TYPES.includes(
-							e.type as EventType
-						) &&
-						!isStreamingAssistantEvent(e) &&
-						(e.type !== 'session_rotated' ||
-							i === lastRotatedIdx)
+				const messageEvents = events.filter(event =>
+					shouldRenderInSnapshot(
+						event,
+						lastRotatedIdx,
+						closedRunIds
+					)
 				)
 				const msgs = messageEvents
-					.map(eventToStored)
-					.filter(m => m.parts.length > 0 || m.text)
+					.map(event => {
+						const message = eventToStored(event)
+						if (!isStreamingAssistantEvent(event)) {
+							return message
+						}
+						return finalizeStreamingMessage(message)
+					})
+					.filter(
+						(message): message is StoredChatMessage =>
+							message != null &&
+							isRenderableMessage(message)
+					)
 
 				// Snapshots are canonical full state. Always replace the local
 				// collection so stale rows left over from disconnects/crashes
@@ -160,11 +236,9 @@ export function useStreamConnection(
 				const streamingEvent =
 					getOpenStreamingAssistantEvent(events)
 				if (streamingEvent) {
-					const stored = eventToStored(streamingEvent)
-					setStreamingMessage({
-						...stored,
-						isStreaming: true
-					})
+					setStreamingMessage(
+						toStreamingAssistantMessage(streamingEvent)
+					)
 				} else if (!sessionChanged) {
 					setStreamingMessage(null)
 				}
@@ -178,21 +252,41 @@ export function useStreamConnection(
 					setIsAgentRunning(true)
 				} else if (AGENT_END_TYPES.has(event.type)) {
 					setIsAgentRunning(false)
+					const finalized = finalizeStreamingMessage(
+						streamingMessageRef.current
+					)
+					if (finalized && isRenderableMessage(finalized)) {
+						syncWrite([finalized])
+					}
 					setStreamingMessage(null)
 				}
 
 				if (event.type === 'assistant_message') {
-					setStreamingMessage({
-						id: String(event.id),
-						timestamp: new Date(
-							event.createdAt
-						).toISOString(),
-						text: '',
-						parts: [],
-						seq: event.seq,
-						sender: 'agent',
-						isStreaming: true
-					})
+					if (isStreamingAssistantEvent(event)) {
+						setStreamingMessage(
+							toStreamingAssistantMessage(event)
+						)
+						return
+					}
+
+					setStreamingMessage(null)
+					const stored = eventToStored(event)
+					if (!isRenderableMessage(stored)) return
+					syncWrite([stored])
+
+					const delta = computeStatsFromEvents([event])
+					setSessionStats(prev => ({
+						model: delta.model ?? prev.model,
+						provider: delta.provider ?? prev.provider,
+						messageCount:
+							prev.messageCount + delta.messageCount,
+						promptTokens:
+							prev.promptTokens + delta.promptTokens,
+						completionTokens:
+							prev.completionTokens +
+							delta.completionTokens,
+						totalCost: prev.totalCost + delta.totalCost
+					}))
 					return
 				}
 
@@ -233,74 +327,40 @@ export function useStreamConnection(
 
 			onUpdate(event) {
 				if (event.type === 'assistant_message') {
-					let parsed: Record<string, unknown>
-					try {
-						parsed =
-							typeof event.payload === 'string'
-								? JSON.parse(event.payload)
-								: (event.payload as Record<string, unknown>)
-					} catch {
+					if (isStreamingAssistantEvent(event)) {
+						setStreamingMessage(
+							toStreamingAssistantMessage(event)
+						)
 						return
 					}
 
-					const streaming = parsed.streaming as boolean
-
-					// Check raw text for [[tts]] — voice-only messages
-					// should never show text, even while streaming.
-					const rawParts = (parsed.content ??
-						parsed.parts) as
-						| { type: string; text?: string }[]
-						| undefined
-					const rawText =
-						rawParts
-							?.filter(p => p.type === 'text')
-							.map(p => p.text ?? '')
-							.join('') ?? ''
-					const isTts = /\[\[tts(?::[^\]]*?)?\]\]/i.test(
-						rawText
-					)
-
 					const stored = eventToStored(event)
-
-					if (streaming) {
-						if (isTts) {
-							// [[tts]] detected — hide streaming text entirely.
-							// Audio will arrive via a separate assistant_audio event.
-							setStreamingMessage(null)
-						} else {
-							setStreamingMessage({
-								...stored,
-								isStreaming: true
-							})
-						}
-					} else {
-						setStreamingMessage(null)
-						// Skip empty messages — [[tts]] suppresses text in display,
-						// and the audio player arrives via a separate assistant_audio event.
-						if (stored.parts.length > 0 || stored.text) {
-							syncWrite([stored])
-						}
-
-						const delta = computeStatsFromEvents([event])
-						setSessionStats(prev => ({
-							model: delta.model ?? prev.model,
-							provider: delta.provider ?? prev.provider,
-							messageCount:
-								prev.messageCount + delta.messageCount,
-							promptTokens:
-								prev.promptTokens + delta.promptTokens,
-							completionTokens:
-								prev.completionTokens +
-								delta.completionTokens,
-							totalCost: prev.totalCost + delta.totalCost
-						}))
+					setStreamingMessage(null)
+					// Skip empty messages — [[tts]] suppresses text in display,
+					// and the audio player arrives via a separate assistant_audio event.
+					if (isRenderableMessage(stored)) {
+						syncWrite([stored])
 					}
+
+					const delta = computeStatsFromEvents([event])
+					setSessionStats(prev => ({
+						model: delta.model ?? prev.model,
+						provider: delta.provider ?? prev.provider,
+						messageCount:
+							prev.messageCount + delta.messageCount,
+						promptTokens:
+							prev.promptTokens + delta.promptTokens,
+						completionTokens:
+							prev.completionTokens +
+							delta.completionTokens,
+						totalCost: prev.totalCost + delta.totalCost
+					}))
 					return
 				}
 
 				if (event.type === 'tool_execution') {
 					const msg = eventToStored(event)
-					if (msg.parts.length === 0 && !msg.text) return
+					if (!isRenderableMessage(msg)) return
 					syncWrite([msg])
 					return
 				}

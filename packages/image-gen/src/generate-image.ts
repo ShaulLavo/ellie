@@ -334,33 +334,53 @@ export async function executeImageGeneration(
 			onProgress
 		)
 
-		// Upload image
+		// Upload images
+		const batchImages = serviceResult.images
+		const mime = 'image/png'
 		onProgress(
 			'save',
 			'started',
-			'Saving generated image...'
+			`Saving ${batchImages.length} generated image(s)...`
 		)
-		const imageFile = Bun.file(serviceResult.imagePath)
-		const imageBuffer = Buffer.from(
-			await imageFile.arrayBuffer()
+
+		const uploadedImages: Array<{
+			uploadId: string
+			url: string
+			mime: string
+		}> = []
+
+		for (const img of batchImages) {
+			const imageFile = Bun.file(img.imagePath)
+			const imageBuffer = Buffer.from(
+				await imageFile.arrayBuffer()
+			)
+
+			const blobRef = await blobSink.write({
+				traceId: runId,
+				spanId: 'image-gen',
+				role: 'generated_image',
+				content: imageBuffer,
+				mimeType: mime,
+				ext: 'png'
+			})
+
+			uploadedImages.push({
+				uploadId: blobRef.uploadId,
+				url: blobRef.url,
+				mime
+			})
+
+			// Clean up temp file
+			try {
+				unlinkSync(img.imagePath)
+			} catch {}
+		}
+
+		onProgress(
+			'save',
+			'completed',
+			`Saved ${uploadedImages.length} generated image(s)`
 		)
-		const mime = 'image/png'
-
-		const blobRef = await blobSink.write({
-			traceId: runId,
-			spanId: 'image-gen',
-			role: 'generated_image',
-			content: imageBuffer,
-			mimeType: mime,
-			ext: 'png'
-		})
-
-		onProgress('save', 'completed', 'Saved generated image')
-
-		// Clean up temp file
-		try {
-			unlinkSync(serviceResult.imagePath)
-		} catch {}
 
 		const durationMs = Date.now() - startTime
 
@@ -369,14 +389,16 @@ export async function executeImageGeneration(
 			resolved.seed = serviceResult.seed
 		}
 
+		const primaryUpload = uploadedImages[0]
+
 		console.info(
-			`[image-gen] Complete: ${mime} ${imageBuffer.length} bytes in ${(durationMs / 1000).toFixed(1)}s`
+			`[image-gen] Complete: ${uploadedImages.length} image(s) in ${(durationMs / 1000).toFixed(1)}s`
 		)
 
 		imageTrace({
 			type: 'generation_success',
 			sessionId,
-			uploadId: blobRef.uploadId,
+			uploadId: primaryUpload.uploadId,
 			mime,
 			durationMs,
 			recipe: resolved as unknown as Record<string, unknown>
@@ -385,9 +407,10 @@ export async function executeImageGeneration(
 		return {
 			success: true,
 			request: resolved,
-			uploadId: blobRef.uploadId,
-			url: blobRef.url,
+			uploadId: primaryUpload.uploadId,
+			url: primaryUpload.url,
 			mime,
+			images: uploadedImages,
 			durationMs
 		}
 	} catch (err) {

@@ -1,19 +1,20 @@
-import { memo } from 'react'
 import type { StoredChatMessage } from '@/collections/chat-messages'
 import {
 	Message,
-	MessageContent,
-	MessageActions
+	MessageContent
 } from '@/components/ai-elements/message'
 import {
 	Reasoning,
-	ReasoningTrigger,
-	ReasoningContent
+	ReasoningContent,
+	ReasoningTrigger
 } from '@/components/ai-elements/reasoning'
+import { memo } from 'react'
 import type { ToolResultPart } from '../utils'
 import { formatTime } from '../utils'
-import { PartRenderer } from './part-renderer'
-import { CopyButton } from './copy-button'
+import {
+	PartRenderer,
+	partHasVisibleOutput
+} from './part-renderer'
 
 export const ChatMessageRow = memo(
 	({
@@ -49,6 +50,15 @@ export const ChatMessageRow = memo(
 		const isUser =
 			message.sender === 'human' ||
 			message.sender === 'user'
+		const visibleParts = message.parts.filter(part =>
+			partHasVisibleOutput(part, consumedToolCallIds)
+		)
+		const hasAudio = message.parts.some(
+			p => p.type === 'audio'
+		)
+		const hasVisibleContent =
+			!!message.thinking || visibleParts.length > 0
+		if (!hasVisibleContent) return null
 
 		return (
 			<Message
@@ -79,22 +89,25 @@ export const ChatMessageRow = memo(
 								</ReasoningContent>
 							</Reasoning>
 						)}
-						{message.parts.map((part, i) => (
+						{visibleParts.map((part, i) => (
 							<PartRenderer
 								key={`${part.type}-${i}`}
 								part={part}
 								isStreaming={message.isStreaming}
+								isTranscription={
+									hasAudio && part.type === 'text'
+								}
 								toolResults={toolResults}
 								consumedToolCallIds={consumedToolCallIds}
 							/>
 						))}
 					</div>
+					{/* {message.text && !message.isStreaming && (
+						<MessageActions className="opacity-0 transition-opacity group-hover:opacity-100">
+							<CopyButton text={message.text} />
+						</MessageActions>
+					)} */}
 				</MessageContent>
-				{message.text && !message.isStreaming && (
-					<MessageActions className="opacity-0 group-hover:opacity-100 transition-opacity group-[.is-user]:ml-auto">
-						<CopyButton text={message.text} />
-					</MessageActions>
-				)}
 			</Message>
 		)
 	}

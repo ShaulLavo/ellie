@@ -14,6 +14,7 @@ import {
 } from '@phosphor-icons/react'
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
+import { ClickableImage } from '@/components/ui/clickable-image'
 import { ChainOfThoughtStep } from '@/components/ai-elements/chain-of-thought'
 import {
 	Task,
@@ -41,6 +42,10 @@ interface PhaseGroup {
 	latest: ProgressEntry
 	/** All entries in this group */
 	entries: ProgressEntry[]
+	/** Highest step value seen across all entries in the group */
+	maxStep: number | null
+	/** Total steps (from any entry that reported it) */
+	totalSteps: number | null
 }
 
 function groupByPhase(
@@ -52,12 +57,23 @@ function groupByPhase(
 		if (last && last.phase === entry.phase) {
 			last.latest = entry
 			last.entries.push(entry)
+			if (
+				entry.step != null &&
+				(last.maxStep == null || entry.step > last.maxStep)
+			) {
+				last.maxStep = entry.step
+			}
+			if (entry.totalSteps != null) {
+				last.totalSteps = entry.totalSteps
+			}
 		} else {
 			groups.push({
 				id: entry.id,
 				phase: entry.phase,
 				latest: entry,
-				entries: [entry]
+				entries: [entry],
+				maxStep: entry.step ?? null,
+				totalSteps: entry.totalSteps ?? null
 			})
 		}
 	}
@@ -88,7 +104,7 @@ export const ImageGenProgress = memo(
 							{part.status === 'error' ? (
 								<XCircleIcon className="size-4 text-destructive" />
 							) : part.status === 'complete' ? (
-								<CheckCircleIcon className="size-4 text-emerald-500" />
+								<CheckCircleIcon className="size-4 text-primary" />
 							) : (
 								<LoadingAnimation
 									className="size-4"
@@ -123,12 +139,11 @@ export const ImageGenProgress = memo(
 												{stripStepSuffix(
 													group.latest.label
 												)}
-												{group.latest.step != null &&
-													group.latest.totalSteps !=
-														null && (
+												{group.maxStep != null &&
+													group.totalSteps != null && (
 														<span className="ml-1 text-muted-foreground">
-															{group.latest.step}/
-															{group.latest.totalSteps}
+															{group.maxStep}/
+															{group.totalSteps}
 														</span>
 													)}
 											</div>
@@ -144,13 +159,11 @@ export const ImageGenProgress = memo(
 											groups.length
 										)}
 									>
-										{group.latest.step != null &&
-											group.latest.totalSteps != null && (
+										{group.maxStep != null &&
+											group.totalSteps != null && (
 												<StepProgressBar
-													step={group.latest.step}
-													totalSteps={
-														group.latest.totalSteps
-													}
+													step={group.maxStep}
+													totalSteps={group.totalSteps}
 												/>
 											)}
 									</ChainOfThoughtStep>
@@ -170,14 +183,30 @@ export const ImageGenProgress = memo(
 
 						{part.status === 'complete' && (
 							<div className="space-y-2">
-								{part.url && (
-									<img
+								{part.images && part.images.length > 0 ? (
+									<div
+										className={
+											part.images.length > 1
+												? 'grid grid-cols-2 gap-2'
+												: ''
+										}
+									>
+										{part.images.map((img, i) => (
+											<ClickableImage
+												key={img.uploadId}
+												src={img.url}
+												alt={`Generated image ${i + 1}`}
+												className="max-h-80 rounded-lg object-contain"
+											/>
+										))}
+									</div>
+								) : part.url ? (
+									<ClickableImage
 										src={part.url}
 										alt="Generated image"
 										className="max-h-80 rounded-lg object-contain"
-										loading="lazy"
 									/>
-								)}
+								) : null}
 								{part.recipe && (
 									<div className="flex flex-wrap gap-1">
 										<MetaBadge label={part.recipe.model} />
@@ -232,9 +261,7 @@ function StepProgressBar({
 				<div
 					className={cn(
 						'absolute inset-y-0 left-0 rounded-full transition-[width] duration-300 ease-out',
-						isDone
-							? 'bg-emerald-500'
-							: 'bg-gradient-to-r from-blue-500 to-violet-500'
+						'bg-primary'
 					)}
 					style={{ width: `${pct}%` }}
 				/>
@@ -289,9 +316,9 @@ function groupVisualStatus(
 
 	// If step data exists and step reached totalSteps, it's done
 	if (
-		group.latest.step != null &&
-		group.latest.totalSteps != null &&
-		group.latest.step >= group.latest.totalSteps
+		group.maxStep != null &&
+		group.totalSteps != null &&
+		group.maxStep >= group.totalSteps
 	) {
 		return 'complete'
 	}

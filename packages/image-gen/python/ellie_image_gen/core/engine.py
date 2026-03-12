@@ -110,21 +110,32 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
     result = pipe(**gen_kwargs)
 
     # Save output
-    _progress("save", "Encoding image")
-    output_path = config.get("outputPath")
-    if not output_path:
-        fd, output_path = tempfile.mkstemp(suffix=".png", prefix="gen-")
-        os.close(fd)
+    images = result.images
+    _progress("save", f"Encoding {len(images)} image(s)")
 
-    image = result.images[0]
-    image.save(output_path, format="PNG")
+    saved_images: list[dict[str, Any]] = []
+    for i, image in enumerate(images):
+        out = config.get("outputPath") if i == 0 else None
+        if not out:
+            fd, out = tempfile.mkstemp(suffix=".png", prefix=f"gen-{i}-")
+            os.close(fd)
+        image.save(out, format="PNG")
+        saved_images.append({
+            "imagePath": out,
+            "width": image.width,
+            "height": image.height,
+        })
+
     _progress("save", "Done")
 
     result_data = {
-        "imagePath": output_path,
-        "width": image.width,
-        "height": image.height,
+        # Primary image (backwards compat)
+        "imagePath": saved_images[0]["imagePath"],
+        "width": saved_images[0]["width"],
+        "height": saved_images[0]["height"],
         "seed": seed,
+        # Full batch
+        "images": saved_images,
     }
 
     # Cleanup ELLA (heavy — free T5 encoder after each gen)

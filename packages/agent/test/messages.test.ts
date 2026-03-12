@@ -221,6 +221,40 @@ describe('toModelMessage', () => {
 		expect(result.content).toBe('Sunny, 72°F')
 		expect(result.toolCallId).toBe('tc_1')
 	})
+
+	test('preserves image parts in ToolResultMessage', () => {
+		const msg: ToolResultMessage = {
+			role: 'toolResult',
+			toolCallId: 'tc_img_1',
+			toolName: 'generate_image',
+			content: [
+				{ type: 'text', text: 'Generated bonobo.' },
+				{
+					type: 'image',
+					data: 'base64png',
+					mimeType: 'image/png'
+				}
+			],
+			isError: false,
+			timestamp: 1000
+		}
+
+		const result = toModelMessage(msg)
+
+		expect(result.role).toBe('tool')
+		expect(result.toolCallId).toBe('tc_img_1')
+		expect(result.content).toEqual([
+			{ type: 'text', content: 'Generated bonobo.' },
+			{
+				type: 'image',
+				source: {
+					type: 'data',
+					value: 'base64png',
+					mimeType: 'image/png'
+				}
+			}
+		])
+	})
 })
 
 describe('toModelMessages', () => {

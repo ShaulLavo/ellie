@@ -1,4 +1,4 @@
-import type { EventStore } from '@ellie/db'
+import type { EventRow, EventStore } from '@ellie/db'
 import type {
 	RealtimeStore,
 	SessionEvent
@@ -10,6 +10,11 @@ import {
 	buildReplyPayload,
 	type ChannelReplyPayload
 } from './reply-payload'
+import {
+	synthesizeToPayload,
+	stripMarkdownForTts,
+	truncateForTts
+} from './reply-tts'
 import { resolveMedia } from './media-resolver'
 import {
 	maybeApplyTtsToPayload,
@@ -17,12 +22,20 @@ import {
 } from './auto-tts'
 import {
 	resolveElevenLabsTtsConfig,
-	resolveElevenLabsApiKeyAsync
+	resolveElevenLabsApiKeyAsync,
+	type ElevenLabsTtsConfig,
+	type ElevenLabsTtsOverrides
 } from '../../lib/tts'
-import type { TtsPostProcessor } from '../../lib/tts-post-processor'
+import {
+	parseTtsDirectiveParams,
+	type TtsPostProcessor
+} from '../../lib/tts-post-processor'
+import { loadTtsPreferences } from '../../lib/tts-preferences'
 
 /** Check for any [[tts...]] directive in text. */
 const TTS_DIRECTIVE_RE = /\[\[tts(?::[^\]]*?)?\]\]/i
+const TTS_DIRECTIVE_GLOBAL_RE =
+	/\[\[tts(?::([^\]]*?))?\]\]/gi
 const UPLOAD_REF_PREFIX = 'upload:'
 
 function toUploadRef(uploadId: string): string {
@@ -64,6 +77,53 @@ function normalizeMediaRef(ref: string): string {
 	return ref.replace(/\/+$/, '')
 }
 
+function appendUniqueMediaRef(
+	refs: string[],
+	seen: Set<string>,
+	ref: string | undefined
+): void {
+	if (!ref) return
+	const normalized = normalizeMediaRef(ref)
+	if (seen.has(normalized)) return
+	seen.add(normalized)
+	refs.push(normalized)
+}
+
+function extractToolUploadRefs(
+	details: Record<string, unknown> | undefined
+): string[] {
+	if (!details || details.success !== true) return []
+
+	const refs: string[] = []
+	const seen = new Set<string>()
+	const uploadId =
+		typeof details.uploadId === 'string'
+			? details.uploadId
+			: undefined
+	appendUniqueMediaRef(
+		refs,
+		seen,
+		uploadId ? toUploadRef(uploadId) : undefined
+	)
+
+	const images = Array.isArray(details.images)
+		? details.images
+		: []
+	for (const image of images) {
+		if (!image || typeof image !== 'object') continue
+		const imageUploadId = (image as { uploadId?: unknown })
+			.uploadId
+		if (typeof imageUploadId !== 'string') continue
+		appendUniqueMediaRef(
+			refs,
+			seen,
+			toUploadRef(imageUploadId)
+		)
+	}
+
+	return refs
+}
+
 export interface TtsConfig {
 	mode: TtsAutoMode
 	inboundAudio?: boolean
@@ -73,9 +133,80 @@ function targetKey(t: ChannelDeliveryTarget): string {
 	return `${t.channelId}:${t.accountId}:${t.conversationId}`
 }
 
+// ── Outbound item model ─────────────────────────────────────────────────
+
+/** A single atomic send operation with stable identity for checkpointing. */
+interface OutboundItem {
+	replyIndex: number
+	payloadIndex: number
+	attachmentIndex: number
+	kind: 'message' | 'media' | 'audio_voice'
+	/** Caption (media) or message text. */
+	text: string
+	/** Media ref to resolve and send. */
+	mediaRef?: string
+}
+
+function checkpointKey(item: {
+	replyIndex: number
+	payloadIndex: number
+	attachmentIndex: number
+}): string {
+	return `${item.replyIndex}:${item.payloadIndex}:${item.attachmentIndex}`
+}
+
+/** Split prepared payloads into individual outbound items. */
+function buildOutboundItems(
+	replyIndex: number,
+	preparedPayloads: ChannelReplyPayload[]
+): OutboundItem[] {
+	const items: OutboundItem[] = []
+	for (const [
+		payloadIndex,
+		payload
+	] of preparedPayloads.entries()) {
+		if (payload.mediaRefs?.length) {
+			const kind: OutboundItem['kind'] =
+				payload.audioAsVoice ? 'audio_voice' : 'media'
+			const caption = payload.audioAsVoice
+				? ''
+				: (payload.text ?? '')
+			for (const [ai, ref] of payload.mediaRefs.entries()) {
+				items.push({
+					replyIndex,
+					payloadIndex,
+					attachmentIndex: ai,
+					kind,
+					text: ai === 0 ? caption : '',
+					mediaRef: ref
+				})
+			}
+		} else if (payload.text) {
+			items.push({
+				replyIndex,
+				payloadIndex,
+				attachmentIndex: 0,
+				kind: 'message',
+				text: payload.text
+			})
+		}
+	}
+	return items
+}
+
+// ── Internal state types ────────────────────────────────────────────────
+
 interface PendingDelivery {
 	sessionId: string
-	targets: Map<string, ChannelDeliveryTarget>
+	targets: Map<string, PendingTargetDelivery>
+	inFlight: Promise<void>
+}
+
+interface PendingTargetDelivery {
+	target: ChannelDeliveryTarget
+	/** Checkpoint keys for items already sent (live path). */
+	deliveredKeys: Set<string>
+	lastComposingAt: number
 }
 
 interface PendingRowEntry {
@@ -84,12 +215,35 @@ interface PendingRowEntry {
 	createdAt: number
 }
 
+interface ExtractedReplyPayload {
+	assistantRowId: number
+	payload: ChannelReplyPayload
+	isLastAssistantReply: boolean
+}
+
 const PENDING_ROW_TTL = 10 * 60_000 // 10 minutes
 const PENDING_ROW_MAX = 500
+const COMPOSING_COOLDOWN_MS = 3_000
+
+function parseRowPayload(
+	row: Pick<EventRow, 'payload'>
+): Record<string, unknown> | null {
+	try {
+		return JSON.parse(row.payload) as Record<
+			string,
+			unknown
+		>
+	} catch {
+		return null
+	}
+}
 
 /**
  * In-memory registry that tracks channel-triggered runs and routes
  * assistant replies back through the originating channel provider.
+ *
+ * Persists a delivery checkpoint after every individual outbound send
+ * so crash recovery can resume from the exact next unsent item.
  *
  * Supports multiple contributing external targets per run and
  * row-based pending binding for follow-up/queued messages whose
@@ -146,13 +300,29 @@ export class ChannelDeliveryRegistry {
 		const key = targetKey(target)
 		const existing = this.#pending.get(runId)
 		if (existing) {
-			existing.targets.set(key, target)
-		} else {
-			this.#pending.set(runId, {
-				sessionId,
-				targets: new Map([[key, target]])
+			const current = existing.targets.get(key)
+			existing.targets.set(key, {
+				target,
+				deliveredKeys: current?.deliveredKeys ?? new Set(),
+				lastComposingAt: current?.lastComposingAt ?? 0
 			})
+			return
 		}
+
+		this.#pending.set(runId, {
+			sessionId,
+			targets: new Map([
+				[
+					key,
+					{
+						target,
+						deliveredKeys: new Set(),
+						lastComposingAt: 0
+					}
+				]
+			]),
+			inFlight: Promise.resolve()
+		})
 	}
 
 	/**
@@ -193,23 +363,15 @@ export class ChannelDeliveryRegistry {
 		const unsub = this.#store.subscribeToSession(
 			sessionId,
 			(event: SessionEvent) => {
-				// runId backfill on a pending row → promote to run-level
 				if (event.type === 'update') {
-					const row = event.event
-					if (!row.runId) return
-					const pending = this.#pendingByRow.get(row.id)
-					if (!pending) return
-					this.#pendingByRow.delete(row.id)
-					this.register(
-						row.runId,
-						pending.sessionId,
-						pending.target
-					)
+					this.#promotePendingRow(event.event)
+					this.#handleLiveRowEvent(event.event, sessionId)
 					return
 				}
 
-				// run_closed → deliver
 				if (event.type !== 'append') return
+				this.#handleLiveRowEvent(event.event, sessionId)
+
 				if (event.event.type !== 'run_closed') return
 				const runId = event.event.runId
 				if (!runId) return
@@ -226,121 +388,321 @@ export class ChannelDeliveryRegistry {
 		this.#unsubscribers.push(unsub)
 	}
 
+	#promotePendingRow(row: EventRow): void {
+		if (!row.runId) return
+		const pending = this.#pendingByRow.get(row.id)
+		if (!pending) return
+		this.#pendingByRow.delete(row.id)
+		this.register(
+			row.runId,
+			pending.sessionId,
+			pending.target
+		)
+	}
+
+	#handleLiveRowEvent(
+		row: EventRow,
+		sessionId: string
+	): void {
+		if (!row.runId) return
+		if (row.type === 'run_closed') return
+
+		if (row.type === 'tool_execution') {
+			this.#sendComposingForRun(row.runId)
+			return
+		}
+		if (row.type !== 'assistant_message') return
+
+		if (!this.#isFinalAssistantMessageRow(row)) {
+			this.#sendComposingForRun(row.runId)
+			return
+		}
+
+		this.#sendComposingForRun(row.runId)
+		this.#queueRunDelivery(row.runId, async () => {
+			await this.#deliverPendingReplies(
+				row.runId!,
+				sessionId,
+				false
+			)
+		}).catch(err => {
+			console.error(
+				'[delivery] live assistant delivery failed:',
+				err
+			)
+		})
+	}
+
+	#isFinalAssistantMessageRow(row: EventRow): boolean {
+		if (row.type !== 'assistant_message') return false
+		const parsed = parseRowPayload(row)
+		if (!parsed) return false
+		return parsed.streaming === false
+	}
+
+	#queueRunDelivery(
+		runId: string,
+		task: () => Promise<void>
+	): Promise<void> {
+		const delivery = this.#pending.get(runId)
+		if (!delivery) return Promise.resolve()
+
+		const next = delivery.inFlight.then(task, task)
+		delivery.inFlight = next.catch(err => {
+			console.error(
+				`[delivery] queued delivery failed for ${runId}:`,
+				err
+			)
+		})
+		return next
+	}
+
+	/** Send composing indicators to all targets registered for a run. */
+	#sendComposingForRun(runId: string): void {
+		const delivery = this.#pending.get(runId)
+		if (!delivery) return
+		const now = Date.now()
+
+		for (const targetState of delivery.targets.values()) {
+			if (
+				now - targetState.lastComposingAt <
+				COMPOSING_COOLDOWN_MS
+			) {
+				continue
+			}
+
+			const provider = this.#getProvider(
+				targetState.target.channelId
+			)
+			if (!provider?.sendComposing) continue
+			targetState.lastComposingAt = now
+			provider
+				.sendComposing(targetState.target)
+				.catch(err => {
+					console.warn(
+						`[delivery] sendComposing failed for ${targetState.target.channelId}:`,
+						err
+					)
+				})
+		}
+	}
+
 	async #handleRunClosed(
 		runId: string,
 		sessionId: string
 	): Promise<void> {
-		const delivery = this.#pending.get(runId)
-		if (!delivery) return // Not a channel-triggered run
+		if (!this.#pending.has(runId)) {
+			console.log(
+				`[delivery] run_closed but not in pending map: runId=${runId} sessionId=${sessionId}`
+			)
+			return // Not a channel-triggered run
+		}
+		await this.#queueRunDelivery(runId, async () => {
+			await this.#deliverPendingReplies(
+				runId,
+				sessionId,
+				true
+			)
+		})
 		this.#pending.delete(runId)
+	}
 
-		let payload = this.#extractFinalReplyPayload(
-			sessionId,
-			runId
-		)
-		if (!payload) return
-
+	async #preparePayloadsForDelivery(
+		payload: ChannelReplyPayload,
+		sessionId: string,
+		runId: string,
+		inboundAudio: boolean,
+		useRunTtsPostProcessor: boolean
+	): Promise<ChannelReplyPayload[]> {
 		const textHasTts =
 			!!payload.text && TTS_DIRECTIVE_RE.test(payload.text)
-
-		if (textHasTts && this.#ttsPostProcessor) {
-			// [[tts]] detected — let TtsPostProcessor synthesize audio FIRST,
-			// then use its output. This avoids the race where we'd send text
-			// to WhatsApp and the post-processor would clear it after the fact.
-			payload = await this.#resolveFromPostProcessor(
+		if (textHasTts) {
+			return await this.#prepareExplicitTtsPayloads(
 				payload,
+				useRunTtsPostProcessor,
 				runId,
 				sessionId
 			)
-		} else {
-			// No [[tts]] directive, or no post-processor — use inline auto-TTS
-			// (handles 'always' and 'inbound' modes)
-			const hasAudioInbound = [
-				...delivery.targets.values()
-			].some(
-				t =>
-					t.inboundMediaType?.startsWith('audio/') ?? false
-			)
-			payload = await this.#applyAutoTts(
-				payload,
-				hasAudioInbound
-			)
 		}
+		const autoTtsPayload = await this.#applyAutoTts(
+			payload,
+			inboundAudio
+		)
+		return [this.#stripTtsDirectives(autoTtsPayload)]
+	}
 
-		// Always strip [[tts...]] directives from delivery text
-		if (payload.text) {
-			payload = {
-				...payload,
-				text:
-					payload.text
-						.replace(/\[\[tts(?::[^\]]*?)?\]\]/gi, '')
-						.trim() || undefined
+	async #prepareExplicitTtsPayloads(
+		payload: ChannelReplyPayload,
+		useRunTtsPostProcessor: boolean,
+		runId: string,
+		sessionId: string
+	): Promise<ChannelReplyPayload[]> {
+		const basePayload = this.#stripTtsDirectives(payload)
+		if (useRunTtsPostProcessor && this.#ttsPostProcessor) {
+			try {
+				await this.#ttsPostProcessor.processRun(
+					runId,
+					sessionId
+				)
+				const audioPayload =
+					this.#extractAssistantAudioPayload(
+						sessionId,
+						runId
+					)
+				if (audioPayload) {
+					if (basePayload.mediaRefs?.length) {
+						return [basePayload, audioPayload]
+					}
+					return [audioPayload]
+				}
+				console.warn(
+					'[delivery] TtsPostProcessor produced no audio, falling back to direct synthesis',
+					{ runId }
+				)
+			} catch (err) {
+				console.error(
+					'[delivery] TtsPostProcessor failed, falling back to direct synthesis:',
+					err
+				)
 			}
 		}
 
-		// Fan out to every distinct contributing target
-		await this.#deliverPayload(
-			payload,
-			delivery,
-			sessionId,
-			runId
+		try {
+			const audioPayload =
+				await this.#synthesizeExplicitTtsPayload(
+					payload.text
+				)
+			if (!audioPayload) return [basePayload]
+			if (basePayload.mediaRefs?.length) {
+				return [basePayload, audioPayload]
+			}
+			return [audioPayload]
+		} catch (err) {
+			console.error(
+				'[delivery] Explicit TTS synthesis failed, falling back to text:',
+				err
+			)
+			return [basePayload]
+		}
+	}
+
+	async #synthesizeExplicitTtsPayload(
+		text: string | undefined
+	): Promise<ChannelReplyPayload | null> {
+		if (!text) return null
+		const ttsText = this.#toSpeakableTtsText(text)
+		if (ttsText.length < 10) return null
+		const config = await this.#resolveTtsConfig()
+		const overrides =
+			await this.#buildExplicitTtsOverrides(text)
+		return await synthesizeToPayload(ttsText, {
+			preferOpus: true,
+			config,
+			overrides
+		})
+	}
+
+	async #resolveTtsConfig(): Promise<ElevenLabsTtsConfig> {
+		const config = resolveElevenLabsTtsConfig()
+		if (!config.apiKey && this.#credentialsPath) {
+			config.apiKey = await resolveElevenLabsApiKeyAsync(
+				this.#credentialsPath
+			)
+		}
+		return config
+	}
+
+	async #buildExplicitTtsOverrides(
+		text: string
+	): Promise<ElevenLabsTtsOverrides> {
+		const directiveOverrides =
+			this.#extractDirectiveOverrides(text)
+		if (!this.#dataDir) return directiveOverrides
+
+		const prefs = await loadTtsPreferences(this.#dataDir)
+		return {
+			...(prefs.voiceId && { voiceId: prefs.voiceId }),
+			...(prefs.modelId && { modelId: prefs.modelId }),
+			...directiveOverrides,
+			voiceSettings: {
+				...prefs.voiceSettings,
+				...directiveOverrides.voiceSettings
+			}
+		}
+	}
+
+	#extractDirectiveOverrides(
+		text: string
+	): ElevenLabsTtsOverrides {
+		TTS_DIRECTIVE_GLOBAL_RE.lastIndex = 0
+		let merged: ElevenLabsTtsOverrides = {}
+		let match: RegExpExecArray | null
+		while (
+			(match = TTS_DIRECTIVE_GLOBAL_RE.exec(text)) !== null
+		) {
+			const parsed = parseTtsDirectiveParams(match[1])
+			merged = {
+				...merged,
+				...parsed,
+				voiceSettings: {
+					...merged.voiceSettings,
+					...parsed.voiceSettings
+				}
+			}
+		}
+		return merged
+	}
+
+	#toSpeakableTtsText(text: string): string {
+		TTS_DIRECTIVE_GLOBAL_RE.lastIndex = 0
+		const withoutDirectives = text
+			.replace(TTS_DIRECTIVE_GLOBAL_RE, '')
+			.split('\n')
+			.filter(line => !/^\s*media:\s*/i.test(line))
+			.join('\n')
+			.trim()
+		return truncateForTts(
+			stripMarkdownForTts(withoutDirectives)
 		)
 	}
 
-	/**
-	 * Await TtsPostProcessor audio and resolve it for channel delivery.
-	 * Returns a voice-note payload if audio was produced, otherwise
-	 * falls back to the original text payload.
-	 */
-	async #resolveFromPostProcessor(
-		payload: ChannelReplyPayload,
-		runId: string,
-		sessionId: string
-	): Promise<ChannelReplyPayload> {
-		try {
-			// Wait for TtsPostProcessor to finish synthesis (deduped internally)
-			await this.#ttsPostProcessor!.processRun(
-				runId,
-				sessionId
-			)
-
-			// Read the assistant_audio event it produced
-			const rows = this.#store.queryRunEvents(
-				sessionId,
-				runId
-			)
-			for (const row of rows) {
-				if (row.type !== 'assistant_audio') continue
-				let parsed: Record<string, unknown>
-				try {
-					parsed = JSON.parse(row.payload)
-				} catch {
-					continue
-				}
-				const uploadId = parsed.uploadId as
-					| string
-					| undefined
-				if (!uploadId) continue
-
-				return {
-					text: undefined,
-					mediaRefs: [toUploadRef(uploadId)],
-					audioAsVoice: true
-				}
+	#extractAssistantAudioPayload(
+		sessionId: string,
+		runId: string
+	): ChannelReplyPayload | null {
+		const rows = this.#store.queryRunEvents(
+			sessionId,
+			runId
+		)
+		for (const row of rows) {
+			if (row.type !== 'assistant_audio') continue
+			let parsed: Record<string, unknown>
+			try {
+				parsed = JSON.parse(row.payload)
+			} catch {
+				continue
 			}
+			const uploadId = parsed.uploadId as string | undefined
+			if (!uploadId) continue
+			return {
+				text: undefined,
+				mediaRefs: [toUploadRef(uploadId)],
+				audioAsVoice: true
+			}
+		}
+		return null
+	}
 
-			// TtsPostProcessor ran but produced no audio — fall back to text
-			console.warn(
-				'[delivery] TtsPostProcessor produced no audio, falling back to text',
-				{ runId }
-			)
-			return payload
-		} catch (err) {
-			console.error(
-				'[delivery] TtsPostProcessor failed, falling back to text:',
-				err
-			)
-			return payload
+	#stripTtsDirectives(
+		payload: ChannelReplyPayload
+	): ChannelReplyPayload {
+		if (!payload.text) return payload
+		return {
+			...payload,
+			text:
+				payload.text
+					.replace(TTS_DIRECTIVE_GLOBAL_RE, '')
+					.trim() || undefined
 		}
 	}
 
@@ -353,13 +715,7 @@ export class ChannelDeliveryRegistry {
 		if (!ttsConfig || ttsConfig.mode === 'off')
 			return payload
 		try {
-			// Resolve ElevenLabs config with credentials file fallback
-			const config = resolveElevenLabsTtsConfig()
-			if (!config.apiKey && this.#credentialsPath) {
-				config.apiKey = await resolveElevenLabsApiKeyAsync(
-					this.#credentialsPath
-				)
-			}
+			const config = await this.#resolveTtsConfig()
 			return await maybeApplyTtsToPayload({
 				payload,
 				mode: ttsConfig.mode,
@@ -367,7 +723,7 @@ export class ChannelDeliveryRegistry {
 				ttsOptions: { preferOpus: true, config }
 			})
 		} catch (err) {
-			console.error(
+			console.warn(
 				'[delivery] Auto-TTS failed, delivering text-only:',
 				err
 			)
@@ -375,49 +731,207 @@ export class ChannelDeliveryRegistry {
 		}
 	}
 
-	/** Resolve media and deliver a payload to all targets. */
-	async #deliverPayload(
-		payload: ChannelReplyPayload,
-		delivery: PendingDelivery,
-		sessionId: string,
-		runId: string
-	): Promise<void> {
-		// Voice notes (audioAsVoice) are sent without caption text
-		const caption = payload.audioAsVoice
-			? ''
-			: (payload.text ?? '')
+	// ── Core delivery loop (per-item checkpointing) ──────────────────────
 
-		for (const target of delivery.targets.values()) {
-			const provider = this.#getProvider(target.channelId)
+	/**
+	 * Heuristic check: is a reply fully delivered based on the raw
+	 * (unprepared) payload and the set of already-delivered keys?
+	 * Used to skip expensive preparation (TTS synthesis) for items
+	 * that were already sent in a prior delivery pass.
+	 */
+	#isReplyFullyDelivered(
+		replyIndex: number,
+		rawPayload: ChannelReplyPayload,
+		deliveredKeys: Set<string>
+	): boolean {
+		// Primary item must be delivered
+		if (!deliveredKeys.has(`${replyIndex}:0:0`))
+			return false
+
+		// Multi-attachment media: check all attachment keys
+		if (rawPayload.mediaRefs) {
+			for (
+				let i = 1;
+				i < rawPayload.mediaRefs.length;
+				i++
+			) {
+				if (!deliveredKeys.has(`${replyIndex}:0:${i}`))
+					return false
+			}
+		}
+
+		// Explicit [[tts]] with media creates a second payload
+		if (
+			rawPayload.text &&
+			TTS_DIRECTIVE_RE.test(rawPayload.text) &&
+			rawPayload.mediaRefs?.length
+		) {
+			if (!deliveredKeys.has(`${replyIndex}:1:0`))
+				return false
+		}
+
+		return true
+	}
+
+	async #deliverPendingReplies(
+		runId: string,
+		sessionId: string,
+		isRunClosed: boolean
+	): Promise<void> {
+		const delivery = this.#pending.get(runId)
+		if (!delivery) return
+
+		const replyPayloads = this.#extractReplyPayloads(
+			sessionId,
+			runId
+		)
+		console.log(
+			`[delivery] extractReplyPayloads: runId=${runId}`,
+			JSON.stringify({
+				replyCount: replyPayloads.length,
+				isRunClosed
+			})
+		)
+		if (replyPayloads.length === 0) return
+
+		// Cache prepared payloads per reply so TTS is called once
+		// and shared across all targets.
+		const preparedCache = new Map<
+			number,
+			ChannelReplyPayload[]
+		>()
+
+		for (const targetState of delivery.targets.values()) {
+			const provider = this.#getProvider(
+				targetState.target.channelId
+			)
 			if (!provider) continue
 
 			try {
-				if (
-					payload.mediaRefs?.length &&
-					typeof provider.sendMedia === 'function'
-				) {
-					const ref = payload.mediaRefs[0]
-					const media = await resolveMedia(
-						this.#resolveMediaRef(ref),
-						{
-							localRoots: this.#mediaLocalRoots()
-						}
+				for (const [
+					replyIndex,
+					reply
+				] of replyPayloads.entries()) {
+					// Fast-path: skip preparation entirely for replies
+					// that are already fully delivered (avoids TTS re-synthesis).
+					if (
+						this.#isReplyFullyDelivered(
+							replyIndex,
+							reply.payload,
+							targetState.deliveredKeys
+						)
+					) {
+						continue
+					}
+
+					let payloads = preparedCache.get(replyIndex)
+					if (!payloads) {
+						payloads =
+							await this.#preparePayloadsForDelivery(
+								reply.payload,
+								sessionId,
+								runId,
+								targetState.target.inboundMediaType?.startsWith(
+									'audio/'
+								) ?? false,
+								isRunClosed && reply.isLastAssistantReply
+							)
+						preparedCache.set(replyIndex, payloads)
+					}
+
+					const items = buildOutboundItems(
+						replyIndex,
+						payloads
 					)
-					await provider.sendMedia(target, caption, {
-						buffer: media.buffer,
-						mimetype: media.mimetype,
-						fileName: media.fileName
-					})
-				} else if (payload.text) {
-					await provider.sendMessage(target, payload.text)
+					for (const item of items) {
+						const key = checkpointKey(item)
+						if (targetState.deliveredKeys.has(key)) continue
+
+						const sent = await this.#sendOutboundItem(
+							provider,
+							targetState.target,
+							item
+						)
+						if (!sent) continue
+
+						this.#persistCheckpoint(
+							sessionId,
+							runId,
+							targetState.target,
+							item,
+							reply.assistantRowId
+						)
+						targetState.deliveredKeys.add(key)
+					}
 				}
-				this.#markDelivered(sessionId, runId, target)
 			} catch (err) {
 				console.error(
-					`[delivery] Failed to send reply via ${target.channelId}:`,
+					`[delivery] Failed to send reply via ${targetState.target.channelId}:`,
 					err
 				)
 			}
+		}
+	}
+
+	/** Send a single outbound item (text message or single media attachment). */
+	async #sendOutboundItem(
+		provider: ChannelProvider,
+		target: ChannelDeliveryTarget,
+		item: OutboundItem
+	): Promise<boolean> {
+		if (
+			item.mediaRef &&
+			typeof provider.sendMedia === 'function'
+		) {
+			const media = await resolveMedia(
+				this.#resolveMediaRef(item.mediaRef),
+				{ localRoots: this.#mediaLocalRoots() }
+			)
+			await provider.sendMedia(target, item.text, {
+				buffer: media.buffer,
+				mimetype: media.mimetype,
+				fileName: media.fileName
+			})
+			return true
+		}
+		if (item.text) {
+			await provider.sendMessage(target, item.text)
+			return true
+		}
+		return false
+	}
+
+	/** Persist a delivery checkpoint for a single outbound item (idempotent via dedupeKey). */
+	#persistCheckpoint(
+		sessionId: string,
+		runId: string,
+		target: ChannelDeliveryTarget,
+		item: OutboundItem,
+		assistantRowId: number
+	): void {
+		try {
+			this.#store.appendEvent(
+				sessionId,
+				'channel_delivered',
+				{
+					channelId: target.channelId,
+					accountId: target.accountId,
+					conversationId: target.conversationId,
+					assistantRowId,
+					replyIndex: item.replyIndex,
+					payloadIndex: item.payloadIndex,
+					attachmentIndex: item.attachmentIndex,
+					kind: item.kind,
+					deliveredAt: Date.now()
+				},
+				runId,
+				`channel_delivered:${runId}:${targetKey(target)}:r${item.replyIndex}:p${item.payloadIndex}:a${item.attachmentIndex}`
+			)
+		} catch (err) {
+			console.warn(
+				'[delivery] Failed to persist checkpoint:',
+				err
+			)
 		}
 	}
 
@@ -443,175 +957,155 @@ export class ChannelDeliveryRegistry {
 		return path.join(this.#dataDir, 'uploads', uploadId)
 	}
 
-	#extractFinalAssistantText(
+	/** Build ordered reply payloads from completed assistant messages in a run. */
+	#extractReplyPayloads(
 		sessionId: string,
 		runId: string
-	): string | null {
+	): ExtractedReplyPayload[] {
 		const rows = this.#store.queryRunEvents(
 			sessionId,
 			runId
 		)
+		const extracted: Array<{
+			assistantRowId: number
+			payload: ChannelReplyPayload
+		}> = []
+		const pendingAutoMedia: string[] = []
+		const pendingSeen = new Set<string>()
 
-		const texts: string[] = []
 		for (const row of rows) {
-			if (row.type !== 'assistant_message') continue
-			let parsed: Record<string, unknown>
-			try {
-				parsed = JSON.parse(row.payload)
-			} catch {
-				continue
-			}
-			if (parsed.streaming) continue
-			const message = parsed.message as
-				| {
-						content?: Array<{
-							type: string
-							text?: string
-						}>
-				  }
-				| undefined
-			if (!message?.content) continue
-			for (const block of message.content) {
-				if (block.type === 'text' && block.text) {
-					texts.push(block.text)
+			if (row.type === 'tool_execution') {
+				const parsed = parseRowPayload(row)
+				if (!parsed) continue
+				const result = parsed.result as
+					| Record<string, unknown>
+					| undefined
+				const details = result?.details as
+					| Record<string, unknown>
+					| undefined
+				for (const ref of extractToolUploadRefs(details)) {
+					appendUniqueMediaRef(
+						pendingAutoMedia,
+						pendingSeen,
+						ref
+					)
 				}
-			}
-		}
-		return texts.length > 0 ? texts.join('\n') : null
-	}
-
-	/** Extract upload refs from completed generate_image tool_execution events. */
-	#extractImageGenMedia(
-		rows: Array<{
-			type: string
-			payload: string
-		}>
-	): string[] {
-		const refs: string[] = []
-		for (const row of rows) {
-			if (row.type !== 'tool_execution') continue
-			let parsed: Record<string, unknown>
-			try {
-				parsed = JSON.parse(row.payload)
-			} catch {
 				continue
 			}
-			if (parsed.toolName !== 'generate_image') continue
-			if (
-				parsed.status !== 'complete' &&
-				parsed.status !== 'error'
-			)
+
+			if (row.type !== 'assistant_message') continue
+
+			const parsed = parseRowPayload(row)
+			if (!parsed) continue
+			if (parsed.streaming) continue
+
+			const rawText =
+				this.#extractAssistantMessageText(parsed)
+			const payload = rawText
+				? buildReplyPayload(rawText)
+				: {
+						text: undefined,
+						mediaRefs: undefined,
+						audioAsVoice: undefined
+					}
+			const mediaRefs: string[] = []
+			const seen = new Set<string>()
+			for (const ref of pendingAutoMedia) {
+				appendUniqueMediaRef(mediaRefs, seen, ref)
+			}
+			for (const ref of payload.mediaRefs ?? []) {
+				appendUniqueMediaRef(mediaRefs, seen, ref)
+			}
+			pendingAutoMedia.length = 0
+			pendingSeen.clear()
+
+			const replyPayload: ChannelReplyPayload = {
+				text: payload.text,
+				mediaRefs:
+					mediaRefs.length > 0 ? mediaRefs : undefined,
+				audioAsVoice: payload.audioAsVoice
+			}
+			if (!replyPayload.text && !replyPayload.mediaRefs) {
 				continue
-			const result = parsed.result as
-				| Record<string, unknown>
-				| undefined
-			const details = result?.details as
-				| Record<string, unknown>
-				| undefined
-			if (!details || details.success !== true) continue
-			const uploadId = details.uploadId as
-				| string
-				| undefined
-			if (uploadId) refs.push(toUploadRef(uploadId))
+			}
+			extracted.push({
+				assistantRowId: row.id,
+				payload: replyPayload
+			})
 		}
-		return refs
-	}
 
-	/** Build a ChannelReplyPayload from run events (text + auto-appended media). */
-	#extractFinalReplyPayload(
-		sessionId: string,
-		runId: string
-	): ChannelReplyPayload | null {
-		const rows = this.#store.queryRunEvents(
-			sessionId,
-			runId
-		)
-
-		// Extract text from assistant_message events
-		const rawText = this.#extractFinalAssistantText(
-			sessionId,
-			runId
-		)
-
-		// Build payload from text (parses MEDIA: directives)
-		const payload = rawText
-			? buildReplyPayload(rawText)
-			: { text: undefined, mediaRefs: undefined }
-
-		// Auto-append image-gen media
-		const autoMedia = this.#extractImageGenMedia(rows)
-
-		// Merge: auto-generated refs first, then MEDIA: refs from text, deduplicated
-		const allRefs = [...autoMedia]
-		const seen = new Set(autoMedia.map(normalizeMediaRef))
-		for (const ref of payload.mediaRefs ?? []) {
-			const normalized = normalizeMediaRef(ref)
-			if (!seen.has(normalized)) {
-				seen.add(normalized)
-				allRefs.push(normalized)
+		if (pendingAutoMedia.length > 0) {
+			if (extracted.length === 0) {
+				extracted.push({
+					assistantRowId: 0,
+					payload: {
+						mediaRefs: [...pendingAutoMedia]
+					}
+				})
+			} else {
+				const last = extracted.at(-1)!
+				const mediaRefs = [
+					...(last.payload.mediaRefs ?? [])
+				]
+				const seen = new Set(
+					mediaRefs.map(normalizeMediaRef)
+				)
+				for (const ref of pendingAutoMedia) {
+					appendUniqueMediaRef(mediaRefs, seen, ref)
+				}
+				last.payload.mediaRefs = mediaRefs
 			}
 		}
 
-		const finalPayload: ChannelReplyPayload = {
-			text: payload.text,
-			mediaRefs: allRefs.length > 0 ? allRefs : undefined,
-			audioAsVoice: payload.audioAsVoice
-		}
-
-		// Return null if completely empty
-		if (!finalPayload.text && !finalPayload.mediaRefs) {
-			return null
-		}
-
-		return finalPayload
+		return extracted.map((entry, index) => ({
+			assistantRowId: entry.assistantRowId,
+			payload: entry.payload,
+			isLastAssistantReply: index === extracted.length - 1
+		}))
 	}
 
-	/** Persist a channel_delivered marker event (idempotent via dedupeKey). */
-	#markDelivered(
-		sessionId: string,
-		runId: string,
-		target: ChannelDeliveryTarget
-	): void {
-		try {
-			this.#store.appendEvent(
-				sessionId,
-				'channel_delivered',
-				{
-					channelId: target.channelId,
-					accountId: target.accountId,
-					conversationId: target.conversationId,
-					deliveredAt: Date.now()
-				},
-				runId,
-				`channel_delivered:${runId}:${targetKey(target)}`
-			)
-		} catch (err) {
-			console.warn(
-				'[delivery] Failed to persist channel_delivered marker:',
-				err
-			)
+	#extractAssistantMessageText(
+		payload: Record<string, unknown>
+	): string | null {
+		const message = payload.message as
+			| {
+					content?: Array<{
+						type: string
+						text?: string
+					}>
+			  }
+			| undefined
+		if (!message?.content) return null
+		const texts: string[] = []
+		for (const block of message.content) {
+			if (block.type === 'text' && block.text) {
+				texts.push(block.text)
+			}
 		}
+		if (texts.length === 0) return null
+		return texts.join('\n')
 	}
 
 	/**
-	 * Recover channel runs that closed but were never delivered
-	 * (e.g. server crashed before sendMessage completed).
-	 * Safe to call multiple times — delivery markers are idempotent.
+	 * Recover channel runs that closed but have unsent outbound items
+	 * (e.g. server crashed mid-delivery).
+	 * Resumes from the exact next unsent item using per-item checkpoints.
+	 * Safe to call multiple times — checkpoints are idempotent.
 	 */
 	async recoverUndelivered(
 		eventStore: EventStore,
 		maxAgeMs = 30 * 60_000
 	): Promise<number> {
-		const undelivered =
-			eventStore.findUndeliveredChannelRuns(maxAgeMs)
-		if (undelivered.length === 0) return 0
+		const candidates =
+			eventStore.findCandidateChannelRuns(maxAgeMs)
+		if (candidates.length === 0) return 0
 
 		console.log(
-			`[delivery] Recovering ${undelivered.length} undelivered channel run(s)`
+			`[delivery] Evaluating ${candidates.length} candidate channel run(s) for recovery`
 		)
 
 		let recovered = 0
-		for (const row of undelivered) {
+		for (const row of candidates) {
 			try {
 				const target: ChannelDeliveryTarget = {
 					channelId: row.channelId,
@@ -619,16 +1113,59 @@ export class ChannelDeliveryRegistry {
 					conversationId: row.conversationId
 				}
 
-				const payload = this.#extractFinalReplyPayload(
+				// Load existing checkpoints for this run+target
+				const checkpoints =
+					eventStore.findDeliveryCheckpoints(
+						row.sessionId,
+						row.runId,
+						row.channelId,
+						row.accountId,
+						row.conversationId
+					)
+				const deliveredKeys = new Set(
+					checkpoints.map(c => checkpointKey(c))
+				)
+
+				const replyPayloads = this.#extractReplyPayloads(
 					row.sessionId,
 					row.runId
 				)
-				if (!payload) {
-					console.warn(
-						`[delivery] No reply payload for run ${row.runId}, skipping`
-					)
-					continue
+				if (replyPayloads.length === 0) continue
+
+				// Build all outbound items
+				const allItems: Array<{
+					item: OutboundItem
+					assistantRowId: number
+				}> = []
+				for (const [
+					replyIndex,
+					reply
+				] of replyPayloads.entries()) {
+					const payloads =
+						await this.#preparePayloadsForDelivery(
+							reply.payload,
+							row.sessionId,
+							row.runId,
+							false,
+							reply.isLastAssistantReply
+						)
+					for (const item of buildOutboundItems(
+						replyIndex,
+						payloads
+					)) {
+						allItems.push({
+							item,
+							assistantRowId: reply.assistantRowId
+						})
+					}
 				}
+
+				// Filter to remaining unsent items
+				const remaining = allItems.filter(
+					({ item }) =>
+						!deliveredKeys.has(checkpointKey(item))
+				)
+				if (remaining.length === 0) continue
 
 				const provider = this.#getProvider(target.channelId)
 				if (!provider) {
@@ -638,34 +1175,25 @@ export class ChannelDeliveryRegistry {
 					continue
 				}
 
-				const recoverCaption = payload.audioAsVoice
-					? ''
-					: (payload.text ?? '')
-				if (
-					payload.mediaRefs?.length &&
-					typeof provider.sendMedia === 'function'
-				) {
-					const ref = payload.mediaRefs[0]
-					const media = await resolveMedia(
-						this.#resolveMediaRef(ref),
-						{
-							localRoots: this.#mediaLocalRoots()
-						}
+				let sentAny = false
+				for (const { item, assistantRowId } of remaining) {
+					const sent = await this.#sendOutboundItem(
+						provider,
+						target,
+						item
 					)
-					await provider.sendMedia(target, recoverCaption, {
-						buffer: media.buffer,
-						mimetype: media.mimetype,
-						fileName: media.fileName
-					})
-				} else if (payload.text) {
-					await provider.sendMessage(target, payload.text)
+					if (!sent) continue
+					this.#persistCheckpoint(
+						row.sessionId,
+						row.runId,
+						target,
+						item,
+						assistantRowId
+					)
+					sentAny = true
 				}
-				this.#markDelivered(
-					row.sessionId,
-					row.runId,
-					target
-				)
-				recovered++
+
+				if (sentAny) recovered++
 			} catch (err) {
 				console.error(
 					`[delivery] Recovery failed for run ${row.runId}:`,
@@ -674,9 +1202,11 @@ export class ChannelDeliveryRegistry {
 			}
 		}
 
-		console.log(
-			`[delivery] Recovered ${recovered} delivery(ies)`
-		)
+		if (recovered > 0) {
+			console.log(
+				`[delivery] Recovered ${recovered} delivery(ies)`
+			)
+		}
 		return recovered
 	}
 

@@ -1,35 +1,42 @@
 import type { StoredChatMessage } from '@/collections/chat-messages'
 import type { ToolResultPart } from '../hooks/use-tool-grouping'
+import type { ConnectionState } from '@ellie/schemas/chat'
 import {
 	Conversation,
 	ConversationContent,
 	ConversationScrollButton
 } from '@/components/ai-elements/conversation'
 import { ChatMessageRow } from './chat-message'
+import { ConnectionIndicator } from './connection-indicator'
 import { EmptyState } from './empty-state'
 
 export function ChatMessageList({
 	messages,
-	streamingMessage,
 	toolResults,
 	consumedToolCallIds,
 	hiddenMessageIds,
-	needsBootstrap
+	needsBootstrap,
+	connectionState,
+	connectionError
 }: {
 	messages: StoredChatMessage[]
-	streamingMessage: StoredChatMessage | null
 	toolResults: Map<string, ToolResultPart>
 	consumedToolCallIds: Set<string>
 	hiddenMessageIds: Set<string>
 	needsBootstrap: boolean
+	connectionState: ConnectionState
+	connectionError: string | null
 }) {
-	const isEmpty = messages.length === 0 && !streamingMessage
+	const isEmpty = messages.length === 0
 
 	return (
 		<Conversation className="flex-1">
-			<ConversationContent className="gap-5 px-6 py-5">
+			<ConversationContent className="gap-2 px-6 py-5">
 				{isEmpty ? (
-					<EmptyState needsBootstrap={needsBootstrap} />
+					<EmptyState
+						needsBootstrap={needsBootstrap}
+						connectionState={connectionState}
+					/>
 				) : (
 					<>
 						{messages.map(msg =>
@@ -42,17 +49,10 @@ export function ChatMessageList({
 								/>
 							)
 						)}
-						{streamingMessage &&
-							!hiddenMessageIds.has(
-								streamingMessage.id
-							) && (
-								<ChatMessageRow
-									key={streamingMessage.id}
-									message={streamingMessage}
-									toolResults={toolResults}
-									consumedToolCallIds={consumedToolCallIds}
-								/>
-							)}
+						<ConnectionIndicator
+							state={connectionState}
+							error={connectionError}
+						/>
 					</>
 				)}
 			</ConversationContent>

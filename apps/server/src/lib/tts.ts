@@ -279,7 +279,7 @@ export function inferMimeTypeFromOutputFormat(
 	outputFormat: string
 ): string {
 	if (outputFormat.startsWith('mp3')) return 'audio/mpeg'
-	if (outputFormat.startsWith('opus')) return 'audio/ogg'
+	if (outputFormat.startsWith('opus')) return 'audio/ogg; codecs=opus'
 	if (outputFormat.startsWith('pcm')) return 'audio/wav'
 	return 'application/octet-stream'
 }
@@ -374,8 +374,9 @@ export async function elevenLabsTTS(params: {
 		})
 
 		if (!response.ok) {
+			const body = await response.text().catch(() => '')
 			throw new Error(
-				`ElevenLabs API error (${response.status})`
+				`ElevenLabs API error (${response.status}): ${body}`
 			)
 		}
 

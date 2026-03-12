@@ -343,7 +343,8 @@ export const VoiceMessage = memo(
 				pendingSeekTimeRef.current = null
 				setPlaying(false)
 				cancelAnimationFrame(rafId)
-				syncPosition(0, resolveDuration(el))
+				const d = resolveDuration(el)
+				syncPosition(d, d)
 			}
 
 			const onMeta = () => {

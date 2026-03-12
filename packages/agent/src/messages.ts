@@ -12,6 +12,7 @@ import type {
 	AssistantMessage,
 	ToolResultMessage,
 	TextContent,
+	ImageContent,
 	ToolCall
 } from './types'
 import { formatBytes } from '@ellie/utils'
@@ -166,14 +167,53 @@ function assistantToModelMessage(
 function toolResultToModelMessage(
 	msg: ToolResultMessage
 ): ModelMessage {
-	const textContent = msg.content
-		.filter((c): c is TextContent => c.type === 'text')
-		.map(c => c.text)
-		.join('')
+	const modelContent: ContentPart[] = []
+
+	for (const part of msg.content) {
+		if (part.type === 'text') {
+			modelContent.push({
+				type: 'text',
+				content: part.text
+			})
+			continue
+		}
+
+		modelContent.push(toolResultImageToContentPart(part))
+	}
+
+	if (modelContent.every(isTextPart)) {
+		const textContent = modelContent
+			.map(part => part.content)
+			.join('')
+		return {
+			role: 'tool',
+			content: textContent,
+			toolCallId: msg.toolCallId
+		}
+	}
 
 	return {
 		role: 'tool',
-		content: textContent,
+		content: modelContent,
 		toolCallId: msg.toolCallId
+	}
+}
+
+function isTextPart(
+	part: ContentPart
+): part is Extract<ContentPart, { type: 'text' }> {
+	return part.type === 'text'
+}
+
+function toolResultImageToContentPart(
+	part: ImageContent
+): ContentPart {
+	return {
+		type: 'image',
+		source: {
+			type: 'data',
+			value: part.data,
+			mimeType: part.mimeType
+		}
 	}
 }

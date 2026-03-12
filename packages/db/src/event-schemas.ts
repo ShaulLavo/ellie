@@ -294,11 +294,16 @@ export const payloadSchemas: Record<
 		previousSessionId: v.string(),
 		message: v.string()
 	}),
-	// Channel delivery confirmation
+	// Channel delivery checkpoint (per outbound item)
 	channel_delivered: v.object({
 		channelId: v.string(),
 		accountId: v.string(),
 		conversationId: v.string(),
+		assistantRowId: v.number(),
+		replyIndex: v.number(),
+		payloadIndex: v.number(),
+		attachmentIndex: v.number(),
+		kind: v.picklist(['message', 'media', 'audio_voice']),
 		deliveredAt: v.number()
 	}),
 	memory_retain: v.object({

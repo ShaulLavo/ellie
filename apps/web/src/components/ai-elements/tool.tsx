@@ -260,7 +260,7 @@ export const ToolCard = ({
 
 	return (
 		<Collapsible
-			className={cn('group/tool not-prose mb-0', className)}
+			className={cn('group/tool not-prose my-1', className)}
 		>
 			<CollapsibleTrigger className="flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground">
 				<WrenchIcon className="size-4" />

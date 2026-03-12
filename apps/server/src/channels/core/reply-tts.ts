@@ -22,6 +22,9 @@ export interface TtsPayloadOptions {
 	/** Pre-resolved TTS config (with API key already resolved from credentials). */
 	config?: ElevenLabsTtsConfig
 
+	/** Full ElevenLabs overrides (voice settings, model, etc.). */
+	overrides?: ElevenLabsTtsOverrides
+
 	/** Temp directory for writing audio files. Default: os.tmpdir() */
 	tmpDir?: string
 }
@@ -117,9 +120,11 @@ export async function synthesizeToPayload(
 	const truncated = truncateForTts(clean)
 
 	// 3. Build overrides
-	const overrides: ElevenLabsTtsOverrides = {}
+	const overrides: ElevenLabsTtsOverrides = {
+		...options.overrides
+	}
 	if (options.voiceId) overrides.voiceId = options.voiceId
-	if (options.preferOpus)
+	if (options.preferOpus && !overrides.outputFormat)
 		overrides.outputFormat = 'opus_16000'
 
 	// 4. Synthesize

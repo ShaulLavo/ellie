@@ -17,6 +17,10 @@
 		"test": "turbo run test",
 		"studio": "cd packages/db && bunx drizzle-kit studio & cd packages/hindsight && bunx drizzle-kit studio --port 4984 &"
 	},
+	"dependencies": {
+		"react": "^19.3.0-canary-46103596-20260305",
+		"react-dom": "^19.3.0-canary-46103596-20260305"
+	},
 	"devDependencies": {
 		"@tailwindcss/typography": "^0.5.19",
 		"@types/babel__core": "^7.20.5",

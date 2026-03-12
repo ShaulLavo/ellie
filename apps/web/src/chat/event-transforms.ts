@@ -168,11 +168,8 @@ function parseDisplayDirectives(text: string): {
 		{ type: 'media-directive' }
 	>[]
 } {
-	// [[tts]] means "voice, not text" — suppress ALL text so the frontend
-	// never renders it. The assistant_audio event provides the audio player.
-	if (/\[\[tts(?::[^\]]*?)?\]\]/i.test(text)) {
-		return { text: '', mediaParts: [] }
-	}
+	const suppressTextForTts =
+		/\[\[tts(?::[^\]]*?)?\]\]/i.test(text)
 
 	const lines = text.split('\n')
 	const output: string[] = []
@@ -228,7 +225,9 @@ function parseDisplayDirectives(text: string): {
 	}
 
 	return {
-		text: collapsed.join('\n').trim(),
+		text: suppressTextForTts
+			? ''
+			: collapsed.join('\n').trim(),
 		mediaParts
 	}
 }
@@ -298,6 +297,13 @@ function extractImageGenParts(
 					status: 'complete',
 					uploadId: details.uploadId as string | undefined,
 					url: details.url as string | undefined,
+					images: details.images as
+						| Array<{
+								uploadId: string
+								url: string
+								mime: string
+						  }>
+						| undefined,
 					entries: details.entries as
 						| Array<{
 								id: string

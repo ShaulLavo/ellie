@@ -20,6 +20,7 @@ import {
 	CheckpointIcon
 } from '@/components/ai-elements/checkpoint'
 import { ToolCard } from '@/components/ai-elements/tool'
+import { ClickableImage } from '@/components/ui/clickable-image'
 import { ImageGenProgress } from './image-gen-progress'
 import { VoiceMessage } from './voice-message'
 import type { ToolResultPart } from '../utils'
@@ -28,16 +29,25 @@ export const PartRenderer = memo(
 	({
 		part,
 		isStreaming,
+		isTranscription,
 		toolResults,
 		consumedToolCallIds
 	}: {
 		part: ContentPart
 		isStreaming?: boolean
+		isTranscription?: boolean
 		toolResults?: Map<string, ToolResultPart>
 		consumedToolCallIds?: Set<string>
 	}) => {
 		switch (part.type) {
 			case 'text':
+				if (isTranscription) {
+					return (
+						<p className="text-sm italic text-muted-foreground">
+							"{part.text}"
+						</p>
+					)
+				}
 				return isStreaming ? (
 					<StreamingMessageResponse isStreaming>
 						{part.text}
@@ -173,17 +183,15 @@ export const PartRenderer = memo(
 			case 'image':
 				if (!part.url) return null
 				return (
-					<div className="my-2 max-w-sm">
-						<img
-							src={part.url}
-							alt={
-								(part as ContentPart & { name?: string })
-									.name ?? 'Image'
-							}
-							className="max-h-80 rounded-lg object-contain"
-							loading="lazy"
-						/>
-					</div>
+					<ClickableImage
+						src={part.url}
+						alt={
+							(part as ContentPart & { name?: string })
+								.name ?? 'Image'
+						}
+						className="max-h-80 rounded-lg object-contain"
+						containerClassName="my-2 max-w-sm"
+					/>
 				)
 			case 'video':
 				if (!part.url) return null
@@ -199,7 +207,7 @@ export const PartRenderer = memo(
 			case 'audio':
 				if (!part.url) return null
 				return (
-					<div className="my-2">
+					<div>
 						<VoiceMessage
 							src={part.url}
 							duration={part.duration}
@@ -282,14 +290,12 @@ export const PartRenderer = memo(
 
 				if (resolvedKind === 'image') {
 					return (
-						<div className="my-2 max-w-sm">
-							<img
-								src={resolvedUrl}
-								alt="Attached media"
-								className="max-h-80 rounded-lg object-contain"
-								loading="lazy"
-							/>
-						</div>
+						<ClickableImage
+							src={resolvedUrl}
+							alt="Attached media"
+							className="max-h-80 rounded-lg object-contain"
+							containerClassName="my-2 max-w-sm"
+						/>
 					)
 				}
 
@@ -361,3 +367,30 @@ export const PartRenderer = memo(
 		}
 	}
 )
+
+export function partHasVisibleOutput(
+	part: ContentPart,
+	consumedToolCallIds?: Set<string>
+): boolean {
+	switch (part.type) {
+		case 'text':
+			return part.text.trim().length > 0
+		case 'tool-call':
+			return !(
+				part.streaming &&
+				part.toolCallId &&
+				consumedToolCallIds?.has(part.toolCallId)
+			)
+		case 'tool-result':
+			return !(
+				part.toolCallId &&
+				consumedToolCallIds?.has(part.toolCallId)
+			)
+		case 'image':
+		case 'video':
+		case 'audio':
+			return !!part.url
+		default:
+			return true
+	}
+}

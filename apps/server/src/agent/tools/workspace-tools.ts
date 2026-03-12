@@ -133,16 +133,13 @@ function createWriteWorkspaceFileTool(
 		): Promise<AgentToolResult> => {
 			const params = rawParams as WriteParams
 
-			// Safety: only allow .md files in the workspace root
-			if (
-				!params.path.endsWith('.md') ||
-				params.path.includes('/')
-			) {
+			// Safety: prevent path traversal
+			if (params.path.includes('..')) {
 				return {
 					content: [
 						{
 							type: 'text',
-							text: `Invalid path: ${params.path} — only .md files in the workspace root are allowed.`
+							text: `Invalid path: ${params.path} — path traversal is not allowed.`
 						}
 					],
 					details: { path: params.path, written: false }

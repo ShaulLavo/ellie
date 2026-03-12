@@ -12,8 +12,6 @@ import { ChatMessageList } from './components/chat-message-list'
 import { SessionStatusBar } from './components/session-status-bar'
 import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
-import { ConnectionIndicator } from './components/connection-indicator'
-import { ServerDownOverlay } from './components/server-down-overlay'
 import { PromptInputWithCommands } from './components/prompt-input-with-commands'
 import { matchSlashCommand } from './utils'
 
@@ -92,17 +90,6 @@ export function ChatRoom({
 				onShowInfo={() => setShowSessionInfo(true)}
 			/>
 
-			<ConnectionIndicator
-				state={chat.connectionState}
-				error={chat.error}
-				onRetry={chat.retry}
-			/>
-			<ServerDownOverlay
-				state={chat.connectionState}
-				error={chat.error}
-				onRetry={chat.retry}
-			/>
-
 			<SessionList
 				open={showSessionList}
 				onOpenChange={setShowSessionList}
@@ -123,14 +110,17 @@ export function ChatRoom({
 				}
 			/>
 
-			<ChatMessageList
-				messages={chat.messages}
-				streamingMessage={chat.streamingMessage}
-				toolResults={toolResults}
-				consumedToolCallIds={consumedToolCallIds}
-				hiddenMessageIds={hiddenMessageIds}
-				needsBootstrap={needsBootstrap}
-			/>
+			<div className="relative flex flex-col flex-1 min-h-0">
+				<ChatMessageList
+					messages={allMessages}
+					toolResults={toolResults}
+					consumedToolCallIds={consumedToolCallIds}
+					hiddenMessageIds={hiddenMessageIds}
+					needsBootstrap={needsBootstrap}
+					connectionState={chat.connectionState}
+					connectionError={chat.error}
+				/>
+			</div>
 
 			<div className="relative px-6 pb-5 pt-3">
 				<div className="absolute inset-x-6 top-0 h-px bg-border/60" />

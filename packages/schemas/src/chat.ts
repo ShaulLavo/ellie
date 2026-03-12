@@ -115,6 +115,11 @@ export type ContentPart =
 			}>
 			uploadId?: string
 			url?: string
+			images?: Array<{
+				uploadId: string
+				url: string
+				mime: string
+			}>
 			recipe?: {
 				model: string
 				width: number
@@ -317,8 +322,11 @@ function formatPart(part: ContentPart): string {
 				? `[Media Unavailable: ${part.ref}]`
 				: `[Media: ${part.uploadId ?? part.ref}]`
 		case 'image-generation':
-			if (part.status === 'complete')
-				return `[Image Generated${part.uploadId ? `: ${part.uploadId}` : ''}]`
+			if (part.status === 'complete') {
+				const count =
+					part.images?.length ?? (part.uploadId ? 1 : 0)
+				return `[${count} Image(s) Generated${part.uploadId ? `: ${part.uploadId}` : ''}]`
+			}
 			if (part.status === 'error')
 				return `[Image Generation Failed: ${part.error ?? 'unknown'}]`
 			return `[Generating Image: ${part.phase ?? 'starting'}${part.step != null ? ` ${part.step}/${part.totalSteps}` : ''}]`

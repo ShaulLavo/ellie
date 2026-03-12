@@ -175,11 +175,16 @@ export interface EventPayloadMap {
 	// --- Error ---
 	error: { message: string; code?: string }
 
-	// --- Channel delivery ---
+	// --- Channel delivery checkpoint (per outbound item) ---
 	channel_delivered: {
 		channelId: string
 		accountId: string
 		conversationId: string
+		assistantRowId: number
+		replyIndex: number
+		payloadIndex: number
+		attachmentIndex: number
+		kind: 'message' | 'media' | 'audio_voice'
 		deliveredAt: number
 	}
 

@@ -4,6 +4,10 @@
   "workspaces": {
     "": {
       "name": "ellie",
+      "dependencies": {
+        "react": "^19.3.0-canary-46103596-20260305",
+        "react-dom": "^19.3.0-canary-46103596-20260305",
+      },
       "devDependencies": {
         "@tailwindcss/typography": "^0.5.19",
         "@types/babel__core": "^7.20.5",
@@ -132,8 +136,8 @@
         "motion": "12.34.0",
         "nanoid": "^5.1.6",
         "next-themes": "0.4.6",
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
+        "react": "^19.3.0-canary-46103596-20260305",
+        "react-dom": "^19.3.0-canary-46103596-20260305",
         "react-json-view-lite": "2.5.0",
         "react-jsx-parser": "^2.4.1",
         "react-pdf": "10.3.0",
@@ -2465,9 +2469,9 @@
 
     "rc": ["rc@1.2.8", "", { "dependencies": { "deep-extend": "^0.6.0", "ini": "~1.3.0", "minimist": "^1.2.0", "strip-json-comments": "~2.0.1" }, "bin": { "rc": "./cli.js" } }, "sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw=="],
 
-    "react": ["react@19.2.4", "", {}, "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ=="],
+    "react": ["react@19.3.0-canary-46103596-20260305", "", {}, "sha512-didbQF2PPuqv9GbxmIhfBSctPrye+oIDv3bjxKNjbRmy1o0zPwDYBMZ75cX1fMevZUOSfLtWCgipO4GadSNwkQ=="],
 
-    "react-dom": ["react-dom@19.2.4", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.4" } }, "sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ=="],
+    "react-dom": ["react-dom@19.3.0-canary-46103596-20260305", "", { "dependencies": { "scheduler": "0.28.0-canary-46103596-20260305" }, "peerDependencies": { "react": "19.3.0-canary-46103596-20260305" } }, "sha512-yDYAj5jQVxt443YarpckJYDBJwLmKiypG29Uh+nl/0pTmt1qrwUhmFFxMj20JvjI0uQt5+UDMSZzjU17S2vjbw=="],
 
     "react-json-view-lite": ["react-json-view-lite@2.5.0", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-tk7o7QG9oYyELWHL8xiMQ8x4WzjCzbWNyig3uexmkLb54r8jO0yH3WCWx8UZS0c49eSA4QUmG5caiRJ8fAn58g=="],
 
@@ -2565,7 +2569,7 @@
 
     "safer-buffer": ["safer-buffer@2.1.2", "", {}, "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="],
 
-    "scheduler": ["scheduler@0.27.0", "", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
+    "scheduler": ["scheduler@0.28.0-canary-46103596-20260305", "", {}, "sha512-7eRWfbXcCFMZRWhFbXIIll7lkd67AYZx3Dq/q99gnUnbFaZiwgQPowUIElSRBo16AfSK2ilEp7faCHSDShqCEA=="],
 
     "semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 

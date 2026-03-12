@@ -113,12 +113,23 @@ export interface ResolvedGenerationConfig {
 
 // ── Generation result ───────────────────────────────────────────────────────
 
+export interface GeneratedImage {
+	uploadId: string
+	url: string
+	mime: string
+}
+
 export interface GenerationResult {
 	success: boolean
 	request: ResolvedGenerationConfig
+	/** @deprecated Use `images` array instead */
 	uploadId?: string
+	/** @deprecated Use `images` array instead */
 	url?: string
+	/** @deprecated Use `images` array instead */
 	mime?: string
+	/** All generated images (length matches batchSize) */
+	images?: GeneratedImage[]
 	durationMs: number
 	error?: string
 }
@@ -157,6 +168,11 @@ export interface WorkerResultEvent {
 	width: number
 	height: number
 	seed: number
+	images?: Array<{
+		imagePath: string
+		width: number
+		height: number
+	}>
 }
 
 export interface WorkerErrorEvent {

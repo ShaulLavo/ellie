@@ -227,8 +227,8 @@ export class TtsPostProcessor {
 		runId: string,
 		sessionId: string
 	): Promise<void> {
-		// 1. Extract final assistant text and event IDs from this run
-		const { text, eventIds } = this.#extractAssistantText(
+		// 1. Extract the final assistant text from this run
+		const text = this.#extractAssistantText(
 			sessionId,
 			runId
 		)
@@ -336,11 +336,6 @@ export class TtsPostProcessor {
 			runId,
 			`tts:${runId}`
 		)
-
-		// 10. Clear text from assistant_message events (audio replaces text)
-		for (const evtId of eventIds) {
-			this.#clearTextFromEvent(evtId, sessionId)
-		}
 	}
 
 	/**
@@ -387,13 +382,12 @@ export class TtsPostProcessor {
 	#extractAssistantText(
 		sessionId: string,
 		runId: string
-	): { text: string; eventIds: number[] } {
+	): string {
 		const rows = this.#store.queryRunEvents(
 			sessionId,
 			runId
 		)
-		const texts: string[] = []
-		const eventIds: number[] = []
+		let lastText = ''
 
 		for (const row of rows) {
 			if (row.type !== 'assistant_message') continue
@@ -413,51 +407,17 @@ export class TtsPostProcessor {
 				  }
 				| undefined
 			if (!message?.content) continue
+			const texts: string[] = []
 			for (const block of message.content) {
 				if (block.type === 'text' && block.text) {
 					texts.push(block.text)
 				}
 			}
-			eventIds.push(row.id)
+			if (texts.length === 0) continue
+			lastText = texts.join('\n')
 		}
 
-		return { text: texts.join('\n'), eventIds }
-	}
-
-	#clearTextFromEvent(
-		eventId: number,
-		sessionId: string
-	): void {
-		try {
-			const rows = this.#store.queryEvents(sessionId)
-			const row = rows.find(r => r.id === eventId)
-			if (!row) return
-
-			const parsed = JSON.parse(row.payload as string)
-			const message = parsed.message as Record<
-				string,
-				unknown
-			>
-			if (!message?.content) return
-
-			// Clear all text blocks — the audio event replaces the text
-			const content = message.content as Array<{
-				type: string
-				text?: string
-			}>
-			for (const block of content) {
-				if (block.type === 'text') {
-					block.text = ''
-				}
-			}
-
-			this.#store.updateEvent(eventId, parsed, sessionId)
-		} catch (err) {
-			console.warn(
-				'[tts-post-processor] Failed to clear text from event:',
-				err
-			)
-		}
+		return lastText
 	}
 
 	shutdown(): void {

@@ -123,7 +123,16 @@ export async function runRetain(
 	runId: string,
 	force?: boolean
 ): Promise<number> {
-	if (!deps.memory) return 0
+	if (!deps.memory) {
+		console.log(
+			'[retain] skipped: no memory orchestrator configured'
+		)
+		return 0
+	}
+
+	console.log(
+		`[retain] runRetain called session=${sessionId} runId=${runId}`
+	)
 
 	try {
 		const result = await withTracedMemory(deps, m =>

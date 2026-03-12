@@ -7,6 +7,8 @@
  */
 
 import * as v from 'valibot'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type {
 	AgentTool,
 	AgentToolResult,
@@ -331,26 +333,40 @@ export function createImageGenTool(
 				}))
 			}
 
+			const imageCount = result.images?.length ?? 1
+			const uploadIds =
+				result.images?.map(i => i.uploadId) ??
+				(result.uploadId ? [result.uploadId] : [])
+			const imageParts = loadToolResultImages(
+				uploadIds,
+				deps.dataDir,
+				result.images?.[0]?.mime ??
+					result.mime ??
+					'image/png'
+			)
+
 			return {
 				content: [
 					{
 						type: 'text',
 						text:
-							`Image generated successfully.\n` +
+							`${imageCount} image(s) generated successfully.\n` +
 							`Model: ${webRecipe.model}\n` +
 							`Dimensions: ${webRecipe.width}x${webRecipe.height}\n` +
 							`Steps: ${webRecipe.steps}, CFG: ${webRecipe.cfg}\n` +
 							`Seed: ${webRecipe.seed}\n` +
 							`Duration: ${(result.durationMs / 1000).toFixed(1)}s\n` +
-							`Upload ID: ${result.uploadId}\n` +
-							`The image has been saved and will be automatically included in your reply.`
-					}
+							`Upload IDs: ${uploadIds.join(', ')}\n` +
+							`The image(s) have been saved and will be automatically included in your reply.`
+					},
+					...imageParts
 				],
 				details: {
 					success: true,
 					recipe: webRecipe,
 					uploadId: result.uploadId,
 					url: result.url,
+					images: result.images,
 					elapsedMs: result.durationMs,
 					entries: progressSnapshot.entries,
 					completedPhases: progressSnapshot.completedPhases
@@ -358,6 +374,42 @@ export function createImageGenTool(
 			}
 		}
 	}
+}
+
+function loadToolResultImages(
+	uploadIds: string[],
+	dataDir: string,
+	defaultMimeType: string
+): Array<{
+	type: 'image'
+	data: string
+	mimeType: string
+}> {
+	const imageParts: Array<{
+		type: 'image'
+		data: string
+		mimeType: string
+	}> = []
+
+	for (const uploadId of uploadIds) {
+		const filePath = join(dataDir, 'uploads', uploadId)
+
+		try {
+			const bytes = readFileSync(filePath)
+			imageParts.push({
+				type: 'image',
+				data: bytes.toString('base64'),
+				mimeType: defaultMimeType
+			})
+		} catch (error) {
+			console.warn(
+				`[image-gen] failed to load generated image for tool result: ${uploadId}`,
+				error
+			)
+		}
+	}
+
+	return imageParts
 }
 
 // ── Progress adapter ─────────────────────────────────────────────────

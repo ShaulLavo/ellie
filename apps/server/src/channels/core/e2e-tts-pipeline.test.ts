@@ -12,9 +12,15 @@ import { RealtimeStore } from '../../lib/realtime-store'
 import type { ChannelProvider } from './provider'
 import type { ChannelDeliveryTarget } from './types'
 import type { TtsAutoMode } from './auto-tts'
+import { TtsPostProcessor } from '../../lib/tts-post-processor'
 import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
+import {
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync
+} from 'fs'
 
 // ── Mock TTS synthesis so no real API calls are made ────────────────────
 
@@ -150,12 +156,56 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			store,
 			getProvider: id =>
 				id === 'test' ? mockProvider : undefined,
+			dataDir: dir,
 			getTtsConfig: () => ({
 				mode: ttsMode,
 				maxTextLength: 1500,
 				minTextLength: 10
 			})
 		})
+	}
+
+	function attachTtsPostProcessor(
+		registry: ChannelDeliveryRegistry
+	) {
+		const blobSink = {
+			write: async (opts: {
+				content: string | Buffer
+				mimeType: string
+				ext: string
+			}) => {
+				const uploadId = `trace/test-run/tts-post/tts_output/mock.${opts.ext}`
+				const uploadPath = join(dir, 'uploads', uploadId)
+				mkdirSync(dirname(uploadPath), {
+					recursive: true
+				})
+				writeFileSync(
+					uploadPath,
+					new Uint8Array(
+						Buffer.isBuffer(opts.content)
+							? opts.content
+							: Buffer.from(opts.content)
+					)
+				)
+				return {
+					uploadId,
+					url: `/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`,
+					storagePath: uploadPath,
+					mimeType: opts.mimeType,
+					sizeBytes: 0,
+					ohash: 'mock',
+					role: 'tts_output'
+				}
+			}
+		}
+
+		registry.setTtsPostProcessor(
+			new TtsPostProcessor({
+				store,
+				blobSink: blobSink as never,
+				dataDir: dir
+			})
+		)
 	}
 
 	function emitRunWithText(
@@ -197,7 +247,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'The weather is sunny and 72 degrees Fahrenheit today.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		// TTS was called
 		expect(mockSynthesize).toHaveBeenCalledTimes(1)
@@ -230,7 +280,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'The weather is sunny and 72 degrees Fahrenheit today.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		// No TTS
 		expect(mockSynthesize).toHaveBeenCalledTimes(0)
@@ -263,7 +313,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'This should be spoken as a voice note reply.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		expect(mockSynthesize).toHaveBeenCalledTimes(1)
 		expect(sentMedia).toHaveLength(1)
@@ -292,7 +342,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'This should NOT be spoken even though inbound was audio.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		expect(mockSynthesize).toHaveBeenCalledTimes(0)
 		expect(sentMessages).toHaveLength(1)
@@ -320,7 +370,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'Here is the weather forecast for today. [[tts]]'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		expect(mockSynthesize).toHaveBeenCalledTimes(1)
 		expect(sentMedia).toHaveLength(1)
@@ -348,7 +398,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'Here is the weather forecast without any tag.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		expect(mockSynthesize).toHaveBeenCalledTimes(0)
 		expect(sentMessages).toHaveLength(1)
@@ -372,7 +422,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 		emitRunWithText(sessionId, runId, 'OK')
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		// Too short for TTS → text only
 		expect(mockSynthesize).toHaveBeenCalledTimes(0)
@@ -405,13 +455,51 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			`Check this out\nMEDIA:${mediaPath}`
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		// TTS was NOT called — explicit media takes priority
 		expect(mockSynthesize).toHaveBeenCalledTimes(0)
 		// Sent as media via the directive path
 		expect(sentMedia).toHaveLength(1)
 		expect(sentMedia[0].media.mimetype).toBe(
+			'audio/ogg; codecs=opus'
+		)
+
+		registry.shutdown()
+	})
+
+	test('explicit [[tts]] with media sends the media reply and a voice note', async () => {
+		const registry = createRegistry('off')
+		const sessionId = 'test-session'
+		const runId = 'run-explicit-tts-media'
+		const target: ChannelDeliveryTarget = {
+			channelId: 'test',
+			accountId: 'default',
+			conversationId: 'conv-explicit-tts-media'
+		}
+
+		const mediaPath = join(dir, 'preview.png')
+		writeFileSync(mediaPath, 'fake-image')
+		attachTtsPostProcessor(registry)
+
+		registry.register(runId, sessionId, target)
+		registry.watchSession(sessionId)
+
+		emitRunWithText(
+			sessionId,
+			runId,
+			`Here are the options. [[tts]]\nMEDIA:${mediaPath}`
+		)
+
+		await new Promise(r => setTimeout(r, 150))
+
+		expect(mockSynthesize).toHaveBeenCalledTimes(1)
+		expect(sentMessages).toHaveLength(0)
+		expect(sentMedia).toHaveLength(2)
+		expect(sentMedia[0].text).toBe('Here are the options.')
+		expect(sentMedia[0].media.mimetype).toBe('image/png')
+		expect(sentMedia[1].text).toBe('')
+		expect(sentMedia[1].media.mimetype).toBe(
 			'audio/ogg; codecs=opus'
 		)
 
@@ -441,7 +529,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'This should be text because TTS will fail.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		// TTS was attempted but failed
 		expect(mockSynthesize).toHaveBeenCalledTimes(1)
@@ -481,7 +569,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			'Multi-target voice note delivery test message.'
 		)
 
-		await new Promise(r => setTimeout(r, 100))
+		await new Promise(r => setTimeout(r, 150))
 
 		// TTS called once (payload is shared)
 		expect(mockSynthesize).toHaveBeenCalledTimes(1)

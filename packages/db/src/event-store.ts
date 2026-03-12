@@ -391,13 +391,14 @@ export class EventStore {
 		}
 	}
 
-	// ── Undelivered channel run recovery ─────────────────────────────────
+	// ── Channel run recovery ─────────────────────────────────────────────
 
 	/**
-	 * Find channel-originated runs that closed but were never delivered.
-	 * Returns the channel source info needed to reconstruct delivery targets.
+	 * Find channel-originated runs that closed within the age window.
+	 * Returns candidate runs — the caller determines which items
+	 * remain undelivered by comparing against delivery checkpoints.
 	 */
-	findUndeliveredChannelRuns(maxAgeMs: number): Array<{
+	findCandidateChannelRuns(maxAgeMs: number): Array<{
 		sessionId: string
 		runId: string
 		channelId: string
@@ -422,16 +423,7 @@ export class EventStore {
 				WHERE um.type = 'user_message'
 					AND um.run_id IS NOT NULL
 					AND json_extract(um.payload, '$.source.channelId') IS NOT NULL
-					AND um.created_at >= ?
-					AND NOT EXISTS (
-						SELECT 1 FROM events cd
-						WHERE cd.session_id = um.session_id
-							AND cd.run_id     = um.run_id
-							AND cd.type       = 'channel_delivered'
-							AND json_extract(cd.payload, '$.channelId')      = json_extract(um.payload, '$.source.channelId')
-							AND json_extract(cd.payload, '$.accountId')      = json_extract(um.payload, '$.source.accountId')
-							AND json_extract(cd.payload, '$.conversationId') = json_extract(um.payload, '$.source.conversationId')
-					)`
+					AND um.created_at >= ?`
 			)
 			.all(cutoff) as Array<{
 			sessionId: string
@@ -439,6 +431,54 @@ export class EventStore {
 			channelId: string
 			accountId: string
 			conversationId: string
+		}>
+		return rows
+	}
+
+	/**
+	 * Load all delivery checkpoints for a given run + target.
+	 * Returns the per-item checkpoint data used to compute which
+	 * outbound items have already been sent.
+	 */
+	findDeliveryCheckpoints(
+		sessionId: string,
+		runId: string,
+		channelId: string,
+		accountId: string,
+		conversationId: string
+	): Array<{
+		replyIndex: number
+		payloadIndex: number
+		attachmentIndex: number
+		kind: string
+	}> {
+		const rows = this.sqlite
+			.query(
+				`SELECT
+					json_extract(payload, '$.replyIndex')      AS replyIndex,
+					json_extract(payload, '$.payloadIndex')    AS payloadIndex,
+					json_extract(payload, '$.attachmentIndex') AS attachmentIndex,
+					json_extract(payload, '$.kind')            AS kind
+				FROM events
+				WHERE session_id = ?
+					AND run_id = ?
+					AND type = 'channel_delivered'
+					AND json_extract(payload, '$.channelId') = ?
+					AND json_extract(payload, '$.accountId') = ?
+					AND json_extract(payload, '$.conversationId') = ?
+					AND json_extract(payload, '$.replyIndex') IS NOT NULL`
+			)
+			.all(
+				sessionId,
+				runId,
+				channelId,
+				accountId,
+				conversationId
+			) as Array<{
+			replyIndex: number
+			payloadIndex: number
+			attachmentIndex: number
+			kind: string
 		}>
 		return rows
 	}

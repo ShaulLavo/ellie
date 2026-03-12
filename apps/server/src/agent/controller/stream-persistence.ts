@@ -28,22 +28,22 @@ export interface StreamState {
 	currentMessageRowId: number | null
 	/** Map of toolCallId → row ID for in-flight tool_execution rows */
 	currentToolRowIds: Map<string, number>
-	/** Upload IDs from completed image-gen tool executions in this run */
-	pendingImageGenUploads: string[]
+	/** Upload IDs from completed tool executions in this run */
+	pendingToolUploads: string[]
 }
 
 export function createStreamState(): StreamState {
 	return {
 		currentMessageRowId: null,
 		currentToolRowIds: new Map(),
-		pendingImageGenUploads: []
+		pendingToolUploads: []
 	}
 }
 
 export function resetStreamState(state: StreamState): void {
 	state.currentMessageRowId = null
 	state.currentToolRowIds.clear()
-	state.pendingImageGenUploads.length = 0
+	state.pendingToolUploads.length = 0
 }
 
 function toUploadContentUrl(uploadId: string): string {
@@ -105,10 +105,10 @@ function normalizeAssistantMessage(
 }
 
 /**
- * Auto-inject MEDIA directives for image-gen uploads into the assistant message.
+ * Auto-inject MEDIA directives for tool-generated uploads into the assistant message.
  * Appends normalized MEDIA lines for any uploads not already referenced in the text.
  */
-function injectImageGenMedia(
+function injectToolMedia(
 	message: AssistantMessage,
 	uploadIds: string[]
 ): AssistantMessage {
@@ -259,13 +259,23 @@ export function handleStreamingEvent(
 					event.message as AssistantMessage
 				)
 
-				// Auto-inject MEDIA directives for pending image-gen uploads
-				if (state.pendingImageGenUploads.length > 0) {
-					message = injectImageGenMedia(
-						message,
-						state.pendingImageGenUploads
+				// Tool executions finish after the assistant message that requested them.
+				// That means any pending uploads always belong on this assistant reply,
+				// even if this reply also contains the next tool call.
+				if (state.pendingToolUploads.length > 0) {
+					console.log(
+						`[stream-persist] message_end: injecting ${state.pendingToolUploads.length} MEDIA directive(s):`,
+						state.pendingToolUploads
 					)
-					state.pendingImageGenUploads.length = 0
+					message = injectToolMedia(
+						message,
+						state.pendingToolUploads
+					)
+					state.pendingToolUploads.length = 0
+				} else {
+					console.log(
+						'[stream-persist] message_end: no pending uploads to inject'
+					)
 				}
 
 				deps.store.updateEvent(
@@ -340,44 +350,58 @@ export function handleStreamingEvent(
 		const rowId = state.currentToolRowIds.get(
 			event.toolCallId
 		)
-		if (!rowId) return true
-		persistSafe(
-			deps,
-			sessionId,
-			runId,
-			'tool_execution (final)',
-			'update_failed',
-			() => {
-				deps.store.updateEvent(
-					rowId,
-					{
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						result: event.result,
-						isError: event.isError,
-						status: event.isError
-							? ('error' as const)
-							: ('complete' as const),
-						elapsedMs: event.elapsedMs
-					},
-					sessionId
-				)
-			}
-		)
-		state.currentToolRowIds.delete(event.toolCallId)
+		if (rowId) {
+			persistSafe(
+				deps,
+				sessionId,
+				runId,
+				'tool_execution (final)',
+				'update_failed',
+				() => {
+					deps.store.updateEvent(
+						rowId,
+						{
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							result: event.result,
+							isError: event.isError,
+							status: event.isError
+								? ('error' as const)
+								: ('complete' as const),
+							elapsedMs: event.elapsedMs
+						},
+						sessionId
+					)
+				}
+			)
+			state.currentToolRowIds.delete(event.toolCallId)
+		}
 
-		// Track successful image-gen uploads for auto-injection into assistant message
-		if (
-			event.toolName === 'generate_image' &&
-			!event.isError
-		) {
+		// Track successful tool uploads for auto-injection into assistant message.
+		// Always runs, even if the tool_execution DB row is missing.
+		if (!event.isError) {
 			const details = (
 				event.result as {
-					details?: { success?: boolean; uploadId?: string }
+					details?: {
+						success?: boolean
+						uploadId?: string
+						images?: Array<{
+							uploadId: string
+						}>
+					}
 				}
 			)?.details
-			if (details?.success && details.uploadId) {
-				state.pendingImageGenUploads.push(details.uploadId)
+			console.log(
+				`[stream-persist] tool_execution_end: toolName=${event.toolName} success=${details?.success} uploadId=${details?.uploadId} images=${details?.images?.length ?? 0}`
+			)
+			if (details?.success) {
+				if (details.images && details.images.length > 0) {
+					for (const img of details.images) {
+						state.pendingToolUploads.push(img.uploadId)
+					}
+				} else if (details.uploadId) {
+					state.pendingToolUploads.push(details.uploadId)
+				}
 			}
 		}
 
