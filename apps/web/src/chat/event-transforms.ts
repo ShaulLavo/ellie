@@ -168,9 +168,6 @@ function parseDisplayDirectives(text: string): {
 		{ type: 'media-directive' }
 	>[]
 } {
-	const suppressTextForTts =
-		/\[\[tts(?::[^\]]*?)?\]\]/i.test(text)
-
 	const lines = text.split('\n')
 	const output: string[] = []
 	const mediaParts: Extract<
@@ -225,9 +222,7 @@ function parseDisplayDirectives(text: string): {
 	}
 
 	return {
-		text: suppressTextForTts
-			? ''
-			: collapsed.join('\n').trim(),
+		text: collapsed.join('\n').trim(),
 		mediaParts
 	}
 }
@@ -604,6 +599,49 @@ export function eventToStored(
 		parts: filteredParts,
 		seq: row.seq,
 		sender,
-		thinking
+		thinking,
+		runId: row.runId
 	}
+}
+
+/**
+ * Merge assistant_audio messages into their parent assistant_message
+ * so audio + transcript render as a single message (like user voice messages).
+ *
+ * An assistant_audio message is an agent message whose parts are all audio
+ * and that shares a runId with a preceding assistant_message.
+ */
+export function mergeAssistantAudio(
+	msgs: StoredChatMessage[]
+): StoredChatMessage[] {
+	const result: StoredChatMessage[] = []
+	for (const msg of msgs) {
+		const isAudioOnly =
+			msg.sender === 'agent' &&
+			msg.runId &&
+			msg.parts.length > 0 &&
+			msg.parts.every(p => p.type === 'audio')
+
+		if (isAudioOnly) {
+			// Find the last assistant message with the same runId
+			let merged = false
+			for (let i = result.length - 1; i >= 0; i--) {
+				if (
+					result[i].sender === 'agent' &&
+					result[i].runId === msg.runId
+				) {
+					result[i] = {
+						...result[i],
+						parts: [...result[i].parts, ...msg.parts]
+					}
+					merged = true
+					break
+				}
+			}
+			if (!merged) result.push(msg)
+			continue
+		}
+		result.push(msg)
+	}
+	return result
 }

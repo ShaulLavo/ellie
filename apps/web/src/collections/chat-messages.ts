@@ -18,6 +18,7 @@ export interface StoredChatMessage {
 	isStreaming?: boolean
 	streamGroupId?: string
 	thinking?: string
+	runId?: string | null
 }
 
 /**

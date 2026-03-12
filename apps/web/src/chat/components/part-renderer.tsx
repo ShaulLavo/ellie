@@ -127,8 +127,11 @@ export const PartRenderer = memo(
 						/>
 						<ReasoningContent className="mt-2 text-xs leading-relaxed">
 							{recalledMemories
-								.map((m, i) => `${i + 1}. ${m.text}`)
-								.join('\n')}
+								.map(
+									(m, i) =>
+										`${i + 1}. ${m.text.replace(/\|/g, '—')}`
+								)
+								.join('\n\n')}
 						</ReasoningContent>
 					</Reasoning>
 				)
@@ -174,8 +177,11 @@ export const PartRenderer = memo(
 						/>
 						<ReasoningContent className="mt-2 text-xs leading-relaxed">
 							{facts
-								.map((f, i) => `${i + 1}. ${f}`)
-								.join('\n')}
+								.map(
+									(f, i) =>
+										`${i + 1}. ${f.replace(/\|/g, '—')}`
+								)
+								.join('\n\n')}
 						</ReasoningContent>
 					</Reasoning>
 				)
@@ -367,30 +373,3 @@ export const PartRenderer = memo(
 		}
 	}
 )
-
-export function partHasVisibleOutput(
-	part: ContentPart,
-	consumedToolCallIds?: Set<string>
-): boolean {
-	switch (part.type) {
-		case 'text':
-			return part.text.trim().length > 0
-		case 'tool-call':
-			return !(
-				part.streaming &&
-				part.toolCallId &&
-				consumedToolCallIds?.has(part.toolCallId)
-			)
-		case 'tool-result':
-			return !(
-				part.toolCallId &&
-				consumedToolCallIds?.has(part.toolCallId)
-			)
-		case 'image':
-		case 'video':
-		case 'audio':
-			return !!part.url
-		default:
-			return true
-	}
-}

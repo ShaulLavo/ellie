@@ -11,10 +11,8 @@ import {
 import { memo } from 'react'
 import type { ToolResultPart } from '../utils'
 import { formatTime } from '../utils'
-import {
-	PartRenderer,
-	partHasVisibleOutput
-} from './part-renderer'
+import { PartRenderer } from './part-renderer'
+import { partHasVisibleOutput } from './part-utils'
 
 export const ChatMessageRow = memo(
 	({
@@ -50,9 +48,18 @@ export const ChatMessageRow = memo(
 		const isUser =
 			message.sender === 'human' ||
 			message.sender === 'user'
-		const visibleParts = message.parts.filter(part =>
-			partHasVisibleOutput(part, consumedToolCallIds)
-		)
+		const visibleParts = message.parts
+			.filter(part =>
+				partHasVisibleOutput(part, consumedToolCallIds)
+			)
+			.sort((a, b) => {
+				// Audio parts render before text transcriptions
+				if (a.type === 'audio' && b.type !== 'audio')
+					return -1
+				if (a.type !== 'audio' && b.type === 'audio')
+					return 1
+				return 0
+			})
 		const hasAudio = message.parts.some(
 			p => p.type === 'audio'
 		)
