@@ -6,7 +6,7 @@ import {
 	useState
 } from 'react'
 import type { StoredChatMessage } from '@/collections/chat-messages'
-import { StreamClient } from '@/lib/stream'
+import { StreamClient, type EventRow } from '@/lib/stream'
 import {
 	type SessionStats,
 	EMPTY_STATS
@@ -14,8 +14,7 @@ import {
 import {
 	handleSnapshot,
 	handleAppend,
-	handleUpdate,
-	type StreamDispatch
+	handleUpdate
 } from '../utils/stream-callbacks'
 
 interface StreamConnectionResult {
@@ -63,32 +62,35 @@ export function useStreamConnection(
 	}
 
 	const streamRef = useRef<StreamClient | null>(null)
-	const streamingMessageRef =
-		useRef<StoredChatMessage | null>(null)
 
-	useEffect(() => {
-		streamingMessageRef.current = streamingMessage
-	}, [streamingMessage])
+	const getDispatch = useEffectEvent(() => ({
+		setStreamingMessage,
+		setSessionStats,
+		setIsAgentRunning,
+		syncWrite,
+		syncReplaceAll,
+		getStreamingMessage: () => streamingMessage
+	}))
 
-	const buildDispatch = useEffectEvent(
-		(): StreamDispatch => ({
-			setStreamingMessage,
-			setSessionStats,
-			setIsAgentRunning,
-			syncWrite,
-			syncReplaceAll,
-			getStreamingMessage: () => streamingMessageRef.current
-		})
+	const onStreamSnapshot = useEffectEvent(
+		(events: EventRow[], sessionChanged: boolean) =>
+			handleSnapshot(events, sessionChanged, getDispatch())
+	)
+
+	const onStreamAppend = useEffectEvent((event: EventRow) =>
+		handleAppend(event, getDispatch())
+	)
+
+	const onStreamUpdate = useEffectEvent((event: EventRow) =>
+		handleUpdate(event, getDispatch())
 	)
 
 	useEffect(() => {
-		const dispatch = buildDispatch()
-
 		const stream = new StreamClient(sessionId, {
 			onSnapshot: (events, sessionChanged) =>
-				handleSnapshot(events, sessionChanged, dispatch),
-			onAppend: event => handleAppend(event, dispatch),
-			onUpdate: event => handleUpdate(event, dispatch),
+				onStreamSnapshot(events, sessionChanged),
+			onAppend: event => onStreamAppend(event),
+			onUpdate: event => onStreamUpdate(event),
 			onStateChange(state) {
 				setConnectionState(state)
 				if (state === 'connected') setError(null)

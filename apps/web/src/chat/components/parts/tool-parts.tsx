@@ -32,7 +32,7 @@ export function ToolCallPartRenderer({
 		: undefined
 	return (
 		<ToolCard
-			className="my-2"
+			className="my-1"
 			name={part.name}
 			args={part.args}
 			result={matched?.result}
@@ -43,21 +43,13 @@ export function ToolCallPartRenderer({
 }
 
 export function ToolResultPartRenderer({
-	part,
-	consumedToolCallIds
+	part
 }: {
 	part: ToolResultPartType
-	consumedToolCallIds?: Set<string>
 }) {
-	if (
-		part.toolCallId &&
-		consumedToolCallIds?.has(part.toolCallId)
-	) {
-		return null
-	}
 	return (
 		<ToolCard
-			className="my-2"
+			className="my-1"
 			name={part.toolName ?? 'Result'}
 			args={{}}
 			result={part.result}

@@ -245,7 +245,7 @@ export const QueueSectionTrigger = ({
 	<CollapsibleTrigger>
 		<button
 			className={cn(
-				'group flex w-full items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-left font-medium text-muted-foreground text-sm transition-colors hover:bg-muted',
+				'group flex w-full items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-left font-medium text-muted-foreground text-sm transition-colors hover:bg-muted',
 				className
 			)}
 			type="button"
@@ -275,11 +275,11 @@ export const QueueSectionLabel = ({
 		className={cn('flex items-center gap-2', className)}
 		{...props}
 	>
-		<CaretDownIcon className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
 		{icon}
 		<span>
 			{count} {label}
 		</span>
+		<CaretDownIcon className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
 	</span>
 )
 

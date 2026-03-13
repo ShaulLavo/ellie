@@ -20,7 +20,7 @@ export function MemoryPartRenderer({
 	const recalledMemories = part.memories ?? []
 	if (recalledMemories.length === 0) {
 		return (
-			<div className="flex items-center gap-2">
+			<div className="my-1 flex items-center gap-2">
 				<BookOpenIcon className="size-4 text-muted-foreground" />
 				<span className="font-mono text-[11px] tracking-wide text-muted-foreground">
 					recalled {part.count}{' '}
@@ -33,7 +33,7 @@ export function MemoryPartRenderer({
 		)
 	}
 	return (
-		<Reasoning defaultOpen={false} className="mb-0">
+		<Reasoning defaultOpen={false} className="my-1">
 			<ReasoningTrigger
 				className="text-xs"
 				icon={<BookOpenIcon className="size-4" />}
@@ -49,11 +49,8 @@ export function MemoryPartRenderer({
 			/>
 			<ReasoningContent className="mt-2 text-xs leading-relaxed">
 				{recalledMemories
-					.map(
-						(m, i) =>
-							`${i + 1}. ${m.text.replace(/\|/g, '—')}`
-					)
-					.join('\n\n')}
+					.map(m => m.text)
+					.join('\n\n---\n\n')}
 			</ReasoningContent>
 		</Reasoning>
 	)
@@ -72,7 +69,7 @@ export function MemoryRetainPartRenderer({
 	const label = `${modelTag}stored ${part.factsStored} ${part.factsStored === 1 ? 'fact' : 'facts'}${timingTag}`
 	if (facts.length === 0) {
 		return (
-			<div className="flex items-center gap-2">
+			<div className="my-1 flex items-center gap-2">
 				<BookOpenIcon className="size-4 text-muted-foreground" />
 				<span className="font-mono text-[11px] tracking-wide text-muted-foreground">
 					{label}
@@ -81,7 +78,7 @@ export function MemoryRetainPartRenderer({
 		)
 	}
 	return (
-		<Reasoning defaultOpen={false} className="mb-0">
+		<Reasoning defaultOpen={false} className="my-1">
 			<ReasoningTrigger
 				className="text-xs"
 				icon={<BookOpenIcon className="size-4" />}
@@ -92,11 +89,7 @@ export function MemoryRetainPartRenderer({
 				)}
 			/>
 			<ReasoningContent className="mt-2 text-xs leading-relaxed">
-				{facts
-					.map(
-						(f, i) => `${i + 1}. ${f.replace(/\|/g, '—')}`
-					)
-					.join('\n\n')}
+				{facts.join('\n\n---\n\n')}
 			</ReasoningContent>
 		</Reasoning>
 	)

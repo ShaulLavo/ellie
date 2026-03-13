@@ -54,12 +54,7 @@ export function PartRenderer({
 				/>
 			)
 		case 'tool-result':
-			return (
-				<ToolResultPartRenderer
-					part={part}
-					consumedToolCallIds={consumedToolCallIds}
-				/>
-			)
+			return <ToolResultPartRenderer part={part} />
 		case 'memory':
 			return <MemoryPartRenderer part={part} />
 		case 'thinking':

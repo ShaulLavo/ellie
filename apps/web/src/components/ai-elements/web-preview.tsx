@@ -254,7 +254,7 @@ export const WebPreviewConsole = ({
 		>
 			<CollapsibleTrigger>
 				<Button
-					className="flex w-full items-center justify-between p-4 text-left font-medium hover:bg-muted/50"
+					className="flex w-full items-center gap-2 p-4 text-left font-medium hover:bg-muted/50"
 					variant="ghost"
 				>
 					Console

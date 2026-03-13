@@ -14,7 +14,7 @@ export function StepProgressBar({
 	const isDone = step >= totalSteps
 
 	return (
-		<div className="flex items-center gap-2.5">
+		<div className="flex max-w-[350px] items-center gap-2.5">
 			<div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted/80">
 				<div
 					className={cn(

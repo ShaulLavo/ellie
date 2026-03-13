@@ -116,19 +116,17 @@ export const ToolHeader = ({
 	return (
 		<CollapsibleTrigger
 			className={cn(
-				'flex w-full items-center justify-between gap-4 p-3',
+				'flex w-full items-center gap-2 p-3',
 				className
 			)}
 			{...props}
 		>
-			<div className="flex items-center gap-2">
-				<WrenchIcon className="size-4 text-muted-foreground" />
-				<span className="font-medium text-sm">
-					{title ?? derivedName}
-				</span>
-				{getStatusBadge(state)}
-			</div>
+			<WrenchIcon className="size-4 text-muted-foreground" />
+			<span className="font-medium text-sm">
+				{title ?? derivedName}
+			</span>
 			<CaretDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+			{getStatusBadge(state)}
 		</CollapsibleTrigger>
 	)
 }
@@ -267,13 +265,13 @@ export const ToolCard = ({
 				<span className="font-mono text-[11px] tracking-wide">
 					{name}
 				</span>
+				<CaretDownIcon className="size-4 transition-transform group-data-[state=open]/tool:rotate-180" />
 				{getStatusBadge(state)}
 				{elapsedMs != null && (
 					<span className="font-mono text-[11px] text-muted-foreground">
 						{formatElapsed(elapsedMs)}
 					</span>
 				)}
-				<CaretDownIcon className="size-4 ml-auto transition-transform group-data-[state=open]/tool:rotate-180" />
 			</CollapsibleTrigger>
 			<CollapsibleContent
 				ref={contentRef}

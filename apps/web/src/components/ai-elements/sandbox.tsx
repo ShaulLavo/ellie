@@ -54,17 +54,15 @@ export const SandboxHeader = ({
 }: SandboxHeaderProps) => (
 	<CollapsibleTrigger
 		className={cn(
-			'flex w-full items-center justify-between gap-4 p-3',
+			'flex w-full items-center gap-2 p-3',
 			className
 		)}
 		{...props}
 	>
-		<div className="flex items-center gap-2">
-			<CodeIcon className="size-4 text-muted-foreground" />
-			<span className="font-medium text-sm">{title}</span>
-			{getStatusBadge(state)}
-		</div>
+		<CodeIcon className="size-4 text-muted-foreground" />
+		<span className="font-medium text-sm">{title}</span>
 		<CaretDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+		{getStatusBadge(state)}
 	</CollapsibleTrigger>
 )
 
