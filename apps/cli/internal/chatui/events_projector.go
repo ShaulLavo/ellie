@@ -9,14 +9,14 @@ import (
 
 // Renderable event types that produce chat messages.
 var renderableTypes = map[string]bool{
-	"user_message":      true,
-	"assistant_message": true,
-	"tool_execution":    true,
-	"memory_recall":     true,
-	"memory_retain":     true,
-	"assistant_audio":   true,
-	"error":             true,
-	"session_rotated":   true,
+	"user_message":       true,
+	"assistant_message":  true,
+	"tool_execution":     true,
+	"memory_recall":      true,
+	"memory_retain":      true,
+	"assistant_artifact": true,
+	"error":              true,
+	"session_rotated":    true,
 }
 
 // Agent lifecycle event types.
@@ -111,8 +111,8 @@ func EventToStored(row EventRow) StoredMessage {
 	case "memory_recall", "memory_retain":
 		parts = extractMemoryParts(parsed)
 
-	case "assistant_audio":
-		parts = extractAudioParts(parsed)
+	case "assistant_artifact":
+		parts = extractArtifactParts(parsed)
 
 	case "error":
 		parts = extractErrorParts(parsed)
@@ -162,16 +162,30 @@ func EventToStored(row EventRow) StoredMessage {
 	// Determine sender
 	sender := resolveSender(row.Type, parsed)
 
+	// Extract parent message ID for nesting (tools → assistant reply, artifacts → assistant reply)
+	var parentMessageID string
+	if row.Type == "tool_execution" {
+		if srcID, ok := parsed["sourceAssistantRowId"].(float64); ok {
+			parentMessageID = fmt.Sprintf("%d", int(srcID))
+		}
+	} else if row.Type == "assistant_artifact" {
+		if parentID, ok := parsed["assistantRowId"].(float64); ok {
+			parentMessageID = fmt.Sprintf("%d", int(parentID))
+		}
+	}
+
 	ts := time.UnixMilli(row.CreatedAt).UTC().Format(time.RFC3339)
 
 	return StoredMessage{
-		ID:        fmt.Sprintf("%d", row.ID),
-		Timestamp: ts,
-		Text:      text,
-		Parts:     filtered,
-		Seq:       row.Seq,
-		Sender:    sender,
-		Thinking:  thinking,
+		ID:              fmt.Sprintf("%d", row.ID),
+		Timestamp:       ts,
+		Text:            text,
+		Parts:           filtered,
+		Seq:             row.Seq,
+		Sender:          sender,
+		Thinking:        thinking,
+		EventType:       row.Type,
+		ParentMessageID: parentMessageID,
 	}
 }
 
@@ -332,19 +346,57 @@ func extractMemoryParts(parsed map[string]interface{}) []ContentPart {
 	return nil
 }
 
-func extractAudioParts(parsed map[string]interface{}) []ContentPart {
+func extractArtifactParts(parsed map[string]interface{}) []ContentPart {
+	uploadID := jsonStr(parsed, "uploadId")
+	if uploadID == "" {
+		return nil
+	}
+	kind := jsonStr(parsed, "kind")
+	url := jsonStr(parsed, "url")
+	if url == "" {
+		url = "/api/uploads-rpc/" + uploadID + "/content"
+	}
+	mime := jsonStr(parsed, "mime")
 	var size int
 	if v, ok := parsed["size"].(float64); ok {
 		size = int(v)
 	}
+	partType := PartFile
+	switch kind {
+	case "audio":
+		partType = PartAudio
+	case "media":
+		// Classify by extension
+		partType = classifyUploadID(uploadID)
+	}
 	return []ContentPart{{
-		Type:            PartAudio,
-		UploadID:        jsonStr(parsed, "uploadId"),
-		URL:             jsonStr(parsed, "url"),
-		Mime:            jsonStr(parsed, "mime"),
+		Type:            partType,
+		UploadID:        uploadID,
+		URL:             url,
+		Mime:            mime,
 		Size:            size,
 		SynthesizedText: jsonStr(parsed, "synthesizedText"),
 	}}
+}
+
+func classifyUploadID(uploadID string) ContentPartType {
+	lower := strings.ToLower(uploadID)
+	for _, ext := range []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif", ".bmp", ".ico"} {
+		if strings.HasSuffix(lower, ext) {
+			return PartImage
+		}
+	}
+	for _, ext := range []string{".mp3", ".ogg", ".opus", ".wav", ".m4a", ".flac", ".aac"} {
+		if strings.HasSuffix(lower, ext) {
+			return PartAudio
+		}
+	}
+	for _, ext := range []string{".mp4", ".mov", ".webm", ".avi", ".mkv"} {
+		if strings.HasSuffix(lower, ext) {
+			return PartVideo
+		}
+	}
+	return PartFile
 }
 
 func extractErrorParts(parsed map[string]interface{}) []ContentPart {
@@ -360,7 +412,7 @@ func resolveSender(eventType string, parsed map[string]interface{}) MessageSende
 	switch {
 	case eventType == "user_message" || role == "user":
 		return SenderUser
-	case eventType == "assistant_message" || eventType == "assistant_audio" || role == "assistant":
+	case eventType == "assistant_message" || eventType == "assistant_artifact" || role == "assistant":
 		return SenderAgent
 	case role == "system":
 		return SenderSystem

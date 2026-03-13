@@ -87,7 +87,7 @@ type ContentPart struct {
 	Mime     string `json:"mime,omitempty"`
 	Size     int    `json:"size,omitempty"`
 
-	// audio (assistant_audio)
+	// audio
 	SynthesizedText string `json:"synthesizedText,omitempty"`
 }
 
@@ -99,14 +99,16 @@ type MemoryItem struct {
 
 // StoredMessage is the client-side projected chat message (mirrors FE StoredChatMessage).
 type StoredMessage struct {
-	ID          string        `json:"id"`
-	Timestamp   string        `json:"timestamp"`
-	Text        string        `json:"text"`
-	Parts       []ContentPart `json:"parts"`
-	Seq         int           `json:"seq"`
-	Sender      MessageSender `json:"sender,omitempty"`
-	Thinking    string        `json:"thinking,omitempty"`
-	IsStreaming bool          `json:"isStreaming,omitempty"`
+	ID              string        `json:"id"`
+	Timestamp       string        `json:"timestamp"`
+	Text            string        `json:"text"`
+	Parts           []ContentPart `json:"parts"`
+	Seq             int           `json:"seq"`
+	Sender          MessageSender `json:"sender,omitempty"`
+	Thinking        string        `json:"thinking,omitempty"`
+	IsStreaming      bool          `json:"isStreaming,omitempty"`
+	EventType       string        `json:"eventType,omitempty"`
+	ParentMessageID string        `json:"parentMessageId,omitempty"`
 }
 
 // EventRow mirrors FE EventRow from the SSE stream.
