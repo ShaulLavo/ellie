@@ -228,11 +228,11 @@
 	--sidebar-ring: oklch(0.47 0.08 170);
 	--selection-bg: oklch(0.88 0.07 170 / 70%);
 	--selection-fg: oklch(0.18 0.02 260);
-	--color-1: oklch(66.2% 0.225 25.9);
-	--color-2: oklch(60.4% 0.26 302);
-	--color-3: oklch(69.6% 0.165 251);
-	--color-4: oklch(80.2% 0.134 225);
-	--color-5: oklch(90.7% 0.231 133);
+	--color-1: oklch(66.2% 0.18 25.9);
+	--color-2: oklch(60.4% 0.20 302);
+	--color-3: oklch(69.6% 0.14 251);
+	--color-4: oklch(80.2% 0.12 225);
+	--color-5: oklch(90.7% 0.18 133);
 }
 
 /* ─── Dark Mode: Deep Slate + Muted Teal ─── */
