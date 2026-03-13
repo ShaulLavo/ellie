@@ -4,28 +4,17 @@ import {
 	MessageContent
 } from '@/components/ai-elements/message'
 import type { ToolResultPart } from '../utils'
-import {
-	getVisibleParts,
-	getVisibleToolParts,
-	getSortedArtifactParts,
-	hasVisibleContent
-} from '../utils/message-utils'
+import { getVisibleParts } from '../utils/message-utils'
 import { MessageHeader } from './message-header'
 import { MessageThinking } from './message-thinking'
 import { MessagePartsList } from './message-parts-list'
-import { MessageToolParts } from './message-tool-parts'
-import { MessageArtifactParts } from './message-artifact-parts'
 
 export function ConversationMessageRow({
 	message,
-	toolItems,
-	artifactItems,
 	toolResults,
 	consumedToolCallIds
 }: {
 	message: StoredChatMessage
-	toolItems?: StoredChatMessage[]
-	artifactItems?: StoredChatMessage[]
 	toolResults?: Map<string, ToolResultPart>
 	consumedToolCallIds?: Set<string>
 }) {
@@ -38,22 +27,8 @@ export function ConversationMessageRow({
 	const hasAudio = message.parts.some(
 		p => p.type === 'audio'
 	)
-	const visibleToolParts = getVisibleToolParts(
-		toolItems ?? [],
-		consumedToolCallIds
-	)
-	const sortedArtifactParts = getSortedArtifactParts(
-		artifactItems ?? []
-	)
 
-	if (
-		!hasVisibleContent(
-			message,
-			visibleParts,
-			visibleToolParts,
-			sortedArtifactParts
-		)
-	)
+	if (visibleParts.length === 0 && !message.thinking)
 		return null
 
 	return (
@@ -73,25 +48,12 @@ export function ConversationMessageRow({
 							isStreaming={message.isStreaming}
 						/>
 					)}
-					<MessageArtifactParts
-						parts={sortedArtifactParts}
-						kind="audio"
-					/>
 					<MessagePartsList
 						visibleParts={visibleParts}
 						isStreaming={message.isStreaming}
 						hasAudio={hasAudio}
 						toolResults={toolResults}
 						consumedToolCallIds={consumedToolCallIds}
-					/>
-					<MessageToolParts
-						parts={visibleToolParts}
-						toolResults={toolResults}
-						consumedToolCallIds={consumedToolCallIds}
-					/>
-					<MessageArtifactParts
-						parts={sortedArtifactParts}
-						kind="non-audio"
 					/>
 				</div>
 			</MessageContent>

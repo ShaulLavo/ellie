@@ -3,6 +3,7 @@ import type {
 	ToolResultPart
 } from '../hooks/use-timeline'
 import { ChatMessageRow } from './chat-message'
+import { AssistantTurnRow } from './assistant-turn-row'
 
 export function TimelineItemRow({
 	item,
@@ -24,13 +25,12 @@ export function TimelineItemRow({
 					consumedToolCallIds={consumedToolCallIds}
 				/>
 			)
-		case 'assistant-reply':
+		case 'assistant-turn':
 			return (
-				<ChatMessageRow
-					key={item.message.id}
-					message={item.message}
-					toolItems={item.toolItems}
-					artifactItems={item.artifactItems}
+				<AssistantTurnRow
+					key={item.finalMessage.id}
+					finalMessage={item.finalMessage}
+					steps={item.steps}
 					toolResults={toolResults}
 					consumedToolCallIds={consumedToolCallIds}
 				/>

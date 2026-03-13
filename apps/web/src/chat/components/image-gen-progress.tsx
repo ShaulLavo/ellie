@@ -41,14 +41,19 @@ export function ImageGenProgress({
 						<ImageGenStatusIcon status={part.status} />
 					</div>
 					<div className="min-w-0 flex-1">
-						<div className="font-mono text-[11px] tracking-wide text-foreground">
+						<div className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-foreground">
 							Generating image
+							<CaretDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
 						</div>
+						{part.prompt && (
+							<div className="mt-0.5 font-mono text-[10px] italic text-muted-foreground/70">
+								&ldquo;{part.prompt}&rdquo;
+							</div>
+						)}
 						<div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
 							{summary}
 						</div>
 					</div>
-					<CaretDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
 				</div>
 			</TaskTrigger>
 			<TaskContent className="mt-0">

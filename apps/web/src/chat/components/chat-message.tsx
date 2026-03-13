@@ -5,14 +5,10 @@ import { ConversationMessageRow } from './conversation-message-row'
 
 export function ChatMessageRow({
 	message,
-	toolItems,
-	artifactItems,
 	toolResults,
 	consumedToolCallIds
 }: {
 	message: StoredChatMessage
-	toolItems?: StoredChatMessage[]
-	artifactItems?: StoredChatMessage[]
 	toolResults?: Map<string, ToolResultPart>
 	consumedToolCallIds?: Set<string>
 }) {
@@ -32,8 +28,6 @@ export function ChatMessageRow({
 	return (
 		<ConversationMessageRow
 			message={message}
-			toolItems={toolItems}
-			artifactItems={artifactItems}
 			toolResults={toolResults}
 			consumedToolCallIds={consumedToolCallIds}
 		/>

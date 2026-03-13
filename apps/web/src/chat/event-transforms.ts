@@ -135,6 +135,9 @@ function extractImageGenParts(
 		(parsed.toolCallId as string) ?? 'unknown'
 	const details = (parsed.result as Record<string, unknown>)
 		?.details as Record<string, unknown> | undefined
+	const prompt = (
+		parsed.args as Record<string, unknown> | undefined
+	)?.prompt as string | undefined
 
 	if (status === 'complete' || status === 'error') {
 		if (
@@ -147,6 +150,7 @@ function extractImageGenParts(
 					type: 'image-generation',
 					toolCallId,
 					status: 'complete',
+					prompt,
 					uploadId: details.uploadId as string | undefined,
 					url: details.url as string | undefined,
 					images: details.images as
@@ -202,6 +206,7 @@ function extractImageGenParts(
 				type: 'image-generation',
 				toolCallId,
 				status: 'error',
+				prompt,
 				error: errorText,
 				url: details?.url as string | undefined,
 				entries: details?.entries as
@@ -231,6 +236,7 @@ function extractImageGenParts(
 			type: 'image-generation',
 			toolCallId,
 			status: 'running',
+			prompt,
 			phase: runDetails.phase as string | undefined,
 			step: runDetails.step as number | undefined,
 			totalSteps: runDetails.totalSteps as

@@ -7,6 +7,11 @@ import { EmptyState } from './empty-state'
 import { TimelineItemRow } from './timeline-item-row'
 import { ConnectionIndicator } from './connection-indicator'
 
+function getTimelineItemKey(item: TimelineItem): string {
+	if (item.type === 'assistant-turn') return item.runId
+	return item.message.id
+}
+
 export function TimelineContent({
 	timeline,
 	toolResults,
@@ -35,7 +40,7 @@ export function TimelineContent({
 		<>
 			{timeline.map(item => (
 				<TimelineItemRow
-					key={item.message.id}
+					key={getTimelineItemKey(item)}
 					item={item}
 					toolResults={toolResults}
 					consumedToolCallIds={consumedToolCallIds}
