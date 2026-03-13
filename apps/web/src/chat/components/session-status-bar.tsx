@@ -1,46 +1,10 @@
 import { NumberTicker } from '@/components/ui/number-ticker'
 import type { SessionStats } from '@/lib/chat/session-stats'
+import { TokenCount } from './token-count'
+import { Cost } from './cost-display'
+import { formatModel } from '../utils'
 
 export type { SessionStats }
-
-function formatModel(model: string): string {
-	const match = model.match(/^claude-(.+?)(-\d{8})?$/)
-	return match ? match[1] : model
-}
-
-function TokenCount({ value }: { value: number }) {
-	if (value >= 1000) {
-		return (
-			<>
-				<NumberTicker
-					value={Math.round(value / 1000)}
-					className="text-inherit tracking-inherit"
-				/>
-				k
-			</>
-		)
-	}
-	return (
-		<NumberTicker
-			value={value}
-			className="text-inherit tracking-inherit"
-		/>
-	)
-}
-
-function Cost({ value }: { value: number }) {
-	const decimalPlaces = value >= 0.01 ? 2 : 4
-	return (
-		<span>
-			$
-			<NumberTicker
-				value={value}
-				decimalPlaces={decimalPlaces}
-				className="text-inherit tracking-inherit"
-			/>
-		</span>
-	)
-}
 
 const DOT = (
 	<span className="text-muted-foreground/50">&middot;</span>

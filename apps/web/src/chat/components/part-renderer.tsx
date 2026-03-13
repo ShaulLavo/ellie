@@ -1,342 +1,88 @@
-import { memo } from 'react'
-import { BookOpenIcon, FileTextIcon } from 'lucide-react'
-import { SunHorizonIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
-import {
-	MessageResponse,
-	StreamingMessageResponse
-} from '@/components/ai-elements/message'
-import {
-	Reasoning,
-	ReasoningTrigger,
-	ReasoningContent
-} from '@/components/ai-elements/reasoning'
-import {
-	Checkpoint,
-	CheckpointIcon
-} from '@/components/ai-elements/checkpoint'
-import { ToolCard } from '@/components/ai-elements/tool'
-import { ClickableImage } from '@/components/ui/clickable-image'
-import { ImageGenProgress } from './image-gen-progress'
-import { VoiceMessage } from './voice-message'
 import type { ToolResultPart } from '../utils'
+import { TextPartRenderer } from './parts/text-part'
+import {
+	ToolCallPartRenderer,
+	ToolResultPartRenderer
+} from './parts/tool-parts'
+import {
+	MemoryPartRenderer,
+	MemoryRetainPartRenderer
+} from './parts/memory-parts'
+import { ThinkingPartRenderer } from './parts/thinking-part'
+import {
+	ImagePartRenderer,
+	VideoPartRenderer,
+	AudioPartRenderer,
+	FilePartRenderer,
+	AssistantArtifactPartRenderer
+} from './parts/media-parts'
+import {
+	CheckpointPartRenderer,
+	ArtifactPartRenderer
+} from './parts/checkpoint-part'
+import { ImageGenProgress } from './image-gen-progress'
 
-export const PartRenderer = memo(
-	({
-		part,
-		isStreaming,
-		isTranscription,
-		toolResults,
-		consumedToolCallIds
-	}: {
-		part: ContentPart
-		isStreaming?: boolean
-		isTranscription?: boolean
-		toolResults?: Map<string, ToolResultPart>
-		consumedToolCallIds?: Set<string>
-	}) => {
-		switch (part.type) {
-			case 'text':
-				if (isTranscription) {
-					return (
-						<MessageResponse className="prose-sm italic text-muted-foreground [&_*]:text-muted-foreground">
-							{part.text}
-						</MessageResponse>
-					)
-				}
-				return isStreaming ? (
-					<StreamingMessageResponse isStreaming>
-						{part.text}
-					</StreamingMessageResponse>
-				) : (
-					<MessageResponse>{part.text}</MessageResponse>
-				)
-			case 'tool-call': {
-				if (
-					part.streaming &&
-					part.toolCallId &&
-					consumedToolCallIds?.has(part.toolCallId)
-				) {
-					return null
-				}
-				const matched = part.toolCallId
-					? toolResults?.get(part.toolCallId)
-					: undefined
-				return (
-					<ToolCard
-						className="my-2"
-						name={part.name}
-						args={part.args}
-						result={matched?.result}
-						elapsedMs={matched?.elapsedMs}
-						streaming={part.streaming}
-					/>
-				)
-			}
-			case 'tool-result': {
-				if (
-					part.toolCallId &&
-					consumedToolCallIds?.has(part.toolCallId)
-				) {
-					return null
-				}
-				return (
-					<ToolCard
-						className="my-2"
-						name={part.toolName ?? 'Result'}
-						args={{}}
-						result={part.result}
-						elapsedMs={part.elapsedMs}
-					/>
-				)
-			}
-			case 'memory': {
-				const recalledMemories = part.memories ?? []
-				if (recalledMemories.length === 0) {
-					return (
-						<div className="flex items-center gap-2">
-							<BookOpenIcon className="size-4 text-muted-foreground" />
-							<span className="font-mono text-[11px] tracking-wide text-muted-foreground">
-								recalled {part.count}{' '}
-								{part.count === 1 ? 'memory' : 'memories'}
-								{part.duration_ms != null
-									? ` (${(part.duration_ms / 1000).toFixed(1)}s)`
-									: ''}
-							</span>
-						</div>
-					)
-				}
-				return (
-					<Reasoning defaultOpen={false} className="mb-0">
-						<ReasoningTrigger
-							className="text-xs"
-							icon={<BookOpenIcon className="size-4" />}
-							getThinkingMessage={() => (
-								<span className="font-mono text-[11px] tracking-wide">
-									recalled {part.count}{' '}
-									{part.count === 1 ? 'memory' : 'memories'}
-									{part.duration_ms != null
-										? ` (${(part.duration_ms / 1000).toFixed(1)}s)`
-										: ''}
-								</span>
-							)}
-						/>
-						<ReasoningContent className="mt-2 text-xs leading-relaxed">
-							{recalledMemories
-								.map(
-									(m, i) =>
-										`${i + 1}. ${m.text.replace(/\|/g, '—')}`
-								)
-								.join('\n\n')}
-						</ReasoningContent>
-					</Reasoning>
-				)
-			}
-			case 'thinking':
-				return (
-					<Reasoning defaultOpen={false} className="mb-0">
-						<ReasoningTrigger className="text-xs" />
-						<ReasoningContent className="mt-2 text-xs leading-relaxed">
-							{part.text}
-						</ReasoningContent>
-					</Reasoning>
-				)
-			case 'memory-retain': {
-				const facts = part.facts ?? []
-				const modelTag = part.model
-					? `[${part.model}] `
-					: ''
-				const timingTag = part.duration_ms
-					? ` (${(part.duration_ms / 1000).toFixed(1)}s)`
-					: ''
-				const label = `${modelTag}stored ${part.factsStored} ${part.factsStored === 1 ? 'fact' : 'facts'}${timingTag}`
-				if (facts.length === 0) {
-					return (
-						<div className="flex items-center gap-2">
-							<BookOpenIcon className="size-4 text-muted-foreground" />
-							<span className="font-mono text-[11px] tracking-wide text-muted-foreground">
-								{label}
-							</span>
-						</div>
-					)
-				}
-				return (
-					<Reasoning defaultOpen={false} className="mb-0">
-						<ReasoningTrigger
-							className="text-xs"
-							icon={<BookOpenIcon className="size-4" />}
-							getThinkingMessage={() => (
-								<span className="font-mono text-[11px] tracking-wide">
-									{label}
-								</span>
-							)}
-						/>
-						<ReasoningContent className="mt-2 text-xs leading-relaxed">
-							{facts
-								.map(
-									(f, i) =>
-										`${i + 1}. ${f.replace(/\|/g, '—')}`
-								)
-								.join('\n\n')}
-						</ReasoningContent>
-					</Reasoning>
-				)
-			}
-			case 'image':
-				if (!part.url) return null
-				return (
-					<ClickableImage
-						src={part.url}
-						alt={
-							(part as ContentPart & { name?: string })
-								.name ?? 'Image'
-						}
-						className="max-h-80 rounded-lg object-contain"
-						containerClassName="my-2 max-w-sm"
-					/>
-				)
-			case 'video':
-				if (!part.url) return null
-				return (
-					<div className="my-2 max-w-sm">
-						<video
-							src={part.url}
-							controls
-							className="max-h-80 rounded-lg"
-						/>
-					</div>
-				)
-			case 'audio':
-				if (!part.url) return null
-				return (
-					<div>
-						<VoiceMessage
-							src={part.url}
-							duration={part.duration}
-							waveform={part.waveform}
-						/>
-					</div>
-				)
-			case 'file': {
-				const hasUpload = !!part.url
-				const label = part.name ?? 'Attachment'
-				const sizeLabel =
-					part.size >= 1024
-						? `${(part.size / 1024).toFixed(1)} KB`
-						: `${part.size} B`
-				const inner = (
-					<>
-						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
-						<div className="min-w-0">
-							<span className="block truncate font-medium">
-								{label}
-							</span>
-							<span className="text-xs text-muted-foreground">
-								{sizeLabel}
-							</span>
-						</div>
-					</>
-				)
-				return hasUpload ? (
-					<a
-						href={part.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="my-2 flex max-w-xs items-center gap-2 text-sm transition-colors hover:text-accent-foreground"
-						download={part.name}
-					>
-						{inner}
-					</a>
-				) : (
-					<div className="my-2 flex max-w-xs items-center gap-2 text-sm">
-						{inner}
-					</div>
-				)
-			}
-			case 'assistant-artifact': {
-				const resolvedUrl =
-					part.url ||
-					`/api/uploads-rpc/${encodeURIComponent(part.uploadId)}/content`
-				const resolvedKind =
-					part.mediaKind ||
-					(part.kind === 'audio' ? 'audio' : 'file')
-
-				if (resolvedKind === 'image') {
-					return (
-						<ClickableImage
-							src={resolvedUrl}
-							alt="Attached media"
-							className="max-h-80 rounded-lg object-contain"
-							containerClassName="my-2 max-w-sm"
-						/>
-					)
-				}
-
-				if (resolvedKind === 'video') {
-					return (
-						<div className="my-2 max-w-sm">
-							<video
-								src={resolvedUrl}
-								controls
-								className="max-h-80 rounded-lg"
-							/>
-						</div>
-					)
-				}
-
-				if (resolvedKind === 'audio') {
-					return (
-						<div className="my-2">
-							<VoiceMessage src={resolvedUrl} />
-						</div>
-					)
-				}
-
-				return (
-					<a
-						href={resolvedUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="my-2 flex max-w-xs items-center gap-2 text-sm transition-colors hover:text-accent-foreground"
-					>
-						<FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
-						<div className="min-w-0">
-							<span className="block truncate font-medium">
-								Attached media
-							</span>
-							<span className="text-xs text-muted-foreground">
-								{part.uploadId}
-							</span>
-						</div>
-					</a>
-				)
-			}
-			case 'checkpoint':
-				return (
-					<Checkpoint>
-						<CheckpointIcon>
-							<SunHorizonIcon className="size-4 shrink-0" />
-						</CheckpointIcon>
-						<span className="shrink-0 text-xs">
-							{part.message}
-						</span>
-					</Checkpoint>
-				)
-			case 'artifact':
-				return (
-					<div className="text-sm">
-						<span className="font-medium">
-							{part.title ?? part.filename}
-						</span>
-						<pre className="mt-2 text-xs overflow-auto max-h-64">
-							{part.content}
-						</pre>
-					</div>
-				)
-			case 'image-generation':
-				return <ImageGenProgress part={part} />
-			default:
-				return null
-		}
+export function PartRenderer({
+	part,
+	isStreaming,
+	isTranscription,
+	toolResults,
+	consumedToolCallIds
+}: {
+	part: ContentPart
+	isStreaming?: boolean
+	isTranscription?: boolean
+	toolResults?: Map<string, ToolResultPart>
+	consumedToolCallIds?: Set<string>
+}) {
+	switch (part.type) {
+		case 'text':
+			return (
+				<TextPartRenderer
+					part={part}
+					isStreaming={isStreaming}
+					isTranscription={isTranscription}
+				/>
+			)
+		case 'tool-call':
+			return (
+				<ToolCallPartRenderer
+					part={part}
+					toolResults={toolResults}
+					consumedToolCallIds={consumedToolCallIds}
+				/>
+			)
+		case 'tool-result':
+			return (
+				<ToolResultPartRenderer
+					part={part}
+					consumedToolCallIds={consumedToolCallIds}
+				/>
+			)
+		case 'memory':
+			return <MemoryPartRenderer part={part} />
+		case 'thinking':
+			return <ThinkingPartRenderer part={part} />
+		case 'memory-retain':
+			return <MemoryRetainPartRenderer part={part} />
+		case 'image':
+			return <ImagePartRenderer part={part} />
+		case 'video':
+			return <VideoPartRenderer part={part} />
+		case 'audio':
+			return <AudioPartRenderer part={part} />
+		case 'file':
+			return <FilePartRenderer part={part} />
+		case 'assistant-artifact':
+			return <AssistantArtifactPartRenderer part={part} />
+		case 'checkpoint':
+			return <CheckpointPartRenderer part={part} />
+		case 'artifact':
+			return <ArtifactPartRenderer part={part} />
+		case 'image-generation':
+			return <ImageGenProgress part={part} />
+		default:
+			return null
 	}
-)
+}

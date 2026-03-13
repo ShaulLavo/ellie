@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { WifiOffIcon } from 'lucide-react'
 import type { ConnectionState } from '@ellie/schemas/chat'
 import {
@@ -26,15 +26,19 @@ export function ServerDownOverlay({
 }) {
 	const [visible, setVisible] = useState(false)
 
+	const onStateChange = useEffectEvent(
+		(current: ConnectionState) => {
+			if (current === 'error') {
+				setVisible(true)
+			} else if (current === 'connected') {
+				setVisible(false)
+			}
+		}
+	)
+
 	useEffect(() => {
-		if (state === 'error') {
-			setVisible(true)
-			return
-		}
-		if (state === 'connected') {
-			setVisible(false)
-			return
-		}
+		onStateChange(state)
+		if (state === 'error' || state === 'connected') return
 		const timer = setTimeout(
 			() => setVisible(true),
 			SHOW_DELAY_MS
@@ -46,9 +50,9 @@ export function ServerDownOverlay({
 
 	return (
 		<AlertDialog open={visible}>
-			<AlertDialogContent className="!max-w-xs">
+			<AlertDialogContent className="max-w-xs!">
 				<AlertDialogHeader>
-					<AlertDialogMedia className="!bg-transparent">
+					<AlertDialogMedia className="bg-transparent!">
 						{isError ? (
 							<WifiOffIcon className="size-5 text-destructive" />
 						) : (
