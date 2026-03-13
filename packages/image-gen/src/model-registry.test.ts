@@ -50,7 +50,6 @@ describe('MODEL_PRESETS', () => {
 		const civitaiModels = [
 			'realizum',
 			'perfectdeliberate',
-			'dreamshaper',
 			'toonyou',
 			'moodymix',
 			'majicmix'

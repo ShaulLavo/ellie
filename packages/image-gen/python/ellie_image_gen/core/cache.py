@@ -110,7 +110,8 @@ class ModelCache:
 
         pipe_kwargs: dict[str, Any] = {
             "torch_dtype": dtype,
-            "use_safetensors": True,
+            "safety_checker": None,
+            "requires_safety_checker": False,
         }
 
         arch = config.get("arch", "sd15")

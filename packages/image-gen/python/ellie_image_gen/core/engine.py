@@ -8,6 +8,8 @@ import random
 import tempfile
 from typing import Any
 
+import numpy as np
+
 from .cache import ModelCache
 from .device import DeviceProfile
 from .ella import encode_prompt_with_ella, load_ella
@@ -120,6 +122,16 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
 
     _progress("denoise", step=0, totalSteps=total_steps)  # approximate; callback will correct
     result = pipe(**gen_kwargs)
+
+    # Validate output — corrupted scheduler config can produce garbage silently.
+    # PIL images won't contain NaN (already clamped to uint8), so also check
+    # for degenerate output: near-zero variance means uniform noise/solid color.
+    for img in result.images:
+        arr = np.array(img, dtype=np.float32)
+        if np.any(np.isnan(arr)) or np.any(np.isinf(arr)):
+            raise RuntimeError("Generation produced corrupted output (NaN/Inf). Try a different sampler.")
+        if arr.std() < 1.0:
+            raise RuntimeError("Generation produced degenerate output (near-uniform). Try a different sampler.")
 
     # ADetailer post-processing (face/hand detail enhancement)
     images = result.images

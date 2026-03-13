@@ -187,8 +187,8 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		singleFileFilename:
 			'perfectdeliberate_v5SD15.safetensors',
 		pipelineClass: 'StableDiffusionPipeline',
-		defaultWidth: 832,
-		defaultHeight: 1216,
+		defaultWidth: 512,
+		defaultHeight: 768,
 		defaultSteps: 30,
 		defaultCfg: 6.0,
 		arch: 'sd15',
@@ -209,9 +209,7 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		ellaCompatible: true
 	},
 	dreamshaper: {
-		singleFileUrl:
-			'https://civitai.com/api/download/models/128713',
-		singleFileFilename: 'dreamshaper_8.safetensors',
+		hfModelId: 'Lykon/dreamshaper-8',
 		pipelineClass: 'StableDiffusionPipeline',
 		defaultWidth: 512,
 		defaultHeight: 768,
