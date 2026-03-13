@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import type { SlashCommand } from './slash-command-menu'
+import type { SessionStats } from '@/lib/chat/session-stats'
 import { SlashCommandMenu } from './slash-command-menu'
 import {
 	PromptInput,
@@ -8,24 +9,28 @@ import {
 	PromptInputTools,
 	PromptInputSubmit
 } from '@/components/ai-elements/prompt-input'
+import { InputGroupAddon } from '@/components/ui/input-group'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import { MicRecordButton } from '@/components/ai-elements/mic-record-button'
 import { PromptInputAttachments } from './prompt-input-attachments'
 import { DropZoneOverlay } from './drop-zone-overlay'
 import { AttachButton } from './attach-button'
 import { SearchToggleButton } from './search-toggle-button'
+import { SessionContext } from './session-context'
 import { usePromptInputLogic } from '../hooks/use-prompt-input-logic'
 
 export function PromptInputWithCommands({
 	commands,
 	onSubmit,
 	disabled,
-	speechRefRef
+	speechRefRef,
+	stats
 }: {
 	commands: SlashCommand[]
 	onSubmit: (message: PromptInputMessage) => void
 	disabled: boolean
 	speechRefRef?: RefObject<string | null>
+	stats?: SessionStats
 }) {
 	const {
 		inputValue,
@@ -54,6 +59,11 @@ export function PromptInputWithCommands({
 			/>
 
 			<PromptInput onSubmit={onSubmit} multiple>
+				{stats && (
+					<InputGroupAddon align="block-start">
+						<SessionContext stats={stats} />
+					</InputGroupAddon>
+				)}
 				<PromptInputAttachments />
 				<PromptInputTextarea placeholder="Type a message..." />
 				<PromptInputFooter>

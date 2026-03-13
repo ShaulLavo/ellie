@@ -23,6 +23,23 @@ import {
 } from './stream-event-handlers'
 import type { EventType } from '@ellie/schemas/events'
 
+function extractInputTokens(event: EventRow): number {
+	try {
+		const parsed =
+			typeof event.payload === 'string'
+				? JSON.parse(event.payload)
+				: event.payload
+		const msg = (parsed as Record<string, unknown>)
+			.message as Record<string, unknown> | undefined
+		const usage = msg?.usage as
+			| { input?: number }
+			| undefined
+		return usage?.input ?? 0
+	} catch {
+		return 0
+	}
+}
+
 /** Merge a delta into previous session stats. */
 export function mergeStats(
 	prev: SessionStats,
@@ -35,7 +52,9 @@ export function mergeStats(
 		promptTokens: prev.promptTokens + delta.promptTokens,
 		completionTokens:
 			prev.completionTokens + delta.completionTokens,
-		totalCost: prev.totalCost + delta.totalCost
+		totalCost: prev.totalCost + delta.totalCost,
+		lastPromptTokens:
+			delta.lastPromptTokens || prev.lastPromptTokens
 	}
 }
 
@@ -131,6 +150,13 @@ export function handleAppend(
 			dispatch.setStreamingMessage(
 				toStreamingAssistantMessage(event)
 			)
+			const inputTokens = extractInputTokens(event)
+			if (inputTokens > 0) {
+				dispatch.setSessionStats(prev => ({
+					...prev,
+					lastPromptTokens: inputTokens
+				}))
+			}
 			return
 		}
 
@@ -185,6 +211,13 @@ export function handleUpdate(
 			dispatch.setStreamingMessage(
 				toStreamingAssistantMessage(event)
 			)
+			const inputTokens = extractInputTokens(event)
+			if (inputTokens > 0) {
+				dispatch.setSessionStats(prev => ({
+					...prev,
+					lastPromptTokens: inputTokens
+				}))
+			}
 			return
 		}
 

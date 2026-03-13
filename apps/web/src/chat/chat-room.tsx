@@ -8,7 +8,6 @@ import { PromptInputProvider } from '@/components/ai-elements/prompt-input'
 import { eden } from '@/lib/eden'
 import { ChatToolbar } from './components/chat-toolbar'
 import { ChatMessageList } from './components/chat-message-list'
-import { SessionStatusBar } from './components/session-status-bar'
 import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
 import { PromptInputWithCommands } from './components/prompt-input-with-commands'
@@ -100,16 +99,10 @@ export function ChatRoom({
 						onSubmit={handleSubmit}
 						disabled={chat.connectionState !== 'connected'}
 						speechRefRef={speechRefRef}
+						stats={chat.sessionStats}
 					/>
 				</PromptInputProvider>
 			</div>
-
-			<SessionStatusBar
-				stats={chat.sessionStats}
-				isAgentRunning={
-					chat.isAgentRunning || !!chat.streamingMessage
-				}
-			/>
 		</div>
 	)
 }

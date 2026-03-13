@@ -5,6 +5,7 @@ export interface SessionStats {
 	promptTokens: number
 	completionTokens: number
 	totalCost: number
+	lastPromptTokens: number
 }
 
 export const EMPTY_STATS: SessionStats = {
@@ -13,7 +14,8 @@ export const EMPTY_STATS: SessionStats = {
 	messageCount: 0,
 	promptTokens: 0,
 	completionTokens: 0,
-	totalCost: 0
+	totalCost: 0,
+	lastPromptTokens: 0
 }
 
 interface StatsRow {
@@ -42,6 +44,7 @@ export function computeStatsFromEvents(
 	let completionTokens = 0
 	let totalCost = 0
 	let messageCount = 0
+	let lastPromptTokens = 0
 
 	for (const row of events) {
 		if (row.type === 'user_message') {
@@ -74,6 +77,7 @@ export function computeStatsFromEvents(
 				promptTokens += usage.input ?? 0
 				completionTokens += usage.output ?? 0
 				totalCost += usage.cost?.total ?? 0
+				lastPromptTokens = usage.input ?? 0
 			}
 			continue
 		}
@@ -85,7 +89,8 @@ export function computeStatsFromEvents(
 		messageCount,
 		promptTokens,
 		completionTokens,
-		totalCost
+		totalCost,
+		lastPromptTokens
 	}
 }
 
@@ -105,6 +110,7 @@ export function computeStatsFromMessages(
 	let completionTokens = 0
 	let totalCost = 0
 	let messageCount = 0
+	let lastPromptTokens = 0
 
 	for (const msg of messages) {
 		if (msg.role === 'toolResult') continue
@@ -126,6 +132,7 @@ export function computeStatsFromMessages(
 			promptTokens += usage.input ?? 0
 			completionTokens += usage.output ?? 0
 			totalCost += usage.cost?.total ?? 0
+			lastPromptTokens = usage.input ?? 0
 		}
 	}
 
@@ -135,6 +142,7 @@ export function computeStatsFromMessages(
 		messageCount,
 		promptTokens,
 		completionTokens,
-		totalCost
+		totalCost,
+		lastPromptTokens
 	}
 }
