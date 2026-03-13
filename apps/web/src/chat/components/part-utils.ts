@@ -8,13 +8,10 @@ export function partHasVisibleOutput(
 		case 'text':
 			return part.text.trim().length > 0
 		case 'tool-call':
+			// Hide streaming tool-call placeholders in the assistant
+			// message once a real tool_execution result exists.
 			return !(
 				part.streaming &&
-				part.toolCallId &&
-				consumedToolCallIds?.has(part.toolCallId)
-			)
-		case 'tool-result':
-			return !(
 				part.toolCallId &&
 				consumedToolCallIds?.has(part.toolCallId)
 			)

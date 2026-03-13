@@ -1,9 +1,4 @@
-import { useMemo, useCallback } from 'react'
 import { useConfirm } from '@omit/react-confirm-dialog'
-import {
-	messagesToTranscript,
-	renderTranscript
-} from '@ellie/schemas/chat'
 import type { StoredChatMessage } from '@/collections/chat-messages'
 import type { SlashCommand } from '../components/slash-command-menu'
 import {
@@ -13,6 +8,7 @@ import {
 	DownloadIcon
 } from 'lucide-react'
 import { createElement } from 'react'
+import { downloadTranscript } from '../utils/download-transcript'
 
 interface UseChatCommandsOptions {
 	sessionId: string
@@ -27,29 +23,11 @@ export function useChatCommands({
 }: UseChatCommandsOptions) {
 	const confirm = useConfirm()
 
-	const handleDownloadTranscript = useCallback(() => {
-		if (allMessages.length === 0) return
+	const handleDownloadTranscript = () => {
+		downloadTranscript(allMessages, sessionId)
+	}
 
-		// Convert to ChatMessage format lazily (only on download)
-		const chatMessages = allMessages.map(m => ({
-			...m,
-			timestamp: new Date(m.timestamp),
-			line: m.seq
-		}))
-		const transcript = messagesToTranscript(chatMessages)
-		const text = renderTranscript(transcript)
-		const blob = new Blob([text], { type: 'text/plain' })
-		const url = URL.createObjectURL(blob)
-		const a = document.createElement('a')
-		a.href = url
-		a.download = `transcript-${sessionId}-${new Date().toISOString().slice(0, 10)}.txt`
-		document.body.append(a)
-		a.click()
-		a.remove()
-		URL.revokeObjectURL(url)
-	}, [allMessages, sessionId])
-
-	const handleClearWithConfirm = useCallback(async () => {
+	const handleClearWithConfirm = async () => {
 		const ok = await confirm({
 			title: 'Clear conversation',
 			description:
@@ -58,49 +36,46 @@ export function useChatCommands({
 			cancelText: 'Cancel'
 		})
 		if (ok) onClear?.()
-	}, [confirm, onClear])
+	}
 
-	const commands = useMemo<SlashCommand[]>(
-		() => [
-			{
-				name: 'clear',
-				description: 'Start a new conversation',
-				icon: createElement(Trash2Icon, {
-					className: 'size-4'
-				}),
-				action: () => handleClearWithConfirm()
-			},
-			{
-				name: 'sessions',
-				description: 'List all sessions',
-				icon: createElement(ListIcon, {
-					className: 'size-4'
-				}),
-				action: () => {
-					/* TODO: session list dialog */
-				}
-			},
-			{
-				name: 'info',
-				description: 'Show current session info',
-				icon: createElement(InfoIcon, {
-					className: 'size-4'
-				}),
-				action: () => {
-					/* TODO: session info dialog */
-				}
-			},
-			{
-				name: 'transcript',
-				description: 'Download session transcript',
-				icon: createElement(DownloadIcon, {
-					className: 'size-4'
-				}),
-				action: handleDownloadTranscript
+	const commands: SlashCommand[] = [
+		{
+			name: 'clear',
+			description: 'Start a new conversation',
+			icon: createElement(Trash2Icon, {
+				className: 'size-4'
+			}),
+			action: () => handleClearWithConfirm()
+		},
+		{
+			name: 'sessions',
+			description: 'List all sessions',
+			icon: createElement(ListIcon, {
+				className: 'size-4'
+			}),
+			action: () => {
+				/* TODO: session list dialog */
 			}
-		],
-		[handleClearWithConfirm, handleDownloadTranscript]
-	)
+		},
+		{
+			name: 'info',
+			description: 'Show current session info',
+			icon: createElement(InfoIcon, {
+				className: 'size-4'
+			}),
+			action: () => {
+				/* TODO: session info dialog */
+			}
+		},
+		{
+			name: 'transcript',
+			description: 'Download session transcript',
+			icon: createElement(DownloadIcon, {
+				className: 'size-4'
+			}),
+			action: handleDownloadTranscript
+		}
+	]
 
 	return { commands }
 }

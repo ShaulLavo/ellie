@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import type { StoredChatMessage } from '@/collections/chat-messages'
 import type { ToolResultPart } from '../utils'
 
@@ -123,19 +122,17 @@ export function useTimeline(
 	messages: StoredChatMessage[],
 	streamingMessage?: StoredChatMessage | null
 ) {
-	return useMemo(() => {
-		const allMessages = streamingMessage
-			? [...messages, streamingMessage]
-			: messages
+	const allMessages = streamingMessage
+		? [...messages, streamingMessage]
+		: messages
 
-		const { timeline, toolResults, consumedToolCallIds } =
-			projectTimeline(allMessages)
+	const { timeline, toolResults, consumedToolCallIds } =
+		projectTimeline(allMessages)
 
-		return {
-			timeline,
-			allMessages,
-			toolResults,
-			consumedToolCallIds
-		}
-	}, [messages, streamingMessage])
+	return {
+		timeline,
+		allMessages,
+		toolResults,
+		consumedToolCallIds
+	}
 }
