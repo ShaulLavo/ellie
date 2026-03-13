@@ -24,7 +24,8 @@ export async function preparePayloadsForDelivery(
 	inboundAudio: boolean,
 	useRunTtsPostProcessor: boolean,
 	deps: DeliveryTtsDeps,
-	hasTtsDirective?: boolean
+	hasTtsDirective?: boolean,
+	assistantRowId?: number
 ): Promise<ChannelReplyPayload[]> {
 	if (hasTtsDirective) {
 		return await prepareExplicitTtsPayloads(
@@ -32,7 +33,8 @@ export async function preparePayloadsForDelivery(
 			useRunTtsPostProcessor,
 			runId,
 			sessionId,
-			deps
+			deps,
+			assistantRowId
 		)
 	}
 	const autoTtsPayload = await applyAutoTts(
@@ -48,7 +50,8 @@ export async function prepareExplicitTtsPayloads(
 	useRunTtsPostProcessor: boolean,
 	runId: string,
 	sessionId: string,
-	deps: DeliveryTtsDeps
+	deps: DeliveryTtsDeps,
+	assistantRowId?: number
 ): Promise<ChannelReplyPayload[]> {
 	const basePayload = payload
 
@@ -70,7 +73,8 @@ export async function prepareExplicitTtsPayloads(
 			const audioPayload = extractAssistantAudioPayload(
 				deps.store,
 				sessionId,
-				runId
+				runId,
+				assistantRowId
 			)
 			if (audioPayload) {
 				if (basePayload.mediaRefs?.length) {
@@ -107,7 +111,8 @@ export async function resolveTtsConfig(
 export function extractAssistantAudioPayload(
 	store: RealtimeStore,
 	sessionId: string,
-	runId: string
+	runId: string,
+	assistantRowId?: number
 ): ChannelReplyPayload | null {
 	const rows = store.queryRunEvents(sessionId, runId)
 	for (const row of rows) {
@@ -119,6 +124,14 @@ export function extractAssistantAudioPayload(
 			continue
 		}
 		if (parsed.kind !== 'audio') continue
+		// When assistantRowId is provided, only match the artifact
+		// bound to that specific reply (not the first audio in the run).
+		if (
+			assistantRowId != null &&
+			parsed.assistantRowId !== assistantRowId
+		) {
+			continue
+		}
 		const uploadId = parsed.uploadId as string | undefined
 		if (!uploadId) continue
 		return {

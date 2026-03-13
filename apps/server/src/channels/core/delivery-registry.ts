@@ -461,7 +461,8 @@ export class ChannelDeliveryRegistry {
 							) ?? false,
 							isRunClosed && reply.isLastAssistantReply,
 							this.#ttsDeps,
-							!!reply.ttsDirective
+							Boolean(reply.ttsDirective),
+							reply.assistantRowId
 						)
 						preparedCache.set(replyIndex, payloads)
 					}
@@ -838,7 +839,8 @@ export class ChannelDeliveryRegistry {
 						false,
 						reply.isLastAssistantReply,
 						this.#ttsDeps,
-						!!reply.ttsDirective
+						!!reply.ttsDirective,
+						reply.assistantRowId
 					)
 					for (const item of buildOutboundItems(
 						replyIndex,
