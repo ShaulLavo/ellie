@@ -45,7 +45,10 @@ export interface ServerContext {
 	sttBaseUrl: string
 	getAgentController: () => Promise<AgentController | null>
 	invalidateAgentCache: () => void
-	ensureBootstrap: (sessionId: string) => void
+	ensureBootstrap: (
+		sessionId: string,
+		runId: string
+	) => void
 	isBootstrapInjected: () => boolean
 	channelManager: ChannelManager
 }
@@ -270,9 +273,13 @@ export async function init(): Promise<ServerContext> {
 	// TODO: speech artifact TTL cleanup (expire stale drafts, delete blobs)
 
 	// ── Bootstrap helper ──────────────────────────────────────────────────
-	const ensureBootstrap = (sessionId: string) =>
+	const ensureBootstrap = (
+		sessionId: string,
+		runId: string
+	) =>
 		ensureBootstrapInjected({
 			sessionId,
+			runId,
 			store,
 			eventStore,
 			workspaceDir

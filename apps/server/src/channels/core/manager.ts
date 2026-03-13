@@ -25,7 +25,10 @@ export interface ChannelManagerOptions {
 	dataDir: string
 	store: RealtimeStore
 	getAgentController: () => Promise<AgentController | null>
-	ensureBootstrap: (sessionId: string) => void
+	ensureBootstrap: (
+		sessionId: string,
+		runId: string
+	) => void
 	deliveryRegistry: ChannelDeliveryRegistry
 	uploadStore?: FileStore
 }
@@ -45,7 +48,10 @@ export class ChannelManager {
 	readonly #dataDir: string
 	readonly #store: RealtimeStore
 	readonly #getAgentController: () => Promise<AgentController | null>
-	readonly #ensureBootstrap: (sessionId: string) => void
+	readonly #ensureBootstrap: (
+		sessionId: string,
+		runId: string
+	) => void
 	readonly #deliveryRegistry: ChannelDeliveryRegistry
 	readonly #uploadStore?: FileStore
 	/** In-memory dedupe cache with TTL + max-size eviction (matching OpenCLAW) */
@@ -280,8 +286,6 @@ export class ChannelManager {
 			dedupeKey
 		)
 
-		this.#ensureBootstrap(sessionId)
-
 		const controller = await this.#getAgentController()
 		if (!controller) {
 			console.warn(
@@ -295,6 +299,8 @@ export class ChannelManager {
 			msg.text,
 			row.id
 		)
+
+		this.#ensureBootstrap(sessionId, result.runId)
 
 		// Register delivery target so reply routes back through this channel
 		const deliveryTarget = {

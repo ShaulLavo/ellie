@@ -34,13 +34,18 @@ export interface PendingArtifact {
  * Mutable state for in-flight streaming rows.
  * Owned by the controller, passed into handler functions.
  */
+interface ToolRowEntry {
+	rowId: number
+	sourceAssistantRowId: number | undefined
+}
+
 export interface StreamState {
 	/** Row ID of the in-flight assistant_message being streamed */
 	currentMessageRowId: number | null
 	/** Row ID of the last finalized assistant_message (survives message_end) */
 	lastFinalizedMessageRowId: number | null
-	/** Map of toolCallId → row ID for in-flight tool_execution rows */
-	currentToolRowIds: Map<string, number>
+	/** Map of toolCallId → row info for in-flight tool_execution rows */
+	currentToolRowIds: Map<string, ToolRowEntry>
 	/** Pending artifacts from completed tool executions in this run */
 	pendingArtifacts: PendingArtifact[]
 }
@@ -340,6 +345,8 @@ export function handleStreamingEvent(
 			'tool_execution',
 			'persist_failed',
 			() => {
+				const srcId =
+					state.lastFinalizedMessageRowId ?? undefined
 				const row = deps.store.appendEvent(
 					sessionId,
 					'tool_execution',
@@ -348,25 +355,24 @@ export function handleStreamingEvent(
 						toolName: event.toolName,
 						args: event.args,
 						status: 'running' as const,
-						sourceAssistantRowId:
-							state.lastFinalizedMessageRowId ?? undefined
+						sourceAssistantRowId: srcId
 					},
 					runId
 				)
-				state.currentToolRowIds.set(
-					event.toolCallId,
-					row.id
-				)
+				state.currentToolRowIds.set(event.toolCallId, {
+					rowId: row.id,
+					sourceAssistantRowId: srcId
+				})
 			}
 		)
 		return true
 	}
 
 	if (event.type === 'tool_execution_update') {
-		const rowId = state.currentToolRowIds.get(
+		const entry = state.currentToolRowIds.get(
 			event.toolCallId
 		)
-		if (!rowId) return true
+		if (!entry) return true
 		persistSafe(
 			deps,
 			sessionId,
@@ -375,13 +381,14 @@ export function handleStreamingEvent(
 			'update_failed',
 			() => {
 				deps.store.updateEvent(
-					rowId,
+					entry.rowId,
 					{
 						toolCallId: event.toolCallId,
 						toolName: event.toolName,
 						args: event.args,
 						result: event.partialResult,
-						status: 'running' as const
+						status: 'running' as const,
+						sourceAssistantRowId: entry.sourceAssistantRowId
 					},
 					sessionId
 				)
@@ -392,10 +399,10 @@ export function handleStreamingEvent(
 	}
 
 	if (event.type === 'tool_execution_end') {
-		const rowId = state.currentToolRowIds.get(
+		const entry = state.currentToolRowIds.get(
 			event.toolCallId
 		)
-		if (rowId) {
+		if (entry) {
 			persistSafe(
 				deps,
 				sessionId,
@@ -404,7 +411,7 @@ export function handleStreamingEvent(
 				'update_failed',
 				() => {
 					deps.store.updateEvent(
-						rowId,
+						entry.rowId,
 						{
 							toolCallId: event.toolCallId,
 							toolName: event.toolName,
@@ -413,7 +420,9 @@ export function handleStreamingEvent(
 							status: event.isError
 								? ('error' as const)
 								: ('complete' as const),
-							elapsedMs: event.elapsedMs
+							elapsedMs: event.elapsedMs,
+							sourceAssistantRowId:
+								entry.sourceAssistantRowId
 						},
 						sessionId
 					)

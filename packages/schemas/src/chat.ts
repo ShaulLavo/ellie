@@ -96,6 +96,7 @@ export type ContentPart =
 			type: 'image-generation'
 			toolCallId: string
 			status: 'running' | 'complete' | 'error'
+			prompt?: string
 			phase?: string
 			step?: number
 			totalSteps?: number

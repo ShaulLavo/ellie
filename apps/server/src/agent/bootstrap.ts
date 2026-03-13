@@ -23,12 +23,18 @@ const AGENT_ID = 'main'
  */
 export function ensureBootstrapInjected(opts: {
 	sessionId: string
+	runId: string
 	store: RealtimeStore
 	eventStore: EventStore
 	workspaceDir: string
 }): boolean {
-	const { sessionId, store, eventStore, workspaceDir } =
-		opts
+	const {
+		sessionId,
+		runId,
+		store,
+		eventStore,
+		workspaceDir
+	} = opts
 
 	// Atomic claim — returns false if already injected
 	const claimed = eventStore.claimBootstrapInjection(
@@ -74,7 +80,7 @@ export function ensureBootstrapInjected(opts: {
 				isError: false,
 				status: 'complete'
 			},
-			undefined, // no runId — synthetic
+			runId,
 			'bootstrap:v2:tool_execution'
 		)
 

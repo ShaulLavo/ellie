@@ -239,13 +239,15 @@ export function createImageGenTool(
 			'Generate images using Stable Diffusion via Diffusers. ' +
 			'Returns a complete reproducible recipe (every parameter including seed) with the generated image.\n\n' +
 			'QUICK START: Just provide a prompt. Everything else has sensible defaults.\n\n' +
-			'MODEL GUIDE:\n' +
-			"- Photorealistic people: 'cyberrealistic' + perfection LoRA\n" +
-			"- Moody/cinematic: 'moodymix' (dramatic lighting built in)\n" +
-			"- General realistic: 'realizum' (warm, natural)\n" +
-			"- Artistic/creative: 'perfectdeliberate' (illustration-photo blend)\n" +
-			"- High-res/complex scenes: 'sdxl' (1024px, better anatomy, no ELLA)\n" +
-			'- Complex prompts needing precise understanding: any SD 1.5 model + useElla=true\n\n' +
+			'AVAILABLE MODELS:\n' +
+			Object.entries(MODEL_PRESETS)
+				.map(
+					([key, preset]) =>
+						`- '${key}' (${preset.arch}) — ${preset.description}`
+				)
+				.join('\n') +
+			'\n\n' +
+			'Complex prompts needing precise understanding: any SD 1.5 model + useElla=true\n\n' +
 			'SD 1.5 PHOTOREALISM TIPS:\n' +
 			'- Use photographic terms: camera model/lens (nikon d850, 85mm, f1.6), film stock (kodak portra 400, cinestill 800)\n' +
 			'- Include lighting: dramatic lighting, rimlight, three point studio light, golden hour\n' +

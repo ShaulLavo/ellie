@@ -148,7 +148,10 @@ export function createChatRoutes(
 	store: RealtimeStore,
 	sseState: SseState,
 	getAgentController?: () => Promise<AgentController | null>,
-	ensureBootstrap?: (sessionId: string) => void,
+	ensureBootstrap?: (
+		sessionId: string,
+		runId: string
+	) => void,
 	uploadStore?: FileStore,
 	eventStore?: EventStore
 ) {
@@ -410,8 +413,6 @@ export function createChatRoutes(
 						}
 					}
 
-					ensureBootstrap?.(sessionId)
-
 					// Route the message directly to the agent controller.
 					// handleMessage backfills the runId on the user_message row.
 					let result:
@@ -440,6 +441,10 @@ export function createChatRoutes(
 								? err.message
 								: 'Message routing failed'
 						)
+					}
+
+					if (result) {
+						ensureBootstrap?.(sessionId, result.runId)
 					}
 
 					return {
