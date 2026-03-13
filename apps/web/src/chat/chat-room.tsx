@@ -1,19 +1,17 @@
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useChatDB } from './hooks/use-chat-db'
 import { useTimeline } from './hooks/use-timeline'
 import { useChatCommands } from './hooks/use-chat-commands'
+import { useChatSubmit } from './hooks/use-chat-submit'
 import { PromptInputProvider } from '@/components/ai-elements/prompt-input'
-import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import { eden } from '@/lib/eden'
-import { uploadFiles } from '@/lib/upload'
 import { ChatToolbar } from './components/chat-toolbar'
 import { ChatMessageList } from './components/chat-message-list'
 import { SessionStatusBar } from './components/session-status-bar'
 import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
 import { PromptInputWithCommands } from './components/prompt-input-with-commands'
-import { matchSlashCommand } from './utils'
 
 export function ChatRoom({
 	sessionId,
@@ -50,38 +48,11 @@ export function ChatRoom({
 		onClear: onClear ?? chat.clearSession
 	})
 
-	const handleSubmit = useCallback(
-		async (message: PromptInputMessage) => {
-			const { text, files } = message
-			if (!text.trim() && files.length === 0) return
-
-			if (text.trim()) {
-				const cmd = matchSlashCommand(text, commands)
-				if (cmd) {
-					cmd.action()
-					return
-				}
-			}
-
-			// Upload files via TUS before sending message
-			const rawFiles = files
-				.map(f => f.rawFile)
-				.filter((f): f is File => f != null)
-			const attachments =
-				rawFiles.length > 0
-					? await uploadFiles(rawFiles)
-					: undefined
-
-			const speechRef = speechRefRef.current
-			speechRefRef.current = null
-			await chat.sendMessage(
-				text,
-				attachments,
-				speechRef ?? undefined
-			)
-		},
-		[commands, chat]
-	)
+	const { handleSubmit } = useChatSubmit({
+		commands,
+		sendMessage: chat.sendMessage,
+		speechRefRef
+	})
 
 	return (
 		<div className="flex h-full w-full flex-col">
