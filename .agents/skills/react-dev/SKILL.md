@@ -82,10 +82,10 @@ function Button({ variant, children, ...props }: ButtonProps) {
 
 ```typescript
 type Props = {
-  children: React.ReactNode;          // Anything renderable
-  icon: React.ReactElement;           // Single element
-  render: (data: T) => React.ReactNode;  // Render prop
-};
+	children: React.ReactNode // Anything renderable
+	icon: React.ReactElement // Single element
+	render: (data: T) => React.ReactNode // Render prop
+}
 ```
 
 **Discriminated unions** for variant props:
@@ -111,24 +111,30 @@ Use specific event types for accurate target typing:
 
 ```typescript
 // Mouse
-function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
-  e.currentTarget.disabled = true;
+function handleClick(
+	e: React.MouseEvent<HTMLButtonElement>
+) {
+	e.currentTarget.disabled = true
 }
 
 // Form
 function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-  e.preventDefault();
-  const formData = new FormData(e.currentTarget);
+	e.preventDefault()
+	const formData = new FormData(e.currentTarget)
 }
 
 // Input
-function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-  console.log(e.target.value);
+function handleChange(
+	e: React.ChangeEvent<HTMLInputElement>
+) {
+	console.log(e.target.value)
 }
 
 // Keyboard
-function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-  if (e.key === 'Enter') e.currentTarget.blur();
+function handleKeyDown(
+	e: React.KeyboardEvent<HTMLInputElement>
+) {
+	if (e.key === 'Enter') e.currentTarget.blur()
 }
 ```
 
@@ -141,29 +147,33 @@ See [event-handlers.md](references/event-handlers.md) for focus, drag, clipboard
 **useState** - explicit for unions/null:
 
 ```typescript
-const [user, setUser] = useState<User | null>(null);
-const [status, setStatus] = useState<'idle' | 'loading'>('idle');
+const [user, setUser] = useState<User | null>(null)
+const [status, setStatus] = useState<'idle' | 'loading'>(
+	'idle'
+)
 ```
 
 **useRef** - null for DOM, value for mutable:
 
 ```typescript
-const inputRef = useRef<HTMLInputElement>(null);  // DOM - use ?.
-const countRef = useRef<number>(0);               // Mutable - direct access
+const inputRef = useRef<HTMLInputElement>(null) // DOM - use ?.
+const countRef = useRef<number>(0) // Mutable - direct access
 ```
 
 **useReducer** - discriminated unions for actions:
 
 ```typescript
 type Action =
-  | { type: 'increment' }
-  | { type: 'set'; payload: number };
+	| { type: 'increment' }
+	| { type: 'set'; payload: number }
 
 function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case 'set': return { ...state, count: action.payload };
-    default: return state;
-  }
+	switch (action.type) {
+		case 'set':
+			return { ...state, count: action.payload }
+		default:
+			return state
+	}
 }
 ```
 
@@ -171,21 +181,21 @@ function reducer(state: State, action: Action): State {
 
 ```typescript
 function useToggle(initial = false) {
-  const [value, setValue] = useState(initial);
-  const toggle = () => setValue(v => !v);
-  return [value, toggle] as const;
+	const [value, setValue] = useState(initial)
+	const toggle = () => setValue(v => !v)
+	return [value, toggle] as const
 }
 ```
 
 **useContext** - null guard pattern:
 
 ```typescript
-const UserContext = createContext<User | null>(null);
+const UserContext = createContext<User | null>(null)
 
 function useUser() {
-  const user = useContext(UserContext);
-  if (!user) throw new Error('useUser outside UserProvider');
-  return user;
+	const user = useContext(UserContext)
+	if (!user) throw new Error('useUser outside UserProvider')
+	return user
 }
 ```
 
@@ -316,23 +326,25 @@ Both TanStack Router and React Router v7 provide type-safe routing solutions.
 **TanStack Router** - Compile-time type safety with Zod validation:
 
 ```typescript
-import { createRoute } from '@tanstack/react-router';
-import { z } from 'zod';
+import { createRoute } from '@tanstack/react-router'
+import { z } from 'zod'
 
 const userRoute = createRoute({
-  path: '/users/$userId',
-  component: UserPage,
-  loader: async ({ params }) => ({ user: await fetchUser(params.userId) }),
-  validateSearch: z.object({
-    tab: z.enum(['profile', 'settings']).optional(),
-    page: z.number().int().positive().default(1),
-  }),
-});
+	path: '/users/$userId',
+	component: UserPage,
+	loader: async ({ params }) => ({
+		user: await fetchUser(params.userId)
+	}),
+	validateSearch: z.object({
+		tab: z.enum(['profile', 'settings']).optional(),
+		page: z.number().int().positive().default(1)
+	})
+})
 
 function UserPage() {
-  const { user } = useLoaderData({ from: userRoute.id });
-  const { tab, page } = useSearch({ from: userRoute.id });
-  const { userId } = useParams({ from: userRoute.id });
+	const { user } = useLoaderData({ from: userRoute.id })
+	const { tab, page } = useSearch({ from: userRoute.id })
+	const { userId } = useParams({ from: userRoute.id })
 }
 ```
 
@@ -358,6 +370,7 @@ See [tanstack-router.md](references/tanstack-router.md) for TanStack patterns an
 <rules>
 
 ALWAYS:
+
 - Specific event types (MouseEvent, ChangeEvent, etc)
 - Explicit useState for unions/null
 - ComponentPropsWithoutRef for native element extension
@@ -368,6 +381,7 @@ ALWAYS:
 - Type-safe routing patterns (see routing section)
 
 NEVER:
+
 - any for event handlers
 - JSX.Element for children (use ReactNode)
 - forwardRef in React 19+

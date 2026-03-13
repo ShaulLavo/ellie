@@ -19,6 +19,7 @@ Activate this skill when working on:
 - **Migrating to React 19** - Understanding breaking changes and new patterns
 
 **Trigger phrases:**
+
 - "Build a typed React component"
 - "Type this event handler"
 - "Create a generic Table/List/Modal"
@@ -28,6 +29,7 @@ Activate this skill when working on:
 - "React TypeScript best practices"
 
 **Not for:**
+
 - Non-React TypeScript projects
 - Vanilla JavaScript React (without TypeScript)
 - React Native-specific patterns
@@ -42,6 +44,7 @@ The skill provides progressive disclosure of React TypeScript knowledge:
 4. **React 19 migration guidance** - Breaking changes and new APIs clearly marked
 
 The skill is structured around:
+
 - **Quick reference sections** - Common patterns you can copy immediately
 - **Detailed reference files** - In-depth examples and explanations
 - **Rules and anti-patterns** - What to always do and what to never do
@@ -272,13 +275,13 @@ function Form() {
 
 ```typescript
 function useToggle(initial = false) {
-  const [value, setValue] = useState(initial);
-  const toggle = () => setValue(v => !v);
-  return [value, toggle] as const; // Tuple type preserved!
+	const [value, setValue] = useState(initial)
+	const toggle = () => setValue(v => !v)
+	return [value, toggle] as const // Tuple type preserved!
 }
 
 // Usage
-const [isOpen, toggleOpen] = useToggle(false);
+const [isOpen, toggleOpen] = useToggle(false)
 // isOpen is boolean, toggleOpen is () => void
 ```
 

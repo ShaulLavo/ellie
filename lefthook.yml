@@ -2,7 +2,7 @@ pre-commit:
   parallel: false
   commands:
     format:
-      glob: "*.{ts,tsx,js,jsx}"
+      glob: '*.{ts,tsx,js,jsx}'
       run: bunx oxfmt --check {staged_files}
     typecheck:
       run: bun run check-types
