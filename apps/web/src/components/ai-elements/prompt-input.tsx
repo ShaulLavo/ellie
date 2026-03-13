@@ -746,6 +746,7 @@ export const PromptInput = ({
 							await result
 						} catch {
 							// Don't clear on error - user may want to retry
+							isSubmittingRef.current = false
 							return
 						}
 					}
@@ -754,9 +755,8 @@ export const PromptInput = ({
 					clear()
 				} catch {
 					// Don't clear on error - user may want to retry
-				} finally {
-					isSubmittingRef.current = false
 				}
+				isSubmittingRef.current = false
 			},
 			[usingProvider, controller, files, onSubmit, clear]
 		)
