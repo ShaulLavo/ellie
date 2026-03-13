@@ -84,12 +84,13 @@ export type ContentPart =
 			title?: string
 	  }
 	| {
-			type: 'media-directive'
-			ref: string
-			uploadId?: string
+			type: 'assistant-artifact'
+			kind: 'media' | 'audio' | 'file'
+			origin: 'tool_upload' | 'tts' | 'llm_directive'
+			uploadId: string
 			url?: string
-			mediaKind: 'image' | 'audio' | 'video' | 'file'
-			error?: string
+			mime?: string
+			mediaKind?: 'image' | 'audio' | 'video' | 'file'
 	  }
 	| {
 			type: 'image-generation'
@@ -317,10 +318,8 @@ function formatPart(part: ContentPart): string {
 			return `[Checkpoint: ${part.message}]`
 		case 'artifact':
 			return `[Artifact: ${part.title ?? part.filename}]\n${part.content}`
-		case 'media-directive':
-			return part.error
-				? `[Media Unavailable: ${part.ref}]`
-				: `[Media: ${part.uploadId ?? part.ref}]`
+		case 'assistant-artifact':
+			return `[Artifact: ${part.kind} ${part.uploadId}]`
 		case 'image-generation':
 			if (part.status === 'complete') {
 				const count =

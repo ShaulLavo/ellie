@@ -87,11 +87,14 @@ class ModelCache:
                 if emit_progress:
                     emit_progress("load", "Evicting cached pipeline to free memory")
                 del pipe
+                gc.collect()
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                gc.collect()
+                if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+                    torch.mps.empty_cache()
 
     def _load_fresh(self, config: dict[str, Any], emit_progress: Any = None) -> Any:
+        import os
         import torch
         from diffusers import (
             StableDiffusionPipeline,
@@ -100,6 +103,10 @@ class ModelCache:
 
         device = self.profile.device
         dtype = self.profile.dtype
+
+        # Allow spilling into system RAM instead of hard-crashing on OOM
+        if "PYTORCH_MPS_HIGH_WATERMARK_RATIO" not in os.environ:
+            os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
 
         pipe_kwargs: dict[str, Any] = {
             "torch_dtype": dtype,
@@ -116,10 +123,15 @@ class ModelCache:
 
         if single_file_path:
             _progress("load", f"Loading {Path(single_file_path).name}", step=1, totalSteps=4)
+            # Explicit config prevents from_single_file picking up wrong cached models
+            config_repo = (
+                "stabilityai/stable-diffusion-xl-base-1.0" if arch == "sdxl"
+                else "sd-legacy/stable-diffusion-v1-5"
+            )
             try:
                 pipe = PipeClass.from_single_file(
                     single_file_path,
-                    original_config_file=None,
+                    config=config_repo,
                     local_files_only=False,
                     **pipe_kwargs,
                 )
@@ -140,7 +152,8 @@ class ModelCache:
 
         _progress("load", "Optimizing", step=3, totalSteps=4)
         pipe.enable_attention_slicing()
-        if hasattr(pipe, "enable_vae_tiling"):
+        # VAE tiling only on CUDA — causes tile seam artifacts on MPS
+        if device == "cuda" and hasattr(pipe, "enable_vae_tiling"):
             pipe.enable_vae_tiling()
 
         # CPU offload for limited VRAM
@@ -171,9 +184,11 @@ class ModelCache:
         self._pipelines.clear()
         self._load_order.clear()
         self._lora_state.clear()
+        gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        gc.collect()
+        if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
 
     def cached_keys(self) -> list[str]:
         return list(self._pipelines.keys())

@@ -36,6 +36,10 @@ export interface ModelPreset {
 	defaultNegativePrompt?: string
 	/** Textual inversion embeddings to auto-load with this model */
 	textualInversions?: string[]
+	/** CLIP layers to skip (1 = no skip, 2 = skip last layer). Most SD 1.5 anime models want 2. */
+	defaultClipSkip?: number
+	/** Enable ADetailer by default for this model */
+	defaultUseADetailer?: boolean
 	ellaCompatible: boolean
 }
 
@@ -151,9 +155,7 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		ellaCompatible: true
 	},
 	cyberrealistic: {
-		singleFileUrl:
-			'https://civitai.com/api/download/models/2681234',
-		singleFileFilename: 'cyberrealistic_final.safetensors',
+		hfModelId: 'stablediffusionapi/cyberrealistic',
 		pipelineClass: 'StableDiffusionPipeline',
 		defaultWidth: 512,
 		defaultHeight: 768,
@@ -185,8 +187,8 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		singleFileFilename:
 			'perfectdeliberate_v5SD15.safetensors',
 		pipelineClass: 'StableDiffusionPipeline',
-		defaultWidth: 512,
-		defaultHeight: 768,
+		defaultWidth: 832,
+		defaultHeight: 1216,
 		defaultSteps: 30,
 		defaultCfg: 6.0,
 		arch: 'sd15',
@@ -195,7 +197,8 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		strengths: [
 			'illustration-photo blend',
 			'creative flexibility',
-			'good composition'
+			'good composition',
+			'high resolution support'
 		],
 		weaknesses: ['less photorealistic than cyberrealistic'],
 		recommendedSampler: 'euler_ancestral',
@@ -203,6 +206,73 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		defaultPositivePrompt:
 			'sharp focus, artistic realism, cinematic composition, rich colors, ' +
 			'natural lighting, detailed textures, professional portrait',
+		ellaCompatible: true
+	},
+	dreamshaper: {
+		singleFileUrl:
+			'https://civitai.com/api/download/models/128713',
+		singleFileFilename: 'dreamshaper_8.safetensors',
+		pipelineClass: 'StableDiffusionPipeline',
+		defaultWidth: 512,
+		defaultHeight: 768,
+		defaultSteps: 25,
+		defaultCfg: 8.0,
+		arch: 'sd15',
+		description:
+			'Versatile all-rounder. Photorealism, characters, anime, and artistic styles. ' +
+			'Great LoRA compatibility. Works with clip skip 2. ' +
+			'Use ADetailer sparingly — tends to make all faces look the same.',
+		strengths: [
+			'versatility across styles',
+			'strong LoRA compatibility',
+			'good photorealism',
+			'character work'
+		],
+		weaknesses: [
+			'jack-of-all-trades, less specialized than dedicated models',
+			'ADetailer can homogenize faces'
+		],
+		recommendedSampler: 'dpmpp_sde',
+		recommendedScheduler: 'karras',
+		defaultPositivePrompt:
+			'masterpiece, best quality, highly detailed, sharp focus',
+		defaultNegativePrompt:
+			'(worst quality, low quality:1.4), bad anatomy, bad hands, ' +
+			'missing fingers, extra fingers, mutated hands, poorly drawn face, ' +
+			'watermark, text, signature, blurry',
+		defaultClipSkip: 2,
+		ellaCompatible: true
+	},
+	toonyou: {
+		singleFileUrl:
+			'https://civitai.com/api/download/models/125771',
+		singleFileFilename: 'toonyou_beta6.safetensors',
+		pipelineClass: 'StableDiffusionPipeline',
+		defaultWidth: 512,
+		defaultHeight: 768,
+		defaultSteps: 30,
+		defaultCfg: 8.0,
+		arch: 'sd15',
+		description:
+			'Anime/cartoon style. Vibrant colors, clean linework, expressive characters. Clip skip 2 recommended.',
+		strengths: [
+			'anime/cartoon aesthetics',
+			'vibrant colors',
+			'clean linework',
+			'expressive characters'
+		],
+		weaknesses: [
+			'not suited for photorealism',
+			'limited for realistic scenes'
+		],
+		recommendedSampler: 'dpmpp_sde',
+		recommendedScheduler: 'karras',
+		defaultPositivePrompt:
+			'(best quality, masterpiece), highly detailed, sharp focus, vibrant colors',
+		defaultNegativePrompt:
+			'(worst quality, low quality, letterboxed), bad anatomy, bad hands, ' +
+			'missing fingers, extra fingers, watermark, text, signature',
+		defaultClipSkip: 2,
 		ellaCompatible: true
 	},
 	moodymix: {
@@ -231,6 +301,69 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		defaultPositivePrompt:
 			'sharp focus, cinematic lighting, dramatic atmosphere, moody tones, ' +
 			'film grain, rich shadows, hyper realistic, lifelike texture',
+		defaultUseADetailer: true,
+		ellaCompatible: true
+	},
+	epicrealism: {
+		hfModelId: 'emilianJR/epiCRealism',
+		pipelineClass: 'StableDiffusionPipeline',
+		defaultWidth: 512,
+		defaultHeight: 768,
+		defaultSteps: 25,
+		defaultCfg: 5.0,
+		arch: 'sd15',
+		description:
+			'Photorealistic with natural look. Low CFG friendly (2-7). VAE included. ' +
+			'Avoid optimizer embeddings.',
+		strengths: [
+			'natural photorealism',
+			'works well at low CFG',
+			'included VAE',
+			'clean skin detail'
+		],
+		weaknesses: [
+			'can look flat at high CFG',
+			'less stylized range'
+		],
+		recommendedSampler: 'dpmpp_2m_sde',
+		recommendedScheduler: 'karras',
+		defaultPositivePrompt:
+			'masterpiece, best quality, photorealistic, sharp focus, natural lighting',
+		defaultNegativePrompt:
+			'cartoon, cgi, render, illustration, painting, drawing, ' +
+			'bad anatomy, bad hands, missing fingers, extra fingers, watermark, text',
+		ellaCompatible: true
+	},
+	majicmix: {
+		singleFileUrl:
+			'https://civitai.com/api/download/models/176425',
+		singleFileFilename: 'majicmixRealistic_v7.safetensors',
+		pipelineClass: 'StableDiffusionPipeline',
+		defaultWidth: 512,
+		defaultHeight: 768,
+		defaultSteps: 25,
+		defaultCfg: 7.0,
+		arch: 'sd15',
+		description:
+			'Photorealistic Asian portraits and scenes. Clean skin, natural lighting, high detail.',
+		strengths: [
+			'photorealistic portraits',
+			'natural skin tones',
+			'clean detail',
+			'good with Asian faces'
+		],
+		weaknesses: [
+			'bias toward Asian features',
+			'needs specific VAE for best results'
+		],
+		recommendedSampler: 'euler_ancestral',
+		recommendedScheduler: 'normal',
+		defaultPositivePrompt:
+			'masterpiece, best quality, highly detailed, sharp focus, photorealistic',
+		defaultNegativePrompt:
+			'(worst quality:2), (low quality:2), (normal quality:2), lowres, watermark, ' +
+			'bad anatomy, bad hands, missing fingers, extra fingers, mutated hands',
+		defaultClipSkip: 2,
 		ellaCompatible: true
 	},
 	sdxl: {

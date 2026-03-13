@@ -76,6 +76,16 @@ export interface GenerateImageRequest {
 	denoise?: number
 	seed?: number
 	batchSize?: number
+	clipSkip?: number
+	/** Enable ADetailer face/hand detail enhancement */
+	useADetailer?: boolean
+	adetailerStrength?: number
+	adetailerSteps?: number
+	adetailerConfidence?: number
+	adetailerDetectFaces?: boolean
+	adetailerDetectHands?: boolean
+	adetailerMaskPadding?: number
+	adetailerMaskBlur?: number
 	useElla?: boolean
 	ellaModel?: string
 	t5Encoder?: string
@@ -104,6 +114,15 @@ export interface ResolvedGenerationConfig {
 	width: number
 	height: number
 	batchSize: number
+	clipSkip: number
+	useADetailer: boolean
+	adetailerStrength: number
+	adetailerSteps: number
+	adetailerConfidence: number
+	adetailerDetectFaces: boolean
+	adetailerDetectHands: boolean
+	adetailerMaskPadding: number
+	adetailerMaskBlur: number
 	useElla: boolean
 	ellaModel?: string
 	t5Encoder?: string

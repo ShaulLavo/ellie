@@ -5,10 +5,6 @@ import type { TtsAutoMode } from './auto-tts'
 
 // ── Constants ────────────────────────────────────────────────────────────
 
-/** Check for any [[tts...]] directive in text. */
-export const TTS_DIRECTIVE_RE = /\[\[tts(?::[^\]]*?)?\]\]/i
-export const TTS_DIRECTIVE_GLOBAL_RE =
-	/\[\[tts(?::([^\]]*?))?\]\]/gi
 export const UPLOAD_REF_PREFIX = 'upload:'
 
 export const PENDING_ROW_TTL = 10 * 60_000 // 10 minutes
@@ -57,6 +53,41 @@ export interface ExtractedReplyPayload {
 	assistantRowId: number
 	payload: ChannelReplyPayload
 	isLastAssistantReply: boolean
+	ttsDirective?: { params?: string }
+}
+
+// ── Live-text streaming types ───────────────────────────────────────────
+
+/** Opaque provider-native handle for an in-flight live message. */
+export type LiveTextHandle = Record<string, unknown>
+
+/** Status of a live-text stream for a single target+row. */
+export type LiveTextStatus =
+	| 'streaming'
+	| 'finalized'
+	| 'failed'
+
+/** Per-target live state keyed by assistantRowId. */
+export interface LiveTextState {
+	assistantRowId: number
+	handle: LiveTextHandle
+	status: LiveTextStatus
+	/** Last text snapshot sent to the provider. */
+	lastSentText: string
+	/** Serialization: promise chain for edits to this target+row. */
+	editChain: Promise<void>
+}
+
+/** Durable live-delivery event payload (persisted via appendEvent). */
+export interface LiveDeliveryEvent {
+	channelId: string
+	accountId: string
+	conversationId: string
+	assistantRowId: number
+	handle: LiveTextHandle
+	status: LiveTextStatus
+	lastSentText: string
+	updatedAt: number
 }
 
 // ── Pure functions ───────────────────────────────────────────────────────
@@ -160,7 +191,9 @@ export function parseRowPayload(
 	}
 }
 
-export function targetKey(t: ChannelDeliveryTarget): string {
+export function targetKey(
+	t: ChannelDeliveryTarget
+): string {
 	return `${t.channelId}:${t.accountId}:${t.conversationId}`
 }
 

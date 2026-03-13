@@ -73,158 +73,15 @@ function extractMessageParts(
 	return []
 }
 
-function classifyMediaRef(
-	ref: string
-): Extract<
-	ContentPart,
-	{ type: 'media-directive' }
->['mediaKind'] {
-	const lower = ref.toLowerCase()
+/** Regex to strip [[tts:...]] directives from streaming text display. */
+const TTS_TAG_DISPLAY_RE = /\[\[tts(?::[^\]]*?)?\]\]/gi
 
-	// Upload content URLs ending in image extensions (e.g. .png)
-	// The path may contain /content suffix after the extension
-	const pathWithoutQuery = lower.split('?')[0] ?? lower
-	const pathToCheck = pathWithoutQuery.endsWith('/content')
-		? pathWithoutQuery.slice(0, -'/content'.length)
-		: pathWithoutQuery
-
-	if (
-		pathToCheck.endsWith('.png') ||
-		pathToCheck.endsWith('.jpg') ||
-		pathToCheck.endsWith('.jpeg') ||
-		pathToCheck.endsWith('.gif') ||
-		pathToCheck.endsWith('.webp') ||
-		pathToCheck.endsWith('.svg')
-	) {
-		return 'image'
-	}
-	if (
-		pathToCheck.endsWith('.mp3') ||
-		pathToCheck.endsWith('.ogg') ||
-		pathToCheck.endsWith('.opus') ||
-		pathToCheck.endsWith('.wav') ||
-		pathToCheck.endsWith('.m4a')
-	) {
-		return 'audio'
-	}
-	if (
-		pathToCheck.endsWith('.mp4') ||
-		pathToCheck.endsWith('.mov') ||
-		pathToCheck.endsWith('.webm')
-	) {
-		return 'video'
-	}
-	return 'file'
-}
-
-function extractUploadIdFromMediaRef(
-	ref: string
-): string | undefined {
-	const trimmed = ref.trim()
-	const uploadPrefixMatch = trimmed.match(/^upload:(.+)$/i)
-	if (uploadPrefixMatch?.[1]) {
-		return uploadPrefixMatch[1]
-	}
-
-	const uploadContentMatch = trimmed.match(
-		/\/api\/uploads-rpc\/([^/?#]+)\/content(?:[?#].*)?$/i
-	)
-	if (uploadContentMatch?.[1]) {
-		try {
-			return decodeURIComponent(uploadContentMatch[1])
-		} catch {
-			return uploadContentMatch[1]
-		}
-	}
-
-	const marker = '/uploads/'
-	const markerIndex = trimmed.indexOf(marker)
-	if (markerIndex === -1) return undefined
-	const uploadId = trimmed.slice(
-		markerIndex + marker.length
-	)
-	return uploadId.length > 0 ? uploadId : undefined
-}
-
-function extractRenderableMediaUrl(
-	ref: string
-): string | undefined {
-	const trimmed = ref.trim()
-	if (/^https?:\/\//i.test(trimmed)) return trimmed
-	if (
-		/^\/api\/uploads-rpc\/.+\/content(?:[?#].*)?$/i.test(
-			trimmed
-		)
-	) {
-		return trimmed
-	}
-	return undefined
-}
-
-function parseDisplayDirectives(text: string): {
-	text: string
-	mediaParts: Extract<
-		ContentPart,
-		{ type: 'media-directive' }
-	>[]
-} {
-	const lines = text.split('\n')
-	const output: string[] = []
-	const mediaParts: Extract<
-		ContentPart,
-		{ type: 'media-directive' }
-	>[] = []
-	let inFence = false
-
-	for (const line of lines) {
-		if (/^\s*```/.test(line)) {
-			inFence = !inFence
-			output.push(line)
-			continue
-		}
-
-		if (!inFence) {
-			if (/^\s*MEDIA:\s*/i.test(line)) {
-				const ref = line
-					.replace(/^\s*MEDIA:\s*/i, '')
-					.trim()
-				if (ref.length > 0) {
-					const uploadId = extractUploadIdFromMediaRef(ref)
-					mediaParts.push({
-						type: 'media-directive',
-						ref,
-						uploadId,
-						url: extractRenderableMediaUrl(ref),
-						mediaKind: classifyMediaRef(ref)
-					})
-				}
-				continue
-			}
-			const cleaned = line
-				.replace(/\[\[tts(?::[^\]]*?)?\]\]/gi, '')
-				.trim()
-			if (cleaned.length === 0 && line.trim().length > 0)
-				continue
-			output.push(cleaned)
-			continue
-		}
-
-		output.push(line)
-	}
-
-	const collapsed: string[] = []
-	let previousBlank = false
-	for (const line of output) {
-		const isBlank = line.trim().length === 0
-		if (isBlank && previousBlank) continue
-		collapsed.push(line)
-		previousBlank = isBlank
-	}
-
-	return {
-		text: collapsed.join('\n').trim(),
-		mediaParts
-	}
+/**
+ * Strip [[tts:...]] from streaming display text.
+ * For finalized messages, text is already clean from the server.
+ */
+function stripTtsForDisplay(text: string): string {
+	return text.replace(TTS_TAG_DISPLAY_RE, '').trim()
 }
 
 /** Extract content parts from a tool_execution event payload (result view). */
@@ -402,6 +259,22 @@ function extractImageGenParts(
 	]
 }
 
+/** Classify an upload ID into a media kind based on file extension. */
+function classifyUploadId(
+	uploadId: string
+): 'image' | 'audio' | 'video' | 'file' {
+	const lower = uploadId.toLowerCase()
+	if (
+		/\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/.test(lower)
+	)
+		return 'image'
+	if (/\.(mp3|ogg|opus|wav|m4a|flac|aac)$/.test(lower))
+		return 'audio'
+	if (/\.(mp4|mov|webm|avi|mkv)$/.test(lower))
+		return 'video'
+	return 'file'
+}
+
 /** Convert an EventRow into a StoredChatMessage (no Date allocation). */
 export function eventToStored(
 	row: EventRow
@@ -462,17 +335,29 @@ export function eventToStored(
 		]
 	} else if (row.type === 'error') {
 		parts = extractErrorParts(parsed)
-	} else if (row.type === 'assistant_audio') {
-		// TTS post-processor synthesized audio → render as voice message
+	} else if (row.type === 'assistant_artifact') {
+		// Artifact bound to a reply → render as assistant-artifact content part
 		const uploadId = parsed.uploadId as string | undefined
 		if (uploadId) {
+			const kind = parsed.kind as 'media' | 'audio' | 'file'
+			const origin = parsed.origin as
+				| 'tool_upload'
+				| 'tts'
+				| 'llm_directive'
 			parts = [
 				{
-					type: 'audio',
-					file: uploadId,
-					url: parsed.url as string | undefined,
-					mime: (parsed.mime as string) ?? 'audio/ogg',
-					size: (parsed.size as number) ?? 0
+					type: 'assistant-artifact',
+					kind,
+					origin,
+					uploadId,
+					url:
+						(parsed.url as string) ??
+						`/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`,
+					mime: parsed.mime as string | undefined,
+					mediaKind:
+						kind === 'audio'
+							? 'audio'
+							: classifyUploadId(uploadId)
 				}
 			]
 		} else {
@@ -529,36 +414,28 @@ export function eventToStored(
 	}
 
 	// Strip empty text parts from finalized (non-streaming) messages.
-	// When toolCall blocks are filtered out, empty text blocks may remain
-	// and create ghost message bubbles in the UI.
 	if (!isMessageStreaming) {
 		filteredParts = filteredParts.filter(
 			p => p.type !== 'text' || p.text.trim().length > 0
 		)
 	}
 
-	// Strip [[tts]] / [[tts:...]] directives from displayed text
-	const displayParts: ContentPart[] = []
-	for (const p of filteredParts) {
-		if (p.type === 'text') {
-			const parsedText = parseDisplayDirectives(p.text)
-			if (parsedText.text.trim().length > 0) {
-				displayParts.push({
-					...p,
-					text: parsedText.text
-				})
-			}
-			displayParts.push(...parsedText.mediaParts)
-			continue
-		}
-		displayParts.push(p)
+	// For streaming messages only, strip [[tts:...]] from display text.
+	// For finalized messages, text is already clean from the server.
+	if (isMessageStreaming) {
+		filteredParts = filteredParts.map(p => {
+			if (p.type !== 'text') return p
+			const cleaned = stripTtsForDisplay(p.text)
+			return cleaned.length > 0
+				? { ...p, text: cleaned }
+				: p
+		})
+		filteredParts = filteredParts.filter(
+			p => p.type !== 'text' || p.text.trim().length > 0
+		)
 	}
 
-	filteredParts = displayParts.filter(
-		p => p.type !== 'text' || p.text.trim().length > 0
-	)
-
-	// Recompute text from display-processed parts (e.g. [[tts]] suppresses all text)
+	// Recompute text from processed parts
 	text = filteredParts
 		.filter(
 			(p): p is Extract<ContentPart, { type: 'text' }> =>
@@ -576,7 +453,7 @@ export function eventToStored(
 		sender = 'user'
 	} else if (
 		row.type === 'assistant_message' ||
-		row.type === 'assistant_audio' ||
+		row.type === 'assistant_artifact' ||
 		parsed.role === 'assistant'
 	) {
 		sender = 'agent'
@@ -592,6 +469,20 @@ export function eventToStored(
 		sender = 'memory'
 	}
 
+	// Extract parent message ID for nesting (tools → assistant reply, artifacts → assistant reply)
+	let parentMessageId: string | undefined
+	if (row.type === 'tool_execution') {
+		const srcId = parsed.sourceAssistantRowId as
+			| number
+			| undefined
+		if (srcId != null) parentMessageId = String(srcId)
+	} else if (row.type === 'assistant_artifact') {
+		const parentId = parsed.assistantRowId as
+			| number
+			| undefined
+		if (parentId != null) parentMessageId = String(parentId)
+	}
+
 	return {
 		id: String(row.id),
 		timestamp: new Date(row.createdAt).toISOString(),
@@ -600,48 +491,8 @@ export function eventToStored(
 		seq: row.seq,
 		sender,
 		thinking,
-		runId: row.runId
+		runId: row.runId,
+		eventType: row.type,
+		parentMessageId
 	}
-}
-
-/**
- * Merge assistant_audio messages into their parent assistant_message
- * so audio + transcript render as a single message (like user voice messages).
- *
- * An assistant_audio message is an agent message whose parts are all audio
- * and that shares a runId with a preceding assistant_message.
- */
-export function mergeAssistantAudio(
-	msgs: StoredChatMessage[]
-): StoredChatMessage[] {
-	const result: StoredChatMessage[] = []
-	for (const msg of msgs) {
-		const isAudioOnly =
-			msg.sender === 'agent' &&
-			msg.runId &&
-			msg.parts.length > 0 &&
-			msg.parts.every(p => p.type === 'audio')
-
-		if (isAudioOnly) {
-			// Find the last assistant message with the same runId
-			let merged = false
-			for (let i = result.length - 1; i >= 0; i--) {
-				if (
-					result[i].sender === 'agent' &&
-					result[i].runId === msg.runId
-				) {
-					result[i] = {
-						...result[i],
-						parts: [...result[i].parts, ...msg.parts]
-					}
-					merged = true
-					break
-				}
-			}
-			if (!merged) result.push(msg)
-			continue
-		}
-		result.push(msg)
-	}
-	return result
 }

@@ -83,8 +83,13 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
     total_steps = config.get("steps", 25)
 
     def step_callback(pipe_obj: Any, step: int, timestep: Any, callback_kwargs: dict) -> dict:
-        _progress("denoise", step=step + 1, totalSteps=total_steps)
+        # Use the pipeline's actual num_timesteps which accounts for
+        # scheduler order (e.g. DPM++ SDE runs ~2N steps for N requested)
+        actual_total = getattr(pipe_obj, "num_timesteps", total_steps)
+        _progress("denoise", step=step + 1, totalSteps=actual_total)
         return callback_kwargs
+
+    clip_skip = config.get("clipSkip", 1)
 
     gen_kwargs: dict[str, Any] = {
         "prompt": config["prompt"],
@@ -98,6 +103,12 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
         "callback_on_step_end": step_callback,
     }
 
+    # Only pass clip_skip when > 1 (diffusers treats 1 as "skip 1 layer",
+    # while A1111 convention is clip_skip=1 means no skip = diffusers None)
+    if clip_skip > 1:
+        gen_kwargs["clip_skip"] = clip_skip
+
+
     # ELLA conditioning: project through adapter, not raw T5 injection
     if use_ella and ella_components:
         projected_embeds = encode_prompt_with_ella(
@@ -105,12 +116,25 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
         )
         gen_kwargs["prompt_embeds"] = projected_embeds
         del gen_kwargs["prompt"]
+        gen_kwargs.pop("clip_skip", None)  # ELLA bypasses CLIP encoder
 
-    _progress("denoise", step=0, totalSteps=total_steps)
+    _progress("denoise", step=0, totalSteps=total_steps)  # approximate; callback will correct
     result = pipe(**gen_kwargs)
 
-    # Save output
+    # ADetailer post-processing (face/hand detail enhancement)
     images = result.images
+    use_adetailer = config.get("useADetailer", False)
+    if use_adetailer:
+        from .adetailer import apply_adetailer
+        _progress("adetailer", "Starting detail enhancement...")
+        images = apply_adetailer(
+            images, pipe, config,
+            device=profile.device, dtype=profile.dtype,
+            emit_progress=_progress, emit_error=_error,
+        )
+        _progress("adetailer", "Detail enhancement complete")
+
+    # Save output
     _progress("save", f"Encoding {len(images)} image(s)")
 
     saved_images: list[dict[str, Any]] = []

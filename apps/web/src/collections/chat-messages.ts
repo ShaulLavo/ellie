@@ -19,6 +19,10 @@ export interface StoredChatMessage {
 	streamGroupId?: string
 	thinking?: string
 	runId?: string | null
+	/** Source event type (e.g. 'assistant_message', 'tool_execution', 'assistant_artifact'). */
+	eventType?: string
+	/** Row ID of the parent assistant reply (for tools and artifacts). */
+	parentMessageId?: string
 }
 
 /**

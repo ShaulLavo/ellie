@@ -1,9 +1,5 @@
 import { memo } from 'react'
-import {
-	AlertTriangleIcon,
-	BookOpenIcon,
-	FileTextIcon
-} from 'lucide-react'
+import { BookOpenIcon, FileTextIcon } from 'lucide-react'
 import { SunHorizonIcon } from '@phosphor-icons/react'
 import type { ContentPart } from '@ellie/schemas/chat'
 import {
@@ -43,9 +39,9 @@ export const PartRenderer = memo(
 			case 'text':
 				if (isTranscription) {
 					return (
-						<p className="text-sm italic text-muted-foreground">
-							"{part.text}"
-						</p>
+						<MessageResponse className="prose-sm italic text-muted-foreground [&_*]:text-muted-foreground">
+							{part.text}
+						</MessageResponse>
 					)
 				}
 				return isStreaming ? (
@@ -257,42 +253,13 @@ export const PartRenderer = memo(
 					</div>
 				)
 			}
-			case 'media-directive': {
+			case 'assistant-artifact': {
 				const resolvedUrl =
 					part.url ||
-					(part.uploadId
-						? `/api/uploads-rpc/${encodeURIComponent(part.uploadId)}/content`
-						: undefined)
+					`/api/uploads-rpc/${encodeURIComponent(part.uploadId)}/content`
 				const resolvedKind =
 					part.mediaKind ||
-					(/\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)(\b|$)/i.test(
-						part.uploadId ?? part.ref ?? ''
-					)
-						? 'image'
-						: /\.(mp4|webm|mov|avi|mkv)(\b|$)/i.test(
-									part.uploadId ?? part.ref ?? ''
-							  )
-							? 'video'
-							: /\.(mp3|wav|ogg|flac|aac|m4a)(\b|$)/i.test(
-										part.uploadId ?? part.ref ?? ''
-								  )
-								? 'audio'
-								: 'file')
-				if (part.error || !resolvedUrl) {
-					return (
-						<div className="my-2 flex max-w-sm items-start gap-2">
-							<AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
-							<div className="min-w-0">
-								<div className="font-mono text-[11px] text-amber-700 dark:text-amber-400">
-									Media could not be rendered
-								</div>
-								<div className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">
-									{part.ref}
-								</div>
-							</div>
-						</div>
-					)
-				}
+					(part.kind === 'audio' ? 'audio' : 'file')
 
 				if (resolvedKind === 'image') {
 					return (

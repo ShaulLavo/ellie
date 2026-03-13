@@ -17,10 +17,14 @@ import { partHasVisibleOutput } from './part-utils'
 export const ChatMessageRow = memo(
 	({
 		message,
+		toolItems,
+		artifactItems,
 		toolResults,
 		consumedToolCallIds
 	}: {
 		message: StoredChatMessage
+		toolItems?: StoredChatMessage[]
+		artifactItems?: StoredChatMessage[]
 		toolResults?: Map<string, ToolResultPart>
 		consumedToolCallIds?: Set<string>
 	}) => {
@@ -63,8 +67,34 @@ export const ChatMessageRow = memo(
 		const hasAudio = message.parts.some(
 			p => p.type === 'audio'
 		)
+
+		// Collect visible nested parts
+		const visibleToolParts = (toolItems ?? []).flatMap(
+			msg =>
+				msg.parts.filter(part =>
+					partHasVisibleOutput(part, consumedToolCallIds)
+				)
+		)
+		// Audio artifacts before media artifacts
+		const sortedArtifactParts = (artifactItems ?? [])
+			.flatMap(msg => msg.parts)
+			.sort((a, b) => {
+				const aIsAudio =
+					a.type === 'assistant-artifact' &&
+					a.kind === 'audio'
+				const bIsAudio =
+					b.type === 'assistant-artifact' &&
+					b.kind === 'audio'
+				if (aIsAudio && !bIsAudio) return -1
+				if (!aIsAudio && bIsAudio) return 1
+				return 0
+			})
+
 		const hasVisibleContent =
-			!!message.thinking || visibleParts.length > 0
+			!!message.thinking ||
+			visibleParts.length > 0 ||
+			visibleToolParts.length > 0 ||
+			sortedArtifactParts.length > 0
 		if (!hasVisibleContent) return null
 
 		return (
@@ -96,6 +126,19 @@ export const ChatMessageRow = memo(
 								</ReasoningContent>
 							</Reasoning>
 						)}
+						{/* Audio artifacts (TTS) render before text */}
+						{sortedArtifactParts
+							.filter(
+								p =>
+									p.type === 'assistant-artifact' &&
+									p.kind === 'audio'
+							)
+							.map((part, i) => (
+								<PartRenderer
+									key={`artifact-audio-${i}`}
+									part={part}
+								/>
+							))}
 						{visibleParts.map((part, i) => (
 							<PartRenderer
 								key={`${part.type}-${i}`}
@@ -108,12 +151,29 @@ export const ChatMessageRow = memo(
 								consumedToolCallIds={consumedToolCallIds}
 							/>
 						))}
+						{/* Nested tool items */}
+						{visibleToolParts.map((part, i) => (
+							<PartRenderer
+								key={`tool-${i}`}
+								part={part}
+								toolResults={toolResults}
+								consumedToolCallIds={consumedToolCallIds}
+							/>
+						))}
+						{/* Non-audio artifacts (media, files) render after text */}
+						{sortedArtifactParts
+							.filter(
+								p =>
+									p.type !== 'assistant-artifact' ||
+									p.kind !== 'audio'
+							)
+							.map((part, i) => (
+								<PartRenderer
+									key={`artifact-media-${i}`}
+									part={part}
+								/>
+							))}
 					</div>
-					{/* {message.text && !message.isStreaming && (
-						<MessageActions className="opacity-0 transition-opacity group-hover:opacity-100">
-							<CopyButton text={message.text} />
-						</MessageActions>
-					)} */}
 				</MessageContent>
 			</Message>
 		)

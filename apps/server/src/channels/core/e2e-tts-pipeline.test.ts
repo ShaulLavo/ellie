@@ -433,7 +433,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		registry.shutdown()
 	})
 
-	test('explicit MEDIA: directive takes priority over auto-TTS', async () => {
+	test('media artifact takes priority over auto-TTS', async () => {
 		const registry = createRegistry('always')
 		const sessionId = 'test-session'
 		const runId = 'run-explicit-media'
@@ -443,25 +443,48 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-explicit'
 		}
 
-		// Create a real temp file for the MEDIA: ref
-		const mediaPath = join(dir, 'voice.opus')
-		writeFileSync(mediaPath, 'pre-made-audio')
+		// Create an upload file that resolves from upload:path
+		const uploadId = 'trace/run-explicit-media/voice.opus'
+		const uploadPath = join(dir, 'uploads', uploadId)
+		mkdirSync(dirname(uploadPath), { recursive: true })
+		writeFileSync(uploadPath, 'pre-made-audio')
 
 		registry.register(runId, sessionId, target)
 		registry.watchSession(sessionId)
 
-		emitRunWithText(
+		// Emit clean text + an assistant_artifact for the media
+		const row = store.appendEvent(
 			sessionId,
-			runId,
-			`Check this out\nMEDIA:${mediaPath}`
+			'assistant_message',
+			makeAssistantPayload('Check this out', runId),
+			runId
+		)
+		store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: row.id,
+				kind: 'media',
+				origin: 'tool_upload',
+				uploadId,
+				mime: 'audio/ogg; codecs=opus'
+			},
+			runId
+		)
+		store.appendEvent(
+			sessionId,
+			'run_closed',
+			{ reason: 'completed' },
+			runId
 		)
 
 		await new Promise(r => setTimeout(r, 150))
 
-		// TTS was NOT called — explicit media takes priority
+		// TTS was NOT called — media artifact takes priority
 		expect(mockSynthesize).toHaveBeenCalledTimes(0)
-		// Sent as media via the directive path
+		// Sent as media via the artifact path
 		expect(sentMedia).toHaveLength(1)
+		expect(sentMedia[0].text).toBe('Check this out')
 		expect(sentMedia[0].media.mimetype).toBe(
 			'audio/ogg; codecs=opus'
 		)
@@ -469,7 +492,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		registry.shutdown()
 	})
 
-	test('explicit [[tts]] with media sends the media reply and a voice note', async () => {
+	test('ttsDirective with media artifact sends both media and voice note', async () => {
 		const registry = createRegistry('off')
 		const sessionId = 'test-session'
 		const runId = 'run-explicit-tts-media'
@@ -479,17 +502,48 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-explicit-tts-media'
 		}
 
-		const mediaPath = join(dir, 'preview.png')
-		writeFileSync(mediaPath, 'fake-image')
+		// Create an upload file for the media artifact
+		const uploadId =
+			'trace/run-explicit-tts-media/preview.png'
+		const uploadPath = join(dir, 'uploads', uploadId)
+		mkdirSync(dirname(uploadPath), { recursive: true })
+		writeFileSync(uploadPath, 'fake-image')
 		attachTtsPostProcessor(registry)
 
 		registry.register(runId, sessionId, target)
 		registry.watchSession(sessionId)
 
-		emitRunWithText(
+		// Emit clean text with ttsDirective + media artifact
+		const assistantPayload = makeAssistantPayload(
+			'Here are the options.',
+			runId
+		)
+		;(
+			assistantPayload as Record<string, unknown>
+		).ttsDirective = { params: undefined }
+		const row = store.appendEvent(
 			sessionId,
-			runId,
-			`Here are the options. [[tts]]\nMEDIA:${mediaPath}`
+			'assistant_message',
+			assistantPayload,
+			runId
+		)
+		store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: row.id,
+				kind: 'media',
+				origin: 'tool_upload',
+				uploadId,
+				mime: 'image/png'
+			},
+			runId
+		)
+		store.appendEvent(
+			sessionId,
+			'run_closed',
+			{ reason: 'completed' },
+			runId
 		)
 
 		await new Promise(r => setTimeout(r, 150))

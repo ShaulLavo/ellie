@@ -1,13 +1,16 @@
 /**
- * TtsPostProcessor — watches ALL sessions for [[tts]] directives
- * in assistant replies and synthesizes audio server-side.
+ * TtsPostProcessor — watches ALL sessions for ttsDirective flags
+ * on assistant replies and synthesizes audio server-side.
  *
  * Supports per-reply voice overrides via [[tts:voiceId=xxx speed=1.1]]
- * and persistent default voice preferences from DATA_DIR/tts/preferences.json.
+ * (captured as structured ttsDirective at message_end) and persistent
+ * default voice preferences from DATA_DIR/tts/preferences.json.
  *
- * Runs after run_closed fires. Produces `assistant_audio` events
- * that both the web frontend (audio player) and channel delivery
- * pipeline (voice note) can consume.
+ * Runs after run_closed fires. Produces `assistant_artifact` events
+ * (kind='audio', origin='tts') that both the web frontend (audio player)
+ * and channel delivery pipeline (voice note) can consume.
+ *
+ * Processes EVERY reply in a run that has ttsDirective set, not just the last.
  */
 
 import type {
@@ -28,18 +31,6 @@ import {
 	stripMarkdownForTts,
 	truncateForTts
 } from '../channels/core/reply-tts'
-
-/**
- * Matches [[tts]] or [[tts:key=value key2=value2 ...]].
- * Group 1 captures the key=value params (if any).
- */
-const TTS_TAG_RE = /\[\[tts(?::([^\]]*))?\]\]/gi
-
-/** Check if text contains any [[tts...]] directive. */
-function hasTtsDirective(text: string): boolean {
-	TTS_TAG_RE.lastIndex = 0
-	return TTS_TAG_RE.test(text)
-}
 
 /**
  * Parse voice overrides from a [[tts:...]] directive's param string.
@@ -108,37 +99,6 @@ export function parseTtsDirectiveParams(
 	return overrides
 }
 
-/**
- * Extract all [[tts:...]] directives from text and merge their overrides.
- * If multiple directives exist, later ones win for conflicting keys.
- */
-function extractDirectiveOverrides(
-	text: string
-): ElevenLabsTtsOverrides {
-	TTS_TAG_RE.lastIndex = 0
-	let merged: ElevenLabsTtsOverrides = {}
-	let match: RegExpExecArray | null
-	while ((match = TTS_TAG_RE.exec(text)) !== null) {
-		const params = parseTtsDirectiveParams(match[1])
-		merged = {
-			...merged,
-			...params,
-			voiceSettings: {
-				...merged.voiceSettings,
-				...params.voiceSettings
-			}
-		}
-	}
-	// Clean up empty voiceSettings
-	if (
-		merged.voiceSettings &&
-		Object.keys(merged.voiceSettings).length === 0
-	) {
-		delete merged.voiceSettings
-	}
-	return merged
-}
-
 export interface TtsPostProcessorOpts {
 	store: RealtimeStore
 	blobSink: BlobSink
@@ -192,8 +152,8 @@ export class TtsPostProcessor {
 	}
 
 	/**
-	 * Process a completed run: extract text, detect [[tts]],
-	 * synthesize, store audio, append assistant_audio event.
+	 * Process a completed run: find all replies with ttsDirective,
+	 * synthesize audio for each, emit assistant_artifact events.
 	 *
 	 * Returns a promise that external callers (e.g. delivery registry)
 	 * can await to ensure synthesis is complete before delivering.
@@ -227,50 +187,70 @@ export class TtsPostProcessor {
 		runId: string,
 		sessionId: string
 	): Promise<void> {
-		// 1. Extract the final assistant text from this run
-		const text = this.#extractAssistantText(
+		// 1. Query all run events and find replies with ttsDirective
+		const rows = this.#store.queryRunEvents(
 			sessionId,
 			runId
 		)
-		if (!text) return
 
-		// 2. Check for [[tts]] or [[tts:...]] tag
-		if (!hasTtsDirective(text)) return
+		const ttsReplies: Array<{
+			rowId: number
+			text: string
+			params?: string
+		}> = []
 
-		// 3. Extract per-reply overrides from directive params
-		const directiveOverrides =
-			extractDirectiveOverrides(text)
+		for (const row of rows) {
+			if (row.type !== 'assistant_message') continue
+			let parsed: Record<string, unknown>
+			try {
+				parsed = JSON.parse(row.payload as string)
+			} catch {
+				continue
+			}
+			if (parsed.streaming) continue
+
+			const ttsDirective = parsed.ttsDirective as
+				| { params?: string }
+				| undefined
+			if (!ttsDirective) continue
+
+			// Extract clean text from stored message
+			const message = parsed.message as
+				| {
+						content?: Array<{
+							type: string
+							text?: string
+						}>
+				  }
+				| undefined
+			if (!message?.content) continue
+			const texts: string[] = []
+			for (const block of message.content) {
+				if (block.type === 'text' && block.text) {
+					texts.push(block.text)
+				}
+			}
+			if (texts.length === 0) continue
+			const text = texts.join('\n')
+
+			ttsReplies.push({
+				rowId: row.id,
+				text,
+				params: ttsDirective.params
+			})
+		}
+
+		if (ttsReplies.length === 0) return
 
 		console.info(
-			'[tts-post-processor] Detected [[tts]] in run',
+			'[tts-post-processor] Found ttsDirective replies in run',
 			{
 				runId,
-				textLength: text.length,
-				hasOverrides:
-					Object.keys(directiveOverrides).length > 0
+				count: ttsReplies.length
 			}
 		)
 
-		// 4. Prepare text for synthesis (strip all [[tts...]] tags and MEDIA: lines)
-		TTS_TAG_RE.lastIndex = 0
-		let ttsText = text.replace(TTS_TAG_RE, '').trim()
-		// Strip MEDIA: directive lines (URLs are not speakable)
-		ttsText = ttsText
-			.split('\n')
-			.filter(line => !/^\s*media:\s*/i.test(line))
-			.join('\n')
-			.trim()
-		ttsText = stripMarkdownForTts(ttsText)
-		ttsText = truncateForTts(ttsText)
-
-		if (ttsText.length < 10) {
-			console.debug(
-				'[tts-post-processor] Text too short after cleanup, skipping'
-			)
-			return
-		}
-
-		// 5. Resolve TTS config (with credentials file fallback for API key)
+		// 2. Resolve TTS config once for all replies
 		const config =
 			this.#ttsConfig ?? resolveElevenLabsTtsConfig()
 		if (!config.apiKey && this.#credentialsPath) {
@@ -279,32 +259,63 @@ export class TtsPostProcessor {
 			)
 		}
 
-		// 6. Load persistent preferences and merge with directive overrides
-		//    Priority: directive overrides > saved preferences > config defaults
-		const overrides = await this.#buildOverrides(
-			directiveOverrides
+		// 3. Process each reply
+		for (const reply of ttsReplies) {
+			try {
+				await this.#synthesizeReply(
+					reply,
+					config,
+					sessionId,
+					runId
+				)
+			} catch (err) {
+				console.error(
+					`[tts-post-processor] Failed to synthesize reply ${reply.rowId}:`,
+					err
+				)
+			}
+		}
+	}
+
+	async #synthesizeReply(
+		reply: { rowId: number; text: string; params?: string },
+		config: ElevenLabsTtsConfig,
+		sessionId: string,
+		runId: string
+	): Promise<void> {
+		// Parse directive overrides
+		const directiveOverrides = parseTtsDirectiveParams(
+			reply.params
 		)
 
-		// 7. Synthesize
-		const synthStart = Date.now()
-		let result
-		try {
-			result = await elevenLabsTTS({
-				text: ttsText,
-				config,
-				overrides
-			})
-		} catch (err) {
-			console.error(
-				'[tts-post-processor] TTS synthesis failed:',
-				err
+		// Prepare text for synthesis
+		let ttsText = stripMarkdownForTts(reply.text)
+		ttsText = truncateForTts(ttsText)
+
+		if (ttsText.length < 10) {
+			console.debug(
+				`[tts-post-processor] Text too short for reply ${reply.rowId}, skipping`
 			)
 			return
 		}
 
+		// Build overrides (directive > preferences > config defaults)
+		const overrides = await this.#buildOverrides(
+			directiveOverrides
+		)
+
+		// Synthesize
+		const synthStart = Date.now()
+		const result = await elevenLabsTTS({
+			text: ttsText,
+			config,
+			overrides
+		})
+
 		console.info(
 			'[tts-post-processor] Synthesis complete',
 			{
+				rowId: reply.rowId,
 				durationMs: Date.now() - synthStart,
 				audioSize: result.audio.length,
 				format: result.outputFormat,
@@ -312,7 +323,7 @@ export class TtsPostProcessor {
 			}
 		)
 
-		// 8. Store audio via blobSink
+		// Store audio via blobSink
 		const blobRef = await this.#blobSink.write({
 			traceId: runId,
 			spanId: 'tts-post',
@@ -322,11 +333,14 @@ export class TtsPostProcessor {
 			ext: result.extension
 		})
 
-		// 9. Append assistant_audio event (deduped by runId)
+		// Emit assistant_artifact event (deduped by assistantRowId)
 		this.#store.appendEvent(
 			sessionId,
-			'assistant_audio',
+			'assistant_artifact',
 			{
+				assistantRowId: reply.rowId,
+				kind: 'audio' as const,
+				origin: 'tts' as const,
 				uploadId: blobRef.uploadId,
 				url: blobRef.url,
 				mime: result.mime,
@@ -334,7 +348,7 @@ export class TtsPostProcessor {
 				synthesizedText: ttsText
 			},
 			runId,
-			`tts:${runId}`
+			`tts:${reply.rowId}`
 		)
 	}
 
@@ -377,47 +391,6 @@ export class TtsPostProcessor {
 				...directiveOverrides.voiceSettings
 			}
 		}
-	}
-
-	#extractAssistantText(
-		sessionId: string,
-		runId: string
-	): string {
-		const rows = this.#store.queryRunEvents(
-			sessionId,
-			runId
-		)
-		let lastText = ''
-
-		for (const row of rows) {
-			if (row.type !== 'assistant_message') continue
-			let parsed: Record<string, unknown>
-			try {
-				parsed = JSON.parse(row.payload as string)
-			} catch {
-				continue
-			}
-			if (parsed.streaming) continue
-			const message = parsed.message as
-				| {
-						content?: Array<{
-							type: string
-							text?: string
-						}>
-				  }
-				| undefined
-			if (!message?.content) continue
-			const texts: string[] = []
-			for (const block of message.content) {
-				if (block.type === 'text' && block.text) {
-					texts.push(block.text)
-				}
-			}
-			if (texts.length === 0) continue
-			lastText = texts.join('\n')
-		}
-
-		return lastText
 	}
 
 	shutdown(): void {

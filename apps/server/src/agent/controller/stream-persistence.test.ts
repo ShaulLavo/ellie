@@ -22,7 +22,39 @@ function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'stream-persist-test-'))
 }
 
-describe('stream-persistence image-gen injection', () => {
+function makeUsage() {
+	return {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			total: 0
+		}
+	}
+}
+
+function makeAssistantMessage(
+	text: string,
+	stopReason: string = 'stop'
+) {
+	return {
+		role: 'assistant',
+		content: [{ type: 'text', text }],
+		provider: 'anthropic',
+		model: 'test',
+		usage: makeUsage(),
+		stopReason,
+		timestamp: Date.now()
+	}
+}
+
+describe('stream-persistence artifact emission', () => {
 	let tmpDir: string
 	let eventStore: EventStore
 	let store: RealtimeStore
@@ -46,86 +78,37 @@ describe('stream-persistence image-gen injection', () => {
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
 
-	test('injects MEDIA directive into the next assistant message after generate_image', () => {
-		// 1. Tool-use assistant message starts
+	test('emits assistant_artifact events instead of injecting MEDIA directives', () => {
+		// 1. Tool-use assistant message
 		handleStreamingEvent(
 			deps,
 			state,
 			{
 				type: 'message_start',
-				message: {
-					role: 'assistant',
-					content: [
-						{
-							type: 'text',
-							text: "I'll generate that image for you."
-						}
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0
-						}
-					},
-					stopReason: 'toolUse',
-					timestamp: Date.now()
-				}
+				message: makeAssistantMessage(
+					"I'll generate that image for you.",
+					'toolUse'
+				)
 			} as AgentEvent,
 			sessionId,
 			runId
 		)
 
-		expect(state.currentMessageRowId).not.toBeNull()
-
-		// 2. Tool-use assistant message ends before the tool runs
 		handleStreamingEvent(
 			deps,
 			state,
 			{
 				type: 'message_end',
-				message: {
-					role: 'assistant',
-					content: [
-						{
-							type: 'text',
-							text: "I'll generate that image for you."
-						}
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0
-						}
-					},
-					stopReason: 'toolUse',
-					timestamp: Date.now()
-				}
+				message: makeAssistantMessage(
+					"I'll generate that image for you.",
+					'toolUse'
+				)
 			} as AgentEvent,
 			sessionId,
 			runId
 		)
 
-		// 3. tool_execution_start for generate_image
+		// 2. Tool execution
 		handleStreamingEvent(
 			deps,
 			state,
@@ -139,9 +122,6 @@ describe('stream-persistence image-gen injection', () => {
 			runId
 		)
 
-		expect(state.currentToolRowIds.has('tc-1')).toBe(true)
-
-		// 4. tool_execution_end for generate_image (success)
 		handleStreamingEvent(
 			deps,
 			state,
@@ -151,16 +131,11 @@ describe('stream-persistence image-gen injection', () => {
 				toolName: 'generate_image',
 				result: {
 					content: [
-						{
-							type: 'text',
-							text: 'Image generated successfully.'
-						}
+						{ type: 'text', text: 'Image generated.' }
 					],
 					details: {
 						success: true,
-						uploadId:
-							'trace/test-run/image-gen/generated_image/abc123.png',
-						url: '/api/uploads-rpc/trace%2Ftest-run%2Fimage-gen%2Fgenerated_image%2Fabc123.png/content'
+						uploadId: 'trace/test-run/image-gen/abc123.png'
 					}
 				},
 				isError: false,
@@ -170,159 +145,94 @@ describe('stream-persistence image-gen injection', () => {
 			runId
 		)
 
-		// Upload should be tracked
-		expect(state.pendingToolUploads).toEqual([
-			'trace/test-run/image-gen/generated_image/abc123.png'
-		])
+		// Upload tracked as pending artifact
+		expect(state.pendingArtifacts).toHaveLength(1)
+		expect(state.pendingArtifacts[0]!.uploadId).toBe(
+			'trace/test-run/image-gen/abc123.png'
+		)
 
-		// 5. Next assistant message starts after the tool result
+		// 3. Next assistant message receives the artifact
 		handleStreamingEvent(
 			deps,
 			state,
 			{
 				type: 'message_start',
-				message: {
-					role: 'assistant',
-					content: [
-						{
-							type: 'text',
-							text: 'Here is your generated image.'
-						}
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0
-						}
-					},
-					stopReason: 'stop',
-					timestamp: Date.now()
-				}
+				message: makeAssistantMessage(
+					'Here is your generated image.'
+				)
 			} as AgentEvent,
 			sessionId,
 			runId
 		)
 
-		// 6. Final assistant message receives the MEDIA directive
 		handleStreamingEvent(
 			deps,
 			state,
 			{
 				type: 'message_end',
-				message: {
-					role: 'assistant',
-					content: [
-						{
-							type: 'text',
-							text: 'Here is your generated image.'
-						}
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0
-						}
-					},
-					stopReason: 'stop',
-					timestamp: Date.now()
-				}
+				message: makeAssistantMessage(
+					'Here is your generated image.'
+				)
 			} as AgentEvent,
 			sessionId,
 			runId
 		)
 
-		// pendingToolUploads should be cleared
-		expect(state.pendingToolUploads).toEqual([])
+		// Pending artifacts cleared
+		expect(state.pendingArtifacts).toHaveLength(0)
 
-		// Verify the follow-up assistant message has the injected MEDIA directive
+		// Verify: assistant message text is CLEAN (no MEDIA: lines)
 		const rows = store.queryRunEvents(sessionId, runId)
 		const assistantRows = rows.filter(
 			r => r.type === 'assistant_message'
 		)
 		expect(assistantRows).toHaveLength(2)
 
-		const firstPayload = JSON.parse(
-			assistantRows[0]!.payload
-		)
 		const secondPayload = JSON.parse(
 			assistantRows[1]!.payload
-		)
-		const firstText = firstPayload.message.content.find(
-			(c: { type: string }) => c.type === 'text'
 		)
 		const secondText = secondPayload.message.content.find(
 			(c: { type: string }) => c.type === 'text'
 		)
-		expect(firstText.text).toBe(
-			"I'll generate that image for you."
-		)
-		expect(firstText.text).not.toContain('MEDIA:')
-		expect(secondText.text).toContain(
+		expect(secondText.text).toBe(
 			'Here is your generated image.'
 		)
-		expect(secondText.text).toContain('MEDIA:')
-		expect(secondText.text).toContain('/api/uploads-rpc/')
-		expect(secondText.text).toContain('abc123.png')
+		expect(secondText.text).not.toContain('MEDIA:')
+
+		// Verify: assistant_artifact event was emitted
+		const artifactRows = rows.filter(
+			r => r.type === 'assistant_artifact'
+		)
+		expect(artifactRows).toHaveLength(1)
+		const artifactPayload = JSON.parse(
+			artifactRows[0]!.payload
+		)
+		expect(artifactPayload.kind).toBe('media')
+		expect(artifactPayload.origin).toBe('tool_upload')
+		expect(artifactPayload.uploadId).toBe(
+			'trace/test-run/image-gen/abc123.png'
+		)
+		expect(artifactPayload.assistantRowId).toBe(
+			assistantRows[1]!.id
+		)
 	})
 
 	test('tracks upload even when tool_execution_start has no DB row', () => {
-		// 1. message_start for assistant message
 		handleStreamingEvent(
 			deps,
 			state,
 			{
 				type: 'message_start',
-				message: {
-					role: 'assistant',
-					content: [
-						{ type: 'text', text: 'Generating...' }
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0
-						}
-					},
-					stopReason: 'toolUse',
-					timestamp: Date.now()
-				}
+				message: makeAssistantMessage(
+					'Generating...',
+					'toolUse'
+				)
 			} as AgentEvent,
 			sessionId,
 			runId
 		)
 
-		// 2. Skip tool_execution_start (simulating missing start event)
-		// 3. tool_execution_end without a matching start — upload should STILL be tracked
+		// Skip tool_execution_start — directly end
 		handleStreamingEvent(
 			deps,
 			state,
@@ -346,42 +256,22 @@ describe('stream-persistence image-gen injection', () => {
 			runId
 		)
 
-		// Upload IS tracked even without matching start row
-		expect(state.pendingToolUploads).toEqual([
+		expect(state.pendingArtifacts).toHaveLength(1)
+		expect(state.pendingArtifacts[0]!.uploadId).toBe(
 			'trace/run/orphan.png'
-		])
+		)
 	})
 
-	test('tracks uploads from any tool with uploadId (not just generate_image)', () => {
+	test('tracks uploads from any tool with uploadId', () => {
 		handleStreamingEvent(
 			deps,
 			state,
 			{
 				type: 'message_start',
-				message: {
-					role: 'assistant',
-					content: [
-						{ type: 'text', text: 'Processing...' }
-					],
-					provider: 'anthropic',
-					model: 'test',
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0
-						}
-					},
-					stopReason: 'toolUse',
-					timestamp: Date.now()
-				}
+				message: makeAssistantMessage(
+					'Processing...',
+					'toolUse'
+				)
 			} as AgentEvent,
 			sessionId,
 			runId
@@ -421,12 +311,13 @@ describe('stream-persistence image-gen injection', () => {
 			runId
 		)
 
-		expect(state.pendingToolUploads).toEqual([
+		expect(state.pendingArtifacts).toHaveLength(1)
+		expect(state.pendingArtifacts[0]!.uploadId).toBe(
 			'trace/run/output.pdf'
-		])
+		)
 	})
 
-	test('sequential tool uploads attach to each subsequent assistant message', () => {
+	test('sequential tool uploads emit artifact events per reply', () => {
 		const assistantReplies = [
 			{
 				text: 'Sure! I will make imgs one by one.',
@@ -464,28 +355,10 @@ describe('stream-persistence image-gen injection', () => {
 				state,
 				{
 					type: 'message_start',
-					message: {
-						role: 'assistant',
-						content: [{ type: 'text', text: reply.text }],
-						provider: 'anthropic',
-						model: 'test',
-						usage: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							totalTokens: 0,
-							cost: {
-								input: 0,
-								output: 0,
-								cacheRead: 0,
-								cacheWrite: 0,
-								total: 0
-							}
-						},
-						stopReason: reply.stopReason,
-						timestamp: Date.now()
-					}
+					message: makeAssistantMessage(
+						reply.text,
+						reply.stopReason
+					)
 				} as AgentEvent,
 				sessionId,
 				runId
@@ -496,28 +369,10 @@ describe('stream-persistence image-gen injection', () => {
 				state,
 				{
 					type: 'message_end',
-					message: {
-						role: 'assistant',
-						content: [{ type: 'text', text: reply.text }],
-						provider: 'anthropic',
-						model: 'test',
-						usage: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							totalTokens: 0,
-							cost: {
-								input: 0,
-								output: 0,
-								cacheRead: 0,
-								cacheWrite: 0,
-								total: 0
-							}
-						},
-						stopReason: reply.stopReason,
-						timestamp: Date.now()
-					}
+					message: makeAssistantMessage(
+						reply.text,
+						reply.stopReason
+					)
 				} as AgentEvent,
 				sessionId,
 				runId
@@ -572,39 +427,144 @@ describe('stream-persistence image-gen injection', () => {
 		)
 		expect(assistantRows).toHaveLength(4)
 
-		const texts = assistantRows.map(row => {
+		// All assistant message texts should be CLEAN
+		for (const row of assistantRows) {
 			const payload = JSON.parse(row.payload)
 			const textPart = payload.message.content.find(
 				(c: { type: string }) => c.type === 'text'
 			)
-			return textPart.text as string
-		})
+			expect(textPart.text).not.toContain('MEDIA:')
+		}
 
-		expect(texts[0]).toBe(
-			'Sure! I will make imgs one by one.'
+		// Check artifact events
+		const artifactRows = rows.filter(
+			r => r.type === 'assistant_artifact'
 		)
-		expect(texts[0]).not.toContain('MEDIA:')
-		expect(texts[1]).toContain('Here you go!')
-		expect(texts[1]).toContain(
-			'/api/uploads-rpc/trace%2Frun%2Fimg-1.png/content'
+		// Reply 1 (index 0) has no artifacts (no tool runs before it)
+		// Reply 2 (index 1) gets img-1.png (1 artifact)
+		// Reply 3 (index 2) gets img-2a, img-2b, img-2c (3 artifacts)
+		// Reply 4 (index 3) gets img-3a, img-3b (2 artifacts)
+		expect(artifactRows).toHaveLength(6)
+
+		// Verify artifact targeting
+		const artifactsForReply2 = artifactRows.filter(r => {
+			const p = JSON.parse(r.payload)
+			return p.assistantRowId === assistantRows[1]!.id
+		})
+		expect(artifactsForReply2).toHaveLength(1)
+
+		const artifactsForReply3 = artifactRows.filter(r => {
+			const p = JSON.parse(r.payload)
+			return p.assistantRowId === assistantRows[2]!.id
+		})
+		expect(artifactsForReply3).toHaveLength(3)
+
+		const artifactsForReply4 = artifactRows.filter(r => {
+			const p = JSON.parse(r.payload)
+			return p.assistantRowId === assistantRows[3]!.id
+		})
+		expect(artifactsForReply4).toHaveLength(2)
+
+		expect(state.pendingArtifacts).toHaveLength(0)
+	})
+
+	test('strips [[tts:...]] and sets ttsDirective on message_end', () => {
+		handleStreamingEvent(
+			deps,
+			state,
+			{
+				type: 'message_start',
+				message: makeAssistantMessage(
+					'Hello! [[tts:voiceId=abc speed=1.2]]'
+				)
+			} as AgentEvent,
+			sessionId,
+			runId
 		)
-		expect(texts[2]).toContain('Made img 2')
-		expect(texts[2]).toContain(
-			'/api/uploads-rpc/trace%2Frun%2Fimg-2a.png/content'
+
+		handleStreamingEvent(
+			deps,
+			state,
+			{
+				type: 'message_end',
+				message: makeAssistantMessage(
+					'Hello! [[tts:voiceId=abc speed=1.2]]'
+				)
+			} as AgentEvent,
+			sessionId,
+			runId
 		)
-		expect(texts[2]).toContain(
-			'/api/uploads-rpc/trace%2Frun%2Fimg-2b.png/content'
+
+		const rows = store.queryRunEvents(sessionId, runId)
+		const assistantRow = rows.find(
+			r => r.type === 'assistant_message'
+		)!
+		const payload = JSON.parse(assistantRow.payload)
+
+		// Text should be clean
+		expect(payload.message.content[0].text).toBe('Hello!')
+		// ttsDirective should be set
+		expect(payload.ttsDirective).toBeDefined()
+		expect(payload.ttsDirective.params).toBe(
+			'voiceId=abc speed=1.2'
 		)
-		expect(texts[2]).toContain(
-			'/api/uploads-rpc/trace%2Frun%2Fimg-2c.png/content'
+	})
+
+	test('sets sourceAssistantRowId on tool_execution_start', () => {
+		// First assistant message
+		handleStreamingEvent(
+			deps,
+			state,
+			{
+				type: 'message_start',
+				message: makeAssistantMessage(
+					'Calling tool...',
+					'toolUse'
+				)
+			} as AgentEvent,
+			sessionId,
+			runId
 		)
-		expect(texts[3]).toContain('Made img 3')
-		expect(texts[3]).toContain(
-			'/api/uploads-rpc/trace%2Frun%2Fimg-3a.png/content'
+
+		handleStreamingEvent(
+			deps,
+			state,
+			{
+				type: 'message_end',
+				message: makeAssistantMessage(
+					'Calling tool...',
+					'toolUse'
+				)
+			} as AgentEvent,
+			sessionId,
+			runId
 		)
-		expect(texts[3]).toContain(
-			'/api/uploads-rpc/trace%2Frun%2Fimg-3b.png/content'
+
+		// Now tool starts — should have sourceAssistantRowId
+		handleStreamingEvent(
+			deps,
+			state,
+			{
+				type: 'tool_execution_start',
+				toolCallId: 'tc-1',
+				toolName: 'test_tool',
+				args: {}
+			} as AgentEvent,
+			sessionId,
+			runId
 		)
-		expect(state.pendingToolUploads).toHaveLength(0)
+
+		const rows = store.queryRunEvents(sessionId, runId)
+		const toolRow = rows.find(
+			r => r.type === 'tool_execution'
+		)!
+		const assistantRow = rows.find(
+			r => r.type === 'assistant_message'
+		)!
+		const toolPayload = JSON.parse(toolRow.payload)
+
+		expect(toolPayload.sourceAssistantRowId).toBe(
+			assistantRow.id
+		)
 	})
 })

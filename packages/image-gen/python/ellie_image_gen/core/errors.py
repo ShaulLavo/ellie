@@ -70,6 +70,12 @@ class TimeoutError(ImageGenError):
     retryable = True
 
 
+class ADetailerError(ImageGenError):
+    code = "ADETAILER_FAILED"
+    phase = "adetailer"
+    retryable = True
+
+
 class ServiceBusyError(ImageGenError):
     code = "SERVICE_BUSY"
     retryable = True

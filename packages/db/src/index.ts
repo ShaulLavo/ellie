@@ -14,6 +14,11 @@ export type {
 	AgentMessage
 } from './event-store'
 export type { EventPayloadMap } from '@ellie/schemas/events'
+export {
+	projectReplies,
+	type NormalizedReply,
+	type NormalizedArtifact
+} from './reply-projector'
 export * as schema from './schema'
 export type {
 	SessionRow,

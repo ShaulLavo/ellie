@@ -341,10 +341,24 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentDeliveries).toHaveLength(1)
 		expect(sentComposing.length).toBeGreaterThan(0)
 
-		store.appendEvent(
+		const imgRow = store.appendEvent(
 			sessionId,
 			'assistant_message',
 			makeAssistantPayload('Here is the image.'),
+			runId
+		)
+
+		// Artifact linking the image to the assistant message
+		store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: imgRow.id,
+				kind: 'media' as const,
+				origin: 'tool_upload' as const,
+				uploadId,
+				mime: 'image/png'
+			},
 			runId
 		)
 
@@ -730,7 +744,7 @@ describe('ChannelDeliveryRegistry', () => {
 		registry.register(runId, sessionId, target)
 		registry.watchSession(sessionId)
 
-		store.appendEvent(
+		const imgMsgRow = store.appendEvent(
 			sessionId,
 			'assistant_message',
 			makeAssistantPayload('Here are your images'),
@@ -763,6 +777,22 @@ describe('ChannelDeliveryRegistry', () => {
 			},
 			runId
 		)
+
+		// Artifacts linking each image to the assistant message
+		for (const id of uploadIds) {
+			store.appendEvent(
+				sessionId,
+				'assistant_artifact',
+				{
+					assistantRowId: imgMsgRow.id,
+					kind: 'media' as const,
+					origin: 'tool_upload' as const,
+					uploadId: id,
+					mime: 'image/png'
+				},
+				runId
+			)
+		}
 
 		store.appendEvent(
 			sessionId,
@@ -983,6 +1013,22 @@ describe('ChannelDeliveryRegistry', () => {
 			runId
 		)
 
+		// Artifacts linking each image to the assistant message
+		for (const id of uploadIds) {
+			store.appendEvent(
+				sessionId,
+				'assistant_artifact',
+				{
+					assistantRowId: assistantRow.id,
+					kind: 'media' as const,
+					origin: 'tool_upload' as const,
+					uploadId: id,
+					mime: 'image/png'
+				},
+				runId
+			)
+		}
+
 		store.appendEvent(
 			sessionId,
 			'run_closed',
@@ -1041,12 +1087,6 @@ describe('ChannelDeliveryRegistry', () => {
 			new Uint8Array(Buffer.from('audio:partial-media-tts'))
 		)
 
-		registry.setTtsPostProcessor({
-			processRun: async () => {}
-		} as unknown as Parameters<
-			ChannelDeliveryRegistry['setTtsPostProcessor']
-		>[0])
-
 		store.appendEvent(
 			sessionId,
 			'user_message',
@@ -1069,24 +1109,49 @@ describe('ChannelDeliveryRegistry', () => {
 		const assistantRow = store.appendEvent(
 			sessionId,
 			'assistant_message',
-			makeAssistantPayload(
-				`Here is the bonobo. [[tts]]\nMEDIA:${join(dir, 'uploads', imageUploadId)}`
-			),
-			runId
-		)
-
-		store.appendEvent(
-			sessionId,
-			'assistant_audio',
 			{
-				uploadId: audioUploadId,
-				url: `/api/uploads-rpc/${audioUploadId}/content`,
-				mime: 'audio/ogg',
-				size: 23,
-				synthesizedText: 'Here is the bonobo.'
+				...makeAssistantPayload('Here is the bonobo.'),
+				ttsDirective: { params: undefined }
 			},
 			runId
 		)
+
+		// Image artifact (compiled server-side from tool_upload)
+		store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: assistantRow.id,
+				kind: 'media' as const,
+				origin: 'tool_upload' as const,
+				uploadId: imageUploadId,
+				mime: 'image/png'
+			},
+			runId
+		)
+
+		// TTS post-processor mock: emits audio artifact when called during recovery
+		registry.setTtsPostProcessor({
+			processRun: async (_rid: string, _sid: string) => {
+				store.appendEvent(
+					sessionId,
+					'assistant_artifact',
+					{
+						assistantRowId: assistantRow.id,
+						kind: 'audio' as const,
+						origin: 'tts' as const,
+						uploadId: audioUploadId,
+						url: `/api/uploads-rpc/${audioUploadId}/content`,
+						mime: 'audio/ogg',
+						size: 23,
+						synthesizedText: 'Here is the bonobo.'
+					},
+					runId
+				)
+			}
+		} as unknown as Parameters<
+			ChannelDeliveryRegistry['setTtsPostProcessor']
+		>[0])
 
 		store.appendEvent(
 			sessionId,
@@ -1479,6 +1544,7 @@ describe('ChannelDeliveryRegistry', () => {
 		registry.register(runId, sessionId, target)
 		registry.watchSession(sessionId)
 
+		// Reply 0: text only (no media)
 		store.appendEvent(
 			sessionId,
 			'assistant_message',
@@ -1489,14 +1555,60 @@ describe('ChannelDeliveryRegistry', () => {
 			runId
 		)
 
-		for (const [index, uploadId] of uploadIds.entries()) {
+		// tool_execution for step-1
+		store.appendEvent(
+			sessionId,
+			'tool_execution',
+			{
+				toolName: 'generate_image',
+				toolCallId: 'tc-1',
+				args: { prompt: 'img 1' },
+				status: 'complete',
+				result: {
+					content: [
+						{ type: 'text', text: `Generated step-1.png` }
+					],
+					details: { success: true, uploadId: 'step-1.png' }
+				}
+			},
+			runId
+		)
+
+		// Reply 1: "Here you go!" with step-1 artifact
+		const reply1 = store.appendEvent(
+			sessionId,
+			'assistant_message',
+			makeAssistantPayload('Here you go!', {
+				stopReason: 'toolUse'
+			}),
+			runId
+		)
+		store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: reply1.id,
+				kind: 'media' as const,
+				origin: 'tool_upload' as const,
+				uploadId: 'step-1.png',
+				mime: 'image/png'
+			},
+			runId
+		)
+
+		// tool_executions for step-2a, 2b, 2c
+		for (const uploadId of [
+			'step-2a.png',
+			'step-2b.png',
+			'step-2c.png'
+		]) {
 			store.appendEvent(
 				sessionId,
 				'tool_execution',
 				{
 					toolName: 'generate_image',
-					toolCallId: `tc-${index + 1}`,
-					args: { prompt: `img ${index + 1}` },
+					toolCallId: `tc-${uploadId}`,
+					args: { prompt: `img ${uploadId}` },
 					status: 'complete',
 					result: {
 						content: [
@@ -1505,44 +1617,86 @@ describe('ChannelDeliveryRegistry', () => {
 								text: `Generated ${uploadId}`
 							}
 						],
-						details: {
-							success: true,
-							uploadId
-						}
+						details: { success: true, uploadId }
 					}
 				},
 				runId
 			)
-
-			if (index === 0) {
-				store.appendEvent(
-					sessionId,
-					'assistant_message',
-					makeAssistantPayload('Here you go!', {
-						stopReason: 'toolUse'
-					}),
-					runId
-				)
-			}
-
-			if (index === 3) {
-				store.appendEvent(
-					sessionId,
-					'assistant_message',
-					makeAssistantPayload('Made img 2', {
-						stopReason: 'toolUse'
-					}),
-					runId
-				)
-			}
 		}
 
-		store.appendEvent(
+		// Reply 2: "Made img 2" with step-2a, 2b, 2c artifacts
+		const reply2 = store.appendEvent(
+			sessionId,
+			'assistant_message',
+			makeAssistantPayload('Made img 2', {
+				stopReason: 'toolUse'
+			}),
+			runId
+		)
+		for (const uploadId of [
+			'step-2a.png',
+			'step-2b.png',
+			'step-2c.png'
+		]) {
+			store.appendEvent(
+				sessionId,
+				'assistant_artifact',
+				{
+					assistantRowId: reply2.id,
+					kind: 'media' as const,
+					origin: 'tool_upload' as const,
+					uploadId,
+					mime: 'image/png'
+				},
+				runId
+			)
+		}
+
+		// tool_executions for step-3a, 3b
+		for (const uploadId of ['step-3a.png', 'step-3b.png']) {
+			store.appendEvent(
+				sessionId,
+				'tool_execution',
+				{
+					toolName: 'generate_image',
+					toolCallId: `tc-${uploadId}`,
+					args: { prompt: `img ${uploadId}` },
+					status: 'complete',
+					result: {
+						content: [
+							{
+								type: 'text',
+								text: `Generated ${uploadId}`
+							}
+						],
+						details: { success: true, uploadId }
+					}
+				},
+				runId
+			)
+		}
+
+		// Reply 3: "Made img 3" with step-3a, 3b artifacts
+		const reply3 = store.appendEvent(
 			sessionId,
 			'assistant_message',
 			makeAssistantPayload('Made img 3'),
 			runId
 		)
+		for (const uploadId of ['step-3a.png', 'step-3b.png']) {
+			store.appendEvent(
+				sessionId,
+				'assistant_artifact',
+				{
+					assistantRowId: reply3.id,
+					kind: 'media' as const,
+					origin: 'tool_upload' as const,
+					uploadId,
+					mime: 'image/png'
+				},
+				runId
+			)
+		}
 
 		store.appendEvent(
 			sessionId,
@@ -1621,7 +1775,7 @@ describe('ChannelDeliveryRegistry', () => {
 		registry.watchSession(sessionId)
 
 		// Assistant text
-		store.appendEvent(
+		const assistantRow = store.appendEvent(
 			sessionId,
 			'assistant_message',
 			makeAssistantPayload('Here is your image'),
@@ -1653,6 +1807,20 @@ describe('ChannelDeliveryRegistry', () => {
 						uploadId
 					}
 				}
+			},
+			runId
+		)
+
+		// Artifact linking the image to the assistant message
+		store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: assistantRow.id,
+				kind: 'media' as const,
+				origin: 'tool_upload' as const,
+				uploadId,
+				mime: 'image/png'
 			},
 			runId
 		)
@@ -1703,7 +1871,7 @@ describe('ChannelDeliveryRegistry', () => {
 		registry.register(runId, sessionId, target)
 		registry.watchSession(sessionId)
 
-		store.appendEvent(
+		const assistantRow = store.appendEvent(
 			sessionId,
 			'assistant_message',
 			makeAssistantPayload(
@@ -1738,6 +1906,22 @@ describe('ChannelDeliveryRegistry', () => {
 			},
 			runId
 		)
+
+		// Artifacts linking each image to the assistant message
+		for (const uploadId of uploadIds) {
+			store.appendEvent(
+				sessionId,
+				'assistant_artifact',
+				{
+					assistantRowId: assistantRow.id,
+					kind: 'media' as const,
+					origin: 'tool_upload' as const,
+					uploadId,
+					mime: 'image/png'
+				},
+				runId
+			)
+		}
 
 		store.appendEvent(
 			sessionId,
@@ -1814,52 +1998,6 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages).toHaveLength(1)
 		expect(sentMessages[0].text).toBe('Image failed')
 		expect(sentMedia).toHaveLength(0)
-	})
-
-	test('legacy MEDIA: directives in text still work', async () => {
-		const sessionId = 'test-session'
-		const runId = 'run-legacy'
-		const target: ChannelDeliveryTarget = {
-			channelId: 'test',
-			accountId: 'default',
-			conversationId: 'conv-legacy'
-		}
-
-		// Create a real temp file so resolveMedia can read it
-		const legacyPath = join(tmpdir(), 'legacy-test.png')
-		const legacyContent = Buffer.from('fake-legacy-png')
-		writeFileSync(legacyPath, new Uint8Array(legacyContent))
-
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
-
-		store.appendEvent(
-			sessionId,
-			'assistant_message',
-			makeAssistantPayload(
-				`Here is the file\nMEDIA:${legacyPath}`
-			),
-			runId
-		)
-
-		store.appendEvent(
-			sessionId,
-			'run_closed',
-			{ reason: 'completed' },
-			runId
-		)
-
-		await new Promise(r => setTimeout(r, 150))
-
-		// Should call sendMedia via resolveMedia → provider.sendMedia
-		expect(sentMessages).toHaveLength(0)
-		expect(sentMedia).toHaveLength(1)
-		expect(sentMedia[0].caption).toBe('Here is the file')
-		expect(sentMedia[0].media.mimetype).toBe('image/png')
-		expect(sentMedia[0].media.buffer).toEqual(legacyContent)
-
-		// Cleanup
-		rmSync(legacyPath, { force: true })
 	})
 
 	// ── Multi-target recovery ───────────────────────────────────────────

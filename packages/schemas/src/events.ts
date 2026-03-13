@@ -28,6 +28,8 @@ export interface EventPayloadMap {
 	assistant_message: {
 		message: AssistantMessage
 		streaming: boolean
+		/** Structured TTS directive (compiled from [[tts:...]] at message_end). */
+		ttsDirective?: { params?: string }
 	}
 	tool_execution: {
 		toolCallId: string
@@ -43,6 +45,20 @@ export interface EventPayloadMap {
 		isError?: boolean
 		status: 'running' | 'complete' | 'error'
 		elapsedMs?: number
+		/** Row ID of the assistant message that triggered this tool execution. */
+		sourceAssistantRowId?: number
+	}
+
+	// --- Reply-bound artifacts (media, audio, files) ---
+	assistant_artifact: {
+		assistantRowId: number
+		kind: 'media' | 'audio' | 'file'
+		origin: 'tool_upload' | 'tts' | 'llm_directive'
+		uploadId: string
+		url?: string
+		mime?: string
+		size?: number
+		synthesizedText?: string
 	}
 
 	// --- Agent lifecycle ---
@@ -188,13 +204,16 @@ export interface EventPayloadMap {
 		deliveredAt: number
 	}
 
-	// --- TTS post-processing ---
-	assistant_audio: {
-		uploadId: string
-		url: string
-		mime: string
-		size: number
-		synthesizedText: string
+	// --- Live-text delivery checkpoint (separate from channel_delivered) ---
+	live_delivery: {
+		channelId: string
+		accountId: string
+		conversationId: string
+		assistantRowId: number
+		handle: Record<string, unknown>
+		status: 'streaming' | 'finalized' | 'failed'
+		lastSentText: string
+		updatedAt: number
 	}
 }
 

@@ -483,6 +483,57 @@ export class EventStore {
 		return rows
 	}
 
+	/**
+	 * Find persisted live_delivery events with status 'streaming' within the age window.
+	 * Used on crash recovery to fail partial live messages.
+	 */
+	findStreamingLiveDeliveries(maxAgeMs: number): Array<{
+		sessionId: string
+		runId: string
+		channelId: string
+		accountId: string
+		conversationId: string
+		assistantRowId: number
+		handle: Record<string, unknown>
+		lastSentText: string
+	}> {
+		const cutoff = Date.now() - maxAgeMs
+		const rows = this.sqlite
+			.query(
+				`SELECT
+					session_id AS sessionId,
+					run_id AS runId,
+					json_extract(payload, '$.channelId') AS channelId,
+					json_extract(payload, '$.accountId') AS accountId,
+					json_extract(payload, '$.conversationId') AS conversationId,
+					json_extract(payload, '$.assistantRowId') AS assistantRowId,
+					json_extract(payload, '$.handle') AS handle,
+					json_extract(payload, '$.lastSentText') AS lastSentText
+				FROM events
+				WHERE type = 'live_delivery'
+					AND json_extract(payload, '$.status') = 'streaming'
+					AND json_extract(payload, '$.updatedAt') > ?
+				ORDER BY id ASC`
+			)
+			.all(cutoff) as Array<{
+			sessionId: string
+			runId: string
+			channelId: string
+			accountId: string
+			conversationId: string
+			assistantRowId: number
+			handle: string
+			lastSentText: string
+		}>
+		return rows.map(r => ({
+			...r,
+			handle:
+				typeof r.handle === 'string'
+					? JSON.parse(r.handle)
+					: (r.handle as Record<string, unknown>)
+		}))
+	}
+
 	// ── Bootstrap state ──────────────────────────────────────────────────
 
 	getBootstrapState(

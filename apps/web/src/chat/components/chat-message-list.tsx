@@ -1,5 +1,7 @@
-import type { StoredChatMessage } from '@/collections/chat-messages'
-import type { ToolResultPart } from '../hooks/use-tool-grouping'
+import type {
+	TimelineItem,
+	ToolResultPart
+} from '../hooks/use-timeline'
 import type { ConnectionState } from '@ellie/schemas/chat'
 import {
 	Conversation,
@@ -11,23 +13,21 @@ import { ConnectionIndicator } from './connection-indicator'
 import { EmptyState } from './empty-state'
 
 export function ChatMessageList({
-	messages,
+	timeline,
 	toolResults,
 	consumedToolCallIds,
-	hiddenMessageIds,
 	needsBootstrap,
 	connectionState,
 	connectionError
 }: {
-	messages: StoredChatMessage[]
+	timeline: TimelineItem[]
 	toolResults: Map<string, ToolResultPart>
 	consumedToolCallIds: Set<string>
-	hiddenMessageIds: Set<string>
 	needsBootstrap: boolean
 	connectionState: ConnectionState
 	connectionError: string | null
 }) {
-	const isEmpty = messages.length === 0
+	const isEmpty = timeline.length === 0
 
 	return (
 		<Conversation className="flex-1">
@@ -39,16 +39,35 @@ export function ChatMessageList({
 					/>
 				) : (
 					<>
-						{messages.map(msg =>
-							hiddenMessageIds.has(msg.id) ? null : (
-								<ChatMessageRow
-									key={msg.id}
-									message={msg}
-									toolResults={toolResults}
-									consumedToolCallIds={consumedToolCallIds}
-								/>
-							)
-						)}
+						{timeline.map(item => {
+							switch (item.type) {
+								case 'user':
+								case 'system':
+									return (
+										<ChatMessageRow
+											key={item.message.id}
+											message={item.message}
+											toolResults={toolResults}
+											consumedToolCallIds={
+												consumedToolCallIds
+											}
+										/>
+									)
+								case 'assistant-reply':
+									return (
+										<ChatMessageRow
+											key={item.message.id}
+											message={item.message}
+											toolItems={item.toolItems}
+											artifactItems={item.artifactItems}
+											toolResults={toolResults}
+											consumedToolCallIds={
+												consumedToolCallIds
+											}
+										/>
+									)
+							}
+						})}
 						<ConnectionIndicator
 							state={connectionState}
 							error={connectionError}

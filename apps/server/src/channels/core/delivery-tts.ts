@@ -2,14 +2,8 @@ import type { RealtimeStore } from '../../lib/realtime-store'
 import type { ChannelReplyPayload } from './reply-payload'
 import type { TtsPostProcessor } from '../../lib/tts-post-processor'
 import type { TtsConfig } from './delivery-helpers'
-import {
-	TTS_DIRECTIVE_RE,
-	TTS_DIRECTIVE_GLOBAL_RE,
-	toUploadRef
-} from './delivery-helpers'
-import {
-	maybeApplyTtsToPayload,
-} from './auto-tts'
+import { toUploadRef } from './delivery-helpers'
+import { maybeApplyTtsToPayload } from './auto-tts'
 import {
 	resolveElevenLabsTtsConfig,
 	resolveElevenLabsApiKeyAsync,
@@ -29,11 +23,10 @@ export async function preparePayloadsForDelivery(
 	runId: string,
 	inboundAudio: boolean,
 	useRunTtsPostProcessor: boolean,
-	deps: DeliveryTtsDeps
+	deps: DeliveryTtsDeps,
+	hasTtsDirective?: boolean
 ): Promise<ChannelReplyPayload[]> {
-	const textHasTts =
-		!!payload.text && TTS_DIRECTIVE_RE.test(payload.text)
-	if (textHasTts) {
+	if (hasTtsDirective) {
 		return await prepareExplicitTtsPayloads(
 			payload,
 			useRunTtsPostProcessor,
@@ -47,7 +40,7 @@ export async function preparePayloadsForDelivery(
 		inboundAudio,
 		deps
 	)
-	return [stripTtsDirectives(autoTtsPayload)]
+	return [autoTtsPayload]
 }
 
 export async function prepareExplicitTtsPayloads(
@@ -57,7 +50,7 @@ export async function prepareExplicitTtsPayloads(
 	sessionId: string,
 	deps: DeliveryTtsDeps
 ): Promise<ChannelReplyPayload[]> {
-	const basePayload = stripTtsDirectives(payload)
+	const basePayload = payload
 
 	// During live delivery (before run_closed), defer [[tts]] messages
 	// so they are handled once by the TtsPostProcessor at run_closed.
@@ -74,12 +67,11 @@ export async function prepareExplicitTtsPayloads(
 				runId,
 				sessionId
 			)
-			const audioPayload =
-				extractAssistantAudioPayload(
-					deps.store,
-					sessionId,
-					runId
-				)
+			const audioPayload = extractAssistantAudioPayload(
+				deps.store,
+				sessionId,
+				runId
+			)
 			if (audioPayload) {
 				if (basePayload.mediaRefs?.length) {
 					return [basePayload, audioPayload]
@@ -106,9 +98,8 @@ export async function resolveTtsConfig(
 ): Promise<ElevenLabsTtsConfig> {
 	const config = resolveElevenLabsTtsConfig()
 	if (!config.apiKey && credentialsPath) {
-		config.apiKey = await resolveElevenLabsApiKeyAsync(
-			credentialsPath
-		)
+		config.apiKey =
+			await resolveElevenLabsApiKeyAsync(credentialsPath)
 	}
 	return config
 }
@@ -120,13 +111,14 @@ export function extractAssistantAudioPayload(
 ): ChannelReplyPayload | null {
 	const rows = store.queryRunEvents(sessionId, runId)
 	for (const row of rows) {
-		if (row.type !== 'assistant_audio') continue
+		if (row.type !== 'assistant_artifact') continue
 		let parsed: Record<string, unknown>
 		try {
 			parsed = JSON.parse(row.payload)
 		} catch {
 			continue
 		}
+		if (parsed.kind !== 'audio') continue
 		const uploadId = parsed.uploadId as string | undefined
 		if (!uploadId) continue
 		return {
@@ -138,28 +130,17 @@ export function extractAssistantAudioPayload(
 	return null
 }
 
-export function stripTtsDirectives(
-	payload: ChannelReplyPayload
-): ChannelReplyPayload {
-	if (!payload.text) return payload
-	return {
-		...payload,
-		text:
-			payload.text
-				.replace(TTS_DIRECTIVE_GLOBAL_RE, '')
-				.trim() || undefined
-	}
-}
-
 /** Apply auto-TTS to a payload if configured. Non-fatal on error. */
 export async function applyAutoTts(
 	payload: ChannelReplyPayload,
 	inboundAudio: boolean,
-	deps: Pick<DeliveryTtsDeps, 'getTtsConfig' | 'credentialsPath'>
+	deps: Pick<
+		DeliveryTtsDeps,
+		'getTtsConfig' | 'credentialsPath'
+	>
 ): Promise<ChannelReplyPayload> {
 	const ttsConfig = deps.getTtsConfig?.()
-	if (!ttsConfig || ttsConfig.mode === 'off')
-		return payload
+	if (!ttsConfig || ttsConfig.mode === 'off') return payload
 	try {
 		const config = await resolveTtsConfig(
 			deps.credentialsPath

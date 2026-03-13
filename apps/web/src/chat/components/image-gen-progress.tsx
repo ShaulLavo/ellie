@@ -289,7 +289,7 @@ function buildSummary(
 	currentEntry?: ProgressEntry
 ): string {
 	if (part.status === 'error') {
-		return part.error ?? 'Image generation failed'
+		return 'Image generation failed'
 	}
 	if (part.status === 'complete') {
 		if (part.elapsedMs != null) {
@@ -348,6 +348,8 @@ function iconForPhase(
 			return DownloadSimpleIcon
 		case 'denoising':
 			return ImageSquareIcon
+		case 'adetailer':
+			return GearSixIcon
 		case 'save':
 			return CloudArrowDownIcon
 		default:

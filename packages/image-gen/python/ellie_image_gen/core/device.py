@@ -37,7 +37,7 @@ class DeviceProfile:
 
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             self.device = "mps"
-            self.dtype = torch.float32  # MPS fp16 is unreliable
+            self.dtype = torch.float32  # MPS fp16 produces black images on many models
         else:
             self.device = "cpu"
             self.dtype = torch.float32

@@ -53,6 +53,16 @@ class GenerateRequest(BaseModel):
     width: int = 512
     height: int = 512
     batchSize: int = 1
+    clipSkip: int = 1
+    # ADetailer
+    useADetailer: bool = False
+    adetailerStrength: float = 0.4
+    adetailerSteps: int = 20
+    adetailerConfidence: float = 0.3
+    adetailerDetectFaces: bool = True
+    adetailerDetectHands: bool = True
+    adetailerMaskPadding: int = 32
+    adetailerMaskBlur: int = 12
     useElla: bool = False
     ellaModel: str | None = None
     t5Encoder: str | None = None

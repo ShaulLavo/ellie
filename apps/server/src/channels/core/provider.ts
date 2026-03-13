@@ -4,6 +4,7 @@ import type {
 	ChannelRuntimeStatus,
 	ChannelDeliveryTarget
 } from './types'
+import type { LiveTextHandle } from './delivery-helpers'
 
 /**
  * Standard contract every channel provider implements.
@@ -91,4 +92,33 @@ export interface ChannelProvider {
 	 * Used by crash recovery to ensure delivery doesn't race socket open.
 	 */
 	waitForReady?(timeoutMs?: number): Promise<void>
+
+	// ── Live-text streaming (optional) ───────────────────────────────
+
+	/** Send the first live text message. Returns an opaque handle for subsequent edits. */
+	beginLiveText?(
+		target: ChannelDeliveryTarget,
+		text: string
+	): Promise<{ handle: LiveTextHandle }>
+
+	/** Edit an in-flight live text message. */
+	updateLiveText?(
+		target: ChannelDeliveryTarget,
+		handle: LiveTextHandle,
+		text: string
+	): Promise<void>
+
+	/** Finalize a live text message with the completed text. */
+	finalizeLiveText?(
+		target: ChannelDeliveryTarget,
+		handle: LiveTextHandle,
+		text: string
+	): Promise<void>
+
+	/** Replace a live text message with a failure note. */
+	failLiveText?(
+		target: ChannelDeliveryTarget,
+		handle: LiveTextHandle,
+		text: string
+	): Promise<void>
 }

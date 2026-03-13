@@ -4,6 +4,10 @@
  * Each streaming entity gets a single DB row: INSERT on start, UPDATE on
  * delta/completion. This module owns the row-ID tracking maps and the
  * event → DB write logic.
+ *
+ * Reply-centric pipeline: tool uploads are tracked as pending artifacts
+ * and emitted as assistant_artifact events at message_end, rather than
+ * injecting MEDIA: directives into assistant message text.
  */
 
 import type { AgentEvent } from '@ellie/agent'
@@ -19,6 +23,13 @@ export interface StreamPersistenceDeps {
 	) => void
 }
 
+export interface PendingArtifact {
+	uploadId: string
+	kind: 'media' | 'file'
+	origin: 'tool_upload'
+	mime?: string
+}
+
 /**
  * Mutable state for in-flight streaming rows.
  * Owned by the controller, passed into handler functions.
@@ -26,31 +37,60 @@ export interface StreamPersistenceDeps {
 export interface StreamState {
 	/** Row ID of the in-flight assistant_message being streamed */
 	currentMessageRowId: number | null
+	/** Row ID of the last finalized assistant_message (survives message_end) */
+	lastFinalizedMessageRowId: number | null
 	/** Map of toolCallId → row ID for in-flight tool_execution rows */
 	currentToolRowIds: Map<string, number>
-	/** Upload IDs from completed tool executions in this run */
-	pendingToolUploads: string[]
+	/** Pending artifacts from completed tool executions in this run */
+	pendingArtifacts: PendingArtifact[]
 }
 
 export function createStreamState(): StreamState {
 	return {
 		currentMessageRowId: null,
+		lastFinalizedMessageRowId: null,
 		currentToolRowIds: new Map(),
-		pendingToolUploads: []
+		pendingArtifacts: []
 	}
 }
 
 export function resetStreamState(state: StreamState): void {
 	state.currentMessageRowId = null
+	state.lastFinalizedMessageRowId = null
 	state.currentToolRowIds.clear()
-	state.pendingToolUploads.length = 0
+	state.pendingArtifacts.length = 0
 }
 
-function toUploadContentUrl(uploadId: string): string {
-	return `/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`
+/** TTS directive regex: captures optional params after the colon */
+const TTS_DIRECTIVE_RE = /\[\[tts(?::([^\]]*))?\]\]/gi
+
+/** MEDIA: line regex (outside code fences) */
+const MEDIA_LINE_RE = /^\s*MEDIA:\s*.+$/i
+
+/**
+ * Strip [[tts:...]] directives from text, returning cleaned text and
+ * the captured params (if any).
+ */
+function stripTtsDirective(text: string): {
+	cleaned: string
+	params: string | undefined
+} {
+	let params: string | undefined
+	const cleaned = text.replace(
+		TTS_DIRECTIVE_RE,
+		(_match, p1) => {
+			if (p1 !== undefined) params = p1
+			return ''
+		}
+	)
+	return { cleaned: cleaned.trim(), params }
 }
 
-function normalizeMediaDirectiveText(text: string): string {
+/**
+ * Strip MEDIA: lines from text (outside code fences).
+ * These are legacy LLM-written directives that should not appear in clean output.
+ */
+function stripMediaLines(text: string): string {
 	const lines = text.split('\n')
 	const output: string[] = []
 	let inFence = false
@@ -67,28 +107,20 @@ function normalizeMediaDirectiveText(text: string): string {
 			continue
 		}
 
-		const mediaMatch = line.match(/^(\s*MEDIA:\s*)(.+)$/i)
-		if (!mediaMatch) {
-			output.push(line)
+		if (MEDIA_LINE_RE.test(line)) {
 			continue
 		}
 
-		const [, prefix, rawRef] = mediaMatch
-		const ref = rawRef.trim()
-		const uploadMatch = ref.match(/^upload:(.+)$/i)
-		if (!uploadMatch?.[1]) {
-			output.push(line)
-			continue
-		}
-
-		output.push(
-			`${prefix}${toUploadContentUrl(uploadMatch[1])}`
-		)
+		output.push(line)
 	}
 
 	return output.join('\n')
 }
 
+/**
+ * Normalize an assistant message: clone and clean content blocks.
+ * Strips thinking blocks etc. Does NOT inject MEDIA lines.
+ */
 function normalizeAssistantMessage(
 	message: AssistantMessage
 ): AssistantMessage {
@@ -96,65 +128,9 @@ function normalizeAssistantMessage(
 		...message,
 		content: message.content.map(part => {
 			if (part.type !== 'text') return part
-			return {
-				...part,
-				text: normalizeMediaDirectiveText(part.text)
-			}
+			return { ...part }
 		})
 	}
-}
-
-/**
- * Auto-inject MEDIA directives for tool-generated uploads into the assistant message.
- * Appends normalized MEDIA lines for any uploads not already referenced in the text.
- */
-function injectToolMedia(
-	message: AssistantMessage,
-	uploadIds: string[]
-): AssistantMessage {
-	// Collect all upload IDs already referenced in the message text
-	const existingRefs = new Set<string>()
-	for (const part of message.content) {
-		if (part.type !== 'text') continue
-		for (const id of uploadIds) {
-			if (part.text.includes(id)) {
-				existingRefs.add(id)
-			}
-		}
-	}
-
-	const missing = uploadIds.filter(
-		id => !existingRefs.has(id)
-	)
-	if (missing.length === 0) return message
-
-	// Build MEDIA lines (already normalized to /api/uploads-rpc/.../content URLs)
-	const mediaLines = missing
-		.map(id => `MEDIA: ${toUploadContentUrl(id)}`)
-		.join('\n')
-
-	// Append to the last text part, or add a new text part
-	const content = [...message.content]
-	const lastTextIdx = content.findLastIndex(
-		p => p.type === 'text'
-	)
-	if (lastTextIdx >= 0) {
-		const lastText = content[lastTextIdx] as {
-			type: 'text'
-			text: string
-		}
-		content[lastTextIdx] = {
-			...lastText,
-			text: `${lastText.text}\n${mediaLines}`
-		}
-	} else {
-		content.push({
-			type: 'text' as const,
-			text: mediaLines
-		})
-	}
-
-	return { ...message, content }
 }
 
 /** Persist a DB write with standardized error handling. */
@@ -182,6 +158,36 @@ function persistSafe(
 }
 
 /**
+ * Flush pending artifacts as assistant_artifact events targeting the
+ * last finalized assistant message row.
+ */
+export function flushPendingArtifacts(
+	deps: StreamPersistenceDeps,
+	state: StreamState,
+	sessionId: string,
+	runId: string
+): void {
+	if (state.pendingArtifacts.length === 0) return
+	const targetRowId = state.lastFinalizedMessageRowId
+	if (!targetRowId) return
+	for (const artifact of state.pendingArtifacts) {
+		deps.store.appendEvent(
+			sessionId,
+			'assistant_artifact',
+			{
+				assistantRowId: targetRowId,
+				kind: artifact.kind,
+				origin: artifact.origin,
+				uploadId: artifact.uploadId,
+				mime: artifact.mime
+			},
+			runId
+		)
+	}
+	state.pendingArtifacts.length = 0
+}
+
+/**
  * Handle a streaming AgentEvent by persisting to the DB.
  * Returns true if the event was handled, false if it should
  * fall through to the non-streaming mapper.
@@ -202,13 +208,14 @@ export function handleStreamingEvent(
 			'assistant_message',
 			'persist_failed',
 			() => {
+				const message = normalizeAssistantMessage(
+					event.message as AssistantMessage
+				)
 				const row = deps.store.appendEvent(
 					sessionId,
 					'assistant_message',
 					{
-						message: normalizeAssistantMessage(
-							event.message as AssistantMessage
-						),
+						message,
 						streaming: true
 					},
 					runId
@@ -259,32 +266,68 @@ export function handleStreamingEvent(
 					event.message as AssistantMessage
 				)
 
-				// Tool executions finish after the assistant message that requested them.
-				// That means any pending uploads always belong on this assistant reply,
-				// even if this reply also contains the next tool call.
-				if (state.pendingToolUploads.length > 0) {
-					console.log(
-						`[stream-persist] message_end: injecting ${state.pendingToolUploads.length} MEDIA directive(s):`,
-						state.pendingToolUploads
-					)
-					message = injectToolMedia(
-						message,
-						state.pendingToolUploads
-					)
-					state.pendingToolUploads.length = 0
-				} else {
-					console.log(
-						'[stream-persist] message_end: no pending uploads to inject'
-					)
+				// 1. Strip [[tts:...]] directives from text parts
+				let ttsDirective: { params: string } | undefined
+				message = {
+					...message,
+					content: message.content.map(part => {
+						if (part.type !== 'text') return part
+						const { cleaned, params } = stripTtsDirective(
+							part.text
+						)
+						if (params !== undefined) {
+							ttsDirective = { params }
+						}
+						return { ...part, text: cleaned }
+					})
 				}
 
+				// 2. Strip MEDIA: lines from text (legacy LLM behavior)
+				message = {
+					...message,
+					content: message.content.map(part => {
+						if (part.type !== 'text') return part
+						return {
+							...part,
+							text: stripMediaLines(part.text)
+						}
+					})
+				}
+
+				// 3. Store CLEAN text in the assistant_message row
 				deps.store.updateEvent(
 					state.currentMessageRowId!,
-					{ message, streaming: false },
+					{
+						message,
+						streaming: false,
+						...(ttsDirective && { ttsDirective })
+					},
 					sessionId
 				)
+
+				// 4. Set lastFinalizedMessageRowId before clearing current
+				state.lastFinalizedMessageRowId =
+					state.currentMessageRowId
+
+				// 5. Emit assistant_artifact events for pending artifacts
+				if (state.pendingArtifacts.length > 0) {
+					console.log(
+						`[stream-persist] message_end: emitting ${state.pendingArtifacts.length} artifact event(s)`
+					)
+					flushPendingArtifacts(
+						deps,
+						state,
+						sessionId,
+						runId
+					)
+				} else {
+					console.log(
+						'[stream-persist] message_end: no pending artifacts'
+					)
+				}
 			}
 		)
+		// 6. Clear currentMessageRowId (lastFinalizedMessageRowId survives)
 		state.currentMessageRowId = null
 		return true
 	}
@@ -304,7 +347,9 @@ export function handleStreamingEvent(
 						toolCallId: event.toolCallId,
 						toolName: event.toolName,
 						args: event.args,
-						status: 'running' as const
+						status: 'running' as const,
+						sourceAssistantRowId:
+							state.lastFinalizedMessageRowId ?? undefined
 					},
 					runId
 				)
@@ -377,8 +422,7 @@ export function handleStreamingEvent(
 			state.currentToolRowIds.delete(event.toolCallId)
 		}
 
-		// Track successful tool uploads for auto-injection into assistant message.
-		// Always runs, even if the tool_execution DB row is missing.
+		// Track successful tool uploads as pending artifacts
 		if (!event.isError) {
 			const details = (
 				event.result as {
@@ -387,6 +431,7 @@ export function handleStreamingEvent(
 						uploadId?: string
 						images?: Array<{
 							uploadId: string
+							mime?: string
 						}>
 					}
 				}
@@ -397,10 +442,19 @@ export function handleStreamingEvent(
 			if (details?.success) {
 				if (details.images && details.images.length > 0) {
 					for (const img of details.images) {
-						state.pendingToolUploads.push(img.uploadId)
+						state.pendingArtifacts.push({
+							uploadId: img.uploadId,
+							kind: 'media',
+							origin: 'tool_upload',
+							mime: img.mime
+						})
 					}
 				} else if (details.uploadId) {
-					state.pendingToolUploads.push(details.uploadId)
+					state.pendingArtifacts.push({
+						uploadId: details.uploadId,
+						kind: 'media',
+						origin: 'tool_upload'
+					})
 				}
 			}
 		}

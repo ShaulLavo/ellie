@@ -156,6 +156,18 @@ export async function executeImageGeneration(
 		width: args.width ?? preset.defaultWidth,
 		height: args.height ?? preset.defaultHeight,
 		batchSize: args.batchSize ?? 1,
+		clipSkip: args.clipSkip ?? preset.defaultClipSkip ?? 1,
+		useADetailer:
+			args.useADetailer ??
+			preset.defaultUseADetailer ??
+			false,
+		adetailerStrength: args.adetailerStrength ?? 0.4,
+		adetailerSteps: args.adetailerSteps ?? 20,
+		adetailerConfidence: args.adetailerConfidence ?? 0.3,
+		adetailerDetectFaces: args.adetailerDetectFaces ?? true,
+		adetailerDetectHands: args.adetailerDetectHands ?? true,
+		adetailerMaskPadding: args.adetailerMaskPadding ?? 32,
+		adetailerMaskBlur: args.adetailerMaskBlur ?? 12,
 		useElla,
 		ellaModel: useElla
 			? (args.ellaModel ?? ELLA_DEFAULTS.ellaModel)
@@ -250,6 +262,15 @@ export async function executeImageGeneration(
 			width: resolved.width,
 			height: resolved.height,
 			batchSize: resolved.batchSize,
+			clipSkip: resolved.clipSkip,
+			useADetailer: resolved.useADetailer,
+			adetailerStrength: resolved.adetailerStrength,
+			adetailerSteps: resolved.adetailerSteps,
+			adetailerConfidence: resolved.adetailerConfidence,
+			adetailerDetectFaces: resolved.adetailerDetectFaces,
+			adetailerDetectHands: resolved.adetailerDetectHands,
+			adetailerMaskPadding: resolved.adetailerMaskPadding,
+			adetailerMaskBlur: resolved.adetailerMaskBlur,
 			useElla: resolved.useElla,
 			ellaModel: resolved.ellaModel,
 			t5Encoder: resolved.t5Encoder,
@@ -454,6 +475,15 @@ function buildEmptyConfig(
 		width: args.width ?? 512,
 		height: args.height ?? 512,
 		batchSize: args.batchSize ?? 1,
+		clipSkip: args.clipSkip ?? 1,
+		useADetailer: args.useADetailer ?? false,
+		adetailerStrength: args.adetailerStrength ?? 0.4,
+		adetailerSteps: args.adetailerSteps ?? 20,
+		adetailerConfidence: args.adetailerConfidence ?? 0.3,
+		adetailerDetectFaces: args.adetailerDetectFaces ?? true,
+		adetailerDetectHands: args.adetailerDetectHands ?? true,
+		adetailerMaskPadding: args.adetailerMaskPadding ?? 32,
+		adetailerMaskBlur: args.adetailerMaskBlur ?? 12,
 		useElla: args.useElla ?? false,
 		loras: []
 	}

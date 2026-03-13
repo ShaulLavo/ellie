@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useChatDB } from './hooks/use-chat-db'
-import { useToolGrouping } from './hooks/use-tool-grouping'
+import { useTimeline } from './hooks/use-timeline'
 import { useChatCommands } from './hooks/use-chat-commands'
 import { PromptInputProvider } from '@/components/ai-elements/prompt-input'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
@@ -38,11 +38,11 @@ export function ChatRoom({
 	const chat = useChatDB(sessionId)
 
 	const {
+		timeline,
 		allMessages,
 		toolResults,
-		consumedToolCallIds,
-		hiddenMessageIds
-	} = useToolGrouping(chat.messages, chat.streamingMessage)
+		consumedToolCallIds
+	} = useTimeline(chat.messages, chat.streamingMessage)
 
 	const { commands } = useChatCommands({
 		sessionId,
@@ -112,10 +112,9 @@ export function ChatRoom({
 
 			<div className="relative flex flex-col flex-1 min-h-0">
 				<ChatMessageList
-					messages={allMessages}
+					timeline={timeline}
 					toolResults={toolResults}
 					consumedToolCallIds={consumedToolCallIds}
-					hiddenMessageIds={hiddenMessageIds}
 					needsBootstrap={needsBootstrap}
 					connectionState={chat.connectionState}
 					connectionError={chat.error}

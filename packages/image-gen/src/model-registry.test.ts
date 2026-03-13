@@ -8,18 +8,22 @@ import {
 describe('MODEL_PRESETS', () => {
 	const presetNames = Object.keys(MODEL_PRESETS)
 
-	test('all 6 model presets exist', () => {
+	test('all model presets exist', () => {
 		expect(presetNames).toEqual(
 			expect.arrayContaining([
 				'sd15',
 				'realizum',
 				'cyberrealistic',
 				'perfectdeliberate',
+				'dreamshaper',
+				'toonyou',
 				'moodymix',
+				'epicrealism',
+				'majicmix',
 				'sdxl'
 			])
 		)
-		expect(presetNames).toHaveLength(6)
+		expect(presetNames).toHaveLength(10)
 	})
 
 	test('all presets have required fields', () => {
@@ -45,9 +49,11 @@ describe('MODEL_PRESETS', () => {
 	test('CivitAI models have singleFileUrl set', () => {
 		const civitaiModels = [
 			'realizum',
-			'cyberrealistic',
 			'perfectdeliberate',
-			'moodymix'
+			'dreamshaper',
+			'toonyou',
+			'moodymix',
+			'majicmix'
 		]
 		for (const name of civitaiModels) {
 			const preset = MODEL_PRESETS[name]
@@ -68,7 +74,11 @@ describe('MODEL_PRESETS', () => {
 			'realizum',
 			'cyberrealistic',
 			'perfectdeliberate',
-			'moodymix'
+			'dreamshaper',
+			'toonyou',
+			'moodymix',
+			'epicrealism',
+			'majicmix'
 		]
 		for (const name of sd15Models) {
 			expect(MODEL_PRESETS[name].pipelineClass).toBe(

@@ -624,6 +624,136 @@ export class WhatsAppProvider implements ChannelProvider {
 			.catch(() => {})
 	}
 
+	// ── Live-text streaming (message edit) ───────────────────────────
+
+	async beginLiveText(
+		target: ChannelDeliveryTarget,
+		text: string
+	): Promise<{ handle: Record<string, unknown> }> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) {
+			throw new Error(
+				`WhatsApp account ${target.accountId} not connected`
+			)
+		}
+
+		const formatted = markdownToWhatsApp(text)
+		const chunks = chunkMessage(formatted)
+		// Live-edit only the first chunk; overflow is appended at finalization
+		const firstChunk = chunks[0] ?? formatted
+
+		const result = await account.sock.sendMessage(
+			target.conversationId,
+			{ text: firstChunk }
+		)
+
+		if (!result?.key || typeof result.key !== 'object') {
+			throw new Error(
+				'WhatsApp beginLiveText: no message key returned'
+			)
+		}
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+
+		return { handle: { key: result.key } }
+	}
+
+	async updateLiveText(
+		target: ChannelDeliveryTarget,
+		handle: Record<string, unknown>,
+		text: string
+	): Promise<void> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) return
+
+		const formatted = markdownToWhatsApp(text)
+		const chunks = chunkMessage(formatted)
+		const firstChunk = chunks[0] ?? formatted
+		const key = handle.key as {
+			remoteJid?: string
+			id?: string
+			fromMe?: boolean
+			participant?: string
+		}
+
+		await account.sock.sendMessage(target.conversationId, {
+			text: firstChunk,
+			edit: key
+		} as AnyMessageContent)
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+	}
+
+	async finalizeLiveText(
+		target: ChannelDeliveryTarget,
+		handle: Record<string, unknown>,
+		text: string
+	): Promise<void> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) return
+
+		const formatted = markdownToWhatsApp(text)
+		const chunks = chunkMessage(formatted)
+		const key = handle.key as {
+			remoteJid?: string
+			id?: string
+			fromMe?: boolean
+			participant?: string
+		}
+
+		// Edit the original message to the final first chunk
+		const firstChunk = chunks[0] ?? formatted
+		await account.sock.sendMessage(target.conversationId, {
+			text: firstChunk,
+			edit: key
+		} as AnyMessageContent)
+
+		// Send overflow chunks as new messages
+		for (let i = 1; i < chunks.length; i++) {
+			await account.sock.sendMessage(
+				target.conversationId,
+				{ text: chunks[i]! }
+			)
+		}
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+	}
+
+	async failLiveText(
+		target: ChannelDeliveryTarget,
+		handle: Record<string, unknown>,
+		text: string
+	): Promise<void> {
+		const account = this.#accounts.get(target.accountId)
+		if (!account?.sock) return
+
+		const key = handle.key as {
+			remoteJid?: string
+			id?: string
+			fromMe?: boolean
+			participant?: string
+		}
+
+		await account.sock.sendMessage(target.conversationId, {
+			text,
+			edit: key
+		} as AnyMessageContent)
+
+		account.status = {
+			...account.status,
+			lastEventAt: Date.now()
+		}
+	}
+
 	isReady(accountId: string): {
 		ok: boolean
 		reason: string

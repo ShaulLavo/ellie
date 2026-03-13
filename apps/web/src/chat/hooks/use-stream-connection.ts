@@ -17,8 +17,7 @@ import {
 	AGENT_START_TYPES,
 	AGENT_END_TYPES,
 	isAgentRunOpen,
-	eventToStored,
-	mergeAssistantAudio
+	eventToStored
 } from '../event-transforms'
 
 function isStreamingAssistantEvent(event: {
@@ -44,8 +43,8 @@ function isRenderableMessage(
 ): boolean {
 	return (
 		message.parts.length > 0 ||
-		!!message.text ||
-		!!message.thinking
+		Boolean(message.text) ||
+		Boolean(message.thinking)
 	)
 }
 
@@ -128,7 +127,7 @@ function finalizeStreamingMessage(
 const RENDERABLE_TYPES: EventType[] = [
 	'user_message',
 	'assistant_message',
-	'assistant_audio',
+	'assistant_artifact',
 	'tool_execution',
 	'memory_recall',
 	'memory_retain',
@@ -190,12 +189,6 @@ export function useStreamConnection(
 	}, [streamingMessage])
 
 	useEffect(() => {
-		/** Maps runId → last written assistant message, used to merge assistant_audio parts. */
-		const agentMsgByRunId = new Map<
-			string,
-			StoredChatMessage
-		>()
-
 		const stream = new StreamClient(sessionId, {
 			onSnapshot(events, sessionChanged) {
 				// Keep only the last session_rotated event (duplicates may exist from hot-reload)
@@ -215,29 +208,19 @@ export function useStreamConnection(
 						closedRunIds
 					)
 				)
-				const msgs = mergeAssistantAudio(
-					messageEvents
-						.map(event => {
-							const message = eventToStored(event)
-							if (!isStreamingAssistantEvent(event)) {
-								return message
-							}
-							return finalizeStreamingMessage(message)
-						})
-						.filter(
-							(message): message is StoredChatMessage =>
-								message != null &&
-								isRenderableMessage(message)
-						)
-				)
-
-				// Rebuild runId → message index from the merged snapshot
-				agentMsgByRunId.clear()
-				for (const m of msgs) {
-					if (m.sender === 'agent' && m.runId) {
-						agentMsgByRunId.set(m.runId, m)
-					}
-				}
+				const msgs = messageEvents
+					.map(event => {
+						const message = eventToStored(event)
+						if (!isStreamingAssistantEvent(event)) {
+							return message
+						}
+						return finalizeStreamingMessage(message)
+					})
+					.filter(
+						(message): message is StoredChatMessage =>
+							message != null &&
+							isRenderableMessage(message)
+					)
 
 				// Snapshots are canonical full state. Always replace the local
 				// collection so stale rows left over from disconnects/crashes
@@ -289,9 +272,6 @@ export function useStreamConnection(
 					setStreamingMessage(null)
 					const stored = eventToStored(event)
 					if (!isRenderableMessage(stored)) return
-					if (event.runId) {
-						agentMsgByRunId.set(event.runId, stored)
-					}
 					syncWrite([stored])
 
 					const delta = computeStatsFromEvents([event])
@@ -317,23 +297,10 @@ export function useStreamConnection(
 					return
 				}
 
-				if (event.type === 'assistant_audio') {
-					const audioMsg = eventToStored(event)
-					if (audioMsg.parts.length === 0) return
-					if (event.runId) {
-						const parent = agentMsgByRunId.get(event.runId)
-						if (parent) {
-							const merged = {
-								...parent,
-								parts: [...parent.parts, ...audioMsg.parts]
-							}
-							agentMsgByRunId.set(event.runId, merged)
-							syncWrite([merged])
-							return
-						}
-					}
-					// Fallback: render standalone if no parent found
-					syncWrite([audioMsg])
+				if (event.type === 'assistant_artifact') {
+					const msg = eventToStored(event)
+					if (msg.parts.length === 0) return
+					syncWrite([msg])
 					return
 				}
 

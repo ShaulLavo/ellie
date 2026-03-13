@@ -42,8 +42,10 @@ export const EVENT_TYPES = [
 	'session_rotated',
 	// Channel delivery confirmation
 	'channel_delivered',
-	// TTS post-processing
-	'assistant_audio'
+	// Reply-bound artifacts
+	'assistant_artifact',
+	// Live-text delivery
+	'live_delivery'
 ] as const satisfies readonly EventType[]
 
 export const eventTypeSchema = v.picklist(EVENT_TYPES)
@@ -63,7 +65,8 @@ export const DURABLE_EVENT_TYPES = [
 	'memory_recall',
 	'memory_retain',
 	'channel_delivered',
-	'assistant_audio'
+	'assistant_artifact',
+	'live_delivery'
 ] as const satisfies readonly EventType[]
 
 const durableEventTypeSet = new Set<EventType>(
@@ -151,7 +154,12 @@ export const payloadSchemas: Record<
 	// Unified streaming events — permissive message schema (evolves during streaming)
 	assistant_message: v.object({
 		message: v.record(v.string(), v.unknown()),
-		streaming: v.boolean()
+		streaming: v.boolean(),
+		ttsDirective: v.optional(
+			v.object({
+				params: v.optional(v.string())
+			})
+		)
 	}),
 	tool_execution: v.object({
 		toolCallId: v.string(),
@@ -159,7 +167,8 @@ export const payloadSchemas: Record<
 		args: v.unknown(),
 		result: v.optional(v.unknown()),
 		isError: v.optional(v.boolean()),
-		status: v.picklist(['running', 'complete', 'error'])
+		status: v.picklist(['running', 'complete', 'error']),
+		sourceAssistantRowId: v.optional(v.number())
 	}),
 	// Resilience events — permissive schemas for operational data
 	retry: v.object({
@@ -326,11 +335,34 @@ export const payloadSchemas: Record<
 		seqTo: v.number(),
 		timestamp: v.number()
 	}),
-	// TTS post-processing
-	assistant_audio: v.object({
+	// Reply-bound artifacts
+	assistant_artifact: v.object({
+		assistantRowId: v.number(),
+		kind: v.picklist(['media', 'audio', 'file']),
+		origin: v.picklist([
+			'tool_upload',
+			'tts',
+			'llm_directive'
+		]),
 		uploadId: v.string(),
-		mime: v.string(),
-		size: v.number(),
-		synthesizedText: v.string()
+		url: v.optional(v.string()),
+		mime: v.optional(v.string()),
+		size: v.optional(v.number()),
+		synthesizedText: v.optional(v.string())
+	}),
+	// Live-text delivery checkpoint
+	live_delivery: v.object({
+		channelId: v.string(),
+		accountId: v.string(),
+		conversationId: v.string(),
+		assistantRowId: v.number(),
+		handle: v.record(v.string(), v.unknown()),
+		status: v.picklist([
+			'streaming',
+			'finalized',
+			'failed'
+		]),
+		lastSentText: v.string(),
+		updatedAt: v.number()
 	})
 }

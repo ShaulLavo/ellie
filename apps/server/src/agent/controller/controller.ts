@@ -41,6 +41,7 @@ import {
 	handleStreamingEvent,
 	createStreamState,
 	resetStreamState,
+	flushPendingArtifacts,
 	type StreamPersistenceDeps
 } from './stream-persistence'
 import { handleControllerError } from './error-handler'
@@ -549,6 +550,13 @@ export class AgentController {
 		// 3. agent_end lifecycle: close run, memory, queue processing
 		if (event.type !== 'agent_end') return
 
+		// Flush any remaining pending artifacts before resetting state
+		flushPendingArtifacts(
+			this.streamDeps,
+			this.streamState,
+			sessionId,
+			runId
+		)
 		resetStreamState(this.streamState)
 
 		try {

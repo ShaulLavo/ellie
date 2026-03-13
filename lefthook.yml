@@ -2,7 +2,8 @@ pre-commit:
   parallel: false
   commands:
     format:
-      run: bunx oxfmt --write '.' '!bun.lock'
+      glob: "*.{ts,tsx,js,jsx}"
+      run: bunx oxfmt --check {staged_files}
     typecheck:
       run: bun run check-types
     lint:
