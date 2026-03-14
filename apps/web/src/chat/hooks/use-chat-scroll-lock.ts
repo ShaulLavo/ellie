@@ -111,6 +111,12 @@ export function useChatScrollLock() {
 		pinnedRef.current = true
 		setButtonVisibility(false)
 
+		if (behavior === 'smooth') {
+			syncToBottom('smooth')
+			syncButtonVisibility()
+			return
+		}
+
 		frameRef.current = requestAnimationFrame(() => {
 			frameRef.current = null
 			syncToBottom(behavior)
