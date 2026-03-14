@@ -17,6 +17,11 @@ export function ImageGenResult({
 	return (
 		<div className="space-y-2">
 			<ImageGenGallery part={part} />
+			{part.prompt && (
+				<div className="font-mono text-[10px] italic text-muted-foreground/70">
+					&ldquo;{part.prompt}&rdquo;
+				</div>
+			)}
 			{part.recipe && (
 				<ImageGenRecipe recipe={part.recipe} />
 			)}

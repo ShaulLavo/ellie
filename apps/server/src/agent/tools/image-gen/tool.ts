@@ -365,6 +365,7 @@ export function createImageGenTool(
 				],
 				details: {
 					success: true,
+					prompt: r.prompt,
 					recipe: webRecipe,
 					uploadId: result.uploadId,
 					url: result.url,

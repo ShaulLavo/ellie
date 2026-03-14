@@ -135,9 +135,10 @@ function extractImageGenParts(
 		(parsed.toolCallId as string) ?? 'unknown'
 	const details = (parsed.result as Record<string, unknown>)
 		?.details as Record<string, unknown> | undefined
-	const prompt = (
-		parsed.args as Record<string, unknown> | undefined
-	)?.prompt as string | undefined
+	const prompt =
+		((parsed.args as Record<string, unknown> | undefined)
+			?.prompt as string | undefined) ??
+		(details?.prompt as string | undefined)
 
 	if (status === 'complete' || status === 'error') {
 		if (
