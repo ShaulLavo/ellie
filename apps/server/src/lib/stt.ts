@@ -43,6 +43,13 @@ const VAD_MODEL_URL =
 const AUTO_LOAD_MODEL = 'parakeet-tdt-0.6b-v3-int8'
 const AUTO_LOAD_ENGINE = 'parakeet'
 
+const PARAKEET_MODEL_DIR = resolve(
+	MODELS_DIR,
+	AUTO_LOAD_MODEL
+)
+const PARAKEET_TAR_URL =
+	'https://blob.handy.computer/parakeet-v3-int8.tar.gz'
+
 let sttProcess: Subprocess | undefined
 
 /** Download Silero VAD model if not already present. */
@@ -63,6 +70,63 @@ async function ensureVadModel(): Promise<void> {
 		)
 	await Bun.write(VAD_MODEL_PATH, res)
 	console.log('[stt] VAD model downloaded.')
+}
+
+/** Download Parakeet TDT model if not already present. */
+async function ensureParakeetModel(): Promise<void> {
+	if (existsSync(PARAKEET_MODEL_DIR)) return
+
+	console.log(
+		'[stt] Downloading Parakeet TDT 0.6B v3 int8 model (this may take a minute)...'
+	)
+	const res = await fetch(PARAKEET_TAR_URL, {
+		redirect: 'follow'
+	})
+	if (!res.ok)
+		throw new Error(
+			`[stt] Failed to download Parakeet model: ${res.status}`
+		)
+
+	const tarPath = resolve(
+		MODELS_DIR,
+		'parakeet-v3-int8.tar.gz'
+	)
+	await Bun.write(tarPath, res)
+
+	const proc = spawn(
+		['tar', '-xzf', tarPath, '-C', MODELS_DIR],
+		{ stdout: 'inherit', stderr: 'inherit' }
+	)
+	const code = await proc.exited
+	const { unlinkSync, readdirSync, renameSync } =
+		await import('node:fs')
+	unlinkSync(tarPath)
+
+	if (code !== 0)
+		throw new Error(
+			'[stt] Failed to extract Parakeet model'
+		)
+
+	// Rename if extracted to a different directory name
+	if (!existsSync(PARAKEET_MODEL_DIR)) {
+		const entries = readdirSync(MODELS_DIR)
+		const parakeetDir = entries.find(
+			e => e.startsWith('parakeet') && !e.endsWith('.onnx')
+		)
+		if (parakeetDir) {
+			renameSync(
+				resolve(MODELS_DIR, parakeetDir),
+				PARAKEET_MODEL_DIR
+			)
+		}
+	}
+
+	if (!existsSync(PARAKEET_MODEL_DIR))
+		throw new Error(
+			'[stt] Parakeet model directory not found after extraction'
+		)
+
+	console.log('[stt] Parakeet model downloaded.')
 }
 
 /** Check if the STT port is already in use. */
@@ -183,6 +247,7 @@ function buildArgs(): string[] {
  */
 export async function startStt(): Promise<boolean> {
 	await ensureVadModel()
+	await ensureParakeetModel()
 
 	const alreadyRunning = await isPortInUse(STT_PORT)
 	if (alreadyRunning) {
@@ -206,20 +271,39 @@ export async function startStt(): Promise<boolean> {
 		`[stt] Starting stt-server on port ${STT_PORT}...`
 	)
 	sttProcess = spawn([binary, ...buildArgs()], {
-		stdout: 'ignore',
-		stderr: 'ignore'
+		stdout: 'inherit',
+		stderr: 'inherit'
 	})
 
 	const healthy = await waitForHealth(STT_PORT)
-	if (healthy) {
-		console.log(`[stt] ready on port ${STT_PORT}`)
-	} else {
+	if (!healthy) {
 		console.warn(
 			`[stt] failed to start on port ${STT_PORT}`
 		)
+		return false
 	}
 
-	return healthy
+	// Verify the model actually loaded (server can be healthy but model-less)
+	try {
+		const res = await fetch(
+			`http://localhost:${STT_PORT}/health`,
+			{ signal: AbortSignal.timeout(1000) }
+		)
+		const body = (await res.json()) as {
+			model_loaded?: boolean
+		}
+		if (!body.model_loaded) {
+			console.warn(
+				'[stt] server is running but NO MODEL LOADED — transcription will fail. Check that the model exists in',
+				MODELS_DIR
+			)
+		}
+	} catch {
+		// health check already passed, non-critical
+	}
+
+	console.log(`[stt] ready on port ${STT_PORT}`)
+	return true
 }
 
 /** Kill the STT child process. Called on server shutdown. */
