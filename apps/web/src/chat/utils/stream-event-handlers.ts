@@ -1,5 +1,5 @@
 import type { EventType } from '@ellie/schemas/events'
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { StoredChatMessage } from '@/chat/types'
 import type { EventRow } from '@/lib/stream'
 import { eventToStored } from '../event-transforms'
 

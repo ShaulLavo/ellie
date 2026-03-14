@@ -45,7 +45,7 @@ export function ImageGenProgress({
 							Generating image
 							<CaretDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
 						</div>
-						{part.prompt && (
+						{part.status === 'running' && part.prompt && (
 							<div className="mt-0.5 font-mono text-[10px] italic text-muted-foreground/70">
 								&ldquo;{part.prompt}&rdquo;
 							</div>

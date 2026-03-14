@@ -1,46 +1,27 @@
-import { useLiveQuery } from '@tanstack/react-db'
-import { useCallback, useState } from 'react'
-import {
-	getChatMessagesCollection,
-	type StoredChatMessage
-} from '@/collections/chat-messages'
-import { useChatSync } from './use-chat-sync'
+import { useChatMessages } from './use-chat-messages'
+import { useChatSessionStats } from './use-chat-session-stats'
 import { useStreamConnection } from './use-stream-connection'
 
 export function useChatDB(sessionId: string) {
-	const [sessionVersion, setSessionVersion] = useState(0)
+	const { messages, upsert, replaceAll, clear } =
+		useChatMessages(sessionId)
+	const {
+		sessionStats,
+		setSessionStats,
+		clearSessionStats
+	} = useChatSessionStats(sessionId)
 
-	const { syncWrite, syncReplaceAll, destroyCollection } =
-		useChatSync(sessionId)
-
-	// ── Live query: reactive sorted messages ───────────────────────────
-	const { data: storedMessages } = useLiveQuery(
-		q =>
-			q
-				.from({
-					msg: getChatMessagesCollection(sessionId)
-				})
-				.orderBy(
-					({ msg }) =>
-						(msg as unknown as StoredChatMessage).seq,
-					'asc'
-				),
-		[sessionId, sessionVersion]
-	)
-
-	const messages = (storedMessages ??
-		[]) as StoredChatMessage[]
-
-	const resetSessionState = useCallback(() => {
-		destroyCollection()
-		setSessionVersion(v => v + 1)
-	}, [destroyCollection])
+	const resetSessionState = () => {
+		clear()
+		clearSessionStats()
+	}
 
 	const stream = useStreamConnection(
 		sessionId,
-		syncWrite,
-		syncReplaceAll,
-		resetSessionState
+		upsert,
+		replaceAll,
+		resetSessionState,
+		setSessionStats
 	)
 
 	return {
@@ -48,7 +29,7 @@ export function useChatDB(sessionId: string) {
 		streamingMessage: stream.streamingMessage,
 		connectionState: stream.connectionState,
 		error: stream.error,
-		sessionStats: stream.sessionStats,
+		sessionStats,
 		isAgentRunning: stream.isAgentRunning,
 		sendMessage: stream.sendMessage,
 		clearSession: stream.clearSession,

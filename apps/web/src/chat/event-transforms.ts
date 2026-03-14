@@ -2,7 +2,7 @@ import type {
 	ContentPart,
 	MessageSender
 } from '@ellie/schemas/chat'
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { StoredChatMessage } from '@/chat/types'
 import type { EventRow } from '@/lib/stream'
 
 /** Agent lifecycle event types */
@@ -244,6 +244,7 @@ function extractImageGenParts(
 				| number
 				| undefined,
 			detail: runDetails.detail as string | undefined,
+			preview: runDetails.preview as string | undefined,
 			entries: runDetails.entries as
 				| Array<{
 						id: string
@@ -257,6 +258,7 @@ function extractImageGenParts(
 						detail?: string
 						step?: number
 						totalSteps?: number
+						preview?: string
 				  }>
 				| undefined,
 			completedPhases: runDetails.completedPhases as

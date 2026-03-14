@@ -1,5 +1,5 @@
 import { useConfirm } from '@omit/react-confirm-dialog'
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { StoredChatMessage } from '@/chat/types'
 import type { SlashCommand } from '../components/slash-command-menu'
 import {
 	Trash2Icon,

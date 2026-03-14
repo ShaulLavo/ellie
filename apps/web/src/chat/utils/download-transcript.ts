@@ -2,7 +2,7 @@ import {
 	messagesToTranscript,
 	renderTranscript
 } from '@ellie/schemas/chat'
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { StoredChatMessage } from '@/chat/types'
 
 export function downloadTranscript(
 	allMessages: StoredChatMessage[],

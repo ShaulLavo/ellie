@@ -30,7 +30,8 @@ export interface EventRow {
 export interface StreamCallbacks {
 	onSnapshot: (
 		events: EventRow[],
-		sessionChanged: boolean
+		sessionChanged: boolean,
+		resolvedSessionId: string
 	) => void
 	onAppend: (event: EventRow) => void
 	onUpdate: (event: EventRow) => void
@@ -155,7 +156,8 @@ export class StreamClient {
 				this.lastResolvedSessionId = data.sessionId
 				this.callbacks.onSnapshot(
 					data.events,
-					sessionChanged
+					sessionChanged,
+					data.sessionId
 				)
 			} catch (err) {
 				console.error(

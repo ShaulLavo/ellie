@@ -7,6 +7,7 @@ import {
 } from '@/components/ai-elements/conversation'
 import { TimelineContent } from './timeline-content'
 import type { TimelineItem } from '../hooks/use-timeline'
+import { ConnectionIndicator } from './connection-indicator'
 
 export function ChatMessageList({
 	timeline,
@@ -32,7 +33,10 @@ export function ChatMessageList({
 					consumedToolCallIds={consumedToolCallIds}
 					needsBootstrap={needsBootstrap}
 					connectionState={connectionState}
-					connectionError={connectionError}
+				/>
+				<ConnectionIndicator
+					state={connectionState}
+					error={connectionError}
 				/>
 			</ConversationContent>
 			<ConversationScrollButton />

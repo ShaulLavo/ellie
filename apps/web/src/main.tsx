@@ -19,7 +19,7 @@ createRoot(document.getElementById('root')!).render(
 				client={queryClient}
 				persistOptions={{
 					persister: localStoragePersister,
-					maxAge: 1000 * 60 * 60 * 24
+					maxAge: Number.POSITIVE_INFINITY
 				}}
 			>
 				<ConfirmDialogProvider>

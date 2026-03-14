@@ -1,4 +1,4 @@
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { StoredChatMessage } from '@/chat/types'
 import type { ToolResultPart } from '../utils'
 import { partHasVisibleOutput } from './part-utils'
 import { PartRenderer } from './part-renderer'

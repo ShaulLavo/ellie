@@ -5,12 +5,9 @@ import {
 	useRef,
 	useState
 } from 'react'
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import type { StoredChatMessage } from '@/chat/types'
 import { StreamClient, type EventRow } from '@/lib/stream'
-import {
-	type SessionStats,
-	EMPTY_STATS
-} from '@/lib/chat/session-stats'
+import type { SessionStats } from '@/lib/chat/session-stats'
 import {
 	handleSnapshot,
 	handleAppend,
@@ -21,7 +18,6 @@ interface StreamConnectionResult {
 	connectionState: ConnectionState
 	error: string | null
 	streamingMessage: StoredChatMessage | null
-	sessionStats: SessionStats
 	isAgentRunning: boolean
 	sendMessage: (
 		text: string,
@@ -39,27 +35,22 @@ interface StreamConnectionResult {
 
 export function useStreamConnection(
 	sessionId: string,
-	syncWrite: (msgs: StoredChatMessage[]) => void,
-	syncReplaceAll: (msgs: StoredChatMessage[]) => void,
-	resetSessionState: () => void
+	upsert: (msgs: StoredChatMessage[]) => void,
+	replaceAll: (msgs: StoredChatMessage[]) => void,
+	resetSessionState: () => void,
+	setSessionStats: (
+		updater:
+			| SessionStats
+			| ((prev: SessionStats) => SessionStats)
+	) => void
 ): StreamConnectionResult {
 	const [connectionState, setConnectionState] =
 		useState<ConnectionState>('connecting')
 	const [error, setError] = useState<string | null>(null)
 	const [streamingMessage, setStreamingMessage] =
 		useState<StoredChatMessage | null>(null)
-	const [sessionStats, setSessionStats] =
-		useState<SessionStats>(EMPTY_STATS)
 	const [isAgentRunning, setIsAgentRunning] =
 		useState(false)
-	const [currentSessionId, setCurrentSessionId] =
-		useState(sessionId)
-
-	if (currentSessionId !== sessionId) {
-		setCurrentSessionId(sessionId)
-		setSessionStats(EMPTY_STATS)
-		setIsAgentRunning(false)
-	}
 
 	const streamRef = useRef<StreamClient | null>(null)
 
@@ -67,14 +58,27 @@ export function useStreamConnection(
 		setStreamingMessage,
 		setSessionStats,
 		setIsAgentRunning,
-		syncWrite,
-		syncReplaceAll,
+		upsert,
+		replaceAll,
 		getStreamingMessage: () => streamingMessage
 	}))
 
 	const onStreamSnapshot = useEffectEvent(
-		(events: EventRow[], sessionChanged: boolean) =>
+		(
+			events: EventRow[],
+			sessionChanged: boolean,
+			resolvedSessionId: string
+		) => {
 			handleSnapshot(events, sessionChanged, getDispatch())
+			// Update the current-session marker so the next reload knows
+			// which session's cache is valid for "current".
+			if (sessionId === 'current') {
+				localStorage.setItem(
+					'ellie-current-session',
+					resolvedSessionId
+				)
+			}
+		}
 	)
 
 	const onStreamAppend = useEffectEvent((event: EventRow) =>
@@ -87,8 +91,16 @@ export function useStreamConnection(
 
 	useEffect(() => {
 		const stream = new StreamClient(sessionId, {
-			onSnapshot: (events, sessionChanged) =>
-				onStreamSnapshot(events, sessionChanged),
+			onSnapshot: (
+				events,
+				sessionChanged,
+				resolvedSessionId
+			) =>
+				onStreamSnapshot(
+					events,
+					sessionChanged,
+					resolvedSessionId
+				),
 			onAppend: event => onStreamAppend(event),
 			onUpdate: event => onStreamUpdate(event),
 			onStateChange(state) {
@@ -171,7 +183,6 @@ export function useStreamConnection(
 		connectionState,
 		error,
 		streamingMessage,
-		sessionStats,
 		isAgentRunning,
 		sendMessage,
 		clearSession,

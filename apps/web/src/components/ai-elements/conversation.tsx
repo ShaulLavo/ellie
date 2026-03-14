@@ -27,8 +27,8 @@ export const Conversation = ({
 			'relative flex-1 overflow-y-hidden',
 			className
 		)}
-		initial="smooth"
-		resize="smooth"
+		initial="instant"
+		resize="instant"
 		role="log"
 		{...props}
 	/>

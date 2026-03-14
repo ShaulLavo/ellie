@@ -1,4 +1,5 @@
-import type { StoredChatMessage } from '@/collections/chat-messages'
+import { useMemo } from 'react'
+import type { StoredChatMessage } from '@/chat/types'
 import type { ToolResultPart } from '../utils'
 
 // ── Public types ──────────────────────────────────────────────
@@ -143,12 +144,19 @@ export function useTimeline(
 	messages: StoredChatMessage[],
 	streamingMessage?: StoredChatMessage | null
 ) {
-	const allMessages = streamingMessage
-		? [...messages, streamingMessage]
-		: messages
+	const allMessages = useMemo(
+		() =>
+			streamingMessage
+				? [...messages, streamingMessage]
+				: messages,
+		[messages, streamingMessage]
+	)
 
 	const { timeline, toolResults, consumedToolCallIds } =
-		projectTimeline(allMessages)
+		useMemo(
+			() => projectTimeline(allMessages),
+			[allMessages]
+		)
 
 	return {
 		timeline,
