@@ -57,7 +57,7 @@ export interface ReplSessionInfo {
 
 const SENTINEL_PREFIX = '__ELLIE_REPL_SENTINEL_'
 const COMMIT_MARKER = '__ELLIE_COMMIT__'
-const DEFAULT_TIMEOUT_MS = 30_000
+const DEFAULT_TIMEOUT_MS = 180_000
 const MAX_OUTPUT_BYTES = 262_144
 
 // ── Helpers ─────────────────────────────────────────────────────────────
