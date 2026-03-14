@@ -26,7 +26,7 @@ export function MemoryPartRenderer({
 					recalled {part.count}{' '}
 					{part.count === 1 ? 'memory' : 'memories'}
 					{part.duration_ms != null
-						? ` (${(part.duration_ms / 1000).toFixed(1)}s)`
+						? ` ${(part.duration_ms / 1000).toFixed(1)}s`
 						: ''}
 				</span>
 			</div>
@@ -42,7 +42,7 @@ export function MemoryPartRenderer({
 						recalled {part.count}{' '}
 						{part.count === 1 ? 'memory' : 'memories'}
 						{part.duration_ms != null
-							? ` (${(part.duration_ms / 1000).toFixed(1)}s)`
+							? ` ${(part.duration_ms / 1000).toFixed(1)}s`
 							: ''}
 					</span>
 				)}
@@ -64,7 +64,7 @@ export function MemoryRetainPartRenderer({
 	const facts = part.facts ?? []
 	const modelTag = part.model ? `[${part.model}] ` : ''
 	const timingTag = part.duration_ms
-		? ` (${(part.duration_ms / 1000).toFixed(1)}s)`
+		? ` ${(part.duration_ms / 1000).toFixed(1)}s`
 		: ''
 	const label = `${modelTag}stored ${part.factsStored} ${part.factsStored === 1 ? 'fact' : 'facts'}${timingTag}`
 	if (facts.length === 0) {

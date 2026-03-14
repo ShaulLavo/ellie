@@ -9,7 +9,6 @@ import {
 	PromptInputTools,
 	PromptInputSubmit
 } from '@/components/ai-elements/prompt-input'
-import { InputGroupAddon } from '@/components/ui/input-group'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import { MicRecordButton } from '@/components/ai-elements/mic-record-button'
 import { PromptInputAttachments } from './prompt-input-attachments'
@@ -59,11 +58,6 @@ export function PromptInputWithCommands({
 			/>
 
 			<PromptInput onSubmit={onSubmit} multiple>
-				{stats && (
-					<InputGroupAddon align="block-start">
-						<SessionContext stats={stats} />
-					</InputGroupAddon>
-				)}
 				<PromptInputAttachments />
 				<PromptInputTextarea placeholder="Type a message..." />
 				<PromptInputFooter>
@@ -83,6 +77,7 @@ export function PromptInputWithCommands({
 								handleTranscriptionChange
 							}
 						/>
+						{stats && <SessionContext stats={stats} />}
 					</PromptInputTools>
 					<PromptInputSubmit disabled={disabled} />
 				</PromptInputFooter>
