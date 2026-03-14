@@ -31,10 +31,19 @@ import { createTraceRoutes } from './routes/traces'
 import { createChannelRoutes } from './routes/channels'
 import { API_INFO, API_TAGS } from './consts'
 import { init } from './init'
+import { getTrailingSlashRedirectUrl } from './lib/trailing-slash'
 
 const ctx = await init()
 
 export const app = new Elysia()
+	.onRequest(({ request }) => {
+		const redirectUrl = getTrailingSlashRedirectUrl(
+			request.url
+		)
+		if (!redirectUrl) return
+
+		return Response.redirect(redirectUrl, 308)
+	})
 	.use(
 		openapi({
 			documentation: {

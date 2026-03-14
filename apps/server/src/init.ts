@@ -215,7 +215,7 @@ export async function init(): Promise<ServerContext> {
 
 	const STUDIO_PUBLIC = resolve(
 		import.meta.dir,
-		'../../web/public'
+		'../../web'
 	)
 
 	// ── Legacy cleanup ───────────────────────────────────────────────────
