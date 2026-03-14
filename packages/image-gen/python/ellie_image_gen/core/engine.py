@@ -105,10 +105,12 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
         "callback_on_step_end": step_callback,
     }
 
-    # Only pass clip_skip when > 1 (diffusers treats 1 as "skip 1 layer",
-    # while A1111 convention is clip_skip=1 means no skip = diffusers None)
-    if clip_skip > 1:
-        gen_kwargs["clip_skip"] = clip_skip
+    # A1111 convention: clip_skip=1 → no skip, clip_skip=2 → second-to-last layer.
+    # Diffusers convention: clip_skip=1 → skip 1 layer (second-to-last).
+    # Mapping: diffusers_value = a1111_value - 1; pass None when 0.
+    diffusers_clip_skip = clip_skip - 1
+    if diffusers_clip_skip > 0:
+        gen_kwargs["clip_skip"] = diffusers_clip_skip
 
 
     # ELLA conditioning: project through adapter, not raw T5 injection

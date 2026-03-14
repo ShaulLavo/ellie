@@ -104,9 +104,8 @@ class ModelCache:
         device = self.profile.device
         dtype = self.profile.dtype
 
-        # Allow spilling into system RAM instead of hard-crashing on OOM
-        if "PYTORCH_MPS_HIGH_WATERMARK_RATIO" not in os.environ:
-            os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+        # Do NOT set PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 — it causes MPS to
+        # spill tensors to system RAM, producing degenerate output with SDE schedulers.
 
         pipe_kwargs: dict[str, Any] = {
             "torch_dtype": dtype,
@@ -153,6 +152,8 @@ class ModelCache:
 
         _progress("load", "Optimizing", step=3, totalSteps=4)
         pipe.enable_attention_slicing()
+        if hasattr(pipe, "enable_vae_slicing"):
+            pipe.enable_vae_slicing()
         # VAE tiling only on CUDA — causes tile seam artifacts on MPS
         if device == "cuda" and hasattr(pipe, "enable_vae_tiling"):
             pipe.enable_vae_tiling()
