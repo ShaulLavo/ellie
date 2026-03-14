@@ -44,6 +44,7 @@ import {
 } from './http-errors'
 import type { FileStore } from '@ellie/tus'
 import { join } from 'node:path'
+import { generateThumbHash } from '../lib/thumbhash'
 
 /** Extract width/height from common image format headers. */
 function extractImageDimensions(
@@ -339,6 +340,9 @@ export function createChatRoutes(
 									att.uploadId
 								)
 								const dims = extractImageDimensions(bytes)
+								const hash = await generateThumbHash(
+									bytes
+								).catch(() => undefined)
 								contentParts.push({
 									type: 'image',
 									file: att.uploadId,
@@ -352,7 +356,8 @@ export function createChatRoutes(
 									...(dims && {
 										width: dims.width,
 										height: dims.height
-									})
+									}),
+									...(hash && { hash })
 								})
 							} else if (isTextContent(mime, att.name)) {
 								// Store as file attachment (renders as card in UI)

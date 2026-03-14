@@ -348,6 +348,9 @@ export const payloadSchemas: Record<
 		url: v.optional(v.string()),
 		mime: v.optional(v.string()),
 		size: v.optional(v.number()),
+		width: v.optional(v.number()),
+		height: v.optional(v.number()),
+		hash: v.optional(v.string()),
 		synthesizedText: v.optional(v.string())
 	}),
 	// Live-text delivery checkpoint

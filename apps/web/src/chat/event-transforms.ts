@@ -161,6 +161,7 @@ function extractImageGenParts(
 								mime: string
 								width?: number
 								height?: number
+								hash?: string
 						  }>
 						| undefined,
 					entries: details.entries as
@@ -374,6 +375,9 @@ export function eventToStored(
 					}),
 					...(typeof parsed.height === 'number' && {
 						height: parsed.height
+					}),
+					...(typeof parsed.hash === 'string' && {
+						hash: parsed.hash
 					})
 				}
 			]

@@ -196,7 +196,7 @@ export function DbTableGrid({
 			</div>
 
 			{/* Pagination — adapted from table-example.tsx */}
-			<div className="flex items-center justify-between px-3 py-2 border-t bg-card/50">
+			<div className="flex items-center justify-between px-3 py-2 border-t bg-muted/80">
 				<div className="text-xs text-muted-foreground tabular-nums">
 					{totalRows.toLocaleString()} row
 					{totalRows !== 1 ? 's' : ''}

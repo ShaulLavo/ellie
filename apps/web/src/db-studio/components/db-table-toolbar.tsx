@@ -118,7 +118,7 @@ export function DbTableToolbar({
 		operator
 
 	return (
-		<div className="flex items-center gap-2 px-3 py-2 border-b bg-card/50">
+		<div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/80">
 			<Filter className="size-3.5 text-muted-foreground shrink-0" />
 
 			<DropdownMenu>

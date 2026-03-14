@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'motion/react'
 import type { ContentPart } from '@ellie/schemas/chat'
 import { ImageGenGallery } from './image-gen-gallery'
 import { ImageGenRecipe } from './image-gen-recipe'
@@ -6,6 +7,13 @@ type ImageGenPart = Extract<
 	ContentPart,
 	{ type: 'image-generation' }
 >
+
+const fadeIn = {
+	initial: { opacity: 0, y: 4 },
+	animate: { opacity: 1, y: 0 },
+	exit: { opacity: 0 },
+	transition: { duration: 0.3 }
+} as const
 
 export function ImageGenResult({
 	part
@@ -22,32 +30,47 @@ export function ImageGenResult({
 
 	return (
 		<div className="space-y-2">
-			{hasRealImage ? (
-				<ImageGenGallery part={part} />
-			) : (
-				preview && (
-					<img
-						src={`data:image/jpeg;base64,${preview}`}
-						alt="Generating..."
-						className="max-h-80 rounded-lg object-contain"
-						style={
-							part.recipe
-								? {
-										aspectRatio: `${part.recipe.width} / ${part.recipe.height}`
-									}
-								: undefined
-						}
-					/>
-				)
-			)}
-			{isComplete && part.prompt && (
-				<div className="font-mono text-[10px] italic text-muted-foreground/70">
-					&ldquo;{part.prompt}&rdquo;
-				</div>
-			)}
-			{isComplete && part.recipe && (
-				<ImageGenRecipe recipe={part.recipe} />
-			)}
+			<AnimatePresence mode="wait">
+				{hasRealImage ? (
+					<motion.div key="gallery" {...fadeIn}>
+						<ImageGenGallery part={part} />
+					</motion.div>
+				) : (
+					preview && (
+						<motion.div key="preview" {...fadeIn}>
+							<img
+								src={`data:image/jpeg;base64,${preview}`}
+								alt="Generating..."
+								className="max-h-80 rounded-lg object-contain"
+								style={
+									part.recipe
+										? {
+												aspectRatio: `${part.recipe.width} / ${part.recipe.height}`
+											}
+										: undefined
+								}
+							/>
+						</motion.div>
+					)
+				)}
+			</AnimatePresence>
+			<AnimatePresence>
+				{isComplete && part.prompt && (
+					<motion.div
+						className="font-mono text-[10px] italic text-muted-foreground/70"
+						{...fadeIn}
+					>
+						&ldquo;{part.prompt}&rdquo;
+					</motion.div>
+				)}
+			</AnimatePresence>
+			<AnimatePresence>
+				{isComplete && part.recipe && (
+					<motion.div {...fadeIn}>
+						<ImageGenRecipe recipe={part.recipe} />
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	)
 }

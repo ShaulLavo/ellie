@@ -19,7 +19,18 @@ createRoot(document.getElementById('root')!).render(
 				client={queryClient}
 				persistOptions={{
 					persister: localStoragePersister,
-					maxAge: Number.POSITIVE_INFINITY
+					maxAge: Number.POSITIVE_INFINITY,
+					dehydrateOptions: {
+						shouldDehydrateQuery: query => {
+							const key = query.queryKey[0]
+							if (
+								typeof key === 'string' &&
+								key.startsWith('/db')
+							)
+								return false
+							return query.state.status === 'success'
+						}
+					}
 				}}
 			>
 				<ConfirmDialogProvider>

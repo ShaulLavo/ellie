@@ -58,6 +58,9 @@ export interface EventPayloadMap {
 		url?: string
 		mime?: string
 		size?: number
+		width?: number
+		height?: number
+		hash?: string
 		synthesizedText?: string
 	}
 

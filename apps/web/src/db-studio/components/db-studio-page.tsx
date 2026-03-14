@@ -92,7 +92,7 @@ export function DbStudioPage() {
 	return (
 		<div className="h-screen flex flex-col overflow-hidden bg-background">
 			{/* Header */}
-			<header className="flex items-center gap-3 px-4 h-11 border-b bg-card/50 shrink-0">
+			<header className="flex items-center gap-3 px-4 h-11 border-b bg-muted/80 shrink-0">
 				<button
 					onClick={() => setIsCollapsed(v => !v)}
 					className="inline-flex items-center justify-center size-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

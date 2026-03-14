@@ -15,7 +15,7 @@ export type ContentPart =
 			url?: string
 			mime: string
 			size: number
-			thumb?: string
+			hash?: string
 			width?: number
 			height?: number
 	  }
@@ -25,7 +25,7 @@ export type ContentPart =
 			url?: string
 			mime: string
 			size: number
-			thumb?: string
+			hash?: string
 			duration?: number
 	  }
 	| {
@@ -93,6 +93,7 @@ export type ContentPart =
 			mediaKind?: 'image' | 'audio' | 'video' | 'file'
 			width?: number
 			height?: number
+			hash?: string
 	  }
 	| {
 			type: 'image-generation'
@@ -127,6 +128,7 @@ export type ContentPart =
 				mime: string
 				width?: number
 				height?: number
+				hash?: string
 			}>
 			recipe?: {
 				model: string

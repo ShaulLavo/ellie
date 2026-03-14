@@ -29,6 +29,7 @@ export function ImagePartRenderer({
 			containerClassName="my-2 max-w-sm"
 			naturalWidth={part.width}
 			naturalHeight={part.height}
+			hash={part.hash}
 		/>
 	)
 }
@@ -129,6 +130,7 @@ export function AssistantArtifactPartRenderer({
 				containerClassName="my-2 max-w-sm"
 				naturalWidth={part.width}
 				naturalHeight={part.height}
+				hash={part.hash}
 			/>
 		)
 	}

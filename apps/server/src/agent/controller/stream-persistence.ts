@@ -30,6 +30,7 @@ export interface PendingArtifact {
 	mime?: string
 	width?: number
 	height?: number
+	hash?: string
 }
 
 /**
@@ -192,7 +193,8 @@ export function flushPendingArtifacts(
 				}),
 				...(artifact.height != null && {
 					height: artifact.height
-				})
+				}),
+				...(artifact.hash && { hash: artifact.hash })
 			},
 			runId
 		)
@@ -451,6 +453,7 @@ export function handleStreamingEvent(
 							mime?: string
 							width?: number
 							height?: number
+							hash?: string
 						}>
 						recipe?: {
 							width?: number
@@ -471,7 +474,8 @@ export function handleStreamingEvent(
 							origin: 'tool_upload',
 							mime: img.mime,
 							width: img.width ?? details.recipe?.width,
-							height: img.height ?? details.recipe?.height
+							height: img.height ?? details.recipe?.height,
+							hash: img.hash
 						})
 					}
 				} else if (details.uploadId) {

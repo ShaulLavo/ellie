@@ -30,6 +30,7 @@ export function ImageGenGallery({
 						naturalHeight={
 							img.height ?? part.recipe?.height
 						}
+						hash={img.hash}
 					/>
 				))}
 			</div>

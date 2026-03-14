@@ -36,12 +36,14 @@ export function useChatScrollLock() {
 	const scrollRef = useRef<HTMLDivElement>(null)
 	const contentRef = useRef<HTMLDivElement>(null)
 	const frameRef = useRef<number | null>(null)
+	const mutationFrameRef = useRef<number | null>(null)
 	const lastScrollTopRef = useRef(0)
 	const previousHeightRef = useRef<number | null>(null)
 	const escapedRef = useRef(false)
 	const pinnedRef = useRef(true)
 	const keepPinnedRef = useRef(false)
 	const hasPendingContentRef = useRef(false)
+	const contentMutatedRef = useRef(false)
 	const [showScrollButton, setShowScrollButton] =
 		useState(false)
 
@@ -70,6 +72,21 @@ export function useChatScrollLock() {
 		if (frameRef.current == null) return
 		cancelAnimationFrame(frameRef.current)
 		frameRef.current = null
+	}
+
+	function cancelScheduledMutationReset() {
+		if (mutationFrameRef.current == null) return
+		cancelAnimationFrame(mutationFrameRef.current)
+		mutationFrameRef.current = null
+	}
+
+	function markContentMutated() {
+		contentMutatedRef.current = true
+		cancelScheduledMutationReset()
+		mutationFrameRef.current = requestAnimationFrame(() => {
+			mutationFrameRef.current = null
+			contentMutatedRef.current = false
+		})
 	}
 
 	function syncToBottom(
@@ -147,6 +164,38 @@ export function useChatScrollLock() {
 		const content = contentRef.current
 		if (!content) return
 
+		const observer = new MutationObserver(mutations => {
+			for (const mutation of mutations) {
+				if (mutation.type === 'characterData') {
+					markContentMutated()
+					return
+				}
+
+				if (
+					mutation.addedNodes.length > 0 ||
+					mutation.removedNodes.length > 0
+				) {
+					markContentMutated()
+					return
+				}
+			}
+		})
+
+		observer.observe(content, {
+			childList: true,
+			characterData: true,
+			subtree: true
+		})
+
+		return () => {
+			observer.disconnect()
+		}
+	}, [])
+
+	useEffect(() => {
+		const content = contentRef.current
+		if (!content) return
+
 		const observer = new ResizeObserver(entries => {
 			const entry = entries[0]
 			if (!entry) return
@@ -173,7 +222,7 @@ export function useChatScrollLock() {
 				(pinnedRef.current || keepPinnedRef.current) &&
 				!escapedRef.current
 			) {
-				scrollToBottom('instant')
+				scrollToBottom('smooth')
 				return
 			}
 
@@ -181,6 +230,10 @@ export function useChatScrollLock() {
 				nextHeight > previousHeight &&
 				!pinnedRef.current
 			) {
+				if (!contentMutatedRef.current) {
+					syncButtonVisibility()
+					return
+				}
 				hasPendingContentRef.current = true
 			}
 
@@ -220,7 +273,7 @@ export function useChatScrollLock() {
 			escapedRef.current = true
 			pinnedRef.current = false
 			keepPinnedRef.current = false
-			setButtonVisibility(true)
+			setButtonVisibility(hasPendingContentRef.current)
 		}
 
 		content.addEventListener(
@@ -241,6 +294,7 @@ export function useChatScrollLock() {
 	useEffect(() => {
 		return () => {
 			cancelScheduledScroll()
+			cancelScheduledMutationReset()
 		}
 	}, [])
 

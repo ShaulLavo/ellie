@@ -1,29 +1,20 @@
-import {
-	useState,
-	useCallback,
-	useEffect,
-	useId
-} from 'react'
+import type { ImgHTMLAttributes } from 'react'
 import { createPortal } from 'react-dom'
 import {
-	motion,
 	AnimatePresence,
-	LayoutGroup
+	LayoutGroup,
+	motion
 } from 'motion/react'
 import { cn } from '@/lib/utils'
+import {
+	getClickableImageContainerStyle,
+	getClickableImagePlaceholderStyle,
+	getClickableImagePlaceholderUrl
+} from './clickable-image.utils'
+import { useClickableImage } from './use-clickable-image'
 
-const MAX_CHAT_IMAGE_HEIGHT_PX = 320
-
-export function ClickableImage({
-	src,
-	alt,
-	className,
-	containerClassName,
-	naturalWidth,
-	naturalHeight,
-	...props
-}: Omit<
-	React.ImgHTMLAttributes<HTMLImageElement>,
+type ClickableImageProps = Omit<
+	ImgHTMLAttributes<HTMLImageElement>,
 	| 'onAnimationStart'
 	| 'onDragStart'
 	| 'onDragEnd'
@@ -32,89 +23,97 @@ export function ClickableImage({
 	containerClassName?: string
 	naturalWidth?: number
 	naturalHeight?: number
-}) {
-	const [open, setOpen] = useState(false)
-	const layoutId = useId()
+	hash?: string
+}
 
-	const close = useCallback(() => setOpen(false), [])
-
-	useEffect(() => {
-		if (!open) return
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') close()
-		}
-		document.addEventListener('keydown', onKey)
-		return () =>
-			document.removeEventListener('keydown', onKey)
-	}, [open, close])
-
-	const aspectStyle =
-		naturalWidth && naturalHeight
-			? ({
-					aspectRatio: `${naturalWidth} / ${naturalHeight}`
-				} as React.CSSProperties)
-			: undefined
-	const boundedWidth =
-		naturalWidth && naturalHeight
-			? Math.min(
-					naturalWidth,
-					(naturalWidth / naturalHeight) *
-						MAX_CHAT_IMAGE_HEIGHT_PX
-				)
-			: undefined
-	const containerStyle =
-		aspectStyle && boundedWidth
-			? ({
-					...aspectStyle,
-					width: `min(100%, ${boundedWidth}px)`
-				} as React.CSSProperties)
-			: aspectStyle
+export function ClickableImage({
+	src,
+	alt,
+	className,
+	containerClassName,
+	naturalWidth,
+	naturalHeight,
+	hash,
+	onLoad,
+	...props
+}: ClickableImageProps) {
+	const {
+		closeImage,
+		handleThumbnailLoad,
+		isOpen,
+		layoutId,
+		loaded,
+		openImage
+	} = useClickableImage()
+	const placeholderUrl =
+		getClickableImagePlaceholderUrl(hash)
+	const containerStyle = getClickableImageContainerStyle({
+		naturalHeight,
+		naturalWidth
+	})
+	const placeholderStyle =
+		getClickableImagePlaceholderStyle(placeholderUrl)
 
 	return (
 		<LayoutGroup>
-			<motion.button
-				layoutId={layoutId}
+			<button
 				type="button"
 				className={cn(
 					'block max-w-full cursor-pointer overflow-hidden p-0 text-left',
 					containerClassName,
-					className,
-					open && 'invisible'
+					className
 				)}
-				style={containerStyle}
-				onClick={() => setOpen(true)}
+				style={{
+					...containerStyle,
+					...placeholderStyle
+				}}
+				onClick={openImage}
+				aria-expanded={isOpen}
 			>
-				<img
+				<motion.img
+					layoutId={layoutId}
 					src={src}
 					alt={alt}
-					className="block h-auto max-w-full object-contain"
+					className={cn(
+						'block h-auto max-w-full object-contain transition-opacity duration-300',
+						!loaded && hash && 'opacity-0'
+					)}
 					loading="lazy"
+					onLoad={event => {
+						handleThumbnailLoad()
+						onLoad?.(event)
+					}}
 					{...props}
 				/>
-			</motion.button>
+			</button>
 
 			{createPortal(
 				<AnimatePresence>
-					{open && (
+					{isOpen && (
 						<motion.div
-							className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							exit={{ opacity: 0 }}
-							transition={{ duration: 0.2 }}
-							onClick={close}
+							className="fixed inset-0 z-100 flex items-center justify-center"
+							exit={{ opacity: 1 }}
+							role="dialog"
+							aria-modal="true"
 						>
-							<motion.div
-								layoutId={layoutId}
-								className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-lg shadow-2xl"
-								onClick={e => e.stopPropagation()}
-							>
-								<img
+							<motion.button
+								type="button"
+								aria-label="Close expanded image"
+								className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								exit={{ opacity: 0 }}
+								transition={{ duration: 0.2 }}
+								onClick={closeImage}
+							/>
+							<div className="relative max-h-[90vh] max-w-[90vw]">
+								<motion.img
+									layoutId={layoutId}
 									src={src}
 									alt={alt}
-									className="block max-h-[90vh] max-w-[90vw] object-contain"
+									className="block max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
 								/>
-							</motion.div>
+							</div>
 						</motion.div>
 					)}
 				</AnimatePresence>,

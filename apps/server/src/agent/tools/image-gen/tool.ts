@@ -8,6 +8,7 @@
 
 import * as v from 'valibot'
 import { join } from 'node:path'
+import { generateThumbHash } from '../../../lib/thumbhash'
 import type {
 	AgentTool,
 	AgentToolResult,
@@ -346,14 +347,31 @@ export function createImageGenTool(
 					'image/png'
 			)
 
-			// Enrich images with dimensions from the recipe
-			const imagesWithDimensions = result.images?.map(
-				img => ({
-					...img,
-					width: webRecipe.width,
-					height: webRecipe.height
-				})
-			)
+			// Enrich images with dimensions and thumbhash
+			const imagesWithDimensions = result.images
+				? await Promise.all(
+						result.images.map(async img => {
+							const filePath = join(
+								deps.dataDir,
+								'uploads',
+								img.uploadId
+							)
+							let hash: string | undefined
+							try {
+								const buf = Buffer.from(
+									await Bun.file(filePath).arrayBuffer()
+								)
+								hash = await generateThumbHash(buf)
+							} catch {}
+							return {
+								...img,
+								width: webRecipe.width,
+								height: webRecipe.height,
+								...(hash && { hash })
+							}
+						})
+					)
+				: undefined
 
 			return {
 				content: [
