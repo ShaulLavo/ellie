@@ -1,19 +1,23 @@
-import { get, set, del } from 'idb-keyval'
 import type {
 	PersistedClient,
 	Persister
 } from '@tanstack/react-query-persist-client'
 
-const IDB_KEY = 'ellie-query-cache'
+const STORAGE_KEY = 'ellie-query-cache'
 
-export const idbPersister: Persister = {
-	persistClient: async (client: PersistedClient) => {
-		await set(IDB_KEY, client)
+export const localStoragePersister: Persister = {
+	persistClient: (client: PersistedClient) => {
+		localStorage.setItem(
+			STORAGE_KEY,
+			JSON.stringify(client)
+		)
 	},
-	restoreClient: async () => {
-		return await get<PersistedClient>(IDB_KEY)
+	restoreClient: () => {
+		const raw = localStorage.getItem(STORAGE_KEY)
+		if (!raw) return undefined
+		return JSON.parse(raw) as PersistedClient
 	},
-	removeClient: async () => {
-		await del(IDB_KEY)
+	removeClient: () => {
+		localStorage.removeItem(STORAGE_KEY)
 	}
 }
