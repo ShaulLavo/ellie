@@ -57,6 +57,7 @@
 		"@types/hapi__boom": "^9.0.1",
 		"@types/qrcode": "^1.5.6",
 		"babel-plugin-react-compiler": "^1.0.0",
+		"bun-plugin-tailwind": "^0.1.2",
 		"bun-types": "latest",
 		"qrcode": "^1.5.4"
 	}

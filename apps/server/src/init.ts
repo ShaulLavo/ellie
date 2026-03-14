@@ -220,8 +220,8 @@ export async function init(): Promise<ServerContext> {
 			resolve(import.meta.dir, 'web'),
 			// Source layout: apps/web/dist (pre-built)
 			resolve(import.meta.dir, '../../web/dist'),
-			// Source layout: apps/web (dev, Bun transpiles on-the-fly)
-			resolve(import.meta.dir, '../../web')
+			// Source layout: apps/web/public (dev, Bun serves with HMR)
+			resolve(import.meta.dir, '../../web/public')
 		]
 	})
 
