@@ -2,7 +2,7 @@ import {
 	useQuery,
 	useQueryClient
 } from '@tanstack/react-query'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { StoredChatMessage } from '@/chat/types'
 import { eden } from '@/lib/eden'
 import type { EventRow } from '@/lib/stream'
@@ -23,10 +23,12 @@ export function useChatMessages(sessionId: string) {
 	const epochRef = useRef(0)
 	// Track which sessionId the epoch belongs to so we reset on switch.
 	const sessionRef = useRef(sessionId)
-	if (sessionRef.current !== sessionId) {
-		sessionRef.current = sessionId
-		epochRef.current = 0
-	}
+	useEffect(() => {
+		if (sessionRef.current !== sessionId) {
+			sessionRef.current = sessionId
+			epochRef.current = 0
+		}
+	}, [sessionId])
 
 	const { data: messages = [] } = useQuery({
 		queryKey: chatMessagesKey(sessionId),

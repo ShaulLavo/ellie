@@ -228,6 +228,149 @@ export function parseCausalRelation(
 	return { targetIndex, relationType, strength }
 }
 
+function buildFactDedupKey(content: string): string {
+	return sanitizeText(content)
+		.trim()
+		.toLowerCase()
+		.replace(/\s+/g, ' ')
+}
+
+function mergeUniqueStrings(
+	current: string[],
+	incoming: string[]
+): string[] {
+	return [...new Set([...current, ...incoming])]
+}
+
+function mergeUniqueEntities(
+	current: ExtractedEntity[],
+	incoming: ExtractedEntity[]
+): ExtractedEntity[] {
+	const merged = new Map<string, ExtractedEntity>()
+	for (const entity of [...current, ...incoming]) {
+		const key = `${entity.name.trim().toLowerCase()}|${entity.entityType}`
+		if (merged.has(key)) continue
+		merged.set(key, entity)
+	}
+	return [...merged.values()]
+}
+
+function cloneExtractedFact(
+	fact: ExtractedFact
+): ExtractedFact {
+	return {
+		...fact,
+		entities: [...fact.entities],
+		tags: [...fact.tags],
+		causalRelations: []
+	}
+}
+
+function mergeDuplicateFact(
+	current: ExtractedFact,
+	incoming: ExtractedFact
+): void {
+	current.confidence = Math.max(
+		current.confidence,
+		incoming.confidence
+	)
+	current.eventDate ||= incoming.eventDate
+	current.occurredStart ||= incoming.occurredStart
+	current.occurredEnd ||= incoming.occurredEnd
+	current.mentionedAt ||= incoming.mentionedAt
+	current.tags = mergeUniqueStrings(
+		current.tags,
+		incoming.tags
+	)
+	current.entities = mergeUniqueEntities(
+		current.entities,
+		incoming.entities
+	)
+}
+
+function remapMergedCausalRelations(
+	facts: ExtractedFact[],
+	relationsByFact: Map<number, ExtractedCausalRelation[]>,
+	oldToNewIndex: Map<number, number>
+): void {
+	for (
+		let factIndex = 0;
+		factIndex < facts.length;
+		factIndex++
+	) {
+		const relations = relationsByFact.get(factIndex) ?? []
+		const uniqueRelations = new Map<
+			string,
+			ExtractedCausalRelation
+		>()
+		for (const relation of relations) {
+			const targetIndex = oldToNewIndex.get(
+				relation.targetIndex
+			)
+			if (targetIndex == null) continue
+			if (targetIndex >= factIndex) continue
+			const key = `${targetIndex}|${relation.relationType}|${relation.strength}`
+			if (uniqueRelations.has(key)) continue
+			uniqueRelations.set(key, {
+				...relation,
+				targetIndex
+			})
+		}
+		facts[factIndex]!.causalRelations = [
+			...uniqueRelations.values()
+		]
+	}
+}
+
+export function dedupeExtractedFacts(
+	facts: ExtractedFact[]
+): ExtractedFact[] {
+	if (facts.length < 2) return facts
+
+	const dedupedFacts: ExtractedFact[] = []
+	const dedupedIndexByKey = new Map<string, number>()
+	const oldToNewIndex = new Map<number, number>()
+	const relationsByFact = new Map<
+		number,
+		ExtractedCausalRelation[]
+	>()
+
+	for (
+		let factIndex = 0;
+		factIndex < facts.length;
+		factIndex++
+	) {
+		const fact = facts[factIndex]!
+		const key = buildFactDedupKey(fact.content)
+		const existingIndex = dedupedIndexByKey.get(key)
+
+		if (existingIndex == null) {
+			const dedupedIndex = dedupedFacts.length
+			dedupedFacts.push(cloneExtractedFact(fact))
+			dedupedIndexByKey.set(key, dedupedIndex)
+			oldToNewIndex.set(factIndex, dedupedIndex)
+			relationsByFact.set(dedupedIndex, [
+				...fact.causalRelations
+			])
+			continue
+		}
+
+		oldToNewIndex.set(factIndex, existingIndex)
+		mergeDuplicateFact(dedupedFacts[existingIndex]!, fact)
+		const existingRelations =
+			relationsByFact.get(existingIndex) ?? []
+		existingRelations.push(...fact.causalRelations)
+		relationsByFact.set(existingIndex, existingRelations)
+	}
+
+	remapMergedCausalRelations(
+		dedupedFacts,
+		relationsByFact,
+		oldToNewIndex
+	)
+	return dedupedFacts
+}
+
 export function normalizeExtractedFacts(
 	parsed: unknown,
 	eventDateMs: number
@@ -448,34 +591,37 @@ export async function extractFactsFromContent(
 	totalChunks = 1
 ): Promise<ExtractedFact[]> {
 	if ('facts' in options && options.facts) {
-		return options.facts.map(f => ({
-			content: sanitizeText(f.content),
-			factType: (f.factType ??
-				'world') as ExtractedFact['factType'],
-			confidence: f.confidence ?? 1.0,
-			eventDate: null,
-			occurredStart:
-				f.occurredStart != null
-					? new Date(f.occurredStart).toISOString()
-					: null,
-			occurredEnd:
-				f.occurredEnd != null
-					? new Date(f.occurredEnd).toISOString()
-					: null,
-			mentionedAt: null,
-			entities: (f.entities ?? []).map(name => ({
-				name,
-				entityType: 'concept' as const
-			})),
-			tags: f.tags ?? [],
-			causalRelations: Array.isArray(f.causalRelations)
-				? f.causalRelations
-						.map(rel => parseCausalRelation(rel))
-						.filter((rel): rel is ExtractedCausalRelation =>
-							Boolean(rel)
-						)
-				: []
-		}))
+		return dedupeExtractedFacts(
+			options.facts.map(f => ({
+				content: sanitizeText(f.content),
+				factType: (f.factType ??
+					'world') as ExtractedFact['factType'],
+				confidence: f.confidence ?? 1.0,
+				eventDate: null,
+				occurredStart:
+					f.occurredStart != null
+						? new Date(f.occurredStart).toISOString()
+						: null,
+				occurredEnd:
+					f.occurredEnd != null
+						? new Date(f.occurredEnd).toISOString()
+						: null,
+				mentionedAt: null,
+				entities: (f.entities ?? []).map(name => ({
+					name,
+					entityType: 'concept' as const
+				})),
+				tags: f.tags ?? [],
+				causalRelations: Array.isArray(f.causalRelations)
+					? f.causalRelations
+							.map(rel => parseCausalRelation(rel))
+							.filter(
+								(rel): rel is ExtractedCausalRelation =>
+									Boolean(rel)
+							)
+					: []
+			}))
+		)
 	}
 
 	const extractionInput = content
@@ -516,7 +662,7 @@ export async function extractFactsFromContent(
 		for (const fact of extracted) {
 			fact.content = sanitizeText(fact.content)
 		}
-		return extracted
+		return dedupeExtractedFacts(extracted)
 	} catch {
 		// Graceful degradation: LLM extraction failed, return empty result
 		return []

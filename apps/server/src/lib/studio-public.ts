@@ -1,68 +1,43 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export type StudioPublicSource =
-	| 'env'
-	| 'bundle'
-	| 'dev'
-	| 'dev-fallback'
-
-export interface ResolveStudioPublicOptions {
-	bundledDir?: string
-	devDir?: string
-	env?: NodeJS.ProcessEnv
-	pathExists?: (path: string) => boolean
-}
-
 export interface ResolvedStudioPublic {
 	dir: string
-	publicDir: string | null
-	source: StudioPublicSource
+	source: 'env' | 'found' | 'fallback'
 }
 
-const DEFAULT_BUNDLED_DIR = resolve(
-	import.meta.dir,
-	'../../../web/dist'
-)
-const DEFAULT_DEV_DIR = resolve(
-	import.meta.dir,
-	'../../../web/public'
-)
-
+/**
+ * Resolve the directory containing the web frontend assets.
+ *
+ * Checks (in order):
+ *  1. `ELLIE_STUDIO_PUBLIC` env var
+ *  2. Each candidate path — first one that exists wins
+ *  3. Last candidate as fallback (even if it doesn't exist)
+ */
 export function resolveStudioPublic({
-	bundledDir = DEFAULT_BUNDLED_DIR,
-	devDir = DEFAULT_DEV_DIR,
+	candidates,
 	env = process.env,
 	pathExists = existsSync
-}: ResolveStudioPublicOptions = {}): ResolvedStudioPublic {
+}: {
+	candidates: string[]
+	env?: NodeJS.ProcessEnv
+	pathExists?: (path: string) => boolean
+}): ResolvedStudioPublic {
 	const explicitDir = env.ELLIE_STUDIO_PUBLIC
 	if (explicitDir) {
-		return {
-			dir: explicitDir,
-			publicDir: null,
-			source: 'env'
-		}
+		return { dir: explicitDir, source: 'env' }
 	}
 
-	if (env.NODE_ENV === 'production') {
-		if (pathExists(bundledDir)) {
-			return {
-				dir: bundledDir,
-				publicDir: null,
-				source: 'bundle'
-			}
-		}
-
-		return {
-			dir: devDir,
-			publicDir: null,
-			source: 'dev-fallback'
+	for (const dir of candidates) {
+		if (pathExists(dir)) {
+			return { dir, source: 'found' }
 		}
 	}
 
 	return {
-		dir: devDir,
-		publicDir: null,
-		source: 'dev'
+		dir:
+			candidates.at(-1) ??
+			resolve(import.meta.dir, '../../../web'),
+		source: 'fallback'
 	}
 }

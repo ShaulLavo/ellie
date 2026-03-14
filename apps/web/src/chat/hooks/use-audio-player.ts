@@ -30,16 +30,14 @@ export function useAudioPlayer(initialDuration?: number) {
 	const [duration, setDuration] = useState(
 		initialDuration ?? 0
 	)
-	const durationRef = useRef(initialDuration ?? 0)
 
-	useEffect(() => {
-		if (!initialDuration || initialDuration <= 0) return
+	if (
+		initialDuration &&
+		initialDuration > 0 &&
+		duration !== initialDuration
+	) {
 		setDuration(initialDuration)
-	}, [initialDuration])
-
-	useEffect(() => {
-		durationRef.current = duration
-	}, [duration])
+	}
 
 	// Pause other instances when this one plays
 	useEffect(() => {
@@ -56,7 +54,7 @@ export function useAudioPlayer(initialDuration?: number) {
 
 	const resolveDuration = (
 		audio: HTMLAudioElement | null
-	) => getAudioDuration(audio, durationRef.current)
+	) => getAudioDuration(audio, duration)
 
 	const syncPosition = (
 		nextTime: number,

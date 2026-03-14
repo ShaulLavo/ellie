@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "bunx @tailwindcss/cli -i src/styles.css -o src/output.css --watch",
-		"build": "bunx @tailwindcss/cli -i src/styles.css -o src/output.css --minify",
+		"build": "bunx @tailwindcss/cli -i src/styles.css -o src/output.css --minify && bun run build.ts",
 		"check-types": "tsgo --build",
 		"lint": "eslint ."
 	},

@@ -14,7 +14,9 @@ import {
 	existsSync
 } from 'node:fs'
 
-const TEMPLATES_DIR = join(import.meta.dir, 'templates')
+const TEMPLATES_DIR =
+	process.env.ELLIE_WORKSPACE_TEMPLATES_DIR ??
+	join(import.meta.dir, 'templates')
 
 function isEexistError(err: unknown): boolean {
 	return (

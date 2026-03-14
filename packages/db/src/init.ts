@@ -11,6 +11,9 @@ export interface SQLiteManagerConfig {
 const EXT = process.platform === 'darwin' ? 'dylib' : 'so'
 
 const CUSTOM_LIB_PATHS = [
+	...(process.env.ELLIE_SQLITE_LIB_PATH
+		? [process.env.ELLIE_SQLITE_LIB_PATH]
+		: []),
 	resolve(
 		import.meta.dirname,
 		`../vendor/libsqlite3-vec.${EXT}`

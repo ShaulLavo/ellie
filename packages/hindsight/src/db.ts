@@ -5,11 +5,9 @@ import { openDatabase } from '@ellie/db'
 import type { Database } from 'bun:sqlite'
 import * as schema from './schema'
 
-const MIGRATIONS_DIR = join(
-	import.meta.dir,
-	'..',
-	'drizzle'
-)
+const MIGRATIONS_DIR =
+	process.env.ELLIE_HINDSIGHT_MIGRATIONS_DIR ??
+	join(import.meta.dir, '..', 'drizzle')
 
 export type HindsightDB = ReturnType<
 	typeof drizzle<typeof schema>

@@ -4,62 +4,51 @@ import { resolveStudioPublic } from './studio-public'
 describe('resolveStudioPublic', () => {
 	it('uses the explicit env override first', () => {
 		const result = resolveStudioPublic({
+			candidates: ['/tmp/web-dist', '/tmp/web'],
 			env: {
 				ELLIE_STUDIO_PUBLIC: '/tmp/custom-web',
 				NODE_ENV: 'production'
 			},
-			pathExists: () => false
+			pathExists: () => true
 		})
 
 		expect(result).toEqual({
 			dir: '/tmp/custom-web',
-			publicDir: null,
 			source: 'env'
 		})
 	})
 
-	it('uses the bundled frontend in production when present', () => {
+	it('uses the first candidate that exists', () => {
 		const result = resolveStudioPublic({
-			env: { NODE_ENV: 'production' },
-			bundledDir: '/tmp/web-dist',
-			devDir: '/tmp/web-public',
+			candidates: [
+				'/tmp/bundle-web',
+				'/tmp/web-dist',
+				'/tmp/web'
+			],
+			env: {},
 			pathExists: path => path === '/tmp/web-dist'
 		})
 
 		expect(result).toEqual({
 			dir: '/tmp/web-dist',
-			publicDir: null,
-			source: 'bundle'
+			source: 'found'
 		})
 	})
 
-	it('falls back to the dev frontend in production when no bundle exists', () => {
+	it('falls back to last candidate when none exist', () => {
 		const result = resolveStudioPublic({
-			env: { NODE_ENV: 'production' },
-			bundledDir: '/tmp/web-dist',
-			devDir: '/tmp/web-public',
+			candidates: [
+				'/tmp/bundle-web',
+				'/tmp/web-dist',
+				'/tmp/web'
+			],
+			env: {},
 			pathExists: () => false
 		})
 
 		expect(result).toEqual({
-			dir: '/tmp/web-public',
-			publicDir: null,
-			source: 'dev-fallback'
-		})
-	})
-
-	it('uses the dev frontend outside production', () => {
-		const result = resolveStudioPublic({
-			env: { NODE_ENV: 'development' },
-			bundledDir: '/tmp/web-dist',
-			devDir: '/tmp/web-public',
-			pathExists: path => path === '/tmp/web-dist'
-		})
-
-		expect(result).toEqual({
-			dir: '/tmp/web-public',
-			publicDir: null,
-			source: 'dev'
+			dir: '/tmp/web',
+			source: 'fallback'
 		})
 	})
 })

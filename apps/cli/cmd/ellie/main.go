@@ -63,6 +63,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(startCmd)

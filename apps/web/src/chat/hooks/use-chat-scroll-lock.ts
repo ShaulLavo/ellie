@@ -2,6 +2,7 @@
 
 import {
 	useEffect,
+	useEffectEvent,
 	useLayoutEffect,
 	useRef,
 	useState
@@ -80,14 +81,14 @@ export function useChatScrollLock() {
 		mutationFrameRef.current = null
 	}
 
-	function markContentMutated() {
+	const markContentMutated = useEffectEvent(() => {
 		contentMutatedRef.current = true
 		cancelScheduledMutationReset()
 		mutationFrameRef.current = requestAnimationFrame(() => {
 			mutationFrameRef.current = null
 			contentMutatedRef.current = false
 		})
-	}
+	})
 
 	function syncToBottom(
 		behavior: ScrollBehaviorMode = 'instant'
@@ -198,11 +199,8 @@ export function useChatScrollLock() {
 		}
 	}, [])
 
-	useEffect(() => {
-		const content = contentRef.current
-		if (!content) return
-
-		const observer = new ResizeObserver(entries => {
+	const onResize = useEffectEvent(
+		(entries: ResizeObserverEntry[]) => {
 			const entry = entries[0]
 			if (!entry) return
 
@@ -248,8 +246,14 @@ export function useChatScrollLock() {
 			}
 
 			syncButtonVisibility()
-		})
+		}
+	)
 
+	useEffect(() => {
+		const content = contentRef.current
+		if (!content) return
+
+		const observer = new ResizeObserver(onResize)
 		observer.observe(content)
 
 		return () => {

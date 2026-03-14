@@ -66,11 +66,9 @@ export interface QueryInput {
 
 // ── Resolved path ───────────────────────────────────────────────────────────
 
-const MIGRATIONS_DIR = join(
-	import.meta.dir,
-	'..',
-	'drizzle'
-)
+const MIGRATIONS_DIR =
+	process.env.ELLIE_DB_MIGRATIONS_DIR ??
+	join(import.meta.dir, '..', 'drizzle')
 
 // ── EventStore ──────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
 	useReactTable,
 	getCoreRowModel,
@@ -83,42 +83,38 @@ export function DbTableGrid({
 		value: unknown
 	} | null>(null)
 
-	const openCellDialog = useCallback(
-		(column: ColumnInfo, value: unknown) => {
-			setCellDialogData({ column, value })
-			setCellDialogOpen(true)
-		},
-		[]
-	)
+	const openCellDialog = (
+		column: ColumnInfo,
+		value: unknown
+	) => {
+		setCellDialogData({ column, value })
+		setCellDialogOpen(true)
+	}
 
-	const columns = useMemo<
-		ColumnDef<Record<string, unknown>>[]
-	>(
-		() =>
-			visibleColumns.map(col => ({
-				accessorKey: col.name,
-				header: () => (
-					<ColumnHeader
-						column={col}
-						sortBy={sortBy}
-						sortDir={sortDir}
-						onSort={onSort}
-					/>
-				),
-				cell: ({ getValue }) => (
-					<CellValue
-						value={getValue()}
-						onExpand={v => openCellDialog(col, v)}
-					/>
-				)
-			})),
-		[visibleColumns, sortBy, sortDir, onSort]
-	)
+	const columns: ColumnDef<Record<string, unknown>>[] =
+		visibleColumns.map(col => ({
+			accessorKey: col.name,
+			header: () => (
+				<ColumnHeader
+					column={col}
+					sortBy={sortBy}
+					sortDir={sortDir}
+					onSort={onSort}
+				/>
+			),
+			cell: ({ getValue }) => (
+				<CellValue
+					value={getValue()}
+					onExpand={v => openCellDialog(col, v)}
+				/>
+			)
+		}))
 
 	const data = rows?.rows ?? []
 	const totalRows = rows?.totalRows ?? 0
 	const totalPages = rows?.totalPages ?? 1
-
+	// TODO switch to a diffrent lib
+	// eslint-disable-next-line react-hooks/incompatible-library
 	const table = useReactTable({
 		data,
 		columns,

@@ -19,6 +19,47 @@ const PARAKEET_MODEL_DIR = join(
 const PARAKEET_TAR_URL =
 	'https://blob.handy.computer/parakeet-v3-int8.tar.gz'
 
+async function downloadWithProgress(
+	url: string,
+	dest: string,
+	label: string
+): Promise<void> {
+	const res = await fetch(url, { redirect: 'follow' })
+	if (!res.ok)
+		throw new Error(
+			`Failed to download ${label}: ${res.status}`
+		)
+
+	const total = Number(
+		res.headers.get('content-length') || 0
+	)
+	if (!total || !res.body) {
+		await Bun.write(dest, res)
+		return
+	}
+
+	const file = Bun.file(dest).writer()
+	let downloaded = 0
+	let lastPct = -1
+
+	for await (const chunk of res.body) {
+		file.write(chunk)
+		downloaded += chunk.byteLength
+		const pct = Math.floor((downloaded / total) * 100)
+		if (pct !== lastPct && pct % 10 === 0) {
+			const mb = (downloaded / 1_000_000).toFixed(1)
+			const totalMb = (total / 1_000_000).toFixed(1)
+			process.stdout.write(
+				`\r${label}: ${mb}/${totalMb} MB (${pct}%)`
+			)
+			lastPct = pct
+		}
+	}
+
+	await file.end()
+	process.stdout.write('\n')
+}
+
 async function downloadVad() {
 	if (existsSync(VAD_MODEL_PATH)) {
 		console.log(
@@ -26,17 +67,12 @@ async function downloadVad() {
 		)
 		return
 	}
-	console.log(
-		`Downloading Silero VAD v4 model to ${VAD_MODEL_PATH}...`
+	console.log('Downloading Silero VAD v4 model...')
+	await downloadWithProgress(
+		VAD_MODEL_URL,
+		VAD_MODEL_PATH,
+		'VAD model'
 	)
-	const res = await fetch(VAD_MODEL_URL, {
-		redirect: 'follow'
-	})
-	if (!res.ok)
-		throw new Error(
-			`Failed to download VAD model: ${res.status}`
-		)
-	await Bun.write(VAD_MODEL_PATH, res)
 	console.log('VAD model downloaded.')
 }
 
@@ -48,21 +84,18 @@ async function downloadParakeet() {
 		return
 	}
 	console.log(
-		`Downloading Parakeet TDT 0.6B v3 int8 model...`
+		'Downloading Parakeet TDT 0.6B v3 int8 model...'
 	)
-	const res = await fetch(PARAKEET_TAR_URL, {
-		redirect: 'follow'
-	})
-	if (!res.ok)
-		throw new Error(
-			`Failed to download Parakeet model: ${res.status}`
-		)
 
 	const tarPath = join(
 		MODELS_DIR,
 		'parakeet-v3-int8.tar.gz'
 	)
-	await Bun.write(tarPath, res)
+	await downloadWithProgress(
+		PARAKEET_TAR_URL,
+		tarPath,
+		'Parakeet model'
+	)
 
 	// Extract the tarball
 	const proc = Bun.spawn(

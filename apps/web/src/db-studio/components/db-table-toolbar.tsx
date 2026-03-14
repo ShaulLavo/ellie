@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import {
+	useEffect,
+	useEffectEvent,
+	useRef,
+	useState
+} from 'react'
 import { ChevronDown, Filter, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -48,25 +53,22 @@ export function DbTableToolbar({
 	const skipDebounce = useRef(false)
 
 	// Sync local state when activeFilter changes externally (e.g. URL navigation)
-	const prevFilter = useRef(activeFilter)
-	useEffect(() => {
-		if (activeFilter !== prevFilter.current) {
-			prevFilter.current = activeFilter
-			if (activeFilter) {
-				const p = parseFilterString(activeFilter)
-				if (p) {
-					setColumn(p.column)
-					setOperator(p.op)
-					setValue(p.value)
-				}
-			} else {
-				setValue('')
+	const [prevFilter, setPrevFilter] = useState(activeFilter)
+	if (activeFilter !== prevFilter) {
+		setPrevFilter(activeFilter)
+		if (activeFilter) {
+			const p = parseFilterString(activeFilter)
+			if (p) {
+				setColumn(p.column)
+				setOperator(p.op)
+				setValue(p.value)
 			}
+		} else {
+			setValue('')
 		}
-	}, [activeFilter])
+	}
 
-	// Debounced auto-apply when column, operator, or value change
-	useEffect(() => {
+	const applyDebounced = useEffectEvent(() => {
 		if (skipDebounce.current) {
 			skipDebounce.current = false
 			return
@@ -74,7 +76,6 @@ export function DbTableToolbar({
 
 		const trimmed = value.trim()
 		if (!trimmed) {
-			// Only clear if there's an active filter
 			if (activeFilter) {
 				const timer = setTimeout(() => {
 					onApplyFilter(undefined)
@@ -91,6 +92,11 @@ export function DbTableToolbar({
 			onApplyFilter(newFilter)
 		}, DEBOUNCE_MS)
 		return () => clearTimeout(timer)
+	})
+
+	// Debounced auto-apply when column, operator, or value change
+	useEffect(() => {
+		return applyDebounced()
 	}, [column, operator, value])
 
 	function handleClear() {

@@ -264,5 +264,5 @@ export function useTerminal(
 			ws?.close()
 			term?.dispose()
 		}
-	}, [])
+	}, [containerRef])
 }

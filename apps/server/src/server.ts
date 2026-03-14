@@ -5,6 +5,8 @@ import {
 } from '@ellie/trace'
 import { createTusApp } from '@ellie/tus'
 import { openapi } from '@elysiajs/openapi'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { staticPlugin } from '@elysiajs/static'
 import { tryValibotSummary } from '@ellie/schemas'
 import { toJsonSchema } from '@valibot/to-json-schema'
@@ -141,22 +143,66 @@ export const app = new Elysia()
 		await staticPlugin({
 			assets: ctx.STUDIO_PUBLIC,
 			prefix: `/app`,
-			indexHTML: true
+			indexHTML: false,
+			ignorePatterns: [/\.html$/]
 		})
 	)
 	.use(
 		await staticPlugin({
 			assets: ctx.STUDIO_PUBLIC,
 			prefix: `/db`,
-			indexHTML: true
+			indexHTML: false,
+			ignorePatterns: [/\.html$/]
 		})
 	)
 	.use(
 		await staticPlugin({
 			assets: ctx.STUDIO_PUBLIC,
 			prefix: `/terminal`,
-			indexHTML: true
+			indexHTML: false,
+			ignorePatterns: [/\.html$/]
 		})
+	)
+	.use(
+		(() => {
+			// Serve index.html as a raw string to prevent Bun's
+			// automatic HTML processing from re-bundling the JS.
+			// Registered AFTER static plugins so asset files are
+			// served by the static plugin first.
+			const indexPath = join(
+				ctx.STUDIO_PUBLIC,
+				'index.html'
+			)
+			let indexHtml: string
+			try {
+				const raw = readFileSync(indexPath, 'utf-8')
+				// Rewrite relative asset paths to absolute under /app/
+				indexHtml = raw.replace(
+					/(?:href|src)="\.\/([^"]+)"/g,
+					(_, file) => {
+						const attr = _.startsWith('href')
+							? 'href'
+							: 'src'
+						return `${attr}="/app/${file}"`
+					}
+				)
+			} catch {
+				indexHtml =
+					'<html><body>index.html not found</body></html>'
+			}
+			const serveIndex = () =>
+				new Response(indexHtml, {
+					headers: {
+						'content-type': 'text/html; charset=utf-8'
+					}
+				})
+			const app = new Elysia()
+			for (const prefix of ['/app', '/db', '/terminal']) {
+				app.get(prefix, serveIndex)
+				app.get(`${prefix}/*`, serveIndex)
+			}
+			return app
+		})()
 	)
 	.all(
 		`/*`,
@@ -201,6 +247,9 @@ export const app = new Elysia()
 export type App = typeof app
 
 app.listen(ctx.port)
+console.log(
+	`[server] ✅ all systems ready on port ${ctx.port}`
+)
 
 // ── Graceful shutdown (close WhatsApp sockets before hot-reload / exit) ──
 async function shutdown() {

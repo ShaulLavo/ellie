@@ -54,6 +54,7 @@ async function main() {
 	await prepareReleaseDir()
 	await bundleServer()
 	await copyReleaseFiles()
+	await stageNativeModules()
 	await stageBinaries()
 	await writeStartScript()
 	await createArchive()
@@ -108,6 +109,8 @@ async function bundleServer() {
 			'apps/server/src/server.ts',
 			'--target',
 			'bun',
+			'--external',
+			'sharp',
 			'--outfile',
 			join(RELEASE_DIR, 'server.js')
 		],
@@ -122,6 +125,51 @@ async function copyReleaseFiles() {
 
 	for (const entry of RESOURCE_ENTRIES) {
 		await copyIntoRelease(entry.source, entry.target)
+	}
+}
+
+async function stageNativeModules() {
+	const nmDir = join(RELEASE_DIR, 'node_modules')
+	await mkdir(nmDir, { recursive: true })
+
+	// sharp has native bindings that can't be bundled — resolve from
+	// apps/server where it's a direct dependency and copy the package
+	// tree so require('sharp') works at runtime.
+	const resolveProc = Bun.spawnSync(
+		['bun', '-e', 'console.log(require.resolve("sharp"))'],
+		{
+			cwd: join(ROOT, 'apps/server'),
+			stdout: 'pipe',
+			stderr: 'pipe'
+		}
+	)
+	const sharpIndex = textDecoder
+		.decode(resolveProc.stdout)
+		.trim()
+	if (!sharpIndex) {
+		throw new Error(
+			'could not resolve sharp from apps/server'
+		)
+	}
+
+	// sharpIndex is like .../node_modules/sharp/lib/index.js
+	// walk up to the node_modules dir containing sharp
+	const sharpPkg = resolve(sharpIndex, '..', '..')
+	const sharpParent = dirname(sharpPkg)
+
+	for (const entry of [
+		'sharp',
+		'@img',
+		'detect-libc',
+		'semver'
+	]) {
+		const src = join(sharpParent, entry)
+		if (!existsSync(src)) continue
+		const dst = join(nmDir, entry)
+		await cp(src, dst, {
+			recursive: true,
+			dereference: true
+		})
 	}
 }
 
@@ -164,6 +212,7 @@ export ELLIE_SQLITE_LIB_PATH="\${ELLIE_SQLITE_LIB_PATH:-$ROOT/lib/${SQLITE_LIB_N
 export ELLIE_PTY_BRIDGE_PATH="\${ELLIE_PTY_BRIDGE_PATH:-$ROOT/bin/pty-bridge}"
 export ELLIE_CLI_PATH="\${ELLIE_CLI_PATH:-$ROOT/bin/ellie}"
 export ELLIE_STT_MODELS_DIR="\${ELLIE_STT_MODELS_DIR:-$ROOT/data/models/stt}"
+export NODE_PATH="\${NODE_PATH:-$ROOT/node_modules}"
 
 exec bun "$ROOT/server.js" "$@"
 `

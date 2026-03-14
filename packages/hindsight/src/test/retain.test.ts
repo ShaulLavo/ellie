@@ -267,6 +267,46 @@ describe('retain', () => {
 				first.memories[0]!.id
 			)
 		})
+
+		it('collapses exact duplicate facts within one retain call', async () => {
+			const result = await t.hs.retain(bankId, 'test', {
+				facts: [
+					{
+						content: 'Peter loves hiking',
+						entities: ['Peter'],
+						tags: ['outdoors']
+					},
+					{
+						content: '  peter   loves hiking  ',
+						entities: ['Peter', 'hiking'],
+						tags: ['repeat']
+					},
+					{
+						content: 'Peter loves hiking'
+					}
+				],
+				consolidate: false,
+				dedupThreshold: 0.92
+			})
+
+			expect(result.memories).toHaveLength(1)
+			expect(result.memories[0]!.content).toBe(
+				'Peter loves hiking'
+			)
+			expect(result.memories[0]!.tags).toEqual([
+				'outdoors',
+				'repeat'
+			])
+
+			const hdb = getHdb(t.hs)
+			const storedCount = hdb.db
+				.select({ id: hdb.schema.memoryUnits.id })
+				.from(hdb.schema.memoryUnits)
+				.where(eq(hdb.schema.memoryUnits.bankId, bankId))
+				.all().length
+
+			expect(storedCount).toBe(1)
+		})
 	})
 
 	// ── Semantic link creation ──────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
 import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { startTei } from './lib/tei'
+import { resolveStudioPublic } from './lib/studio-public'
 import { startStt } from './lib/stt'
 import { resolveGroqAdapter } from './adapters'
 import type { SseState } from './routes/common'
@@ -213,10 +214,16 @@ export async function init(): Promise<ServerContext> {
 		process.env.CREDENTIALS_PATH ??
 		resolve(import.meta.dir, '../../../.credentials.json')
 
-	const STUDIO_PUBLIC = resolve(
-		import.meta.dir,
-		'../../web'
-	)
+	const { dir: STUDIO_PUBLIC } = resolveStudioPublic({
+		candidates: [
+			// Bundle layout: dist/release/web
+			resolve(import.meta.dir, 'web'),
+			// Source layout: apps/web/dist (pre-built)
+			resolve(import.meta.dir, '../../web/dist'),
+			// Source layout: apps/web (dev, Bun transpiles on-the-fly)
+			resolve(import.meta.dir, '../../web')
+		]
+	})
 
 	// ── Legacy cleanup ───────────────────────────────────────────────────
 	cleanupLegacyData(DATA_DIR)

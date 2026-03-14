@@ -20,15 +20,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	binaryPath := filepath.Join(root, "dist", "server")
-	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-		return fmt.Errorf("no production build found at dist/server — build the project first")
+	startScript := filepath.Join(root, "dist", "release", "start.sh")
+	if _, err := os.Stat(startScript); os.IsNotExist(err) {
+		return fmt.Errorf("no production build found at dist/release — build the project first")
 	}
 
 	fmt.Println(styleBold.Render("Starting production server..."))
 	fmt.Println()
 
-	if exitCode := runProcess(binaryPath, []string{}, root); exitCode != 0 {
+	if exitCode := runProcess(startScript, []string{}, root); exitCode != 0 {
 		return exitCodeError(exitCode)
 	}
 	return nil
