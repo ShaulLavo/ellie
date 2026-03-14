@@ -2,6 +2,19 @@
 
 from __future__ import annotations
 
+import os
+import warnings
+
+# Suppress FutureWarning from diffusers (e.g. deprecated enable_vae_slicing)
+# and UserWarning from huggingface_hub (e.g. deprecated local_dir_use_symlinks)
+warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers")
+warnings.filterwarnings("ignore", message=".*local_dir_use_symlinks.*")
+
+# Disable tqdm progress bars from diffusers/transformers/huggingface_hub
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["DIFFUSERS_VERBOSITY"] = "error"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
 import typer
 
 app = typer.Typer(name="ellie-image-gen", help="Ellie image generation service")

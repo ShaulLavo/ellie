@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import gc
+import io
 import os
 import random
 import tempfile
@@ -18,6 +20,7 @@ from .schedulers import apply_scheduler
 from .textual_inversions import load_textual_inversions
 from .assets import download_file
 from .errors import EllaInvalidError
+from .preview import load_taesd, decode_latents_preview
 
 
 def handle_generate(config: dict[str, Any], profile: DeviceProfile,
@@ -84,11 +87,24 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
     generator = torch.Generator(device="cpu").manual_seed(seed)
     total_steps = config.get("steps", 25)
 
+    # Load TAESD for live preview (tiny autoencoder, ~5MB)
+    taesd = load_taesd(pipeline_arch, profile.device, profile.dtype)
+
     def step_callback(pipe_obj: Any, step: int, timestep: Any, callback_kwargs: dict) -> dict:
         # Use the pipeline's actual num_timesteps which accounts for
         # scheduler order (e.g. DPM++ SDE runs ~2N steps for N requested)
         actual_total = getattr(pipe_obj, "num_timesteps", total_steps)
-        _progress("denoise", step=step + 1, totalSteps=actual_total)
+        current_step = step + 1
+
+        # Decode preview every step — TAESD is fast (~5ms), TS throttle handles rate limiting
+        preview_b64 = None
+        if taesd is not None:
+            latents = callback_kwargs.get("latents")
+            if latents is not None:
+                preview_b64 = decode_latents_preview(taesd, latents)
+
+        _progress("denoise", step=current_step, totalSteps=actual_total,
+                  **({"preview": preview_b64} if preview_b64 else {}))
         return callback_kwargs
 
     clip_skip = config.get("clipSkip", 1)
@@ -103,6 +119,7 @@ def handle_generate(config: dict[str, Any], profile: DeviceProfile,
         "generator": generator,
         "num_images_per_prompt": config.get("batchSize", 1),
         "callback_on_step_end": step_callback,
+        "callback_on_step_end_tensor_inputs": ["latents"],
     }
 
     # A1111 convention: clip_skip=1 → no skip, clip_skip=2 → second-to-last layer.

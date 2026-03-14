@@ -13,7 +13,8 @@ export type ProgressFn = (
 	status: 'started' | 'running' | 'completed' | 'failed',
 	detail?: string,
 	step?: number,
-	totalSteps?: number
+	totalSteps?: number,
+	preview?: string
 ) => void
 
 export interface DiffusersSetupResult {

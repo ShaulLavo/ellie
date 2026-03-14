@@ -236,7 +236,8 @@ async function doGenerate(
 		status,
 		detail,
 		step,
-		totalSteps
+		totalSteps,
+		preview
 	) => {
 		console.info(
 			`[image-gen] ${label}: ${status}${detail ? ` — ${detail}` : ''}${step != null ? ` (${step}/${totalSteps})` : ''}`
@@ -246,7 +247,8 @@ async function doGenerate(
 			status,
 			detail,
 			step,
-			totalSteps
+			totalSteps,
+			preview
 		)
 	}
 

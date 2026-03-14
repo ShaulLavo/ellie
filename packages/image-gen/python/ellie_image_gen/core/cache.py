@@ -152,8 +152,8 @@ class ModelCache:
 
         _progress("load", "Optimizing", step=3, totalSteps=4)
         pipe.enable_attention_slicing()
-        if hasattr(pipe, "enable_vae_slicing"):
-            pipe.enable_vae_slicing()
+        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_slicing"):
+            pipe.vae.enable_slicing()
         # VAE tiling only on CUDA — causes tile seam artifacts on MPS
         if device == "cuda" and hasattr(pipe, "enable_vae_tiling"):
             pipe.enable_vae_tiling()

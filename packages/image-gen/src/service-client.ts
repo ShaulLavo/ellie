@@ -97,15 +97,20 @@ export async function serviceGenerate(
 				case 'ella':
 					onProgress?.('ella', 'running', message)
 					break
-				case 'denoise':
+				case 'denoise': {
+					const preview = event.preview as
+						| string
+						| undefined
 					onProgress?.(
 						'denoising',
 						'running',
 						message,
 						step,
-						totalSteps
+						totalSteps,
+						preview
 					)
 					break
+				}
 				case 'save':
 					onProgress?.('save', 'running', message)
 					break

@@ -101,6 +101,7 @@ export type ContentPart =
 			step?: number
 			totalSteps?: number
 			detail?: string
+			preview?: string
 			completedPhases?: string[]
 			entries?: Array<{
 				id: string
@@ -114,6 +115,7 @@ export type ContentPart =
 				detail?: string
 				step?: number
 				totalSteps?: number
+				preview?: string
 			}>
 			uploadId?: string
 			url?: string
