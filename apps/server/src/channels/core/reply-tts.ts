@@ -1,4 +1,4 @@
-import * as fs from 'node:fs/promises'
+import { unlink } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import {
@@ -144,11 +144,11 @@ export async function synthesizeToPayload(
 	const tmpDir = options.tmpDir ?? os.tmpdir()
 	const fileName = `ellie-tts-${Date.now()}.${result.extension}`
 	const tempPath = path.join(tmpDir, fileName)
-	await fs.writeFile(tempPath, new Uint8Array(result.audio))
+	await Bun.write(tempPath, new Uint8Array(result.audio))
 
 	// 6. Schedule cleanup
 	setTimeout(() => {
-		fs.unlink(tempPath).catch(() => {})
+		unlink(tempPath).catch(() => {})
 	}, TEMP_FILE_TTL)
 
 	// 7. Return payload

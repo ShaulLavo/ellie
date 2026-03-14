@@ -112,27 +112,30 @@ describe('ChannelManager', () => {
 
 	// ── Settings persistence ────────────────────────────────
 
-	test('saveSettings + loadSettings round-trip', () => {
+	test('saveSettings + loadSettings round-trip', async () => {
 		const settings = {
 			phoneMode: 'self',
 			foo: 'bar'
 		}
-		manager.saveSettings('test', 'default', settings)
-		const loaded = manager.loadSettings('test', 'default')
+		await manager.saveSettings('test', 'default', settings)
+		const loaded = await manager.loadSettings(
+			'test',
+			'default'
+		)
 		expect(loaded).toEqual(settings)
 	})
 
-	test('loadSettings returns null when no settings exist', () => {
+	test('loadSettings returns null when no settings exist', async () => {
 		expect(
-			manager.loadSettings('test', 'default')
+			await manager.loadSettings('test', 'default')
 		).toBeNull()
 	})
 
-	test('listSavedAccounts returns account dirs', () => {
-		manager.saveSettings('test', 'default', {
+	test('listSavedAccounts returns account dirs', async () => {
+		await manager.saveSettings('test', 'default', {
 			mode: 'a'
 		})
-		manager.saveSettings('test', 'work', {
+		await manager.saveSettings('test', 'work', {
 			mode: 'b'
 		})
 		const accounts = manager
@@ -145,16 +148,16 @@ describe('ChannelManager', () => {
 		expect(manager.listSavedAccounts('unknown')).toEqual([])
 	})
 
-	test('deleteAccountData removes the account dir', () => {
-		manager.saveSettings('test', 'default', {
+	test('deleteAccountData removes the account dir', async () => {
+		await manager.saveSettings('test', 'default', {
 			x: 1
 		})
 		expect(
-			manager.loadSettings('test', 'default')
+			await manager.loadSettings('test', 'default')
 		).not.toBeNull()
 		manager.deleteAccountData('test', 'default')
 		expect(
-			manager.loadSettings('test', 'default')
+			await manager.loadSettings('test', 'default')
 		).toBeNull()
 	})
 
@@ -163,7 +166,7 @@ describe('ChannelManager', () => {
 	test('bootAll calls provider.boot when settings exist', async () => {
 		const provider = createMockProvider('test', 'Test')
 		manager.register(provider)
-		manager.saveSettings('test', 'default', {
+		await manager.saveSettings('test', 'default', {
 			mode: 'self'
 		})
 
@@ -187,7 +190,7 @@ describe('ChannelManager', () => {
 			throw new Error('boot failed')
 		}
 		manager.register(provider)
-		manager.saveSettings('test', 'default', {
+		await manager.saveSettings('test', 'default', {
 			mode: 'self'
 		})
 
@@ -203,7 +206,7 @@ describe('ChannelManager', () => {
 		manager.register(p1)
 		manager.register(p2)
 
-		manager.saveSettings('wa', 'default', {
+		await manager.saveSettings('wa', 'default', {
 			mode: 'self'
 		})
 

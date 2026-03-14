@@ -200,7 +200,7 @@ export class WhatsAppProvider implements ChannelProvider {
 		this.#manager = manager
 		const accounts = manager.listSavedAccounts('whatsapp')
 		for (const accountId of accounts) {
-			const raw = manager.loadSettings(
+			const raw = await manager.loadSettings(
 				'whatsapp',
 				accountId
 			)
@@ -219,7 +219,11 @@ export class WhatsAppProvider implements ChannelProvider {
 			}
 			// Re-save with defaults filled in (backward compat for pre-validation files)
 			const settings = withDefaults(result.output)
-			manager.saveSettings('whatsapp', accountId, settings)
+			await manager.saveSettings(
+				'whatsapp',
+				accountId,
+				settings
+			)
 			// Only auto-connect if auth state exists (creds.json from a previous login)
 			const authDir = join(
 				manager.accountDir('whatsapp', accountId),

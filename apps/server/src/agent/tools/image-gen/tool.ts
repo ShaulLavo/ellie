@@ -7,7 +7,6 @@
  */
 
 import * as v from 'valibot'
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
 	AgentTool,
@@ -339,7 +338,7 @@ export function createImageGenTool(
 			const uploadIds =
 				result.images?.map(i => i.uploadId) ??
 				(result.uploadId ? [result.uploadId] : [])
-			const imageParts = loadToolResultImages(
+			const imageParts = await loadToolResultImages(
 				uploadIds,
 				deps.dataDir,
 				result.images?.[0]?.mime ??
@@ -379,15 +378,17 @@ export function createImageGenTool(
 	}
 }
 
-function loadToolResultImages(
+async function loadToolResultImages(
 	uploadIds: string[],
 	dataDir: string,
 	defaultMimeType: string
-): Array<{
-	type: 'image'
-	data: string
-	mimeType: string
-}> {
+): Promise<
+	Array<{
+		type: 'image'
+		data: string
+		mimeType: string
+	}>
+> {
 	const imageParts: Array<{
 		type: 'image'
 		data: string
@@ -398,10 +399,10 @@ function loadToolResultImages(
 		const filePath = join(dataDir, 'uploads', uploadId)
 
 		try {
-			const bytes = readFileSync(filePath)
+			const buf = await Bun.file(filePath).arrayBuffer()
 			imageParts.push({
 				type: 'image',
-				data: bytes.toString('base64'),
+				data: Buffer.from(buf).toString('base64'),
 				mimeType: defaultMimeType
 			})
 		} catch (error) {
@@ -417,7 +418,7 @@ function loadToolResultImages(
 
 // ── Progress adapter ─────────────────────────────────────────────────
 
-const DENOISING_THROTTLE_MS = 500
+const DENOISING_THROTTLE_MS = 250
 
 type ImageProgressStatus =
 	| 'started'
@@ -433,6 +434,7 @@ interface ImageProgressEntry {
 	detail?: string
 	step?: number
 	totalSteps?: number
+	preview?: string
 }
 
 interface ImageProgressTracker {
@@ -460,13 +462,15 @@ function createThrottledProgress(
 	const completedPhases: string[] = []
 	const entries: ImageProgressEntry[] = []
 	let entryCounter = 0
+	let pendingPreview: string | undefined
 
 	const onProgress: ProgressFn = (
 		label,
 		status,
 		detail,
 		step,
-		totalSteps
+		totalSteps,
+		preview
 	) => {
 		const phase = mapProgressPhase(label)
 
@@ -477,12 +481,18 @@ function createThrottledProgress(
 			completedPhases.push(phase)
 		}
 
+		// Stash preview so throttled updates don't lose it
+		if (preview) pendingPreview = preview
+
 		if (label === 'denoising' && status === 'running') {
 			const now = Date.now()
 			if (now - lastDenoisingUpdate < DENOISING_THROTTLE_MS)
 				return
 			lastDenoisingUpdate = now
 		}
+
+		// Use the latest preview (either from this call or stashed from a throttled one)
+		const currentPreview = preview ?? pendingPreview
 
 		recordProgressEntry(entries, {
 			label,
@@ -491,6 +501,7 @@ function createThrottledProgress(
 			detail,
 			step,
 			totalSteps,
+			preview: currentPreview,
 			nextId: () => `image-progress-${++entryCounter}`
 		})
 
@@ -507,6 +518,7 @@ function createThrottledProgress(
 				detail,
 				step,
 				totalSteps,
+				preview: currentPreview,
 				completedPhases: [...completedPhases],
 				entries: [...entries]
 			}
@@ -548,6 +560,7 @@ function recordProgressEntry(
 		detail?: string
 		step?: number
 		totalSteps?: number
+		preview?: string
 		nextId: () => string
 	}
 ): void {
@@ -558,6 +571,7 @@ function recordProgressEntry(
 		detail,
 		step,
 		totalSteps,
+		preview,
 		nextId
 	} = update
 
@@ -584,6 +598,7 @@ function recordProgressEntry(
 		lastEntry.detail = detail
 		lastEntry.step = step
 		lastEntry.totalSteps = totalSteps
+		if (preview) lastEntry.preview = preview
 		return
 	}
 
@@ -605,7 +620,8 @@ function recordProgressEntry(
 		status,
 		detail,
 		step,
-		totalSteps
+		totalSteps,
+		preview
 	})
 }
 

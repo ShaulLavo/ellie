@@ -1,12 +1,10 @@
 import {
 	existsSync,
 	mkdirSync,
-	readFileSync,
-	writeFileSync,
 	readdirSync,
 	rmSync
 } from 'node:fs'
-import * as fs from 'node:fs'
+import { createReadStream } from 'node:fs'
 import { join, extname } from 'node:path'
 import { hash } from 'ohash'
 import type { ChannelProvider } from './provider'
@@ -104,23 +102,24 @@ export class ChannelManager {
 		)
 	}
 
-	loadSettings(
+	async loadSettings(
 		channelId: string,
 		accountId: string
-	): ChannelAccountSettings | null {
+	): Promise<ChannelAccountSettings | null> {
 		const path = this.settingsPath(channelId, accountId)
-		if (!existsSync(path)) return null
-		return JSON.parse(readFileSync(path, 'utf8'))
+		const file = Bun.file(path)
+		if (!(await file.exists())) return null
+		return (await file.json()) as ChannelAccountSettings
 	}
 
-	saveSettings(
+	async saveSettings(
 		channelId: string,
 		accountId: string,
 		settings: ChannelAccountSettings
-	): void {
+	): Promise<void> {
 		const dir = this.accountDir(channelId, accountId)
 		mkdirSync(dir, { recursive: true })
-		writeFileSync(
+		await Bun.write(
 			this.settingsPath(channelId, accountId),
 			JSON.stringify(settings, null, 2)
 		)
@@ -355,14 +354,15 @@ export class ChannelManager {
 	): Promise<UserMessage['content'][number] | null> {
 		const store = this.#uploadStore
 		if (!store) return null
-		if (!existsSync(mediaPath)) {
+		const mediaFile = Bun.file(mediaPath)
+		if (!(await mediaFile.exists())) {
 			console.warn(
 				`[channels] Media file not found: ${mediaPath}`
 			)
 			return null
 		}
 
-		const stats = fs.statSync(mediaPath)
+		const stats = { size: mediaFile.size }
 		const ext =
 			extname(mediaFileName ?? mediaPath) || '.bin'
 		const uploadId = `channel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
@@ -382,7 +382,7 @@ export class ChannelManager {
 		)
 
 		// Write file data
-		const readable = fs.createReadStream(mediaPath)
+		const readable = createReadStream(mediaPath)
 		await store.write(readable, uploadId, 0)
 
 		const filePath = join(store.directory, uploadId)
@@ -390,7 +390,7 @@ export class ChannelManager {
 
 		if (mediaType.startsWith('image/')) {
 			// Read as base64 so the model can see the image
-			const bytes = readFileSync(mediaPath)
+			const buf = await Bun.file(mediaPath).arrayBuffer()
 			return {
 				type: 'image',
 				file: uploadId,
@@ -399,7 +399,7 @@ export class ChannelManager {
 				size: stats.size,
 				name: mediaFileName,
 				path: filePath,
-				data: bytes.toString('base64'),
+				data: Buffer.from(buf).toString('base64'),
 				mimeType: mediaType
 			}
 		}

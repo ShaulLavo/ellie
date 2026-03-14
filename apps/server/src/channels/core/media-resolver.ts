@@ -1,4 +1,4 @@
-import * as fs from 'node:fs/promises'
+import { stat, realpath } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 
@@ -92,13 +92,13 @@ export async function resolveMedia(
 
 	// 1. Normalize and resolve symlinks
 	const resolved = path.resolve(ref)
-	const realPath = await fs.realpath(resolved)
+	const realPath = await realpath(resolved)
 
 	// 2. Validate against localRoots (also resolve roots to handle symlinks like /var → /private/var)
 	const realRoots = await Promise.all(
 		localRoots.map(async root => {
 			try {
-				return await fs.realpath(root)
+				return await realpath(root)
 			} catch {
 				return path.resolve(root)
 			}
@@ -120,15 +120,17 @@ export async function resolveMedia(
 	}
 
 	// 3. Check file size
-	const stat = await fs.stat(realPath)
-	if (stat.size > maxBytes) {
+	const fileStat = await stat(realPath)
+	if (fileStat.size > maxBytes) {
 		throw new Error(
-			`Media ref rejected: file size ${stat.size} exceeds limit ${maxBytes}`
+			`Media ref rejected: file size ${fileStat.size} exceeds limit ${maxBytes}`
 		)
 	}
 
 	// 4. Read buffer
-	const buffer = await fs.readFile(realPath)
+	const buffer = Buffer.from(
+		await Bun.file(realPath).arrayBuffer()
+	)
 
 	// 5. Detect MIME type
 	const ext = path.extname(realPath).slice(1).toLowerCase()

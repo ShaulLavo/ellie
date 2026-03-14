@@ -77,7 +77,7 @@ export function createChannelRoutes(
 
 			.get(
 				'/:channelId/status',
-				({ params }) => {
+				async ({ params }) => {
 					const provider = channelManager.getProvider(
 						params.channelId
 					)
@@ -95,15 +95,17 @@ export function createChannelRoutes(
 					return {
 						id: provider.id,
 						displayName: provider.displayName,
-						accounts: accountIds.map(accountId => ({
-							accountId,
-							status: provider.getStatus(accountId),
-							settings:
-								channelManager.loadSettings(
-									params.channelId,
-									accountId
-								) ?? undefined
-						}))
+						accounts: await Promise.all(
+							accountIds.map(async accountId => ({
+								accountId,
+								status: provider.getStatus(accountId),
+								settings:
+									(await channelManager.loadSettings(
+										params.channelId,
+										accountId
+									)) ?? undefined
+							}))
+						)
 					}
 				},
 				{
@@ -132,7 +134,7 @@ export function createChannelRoutes(
 							? validateWhatsAppSettings(body.settings)
 							: body.settings
 					// Save settings before starting login
-					channelManager.saveSettings(
+					await channelManager.saveSettings(
 						params.channelId,
 						body.accountId,
 						settings
@@ -175,7 +177,7 @@ export function createChannelRoutes(
 
 			.post(
 				'/:channelId/settings',
-				({ params, body }) => {
+				async ({ params, body }) => {
 					const provider = channelManager.getProvider(
 						params.channelId
 					)
@@ -188,7 +190,7 @@ export function createChannelRoutes(
 						params.channelId === 'whatsapp'
 							? validateWhatsAppSettings(body.settings)
 							: body.settings
-					channelManager.saveSettings(
+					await channelManager.saveSettings(
 						params.channelId,
 						body.accountId,
 						settings
@@ -272,14 +274,14 @@ export function createChannelRoutes(
 
 			// ── WhatsApp allowFrom management ───────────────────────────────
 
-			.get('/whatsapp/allow/list', ({ query }) => {
+			.get('/whatsapp/allow/list', async ({ query }) => {
 				const accountId =
 					(query as Record<string, string>).accountId ??
 					'default'
-				const settings = channelManager.loadSettings(
+				const settings = (await channelManager.loadSettings(
 					'whatsapp',
 					accountId
-				) as WhatsAppSettings | null
+				)) as WhatsAppSettings | null
 				return {
 					config: settings?.allowFrom ?? [],
 					runtime: readAllowFrom(
