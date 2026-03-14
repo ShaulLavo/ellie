@@ -178,7 +178,7 @@ async function doStart(
 		],
 		{
 			stdout: 'pipe',
-			stderr: 'pipe',
+			stderr: 'inherit',
 			env: process.env
 		}
 	)
@@ -205,16 +205,10 @@ async function doStart(
 
 	const deadline = Date.now() + HEALTH_TIMEOUT_MS
 	while (Date.now() < deadline) {
-		// If uvicorn already crashed, fail fast with stderr
+		// If uvicorn already crashed, fail fast
 		if (procExited) {
-			let stderr = ''
-			try {
-				stderr = await new Response(
-					proc.stderr as ReadableStream
-				).text()
-			} catch {}
 			throw new Error(
-				`Image-gen service exited during startup (code ${procExitCode}): ${stderr.slice(-500)}`
+				`Image-gen service exited during startup (code ${procExitCode})`
 			)
 		}
 
@@ -236,15 +230,9 @@ async function doStart(
 		await new Promise(r => setTimeout(r, HEALTH_POLL_MS))
 	}
 
-	// Timed out — grab stderr for diagnostics
+	// Timed out — stderr is already visible in the parent console
 	proc.kill()
-	let stderr = ''
-	try {
-		stderr = await new Response(
-			proc.stderr as ReadableStream
-		).text()
-	} catch {}
 	throw new Error(
-		`Image-gen service failed to start within ${HEALTH_TIMEOUT_MS / 1000}s. stderr: ${stderr.slice(-500)}`
+		`Image-gen service failed to start within ${HEALTH_TIMEOUT_MS / 1000}s (check stderr output above)`
 	)
 }

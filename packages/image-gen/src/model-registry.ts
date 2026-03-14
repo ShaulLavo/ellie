@@ -213,8 +213,8 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 		pipelineClass: 'StableDiffusionPipeline',
 		defaultWidth: 512,
 		defaultHeight: 768,
-		defaultSteps: 25,
-		defaultCfg: 8.0,
+		defaultSteps: 30,
+		defaultCfg: 7.0,
 		arch: 'sd15',
 		description:
 			'Versatile all-rounder. Photorealism, characters, anime, and artistic styles. ' +
@@ -230,14 +230,16 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 			'jack-of-all-trades, less specialized than dedicated models',
 			'ADetailer can homogenize faces'
 		],
-		recommendedSampler: 'dpmpp_sde',
+		recommendedSampler: 'dpmpp_2m',
 		recommendedScheduler: 'karras',
 		defaultPositivePrompt:
-			'masterpiece, best quality, highly detailed, sharp focus',
+			'(masterpiece, best quality:1.2), highly detailed, sharp focus, ' +
+			'intricate detail, rich colors, professional lighting',
 		defaultNegativePrompt:
-			'(worst quality, low quality:1.4), bad anatomy, bad hands, ' +
-			'missing fingers, extra fingers, mutated hands, poorly drawn face, ' +
-			'watermark, text, signature, blurry',
+			'(worst quality, low quality:1.4), (blurry:1.2), jpeg artifacts, ' +
+			'bad anatomy, bad hands, missing fingers, extra fingers, mutated hands, ' +
+			'poorly drawn face, poorly drawn hands, deformed, disfigured, ' +
+			'watermark, text, signature, logo, cropped, out of frame',
 		defaultClipSkip: 2,
 		ellaCompatible: true
 	},
