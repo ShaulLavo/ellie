@@ -2330,9 +2330,6 @@
   .overflow-y-auto {
     overflow-y: auto;
   }
-  .overflow-y-hidden {
-    overflow-y: hidden;
-  }
   .overscroll-contain {
     overscroll-behavior: contain;
   }

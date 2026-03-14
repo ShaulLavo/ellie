@@ -6,7 +6,7 @@ import { useChatCommands } from './hooks/use-chat-commands'
 import { useChatSubmit } from './hooks/use-chat-submit'
 import { PromptInputProvider } from '@/components/ai-elements/prompt-input'
 import { eden } from '@/lib/eden'
-import { ChatToolbar } from './components/chat-toolbar'
+// import { ChatToolbar } from './components/chat-toolbar'
 import { ChatMessageList } from './components/chat-message-list'
 import { SessionInfo } from './components/session-info'
 import { SessionList } from './components/session-list'
@@ -55,10 +55,10 @@ export function ChatRoom({
 
 	return (
 		<div className="flex h-full w-full flex-col">
-			<ChatToolbar
+			{/* <ChatToolbar
 				onShowSessions={() => setShowSessionList(true)}
 				onShowInfo={() => setShowSessionInfo(true)}
-			/>
+			/> */}
 
 			<SessionList
 				open={showSessionList}
@@ -91,7 +91,7 @@ export function ChatRoom({
 				/>
 			</div>
 
-			<div className="relative px-6 pb-5 pt-3">
+			<div className="relative px-6 pb-4 pt-3">
 				<div className="absolute inset-x-6 top-0 h-px bg-border/60" />
 				<PromptInputProvider>
 					<PromptInputWithCommands

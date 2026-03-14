@@ -19,7 +19,6 @@ import {
 } from '@phosphor-icons/react'
 import { LoadingAnimation } from '@/components/kokonutui/ai-loading'
 import { isValidElement, useRef, useEffect } from 'react'
-import { useCollapsibleScroll } from '@/hooks/use-collapsible-scroll'
 
 import { CodeBlock } from './code-block'
 import { ShellOutput } from './shell-output'
@@ -254,7 +253,6 @@ export const ToolCard = ({
 				: 'input-available'
 
 	const contentRef = useRef<HTMLDivElement>(null)
-	useCollapsibleScroll(contentRef)
 
 	return (
 		<Collapsible
@@ -265,13 +263,13 @@ export const ToolCard = ({
 				<span className="font-mono text-[11px] tracking-wide">
 					{name}
 				</span>
-				<CaretDownIcon className="size-4 transition-transform group-data-[state=open]/tool:rotate-180" />
-				{getStatusBadge(state)}
 				{elapsedMs != null && (
 					<span className="font-mono text-[11px] text-muted-foreground">
 						{formatElapsed(elapsedMs)}
 					</span>
 				)}
+				{getStatusBadge(state)}
+				<CaretDownIcon className="size-4 transition-transform group-data-[state=open]/tool:rotate-180" />
 			</CollapsibleTrigger>
 			<CollapsibleContent
 				ref={contentRef}
