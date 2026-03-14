@@ -109,6 +109,7 @@ type StoredMessage struct {
 	IsStreaming      bool          `json:"isStreaming,omitempty"`
 	EventType       string        `json:"eventType,omitempty"`
 	ParentMessageID string        `json:"parentMessageId,omitempty"`
+	RunID           string        `json:"runId,omitempty"`
 }
 
 // EventRow mirrors FE EventRow from the SSE stream.

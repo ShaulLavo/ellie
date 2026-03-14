@@ -6,7 +6,9 @@ import {
 } from '@tanstack/react-router'
 import App from './App'
 import { DbStudioPage } from './db-studio'
+import { ObservePage } from './observe/observe-page'
 import { TerminalPage } from './terminal/terminal-page'
+import { CodePage } from './code/code-page'
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,14 @@ const dbRoute = createRoute({
 	})
 })
 
+// ── /observe → Trace observer ────────────────────────────────────────────────
+
+const observeRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: '/observe',
+	component: ObservePage
+})
+
 // ── /terminal → TUI in the browser ──────────────────────────────────────────
 
 const terminalRoute = createRoute({
@@ -61,12 +71,22 @@ const terminalRoute = createRoute({
 	component: TerminalPage
 })
 
+// ── /code → Code ────────────────────────────────────────────────────────────
+
+const codeRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: '/code',
+	component: CodePage
+})
+
 // ── Router ───────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
 	appRoute,
 	dbRoute,
-	terminalRoute
+	observeRoute,
+	terminalRoute,
+	codeRoute
 ])
 
 export const router = createRouter({ routeTree })

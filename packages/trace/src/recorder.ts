@@ -126,6 +126,15 @@ export class TraceRecorder {
 	}
 
 	/**
+	 * List all trace index entries, sorted by createdAt ascending.
+	 */
+	listTraces(): TraceIndexEntry[] {
+		return Array.from(this.#index.values()).sort(
+			(a, b) => a.createdAt - b.createdAt
+		)
+	}
+
+	/**
 	 * Find traces that belong to a specific session.
 	 */
 	findTracesBySession(sessionId: string): Array<{

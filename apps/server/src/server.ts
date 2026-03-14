@@ -164,6 +164,22 @@ export const app = new Elysia()
 		})
 	)
 	.use(
+		await staticPlugin({
+			assets: ctx.STUDIO_PUBLIC,
+			prefix: `/observe`,
+			indexHTML: false,
+			ignorePatterns: [/\.html$/]
+		})
+	)
+	.use(
+		await staticPlugin({
+			assets: ctx.STUDIO_PUBLIC,
+			prefix: `/code`,
+			indexHTML: false,
+			ignorePatterns: [/\.html$/]
+		})
+	)
+	.use(
 		(() => {
 			// Serve index.html as a raw string to prevent Bun's
 			// automatic HTML processing from re-bundling the JS.
@@ -197,7 +213,13 @@ export const app = new Elysia()
 					}
 				})
 			const app = new Elysia()
-			for (const prefix of ['/app', '/db', '/terminal']) {
+			for (const prefix of [
+				'/app',
+				'/db',
+				'/observe',
+				'/terminal',
+				'/code'
+			]) {
 				app.get(prefix, serveIndex)
 				app.get(`${prefix}/*`, serveIndex)
 			}

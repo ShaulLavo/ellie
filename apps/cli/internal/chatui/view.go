@@ -130,24 +130,46 @@ func renderMessages(m *Model, width int) string {
 
 	var b strings.Builder
 
+	// Track active runId to group consecutive messages from the same run
+	// under a single sender label (mirrors FE assistant-turn grouping).
+	activeRunID := ""
+
 	for _, msg := range m.messages {
 		if tg.HiddenMessageIDs[msg.ID] {
 			continue
 		}
+
+		// Determine whether this message starts a new group or continues the current run.
+		showSender := true
+		if msg.RunID != "" && msg.RunID == activeRunID {
+			showSender = false
+		}
+		if msg.RunID != "" {
+			activeRunID = msg.RunID
+		} else {
+			activeRunID = ""
+		}
+
 		// Check if this message has any active animations or playing audio (skip cache if so).
 		hasActiveAnim := messageHasActiveAnim(msg, m.activeAnims)
 		hasAudioState := m.audioPlayingID != "" && messageHasAudio(msg)
+		// Cache key includes showSender state since the same message renders differently
+		// depending on whether it's the first in a run group.
+		cacheKey := msg.ID
+		if !showSender {
+			cacheKey += ":nosender"
+		}
 		// Use cached render for non-streaming, finalized messages without active anims.
 		if !msg.IsStreaming && !hasActiveAnim && !hasAudioState {
-			if cached, ok := m.msgRenderCache[msg.ID]; ok {
+			if cached, ok := m.msgRenderCache[cacheKey]; ok {
 				b.WriteString(cached)
 				b.WriteString("\n")
 				continue
 			}
 		}
-		rendered := renderMessage(msg, tg, contentWidth, m.activeAnims, m.audioPlayingID)
+		rendered := renderMessage(msg, tg, contentWidth, m.activeAnims, m.audioPlayingID, showSender)
 		if !msg.IsStreaming && !hasActiveAnim {
-			m.msgRenderCache[msg.ID] = rendered
+			m.msgRenderCache[cacheKey] = rendered
 		}
 		b.WriteString(rendered)
 		b.WriteString("\n")
@@ -155,7 +177,11 @@ func renderMessages(m *Model, width int) string {
 
 	// Render streaming message (never cached).
 	if m.streamingMsg != nil {
-		b.WriteString(renderMessage(*m.streamingMsg, tg, contentWidth, m.activeAnims, m.audioPlayingID))
+		streamShowSender := true
+		if m.streamingMsg.RunID != "" && m.streamingMsg.RunID == activeRunID {
+			streamShowSender = false
+		}
+		b.WriteString(renderMessage(*m.streamingMsg, tg, contentWidth, m.activeAnims, m.audioPlayingID, streamShowSender))
 		b.WriteString("\n")
 	}
 
@@ -163,7 +189,9 @@ func renderMessages(m *Model, width int) string {
 }
 
 // renderMessage renders a single chat message.
-func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[string]*chatAnim, audioPlayingID string) string {
+// showSender controls whether the sender label is displayed; when messages
+// share the same runId they are grouped under a single label (like the web FE).
+func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[string]*chatAnim, audioPlayingID string, showSender bool) string {
 	// Checkpoint messages render as standalone dividers without a sender label.
 	if len(msg.Parts) == 1 && msg.Parts[0].Type == PartCheckpoint {
 		return renderPart(msg.Parts[0], tg, width, anims, audioPlayingID)
@@ -171,10 +199,12 @@ func renderMessage(msg StoredMessage, tg ToolGrouping, width int, anims map[stri
 
 	var b strings.Builder
 
-	// Sender label
-	label := renderSenderLabel(msg.Sender)
-	b.WriteString(label)
-	b.WriteString("\n")
+	// Sender label — only shown for the first message in a run group.
+	if showSender {
+		label := renderSenderLabel(msg.Sender)
+		b.WriteString(label)
+		b.WriteString("\n")
+	}
 
 	// Thinking (collapsed by default, show indicator)
 	if msg.Thinking != "" {

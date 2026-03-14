@@ -21,6 +21,7 @@ export function createTraceRoutes(recorder: TraceRecorder) {
 		prefix: '/traces',
 		tags: ['Traces']
 	})
+		.get('/list', () => recorder.listTraces())
 		.get(
 			'/:traceId/events',
 			({ params }) => {

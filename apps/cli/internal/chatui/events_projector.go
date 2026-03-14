@@ -176,6 +176,11 @@ func EventToStored(row EventRow) StoredMessage {
 
 	ts := time.UnixMilli(row.CreatedAt).UTC().Format(time.RFC3339)
 
+	var runID string
+	if row.RunID != nil {
+		runID = *row.RunID
+	}
+
 	return StoredMessage{
 		ID:              fmt.Sprintf("%d", row.ID),
 		Timestamp:       ts,
@@ -186,6 +191,7 @@ func EventToStored(row EventRow) StoredMessage {
 		Thinking:        thinking,
 		EventType:       row.Type,
 		ParentMessageID: parentMessageID,
+		RunID:           runID,
 	}
 }
 
