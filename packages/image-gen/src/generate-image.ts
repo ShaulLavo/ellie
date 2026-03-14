@@ -49,9 +49,47 @@ export interface GenerationDeps {
 	onProgress?: ProgressFn
 }
 
+// ── Generation lock ─────────────────────────────────────────────────────────
+// Only one generation at a time. Concurrent calls queue up and run sequentially.
+
+let generationLock: Promise<void> = Promise.resolve()
+let generationInProgress = false
+
 // ── Core execution ──────────────────────────────────────────────────────────
 
 export async function executeImageGeneration(
+	args: GenerateImageRequest,
+	deps: GenerationDeps
+): Promise<GenerationResult> {
+	// Queue behind any in-progress generation
+	const previousLock = generationLock
+	let releaseLock: () => void
+	generationLock = new Promise<void>(
+		resolve => (releaseLock = resolve)
+	)
+
+	if (generationInProgress) {
+		console.info(
+			'[image-gen] Generation queued — waiting for previous generation to finish'
+		)
+	}
+
+	try {
+		await previousLock
+	} catch {
+		// Previous generation failed — we still proceed
+	}
+
+	generationInProgress = true
+	try {
+		return await doGenerate(args, deps)
+	} finally {
+		generationInProgress = false
+		releaseLock!()
+	}
+}
+
+async function doGenerate(
 	args: GenerateImageRequest,
 	deps: GenerationDeps
 ): Promise<GenerationResult> {
