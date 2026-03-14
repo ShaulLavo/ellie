@@ -120,7 +120,7 @@ export async function runRecall(
 export async function runRetain(
 	deps: MemoryDeps,
 	sessionId: string,
-	runId: string,
+	sourceRunId: string,
 	force?: boolean
 ): Promise<number> {
 	if (!deps.memory) {
@@ -131,7 +131,7 @@ export async function runRetain(
 	}
 
 	console.log(
-		`[retain] runRetain called session=${sessionId} runId=${runId}`
+		`[retain] runRetain called session=${sessionId} sourceRunId=${sourceRunId}`
 	)
 
 	try {
@@ -140,21 +140,20 @@ export async function runRetain(
 		)
 		if (!result) return 0
 
-		// Emit memory_retain event so the client can show retain status
+		// Retain is a session-level background event, not part of a run.
 		deps.store.appendEvent(
 			sessionId,
 			'memory_retain',
-			result,
-			runId
+			result
 		)
 
 		return result.parts[0]?.factsStored ?? 0
 	} catch (err) {
 		handleControllerError(
 			deps.trace,
-			`memory_retain_failed session=${sessionId} runId=${runId}`,
+			`memory_retain_failed session=${sessionId} runId=${sourceRunId}`,
 			'controller.memory_retain_failed',
-			{ sessionId, runId },
+			{ sessionId, runId: sourceRunId },
 			err
 		)
 		return 0

@@ -486,9 +486,122 @@ describe('AgentController', () => {
 			})
 
 			expect(retainEvents).toHaveLength(1)
+			expect(retainEvents[0]!.runId).toBeNull()
 			const payload = JSON.parse(retainEvents[0].payload)
 			expect(payload.trigger).toBe('turn_count')
 			expect(payload.parts[0].factsStored).toBe(2)
+		} finally {
+		}
+	})
+
+	test('retain completes before the next run starts', async () => {
+		store.ensureSession('session-1')
+		const firstUserRow = store.appendEvent(
+			'session-1',
+			'user_message',
+			{
+				role: 'user',
+				content: [{ type: 'text', text: 'First' }],
+				timestamp: Date.now()
+			}
+		)
+
+		const delayedMemory = {
+			async recall() {
+				return null
+			},
+			async evaluateRetain() {
+				await new Promise(resolve =>
+					setTimeout(resolve, 150)
+				)
+				return {
+					parts: [
+						{
+							type: 'memory-retain',
+							factsStored: 1,
+							facts: ['retained after first turn'],
+							duration_ms: 150
+						}
+					],
+					trigger: 'turn_count',
+					bankIds: ['bank-1'],
+					seqFrom: 1,
+					seqTo: 2,
+					timestamp: Date.now()
+				}
+			}
+		} as unknown as MemoryOrchestrator
+
+		const memoryController = new AgentController(store, {
+			adapter: createMockAdapter(),
+			workspaceDir,
+			dataDir: tmpDir,
+			memory: delayedMemory
+		})
+
+		try {
+			await memoryController.handleMessage(
+				'session-1',
+				'First',
+				firstUserRow.id
+			)
+			for (let attempt = 0; attempt < 20; attempt++) {
+				const closedRuns = eventStore.query({
+					sessionId: 'session-1',
+					types: ['run_closed']
+				})
+				if (closedRuns.length > 0) break
+				await new Promise(resolve =>
+					setTimeout(resolve, 10)
+				)
+			}
+
+			const secondUserRow = store.appendEvent(
+				'session-1',
+				'user_message',
+				{
+					role: 'user',
+					content: [{ type: 'text', text: 'Second' }],
+					timestamp: Date.now()
+				}
+			)
+
+			let secondSettled = false
+			const secondRun = memoryController
+				.handleMessage(
+					'session-1',
+					'Second',
+					secondUserRow.id
+				)
+				.then(result => {
+					secondSettled = true
+					return result
+				})
+
+			await new Promise(resolve => setTimeout(resolve, 50))
+			expect(secondSettled).toBe(false)
+
+			const secondResult = await secondRun
+			await new Promise(resolve => setTimeout(resolve, 250))
+
+			const events = eventStore.query({
+				sessionId: 'session-1'
+			})
+			const retainEvent = events.find(
+				event => event.type === 'memory_retain'
+			)
+			const secondRunStart = events.find(
+				event =>
+					event.type === 'agent_start' &&
+					event.runId === secondResult.runId
+			)
+
+			expect(retainEvent).toBeDefined()
+			expect(retainEvent!.runId).toBeNull()
+			expect(secondRunStart).toBeDefined()
+			expect(retainEvent!.seq).toBeLessThan(
+				secondRunStart!.seq
+			)
 		} finally {
 		}
 	})

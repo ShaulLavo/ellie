@@ -465,6 +465,15 @@ export class AgentController {
 		return this.#memoryDeps
 	}
 
+	private createRetainMemoryDeps(
+		traceScope: TraceScope | undefined
+	): MemoryDeps {
+		return {
+			...this.memoryDeps,
+			getTraceScope: () => traceScope
+		}
+	}
+
 	private get streamDeps(): StreamPersistenceDeps {
 		return {
 			store: this.store,
@@ -569,9 +578,30 @@ export class AgentController {
 			)
 		}
 
-		// Memory retain (Hindsight only — no agent prompting)
-		runRetain(this.memoryDeps, sessionId, runId).catch(
-			err => {
+		const retainDeps = this.createRetainMemoryDeps(
+			this.activeTraceScope
+		)
+
+		// Reset system prompt and clear run state before post-run work.
+		this.agent.state.systemPrompt = this.baseSystemPrompt
+		this.agent.runId = undefined
+		this.activeTraceScope = undefined
+
+		this.schedulePostRunWork(sessionId, runId, retainDeps)
+	}
+
+	private schedulePostRunWork(
+		sessionId: string,
+		runId: string,
+		retainDeps: MemoryDeps
+	): void {
+		void this.withLock(async () => {
+			await runRetain(retainDeps, sessionId, runId)
+		})
+			.then(() => {
+				this.scheduleNextQueuedWork(sessionId)
+			})
+			.catch(err => {
 				handleControllerError(
 					(type, payload) => this.trace(type, payload),
 					`retain_error session=${sessionId} runId=${runId}`,
@@ -580,24 +610,21 @@ export class AgentController {
 					err,
 					'warn'
 				)
-			}
-		)
+			})
+	}
 
-		// Reset system prompt, clear runId, and clear trace scope
-		this.agent.state.systemPrompt = this.baseSystemPrompt
-		this.agent.runId = undefined
-		this.activeTraceScope = undefined
-
-		// Process queues
+	private scheduleNextQueuedWork(sessionId: string): void {
+		if (this.agent.state.isStreaming) return
 		if (this.agent.hasQueuedMessages()) {
 			queueMicrotask(() =>
 				this.drainQueuedFollowUps(sessionId)
 			)
-		} else if (this.crossSessionQueue.length > 0) {
-			queueMicrotask(() => {
-				this.processCrossSessionQueue()
-			})
+			return
 		}
+		if (this.crossSessionQueue.length === 0) return
+		queueMicrotask(() => {
+			this.processCrossSessionQueue()
+		})
 	}
 
 	// ── Internal: cross-session queue processing ─────────────────────────────
