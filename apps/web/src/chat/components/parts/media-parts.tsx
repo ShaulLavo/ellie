@@ -27,6 +27,8 @@ export function ImagePartRenderer({
 			}
 			className="max-h-80 rounded-lg object-contain"
 			containerClassName="my-2 max-w-sm"
+			naturalWidth={part.width}
+			naturalHeight={part.height}
 		/>
 	)
 }
@@ -125,6 +127,8 @@ export function AssistantArtifactPartRenderer({
 				alt="Attached media"
 				className="max-h-80 rounded-lg object-contain"
 				containerClassName="my-2 max-w-sm"
+				naturalWidth={part.width}
+				naturalHeight={part.height}
 			/>
 		)
 	}

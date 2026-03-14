@@ -28,6 +28,8 @@ export interface PendingArtifact {
 	kind: 'media' | 'file'
 	origin: 'tool_upload'
 	mime?: string
+	width?: number
+	height?: number
 }
 
 /**
@@ -184,7 +186,13 @@ export function flushPendingArtifacts(
 				kind: artifact.kind,
 				origin: artifact.origin,
 				uploadId: artifact.uploadId,
-				mime: artifact.mime
+				mime: artifact.mime,
+				...(artifact.width != null && {
+					width: artifact.width
+				}),
+				...(artifact.height != null && {
+					height: artifact.height
+				})
 			},
 			runId
 		)
@@ -441,7 +449,13 @@ export function handleStreamingEvent(
 						images?: Array<{
 							uploadId: string
 							mime?: string
+							width?: number
+							height?: number
 						}>
+						recipe?: {
+							width?: number
+							height?: number
+						}
 					}
 				}
 			)?.details
@@ -455,14 +469,18 @@ export function handleStreamingEvent(
 							uploadId: img.uploadId,
 							kind: 'media',
 							origin: 'tool_upload',
-							mime: img.mime
+							mime: img.mime,
+							width: img.width ?? details.recipe?.width,
+							height: img.height ?? details.recipe?.height
 						})
 					}
 				} else if (details.uploadId) {
 					state.pendingArtifacts.push({
 						uploadId: details.uploadId,
 						kind: 'media',
-						origin: 'tool_upload'
+						origin: 'tool_upload',
+						width: details.recipe?.width,
+						height: details.recipe?.height
 					})
 				}
 			}

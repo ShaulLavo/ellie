@@ -12,11 +12,15 @@ import {
 } from 'motion/react'
 import { cn } from '@/lib/utils'
 
+const MAX_CHAT_IMAGE_HEIGHT_PX = 320
+
 export function ClickableImage({
 	src,
 	alt,
 	className,
 	containerClassName,
+	naturalWidth,
+	naturalHeight,
 	...props
 }: Omit<
 	React.ImgHTMLAttributes<HTMLImageElement>,
@@ -26,6 +30,8 @@ export function ClickableImage({
 	| 'onDrag'
 > & {
 	containerClassName?: string
+	naturalWidth?: number
+	naturalHeight?: number
 }) {
 	const [open, setOpen] = useState(false)
 	const layoutId = useId()
@@ -42,25 +48,50 @@ export function ClickableImage({
 			document.removeEventListener('keydown', onKey)
 	}, [open, close])
 
+	const aspectStyle =
+		naturalWidth && naturalHeight
+			? ({
+					aspectRatio: `${naturalWidth} / ${naturalHeight}`
+				} as React.CSSProperties)
+			: undefined
+	const boundedWidth =
+		naturalWidth && naturalHeight
+			? Math.min(
+					naturalWidth,
+					(naturalWidth / naturalHeight) *
+						MAX_CHAT_IMAGE_HEIGHT_PX
+				)
+			: undefined
+	const containerStyle =
+		aspectStyle && boundedWidth
+			? ({
+					...aspectStyle,
+					width: `min(100%, ${boundedWidth}px)`
+				} as React.CSSProperties)
+			: aspectStyle
+
 	return (
 		<LayoutGroup>
-			<div
-				className={cn('cursor-pointer', containerClassName)}
+			<motion.button
+				layoutId={layoutId}
+				type="button"
+				className={cn(
+					'block max-w-full cursor-pointer overflow-hidden p-0 text-left',
+					containerClassName,
+					className,
+					open && 'invisible'
+				)}
+				style={containerStyle}
+				onClick={() => setOpen(true)}
 			>
-				<motion.img
-					layoutId={layoutId}
+				<img
 					src={src}
 					alt={alt}
-					className={cn(
-						className,
-						'cursor-pointer',
-						open && 'invisible'
-					)}
+					className="block h-auto max-w-full object-contain"
 					loading="lazy"
-					onClick={() => setOpen(true)}
 					{...props}
 				/>
-			</div>
+			</motion.button>
 
 			{createPortal(
 				<AnimatePresence>
@@ -73,13 +104,17 @@ export function ClickableImage({
 							transition={{ duration: 0.2 }}
 							onClick={close}
 						>
-							<motion.img
+							<motion.div
 								layoutId={layoutId}
-								src={src}
-								alt={alt}
-								className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+								className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded-lg shadow-2xl"
 								onClick={e => e.stopPropagation()}
-							/>
+							>
+								<img
+									src={src}
+									alt={alt}
+									className="block max-h-[90vh] max-w-[90vw] object-contain"
+								/>
+							</motion.div>
 						</motion.div>
 					)}
 				</AnimatePresence>,

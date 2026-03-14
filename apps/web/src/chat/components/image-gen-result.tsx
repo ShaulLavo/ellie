@@ -30,6 +30,13 @@ export function ImageGenResult({
 						src={`data:image/jpeg;base64,${preview}`}
 						alt="Generating..."
 						className="max-h-80 rounded-lg object-contain"
+						style={
+							part.recipe
+								? {
+										aspectRatio: `${part.recipe.width} / ${part.recipe.height}`
+									}
+								: undefined
+						}
 					/>
 				)
 			)}

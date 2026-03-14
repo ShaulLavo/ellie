@@ -346,6 +346,15 @@ export function createImageGenTool(
 					'image/png'
 			)
 
+			// Enrich images with dimensions from the recipe
+			const imagesWithDimensions = result.images?.map(
+				img => ({
+					...img,
+					width: webRecipe.width,
+					height: webRecipe.height
+				})
+			)
+
 			return {
 				content: [
 					{
@@ -368,7 +377,7 @@ export function createImageGenTool(
 					recipe: webRecipe,
 					uploadId: result.uploadId,
 					url: result.url,
-					images: result.images,
+					images: imagesWithDimensions,
 					elapsedMs: result.durationMs,
 					entries: progressSnapshot.entries,
 					completedPhases: progressSnapshot.completedPhases

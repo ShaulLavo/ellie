@@ -91,6 +91,8 @@ export type ContentPart =
 			url?: string
 			mime?: string
 			mediaKind?: 'image' | 'audio' | 'video' | 'file'
+			width?: number
+			height?: number
 	  }
 	| {
 			type: 'image-generation'
@@ -123,6 +125,8 @@ export type ContentPart =
 				uploadId: string
 				url: string
 				mime: string
+				width?: number
+				height?: number
 			}>
 			recipe?: {
 				model: string

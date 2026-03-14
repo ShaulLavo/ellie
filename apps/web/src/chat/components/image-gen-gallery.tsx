@@ -26,6 +26,10 @@ export function ImageGenGallery({
 						src={img.url}
 						alt={`Generated image ${i + 1}`}
 						className="max-h-80 rounded-lg object-contain"
+						naturalWidth={img.width ?? part.recipe?.width}
+						naturalHeight={
+							img.height ?? part.recipe?.height
+						}
 					/>
 				))}
 			</div>
@@ -38,6 +42,8 @@ export function ImageGenGallery({
 				src={part.url}
 				alt="Generated image"
 				className="max-h-80 rounded-lg object-contain"
+				naturalWidth={part.recipe?.width}
+				naturalHeight={part.recipe?.height}
 			/>
 		)
 	}

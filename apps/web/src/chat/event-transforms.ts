@@ -159,6 +159,8 @@ function extractImageGenParts(
 								uploadId: string
 								url: string
 								mime: string
+								width?: number
+								height?: number
 						  }>
 						| undefined,
 					entries: details.entries as
@@ -366,7 +368,13 @@ export function eventToStored(
 					mediaKind:
 						kind === 'audio'
 							? 'audio'
-							: classifyUploadId(uploadId)
+							: classifyUploadId(uploadId),
+					...(typeof parsed.width === 'number' && {
+						width: parsed.width
+					}),
+					...(typeof parsed.height === 'number' && {
+						height: parsed.height
+					})
 				}
 			]
 		} else {
