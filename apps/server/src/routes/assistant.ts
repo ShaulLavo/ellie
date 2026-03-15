@@ -25,11 +25,21 @@ const assistantCurrentResponseSchema = v.object({
 	branchId: v.string()
 })
 
+const originSchema = v.optional(
+	v.object({
+		threadId: v.optional(v.string()),
+		branchId: v.optional(v.string()),
+		runId: v.optional(v.string()),
+		agentId: v.optional(v.string())
+	})
+)
+
 const createThreadInputSchema = v.object({
 	agentId: v.string(),
 	agentType: v.string(),
 	workspaceId: v.string(),
-	title: v.optional(v.string())
+	title: v.optional(v.string()),
+	origin: originSchema
 })
 
 const createThreadResponseSchema = v.object({
@@ -124,7 +134,8 @@ export function createAssistantRoutes(
 						body.agentId,
 						body.agentType,
 						body.workspaceId,
-						body.title
+						body.title,
+						body.origin
 					)
 				},
 				{

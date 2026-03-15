@@ -48,6 +48,7 @@ import {
 	readUploadBytes,
 	isTextContent
 } from '../lib/attachment-resolver'
+import { todayDayKey } from '../init'
 import { validateSpeechArtifact } from '../lib/speech-validation'
 import { requireLoopback } from './loopback-guard'
 
@@ -428,19 +429,43 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				if (!branch) {
 					throw new NotFoundError('Branch not found')
 				}
-				store.deleteBranch(branchId)
-				// Recreate the branch in the same thread
-				// with the same ID so SSE subscribers stay valid
-				const newBranch = store.eventStore.createBranch(
-					branch.threadId,
-					undefined,
-					undefined,
-					undefined,
-					branchId
+				const thread = store.getThread(branch.threadId)
+				if (!thread) {
+					throw new NotFoundError('Thread not found')
+				}
+
+				const previousThreadId = thread.id
+
+				// For assistant threads, rotate via the standard
+				// path so default pointer and channels move correctly
+				if (thread.agentType === 'assistant') {
+					const result = store.rotateAssistantThread(
+						thread.agentId,
+						thread.workspaceId,
+						todayDayKey()
+					)
+					return {
+						threadId: result.threadId,
+						branchId: result.branchId,
+						previousThreadId
+					}
+				}
+
+				// Non-assistant threads: mark old thread view_only
+				// and create a fresh thread + root branch
+				store.eventStore.updateThread(previousThreadId, {
+					state: 'view_only'
+				})
+				const result = store.createThreadWithBranch(
+					thread.agentId,
+					thread.agentType,
+					thread.workspaceId,
+					thread.title ?? undefined
 				)
 				return {
-					branchId: newBranch.id,
-					cleared: true
+					threadId: result.threadId,
+					branchId: result.branchId,
+					previousThreadId
 				}
 			},
 			{

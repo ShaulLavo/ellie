@@ -266,8 +266,11 @@ export class AgentController {
 
 			// Create root trace scope for this run
 			if (this.traceRecorder) {
+				const threadId =
+					this.store.getBranch(branchId)?.threadId
 				const scope = createRootScope({
 					traceKind: 'chat',
+					threadId,
 					branchId,
 					runId
 				})
@@ -635,8 +638,11 @@ export class AgentController {
 			}
 
 			if (this.traceRecorder) {
+				const threadId =
+					this.store.getBranch(branchId)?.threadId
 				const scope = createRootScope({
 					traceKind: 'follow-up',
+					threadId,
 					branchId,
 					runId: newRunId
 				})

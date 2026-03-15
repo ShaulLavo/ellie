@@ -17,6 +17,10 @@ export const threads = sqliteTable('threads', {
 	title: text('title'),
 	state: text('state').notNull().default('active'),
 	dayKey: text('day_key'),
+	originThreadId: text('origin_thread_id'),
+	originBranchId: text('origin_branch_id'),
+	originRunId: text('origin_run_id'),
+	originAgentId: text('origin_agent_id'),
 	createdAt: integer('created_at').notNull(),
 	updatedAt: integer('updated_at').notNull()
 })

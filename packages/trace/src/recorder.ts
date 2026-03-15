@@ -29,6 +29,7 @@ export interface TraceIndexEntry {
 	relativePath: string
 	createdAt: number
 	traceKind: TraceKind
+	threadId?: string
 	branchId?: string
 	runId?: string
 }
@@ -67,6 +68,7 @@ export class TraceRecorder {
 			traceId: scope.traceId,
 			spanId: scope.spanId,
 			parentSpanId: scope.parentSpanId,
+			threadId: scope.threadId,
 			branchId: scope.branchId,
 			runId: scope.runId,
 			traceKind: scope.traceKind,
@@ -204,6 +206,7 @@ export class TraceRecorder {
 			relativePath: relPath,
 			createdAt: Date.now(),
 			traceKind: scope.traceKind,
+			threadId: scope.threadId,
 			branchId: scope.branchId,
 			runId: scope.runId
 		}
@@ -282,6 +285,7 @@ export class TraceRecorder {
 				relativePath: relPath,
 				createdAt: firstEvent.ts,
 				traceKind: firstEvent.traceKind as TraceKind,
+				threadId: firstEvent.threadId,
 				branchId: firstEvent.branchId,
 				runId: firstEvent.runId
 			}

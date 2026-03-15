@@ -12,6 +12,7 @@ import type { TraceKind, TraceScope } from './types'
  */
 export function createRootScope(opts: {
 	traceKind: TraceKind
+	threadId?: string
 	branchId?: string
 	runId?: string
 }): TraceScope {
@@ -20,6 +21,7 @@ export function createRootScope(opts: {
 		traceId: id,
 		spanId: id, // root span shares the trace ID
 		parentSpanId: undefined,
+		threadId: opts.threadId,
 		branchId: opts.branchId,
 		runId: opts.runId,
 		traceKind: opts.traceKind
@@ -37,6 +39,7 @@ export function createChildScope(
 		traceId: parent.traceId,
 		spanId: ulid(),
 		parentSpanId: parent.spanId,
+		threadId: parent.threadId,
 		branchId: parent.branchId,
 		runId: parent.runId,
 		traceKind: parent.traceKind

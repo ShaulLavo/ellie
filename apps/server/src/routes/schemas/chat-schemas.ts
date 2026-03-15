@@ -8,6 +8,10 @@ export const threadSchema = v.object({
 	title: v.nullable(v.string()),
 	state: v.string(),
 	dayKey: v.nullable(v.string()),
+	originThreadId: v.nullable(v.string()),
+	originBranchId: v.nullable(v.string()),
+	originRunId: v.nullable(v.string()),
+	originAgentId: v.nullable(v.string()),
 	createdAt: v.number(),
 	updatedAt: v.number()
 })
@@ -53,6 +57,7 @@ export const postMessageResponseSchema = v.object({
 })
 
 export const clearBranchResponseSchema = v.object({
+	threadId: v.string(),
 	branchId: v.string(),
-	cleared: v.literal(true)
+	previousThreadId: v.string()
 })

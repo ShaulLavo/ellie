@@ -186,11 +186,46 @@ export class ChannelManager {
 	async ingestMessage(
 		msg: ChannelInboundMessage
 	): Promise<void> {
-		const assistant =
-			this.#store.getDefaultAssistantThread()
-		if (!assistant)
-			throw new Error('No default assistant thread')
-		const branchId = assistant.branchId
+		// Resolve thread via thread_channels attachment table first
+		const conversationKey =
+			msg.conversationId ??
+			`${msg.channelId}:${msg.accountId}`
+		const attachedThreadId =
+			this.#store.eventStore.findActiveChannelThread(
+				msg.channelId,
+				msg.accountId,
+				conversationKey
+			)
+
+		let branchId: string
+
+		if (attachedThreadId) {
+			// Channel already attached to a thread — use its first branch
+			const branchList = this.#store.listBranches(
+				attachedThreadId
+			)
+			if (branchList.length === 0) {
+				throw new Error(
+					`Attached thread ${attachedThreadId} has no branches`
+				)
+			}
+			branchId = branchList[0]!.id
+		} else {
+			// No attachment — fall back to default assistant thread
+			// and create the attachment row for future routing
+			const assistant =
+				this.#store.getDefaultAssistantThread()
+			if (!assistant)
+				throw new Error('No default assistant thread')
+			branchId = assistant.branchId
+			this.#store.eventStore.attachChannel(
+				assistant.threadId,
+				msg.channelId,
+				msg.accountId,
+				conversationKey
+			)
+		}
+
 		this.#store.ensureBranch(branchId)
 
 		// Dedupe key: use externalId (e.g. WhatsApp msg ID) when available,

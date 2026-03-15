@@ -95,7 +95,13 @@ export class EventStore {
 		workspaceId: string,
 		title?: string,
 		dayKey?: string,
-		id?: string
+		id?: string,
+		origin?: {
+			threadId?: string
+			branchId?: string
+			runId?: string
+			agentId?: string
+		}
 	): ThreadRow {
 		const now = Date.now()
 		const threadId = id ?? ulid()
@@ -110,6 +116,10 @@ export class EventStore {
 				title: title ?? null,
 				state: 'active',
 				dayKey: dayKey ?? null,
+				originThreadId: origin?.threadId ?? null,
+				originBranchId: origin?.branchId ?? null,
+				originRunId: origin?.runId ?? null,
+				originAgentId: origin?.agentId ?? null,
 				createdAt: now,
 				updatedAt: now
 			})

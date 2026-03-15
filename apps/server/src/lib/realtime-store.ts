@@ -184,14 +184,22 @@ export class RealtimeStore {
 		agentType: string,
 		workspaceId: string,
 		title?: string,
-		dayKey?: string
+		dayKey?: string,
+		origin?: {
+			threadId?: string
+			branchId?: string
+			runId?: string
+			agentId?: string
+		}
 	): ThreadRow {
 		return this.#store.createThread(
 			agentId,
 			agentType,
 			workspaceId,
 			title,
-			dayKey
+			dayKey,
+			undefined,
+			origin
 		)
 	}
 
@@ -214,13 +222,22 @@ export class RealtimeStore {
 		agentId: string,
 		agentType: string,
 		workspaceId: string,
-		title?: string
+		title?: string,
+		origin?: {
+			threadId?: string
+			branchId?: string
+			runId?: string
+			agentId?: string
+		}
 	): { threadId: string; branchId: string } {
 		const thread = this.#store.createThread(
 			agentId,
 			agentType,
 			workspaceId,
-			title
+			title,
+			undefined,
+			undefined,
+			origin
 		)
 		const branch = this.#store.createBranch(thread.id)
 		return { threadId: thread.id, branchId: branch.id }
