@@ -1,12 +1,3 @@
-/**
- * Per-group configuration resolution.
- * Resolves group-specific settings with wildcard fallback,
- * matching OpenCLAW's group-policy.ts pattern — including
- * per-group/per-sender tool policy resolution.
- */
-
-// ── Tool policy types (matching OpenCLAW's ToolPolicyConfig) ────────────
-
 export type ToolPolicyConfig =
 	| 'all'
 	| 'none'
@@ -17,8 +8,6 @@ export type GroupToolPolicyBySenderConfig = Record<
 	ToolPolicyConfig
 >
 
-// ── Group config (matching OpenCLAW's ChannelGroupConfig) ───────────────
-
 export interface WhatsAppGroupConfig {
 	/** Require @mention to trigger the agent (default: true) */
 	requireMention?: boolean
@@ -28,15 +17,11 @@ export interface WhatsAppGroupConfig {
 	toolsBySender?: GroupToolPolicyBySenderConfig
 }
 
-// ── Sender identification for tool policy resolution ────────────────────
-
-export type GroupToolPolicySender = {
+type GroupToolPolicySender = {
 	senderId?: string | null
 	senderE164?: string | null
 	senderName?: string | null
 }
-
-// ── Resolution functions ────────────────────────────────────────────────
 
 /**
  * Resolve the group config for a specific group JID.
@@ -61,8 +46,6 @@ export function resolveRequireMention(
 	return config?.requireMention ?? true
 }
 
-// ── Sender key normalization (matching OpenCLAW) ────────────────────────
-
 function normalizeSenderKey(value: string): string {
 	const trimmed = value.trim()
 	if (!trimmed) return ''
@@ -77,7 +60,6 @@ function normalizeSenderKey(value: string): string {
  * Resolve a tool policy from a per-sender map.
  * Tries each sender identifier in order: senderId → senderE164 → senderName.
  * Falls back to wildcard "*" entry if no specific match.
- * Matching OpenCLAW's resolveToolsBySender.
  */
 export function resolveToolsBySender(
 	params: {
@@ -128,12 +110,7 @@ export function resolveToolsBySender(
 
 /**
  * Resolve the tool policy for a group + sender combination.
- * Resolution chain (matching OpenCLAW's resolveChannelGroupToolsPolicy):
- *   1. Group-specific toolsBySender (sender match)
- *   2. Group-specific tools
- *   3. Default ("*") toolsBySender (sender match)
- *   4. Default ("*") tools
- *   5. undefined (no restriction)
+ * Resolution: group toolsBySender → group tools → default toolsBySender → default tools.
  */
 export function resolveGroupToolsPolicy(
 	params: {
@@ -146,24 +123,20 @@ export function resolveGroupToolsPolicy(
 	const groupConfig = groups[groupJid]
 	const defaultConfig = groups['*']
 
-	// 1. Group-specific sender policy
 	const groupSenderPolicy = resolveToolsBySender({
 		toolsBySender: groupConfig?.toolsBySender,
 		...senderInfo
 	})
 	if (groupSenderPolicy) return groupSenderPolicy
 
-	// 2. Group-specific tools
 	if (groupConfig?.tools) return groupConfig.tools
 
-	// 3. Default sender policy
 	const defaultSenderPolicy = resolveToolsBySender({
 		toolsBySender: defaultConfig?.toolsBySender,
 		...senderInfo
 	})
 	if (defaultSenderPolicy) return defaultSenderPolicy
 
-	// 4. Default tools
 	if (defaultConfig?.tools) return defaultConfig.tools
 
 	return undefined

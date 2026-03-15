@@ -7,8 +7,6 @@
 
 import type { HindsightConfig } from '@ellie/hindsight'
 
-// ── Deterministic embedding ───────────────────────────────────────────────
-
 /**
  * Hash-based embedding for deterministic eval/test runs.
  * NOT semantically meaningful — produces consistent vectors for identical text.
@@ -29,8 +27,6 @@ export function hashEmbed(
 	const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0))
 	return norm > 0 ? vec.map(v => v / norm) : vec
 }
-
-// ── Noop adapter ──────────────────────────────────────────────────────────
 
 /**
  * Minimal mock adapter for eval — retain uses pre-extracted facts so

@@ -19,7 +19,7 @@ import {
 const REFRESH_BUFFER_MS = 5 * 60 * 1000
 
 /** Refresh an OAuth token if expired/expiring, returning the access token to use. */
-export async function refreshOAuthIfNeeded(
+async function refreshOAuthIfNeeded(
 	credentialsPath: string,
 	cred: {
 		access: string
@@ -43,7 +43,7 @@ export async function refreshOAuthIfNeeded(
 	return refreshed.access
 }
 
-export async function resolveAnthropicAdapter(
+async function resolveAnthropicAdapter(
 	credentialsPath: string
 ): Promise<AnyTextAdapter | null> {
 	const model = env.ANTHROPIC_MODEL as AnthropicChatModel
@@ -95,7 +95,7 @@ export async function resolveGroqAdapter(
 }
 
 /** Agent adapter — Anthropic only. */
-export async function resolveAgentAdapter(
+export function resolveAgentAdapter(
 	credentialsPath: string
 ): Promise<AnyTextAdapter | null> {
 	return resolveAnthropicAdapter(credentialsPath)

@@ -1,12 +1,11 @@
 /**
  * Outbound target resolution for WhatsApp.
  * Validates and normalizes a target string before sending.
- * Matches OpenCLAW's resolveWhatsAppOutboundTarget behavior.
  */
 
 import { normalizeWhatsAppTarget } from './normalize'
 
-export type OutboundTargetResult =
+type OutboundTargetResult =
 	| { ok: true; to: string }
 	| { ok: false; error: string }
 
@@ -16,7 +15,7 @@ export type OutboundTargetResult =
  * - Group JIDs (@g.us) are always allowed (groups managed by group policy).
  * - For 'explicit' mode: allows any normalized target.
  * - For 'implicit'/'heartbeat' mode:
- *     - Wildcard '*' or empty allowFrom → allow any target (OpenCLAW behavior)
+ *     - Wildcard '*' or empty allowFrom → allow any target
  *     - Otherwise validates against normalized allowFrom entries
  */
 export function resolveOutboundTarget(params: {
@@ -42,7 +41,7 @@ export function resolveOutboundTarget(params: {
 	}
 
 	// Implicit/heartbeat mode — validate against allowFrom
-	// Matching OpenCLAW: normalize entries and check for wildcard
+	// Normalize entries and check for wildcard
 	const allowListRaw = (params.allowFrom ?? [])
 		.map(s => s.trim())
 		.filter(Boolean)

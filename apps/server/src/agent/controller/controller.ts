@@ -1,7 +1,7 @@
 /**
- * Agent controller — single persistent agent with session binding.
+ * Agent controller — single persistent agent with branch binding.
  *
- * Orchestration facade: manages locking, session binding, message routing,
+ * Orchestration facade: manages locking, branch binding, message routing,
  * and agent lifecycle. Delegates to:
  *   - stream-persistence: unified INSERT/UPDATE for streaming rows
  *   - event-mapper: pure mapping for non-streaming events
@@ -29,6 +29,8 @@ import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import { buildSystemPrompt } from '../system-prompt'
+import { expandSkillCommand } from '../skills/expand'
+import type { Skill } from '../skills/types'
 import type { MemoryOrchestrator } from '../memory-orchestrator'
 import { createToolRegistry } from '../tools/capability-registry'
 import { mapAgentEventToDb } from './event-mapper'
@@ -46,55 +48,53 @@ import {
 } from './stream-persistence'
 import { handleControllerError } from './error-handler'
 
-// ── Config ───────────────────────────────────────────────────────────────────
+const EMPTY_USAGE = {
+	input: 0,
+	output: 0,
+	cacheRead: 0,
+	cacheWrite: 0,
+	totalTokens: 0,
+	cost: {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		total: 0
+	}
+} as const
 
-export interface AgentControllerOptions {
-	/** TanStack AI adapter for LLM calls */
+interface AgentControllerOptions {
 	adapter: AnyTextAdapter
-	/** Workspace directory path for system prompt assembly */
 	workspaceDir: string
-	/** Data directory for session artifacts and snapshots */
 	dataDir: string
-	/** Additional AgentOptions passed to the Agent */
 	agentOptions?: Partial<AgentOptions>
-	/** Memory orchestrator for recall/retain integration */
 	memory?: MemoryOrchestrator
-	/** Trace recorder for structured trace events */
 	traceRecorder?: TraceRecorder
-	/** Blob sink for overflow storage */
 	blobSink?: BlobSink
-	/** Event store for tool result caching */
 	eventStore?: EventStore
-	/** Path to .credentials.json for API key loading */
 	credentialsPath?: string
 }
 
-// ── Queued cross-session message ─────────────────────────────────────────────
-
 interface QueuedMessage {
-	sessionId: string
+	branchId: string
 	text: string
 	userMessageRowId?: number
 }
 
-// ── Controller ───────────────────────────────────────────────────────────────
-
 export class AgentController {
 	private agent: Agent
-	private boundSessionId: string | null = null
+	private boundBranchId: string | null = null
 	private store: RealtimeStore
 	private options: AgentControllerOptions
 	private memory: MemoryOrchestrator | null
 	private baseSystemPrompt: string
+	private skills: Skill[]
 	private traceRecorder: TraceRecorder | undefined
 	private blobSink: BlobSink | undefined
 	/** Active trace scope for the current run */
 	private activeTraceScope: TraceScope | undefined
 
-	/** Lazily-cached MemoryDeps — safe to cache for the controller lifetime:
-	 *  all deps are stable references (store, memory, agent, baseSystemPrompt)
-	 *  or captured via closures that read current values at call time
-	 *  (trace). */
+	/** Lazily-cached MemoryDeps */
 	#memoryDeps: MemoryDeps | null = null
 
 	/** Streaming row state (owned here, passed to stream-persistence) */
@@ -103,8 +103,8 @@ export class AgentController {
 	/** Global lock — serialises all routing decisions */
 	private lock: Promise<void> = Promise.resolve()
 
-	/** Cross-session message queue — processed FIFO when agent becomes idle */
-	private crossSessionQueue: QueuedMessage[] = []
+	/** Cross-branch message queue — processed FIFO when agent becomes idle */
+	private crossBranchQueue: QueuedMessage[] = []
 
 	/** Row IDs of follow-up user_messages awaiting runId backfill */
 	private pendingFollowUpRows: number[] = []
@@ -119,14 +119,14 @@ export class AgentController {
 		this.traceRecorder = options.traceRecorder
 		this.blobSink = options.blobSink
 
-		const systemPrompt = buildSystemPrompt(
-			options.workspaceDir
-		)
+		const { prompt: systemPrompt, skills } =
+			buildSystemPrompt(options.workspaceDir)
 		this.baseSystemPrompt = systemPrompt
+		this.skills = skills
 		const registry = createToolRegistry({
 			workspaceDir: options.workspaceDir,
 			dataDir: options.dataDir,
-			getSessionId: () => this.boundSessionId,
+			getBranchId: () => this.boundBranchId,
 			getRunId: () => this.agent.runId ?? null,
 			traceRecorder: this.traceRecorder,
 			blobSink: this.blobSink,
@@ -155,10 +155,10 @@ export class AgentController {
 			traceRecorder: this.traceRecorder,
 			onEvent: event => this.handleEvent(event),
 			onTrace: entry => {
-				const sessionId = this.boundSessionId
-				if (!sessionId) return
+				const branchId = this.boundBranchId
+				if (!branchId) return
 				this.store.publishTraceEphemeral({
-					sessionId,
+					branchId,
 					type: entry.type,
 					runId: this.agent.runId,
 					payload: entry.payload
@@ -167,54 +167,42 @@ export class AgentController {
 		})
 	}
 
-	// ── Adapter hot-swap ────────────────────────────────────────────────────
-
 	/** Swap the adapter (e.g. after OAuth token refresh) without destroying the agent. */
 	updateAdapter(adapter: AnyTextAdapter): void {
 		this.agent.adapter = adapter
 		this.options = { ...this.options, adapter }
 	}
 
-	// ── Lock ─────────────────────────────────────────────────────────────────
-
-	/** Hand-rolled async mutex: each caller chains onto the previous promise,
-	 *  serialising execution without a queue data structure. */
 	private async withLock(
 		fn: () => Promise<void>
 	): Promise<void> {
 		const prev = this.lock
-		// .catch(() => {}) swallows any error from the previous turn so one
-		// failure doesn't block all subsequent callers.
 		const next = prev.catch(() => {}).then(() => fn())
 		this.lock = next
 		try {
 			await next
 		} finally {
-			// Only reset if no newer waiter has already replaced this.lock;
-			// a stale reference here would clobber a live chain.
 			if (this.lock === next) {
 				this.lock = Promise.resolve()
 			}
 		}
 	}
 
-	// ── Session binding ─────────────────────────────────────────────────────
-
-	private bindToSession(sessionId: string): void {
-		this.store.ensureSession(sessionId)
-		const history = this.loadHistoryForAgent(sessionId)
+	private bindToBranch(branchId: string): void {
+		this.store.ensureBranch(branchId)
+		const history = this.loadHistory(branchId)
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
-		this.boundSessionId = sessionId
+		this.boundBranchId = branchId
 	}
 
-	private ensureBinding(sessionId: string): boolean {
-		if (this.boundSessionId !== sessionId) {
-			this.bindToSession(sessionId)
+	private ensureBinding(branchId: string): boolean {
+		if (this.boundBranchId !== branchId) {
+			this.bindToBranch(branchId)
 			return this.agent.state.messages.length > 0
 		}
 		if (this.agent.state.messages.length === 0) {
-			const history = this.loadHistoryForAgent(sessionId)
+			const history = this.loadHistory(branchId)
 			if (history.length > 0) {
 				this.agent.replaceMessages(history)
 				return true
@@ -223,10 +211,8 @@ export class AgentController {
 		return false
 	}
 
-	// ── Message routing (core) ───────────────────────────────────────────────
-
 	async handleMessage(
-		sessionId: string,
+		branchId: string,
 		text: string,
 		userMessageRowId?: number
 	): Promise<{
@@ -235,7 +221,13 @@ export class AgentController {
 		activeRunId?: string
 		traceId?: string
 	}> {
-		this.store.ensureSession(sessionId)
+		this.store.ensureBranch(branchId)
+
+		// Expand /skill:name commands before any routing
+		const expandedText = expandSkillCommand(
+			text,
+			this.skills
+		)
 
 		const runId = ulid()
 		let routed: 'prompt' | 'followUp' | 'queued' = 'prompt'
@@ -243,12 +235,12 @@ export class AgentController {
 		let traceId: string | undefined
 
 		await this.withLock(async () => {
-			// Agent busy — queue as follow-up or cross-session
+			// Agent busy — queue as follow-up or cross-branch
 			if (this.agent.state.isStreaming) {
-				if (this.boundSessionId === sessionId) {
+				if (this.boundBranchId === branchId) {
 					this.agent.followUp({
 						role: 'user',
-						content: [{ type: 'text', text }],
+						content: [{ type: 'text', text: expandedText }],
 						timestamp: Date.now()
 					})
 					routed = 'followUp'
@@ -257,8 +249,8 @@ export class AgentController {
 						this.pendingFollowUpRows.push(userMessageRowId)
 					}
 				} else {
-					this.crossSessionQueue.push({
-						sessionId,
+					this.crossBranchQueue.push({
+						branchId,
 						text,
 						userMessageRowId
 					})
@@ -268,21 +260,23 @@ export class AgentController {
 			}
 
 			// Agent idle — bind if needed
-			this.ensureBinding(sessionId)
+			this.ensureBinding(branchId)
 
 			this.agent.runId = runId
 
 			// Create root trace scope for this run
 			if (this.traceRecorder) {
+				const threadId =
+					this.store.getBranch(branchId)?.threadId
 				const scope = createRootScope({
 					traceKind: 'chat',
-					sessionId,
+					threadId,
+					branchId,
 					runId
 				})
 				this.activeTraceScope = scope
 				traceId = scope.traceId
 
-				// Thread trace scope into agent's toolSafety
 				this.agent.updateToolSafety({
 					traceScope: scope
 				})
@@ -291,7 +285,7 @@ export class AgentController {
 					scope,
 					'trace.root',
 					'controller',
-					{ sessionId, runId, text: text.slice(0, 200) }
+					{ branchId, runId, text: text.slice(0, 200) }
 				)
 			}
 
@@ -301,68 +295,74 @@ export class AgentController {
 					this.store.updateEventRunId(
 						userMessageRowId,
 						runId,
-						sessionId
+						branchId
 					)
 				} catch (err) {
 					handleControllerError(
 						(type, payload) => this.trace(type, payload),
-						`backfill_runid_failed session=${sessionId} runId=${runId} rowId=${userMessageRowId}`,
+						`backfill_runid_failed branch=${branchId} runId=${runId} rowId=${userMessageRowId}`,
 						'controller.backfill_runid_failed',
-						{ sessionId, runId, userMessageRowId },
+						{ branchId, runId, userMessageRowId },
 						err
 					)
 				}
 			}
 
-			// Run memory recall before prompting
+			// TODO: skip recall for skill commands — sending `/skill:foo` to recall is useless
 			await runRecall(
 				this.memoryDeps,
-				sessionId,
+				branchId,
 				text,
 				runId
 			)
 
-			// The user_message event is persisted before handleMessage
-			// is called. Reload history so the agent has the full
-			// content parts (including image data from attachments).
 			{
-				const history = this.loadHistoryForAgent(sessionId)
+				const history = this.loadHistory(branchId)
+
+				if (expandedText !== text && history.length > 0) {
+					const last = history[history.length - 1]
+					if (last.role === 'user') {
+						last.content = last.content.map(part =>
+							part.type === 'text'
+								? { ...part, text: expandedText }
+								: part
+						)
+					}
+				}
+
 				this.agent.replaceMessages(history)
 			}
 			this.agent.continue().catch(err => {
 				handleControllerError(
 					(type, payload) => this.trace(type, payload),
-					`continue_failed session=${sessionId} runId=${runId}`,
+					`continue_failed branch=${branchId} runId=${runId}`,
 					'controller.continue_failed',
-					{ sessionId, runId },
+					{ branchId, runId },
 					err
 				)
-				this.writeErrorEvent(sessionId, runId, err)
+				this.writeErrorEvent(branchId, runId, err)
 			})
 		})
 
 		return { runId, routed, activeRunId, traceId }
 	}
 
-	// ── Control passthrough ──────────────────────────────────────────────────
-
 	steer(
-		sessionId: string,
+		branchId: string,
 		text: string
 	): { traceId?: string } {
-		if (this.boundSessionId !== sessionId) {
+		if (this.boundBranchId !== branchId) {
 			throw new Error(
-				`Agent not bound to session ${sessionId}`
+				`Agent not bound to branch ${branchId}`
 			)
 		}
 
 		let traceId: string | undefined
 
-		// Persist steering input as a first-class user_message event
 		const runId = this.agent.runId
 		if (runId) {
 			this.store.appendEvent(
-				sessionId,
+				branchId,
 				'user_message',
 				{
 					role: 'user',
@@ -373,13 +373,12 @@ export class AgentController {
 			)
 		}
 
-		// Emit control.steer trace event
 		if (this.traceRecorder && this.activeTraceScope) {
 			this.traceRecorder.record(
 				this.activeTraceScope,
 				'control.steer',
 				'controller',
-				{ sessionId, text: text.slice(0, 200) }
+				{ branchId, text: text.slice(0, 200) }
 			)
 			traceId = this.activeTraceScope.traceId
 		}
@@ -393,33 +392,31 @@ export class AgentController {
 		return { traceId }
 	}
 
-	abort(sessionId: string): { traceId?: string } {
-		if (this.boundSessionId !== sessionId) {
+	abort(branchId: string): { traceId?: string } {
+		if (this.boundBranchId !== branchId) {
 			throw new Error(
-				`Agent not bound to session ${sessionId}`
+				`Agent not bound to branch ${branchId}`
 			)
 		}
 
 		let traceId: string | undefined
 
-		// Persist abort as a control event
 		const runId = this.agent.runId
 		if (runId) {
 			this.store.appendEvent(
-				sessionId,
+				branchId,
 				'run_closed',
 				{ reason: 'abort' },
 				runId
 			)
 		}
 
-		// Emit control.abort trace event
 		if (this.traceRecorder && this.activeTraceScope) {
 			this.traceRecorder.record(
 				this.activeTraceScope,
 				'control.abort',
 				'controller',
-				{ sessionId }
+				{ branchId }
 			)
 			traceId = this.activeTraceScope.traceId
 		}
@@ -429,25 +426,13 @@ export class AgentController {
 		return { traceId }
 	}
 
-	// ── Queries ──────────────────────────────────────────────────────────────
-
-	loadHistory(sessionId: string): AgentMessage[] {
-		return this.store.listAgentMessages(sessionId)
+	loadHistory(branchId: string): AgentMessage[] {
+		return this.store.listAgentMessages(branchId)
 	}
 
-	hasSession(sessionId: string): boolean {
-		return this.store.hasSession(sessionId)
+	hasBranch(branchId: string): boolean {
+		return this.store.hasBranch(branchId)
 	}
-
-	// ── Internal: source note injection ──────────────────────────────────────
-
-	private loadHistoryForAgent(
-		sessionId: string
-	): AgentMessage[] {
-		return this.loadHistory(sessionId)
-	}
-
-	// ── Internal: dependency bundles for extracted modules ────────────────────
 
 	private get memoryDeps(): MemoryDeps {
 		if (this.#memoryDeps === null) {
@@ -481,44 +466,38 @@ export class AgentController {
 		}
 	}
 
-	// ── Internal: trace helper ──────────────────────────────────────────────
-
 	private trace(
 		type: string,
 		payload: Record<string, unknown>
 	): void {
-		const sessionId = this.boundSessionId
-		if (!sessionId) return
+		const branchId = this.boundBranchId
+		if (!branchId) return
 		try {
 			this.store.publishTraceEphemeral({
-				sessionId,
+				branchId,
 				type,
 				runId: this.agent.runId,
 				payload
 			})
 		} catch (err) {
-			// trace is best-effort — log but don't propagate
 			console.warn('[controller] trace failed:', err)
 		}
 	}
 
-	// ── Internal: event persistence ──────────────────────────────────────────
-
 	private handleEvent(event: AgentEvent): void {
-		const sessionId = this.boundSessionId
-		if (!sessionId) {
+		const branchId = this.boundBranchId
+		if (!branchId) {
 			console.warn(
-				`[agent-controller] event received without bound session type=${event.type} — not persisted`
+				`[agent-controller] event received without bound branch type=${event.type} — not persisted`
 			)
 			return
 		}
 
 		const runId = this.agent.runId
 		if (!runId) {
-			// agent_end can arrive without a runId after cleanup
 			if (event.type !== 'agent_end') {
 				this.trace('controller.event_no_runid', {
-					sessionId,
+					branchId,
 					eventType: event.type
 				})
 			}
@@ -530,7 +509,7 @@ export class AgentController {
 			this.streamDeps,
 			this.streamState,
 			event,
-			sessionId,
+			branchId,
 			runId
 		)
 		if (handled) return
@@ -540,7 +519,7 @@ export class AgentController {
 		for (const row of rows) {
 			try {
 				this.store.appendEvent(
-					sessionId,
+					branchId,
 					row.type as EventType,
 					row.payload as EventPayloadMap[typeof row.type],
 					runId
@@ -548,9 +527,9 @@ export class AgentController {
 			} catch (err) {
 				handleControllerError(
 					(type, payload) => this.trace(type, payload),
-					`persist_failed session=${sessionId} runId=${runId} type=${row.type}`,
+					`persist_failed branch=${branchId} runId=${runId} type=${row.type}`,
 					'controller.persist_failed',
-					{ sessionId, runId, dbType: row.type },
+					{ branchId, runId, dbType: row.type },
 					err
 				)
 			}
@@ -559,19 +538,17 @@ export class AgentController {
 		// 3. agent_end lifecycle: close run, memory, queue processing
 		if (event.type !== 'agent_end') return
 
-		// Flush any remaining pending artifacts before resetting state
 		flushPendingArtifacts(
 			this.streamDeps,
 			this.streamState,
-			sessionId,
+			branchId,
 			runId
 		)
 		resetStreamState(this.streamState)
 
 		try {
-			this.store.closeAgentRun(sessionId, runId)
+			this.store.closeAgentRun(branchId, runId)
 		} catch (err) {
-			// Already closed — non-fatal, but log for visibility
 			console.warn(
 				'[controller] closeAgentRun failed:',
 				err
@@ -582,54 +559,51 @@ export class AgentController {
 			this.activeTraceScope
 		)
 
-		// Reset system prompt and clear run state before post-run work.
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.runId = undefined
 		this.activeTraceScope = undefined
 
-		this.schedulePostRunWork(sessionId, runId, retainDeps)
+		this.schedulePostRunWork(branchId, runId, retainDeps)
 	}
 
 	private schedulePostRunWork(
-		sessionId: string,
+		branchId: string,
 		runId: string,
 		retainDeps: MemoryDeps
 	): void {
 		void this.withLock(async () => {
-			await runRetain(retainDeps, sessionId, runId)
+			await runRetain(retainDeps, branchId, runId)
 		})
 			.then(() => {
-				this.scheduleNextQueuedWork(sessionId)
+				this.scheduleNextQueuedWork(branchId)
 			})
 			.catch(err => {
 				handleControllerError(
 					(type, payload) => this.trace(type, payload),
-					`retain_error session=${sessionId} runId=${runId}`,
+					`retain_error branch=${branchId} runId=${runId}`,
 					'controller.retain_error',
-					{ sessionId, runId },
+					{ branchId, runId },
 					err,
 					'warn'
 				)
 			})
 	}
 
-	private scheduleNextQueuedWork(sessionId: string): void {
+	private scheduleNextQueuedWork(branchId: string): void {
 		if (this.agent.state.isStreaming) return
 		if (this.agent.hasQueuedMessages()) {
 			queueMicrotask(() =>
-				this.drainQueuedFollowUps(sessionId)
+				this.drainQueuedFollowUps(branchId)
 			)
 			return
 		}
-		if (this.crossSessionQueue.length === 0) return
+		if (this.crossBranchQueue.length === 0) return
 		queueMicrotask(() => {
-			this.processCrossSessionQueue()
+			this.processCrossBranchQueue()
 		})
 	}
 
-	// ── Internal: cross-session queue processing ─────────────────────────────
-
-	private drainQueuedFollowUps(sessionId: string): void {
+	private drainQueuedFollowUps(branchId: string): void {
 		this.withLock(async () => {
 			if (
 				this.agent.state.isStreaming ||
@@ -640,24 +614,21 @@ export class AgentController {
 			const newRunId = ulid()
 			this.agent.runId = newRunId
 
-			// Backfill pending follow-up user_message rows with this run's id.
-			// This publishes 'update' events that the delivery registry
-			// watches for, promoting pending row-based targets to run-level.
 			const rows = this.pendingFollowUpRows.splice(0)
 			for (const rowId of rows) {
 				try {
 					this.store.updateEventRunId(
 						rowId,
 						newRunId,
-						sessionId
+						branchId
 					)
 				} catch (err) {
 					handleControllerError(
 						(type, payload) => this.trace(type, payload),
-						`backfill_followup_failed session=${sessionId} runId=${newRunId} rowId=${rowId}`,
+						`backfill_followup_failed branch=${branchId} runId=${newRunId} rowId=${rowId}`,
 						'controller.backfill_followup_failed',
 						{
-							sessionId,
+							branchId,
 							runId: newRunId,
 							rowId
 						},
@@ -666,11 +637,13 @@ export class AgentController {
 				}
 			}
 
-			// Create root trace scope for the follow-up run
 			if (this.traceRecorder) {
+				const threadId =
+					this.store.getBranch(branchId)?.threadId
 				const scope = createRootScope({
 					traceKind: 'follow-up',
-					sessionId,
+					threadId,
+					branchId,
 					runId: newRunId
 				})
 				this.activeTraceScope = scope
@@ -682,7 +655,7 @@ export class AgentController {
 					'trace.root',
 					'controller',
 					{
-						sessionId,
+						branchId,
 						runId: newRunId,
 						type: 'follow-up-drain'
 					}
@@ -692,39 +665,37 @@ export class AgentController {
 			this.agent.continue().catch(err => {
 				handleControllerError(
 					(type, payload) => this.trace(type, payload),
-					`continue_failed (follow-up drain) session=${sessionId} runId=${newRunId}`,
+					`continue_failed (follow-up drain) branch=${branchId} runId=${newRunId}`,
 					'controller.continue_failed',
-					{ sessionId, runId: newRunId },
+					{ branchId, runId: newRunId },
 					err
 				)
-				this.writeErrorEvent(sessionId, newRunId, err)
+				this.writeErrorEvent(branchId, newRunId, err)
 			})
 		})
 	}
 
-	private processCrossSessionQueue(): void {
-		const next = this.crossSessionQueue.shift()
+	private processCrossBranchQueue(): void {
+		const next = this.crossBranchQueue.shift()
 		if (!next) return
 
 		this.handleMessage(
-			next.sessionId,
+			next.branchId,
 			next.text,
 			next.userMessageRowId
 		).catch(err => {
 			handleControllerError(
 				(type, payload) => this.trace(type, payload),
-				`cross_session_failed session=${next.sessionId}`,
-				'controller.cross_session_failed',
-				{ sessionId: next.sessionId },
+				`cross_branch_failed branch=${next.branchId}`,
+				'controller.cross_branch_failed',
+				{ branchId: next.branchId },
 				err
 			)
 		})
 	}
 
-	// ── Internal: error events ───────────────────────────────────────────────
-
 	private writeErrorEvent(
-		sessionId: string,
+		branchId: string,
 		runId: string,
 		error?: unknown
 	): void {
@@ -734,15 +705,14 @@ export class AgentController {
 				: String(error ?? 'Unknown error')
 
 		this.trace('controller.write_error_event', {
-			sessionId,
+			branchId,
 			runId,
 			errorMessage
 		})
 
-		// Write a visible error assistant_message so the client sees the failure
 		try {
 			this.store.appendEvent(
-				sessionId,
+				branchId,
 				'assistant_message',
 				{
 					message: {
@@ -752,20 +722,7 @@ export class AgentController {
 						],
 						provider: 'system',
 						model: 'system',
-						usage: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							totalTokens: 0,
-							cost: {
-								input: 0,
-								output: 0,
-								cacheRead: 0,
-								cacheWrite: 0,
-								total: 0
-							}
-						},
+						usage: EMPTY_USAGE,
 						stopReason: 'error' as const,
 						errorMessage,
 						timestamp: Date.now()
@@ -777,21 +734,21 @@ export class AgentController {
 		} catch (err) {
 			handleControllerError(
 				(type, payload) => this.trace(type, payload),
-				`write_error_message_failed session=${sessionId} runId=${runId}`,
+				`write_error_message_failed branch=${branchId} runId=${runId}`,
 				'controller.write_error_message_failed',
-				{ sessionId, runId },
+				{ branchId, runId },
 				err
 			)
 		}
 
 		try {
-			this.store.closeAgentRun(sessionId, runId)
+			this.store.closeAgentRun(branchId, runId)
 		} catch (err) {
 			handleControllerError(
 				(type, payload) => this.trace(type, payload),
-				`write_error_event_failed session=${sessionId} runId=${runId}`,
+				`write_error_event_failed branch=${branchId} runId=${runId}`,
 				'controller.write_error_event_failed',
-				{ sessionId, runId },
+				{ branchId, runId },
 				err
 			)
 		}

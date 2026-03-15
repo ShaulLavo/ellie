@@ -1,17 +1,8 @@
-/**
- * Bot mention detection for WhatsApp group messages.
- * Detects explicit @mentions, reply-to-self (implicit mention),
- * and body text fallback — matching OpenCLAW's isBotMentionedFromTargets.
- */
-
 import {
 	jidToE164,
 	type JidToE164Options
 } from './normalize'
 
-// ── Context info extraction ──────────────────────────────────────────
-
-/** Message types that carry contextInfo (subset of Baileys proto.IMessage) */
 const CONTEXT_INFO_KEYS = [
 	'extendedTextMessage',
 	'imageMessage',
@@ -65,8 +56,6 @@ export function extractReplyToSenderJid(
 	return ctx?.participant ?? undefined
 }
 
-// ── JID comparison helpers ───────────────────────────────────────────
-
 /**
  * Strip the device suffix from a JID for comparison.
  * "15550001111:0@s.whatsapp.net" → "15550001111@s.whatsapp.net"
@@ -75,9 +64,7 @@ function stripDeviceSuffix(jid: string): string {
 	return jid.replace(/:\d+@/, '@')
 }
 
-// ── Bot mention detection ────────────────────────────────────────────
-
-export type MentionCheckParams = {
+type MentionCheckParams = {
 	/** JIDs that were @mentioned in the message */
 	mentionedJids: string[] | undefined
 	/** The bot's own JID (sock.user.id) */
@@ -92,20 +79,12 @@ export type MentionCheckParams = {
 	jidOpts?: JidToE164Options
 }
 
-export type MentionCheckResult = {
+type MentionCheckResult = {
 	wasMentioned: boolean
 	/** True when replying to bot's own message */
 	implicitMention: boolean
 }
 
-/**
- * Check whether the bot was mentioned in a message.
- *
- * Detection logic (matching OpenCLAW):
- * 1. Explicit @mention: mentionedJids contains selfJid (bare) or selfE164
- * 2. Reply-to-self (implicit): replyToSenderJid matches selfJid or E.164
- * 3. Body text fallback: message body contains bot's phone number digits
- */
 export function checkBotMention(
 	params: MentionCheckParams
 ): MentionCheckResult {
@@ -125,7 +104,6 @@ export function checkBotMention(
 		? stripDeviceSuffix(selfJid)
 		: null
 
-	// 1. Explicit @mention check
 	if (mentionedJids?.length && bareSelfJid) {
 		for (const jid of mentionedJids) {
 			const bareJid = stripDeviceSuffix(jid)
@@ -143,7 +121,6 @@ export function checkBotMention(
 		}
 	}
 
-	// 2. Reply-to-self (implicit mention)
 	if (replyToSenderJid && bareSelfJid) {
 		const bareReply = stripDeviceSuffix(replyToSenderJid)
 		if (bareReply === bareSelfJid) {
@@ -156,7 +133,6 @@ export function checkBotMention(
 		}
 	}
 
-	// 3. Body text fallback — check if body contains bot's phone digits
 	if (!wasMentioned && !implicitMention && selfE164) {
 		const digits = selfE164.replace(/\D/g, '')
 		if (digits && body.includes(digits)) {

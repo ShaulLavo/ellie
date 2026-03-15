@@ -129,8 +129,6 @@ import type {
 	VisualFindHit
 } from './types'
 
-// ── Default config values ───────────────────────────────────────────────
-
 const HARDCODED_DEFAULTS: Required<BankConfig> = {
 	extractionMode: 'concise',
 	customGuidelines: null,
@@ -240,8 +238,6 @@ export class Hindsight {
 		)
 	}
 
-	// ── Config resolution ─────────────────────────────────────────────────
-
 	/**
 	 * Resolve effective config: call-site > bank config > instance defaults > hardcoded defaults
 	 */
@@ -269,8 +265,6 @@ export class Hindsight {
 			return {}
 		}
 	}
-
-	// ── Tracing ───────────────────────────────────────────────────────────
 
 	private async trace<T>(
 		operation: HindsightTrace['operation'],
@@ -317,8 +311,6 @@ export class Hindsight {
 			throw error
 		}
 	}
-
-	// ── Bank management ─────────────────────────────────────────────────
 
 	createBank(
 		name: string,
@@ -585,8 +577,6 @@ Instructions:
 		return { mission: mergedMission }
 	}
 
-	// ── Core operations ─────────────────────────────────────────────────
-
 	/**
 	 * Extract facts from content without storing them.
 	 * Returns facts in the `RetainOptions.facts` format so they can be
@@ -850,8 +840,6 @@ Instructions:
 		)
 	}
 
-	// ── Consolidation ───────────────────────────────────────────────────
-
 	async consolidate(
 		bankId: string,
 		options?: ConsolidateOptions
@@ -895,8 +883,6 @@ Instructions:
 			})
 		)
 	}
-
-	// ── Async Operations ───────────────────────────────────────────────
 
 	async submitAsyncRetain(
 		bankId: string,
@@ -1353,8 +1339,6 @@ Instructions:
 		return dedupResult
 	}
 
-	// ── Mental models ─────────────────────────────────────────────────
-
 	async createMentalModel(
 		bankId: string,
 		options: CreateMentalModelOptions
@@ -1430,8 +1414,6 @@ Instructions:
 		)
 	}
 
-	// ── Directives ──────────────────────────────────────────────────────
-
 	createDirective(
 		bankId: string,
 		options: CreateDirectiveOptions
@@ -1469,8 +1451,6 @@ Instructions:
 	deleteDirective(bankId: string, id: string): void {
 		deleteDirectiveImpl(this.hdb, bankId, id)
 	}
-
-	// ── API Parity Utilities ─────────────────────────────────────────────
 
 	listMemoryUnits(
 		bankId: string,
@@ -2085,8 +2065,6 @@ Instructions:
 		}
 	}
 
-	// ── Documents / Chunks / Graph ─────────────────────────────────────
-
 	listDocuments(
 		bankId: string,
 		options?: {
@@ -2456,8 +2434,6 @@ Instructions:
 		await this.extensions.onComplete(context)
 	}
 
-	// ── Episodes ────────────────────────────────────────────────────────
-
 	async listEpisodes(
 		bankId: string,
 		options?: Omit<ListEpisodesOptions, 'bankId'>
@@ -2489,8 +2465,6 @@ Instructions:
 			result => ({ eventCount: result.events.length })
 		)
 	}
-
-	// ── Location APIs (Phase 3) ─────────────────────────────────────────
 
 	async locationRecord(
 		bankId: string,
@@ -2529,8 +2503,6 @@ Instructions:
 		return locationStatsImpl(this.hdb, bankId, path, scope)
 	}
 
-	// ── Visual APIs (Phase 4) ────────────────────────────────────────────
-
 	async retainVisual(
 		input: VisualRetainInput
 	): Promise<VisualRetainResult> {
@@ -2555,14 +2527,10 @@ Instructions:
 		)
 	}
 
-	// ── Lifecycle ───────────────────────────────────────────────────────
-
 	close(): void {
 		this.hdb.sqlite.close()
 	}
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────────
 
 const DEFAULT_DISPOSITION: DispositionTraits = {
 	skepticism: 3,

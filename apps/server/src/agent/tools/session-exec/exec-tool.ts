@@ -21,8 +21,6 @@ import type {
 import { ReplRuntime } from '../../repl/repl-runtime'
 import { createReplTraceDeps } from './repl-trace-deps'
 
-// ── Schema ──────────────────────────────────────────────────────────────
-
 const execParams = v.object({
 	code: v.pipe(
 		v.string(),
@@ -41,8 +39,6 @@ const execParams = v.object({
 })
 
 type ExecParams = v.InferOutput<typeof execParams>
-
-// ── Factory ─────────────────────────────────────────────────────────────
 
 /**
  * Create the exec tool — one-shot isolated code execution.

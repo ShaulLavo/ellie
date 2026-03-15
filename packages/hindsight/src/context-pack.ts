@@ -13,16 +13,12 @@
  * 7. If top 2 exceed budget, return top 2 full texts only and set overflow=true.
  */
 
-// ── Token estimation ────────────────────────────────────────────────────────
-
 /**
  * Estimate token count for a string (~4 chars per token).
  */
 export function estimateTokens(text: string): number {
 	return Math.ceil(text.length / 4)
 }
-
-// ── Types ───────────────────────────────────────────────────────────────────
 
 export interface PackCandidate {
 	id: string
@@ -45,8 +41,6 @@ export interface PackResult {
 	totalTokensUsed: number
 	budgetRemaining: number
 }
-
-// ── Core packer ─────────────────────────────────────────────────────────────
 
 /**
  * Pack ranked candidates into a token budget.
@@ -134,8 +128,6 @@ export function packContext(
 	}
 }
 
-// ── Top-2 packing helper ───────────────────────────────────────────────────
-
 interface Top2Result {
 	entries: PackedMemory[]
 	totalTokens: number
@@ -170,8 +162,6 @@ function packTop2Candidates(
 		overflow: totalTokens > tokenBudget
 	}
 }
-
-// ── Slot-filling helper ────────────────────────────────────────────────────
 
 interface SlotFillResult {
 	gistSlots: PackedMemory[]
@@ -237,8 +227,6 @@ function fillGistAndBackfillSlots(
 	}
 }
 
-// ── Leftover budget reallocation coordinator ───────────────────────────────
-
 /**
  * Reallocate leftover budget from one bucket to the other (Step 6).
  * Mutates slots.gistSlots, slots.fullBackfillSlots, and usage counters.
@@ -273,8 +261,6 @@ function reallocateLeftoverBudgets(
 		)
 	}
 }
-
-// ── Budget reallocation helpers ──────────────────────────────────────────────
 
 /**
  * Use leftover gist budget to allocate skipped items as full or gist.
@@ -357,8 +343,6 @@ function reallocateFullBudget(
 	}
 	return gistUsed
 }
-
-// ── Gist fallback ───────────────────────────────────────────────────────────
 
 /**
  * Deterministic fallback gist: truncate to 280 chars with "...".

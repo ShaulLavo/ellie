@@ -4,8 +4,6 @@
 
 import * as v from 'valibot'
 
-// ── Speech artifact lifecycle ───────────────────────────────────────────────
-
 export const speechArtifactStatusSchema = v.picklist([
 	'draft',
 	'claimed',
@@ -15,8 +13,6 @@ export const speechArtifactStatusSchema = v.picklist([
 export type SpeechArtifactStatus = v.InferOutput<
 	typeof speechArtifactStatusSchema
 >
-
-// ── Speech metadata (persisted on user_message) ─────────────────────────────
 
 export const speechMetadataSchema = v.object({
 	ref: v.string(),
@@ -33,8 +29,6 @@ export const speechMetadataSchema = v.object({
 export type SpeechMetadata = v.InferOutput<
 	typeof speechMetadataSchema
 >
-
-// ── Transcription endpoint response ─────────────────────────────────────────
 
 export const transcriptionResponseSchema = v.object({
 	text: v.string(),

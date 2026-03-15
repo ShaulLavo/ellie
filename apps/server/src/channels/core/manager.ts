@@ -19,19 +19,16 @@ import type { FileStore } from '@ellie/tus'
 import { Upload } from '@ellie/tus'
 import type { UserMessage } from '@ellie/schemas/agent'
 
-export interface ChannelManagerOptions {
+interface ChannelManagerOptions {
 	dataDir: string
 	store: RealtimeStore
 	getAgentController: () => Promise<AgentController | null>
-	ensureBootstrap: (
-		sessionId: string,
-		runId: string
-	) => void
+	ensureBootstrap: (branchId: string, runId: string) => void
 	deliveryRegistry: ChannelDeliveryRegistry
 	uploadStore?: FileStore
 }
 
-/** Dedupe cache TTL — entries older than this are pruned (matching OpenCLAW) */
+/** Dedupe cache TTL — entries older than this are pruned */
 const DEDUPE_TTL_MS = 20 * 60_000
 /** Dedupe cache max entries — oldest are evicted when exceeded */
 const DEDUPE_MAX_SIZE = 5_000
@@ -47,12 +44,12 @@ export class ChannelManager {
 	readonly #store: RealtimeStore
 	readonly #getAgentController: () => Promise<AgentController | null>
 	readonly #ensureBootstrap: (
-		sessionId: string,
+		branchId: string,
 		runId: string
 	) => void
 	readonly #deliveryRegistry: ChannelDeliveryRegistry
 	readonly #uploadStore?: FileStore
-	/** In-memory dedupe cache with TTL + max-size eviction (matching OpenCLAW) */
+	/** In-memory dedupe cache with TTL + max-size eviction */
 	readonly #seenDedupeKeys = new Map<string, number>()
 
 	constructor(opts: ChannelManagerOptions) {
@@ -63,8 +60,6 @@ export class ChannelManager {
 		this.#deliveryRegistry = opts.deliveryRegistry
 		this.#uploadStore = opts.uploadStore
 	}
-
-	// ── Provider registry ─────────────────────────────────────────────
 
 	register(provider: ChannelProvider): void {
 		this.#providers.set(provider.id, provider)
@@ -81,8 +76,6 @@ export class ChannelManager {
 	get dataDir(): string {
 		return this.#dataDir
 	}
-
-	// ── Settings persistence ──────────────────────────────────────────
 
 	channelDir(channelId: string): string {
 		return join(this.#dataDir, 'channels', channelId)
@@ -144,8 +137,6 @@ export class ChannelManager {
 			.map(d => d.name)
 	}
 
-	// ── Boot ──────────────────────────────────────────────────────────
-
 	async bootAll(): Promise<void> {
 		for (const provider of this.#providers.values()) {
 			try {
@@ -192,13 +183,50 @@ export class ChannelManager {
 		}
 	}
 
-	// ── Ingestion (called by providers on inbound message) ────────────
-
 	async ingestMessage(
 		msg: ChannelInboundMessage
 	): Promise<void> {
-		const sessionId = this.#store.getCurrentSessionId()
-		this.#store.ensureSession(sessionId)
+		// Resolve thread via thread_channels attachment table first
+		const conversationKey =
+			msg.conversationId ??
+			`${msg.channelId}:${msg.accountId}`
+		const attachedThreadId =
+			this.#store.eventStore.findActiveChannelThread(
+				msg.channelId,
+				msg.accountId,
+				conversationKey
+			)
+
+		let branchId: string
+
+		if (attachedThreadId) {
+			// Channel already attached to a thread — use its first branch
+			const branchList = this.#store.listBranches(
+				attachedThreadId
+			)
+			if (branchList.length === 0) {
+				throw new Error(
+					`Attached thread ${attachedThreadId} has no branches`
+				)
+			}
+			branchId = branchList[0]!.id
+		} else {
+			// No attachment — fall back to default assistant thread
+			// and create the attachment row for future routing
+			const assistant =
+				this.#store.getDefaultAssistantThread()
+			if (!assistant)
+				throw new Error('No default assistant thread')
+			branchId = assistant.branchId
+			this.#store.eventStore.attachChannel(
+				assistant.threadId,
+				msg.channelId,
+				msg.accountId,
+				conversationKey
+			)
+		}
+
+		this.#store.ensureBranch(branchId)
 
 		// Dedupe key: use externalId (e.g. WhatsApp msg ID) when available,
 		// otherwise fall back to content hash with a 2s window based on message timestamp
@@ -266,7 +294,7 @@ export class ChannelManager {
 		}
 
 		const row = this.#store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user' as const,
@@ -286,20 +314,15 @@ export class ChannelManager {
 		)
 
 		const controller = await this.#getAgentController()
-		if (!controller) {
-			console.warn(
-				'[channels] Agent not available, dropping inbound message'
-			)
-			return
-		}
+		if (!controller) return
 
 		const result = await controller.handleMessage(
-			sessionId,
+			branchId,
 			msg.text,
 			row.id
 		)
 
-		this.#ensureBootstrap(sessionId, result.runId)
+		this.#ensureBootstrap(branchId, result.runId)
 
 		// Register delivery target so reply routes back through this channel
 		const deliveryTarget = {
@@ -315,33 +338,31 @@ export class ChannelManager {
 			// Idle — runId is the actual answering run
 			this.#deliveryRegistry.register(
 				result.runId,
-				sessionId,
+				branchId,
 				deliveryTarget
 			)
 		} else if (result.routed === 'followUp') {
-			// Same-session follow-up — register pending only.
+			// Same-branch follow-up — register pending only.
 			// The drain run will backfill the runId and promote it.
 			// (Don't register against activeRunId — that run may be
 			// answering a different conversation's message.)
 			this.#deliveryRegistry.registerPending(
 				row.id,
-				sessionId,
+				branchId,
 				deliveryTarget
 			)
 		} else {
-			// Queued cross-session — bind when runId is backfilled
+			// Queued cross-branch — bind when runId is backfilled
 			this.#deliveryRegistry.registerPending(
 				row.id,
-				sessionId,
+				branchId,
 				deliveryTarget
 			)
 		}
 
-		// Ensure we're watching this session for run completions + backfills
-		this.#deliveryRegistry.watchSession(sessionId)
+		// Ensure we're watching this branch for run completions + backfills
+		this.#deliveryRegistry.watchBranch(branchId)
 	}
-
-	// ── Media ingestion ─────────────────────────────────────────────
 
 	/**
 	 * Copy a local media file into the upload store and return a
@@ -438,8 +459,6 @@ export class ChannelManager {
 			path: filePath
 		}
 	}
-
-	// ── Dedupe cache maintenance ─────────────────────────────────────
 
 	#pruneDedupeCache(now: number): void {
 		// TTL eviction

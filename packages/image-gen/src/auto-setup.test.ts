@@ -16,8 +16,6 @@ import {
 } from './auto-setup'
 import type { ProgressFn } from './auto-setup'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 function makeTmpDir(): string {
 	const dir = join(
 		tmpdir(),
@@ -43,8 +41,6 @@ function collectProgress(): {
 	}
 	return { calls, fn }
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('findPython', () => {
 	test('finds a Python 3.10+ installation', async () => {

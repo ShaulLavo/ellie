@@ -43,6 +43,8 @@ import {
 import {
 	scopeMatches,
 	resolveScope,
+	DEFAULT_PROFILE,
+	DEFAULT_PROJECT,
 	type ScopeMode
 } from './scope'
 import { searchVisual, recordVisualAccess } from './visual'
@@ -320,7 +322,6 @@ export async function recall(
 	let rankedCandidates: RankedCandidate[]
 
 	if (mode === 'cognitive') {
-		// ── Cognitive scoring path ──────────────────────────────────────────
 		// Build semantic similarity map from the original retrieval hits
 		const semanticScoreById = new Map<string, number>()
 		for (const hit of semanticTimed.hits) {
@@ -406,7 +407,6 @@ export async function recall(
 			}
 		})
 	} else {
-		// ── Hybrid scoring path (unchanged) ─────────────────────────────────
 		const rrfMin = Math.min(
 			...fused.map(candidate => candidate.score)
 		)
@@ -501,7 +501,6 @@ export async function recall(
 		})
 	}
 
-	// ── Phase 3: Location boost ───────────────────────────────────────────────
 	// Only applied when query contains location signals (file paths, module tokens)
 	const locationBoostStart = Date.now()
 	const locationSignals = detectLocationSignals(query)
@@ -573,7 +572,6 @@ export async function recall(
 		}
 	})
 
-	// ── Phase 3: Scope resolution ──────────────────────────────────────────────
 	const effectiveScope = options.scope
 		? resolveScope(options.scope)
 		: undefined
@@ -704,8 +702,8 @@ export async function recall(
 			if (
 				!scopeMatches(
 					{
-						profile: row.scopeProfile,
-						project: row.scopeProject
+						profile: row.scopeProfile ?? DEFAULT_PROFILE,
+						project: row.scopeProject ?? DEFAULT_PROJECT
 					},
 					effectiveScope,
 					scopeMode
@@ -764,7 +762,6 @@ export async function recall(
 		}
 	})
 
-	// ── Phase 3: Token budget packing ──────────────────────────────────────────
 	// When tokenBudget is specified, apply the gist-first context packing policy
 	const tokenBudget = (options as RecallOptionsWithScope)
 		.tokenBudget
@@ -829,7 +826,6 @@ export async function recall(
 		})
 	}
 
-	// ── Phase 4: Visual fusion ──────────────────────────────────────────────
 	// When includeVisual=true and visualVec is available, search visual
 	// embeddings and inject up to 20% of the final result set.
 	const VISUAL_MAX_SHARE_CAP = 0.2
@@ -866,7 +862,6 @@ export async function recall(
 		})
 	}
 
-	// ── Access write-through (both modes) ────────────────────────────────────
 	// For returned memories only: increment access_count, update last_accessed,
 	// bump encoding_strength (capped at 3.0). Executed synchronously before return.
 	const returnedIds = memories.map(m => m.memory.id)
@@ -874,7 +869,6 @@ export async function recall(
 		updateAccessMetadata(hdb, returnedIds, now)
 	}
 
-	// ── Working memory touch (cognitive mode only) ──────────────────────────
 	if (
 		mode === 'cognitive' &&
 		workingMemory != null &&
@@ -889,7 +883,6 @@ export async function recall(
 		)
 	}
 
-	// ── Phase 4: Visual access history write-through ──────────────────────
 	if (visualResults.length > 0) {
 		recordVisualAccess(
 			hdb,

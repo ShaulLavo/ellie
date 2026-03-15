@@ -102,12 +102,12 @@ func RenderTranscript(t Transcript) string {
 
 // SaveTranscript writes the transcript to a file in the given directory.
 // Returns the file path on success.
-func SaveTranscript(messages []StoredMessage, sessionID, dir string) (string, error) {
+func SaveTranscript(messages []StoredMessage, branchID, dir string) (string, error) {
 	transcript := MessagesToTranscript(messages)
 	text := RenderTranscript(transcript)
 
 	date := time.Now().Format("2006-01-02")
-	filename := fmt.Sprintf("transcript-%s-%s.txt", sessionID, date)
+	filename := fmt.Sprintf("transcript-%s-%s.txt", branchID, date)
 	path := filepath.Join(dir, filename)
 
 	if err := os.WriteFile(path, []byte(text), 0644); err != nil {

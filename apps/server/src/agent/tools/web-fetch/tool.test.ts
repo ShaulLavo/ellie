@@ -12,8 +12,6 @@ function textOf(result: AgentToolResult): string {
 describe('web_fetch tool', () => {
 	const tool = createWebFetchTool()
 
-	// ── Wikipedia ────────────────────────────────────────────────────
-
 	test('fetches a Wikipedia page via extracts API', async () => {
 		const result = await tool.execute('tc-wiki', {
 			url: 'https://en.wikipedia.org/wiki/TypeScript'
@@ -83,8 +81,6 @@ describe('web_fetch tool', () => {
 		expect(details.source).toBe('wikipedia-rest')
 	}, 15_000)
 
-	// ── Reddit ───────────────────────────────────────────────────────
-
 	test('Reddit: fetches subreddit listing', async () => {
 		const result = await tool.execute('tc-reddit-sub', {
 			url: 'https://www.reddit.com/r/typescript'
@@ -133,8 +129,6 @@ describe('web_fetch tool', () => {
 		expect(details.source).toBe('reddit-json')
 	}, 15_000)
 
-	// ── HTML (browser) ──────────────────────────────────────────────
-
 	test('renders SPA pages via headless browser', async () => {
 		const result = await tool.execute('tc-spa', {
 			url: 'https://react.dev/learn'
@@ -154,8 +148,6 @@ describe('web_fetch tool', () => {
 		expect(result.details).toHaveProperty('success', false)
 	}, 15_000)
 
-	// ── PDF ──────────────────────────────────────────────────────────
-
 	test('extracts markdown from a PDF', async () => {
 		const result = await tool.execute('tc-pdf', {
 			url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
@@ -170,8 +162,6 @@ describe('web_fetch tool', () => {
 		}
 		expect(details.contentType).toBe('application/pdf')
 	}, 15_000)
-
-	// ── Media ────────────────────────────────────────────────────────
 
 	test('returns URL reference for image content', async () => {
 		const result = await tool.execute('tc-media', {
@@ -188,8 +178,6 @@ describe('web_fetch tool', () => {
 		}
 		expect(details.contentType).toContain('image/png')
 	}, 15_000)
-
-	// ── HTTP errors ──────────────────────────────────────────────────
 
 	test('handles non-OK HTTP responses', async () => {
 		const result = await tool.execute('tc-404', {

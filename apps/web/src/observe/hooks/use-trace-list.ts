@@ -5,7 +5,7 @@ export function useTraceList() {
 	return useQuery({
 		queryKey: ['traces', 'list'],
 		queryFn: async () => {
-			const res = await eden.traces.list.get()
+			const res = await eden.api.traces.list.get()
 			if (res.error) throw new Error(String(res.error))
 			return res.data
 		}

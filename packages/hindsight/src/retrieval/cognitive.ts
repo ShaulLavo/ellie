@@ -16,12 +16,8 @@ import type { HindsightDatabase } from '../db'
 import { inArray } from 'drizzle-orm'
 import { clamp } from '../util'
 
-// ── Constants ──────────────────────────────────────────────────────────────
-
 /** Decay time constant: 7 days in milliseconds */
 const TAU_MS = 604_800_000
-
-// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface CognitiveCandidate {
 	id: string
@@ -48,8 +44,6 @@ interface LinkRow {
 	targetId: string
 	weight: number
 }
-
-// ── Pure scoring helpers ───────────────────────────────────────────────────
 
 /**
  * Probe activation: power-law transform of semantic similarity.
@@ -120,8 +114,6 @@ export function computeCognitiveScore(
 ): number {
 	return 0.5 * probe + 0.35 * base + 0.15 * spread
 }
-
-// ── Main scorer ────────────────────────────────────────────────────────────
 
 /**
  * Score and rank candidates using cognitive (ACT-R) model.
@@ -214,8 +206,6 @@ export function scoreCognitive(
 
 	return results
 }
-
-// ── DB helpers ─────────────────────────────────────────────────────────────
 
 /**
  * Load all links where BOTH source and target are in the candidate set.

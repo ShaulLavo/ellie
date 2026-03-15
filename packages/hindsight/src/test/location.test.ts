@@ -65,8 +65,6 @@ afterEach(() => {
 	test.cleanup()
 })
 
-// ── Path normalization ──────────────────────────────────────────────────────
-
 describe('normalizePath', () => {
 	it('trims whitespace', () => {
 		expect(normalizePath('  src/foo.ts  ')).toBe(
@@ -111,8 +109,6 @@ describe('normalizePath', () => {
 		expect(normalizePath('  ')).toBe('')
 	})
 })
-
-// ── Query signal detection ──────────────────────────────────────────────────
 
 describe('detectLocationSignals', () => {
 	it('detects absolute file paths', () => {
@@ -181,8 +177,6 @@ describe('hasLocationSignals', () => {
 		)
 	})
 })
-
-// ── Location record + find + stats ──────────────────────────────────────────
 
 describe('locationRecord', () => {
 	it('creates a new path entry', () => {
@@ -343,8 +337,6 @@ describe('locationStats', () => {
 	})
 })
 
-// ── Signal resolution to paths ──────────────────────────────────────────────
-
 describe('resolveSignalsToPaths', () => {
 	it('resolves exact match signals', () => {
 		const hdb = getHdb(test.hs)
@@ -384,8 +376,6 @@ describe('resolveSignalsToPaths', () => {
 		expect(map.size).toBe(0)
 	})
 })
-
-// ── Boost computation ───────────────────────────────────────────────────────
 
 describe('computeLocationBoostBatch', () => {
 	it('returns empty map when no query paths provided', () => {

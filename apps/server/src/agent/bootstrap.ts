@@ -5,7 +5,7 @@
  * On first ever message, injects a single completed tool_execution event
  * containing the BOOTSTRAP.md content. Uses a dedupeKey for exactly-once
  * semantics. The bootstrap state in DB tracks whether injection has occurred
- * globally (not per-session).
+ * globally (not per-branch).
  */
 
 import type { EventStore } from '@ellie/db'
@@ -16,20 +16,20 @@ const AGENT_ID = 'main'
 
 /**
  * Ensure bootstrap has been injected. Call before persisting the
- * first user message in a session.
+ * first user message in a branch.
  *
  * Returns true if bootstrap was injected in this call, false if
  * already done (or not needed).
  */
 export function ensureBootstrapInjected(opts: {
-	sessionId: string
+	branchId: string
 	runId: string
 	store: RealtimeStore
 	eventStore: EventStore
 	workspaceDir: string
 }): boolean {
 	const {
-		sessionId,
+		branchId,
 		runId,
 		store,
 		eventStore,
@@ -39,7 +39,7 @@ export function ensureBootstrapInjected(opts: {
 	// Atomic claim — returns false if already injected
 	const claimed = eventStore.claimBootstrapInjection(
 		AGENT_ID,
-		sessionId
+		branchId
 	)
 	if (!claimed) return false
 
@@ -61,7 +61,7 @@ export function ensureBootstrapInjected(opts: {
 	try {
 		// Append a single completed tool_execution event
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolCallId: 'bootstrap-read-v1',

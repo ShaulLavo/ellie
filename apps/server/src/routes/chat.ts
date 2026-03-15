@@ -1,5 +1,5 @@
 /**
- * Chat routes — sessions, messages, and SSE event streams.
+ * Chat routes — branches, messages, and SSE event streams.
  *
  * Security: This application runs exclusively on localhost. No authentication
  * is required — all routes are accessible only from the local machine.
@@ -10,7 +10,7 @@ import { hash } from 'ohash'
 import * as v from 'valibot'
 import type {
 	RealtimeStore,
-	SessionEvent
+	BranchEvent
 } from '../lib/realtime-store'
 import type { AgentController } from '../agent/controller'
 import type { EventStore } from '@ellie/db'
@@ -19,22 +19,20 @@ import {
 	type UserMessage
 } from '@ellie/schemas/agent'
 import {
-	sessionParamsSchema,
+	branchParamsSchema,
 	afterSeqQuerySchema,
 	eventsQuerySchema,
 	messageInputSchema,
 	normalizeMessageInput,
-	resolveSessionId,
 	toStreamGenerator,
 	type SseState
 } from './common'
 import { errorSchema } from './schemas/common-schemas'
 import {
-	sessionSchema,
-	sessionListSchema,
+	branchSchema,
 	eventRowListSchema,
 	postMessageResponseSchema,
-	clearSessionResponseSchema
+	clearBranchResponseSchema
 } from './schemas/chat-schemas'
 import {
 	BadRequestError,
@@ -45,659 +43,436 @@ import {
 import type { FileStore } from '@ellie/tus'
 import { join } from 'node:path'
 import { generateThumbHash } from '../lib/thumbhash'
-
-/** Extract width/height from common image format headers. */
-function extractImageDimensions(
-	buf: Buffer
-): { width: number; height: number } | undefined {
-	// PNG: bytes 16-23 contain width (4 bytes BE) and height (4 bytes BE) in IHDR
-	if (
-		buf.length >= 24 &&
-		buf[0] === 0x89 &&
-		buf[1] === 0x50
-	) {
-		return {
-			width: buf.readUInt32BE(16),
-			height: buf.readUInt32BE(20)
-		}
-	}
-
-	// GIF: bytes 6-9 contain width and height (2 bytes LE each)
-	if (
-		buf.length >= 10 &&
-		buf[0] === 0x47 &&
-		buf[1] === 0x49 &&
-		buf[2] === 0x46
-	) {
-		return {
-			width: buf.readUInt16LE(6),
-			height: buf.readUInt16LE(8)
-		}
-	}
-
-	// WebP: RIFF....WEBP header, then VP8 chunk
-	if (
-		buf.length >= 30 &&
-		buf.toString('ascii', 0, 4) === 'RIFF' &&
-		buf.toString('ascii', 8, 12) === 'WEBP'
-	) {
-		// VP8 (lossy)
-		if (buf.toString('ascii', 12, 15) === 'VP8') {
-			if (buf[15] === 0x20 && buf.length >= 30) {
-				return {
-					width: buf.readUInt16LE(26) & 0x3fff,
-					height: buf.readUInt16LE(28) & 0x3fff
-				}
-			}
-			// VP8L (lossless)
-			if (buf[15] === 0x4c && buf.length >= 25) {
-				const bits = buf.readUInt32LE(21)
-				return {
-					width: (bits & 0x3fff) + 1,
-					height: ((bits >> 14) & 0x3fff) + 1
-				}
-			}
-		}
-	}
-
-	// JPEG: scan for SOF0/SOF2 marker
-	if (
-		buf.length >= 2 &&
-		buf[0] === 0xff &&
-		buf[1] === 0xd8
-	) {
-		let offset = 2
-		while (offset < buf.length - 1) {
-			if (buf[offset] !== 0xff) break
-			const marker = buf[offset + 1]
-			if (
-				(marker >= 0xc0 &&
-					marker <= 0xc3 &&
-					offset + 9 < buf.length) ||
-				(marker === 0xc5 && offset + 9 < buf.length)
-			) {
-				return {
-					height: buf.readUInt16BE(offset + 5),
-					width: buf.readUInt16BE(offset + 7)
-				}
-			}
-			if (marker === 0xd9 || marker === 0xda) break
-			const segLen = buf.readUInt16BE(offset + 2)
-			offset += 2 + segLen
-		}
-	}
-
-	return undefined
-}
-
-/** Read a TUS upload into a Buffer. */
-async function readUploadBytes(
-	uploadStore: FileStore,
-	uploadId: string
-): Promise<Buffer> {
-	const stream = uploadStore.read(uploadId)
-	const chunks: Uint8Array[] = []
-	for await (const chunk of stream) {
-		chunks.push(
-			chunk instanceof Uint8Array
-				? chunk
-				: new Uint8Array(chunk as ArrayBuffer)
-		)
-	}
-	return Buffer.concat(chunks)
-}
+import { extractImageDimensions } from '../lib/image-dimensions'
+import {
+	readUploadBytes,
+	isTextContent
+} from '../lib/attachment-resolver'
+import { todayDayKey } from '../init'
+import { validateSpeechArtifact } from '../lib/speech-validation'
+import { requireLoopback } from './loopback-guard'
 
 function buildUploadUrl(uploadId: string): string {
 	return `/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`
 }
 
-/** Check if a MIME type represents text-based content the model can read. */
-const TEXT_MIME_PREFIXES = [
-	'text/',
-	'application/json',
-	'application/xml',
-	'application/javascript',
-	'application/typescript',
-	'application/x-yaml',
-	'application/toml',
-	'application/sql'
-]
-
-/** Extensions browsers commonly misidentify (e.g. .ts → video/mp2t). */
-const TEXT_EXTENSIONS = new Set([
-	'.ts',
-	'.tsx',
-	'.js',
-	'.jsx',
-	'.mjs',
-	'.cjs',
-	'.json',
-	'.yaml',
-	'.yml',
-	'.toml',
-	'.xml',
-	'.md',
-	'.mdx',
-	'.txt',
-	'.csv',
-	'.tsv',
-	'.html',
-	'.htm',
-	'.css',
-	'.scss',
-	'.less',
-	'.py',
-	'.rb',
-	'.rs',
-	'.go',
-	'.java',
-	'.kt',
-	'.c',
-	'.h',
-	'.cpp',
-	'.hpp',
-	'.cs',
-	'.swift',
-	'.sh',
-	'.bash',
-	'.zsh',
-	'.fish',
-	'.sql',
-	'.graphql',
-	'.gql',
-	'.env',
-	'.ini',
-	'.cfg',
-	'.conf',
-	'.vue',
-	'.svelte',
-	'.astro'
-])
-
-function isTextContent(
-	mime: string,
-	filename?: string
-): boolean {
-	if (TEXT_MIME_PREFIXES.some(p => mime.startsWith(p)))
-		return true
-	if (filename) {
-		const ext = filename
-			.slice(filename.lastIndexOf('.'))
-			.toLowerCase()
-		if (TEXT_EXTENSIONS.has(ext)) return true
-	}
-	return false
+export interface ChatRoutesDeps {
+	store: RealtimeStore
+	sseState: SseState
+	getAgentController?: () => Promise<AgentController | null>
+	ensureBootstrap?: (
+		branchId: string,
+		runId: string
+	) => void
+	uploadStore?: FileStore
+	eventStore?: EventStore
 }
 
-export function createChatRoutes(
-	store: RealtimeStore,
-	sseState: SseState,
-	getAgentController?: () => Promise<AgentController | null>,
-	ensureBootstrap?: (
-		sessionId: string,
-		runId: string
-	) => void,
-	uploadStore?: FileStore,
-	eventStore?: EventStore
-) {
-	return (
-		new Elysia({ prefix: '/chat', tags: ['Chat'] })
+export function createChatRoutes(deps: ChatRoutesDeps) {
+	const {
+		store,
+		sseState,
+		getAgentController,
+		ensureBootstrap,
+		uploadStore,
+		eventStore
+	} = deps
+	return new Elysia({ prefix: '/api/chat', tags: ['Chat'] })
+		.onBeforeHandle(requireLoopback)
 
-			// ── Sessions CRUD ───────────────────────────────────────────────
-
-			.post(
-				'/sessions',
-				() => {
-					const session = store.createSession()
-					return session
-				},
-				{
-					response: { 200: sessionSchema }
+		.get(
+			'/branches/:branchId',
+			({ params }) => {
+				const branchId = params.branchId
+				const branch = store.getBranch(branchId)
+				if (!branch) {
+					throw new NotFoundError('Branch not found')
 				}
-			)
-
-			.get(
-				'/sessions',
-				() => {
-					return store.listSessions()
-				},
-				{
-					response: { 200: sessionListSchema }
+				return branch
+			},
+			{
+				params: branchParamsSchema,
+				response: {
+					200: branchSchema,
+					404: errorSchema
 				}
-			)
+			}
+		)
 
-			.get(
-				'/sessions/:sessionId',
-				({ params }) => {
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
-					)
-					const session = store.getSession(sessionId)
-					if (!session) {
-						throw new NotFoundError('Session not found')
-					}
-					return session
-				},
-				{
-					params: sessionParamsSchema,
-					response: {
-						200: sessionSchema,
-						404: errorSchema
-					}
+		.get(
+			'/branches/:branchId/messages',
+			({ params }) => {
+				const branchId = params.branchId
+				return store.listAgentMessages(branchId)
+			},
+			{
+				params: branchParamsSchema,
+				response: {
+					200: v.array(agentMessageSchema)
 				}
-			)
+			}
+		)
 
-			// ── Messages ────────────────────────────────────────────────────
+		.post(
+			'/branches/:branchId/messages',
+			async ({ params, body }) => {
+				const branchId = params.branchId
+				const input = normalizeMessageInput(body)
+				store.ensureBranch(branchId)
 
-			.get(
-				'/:sessionId/messages',
-				({ params }) => {
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
-					)
-					return store.listAgentMessages(sessionId)
-				},
-				{
-					params: sessionParamsSchema,
-					response: {
-						200: v.array(agentMessageSchema)
+				// Reject writes to view_only threads
+				const branch = store.getBranch(branchId)
+				if (branch) {
+					const thread = store.getThread(branch.threadId)
+					if (thread?.state === 'view_only') {
+						throw new BadRequestError(
+							'Cannot post to a view-only thread'
+						)
 					}
 				}
-			)
 
-			.post(
-				'/:sessionId/messages',
-				async ({ params, body }) => {
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
-					)
-					const input = normalizeMessageInput(body)
-					store.ensureSession(sessionId)
-
-					// Build content parts: text + attachments
-					const contentParts: UserMessage['content'] = []
-					const trimmed = input.content.trim()
-					if (trimmed) {
-						contentParts.push({
-							type: 'text',
-							text: trimmed
-						})
-					}
-					if (input.attachments && uploadStore) {
-						for (const att of input.attachments) {
-							const mime = att.mime
-							const filePath = join(
+				// Build content parts: text + attachments
+				const contentParts: UserMessage['content'] = []
+				const trimmed = input.content.trim()
+				if (trimmed) {
+					contentParts.push({
+						type: 'text',
+						text: trimmed
+					})
+				}
+				if (input.attachments && uploadStore) {
+					for (const att of input.attachments) {
+						const mime = att.mime
+						const base = {
+							file: att.uploadId,
+							url: buildUploadUrl(att.uploadId),
+							mime: att.mime,
+							size: att.size,
+							name: att.name,
+							path: join(
 								uploadStore.directory,
 								att.uploadId
 							)
-							if (mime.startsWith('image/')) {
-								// Read image data as base64 so the model can see it
-								const bytes = await readUploadBytes(
-									uploadStore,
-									att.uploadId
-								)
-								const dims = extractImageDimensions(bytes)
-								const hash = await generateThumbHash(
-									bytes
-								).catch(() => undefined)
-								contentParts.push({
-									type: 'image',
-									file: att.uploadId,
-									url: buildUploadUrl(att.uploadId),
-									mime: att.mime,
-									size: att.size,
-									name: att.name,
-									path: filePath,
-									data: bytes.toString('base64'),
-									mimeType: att.mime,
-									...(dims && {
-										width: dims.width,
-										height: dims.height
-									}),
-									...(hash && { hash })
-								})
-							} else if (isTextContent(mime, att.name)) {
-								// Store as file attachment (renders as card in UI)
-								// but embed textContent so the model can read it
-								const bytes = await readUploadBytes(
-									uploadStore,
-									att.uploadId
-								)
-								const textContent =
-									new TextDecoder().decode(bytes)
-								contentParts.push({
-									type: 'file',
-									file: att.uploadId,
-									url: buildUploadUrl(att.uploadId),
-									mime: att.mime,
-									size: att.size,
-									name: att.name,
-									path: filePath,
-									textContent
-								})
-							} else if (mime.startsWith('video/')) {
-								contentParts.push({
-									type: 'video',
-									file: att.uploadId,
-									url: buildUploadUrl(att.uploadId),
-									mime: att.mime,
-									size: att.size,
-									name: att.name,
-									path: filePath
-								})
-							} else if (mime.startsWith('audio/')) {
-								contentParts.push({
-									type: 'audio',
-									file: att.uploadId,
-									url: buildUploadUrl(att.uploadId),
-									mime: att.mime,
-									size: att.size,
-									name: att.name,
-									path: filePath
-								})
-							} else {
-								contentParts.push({
-									type: 'file',
-									file: att.uploadId,
-									url: buildUploadUrl(att.uploadId),
-									mime: att.mime,
-									size: att.size,
-									name: att.name,
-									path: filePath
-								})
-							}
 						}
-					}
-
-					// Resolve speech metadata from speechRef (if provided)
-					let speechMeta: UserMessage['speech'] | undefined
-					if (input.speechRef && eventStore) {
-						const artifact = eventStore.speechArtifacts.get(
-							input.speechRef
-						)
-						if (!artifact || artifact.status !== 'draft') {
-							throw new BadRequestError(
-								'Invalid or already-claimed speechRef'
+						if (mime.startsWith('image/')) {
+							const bytes = await readUploadBytes(
+								uploadStore,
+								att.uploadId
 							)
-						}
-						// Runtime-validate artifact fields against expected values
-						const VALID_SOURCES = ['microphone'] as const
-						const VALID_FLOWS = [
-							'transcript-first'
-						] as const
-						const VALID_NORMALIZED_BY = [
-							'client-mediabunny',
-							'server-ffmpeg',
-							'none'
-						] as const
-
-						const source = (
-							VALID_SOURCES as readonly string[]
-						).includes(artifact.source)
-							? (artifact.source as (typeof VALID_SOURCES)[number])
-							: 'microphone'
-						const flow = (
-							VALID_FLOWS as readonly string[]
-						).includes(artifact.flow)
-							? (artifact.flow as (typeof VALID_FLOWS)[number])
-							: 'transcript-first'
-						const normalizedBy = (
-							VALID_NORMALIZED_BY as readonly string[]
-						).includes(artifact.normalizedBy)
-							? (artifact.normalizedBy as (typeof VALID_NORMALIZED_BY)[number])
-							: 'none'
-
-						speechMeta = {
-							ref: artifact.id,
-							source,
-							flow,
-							mime: artifact.mime,
-							normalizedBy
+							const dims = extractImageDimensions(bytes)
+							const hash = await generateThumbHash(
+								bytes
+							).catch(() => undefined)
+							contentParts.push({
+								...base,
+								type: 'image',
+								data: bytes.toString('base64'),
+								mimeType: att.mime,
+								...(dims && {
+									width: dims.width,
+									height: dims.height
+								}),
+								...(hash && { hash })
+							})
+						} else if (isTextContent(mime, att.name)) {
+							const bytes = await readUploadBytes(
+								uploadStore,
+								att.uploadId
+							)
+							contentParts.push({
+								...base,
+								type: 'file',
+								textContent: new TextDecoder().decode(bytes)
+							})
+						} else if (mime.startsWith('video/')) {
+							contentParts.push({
+								...base,
+								type: 'video'
+							})
+						} else if (mime.startsWith('audio/')) {
+							contentParts.push({
+								...base,
+								type: 'audio'
+							})
+						} else {
+							contentParts.push({
+								...base,
+								type: 'file'
+							})
 						}
 					}
+				}
 
-					// Persist user message BEFORE bootstrap so the client
-					// sees the user bubble first, then the synthetic tool call.
-					// Dedupe key: reject rapid-fire duplicate POSTs with the
-					// same content (e.g. key repeat on Enter). Window ~ 2s.
-					const dedupeWindow = Math.floor(Date.now() / 2000)
-					const contentHash = hash(input.content)
-					const dedupeKey = `user_msg:${sessionId}:${dedupeWindow}:${contentHash}`
-
-					const beforeAppend = Date.now()
-					const row = store.appendEvent(
-						sessionId,
-						'user_message',
-						{
-							role: 'user',
-							content: contentParts,
-							timestamp: beforeAppend,
-							...(speechMeta ? { speech: speechMeta } : {})
-						},
-						undefined, // runId — backfilled later by controller
-						dedupeKey
+				// Resolve speech metadata from speechRef (if provided)
+				let speechMeta: UserMessage['speech'] | undefined
+				if (input.speechRef && eventStore) {
+					const artifact = eventStore.speechArtifacts.get(
+						input.speechRef
 					)
-
-					// Claim the speech artifact now that the event is persisted
-					if (speechMeta && eventStore) {
-						const claimed =
-							eventStore.speechArtifacts.claim(
-								speechMeta.ref,
-								row.id,
-								sessionId
-							)
-						if (!claimed) {
-							console.warn(
-								`[chat] Speech artifact claim race: ref=${speechMeta.ref} sessionId=${sessionId} eventId=${row.id} — artifact was already claimed or expired`
-							)
-						}
-					}
-
-					// Dedupe hit: appendEvent returned an existing row
-					// (createdAt will be older than our beforeAppend timestamp)
-					if (row.createdAt < beforeAppend) {
-						return {
-							id: row.id,
-							seq: row.seq,
-							sessionId: row.sessionId,
-							deduplicated: true
-						}
-					}
-
-					// Route the message directly to the agent controller.
-					// handleMessage backfills the runId on the user_message row.
-					let result:
-						| {
-								runId: string
-								routed: 'prompt' | 'followUp' | 'queued'
-								traceId?: string
-						  }
-						| undefined
-					try {
-						const controller = await getAgentController?.()
-						if (!controller) {
-							throw new ServiceUnavailableError(
-								'Agent is not available — check API credentials'
-							)
-						}
-						result = await controller.handleMessage(
-							sessionId,
-							input.content,
-							row.id
-						)
-					} catch (err) {
-						if (err instanceof HttpError) throw err
+					if (!artifact || artifact.status !== 'draft') {
 						throw new BadRequestError(
-							err instanceof Error
-								? err.message
-								: 'Message routing failed'
+							'Invalid or already-claimed speechRef'
 						)
 					}
+					speechMeta = validateSpeechArtifact(artifact)
+				}
 
-					if (result) {
-						ensureBootstrap?.(sessionId, result.runId)
+				// Persist user message BEFORE bootstrap so the client
+				// sees the user bubble first, then the synthetic tool call.
+				const dedupeWindow = Math.floor(Date.now() / 2000)
+				const contentHash = hash(input.content)
+				const dedupeKey = `user_msg:${branchId}:${dedupeWindow}:${contentHash}`
+
+				const beforeAppend = Date.now()
+				const row = store.appendEvent(
+					branchId,
+					'user_message',
+					{
+						role: 'user',
+						content: contentParts,
+						timestamp: beforeAppend,
+						...(speechMeta ? { speech: speechMeta } : {})
+					},
+					undefined, // runId — backfilled later by controller
+					dedupeKey
+				)
+
+				// Claim the speech artifact now that the event is persisted
+				if (speechMeta && eventStore) {
+					const claimed = eventStore.speechArtifacts.claim(
+						speechMeta.ref,
+						row.id,
+						branchId
+					)
+					if (!claimed) {
+						console.warn(
+							`[chat] Speech artifact claim race: ref=${speechMeta.ref} branchId=${branchId} eventId=${row.id} — artifact was already claimed or expired`
+						)
 					}
+				}
 
+				// Dedupe hit: appendEvent returned an existing row
+				if (row.createdAt < beforeAppend) {
 					return {
 						id: row.id,
 						seq: row.seq,
-						sessionId: row.sessionId,
-						...(result
-							? {
-									runId: result.runId,
-									traceId: result.traceId,
-									routed: result.routed
-								}
-							: {})
-					}
-				},
-				{
-					params: sessionParamsSchema,
-					body: messageInputSchema,
-					response: {
-						200: postMessageResponseSchema,
-						400: errorSchema
+						branchId: row.branchId,
+						deduplicated: true
 					}
 				}
-			)
 
-			.delete(
-				'/:sessionId/messages',
-				({ params }) => {
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
-					)
-					store.deleteSession(sessionId)
-					return new Response(null, { status: 204 })
-				},
-				{ params: sessionParamsSchema }
-			)
-
-			// ── Events (replay cursor + SSE) ────────────────────────────────
-
-			.get(
-				'/:sessionId/events',
-				({ params, query }) => {
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
-					)
-					const afterSeq = query.afterSeq
-					const limit = query.limit
-						? Number(query.limit)
-						: undefined
-					return store.queryEvents(
-						sessionId,
-						afterSeq,
-						undefined,
-						limit
-					)
-				},
-				{
-					params: sessionParamsSchema,
-					query: eventsQuerySchema,
-					response: { 200: eventRowListSchema }
-				}
-			)
-
-			.get(
-				'/:sessionId/events/sse',
-				({ params, query, request }) => {
-					const isCurrent = params.sessionId === 'current'
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
-					)
-					const afterSeq = query.afterSeq
-
-					const existingEvents = store.queryEvents(
-						sessionId,
-						afterSeq
-					)
-
-					// For 'current' connections, create a combined abort
-					// signal that fires on rotation OR client disconnect.
-					// This wakes toStreamGenerator's blocking wait so the
-					// client reconnects to the new session.
-					let effectiveRequest = request
-					let unsubRotation: (() => void) | undefined
-					if (isCurrent) {
-						const ac = new AbortController()
-						const abort = ac.abort.bind(ac)
-						request.signal.addEventListener(
-							'abort',
-							abort,
-							{ once: true }
+				// Route the message directly to the agent controller.
+				let result:
+					| {
+							runId: string
+							routed: 'prompt' | 'followUp' | 'queued'
+							traceId?: string
+					  }
+					| undefined
+				try {
+					const controller = await getAgentController?.()
+					if (!controller) {
+						throw new ServiceUnavailableError(
+							'Agent is not available — check API credentials'
 						)
-						unsubRotation = store.subscribeToRotation(abort)
-						effectiveRequest = new Request(request.url, {
-							signal: ac.signal
-						})
 					}
+					result = await controller.handleMessage(
+						branchId,
+						input.content,
+						row.id
+					)
+				} catch (err) {
+					if (err instanceof HttpError) throw err
+					throw new BadRequestError(
+						err instanceof Error
+							? err.message
+							: 'Message routing failed'
+					)
+				}
 
-					const stream = toStreamGenerator<SessionEvent>(
-						effectiveRequest,
-						sseState,
-						listener => {
-							const unsubSession = store.subscribeToSession(
-								sessionId,
-								listener
-							)
-							// Bundle rotation cleanup with session
-							// unsubscribe so both are cleaned up by
-							// toStreamGenerator's finally block.
-							return () => {
-								unsubSession()
-								unsubRotation?.()
+				if (result) {
+					ensureBootstrap?.(branchId, result.runId)
+				}
+
+				return {
+					id: row.id,
+					seq: row.seq,
+					branchId: row.branchId,
+					...(result
+						? {
+								runId: result.runId,
+								traceId: result.traceId,
+								routed: result.routed
 							}
-						},
-						event => ({
-							event: event.type,
-							data: event.event
-						}),
-						{
-							event: 'snapshot',
-							data: {
-								sessionId,
-								events: existingEvents
-							}
+						: {})
+				}
+			},
+			{
+				params: branchParamsSchema,
+				body: messageInputSchema,
+				response: {
+					200: postMessageResponseSchema,
+					400: errorSchema
+				}
+			}
+		)
+
+		.delete(
+			'/branches/:branchId/messages',
+			({ params }) => {
+				const branchId = params.branchId
+				store.deleteBranch(branchId)
+				return new Response(null, { status: 204 })
+			},
+			{ params: branchParamsSchema }
+		)
+
+		.post(
+			'/branches/:branchId/fork',
+			({ params, body }) => {
+				const branchId = params.branchId
+				const branch = store.getBranch(branchId)
+				if (!branch) {
+					throw new NotFoundError('Branch not found')
+				}
+				const thread = store.getThread(branch.threadId)
+				if (thread?.agentType === 'assistant') {
+					throw new BadRequestError(
+						'Cannot fork assistant thread branches'
+					)
+				}
+				const child = store.forkBranch(
+					branchId,
+					body.fromEventId,
+					body.fromSeq
+				)
+				return child
+			},
+			{
+				params: branchParamsSchema,
+				body: v.object({
+					fromEventId: v.number(),
+					fromSeq: v.number()
+				}),
+				response: {
+					200: branchSchema
+				}
+			}
+		)
+
+		.get(
+			'/branches/:branchId/events',
+			({ params, query }) => {
+				const branchId = params.branchId
+				const afterSeq = query.afterSeq
+				const limit = query.limit
+					? Number(query.limit)
+					: undefined
+				return store.queryLineageEvents(
+					branchId,
+					afterSeq,
+					undefined,
+					limit
+				)
+			},
+			{
+				params: branchParamsSchema,
+				query: eventsQuerySchema,
+				response: { 200: eventRowListSchema }
+			}
+		)
+
+		.get(
+			'/branches/:branchId/events/sse',
+			({ params, query, request }) => {
+				const branchId = params.branchId
+				const afterSeq = query.afterSeq
+
+				// Use lineage-aware query so forked branches
+				// include inherited ancestor events in the snapshot
+				const existingEvents = store.queryLineageEvents(
+					branchId,
+					afterSeq
+				)
+
+				const stream = toStreamGenerator<BranchEvent>(
+					request,
+					sseState,
+					listener =>
+						store.subscribeToBranch(branchId, listener),
+					event => ({
+						event: event.type,
+						data: event.event
+					}),
+					{
+						event: 'snapshot',
+						data: {
+							branchId,
+							events: existingEvents
 						}
-					)
+					}
+				)
 
-					return sse(stream)
-				},
-				{
-					params: sessionParamsSchema,
-					query: afterSeqQuerySchema
+				return sse(stream)
+			},
+			{
+				params: branchParamsSchema,
+				query: afterSeqQuerySchema
+			}
+		)
+
+		.post(
+			'/branches/:branchId/clear',
+			({ params }) => {
+				const branchId = params.branchId
+				const branch = store.getBranch(branchId)
+				if (!branch) {
+					throw new NotFoundError('Branch not found')
 				}
-			)
+				const thread = store.getThread(branch.threadId)
+				if (!thread) {
+					throw new NotFoundError('Thread not found')
+				}
 
-			// ── Session lifecycle ────────────────────────────────────────────
+				const previousThreadId = thread.id
 
-			.post(
-				'/:sessionId/clear',
-				({ params }) => {
-					const sessionId = resolveSessionId(
-						store,
-						params.sessionId
+				// For assistant threads, rotate via the standard
+				// path so default pointer and channels move correctly
+				if (thread.agentType === 'assistant') {
+					const result = store.rotateAssistantThread(
+						thread.agentId,
+						thread.workspaceId,
+						todayDayKey()
 					)
-					store.deleteSession(sessionId)
-					const session = store.createSession(sessionId)
 					return {
-						sessionId: session.id,
-						cleared: true
-					}
-				},
-				{
-					params: sessionParamsSchema,
-					response: {
-						200: clearSessionResponseSchema
+						threadId: result.threadId,
+						branchId: result.branchId,
+						previousThreadId
 					}
 				}
-			)
-	)
+
+				// Non-assistant threads: mark old thread view_only
+				// and create a fresh thread + root branch
+				store.eventStore.updateThread(previousThreadId, {
+					state: 'view_only'
+				})
+				const result = store.createThreadWithBranch(
+					thread.agentId,
+					thread.agentType,
+					thread.workspaceId,
+					thread.title ?? undefined
+				)
+				return {
+					threadId: result.threadId,
+					branchId: result.branchId,
+					previousThreadId
+				}
+			},
+			{
+				params: branchParamsSchema,
+				response: {
+					200: clearBranchResponseSchema
+				}
+			}
+		)
 }

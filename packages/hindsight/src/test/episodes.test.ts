@@ -21,8 +21,6 @@ import {
 import { detectBoundary } from '../episodes'
 import type { EpisodeRow } from '../schema'
 
-// ── Helper: create a fake episode row for boundary detection ─────────────────
-
 function fakeEpisode(
 	overrides: Partial<EpisodeRow> = {}
 ): EpisodeRow {
@@ -40,8 +38,6 @@ function fakeEpisode(
 		...overrides
 	}
 }
-
-// ── Boundary detection (pure) ────────────────────────────────────────────────
 
 describe('detectBoundary', () => {
 	it('returns needsNew=true with reason=initial when no last episode', () => {
@@ -181,8 +177,6 @@ describe('detectBoundary', () => {
 		expect(result.reason).toBe('phrase_boundary')
 	})
 })
-
-// ── Integration: episodes via retain ─────────────────────────────────────────
 
 describe('episodes via retain integration', () => {
 	let t: TestHindsight

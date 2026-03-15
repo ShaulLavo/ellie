@@ -64,7 +64,6 @@ type InvokeFn = (
 	request?: Request
 ) => Promise<unknown> | unknown
 
-// ── Trace propagation types ─────────────────────────────────────────────────
 // Structural match for @ellie/trace types — no import needed.
 
 /** Trace scope for propagation via HTTP headers. */
@@ -184,8 +183,6 @@ const listEpisodesQuerySchema = v.object({
 	limit: v.optional(v.string()),
 	cursor: v.optional(v.string())
 })
-
-// ── Handler groups ──────────────────────────────────────────────────────────
 
 function createBankHandlers(
 	hs: Hindsight
@@ -580,8 +577,6 @@ export function createHindsightHandlers(
 	}
 }
 
-// ── Route groups ────────────────────────────────────────────────────────────
-
 function bankAndMemoryRoutes(invoke: InvokeFn) {
 	return new Elysia()
 		.post(
@@ -752,8 +747,6 @@ function extensionRoutes(invoke: InvokeFn) {
 		)
 }
 
-// ── Error handling ──────────────────────────────────────────────────────────
-
 function resolveValidationSummary(
 	error: { validator: unknown; value: unknown },
 	request: Request
@@ -773,8 +766,6 @@ function errorStatus(error: unknown): number {
 	if (error instanceof SyntaxError) return 400
 	return 500
 }
-
-// ── App factory ─────────────────────────────────────────────────────────────
 
 export function createHindsightApp(
 	hs: Hindsight,

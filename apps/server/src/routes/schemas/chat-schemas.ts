@@ -1,19 +1,39 @@
 import * as v from 'valibot'
 
-// ── Chat response schemas ───────────────────────────────────────────────────
-
-export const sessionSchema = v.object({
+export const threadSchema = v.object({
 	id: v.string(),
+	agentId: v.string(),
+	agentType: v.string(),
+	workspaceId: v.string(),
+	title: v.nullable(v.string()),
+	state: v.string(),
+	dayKey: v.nullable(v.string()),
+	originThreadId: v.nullable(v.string()),
+	originBranchId: v.nullable(v.string()),
+	originRunId: v.nullable(v.string()),
+	originAgentId: v.nullable(v.string()),
 	createdAt: v.number(),
-	updatedAt: v.number(),
-	currentSeq: v.number()
+	updatedAt: v.number()
 })
 
-export const sessionListSchema = v.array(sessionSchema)
+export const threadListSchema = v.array(threadSchema)
 
-export const eventRowSchema = v.object({
+export const branchSchema = v.object({
+	id: v.string(),
+	threadId: v.string(),
+	parentBranchId: v.nullable(v.string()),
+	forkedFromEventId: v.nullable(v.number()),
+	forkedFromSeq: v.nullable(v.number()),
+	currentSeq: v.number(),
+	createdAt: v.number(),
+	updatedAt: v.number()
+})
+
+export const branchListSchema = v.array(branchSchema)
+
+const eventRowSchema = v.object({
 	id: v.number(),
-	sessionId: v.string(),
+	branchId: v.string(),
 	seq: v.number(),
 	runId: v.nullable(v.string()),
 	type: v.string(),
@@ -27,7 +47,7 @@ export const eventRowListSchema = v.array(eventRowSchema)
 export const postMessageResponseSchema = v.object({
 	id: v.number(),
 	seq: v.number(),
-	sessionId: v.string(),
+	branchId: v.string(),
 	runId: v.optional(v.string()),
 	traceId: v.optional(v.string()),
 	routed: v.optional(
@@ -36,7 +56,8 @@ export const postMessageResponseSchema = v.object({
 	deduplicated: v.optional(v.boolean())
 })
 
-export const clearSessionResponseSchema = v.object({
-	sessionId: v.string(),
-	cleared: v.literal(true)
+export const clearBranchResponseSchema = v.object({
+	threadId: v.string(),
+	branchId: v.string(),
+	previousThreadId: v.string()
 })

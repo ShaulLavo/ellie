@@ -14,8 +14,6 @@ import type {
 	ScenarioSummary
 } from './types'
 
-// ── Scenario weights (committed and immutable for v1) ─────────────────────
-
 const GLOBAL_WEIGHTS: Record<Scenario, number> = {
 	follow_up_recall: 0.3,
 	temporal_narrative: 0.2,
@@ -24,8 +22,6 @@ const GLOBAL_WEIGHTS: Record<Scenario, number> = {
 	token_budget_packing: 0.15
 }
 
-// ── Primary metric per scenario (used for global score) ───────────────────
-
 export const PRIMARY_METRIC: Record<Scenario, string> = {
 	follow_up_recall: 'mrr',
 	temporal_narrative: 'orderingAccuracy',
@@ -33,8 +29,6 @@ export const PRIMARY_METRIC: Record<Scenario, string> = {
 	code_location_recall: 'pathRecall@k',
 	token_budget_packing: 'factRetentionRate'
 }
-
-// ── Precision helpers ─────────────────────────────────────────────────────
 
 /** Round a number to 6 decimal places to avoid IEEE 754 artifacts in serialized output. */
 function roundMetric(v: number): number {
@@ -51,14 +45,10 @@ function roundMetrics(
 	return rounded
 }
 
-// ── Penalty metrics (lower is better) ──────────────────────────────────────
-
 const PENALTY_METRICS = new Set([
 	'duplicateLeakRate',
 	'truncationLossRate'
 ])
-
-// ── Report generation ─────────────────────────────────────────────────────
 
 export interface GenerateReportOptions {
 	config: EvalRunConfig
@@ -247,8 +237,6 @@ function formatCandidateTable(
 	}
 	lines.push('')
 }
-
-// ── Markdown report ───────────────────────────────────────────────────────
 
 /**
  * Format an EvalReport as a human-readable Markdown summary.

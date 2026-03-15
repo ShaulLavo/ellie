@@ -19,7 +19,7 @@ export interface DeliveryTtsDeps {
 
 export async function preparePayloadsForDelivery(
 	payload: ChannelReplyPayload,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	inboundAudio: boolean,
 	useRunTtsPostProcessor: boolean,
@@ -32,7 +32,7 @@ export async function preparePayloadsForDelivery(
 			payload,
 			useRunTtsPostProcessor,
 			runId,
-			sessionId,
+			branchId,
 			deps,
 			assistantRowId
 		)
@@ -45,11 +45,11 @@ export async function preparePayloadsForDelivery(
 	return [autoTtsPayload]
 }
 
-export async function prepareExplicitTtsPayloads(
+async function prepareExplicitTtsPayloads(
 	payload: ChannelReplyPayload,
 	useRunTtsPostProcessor: boolean,
 	runId: string,
-	sessionId: string,
+	branchId: string,
 	deps: DeliveryTtsDeps,
 	assistantRowId?: number
 ): Promise<ChannelReplyPayload[]> {
@@ -68,11 +68,11 @@ export async function prepareExplicitTtsPayloads(
 		try {
 			await deps.ttsPostProcessor.processRun(
 				runId,
-				sessionId
+				branchId
 			)
 			const audioPayload = extractAssistantAudioPayload(
 				deps.store,
-				sessionId,
+				branchId,
 				runId,
 				assistantRowId
 			)
@@ -97,7 +97,7 @@ export async function prepareExplicitTtsPayloads(
 	return [basePayload]
 }
 
-export async function resolveTtsConfig(
+async function resolveTtsConfig(
 	credentialsPath: string | undefined
 ): Promise<ElevenLabsTtsConfig> {
 	const config = resolveElevenLabsTtsConfig()
@@ -108,13 +108,13 @@ export async function resolveTtsConfig(
 	return config
 }
 
-export function extractAssistantAudioPayload(
+function extractAssistantAudioPayload(
 	store: RealtimeStore,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	assistantRowId?: number
 ): ChannelReplyPayload | null {
-	const rows = store.queryRunEvents(sessionId, runId)
+	const rows = store.queryRunEvents(branchId, runId)
 	for (const row of rows) {
 		if (row.type !== 'assistant_artifact') continue
 		let parsed: Record<string, unknown>
@@ -144,7 +144,7 @@ export function extractAssistantAudioPayload(
 }
 
 /** Apply auto-TTS to a payload if configured. Non-fatal on error. */
-export async function applyAutoTts(
+async function applyAutoTts(
 	payload: ChannelReplyPayload,
 	inboundAudio: boolean,
 	deps: Pick<

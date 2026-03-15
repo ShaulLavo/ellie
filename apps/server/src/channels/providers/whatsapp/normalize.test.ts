@@ -110,8 +110,6 @@ describe('jidToE164', () => {
 		expect(jidToE164('')).toBeNull()
 	})
 
-	// ── @hosted user JIDs ────────────────────────────────────────
-
 	test('@hosted user JID extracts E.164', () => {
 		expect(jidToE164('15550001111@hosted')).toBe(
 			'+15550001111'
@@ -123,8 +121,6 @@ describe('jidToE164', () => {
 			'+15550001111'
 		)
 	})
-
-	// ── LID fallback (matching OpenCLAW) ─────────────────────────
 
 	test('LID JID without authDir falls back to digits as E.164', () => {
 		expect(jidToE164('118696035008721@lid')).toBe(
@@ -143,8 +139,6 @@ describe('jidToE164', () => {
 			'+118696035008721'
 		)
 	})
-
-	// ── LID resolution via auth dir (matching openclaw) ──────────
 
 	describe('with authDir (LID reverse mapping)', () => {
 		let authDir: string
@@ -340,8 +334,6 @@ describe('lidBaseNumber', () => {
 	})
 })
 
-// ── isWhatsAppGroupJid ──────────────────────────────────────────────
-
 describe('isWhatsAppGroupJid', () => {
 	test('numeric group JID', () => {
 		expect(isWhatsAppGroupJid('120363123456@g.us')).toBe(
@@ -371,8 +363,6 @@ describe('isWhatsAppGroupJid', () => {
 		expect(isWhatsAppGroupJid('abc@g.us')).toBe(false)
 	})
 })
-
-// ── isWhatsAppUserTarget ────────────────────────────────────────────
 
 describe('isWhatsAppUserTarget', () => {
 	test('standard user JID', () => {
@@ -421,8 +411,6 @@ describe('isWhatsAppUserTarget', () => {
 		expect(isWhatsAppUserTarget('+15550001111')).toBe(false)
 	})
 })
-
-// ── normalizeWhatsAppTarget ─────────────────────────────────────────
 
 describe('normalizeWhatsAppTarget', () => {
 	test('bare phone → E.164', () => {
@@ -473,7 +461,7 @@ describe('normalizeWhatsAppTarget', () => {
 		).toBe('+15550001111')
 	})
 
-	test('LID JID → E.164 (matching OpenCLAW)', () => {
+	test('LID JID → E.164', () => {
 		expect(
 			normalizeWhatsAppTarget('118696035008721@lid')
 		).toBe('+118696035008721')
@@ -525,8 +513,6 @@ describe('normalizeWhatsAppTarget', () => {
 		expect(normalizeWhatsAppTarget('')).toBeNull()
 	})
 })
-
-// ── readSelfId ──────────────────────────────────────────────────────
 
 describe('readSelfId', () => {
 	let authDir: string

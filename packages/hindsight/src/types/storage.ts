@@ -1,5 +1,3 @@
-// ── Document & Graph Storage Records ──────────────────────────────────────
-
 export interface DocumentRecord {
 	id: string
 	bankId: string
@@ -38,8 +36,6 @@ export interface GraphEdge {
 	weight: number
 }
 
-// ── Entity & Tag Management ──────────────────────────────────────────────
-
 export interface ClearObservationsResult {
 	deletedCount: number
 }
@@ -73,8 +69,6 @@ export interface ListTagsResult {
 	limit: number
 	offset: number
 }
-
-// ── Async Operations ─────────────────────────────────────────────────────
 
 export type AsyncOperationType =
 	| 'retain'

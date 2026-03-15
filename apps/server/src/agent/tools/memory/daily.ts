@@ -22,8 +22,6 @@ import {
 	appendFileSync
 } from 'node:fs'
 
-// ── Schema ──────────────────────────────────────────────────────────────
-
 const params = v.object({
 	entries: v.pipe(
 		v.array(v.string()),
@@ -35,8 +33,6 @@ const params = v.object({
 })
 
 type Params = v.InferOutput<typeof params>
-
-// ── Factory ─────────────────────────────────────────────────────────────
 
 export function createMemoryAppendDailyTool(
 	workspaceDir: string
@@ -113,8 +109,6 @@ export function createMemoryAppendDailyTool(
 		}
 	}
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────────
 
 function todayDateString(): string {
 	const now = new Date()

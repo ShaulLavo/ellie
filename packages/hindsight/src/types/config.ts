@@ -9,8 +9,6 @@ export interface TranscriptTurn {
 /** Supported retain content input. */
 export type RetainContentInput = string | TranscriptTurn[]
 
-// ── Meta-Path Graph Retrieval ─────────────────────────────────────────────
-
 /** Direction constraint for a meta-path step */
 export type LinkDirection = 'forward' | 'backward' | 'both'
 
@@ -34,8 +32,6 @@ export interface MetaPath {
 	weight?: number
 }
 
-// ── Embedding & Ranking ──────────────────────────────────────────────────
-
 /** User-provided embedding function: text → float array */
 export type EmbedFunction = (
 	text: string
@@ -50,8 +46,6 @@ export type RerankFunction = (
 	query: string,
 	documents: string[]
 ) => Promise<number[]>
-
-// ── Tracing ───────────────────────────────────────────────────────────────
 
 /** Trace emitted after each core operation completes */
 export interface HindsightTrace {

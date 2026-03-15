@@ -41,12 +41,8 @@ import type {
 	RollingIngestEvent
 } from './phase2-types'
 
-// ── Constants ────────────────────────────────────────────────────────────
-
 const EVAL_EMBED_DIMS = 16
 const DATASET_SEED = 42
-
-// ── Deterministic embedding ─────────────────────────────────────────────
 
 function deterministicEmbed(
 	text: string
@@ -55,8 +51,6 @@ function deterministicEmbed(
 		hashEmbed(text, EVAL_EMBED_DIMS, true)
 	)
 }
-
-// ── Ingest Runner ───────────────────────────────────────────────────────
 
 /**
  * Run rolling ingest events through a fresh Hindsight instance and
@@ -132,8 +126,6 @@ export async function runRollingIngest(
 		}
 	}
 }
-
-// ── Verification Run ─────────────────────────────────────────────────────
 
 export interface RunPhase2VerificationOptions {
 	outputDir: string
@@ -267,8 +259,6 @@ export async function runPhase2Verification(
 
 	return run
 }
-
-// ── Comparison Runner ───────────────────────────────────────────────────
 
 /**
  * Compare baseline and candidate verification runs.

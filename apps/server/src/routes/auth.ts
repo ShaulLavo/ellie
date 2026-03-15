@@ -1,16 +1,3 @@
-/**
- * Auth routes for Anthropic credential management.
- *
- * All endpoints are under /api/auth and restricted to localhost.
- * The CLI calls these routes — no credential writing happens client-side.
- *
- * Security: The entire application runs exclusively on localhost, so most
- * routes need no auth guard. Auth routes use a localhost guard as
- * defense-in-depth for credential handling specifically — API keys and
- * tokens pass through these endpoints, so the guard prevents accidental
- * exposure if the server were ever bound to a non-loopback interface.
- */
-
 import { Elysia } from 'elysia'
 import {
 	loadAnthropicCredential,
@@ -20,19 +7,15 @@ import {
 	loadGroqCredential,
 	setGroqCredential,
 	clearGroqCredential,
-	type GroqCredential,
 	loadBraveCredential,
 	setBraveCredential,
 	clearBraveCredential,
-	type BraveCredential,
 	loadElevenLabsCredential,
 	setElevenLabsCredential,
 	clearElevenLabsCredential,
-	type ElevenLabsCredential,
 	loadCivitaiCredential,
 	setCivitaiCredential,
-	clearCivitaiCredential,
-	type CivitaiCredential
+	clearCivitaiCredential
 } from '@ellie/ai/credentials'
 import {
 	oauthAuthorize,
@@ -52,82 +35,311 @@ import {
 	authOAuthAuthorizeResponseSchema,
 	authOAuthExchangeBodySchema,
 	authOAuthExchangeResponseSchema,
-	groqAuthStatusResponseSchema,
-	groqAuthClearResponseSchema,
-	groqAuthApiKeyBodySchema,
-	groqAuthApiKeyResponseSchema,
-	braveAuthStatusResponseSchema,
-	braveAuthClearResponseSchema,
-	braveAuthApiKeyBodySchema,
-	braveAuthApiKeyResponseSchema,
-	elevenlabsAuthStatusResponseSchema,
-	elevenlabsAuthClearResponseSchema,
-	elevenlabsAuthApiKeyBodySchema,
-	elevenlabsAuthApiKeyResponseSchema,
-	civitaiAuthStatusResponseSchema,
-	civitaiAuthClearResponseSchema,
-	civitaiAuthApiKeyBodySchema,
-	civitaiAuthApiKeyResponseSchema
+	providerAuthStatusResponseSchema,
+	providerAuthClearResponseSchema,
+	providerAuthApiKeyBodySchema,
+	providerAuthApiKeyResponseSchema
 } from './schemas/auth-schemas'
 import {
 	BadRequestError,
-	ForbiddenError,
 	InternalServerError,
 	UnauthorizedError
 } from './http-errors'
-
-// ── Localhost guard (defense-in-depth for credential endpoints) ──────────────
-
-/** Real client IP addresses considered loopback (IPv4, IPv6, IPv4-mapped IPv6). */
-const LOOPBACK_ADDRS = new Set([
-	'127.0.0.1',
-	'::1',
-	'::ffff:127.0.0.1'
-])
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+import { requireLoopback } from './loopback-guard'
 
 function keyPreview(key: string): string {
 	if (key.length <= 16) return `${key.slice(0, 4)}...`
 	return `${key.slice(0, 12)}...${key.slice(-4)}`
 }
 
-/**
- * Validate an Anthropic API key via GET /v1/models.
- * Returns an error string if invalid, or null if acceptable.
- */
-async function validateAnthropicApiKey(
-	key: string
-): Promise<string | null> {
-	try {
-		const res = await fetch(
-			'https://api.anthropic.com/v1/models',
+// ---------------------------------------------------------------------------
+// Generic provider auth routes factory (api_key-only providers)
+// ---------------------------------------------------------------------------
+
+interface ProviderConfig {
+	/** Route prefix, e.g. "groq" -> /api/auth/groq */
+	name: string
+	/** Environment variable names to check for the key */
+	envVars: string[]
+	/** Load credential from file */
+	load: (
+		path: string
+	) => Promise<{ type: 'api_key'; key: string } | null>
+	/** Save credential to file */
+	set: (
+		path: string,
+		cred: { type: 'api_key'; key: string }
+	) => Promise<{ ok: true } | { ok: false; error: string }>
+	/** Clear credential from file */
+	clear: (path: string) => Promise<boolean>
+	/** Validate the API key against the provider, returns error string or null */
+	validate: (key: string) => Promise<string | null>
+}
+
+function createProviderAuthRoutes(
+	config: ProviderConfig,
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return new Elysia({
+		prefix: `/api/auth/${config.name}`,
+		tags: ['Auth']
+	})
+		.onBeforeHandle(requireLoopback)
+
+		.get(
+			'/status',
+			async () => {
+				for (const envName of config.envVars) {
+					const envKey = process.env[envName]
+					if (envKey) {
+						return {
+							mode: 'api_key' as const,
+							source: 'env_api_key' as const,
+							configured: true,
+							preview: keyPreview(envKey)
+						}
+					}
+				}
+
+				const cred = await config.load(credentialsPath)
+				if (!cred) {
+					return {
+						mode: null,
+						source: 'none' as const,
+						configured: false
+					}
+				}
+
+				return {
+					mode: 'api_key' as const,
+					source: 'file' as const,
+					configured: true,
+					preview: keyPreview(cred.key)
+				}
+			},
 			{
-				method: 'GET',
-				headers: {
-					'x-api-key': key,
-					'anthropic-version': '2023-06-01'
+				response: {
+					200: providerAuthStatusResponseSchema,
+					403: errorSchema
 				}
 			}
 		)
-		if (res.status === 401) {
-			return 'Invalid API key (401 from Anthropic)'
+
+		.post(
+			'/clear',
+			async () => {
+				const cleared = await config.clear(credentialsPath)
+				if (cleared) onCredentialChange?.()
+				return { cleared }
+			},
+			{
+				response: {
+					200: providerAuthClearResponseSchema,
+					403: errorSchema
+				}
+			}
+		)
+
+		.post(
+			'/api-key',
+			async ({ body }) => {
+				const { key, validate = true } = body
+
+				if (validate) {
+					const invalid = await config.validate(key.trim())
+					if (invalid) {
+						throw new UnauthorizedError(invalid)
+					}
+				}
+
+				const cred = {
+					type: 'api_key' as const,
+					key: key.trim()
+				}
+				const result = await config.set(
+					credentialsPath,
+					cred
+				)
+				if (!result.ok) {
+					throw new InternalServerError(result.error)
+				}
+
+				onCredentialChange?.()
+				return {
+					ok: true as const,
+					mode: 'api_key' as const
+				}
+			},
+			{
+				body: providerAuthApiKeyBodySchema,
+				response: {
+					200: providerAuthApiKeyResponseSchema,
+					400: errorSchema,
+					401: errorSchema,
+					403: errorSchema,
+					500: errorSchema
+				}
+			}
+		)
+}
+
+// ---------------------------------------------------------------------------
+// Validation helpers per provider
+// ---------------------------------------------------------------------------
+
+async function validateWithFetch(
+	url: string,
+	headers: Record<string, string>,
+	providerLabel: string,
+	failStatuses: number[] = [401]
+): Promise<string | null> {
+	try {
+		const res = await fetch(url, {
+			method: 'GET',
+			headers
+		})
+		if (failStatuses.includes(res.status)) {
+			return `Invalid API key (${res.status} from ${providerLabel})`
 		}
-		// Any non-401 response is acceptable
 		return null
 	} catch (err) {
-		// Network errors shouldn't block saving
 		console.warn(
-			'[auth] API key validation network error:',
+			`[auth] ${providerLabel} API key validation network error:`,
 			err instanceof Error ? err.message : err
 		)
 		return null
 	}
 }
 
-// ── Route factory ────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Provider configs
+// ---------------------------------------------------------------------------
 
-// ── Anthropic auth handlers ─────────────────────────────────────────────────
+const groqConfig: ProviderConfig = {
+	name: 'groq',
+	envVars: ['GROQ_API_KEY'],
+	load: loadGroqCredential,
+	set: setGroqCredential,
+	clear: clearGroqCredential,
+	validate: key =>
+		validateWithFetch(
+			'https://api.groq.com/openai/v1/models',
+			{ Authorization: `Bearer ${key}` },
+			'Groq'
+		)
+}
+
+const braveConfig: ProviderConfig = {
+	name: 'brave',
+	envVars: ['BRAVE_API_KEY'],
+	load: loadBraveCredential,
+	set: setBraveCredential,
+	clear: clearBraveCredential,
+	validate: key =>
+		validateWithFetch(
+			'https://api.search.brave.com/res/v1/web/search?q=test&count=1',
+			{
+				Accept: 'application/json',
+				'X-Subscription-Token': key
+			},
+			'Brave',
+			[401, 403]
+		)
+}
+
+const elevenlabsConfig: ProviderConfig = {
+	name: 'elevenlabs',
+	envVars: ['ELEVENLABS_API_KEY', 'XI_API_KEY'],
+	load: loadElevenLabsCredential,
+	set: setElevenLabsCredential,
+	clear: clearElevenLabsCredential,
+	validate: key =>
+		validateWithFetch(
+			'https://api.elevenlabs.io/v1/voices',
+			{ 'xi-api-key': key },
+			'ElevenLabs'
+		)
+}
+
+const civitaiConfig: ProviderConfig = {
+	name: 'civitai',
+	envVars: ['CIVITAI_TOKEN'],
+	load: loadCivitaiCredential,
+	set: setCivitaiCredential,
+	clear: clearCivitaiCredential,
+	validate: key =>
+		validateWithFetch(
+			'https://civitai.com/api/v1/models?limit=1',
+			{ Authorization: `Bearer ${key}` },
+			'CivitAI'
+		)
+}
+
+// ---------------------------------------------------------------------------
+// Exported route constructors
+// ---------------------------------------------------------------------------
+
+export function createGroqAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return createProviderAuthRoutes(
+		groqConfig,
+		credentialsPath,
+		onCredentialChange
+	)
+}
+
+export function createBraveAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return createProviderAuthRoutes(
+		braveConfig,
+		credentialsPath,
+		onCredentialChange
+	)
+}
+
+export function createElevenLabsAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return createProviderAuthRoutes(
+		elevenlabsConfig,
+		credentialsPath,
+		onCredentialChange
+	)
+}
+
+export function createCivitaiAuthRoutes(
+	credentialsPath: string,
+	onCredentialChange?: () => void
+) {
+	return createProviderAuthRoutes(
+		civitaiConfig,
+		credentialsPath,
+		onCredentialChange
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Anthropic auth routes (special: supports oauth, token, and api_key)
+// ---------------------------------------------------------------------------
+
+async function validateAnthropicApiKey(
+	key: string
+): Promise<string | null> {
+	return validateWithFetch(
+		'https://api.anthropic.com/v1/models',
+		{
+			'x-api-key': key,
+			'anthropic-version': '2023-06-01'
+		},
+		'Anthropic'
+	)
+}
 
 async function handleAnthropicStatus(
 	credentialsPath: string
@@ -321,8 +533,6 @@ async function handleSetToken(
 	}
 }
 
-// ── Route factory ────────────────────────────────────────────────────────────
-
 export function createAuthRoutes(
 	credentialsPath: string,
 	onCredentialChange?: () => void
@@ -331,15 +541,7 @@ export function createAuthRoutes(
 		prefix: '/api/auth/anthropic',
 		tags: ['Auth']
 	})
-		.onBeforeHandle(({ request, server }) => {
-			const ip = server?.requestIP(request)
-			const addr = ip?.address
-			if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-				throw new ForbiddenError(
-					'Auth routes are only available from localhost'
-				)
-			}
-		})
+		.onBeforeHandle(requireLoopback)
 		.get(
 			'/status',
 			() => handleAnthropicStatus(credentialsPath),
@@ -439,623 +641,4 @@ export function createAuthRoutes(
 				}
 			}
 		)
-}
-
-// ── Groq auth routes ────────────────────────────────────────────────────────
-
-/**
- * Validate a Groq API key via GET /openai/v1/models.
- * Returns an error string if invalid, or null if acceptable.
- */
-async function validateGroqApiKey(
-	key: string
-): Promise<string | null> {
-	try {
-		const res = await fetch(
-			'https://api.groq.com/openai/v1/models',
-			{
-				method: 'GET',
-				headers: {
-					Authorization: `Bearer ${key}`
-				}
-			}
-		)
-		if (res.status === 401) {
-			return 'Invalid API key (401 from Groq)'
-		}
-		return null
-	} catch (err) {
-		console.warn(
-			'[auth] Groq API key validation network error:',
-			err instanceof Error ? err.message : err
-		)
-		return null
-	}
-}
-
-export function createGroqAuthRoutes(
-	credentialsPath: string,
-	onCredentialChange?: () => void
-) {
-	return (
-		new Elysia({
-			prefix: '/api/auth/groq',
-			tags: ['Auth']
-		})
-			.onBeforeHandle(({ request, server }) => {
-				const ip = server?.requestIP(request)
-				const addr = ip?.address
-				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-					throw new ForbiddenError(
-						'Auth routes are only available from localhost'
-					)
-				}
-			})
-
-			// ── GET /status ────────────────────────────────────────
-			.get(
-				'/status',
-				async () => {
-					const envKey = process.env.GROQ_API_KEY
-					if (envKey) {
-						return {
-							mode: 'api_key' as const,
-							source: 'env_api_key' as const,
-							configured: true,
-							preview: keyPreview(envKey)
-						}
-					}
-
-					const cred =
-						await loadGroqCredential(credentialsPath)
-					if (!cred) {
-						return {
-							mode: null,
-							source: 'none' as const,
-							configured: false
-						}
-					}
-
-					return {
-						mode: 'api_key' as const,
-						source: 'file' as const,
-						configured: true,
-						preview: keyPreview(cred.key)
-					}
-				},
-				{
-					response: {
-						200: groqAuthStatusResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /clear ────────────────────────────────────────
-			.post(
-				'/clear',
-				async () => {
-					const cleared =
-						await clearGroqCredential(credentialsPath)
-					if (cleared) onCredentialChange?.()
-					return { cleared }
-				},
-				{
-					response: {
-						200: groqAuthClearResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /api-key ──────────────────────────────────────
-			.post(
-				'/api-key',
-				async ({ body }) => {
-					const { key, validate = true } = body
-
-					if (validate) {
-						const invalid = await validateGroqApiKey(
-							key.trim()
-						)
-						if (invalid) {
-							throw new UnauthorizedError(invalid)
-						}
-					}
-
-					const cred: GroqCredential = {
-						type: 'api_key',
-						key: key.trim()
-					}
-					const result = await setGroqCredential(
-						credentialsPath,
-						cred
-					)
-					if (!result.ok) {
-						throw new InternalServerError(result.error)
-					}
-
-					onCredentialChange?.()
-					return {
-						ok: true as const,
-						mode: 'api_key' as const
-					}
-				},
-				{
-					body: groqAuthApiKeyBodySchema,
-					response: {
-						200: groqAuthApiKeyResponseSchema,
-						400: errorSchema,
-						401: errorSchema,
-						403: errorSchema,
-						500: errorSchema
-					}
-				}
-			)
-	)
-}
-
-// ── Brave auth routes ────────────────────────────────────────────────────────
-
-/**
- * Validate a Brave Search API key via a test search.
- * Returns an error string if invalid, or null if acceptable.
- */
-async function validateBraveApiKey(
-	key: string
-): Promise<string | null> {
-	try {
-		const res = await fetch(
-			'https://api.search.brave.com/res/v1/web/search?q=test&count=1',
-			{
-				method: 'GET',
-				headers: {
-					Accept: 'application/json',
-					'X-Subscription-Token': key
-				}
-			}
-		)
-		if (res.status === 401 || res.status === 403) {
-			return `Invalid API key (${res.status} from Brave)`
-		}
-		return null
-	} catch (err) {
-		console.warn(
-			'[auth] Brave API key validation network error:',
-			err instanceof Error ? err.message : err
-		)
-		return null
-	}
-}
-
-export function createBraveAuthRoutes(
-	credentialsPath: string,
-	onCredentialChange?: () => void
-) {
-	return (
-		new Elysia({
-			prefix: '/api/auth/brave',
-			tags: ['Auth']
-		})
-			.onBeforeHandle(({ request, server }) => {
-				const ip = server?.requestIP(request)
-				const addr = ip?.address
-				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-					throw new ForbiddenError(
-						'Auth routes are only available from localhost'
-					)
-				}
-			})
-
-			// ── GET /status ────────────────────────────────────────
-			.get(
-				'/status',
-				async () => {
-					const envKey = process.env.BRAVE_API_KEY
-					if (envKey) {
-						return {
-							mode: 'api_key' as const,
-							source: 'env_api_key' as const,
-							configured: true,
-							preview: keyPreview(envKey)
-						}
-					}
-
-					const cred =
-						await loadBraveCredential(credentialsPath)
-					if (!cred) {
-						return {
-							mode: null,
-							source: 'none' as const,
-							configured: false
-						}
-					}
-
-					return {
-						mode: 'api_key' as const,
-						source: 'file' as const,
-						configured: true,
-						preview: keyPreview(cred.key)
-					}
-				},
-				{
-					response: {
-						200: braveAuthStatusResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /clear ────────────────────────────────────────
-			.post(
-				'/clear',
-				async () => {
-					const cleared =
-						await clearBraveCredential(credentialsPath)
-					if (cleared) onCredentialChange?.()
-					return { cleared }
-				},
-				{
-					response: {
-						200: braveAuthClearResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /api-key ──────────────────────────────────────
-			.post(
-				'/api-key',
-				async ({ body }) => {
-					const { key, validate = true } = body
-
-					if (validate) {
-						const invalid = await validateBraveApiKey(
-							key.trim()
-						)
-						if (invalid) {
-							throw new UnauthorizedError(invalid)
-						}
-					}
-
-					const cred: BraveCredential = {
-						type: 'api_key',
-						key: key.trim()
-					}
-					const result = await setBraveCredential(
-						credentialsPath,
-						cred
-					)
-					if (!result.ok) {
-						throw new InternalServerError(result.error)
-					}
-
-					onCredentialChange?.()
-					return {
-						ok: true as const,
-						mode: 'api_key' as const
-					}
-				},
-				{
-					body: braveAuthApiKeyBodySchema,
-					response: {
-						200: braveAuthApiKeyResponseSchema,
-						400: errorSchema,
-						401: errorSchema,
-						403: errorSchema,
-						500: errorSchema
-					}
-				}
-			)
-	)
-}
-
-// ── ElevenLabs auth routes ──────────────────────────────────────────────────
-
-/**
- * Validate an ElevenLabs API key via GET /v1/voices.
- * Returns an error string if invalid, or null if acceptable.
- */
-async function validateElevenLabsApiKey(
-	key: string
-): Promise<string | null> {
-	try {
-		const res = await fetch(
-			'https://api.elevenlabs.io/v1/voices',
-			{
-				method: 'GET',
-				headers: {
-					'xi-api-key': key
-				}
-			}
-		)
-		if (res.status === 401) {
-			return 'Invalid API key (401 from ElevenLabs)'
-		}
-		return null
-	} catch (err) {
-		console.warn(
-			'[auth] ElevenLabs API key validation network error:',
-			err instanceof Error ? err.message : err
-		)
-		return null
-	}
-}
-
-export function createElevenLabsAuthRoutes(
-	credentialsPath: string,
-	onCredentialChange?: () => void
-) {
-	return (
-		new Elysia({
-			prefix: '/api/auth/elevenlabs',
-			tags: ['Auth']
-		})
-			.onBeforeHandle(({ request, server }) => {
-				const ip = server?.requestIP(request)
-				const addr = ip?.address
-				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-					throw new ForbiddenError(
-						'Auth routes are only available from localhost'
-					)
-				}
-			})
-
-			// ── GET /status ────────────────────────────────────────
-			.get(
-				'/status',
-				async () => {
-					const envKey =
-						process.env.ELEVENLABS_API_KEY ||
-						process.env.XI_API_KEY
-					if (envKey) {
-						return {
-							mode: 'api_key' as const,
-							source: 'env_api_key' as const,
-							configured: true,
-							preview: keyPreview(envKey)
-						}
-					}
-
-					const cred =
-						await loadElevenLabsCredential(credentialsPath)
-					if (!cred) {
-						return {
-							mode: null,
-							source: 'none' as const,
-							configured: false
-						}
-					}
-
-					return {
-						mode: 'api_key' as const,
-						source: 'file' as const,
-						configured: true,
-						preview: keyPreview(cred.key)
-					}
-				},
-				{
-					response: {
-						200: elevenlabsAuthStatusResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /clear ────────────────────────────────────────
-			.post(
-				'/clear',
-				async () => {
-					const cleared =
-						await clearElevenLabsCredential(credentialsPath)
-					if (cleared) onCredentialChange?.()
-					return { cleared }
-				},
-				{
-					response: {
-						200: elevenlabsAuthClearResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /api-key ──────────────────────────────────────
-			.post(
-				'/api-key',
-				async ({ body }) => {
-					const { key, validate = true } = body
-
-					if (validate) {
-						const invalid = await validateElevenLabsApiKey(
-							key.trim()
-						)
-						if (invalid) {
-							throw new UnauthorizedError(invalid)
-						}
-					}
-
-					const cred: ElevenLabsCredential = {
-						type: 'api_key',
-						key: key.trim()
-					}
-					const result = await setElevenLabsCredential(
-						credentialsPath,
-						cred
-					)
-					if (!result.ok) {
-						throw new InternalServerError(result.error)
-					}
-
-					onCredentialChange?.()
-					return {
-						ok: true as const,
-						mode: 'api_key' as const
-					}
-				},
-				{
-					body: elevenlabsAuthApiKeyBodySchema,
-					response: {
-						200: elevenlabsAuthApiKeyResponseSchema,
-						400: errorSchema,
-						401: errorSchema,
-						403: errorSchema,
-						500: errorSchema
-					}
-				}
-			)
-	)
-}
-
-// ── CivitAI auth routes ─────────────────────────────────────────────────────
-
-/**
- * Validate a CivitAI API key via GET /api/v1/models?limit=1.
- * Returns an error string if invalid, or null if acceptable.
- */
-async function validateCivitaiApiKey(
-	key: string
-): Promise<string | null> {
-	try {
-		const res = await fetch(
-			'https://civitai.com/api/v1/models?limit=1',
-			{
-				method: 'GET',
-				headers: {
-					Authorization: `Bearer ${key}`
-				}
-			}
-		)
-		if (res.status === 401) {
-			return 'Invalid API key (401 from CivitAI)'
-		}
-		return null
-	} catch (err) {
-		console.warn(
-			'[auth] CivitAI API key validation network error:',
-			err instanceof Error ? err.message : err
-		)
-		return null
-	}
-}
-
-export function createCivitaiAuthRoutes(
-	credentialsPath: string,
-	onCredentialChange?: () => void
-) {
-	return (
-		new Elysia({
-			prefix: '/api/auth/civitai',
-			tags: ['Auth']
-		})
-			.onBeforeHandle(({ request, server }) => {
-				const ip = server?.requestIP(request)
-				const addr = ip?.address
-				if (!addr || !LOOPBACK_ADDRS.has(addr)) {
-					throw new ForbiddenError(
-						'Auth routes are only available from localhost'
-					)
-				}
-			})
-
-			// ── GET /status ────────────────────────────────────────
-			.get(
-				'/status',
-				async () => {
-					const envKey = process.env.CIVITAI_TOKEN
-					if (envKey) {
-						return {
-							mode: 'api_key' as const,
-							source: 'env_api_key' as const,
-							configured: true,
-							preview: keyPreview(envKey)
-						}
-					}
-
-					const cred =
-						await loadCivitaiCredential(credentialsPath)
-					if (!cred) {
-						return {
-							mode: null,
-							source: 'none' as const,
-							configured: false
-						}
-					}
-
-					return {
-						mode: 'api_key' as const,
-						source: 'file' as const,
-						configured: true,
-						preview: keyPreview(cred.key)
-					}
-				},
-				{
-					response: {
-						200: civitaiAuthStatusResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /clear ────────────────────────────────────────
-			.post(
-				'/clear',
-				async () => {
-					const cleared =
-						await clearCivitaiCredential(credentialsPath)
-					if (cleared) onCredentialChange?.()
-					return { cleared }
-				},
-				{
-					response: {
-						200: civitaiAuthClearResponseSchema,
-						403: errorSchema
-					}
-				}
-			)
-
-			// ── POST /api-key ──────────────────────────────────────
-			.post(
-				'/api-key',
-				async ({ body }) => {
-					const { key, validate = true } = body
-
-					if (validate) {
-						const invalid = await validateCivitaiApiKey(
-							key.trim()
-						)
-						if (invalid) {
-							throw new UnauthorizedError(invalid)
-						}
-					}
-
-					const cred: CivitaiCredential = {
-						type: 'api_key',
-						key: key.trim()
-					}
-					const result = await setCivitaiCredential(
-						credentialsPath,
-						cred
-					)
-					if (!result.ok) {
-						throw new InternalServerError(result.error)
-					}
-
-					onCredentialChange?.()
-					return {
-						ok: true as const,
-						mode: 'api_key' as const
-					}
-				},
-				{
-					body: civitaiAuthApiKeyBodySchema,
-					response: {
-						200: civitaiAuthApiKeyResponseSchema,
-						400: errorSchema,
-						401: errorSchema,
-						403: errorSchema,
-						500: errorSchema
-					}
-				}
-			)
-	)
 }

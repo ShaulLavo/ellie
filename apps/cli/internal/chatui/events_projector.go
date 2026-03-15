@@ -16,7 +16,7 @@ var renderableTypes = map[string]bool{
 	"memory_retain":      true,
 	"assistant_artifact": true,
 	"error":              true,
-	"session_rotated":    true,
+	"thread_created":    true,
 }
 
 // Agent lifecycle event types.
@@ -117,8 +117,8 @@ func EventToStored(row EventRow) StoredMessage {
 	case "error":
 		parts = extractErrorParts(parsed)
 
-	case "session_rotated":
-		msg := "New day, new session"
+	case "thread_created":
+		msg := "New day, new thread"
 		if s, ok := parsed["message"].(string); ok && s != "" {
 			msg = s
 		}
@@ -195,9 +195,9 @@ func EventToStored(row EventRow) StoredMessage {
 	}
 }
 
-// ComputeStatsFromEvents aggregates session stats from raw events.
-func ComputeStatsFromEvents(events []EventRow) SessionStats {
-	var stats SessionStats
+// ComputeStatsFromEvents aggregates branch stats from raw events.
+func ComputeStatsFromEvents(events []EventRow) BranchStats {
+	var stats BranchStats
 	for _, ev := range events {
 		switch ev.Type {
 		case "user_message":
@@ -235,7 +235,7 @@ func ComputeStatsFromEvents(events []EventRow) SessionStats {
 }
 
 // MergeStats adds delta stats into prev, preferring non-nil model/provider from delta.
-func MergeStats(prev, delta SessionStats) SessionStats {
+func MergeStats(prev, delta BranchStats) BranchStats {
 	out := prev
 	if delta.Model != nil {
 		out.Model = delta.Model
@@ -424,7 +424,7 @@ func resolveSender(eventType string, parsed map[string]interface{}) MessageSende
 		return SenderSystem
 	case eventType == "error":
 		return SenderAgent
-	case eventType == "session_rotated":
+	case eventType == "thread_created":
 		return SenderSystem
 	case len(eventType) > 5 && eventType[:5] == "tool_":
 		return SenderAgent

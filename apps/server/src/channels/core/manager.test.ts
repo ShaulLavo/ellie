@@ -21,10 +21,20 @@ function createTempDir(): string {
 
 function createTestStores(dir: string) {
 	const eventStore = new EventStore(`${dir}/events.db`)
-	const store = new RealtimeStore(
-		eventStore,
-		'test-session'
+	const thread = eventStore.createThread(
+		'agent-test',
+		'assistant',
+		'ws-test'
 	)
+	eventStore.createBranch(
+		thread.id,
+		undefined,
+		undefined,
+		undefined,
+		'test-branch'
+	)
+	eventStore.setKv('assistant.defaultThreadId', thread.id)
+	const store = new RealtimeStore(eventStore)
 	return { eventStore, store }
 }
 
@@ -86,8 +96,6 @@ describe('ChannelManager', () => {
 		rmSync(dir, { recursive: true, force: true })
 	})
 
-	// ── Provider registry ────────────────────────────────────
-
 	test('register + getProvider', () => {
 		const provider = createMockProvider(
 			'test',
@@ -109,8 +117,6 @@ describe('ChannelManager', () => {
 		expect(list).toHaveLength(2)
 		expect(list.map(p => p.id).sort()).toEqual(['a', 'b'])
 	})
-
-	// ── Settings persistence ────────────────────────────────
 
 	test('saveSettings + loadSettings round-trip', async () => {
 		const settings = {
@@ -161,8 +167,6 @@ describe('ChannelManager', () => {
 		).toBeNull()
 	})
 
-	// ── Boot ─────────────────────────────────────────────────
-
 	test('bootAll calls provider.boot when settings exist', async () => {
 		const provider = createMockProvider('test', 'Test')
 		manager.register(provider)
@@ -198,8 +202,6 @@ describe('ChannelManager', () => {
 		await manager.bootAll()
 	})
 
-	// ── Multiple providers ───────────────────────────────────
-
 	test('multiple providers both get booted', async () => {
 		const p1 = createMockProvider('wa', 'WhatsApp')
 		const p2 = createMockProvider('tg', 'Telegram')
@@ -215,17 +217,15 @@ describe('ChannelManager', () => {
 		expect(p2.bootCalls).toHaveLength(1)
 	})
 
-	// ── Ingestion ────────────────────────────────────────────
-
 	test('ingestMessage creates user_message with source field', async () => {
 		const handleMessageCalls: Array<{
-			sessionId: string
+			branchId: string
 			text: string
 			eventId: number
 		}> = []
 		const registerCalls: Array<{
 			runId: string
-			sessionId: string
+			branchId: string
 			target: ChannelDeliveryTarget
 		}> = []
 
@@ -236,12 +236,12 @@ describe('ChannelManager', () => {
 			getAgentController: async () =>
 				({
 					handleMessage: async (
-						sessionId: string,
+						branchId: string,
 						text: string,
 						eventId: number
 					) => {
 						handleMessageCalls.push({
-							sessionId,
+							branchId,
 							text,
 							eventId
 						})
@@ -255,17 +255,17 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: (
 					runId: string,
-					sessionId: string,
+					branchId: string,
 					target: ChannelDeliveryTarget
 				) => {
 					registerCalls.push({
 						runId,
-						sessionId,
+						branchId,
 						target
 					})
 				},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 
@@ -295,7 +295,7 @@ describe('ChannelManager', () => {
 
 		// user_message was persisted with source
 		const allEvents = eventStore.query({
-			sessionId: 'test-session'
+			branchId: 'test-branch'
 		})
 		const userMsg = allEvents.find(
 			e => e.type === 'user_message'
@@ -331,7 +331,7 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 
@@ -371,7 +371,7 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 
@@ -416,7 +416,7 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 

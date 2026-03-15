@@ -6,8 +6,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export type ProgressFn = (
 	label: string,
 	status: 'started' | 'running' | 'completed' | 'failed',
@@ -31,8 +29,6 @@ export interface PythonInfo {
 	versionStr: string
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const MIN_PYTHON_VERSION = [3, 10] as const
 const PREFERRED_PYTHON_VERSION = '3.12'
 const VENV_DIR_NAME = 'diffusers-venv'
@@ -48,8 +44,6 @@ const REQUIRED_PACKAGES = [
 	'requests',
 	'peft'
 ]
-
-// ── Shell helpers ────────────────────────────────────────────────────────────
 
 async function run(
 	cmd: string[],
@@ -107,8 +101,6 @@ async function commandExists(
 	const result = await run(['which', cmd])
 	return result.ok
 }
-
-// ── Python detection ─────────────────────────────────────────────────────────
 
 export async function findPython(): Promise<PythonInfo | null> {
 	const candidates = [
@@ -192,8 +184,6 @@ async function installPython(): Promise<PythonInfo | null> {
 	return null
 }
 
-// ── GPU detection ────────────────────────────────────────────────────────────
-
 export async function detectGpuType(): Promise<GpuType> {
 	const unameResult = await run(['uname', '-s'])
 	const os = unameResult.ok ? unameResult.stdout.trim() : ''
@@ -214,8 +204,6 @@ export async function detectGpuType(): Promise<GpuType> {
 
 	return 'cpu'
 }
-
-// ── SSL certificate fix ─────────────────────────────────────────────────────
 
 async function fixPythonSslCerts(
 	py: PythonInfo
@@ -245,8 +233,6 @@ async function fixPythonSslCerts(
 		'certifi'
 	])
 }
-
-// ── Venv + pip setup ────────────────────────────────────────────────────────
 
 let setupLock: Promise<void> = Promise.resolve()
 

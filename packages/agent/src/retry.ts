@@ -1,35 +1,14 @@
-/**
- * Retry engine — generic async retry with exponential backoff + jitter.
- *
- * Inspired by zclaw's retry pattern (3 attempts, 2s base, 10s max, exponential)
- * and openclaw's error classification + Retry-After header support.
- *
- * Design:
- * - Exponential backoff: delay = base * multiplier^(attempt-1)
- * - Random jitter: ±20% of calculated delay
- * - Retry-After header: use max(retryAfterMs, calculated) when available
- * - Abort signal: interrupt sleep via Promise.race
- * - Configurable shouldRetry predicate for caller-specific logic
- */
-
 export interface RetryOptions {
-	/** Maximum number of attempts (including the first). Default: 3. */
 	maxAttempts: number
-	/** Base delay in milliseconds. Default: 1000. */
 	baseDelayMs: number
-	/** Maximum delay in milliseconds. Default: 30000. */
 	maxDelayMs: number
-	/** Multiplier for exponential backoff. Default: 2. */
 	backoffMultiplier: number
-	/** Optional predicate to decide whether to retry. Return false to stop retrying. */
 	shouldRetry?: (error: unknown, attempt: number) => boolean
-	/** Called before each retry with the error, attempt number, and delay. */
 	onRetry?: (
 		error: unknown,
 		attempt: number,
 		delayMs: number
 	) => void
-	/** Abort signal to cancel retries. */
 	signal?: AbortSignal
 }
 
@@ -40,16 +19,7 @@ const DEFAULT_OPTIONS: RetryOptions = {
 	backoffMultiplier: 2
 }
 
-/**
- * Calculate the delay for a given attempt.
- *
- * Formula: min(base * multiplier^(attempt-1), max) + jitter (±20%)
- * If retryAfterMs is provided, use max(retryAfterMs, calculated), still capped at maxDelayMs.
- *
- * @param attempt - 1-based attempt number (1 = first retry, not the initial call)
- * @param options - Retry options for delay parameters
- * @param retryAfterMs - Optional Retry-After delay from server (in ms)
- */
+/** delay = min(base * multiplier^(attempt-1), max) ± 20% jitter, respecting retryAfterMs */
 export function calculateDelay(
 	attempt: number,
 	options: RetryOptions,
@@ -73,10 +43,7 @@ export function calculateDelay(
 	return Math.round(delay)
 }
 
-/**
- * Sleep for the given duration, interruptible by abort signal.
- * Resolves to true if sleep completed, false if aborted.
- */
+/** Resolves to true if sleep completed, false if aborted. */
 export function abortableSleep(
 	ms: number,
 	signal?: AbortSignal
@@ -112,9 +79,6 @@ export function abortableSleep(
 	})
 }
 
-/**
- * Extract retryAfterMs from an error object, if present and valid.
- */
 function extractRetryAfterMs(
 	err: unknown
 ): number | undefined {
@@ -131,14 +95,6 @@ function extractRetryAfterMs(
 		: undefined
 }
 
-/**
- * Execute an async function with retry on failure.
- *
- * @param fn - The async function to execute. Called on each attempt.
- * @param options - Partial retry options (defaults filled in).
- * @returns The result of the first successful execution.
- * @throws The last error if all attempts fail or if shouldRetry returns false.
- */
 export async function withRetry<T>(
 	fn: () => Promise<T>,
 	options?: Partial<RetryOptions>

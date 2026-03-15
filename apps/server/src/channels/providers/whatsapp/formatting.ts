@@ -66,7 +66,7 @@ export function markdownToWhatsApp(text: string): string {
 /**
  * Split a message into chunks, each ≤ maxLen characters.
  * Tries newline break first, then whitespace (word boundary), then hard-breaks.
- * Guarantees every chunk ≤ maxLen (matching openclaw's chunkText).
+ * Guarantees every chunk ≤ maxLen.
  */
 export function chunkMessage(
 	text: string,

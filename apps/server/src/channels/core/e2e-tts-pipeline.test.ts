@@ -22,8 +22,6 @@ import {
 	writeFileSync
 } from 'fs'
 
-// ── Mock TTS synthesis so no real API calls are made ────────────────────
-
 const mockSynthesize = mock(() => {
 	const tmpDir = tmpdir()
 	const fakeAudioPath = join(
@@ -43,18 +41,25 @@ mock.module('../../lib/tts', () => ({
 	elevenLabsTTS: mockSynthesize
 }))
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'e2e-tts-test-'))
 }
 
 function createTestStores(dir: string) {
 	const eventStore = new EventStore(`${dir}/events.db`)
-	const store = new RealtimeStore(
-		eventStore,
-		'test-session'
+	const thread = eventStore.createThread(
+		'agent-test',
+		'test',
+		'ws-test'
 	)
+	eventStore.createBranch(
+		thread.id,
+		undefined,
+		undefined,
+		undefined,
+		'test-branch'
+	)
+	const store = new RealtimeStore(eventStore)
 	return { eventStore, store }
 }
 
@@ -88,8 +93,6 @@ function makeAssistantPayload(
 		streaming: false
 	}
 }
-
-// ── E2E Tests ───────────────────────────────────────────────────────────
 
 describe('E2E: TTS pipeline through delivery registry', () => {
 	let dir: string
@@ -209,18 +212,18 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 	}
 
 	function emitRunWithText(
-		sessionId: string,
+		branchId: string,
 		runId: string,
 		text: string
 	) {
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload(text, runId),
 			runId
 		)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -229,7 +232,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('inbound voice note triggers auto-TTS in inbound mode', async () => {
 		const registry = createRegistry('inbound')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-inbound-voice'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -238,11 +241,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			inboundMediaType: 'audio/ogg; codecs=opus'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'The weather is sunny and 72 degrees Fahrenheit today.'
 		)
@@ -262,7 +265,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('inbound text does NOT trigger auto-TTS in inbound mode', async () => {
 		const registry = createRegistry('inbound')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-inbound-text'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -271,11 +274,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			// No inboundMediaType → text message
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'The weather is sunny and 72 degrees Fahrenheit today.'
 		)
@@ -296,7 +299,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('always mode applies TTS to all text replies', async () => {
 		const registry = createRegistry('always')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-always'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -304,11 +307,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-always'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'This should be spoken as a voice note reply.'
 		)
@@ -324,7 +327,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('off mode never applies TTS', async () => {
 		const registry = createRegistry('off')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-off'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -333,11 +336,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			inboundMediaType: 'audio/ogg'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'This should NOT be spoken even though inbound was audio.'
 		)
@@ -354,7 +357,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 	test('tagged mode triggers TTS only when [[tts]] tag present', async () => {
 		const registry = createRegistry('tagged')
 		attachTtsPostProcessor(registry)
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-tagged'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -362,11 +365,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-tagged'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'Here is the weather forecast for today. [[tts]]'
 		)
@@ -382,7 +385,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('tagged mode skips when no [[tts]] tag', async () => {
 		const registry = createRegistry('tagged')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-tagged-no'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -390,11 +393,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-tagged-no'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'Here is the weather forecast without any tag.'
 		)
@@ -410,7 +413,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('short text skips TTS even in always mode', async () => {
 		const registry = createRegistry('always')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-short'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -418,10 +421,10 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-short'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
-		emitRunWithText(sessionId, runId, 'OK')
+		emitRunWithText(branchId, runId, 'OK')
 
 		await new Promise(r => setTimeout(r, 150))
 
@@ -435,7 +438,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('media artifact takes priority over auto-TTS', async () => {
 		const registry = createRegistry('always')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-explicit-media'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -449,30 +452,30 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		mkdirSync(dirname(uploadPath), { recursive: true })
 		writeFileSync(uploadPath, 'pre-made-audio')
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Emit clean text + an assistant_artifact for the media
 		const row = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Check this out', runId),
 			runId
 		)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: row.id,
 				kind: 'media',
 				origin: 'tool_upload',
 				uploadId,
-				mime: 'audio/ogg; codecs=opus'
+				mimeType: 'audio/ogg; codecs=opus'
 			},
 			runId
 		)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -494,7 +497,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('ttsDirective with media artifact sends both media and voice note', async () => {
 		const registry = createRegistry('off')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-explicit-tts-media'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -510,8 +513,8 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		writeFileSync(uploadPath, 'fake-image')
 		attachTtsPostProcessor(registry)
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Emit clean text with ttsDirective + media artifact
 		const assistantPayload = makeAssistantPayload(
@@ -522,25 +525,25 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			assistantPayload as Record<string, unknown>
 		).ttsDirective = { params: undefined }
 		const row = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			assistantPayload,
 			runId
 		)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: row.id,
 				kind: 'media',
 				origin: 'tool_upload',
 				uploadId,
-				mime: 'image/png'
+				mimeType: 'image/png'
 			},
 			runId
 		)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -567,7 +570,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 		)
 
 		const registry = createRegistry('always')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-tts-fail'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -575,11 +578,11 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-tts-fail'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'This should be text because TTS will fail.'
 		)
@@ -600,7 +603,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 
 	test('multi-target fan-out with auto-TTS', async () => {
 		const registry = createRegistry('always')
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-fanout-tts'
 
 		const target1: ChannelDeliveryTarget = {
@@ -614,12 +617,12 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 			conversationId: 'conv-fan-2'
 		}
 
-		registry.register(runId, sessionId, target1)
-		registry.register(runId, sessionId, target2)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target1)
+		registry.register(runId, branchId, target2)
+		registry.watchBranch(branchId)
 
 		emitRunWithText(
-			sessionId,
+			branchId,
 			runId,
 			'Multi-target voice note delivery test message.'
 		)

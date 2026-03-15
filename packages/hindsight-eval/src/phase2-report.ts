@@ -28,16 +28,12 @@ function formatFailureDetails(
 	}
 }
 
-// ── JSON Report Generation ──────────────────────────────────────────────
-
 /** Serialize a verification run to formatted JSON for artifact output. */
 export function generateVerificationRunJson(
 	run: Phase2VerificationRun
 ): string {
 	return JSON.stringify(run, null, 2)
 }
-
-// ── Comparison Report ───────────────────────────────────────────────────
 
 export function generateComparisonReport(
 	report: Phase2ComparisonReport,
@@ -137,8 +133,6 @@ export function generateComparisonReport(
 	return lines.join('\n')
 }
 
-// ── DB Invariants Report ────────────────────────────────────────────────
-
 /** Generate a markdown report of Gate 3 route side-effect invariant results. */
 export function generateDbInvariantsReport(
 	gateResults: GateResult[]
@@ -197,8 +191,6 @@ export function generateDbInvariantsReport(
 
 	return lines.join('\n')
 }
-
-// ── Reproducibility Report ──────────────────────────────────────────────
 
 /** Compare two verification runs gate-by-gate and produce a Gate 8 reproducibility report. */
 export function generateReproducibilityReport(

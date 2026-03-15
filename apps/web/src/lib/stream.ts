@@ -1,13 +1,13 @@
 /**
- * Session stream client — EventSource for SSE, eden for REST.
+ * Branch stream client — EventSource for SSE, eden for REST.
  *
  * Ellie's SSE protocol:
- *   1. Connect to GET /chat/:sessionId/events/sse?afterSeq=N
+ *   1. Connect to GET /api/chat/branches/:branchId/events/sse?afterSeq=N
  *   2. Receive "snapshot" event with all existing events (after afterSeq)
  *   3. Receive "append" events for new events in real-time
  *   4. Receive "update" events for in-place row updates (streaming deltas)
  *
- * For REST operations (send message, list sessions, clear), we use eden directly.
+ * For REST operations (send message, clear), we use eden directly.
  */
 
 import type { ConnectionState } from '@ellie/schemas/chat'
@@ -18,7 +18,7 @@ import { eden } from './eden'
 /** Raw event row from the server event store. */
 export interface EventRow {
 	id: number
-	sessionId: string
+	branchId: string
 	seq: number
 	runId: string | null
 	type: EventType
@@ -30,8 +30,8 @@ export interface EventRow {
 export interface StreamCallbacks {
 	onSnapshot: (
 		events: EventRow[],
-		sessionChanged: boolean,
-		resolvedSessionId: string
+		branchChanged: boolean,
+		resolvedBranchId: string
 	) => void
 	onAppend: (event: EventRow) => void
 	onUpdate: (event: EventRow) => void
@@ -40,7 +40,7 @@ export interface StreamCallbacks {
 }
 
 export class StreamClient {
-	private sessionId: string
+	private branchId: string
 	private callbacks: StreamCallbacks
 	private eventSource: EventSource | null = null
 	private lastSeq = 0
@@ -51,13 +51,13 @@ export class StreamClient {
 		typeof setTimeout
 	> | null = null
 	private disposed = false
-	private lastResolvedSessionId: string | null = null
+	private lastResolvedBranchId: string | null = null
 
 	constructor(
-		sessionId: string,
+		branchId: string,
 		callbacks: StreamCallbacks
 	) {
-		this.sessionId = sessionId
+		this.branchId = branchId
 		this.callbacks = callbacks
 	}
 
@@ -97,9 +97,9 @@ export class StreamClient {
 		}[],
 		speechRef?: string
 	): Promise<void> {
-		const { error } = await eden
-			.chat({
-				sessionId: this.sessionId
+		const { error } = await eden.api.chat
+			.branches({
+				branchId: this.branchId
 			})
 			.messages.post({
 				content,
@@ -113,29 +113,24 @@ export class StreamClient {
 		if (error) throw error
 	}
 
-	/** Clear session (delete + recreate) */
-	async clearSession(): Promise<void> {
-		const { error } = await eden
-			.chat({
-				sessionId: this.sessionId
+	/** Clear branch (delete + recreate) */
+	async clearBranch(): Promise<void> {
+		const { error } = await eden.api.chat
+			.branches({
+				branchId: this.branchId
 			})
 			.clear.post()
 		if (error) throw error
 	}
 
-	// ── Internal ──────────────────────────────────────────────────────────
-
 	private openSSE(): void {
 		this.closeSSE()
 
 		// Always request a full snapshot (no afterSeq filter).
-		// In-place row updates (e.g. tool_execution status changes) don't
-		// bump seq, so afterSeq-filtered snapshots would miss them on
-		// reconnect. The client's syncWrite upsert handles duplicates.
 		this.lastSeq = 0
 
 		const baseUrl = env.API_BASE_URL.replace(/\/$/, '')
-		const url = `${baseUrl}/chat/${this.sessionId}/events/sse`
+		const url = `${baseUrl}/api/chat/branches/${this.branchId}/events/sse`
 		const es = new EventSource(url)
 		this.eventSource = es
 
@@ -144,20 +139,20 @@ export class StreamClient {
 				const data = JSON.parse(
 					(event as MessageEvent).data
 				) as {
-					sessionId: string
+					branchId: string
 					events: EventRow[]
 				}
 				for (const ev of data.events) {
 					this.updateLastSeq(ev.seq)
 				}
-				const sessionChanged =
-					this.lastResolvedSessionId !== null &&
-					this.lastResolvedSessionId !== data.sessionId
-				this.lastResolvedSessionId = data.sessionId
+				const branchChanged =
+					this.lastResolvedBranchId !== null &&
+					this.lastResolvedBranchId !== data.branchId
+				this.lastResolvedBranchId = data.branchId
 				this.callbacks.onSnapshot(
 					data.events,
-					sessionChanged,
-					data.sessionId
+					branchChanged,
+					data.branchId
 				)
 			} catch (err) {
 				console.error(
@@ -203,11 +198,6 @@ export class StreamClient {
 		})
 
 		es.addEventListener('error', () => {
-			// Close manually — the browser's built-in EventSource
-			// reconnection keeps readyState as CONNECTING when the
-			// server is unreachable, so our custom retry logic
-			// (with max attempts and exponential backoff) would
-			// never trigger.
 			this.closeSSE()
 			this.callbacks.onStateChange('connecting')
 			this.scheduleReconnect()

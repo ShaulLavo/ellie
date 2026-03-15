@@ -19,9 +19,7 @@ import type {
 	ToolResultMessage
 } from './types'
 
-// ============================================================================
 // Types
-// ============================================================================
 
 export interface ContextRecoveryOptions {
 	/** From model registry — config.model.contextWindow */
@@ -49,9 +47,7 @@ const DEFAULT_OPTIONS: Omit<
 	charsPerToken: 4
 }
 
-// ============================================================================
 // Token estimation
-// ============================================================================
 
 /**
  * Estimate the total token count for a message array.
@@ -161,9 +157,7 @@ export function estimateMessageTokens(
 	return overhead + Math.ceil(chars / charsPerToken)
 }
 
-// ============================================================================
 // Trimming
-// ============================================================================
 
 /**
  * Trim messages to fit within the context window budget.
@@ -259,9 +253,7 @@ export function isApproachingLimit(
 	return estimated > budget
 }
 
-// ============================================================================
 // Orphan prevention
-// ============================================================================
 
 /**
  * Remove orphaned toolResult messages that reference assistant tool calls
@@ -276,10 +268,7 @@ export function isApproachingLimit(
 export function removeOrphans(
 	messages: AgentMessage[]
 ): AgentMessage[] {
-	// ── Phase 1: Reorder tool results after their parent assistant ────
 	const reordered = reorderToolResults(messages)
-
-	// ── Phase 2: Remove orphans ──────────────────────────────────────
 
 	// Collect all toolCall IDs from assistant messages
 	const toolCallIds = new Set<string>()

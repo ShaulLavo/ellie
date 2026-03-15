@@ -15,8 +15,6 @@ import {
 import type { DataStore } from '../core/data-store'
 import type { Upload } from '../core/upload'
 
-// ── Type guard for stores that expose a configstore ─────────────────────
-
 interface ConfigStoreCapable {
 	configstore: {
 		list: () => Promise<string[]>
@@ -118,8 +116,6 @@ function parseByteRange(
 	return { start, end: Math.min(end, size - 1) }
 }
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
 export type CreateTusAppOptions = {
 	/** The DataStore instance (e.g. FileStore). */
 	datastore: DataStore
@@ -145,8 +141,6 @@ export type CreateTusAppOptions = {
 	onIncomingRequest?: TusServerOptions['onIncomingRequest']
 	namingFunction?: TusServerOptions['namingFunction']
 }
-
-// ── Factory ────────────────────────────────────────────────────────────────
 
 function createTusPlugin(
 	prefix: string,

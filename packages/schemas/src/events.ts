@@ -18,8 +18,6 @@ import type {
 } from './agent'
 import type { ContentPart } from './chat'
 
-// ── Payload map ─────────────────────────────────────────────────────────────
-
 export interface EventPayloadMap {
 	// --- Core messages ---
 	user_message: UserMessage
@@ -56,7 +54,7 @@ export interface EventPayloadMap {
 		origin: 'tool_upload' | 'tts' | 'llm_directive'
 		uploadId: string
 		url?: string
-		mime?: string
+		mimeType?: string
 		size?: number
 		width?: number
 		height?: number
@@ -155,28 +153,28 @@ export interface EventPayloadMap {
 	// --- Code execution: session_exec ---
 	session_exec_start: {
 		toolCallId: string
-		sessionId: string
+		branchId: string
 		codeLength: number
 	}
 	session_exec_commit: {
 		toolCallId: string
-		sessionId: string
+		branchId: string
 		committedLength: number
 	}
 	session_exec_end: {
 		toolCallId: string
-		sessionId: string
+		branchId: string
 		success: boolean
 		elapsedMs: number
 		hasArtifacts: boolean
 	}
 	session_exec_snapshot_saved: {
-		sessionId: string
+		branchId: string
 		workspaceDir: string
 		gitHead?: string | null
 	}
 	session_exec_snapshot_restore_skipped: {
-		sessionId: string
+		branchId: string
 		reason: string
 	}
 	session_exec_error: {
@@ -185,9 +183,9 @@ export interface EventPayloadMap {
 		message: string
 	}
 
-	// --- Session lifecycle ---
-	session_rotated: {
-		previousSessionId: string
+	// --- Thread lifecycle ---
+	thread_created: {
+		previousThreadId?: string
 		message: string
 	}
 
@@ -220,8 +218,6 @@ export interface EventPayloadMap {
 	}
 }
 
-// ── Derived helpers ─────────────────────────────────────────────────────────
-
 /** Union of all valid event type strings. */
 export type EventType = keyof EventPayloadMap
 
@@ -233,7 +229,7 @@ export type TypedEvent = {
 /** Full parsed event row (DB metadata + typed event). */
 export type ParsedEventRow = {
 	id: number
-	sessionId: string
+	branchId: string
 	seq: number
 	runId: string | null
 	dedupeKey: string | null

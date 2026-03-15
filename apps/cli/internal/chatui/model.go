@@ -27,7 +27,7 @@ const (
 type Model struct {
 	// Config
 	baseURL       string
-	sessionID     string
+	branchID      string
 	transcriptDir string
 	keys          KeyMap
 
@@ -43,7 +43,7 @@ type Model struct {
 	// Chat state
 	messages       []StoredMessage
 	streamingMsg   *StoredMessage
-	stats          SessionStats
+	stats          BranchStats
 	isAgentRunning bool
 	allEvents      []EventRow // kept for stats recomputation
 
@@ -105,7 +105,7 @@ type Model struct {
 }
 
 // NewModel creates a new chat TUI model.
-func NewModel(baseURL, sessionID, transcriptDir string) Model {
+func NewModel(baseURL, branchID, transcriptDir string) Model {
 	ta := textarea.New()
 	ta.Placeholder = "Type a message..."
 	ta.Focus()
@@ -131,11 +131,11 @@ func NewModel(baseURL, sessionID, transcriptDir string) Model {
 
 	return Model{
 		baseURL:        baseURL,
-		sessionID:      sessionID,
+		branchID:       branchID,
 		transcriptDir:  transcriptDir,
 		keys:           DefaultKeyMap(),
 		httpClient:     NewHTTPClient(baseURL),
-		sseClient:      NewSSEClient(baseURL, sessionID),
+		sseClient:      NewSSEClient(baseURL, branchID),
 		textarea:       ta,
 		viewport:       vp,
 		focus:          focusEditor,
@@ -231,8 +231,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dialog = NewCommandPaletteDialog()
 			return m, nil
 
-		case key.Matches(msg, m.keys.Sessions):
-			return m.openSessionsDialog()
+		case key.Matches(msg, m.keys.Threads):
+			return m.openThreadsDialog()
 
 		case key.Matches(msg, m.keys.Info):
 			return m.openInfoDialog()
@@ -346,15 +346,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Async results ─────────────────────────────────────────
 
-	case sessionsLoadedMsg:
-		if d, ok := m.dialog.(*SessionListDialog); ok {
-			d.SetSessions(msg.sessions)
+	case threadsLoadedMsg:
+		if d, ok := m.dialog.(*ThreadListDialog); ok {
+			d.SetThreads(msg.threads)
 		}
 		return m, nil
 
-	case sessionInfoLoadedMsg:
-		if d, ok := m.dialog.(*SessionInfoDialog); ok {
-			d.SetData(msg.session, msg.stats)
+	case branchInfoLoadedMsg:
+		if d, ok := m.dialog.(*BranchInfoDialog); ok {
+			d.SetData(msg.branch, msg.stats)
 		}
 		return m, nil
 
@@ -365,7 +365,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = nil
 			m.streamingMsg = nil
 			m.allEvents = nil
-			m.stats = SessionStats{}
+			m.stats = BranchStats{}
 			m.isAgentRunning = false
 			m.refreshViewport()
 		}
@@ -731,9 +731,9 @@ func (m Model) updateDialog(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.dialog = nil
 		return m, nil
 
-	case ActionClearSession:
+	case ActionClearBranch:
 		m.dialog = nil
-		return m, m.clearSession()
+		return m, m.clearBranch()
 
 	case ActionSelectCommand:
 		// prev still points to the CommandPaletteDialog even if Update returned nil.
@@ -951,8 +951,8 @@ func (m Model) executeCommand(cmd *SlashCommand) (tea.Model, tea.Cmd) {
 	case "clear":
 		m.dialog = NewClearConfirmDialog()
 		return m, nil
-	case "sessions":
-		return m.openSessionsDialog()
+	case "threads":
+		return m.openThreadsDialog()
 	case "info":
 		return m.openInfoDialog()
 	case "transcript":
@@ -975,27 +975,27 @@ func (m Model) toggleTheme() (tea.Model, tea.Cmd) {
 	return m, tea.Raw(osc11)
 }
 
-func (m Model) openSessionsDialog() (tea.Model, tea.Cmd) {
-	dlg := NewSessionListDialog(m.sessionID)
+func (m Model) openThreadsDialog() (tea.Model, tea.Cmd) {
+	dlg := NewThreadListDialog(m.branchID)
 	m.dialog = dlg
-	return m, m.loadSessions(dlg)
+	return m, m.loadThreads(dlg)
 }
 
 func (m Model) openInfoDialog() (tea.Model, tea.Cmd) {
-	dlg := NewSessionInfoDialog()
+	dlg := NewBranchInfoDialog()
 	m.dialog = dlg
-	return m, m.loadSessionInfo(dlg)
+	return m, m.loadBranchInfo(dlg)
 }
 
 // ─── Async commands (tea.Cmd) ─────────────────────────────────────
 
-type sessionsLoadedMsg struct {
-	sessions []SessionEntry
+type threadsLoadedMsg struct {
+	threads []ThreadEntry
 }
 
-type sessionInfoLoadedMsg struct {
-	session *SessionEntry
-	stats   SessionStats
+type branchInfoLoadedMsg struct {
+	branch *AssistantCurrent
+	stats  BranchStats
 }
 
 type clearDoneMsg struct{ err error }
@@ -1037,7 +1037,7 @@ func (m *Model) StartSSELoop(ctx context.Context, send func(tea.Msg)) {
 
 func (m Model) sendMessage(text string, files ...PendingAttachment) tea.Cmd {
 	httpClient := m.httpClient
-	sessionID := m.sessionID
+	branchID := m.branchID
 	return func() tea.Msg {
 		ctx := context.Background()
 
@@ -1051,39 +1051,39 @@ func (m Model) sendMessage(text string, files ...PendingAttachment) tea.Cmd {
 			results = append(results, r)
 		}
 
-		err := httpClient.SendMessage(ctx, sessionID, text, results)
+		err := httpClient.SendMessage(ctx, branchID, text, results)
 		return sendDoneMsg{err: err}
 	}
 }
 
-func (m Model) clearSession() tea.Cmd {
+func (m Model) clearBranch() tea.Cmd {
 	return func() tea.Msg {
-		err := m.httpClient.ClearSession(context.Background(), m.sessionID)
+		err := m.httpClient.ClearBranch(context.Background(), m.branchID)
 		return clearDoneMsg{err: err}
 	}
 }
 
-func (m Model) loadSessions(dlg *SessionListDialog) tea.Cmd {
+func (m Model) loadThreads(dlg *ThreadListDialog) tea.Cmd {
 	return func() tea.Msg {
-		sessions, err := m.httpClient.ListSessions(context.Background())
+		threads, err := m.httpClient.ListThreads(context.Background())
 		if err != nil {
-			return sessionsLoadedMsg{sessions: nil}
+			return threadsLoadedMsg{threads: nil}
 		}
-		return sessionsLoadedMsg{sessions: sessions}
+		return threadsLoadedMsg{threads: threads}
 	}
 }
 
-func (m Model) loadSessionInfo(dlg *SessionInfoDialog) tea.Cmd {
+func (m Model) loadBranchInfo(dlg *BranchInfoDialog) tea.Cmd {
 	// Snapshot the slice so the closure doesn't race with SSE mutations.
 	eventsSnapshot := make([]EventRow, len(m.allEvents))
 	copy(eventsSnapshot, m.allEvents)
 	return func() tea.Msg {
-		session, err := m.httpClient.GetCurrentSession(context.Background())
+		branch, err := m.httpClient.GetAssistantCurrent(context.Background())
 		if err != nil {
-			return sessionInfoLoadedMsg{session: nil}
+			return branchInfoLoadedMsg{branch: nil}
 		}
 		stats := ComputeStatsFromEvents(eventsSnapshot)
-		return sessionInfoLoadedMsg{session: session, stats: stats}
+		return branchInfoLoadedMsg{branch: branch, stats: stats}
 	}
 }
 
@@ -1094,10 +1094,10 @@ func (m Model) saveTranscript() tea.Cmd {
 	if m.streamingMsg != nil {
 		msgs = append(msgs, *m.streamingMsg)
 	}
-	sid := m.sessionID
+	bid := m.branchID
 	dir := m.transcriptDir
 	return func() tea.Msg {
-		path, err := SaveTranscript(msgs, sid, dir)
+		path, err := SaveTranscript(msgs, bid, dir)
 		return transcriptDoneMsg{path: path, err: err}
 	}
 }

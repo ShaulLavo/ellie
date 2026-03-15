@@ -51,8 +51,6 @@ describe('Retrieval methods', () => {
 		t.cleanup()
 	})
 
-	// ── Semantic retrieval ──────────────────────────────────────────────────
-
 	describe('semantic retrieval', () => {
 		it('finds memories by embedding similarity', async () => {
 			await t.hs.retain(bankId, 'test', {
@@ -77,8 +75,6 @@ describe('Retrieval methods', () => {
 			)
 		})
 	})
-
-	// ── Fulltext (BM25) retrieval ──────────────────────────────────────────
 
 	describe('fulltext retrieval', () => {
 		it('finds memories by keyword match', async () => {
@@ -129,8 +125,6 @@ describe('Retrieval methods', () => {
 			)
 		})
 	})
-
-	// ── Graph retrieval ─────────────────────────────────────────────────────
 
 	describe('graph retrieval', () => {
 		it('finds memories via shared entities', async () => {
@@ -324,8 +318,6 @@ describe('Retrieval methods', () => {
 		})
 	})
 
-	// ── Temporal retrieval ──────────────────────────────────────────────────
-
 	describe('temporal retrieval', () => {
 		it('finds memories within a time range', async () => {
 			const now = Date.now()
@@ -379,8 +371,6 @@ describe('Retrieval methods', () => {
 			expect(result.memories).toHaveLength(0)
 		})
 	})
-
-	// ── MPFP graph retrieval (port of test_mpfp_retrieval.py) ──────────────
 
 	describe('MPFP graph retrieval', () => {
 		it('finds facts related via graph traversal through shared entities (integration)', async () => {
@@ -685,8 +675,6 @@ describe('Retrieval methods', () => {
 		})
 	})
 
-	// ── Link expansion retrieval (port of test_link_expansion_retrieval.py) ─
-
 	describe('link expansion retrieval', () => {
 		it('observations traverse source_memory_ids to find related observations', async () => {
 			await t.hs.retain(bankId, 'test', {
@@ -864,8 +852,6 @@ describe('Retrieval methods', () => {
 			).toBe(true)
 		})
 	})
-
-	// ── Multi-method fusion ─────────────────────────────────────────────────
 
 	describe('multi-method fusion', () => {
 		it('combines results from all methods', async () => {

@@ -60,13 +60,25 @@ describe('stream-persistence artifact emission', () => {
 	let store: RealtimeStore
 	let state: StreamState
 	let deps: StreamPersistenceDeps
-	const sessionId = 'test-session'
+	const branchId = 'test-branch'
 	const runId = 'test-run'
 
 	beforeEach(() => {
 		tmpDir = createTempDir()
 		eventStore = new EventStore(join(tmpDir, 'events.db'))
-		store = new RealtimeStore(eventStore, sessionId)
+		const thread = eventStore.createThread(
+			'agent-test',
+			'test',
+			'ws-test'
+		)
+		eventStore.createBranch(
+			thread.id,
+			undefined,
+			undefined,
+			undefined,
+			branchId
+		)
+		store = new RealtimeStore(eventStore)
 		state = createStreamState()
 		deps = {
 			store,
@@ -90,7 +102,7 @@ describe('stream-persistence artifact emission', () => {
 					'toolUse'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -104,7 +116,7 @@ describe('stream-persistence artifact emission', () => {
 					'toolUse'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -118,7 +130,7 @@ describe('stream-persistence artifact emission', () => {
 				toolName: 'generate_image',
 				args: { prompt: 'a cat' }
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -141,7 +153,7 @@ describe('stream-persistence artifact emission', () => {
 				isError: false,
 				elapsedMs: 5000
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -161,7 +173,7 @@ describe('stream-persistence artifact emission', () => {
 					'Here is your generated image.'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -174,7 +186,7 @@ describe('stream-persistence artifact emission', () => {
 					'Here is your generated image.'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -182,7 +194,7 @@ describe('stream-persistence artifact emission', () => {
 		expect(state.pendingArtifacts).toHaveLength(0)
 
 		// Verify: assistant message text is CLEAN (no MEDIA: lines)
-		const rows = store.queryRunEvents(sessionId, runId)
+		const rows = store.queryRunEvents(branchId, runId)
 		const assistantRows = rows.filter(
 			r => r.type === 'assistant_message'
 		)
@@ -228,7 +240,7 @@ describe('stream-persistence artifact emission', () => {
 					'toolUse'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -252,7 +264,7 @@ describe('stream-persistence artifact emission', () => {
 				isError: false,
 				elapsedMs: 3000
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -273,7 +285,7 @@ describe('stream-persistence artifact emission', () => {
 					'toolUse'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -286,7 +298,7 @@ describe('stream-persistence artifact emission', () => {
 				toolName: 'some_other_tool',
 				args: {}
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -307,7 +319,7 @@ describe('stream-persistence artifact emission', () => {
 				isError: false,
 				elapsedMs: 1000
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -360,7 +372,7 @@ describe('stream-persistence artifact emission', () => {
 						reply.stopReason
 					)
 				} as AgentEvent,
-				sessionId,
+				branchId,
 				runId
 			)
 
@@ -374,7 +386,7 @@ describe('stream-persistence artifact emission', () => {
 						reply.stopReason
 					)
 				} as AgentEvent,
-				sessionId,
+				branchId,
 				runId
 			)
 
@@ -394,7 +406,7 @@ describe('stream-persistence artifact emission', () => {
 						toolName: 'generate_image',
 						args: {}
 					} as AgentEvent,
-					sessionId,
+					branchId,
 					runId
 				)
 
@@ -415,13 +427,13 @@ describe('stream-persistence artifact emission', () => {
 						isError: false,
 						elapsedMs: 2000
 					} as AgentEvent,
-					sessionId,
+					branchId,
 					runId
 				)
 			}
 		}
 
-		const rows = store.queryRunEvents(sessionId, runId)
+		const rows = store.queryRunEvents(branchId, runId)
 		const assistantRows = rows.filter(
 			r => r.type === 'assistant_message'
 		)
@@ -478,7 +490,7 @@ describe('stream-persistence artifact emission', () => {
 					'Hello! [[tts:voiceId=abc speed=1.2]]'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -491,11 +503,11 @@ describe('stream-persistence artifact emission', () => {
 					'Hello! [[tts:voiceId=abc speed=1.2]]'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
-		const rows = store.queryRunEvents(sessionId, runId)
+		const rows = store.queryRunEvents(branchId, runId)
 		const assistantRow = rows.find(
 			r => r.type === 'assistant_message'
 		)!
@@ -522,7 +534,7 @@ describe('stream-persistence artifact emission', () => {
 					'toolUse'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -536,7 +548,7 @@ describe('stream-persistence artifact emission', () => {
 					'toolUse'
 				)
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -550,11 +562,11 @@ describe('stream-persistence artifact emission', () => {
 				toolName: 'test_tool',
 				args: {}
 			} as AgentEvent,
-			sessionId,
+			branchId,
 			runId
 		)
 
-		const rows = store.queryRunEvents(sessionId, runId)
+		const rows = store.queryRunEvents(branchId, runId)
 		const toolRow = rows.find(
 			r => r.type === 'tool_execution'
 		)!

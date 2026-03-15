@@ -3,15 +3,11 @@ import type { ChannelDeliveryTarget } from './types'
 import type { ChannelReplyPayload } from './reply-payload'
 import type { TtsAutoMode } from './auto-tts'
 
-// ── Constants ────────────────────────────────────────────────────────────
-
-export const UPLOAD_REF_PREFIX = 'upload:'
+const UPLOAD_REF_PREFIX = 'upload:'
 
 export const PENDING_ROW_TTL = 10 * 60_000 // 10 minutes
 export const PENDING_ROW_MAX = 500
 export const COMPOSING_COOLDOWN_MS = 3_000
-
-// ── Types ────────────────────────────────────────────────────────────────
 
 export interface TtsConfig {
 	mode: TtsAutoMode
@@ -31,7 +27,7 @@ export interface OutboundItem {
 }
 
 export interface PendingDelivery {
-	sessionId: string
+	branchId: string
 	targets: Map<string, PendingTargetDelivery>
 	inFlight: Promise<void>
 }
@@ -44,7 +40,7 @@ export interface PendingTargetDelivery {
 }
 
 export interface PendingRowEntry {
-	sessionId: string
+	branchId: string
 	target: ChannelDeliveryTarget
 	createdAt: number
 }
@@ -55,8 +51,6 @@ export interface ExtractedReplyPayload {
 	isLastAssistantReply: boolean
 	ttsDirective?: { params?: string }
 }
-
-// ── Live-text streaming types ───────────────────────────────────────────
 
 /** Opaque provider-native handle for an in-flight live message. */
 export type LiveTextHandle = Record<string, unknown>
@@ -90,92 +84,8 @@ export interface LiveDeliveryEvent {
 	updatedAt: number
 }
 
-// ── Pure functions ───────────────────────────────────────────────────────
-
 export function toUploadRef(uploadId: string): string {
 	return `${UPLOAD_REF_PREFIX}${uploadId}`
-}
-
-export function extractUploadIdFromMediaRef(
-	ref: string
-): string | undefined {
-	const trimmed = ref.trim()
-	const uploadPrefixMatch = trimmed.match(/^upload:(.+)$/i)
-	if (uploadPrefixMatch?.[1]) {
-		return uploadPrefixMatch[1]
-	}
-
-	const uploadContentMatch = trimmed.match(
-		/\/api\/uploads-rpc\/([^/?#]+)\/content(?:[?#].*)?$/i
-	)
-	if (uploadContentMatch?.[1]) {
-		try {
-			return decodeURIComponent(uploadContentMatch[1])
-		} catch {
-			return uploadContentMatch[1]
-		}
-	}
-
-	const uploadsMarker = '/uploads/'
-	const uploadsIndex = trimmed.indexOf(uploadsMarker)
-	if (uploadsIndex === -1) return undefined
-	const uploadId = trimmed.slice(
-		uploadsIndex + uploadsMarker.length
-	)
-	return uploadId.length > 0 ? uploadId : undefined
-}
-
-export function normalizeMediaRef(ref: string): string {
-	const uploadId = extractUploadIdFromMediaRef(ref)
-	if (uploadId) return toUploadRef(uploadId)
-	return ref.replace(/\/+$/, '')
-}
-
-export function appendUniqueMediaRef(
-	refs: string[],
-	seen: Set<string>,
-	ref: string | undefined
-): void {
-	if (!ref) return
-	const normalized = normalizeMediaRef(ref)
-	if (seen.has(normalized)) return
-	seen.add(normalized)
-	refs.push(normalized)
-}
-
-export function extractToolUploadRefs(
-	details: Record<string, unknown> | undefined
-): string[] {
-	if (!details || details.success !== true) return []
-
-	const refs: string[] = []
-	const seen = new Set<string>()
-	const uploadId =
-		typeof details.uploadId === 'string'
-			? details.uploadId
-			: undefined
-	appendUniqueMediaRef(
-		refs,
-		seen,
-		uploadId ? toUploadRef(uploadId) : undefined
-	)
-
-	const images = Array.isArray(details.images)
-		? details.images
-		: []
-	for (const image of images) {
-		if (!image || typeof image !== 'object') continue
-		const imageUploadId = (image as { uploadId?: unknown })
-			.uploadId
-		if (typeof imageUploadId !== 'string') continue
-		appendUniqueMediaRef(
-			refs,
-			seen,
-			toUploadRef(imageUploadId)
-		)
-	}
-
-	return refs
 }
 
 export function parseRowPayload(

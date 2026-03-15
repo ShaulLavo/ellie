@@ -29,7 +29,8 @@ export interface TraceIndexEntry {
 	relativePath: string
 	createdAt: number
 	traceKind: TraceKind
-	sessionId?: string
+	threadId?: string
+	branchId?: string
 	runId?: string
 }
 
@@ -67,7 +68,8 @@ export class TraceRecorder {
 			traceId: scope.traceId,
 			spanId: scope.spanId,
 			parentSpanId: scope.parentSpanId,
-			sessionId: scope.sessionId,
+			threadId: scope.threadId,
+			branchId: scope.branchId,
 			runId: scope.runId,
 			traceKind: scope.traceKind,
 			kind,
@@ -137,7 +139,7 @@ export class TraceRecorder {
 	/**
 	 * Find traces that belong to a specific session.
 	 */
-	findTracesBySession(sessionId: string): Array<{
+	findTracesBySession(branchId: string): Array<{
 		traceId: string
 		ts: number
 		traceKind: TraceKind
@@ -149,7 +151,7 @@ export class TraceRecorder {
 		}> = []
 
 		for (const entry of this.#index.values()) {
-			if (entry.sessionId === sessionId) {
+			if (entry.branchId === branchId) {
 				results.push({
 					traceId: entry.traceId,
 					ts: entry.createdAt,
@@ -160,8 +162,6 @@ export class TraceRecorder {
 
 		return results.sort((a, b) => a.ts - b.ts)
 	}
-
-	// ── Path resolution ─────────────────────────────────────────────────
 
 	/**
 	 * Resolve the absolute file path for a trace. On first write for a traceId,
@@ -206,7 +206,8 @@ export class TraceRecorder {
 			relativePath: relPath,
 			createdAt: Date.now(),
 			traceKind: scope.traceKind,
-			sessionId: scope.sessionId,
+			threadId: scope.threadId,
+			branchId: scope.branchId,
 			runId: scope.runId
 		}
 
@@ -222,8 +223,6 @@ export class TraceRecorder {
 
 		return absPath
 	}
-
-	// ── Index loading / rebuilding ──────────────────────────────────────
 
 	#loadOrRebuildIndex(): void {
 		const indexPath = join(this.#traceDir, INDEX_FILENAME)
@@ -286,7 +285,8 @@ export class TraceRecorder {
 				relativePath: relPath,
 				createdAt: firstEvent.ts,
 				traceKind: firstEvent.traceKind as TraceKind,
-				sessionId: firstEvent.sessionId,
+				threadId: firstEvent.threadId,
+				branchId: firstEvent.branchId,
 				runId: firstEvent.runId
 			}
 			this.#index.set(entry.traceId, entry)
@@ -303,8 +303,6 @@ export class TraceRecorder {
 			'utf-8'
 		)
 	}
-
-	// ── Helpers ─────────────────────────────────────────────────────────
 
 	/** Get the next monotonic sequence number for a trace. */
 	#nextSeq(traceId: string): number {

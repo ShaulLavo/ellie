@@ -1,7 +1,6 @@
 /**
  * Pairing request persistence for the `pairing` DM policy.
  * Stores pending pairing requests with human-friendly codes.
- * Aligned with openclaw's pairing-store.ts.
  */
 
 import {

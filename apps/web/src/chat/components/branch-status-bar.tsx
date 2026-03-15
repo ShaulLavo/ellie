@@ -1,20 +1,20 @@
 import { NumberTicker } from '@/components/ui/number-ticker'
-import type { SessionStats } from '@/lib/chat/session-stats'
+import type { BranchStats } from '@/lib/chat/branch-stats'
 import { TokenCount } from './token-count'
 import { Cost } from './cost-display'
 import { formatModel } from '../utils'
 
-export type { SessionStats }
+export type { BranchStats }
 
 const DOT = (
 	<span className="text-muted-foreground/50">&middot;</span>
 )
 
-export function SessionStatusBar({
+export function BranchStatusBar({
 	stats,
 	isAgentRunning
 }: {
-	stats: SessionStats
+	stats: BranchStats
 	isAgentRunning: boolean
 }) {
 	if (stats.messageCount === 0) return null

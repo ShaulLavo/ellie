@@ -47,8 +47,6 @@ describe('access-control', () => {
 
 	const accountId = 'test-account'
 
-	// ── DM: disabled ──────────────────────────────────────────────────
-
 	test('dmPolicy: disabled blocks all DMs', async () => {
 		const result = await checkInboundAccessControl({
 			settings: makeSettings({ dmPolicy: 'disabled' }),
@@ -61,8 +59,6 @@ describe('access-control', () => {
 		})
 		expect(result.allowed).toBe(false)
 	})
-
-	// ── DM: open ──────────────────────────────────────────────────────
 
 	test('dmPolicy: open allows all DMs', async () => {
 		const result = await checkInboundAccessControl({
@@ -77,8 +73,6 @@ describe('access-control', () => {
 		expect(result.allowed).toBe(true)
 		expect(result.shouldMarkRead).toBe(true)
 	})
-
-	// ── DM: allowlist ─────────────────────────────────────────────────
 
 	test('dmPolicy: allowlist blocks sender not in list', async () => {
 		const result = await checkInboundAccessControl({
@@ -127,8 +121,6 @@ describe('access-control', () => {
 		})
 		expect(result.allowed).toBe(true)
 	})
-
-	// ── DM: pairing ───────────────────────────────────────────────────
 
 	test('dmPolicy: pairing — unknown sender triggers pairing reply', async () => {
 		const replies: string[] = []
@@ -190,8 +182,6 @@ describe('access-control', () => {
 		expect(result.allowed).toBe(true)
 	})
 
-	// ── Pairing grace period ──────────────────────────────────────────
-
 	test('pairing: historical message suppresses reply', async () => {
 		const connectedAt = Date.now()
 		// Message from 5 minutes ago (well before connectedAt - 30s)
@@ -242,8 +232,6 @@ describe('access-control', () => {
 		expect(replies).toHaveLength(1) // Reply sent
 	})
 
-	// ── Self-chat ─────────────────────────────────────────────────────
-
 	test('self-chat: always allowed with selfChatMode flag', async () => {
 		const result = await checkInboundAccessControl({
 			settings: makeSettings({
@@ -282,8 +270,6 @@ describe('access-control', () => {
 		expect(result.shouldMarkRead).toBe(false)
 	})
 
-	// ── Group: disabled ───────────────────────────────────────────────
-
 	test('groupPolicy: disabled blocks all group messages', async () => {
 		const result = await checkInboundAccessControl({
 			settings: makeSettings({ groupPolicy: 'disabled' }),
@@ -296,8 +282,6 @@ describe('access-control', () => {
 		})
 		expect(result.allowed).toBe(false)
 	})
-
-	// ── Group: open ───────────────────────────────────────────────────
 
 	test('groupPolicy: open allows all group messages', async () => {
 		const result = await checkInboundAccessControl({
@@ -312,8 +296,6 @@ describe('access-control', () => {
 		expect(result.allowed).toBe(true)
 		expect(result.shouldMarkRead).toBe(true)
 	})
-
-	// ── Group: allowlist ──────────────────────────────────────────────
 
 	test('groupPolicy: allowlist without groupAllowFrom blocks', async () => {
 		const result = await checkInboundAccessControl({
@@ -379,8 +361,6 @@ describe('access-control', () => {
 		expect(result.allowed).toBe(false)
 	})
 
-	// ── Echo suppression ──────────────────────────────────────────────
-
 	test('outgoing echo on non-self account is blocked', async () => {
 		const result = await checkInboundAccessControl({
 			settings: makeSettings({ dmPolicy: 'open' }),
@@ -393,8 +373,6 @@ describe('access-control', () => {
 		})
 		expect(result.allowed).toBe(false)
 	})
-
-	// ── DM edge cases (Phase 7, Task 1a) ─────────────────────────────
 
 	test('dmPolicy: pairing — no senderE164 blocks silently (no reply)', async () => {
 		const replies: string[] = []
@@ -467,8 +445,6 @@ describe('access-control', () => {
 		expect(result.isSelfChat).toBe(true)
 	})
 
-	// ── Group policy edge cases (Phase 7, Task 1b) ───────────────────
-
 	test('groupPolicy: allowlist — sender without E.164 (LID-only) is blocked', async () => {
 		const result = await checkInboundAccessControl({
 			settings: makeSettings({
@@ -500,8 +476,6 @@ describe('access-control', () => {
 		})
 		expect(result.allowed).toBe(true)
 	})
-
-	// ── Pairing + AllowFrom Store Integration (Phase 7, Task 1c) ─────
 
 	test('pairing: approved sender persists across calls', async () => {
 		const replies: string[] = []

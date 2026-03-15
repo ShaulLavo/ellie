@@ -1,7 +1,5 @@
 /**
  * Inbound access control for WhatsApp messages.
- * Extracted from provider.ts inline logic, aligned with openclaw's access-control.ts.
- *
  * Pure-ish function — only side effects are pairing persistence and sending the reply.
  */
 
@@ -11,7 +9,7 @@ import { mergedAllowFrom } from './allowfrom-store'
 import { buildPairingReply } from './pairing-messages'
 import type { WhatsAppSettings } from './provider'
 
-export type AccessControlResult = {
+type AccessControlResult = {
 	allowed: boolean
 	shouldMarkRead: boolean
 	isSelfChat: boolean
@@ -22,7 +20,7 @@ const PAIRING_REPLY_HISTORY_GRACE_MS = 30_000
 /**
  * Determine if self-chat mode is active.
  * True when the explicit selfChatMode flag is set, OR when the owner's own
- * E.164 is present in allowFrom (openclaw-style inference).
+ * E.164 is present in allowFrom.
  */
 function isSelfChatMode(
 	selfE164: string | null,
@@ -82,7 +80,6 @@ export async function checkInboundAccessControl(params: {
 		isSelfChat: false
 	}
 
-	// ── Group messages ────────────────────────────────────────────────
 	if (isGroup) {
 		if (settings.groupPolicy === 'disabled') return blocked
 
@@ -115,8 +112,6 @@ export async function checkInboundAccessControl(params: {
 			isSelfChat: false
 		}
 	}
-
-	// ── DM messages ───────────────────────────────────────────────────
 
 	// Outgoing echo on non-self account — block
 	if (isFromMe && !isSamePhone(selfE164, senderE164))
@@ -177,7 +172,6 @@ export async function checkInboundAccessControl(params: {
 		}
 	}
 
-	// ── Pairing flow ──────────────────────────────────────────────────
 	if (settings.dmPolicy === 'pairing') {
 		if (!senderE164) return blocked
 

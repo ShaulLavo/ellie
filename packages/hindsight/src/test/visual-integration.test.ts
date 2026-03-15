@@ -35,8 +35,6 @@ describe('Phase 4: Visual Integration', () => {
 		t.cleanup()
 	})
 
-	// ── E2E: Visual retain → visual recall ─────────────────────────────
-
 	describe('end-to-end visual retain → recall', () => {
 		it('retains visual description and finds it via recall', async () => {
 			// Retain some text memories as baseline
@@ -80,8 +78,6 @@ describe('Phase 4: Visual Integration', () => {
 		})
 	})
 
-	// ── Mixed recall with cap enforcement ─────────────────────────────
-
 	describe('mixed recall with cap enforcement', () => {
 		it('enforces 20% visual cap in mixed results', async () => {
 			// Retain 20 text memories
@@ -115,8 +111,6 @@ describe('Phase 4: Visual Integration', () => {
 			expect(visualCount).toBeLessThanOrEqual(4)
 		})
 	})
-
-	// ── Non-visual baseline behavior ──────────────────────────────────
 
 	describe('non-visual baseline', () => {
 		it('includeVisual=false produces identical results to pre-visual behavior', async () => {
@@ -192,8 +186,6 @@ describe('Phase 4: Visual Integration', () => {
 		})
 	})
 
-	// ── Scope isolation ───────────────────────────────────────────────
-
 	describe('scope isolation', () => {
 		it('visual memories in different banks are isolated', async () => {
 			const bankId2 = createTestBank(t.hs, 'bank-2')
@@ -256,8 +248,6 @@ describe('Phase 4: Visual Integration', () => {
 			expect(stats.totalVisualMemories).toBe(2)
 		})
 	})
-
-	// ── Recall trace includes visual phase ────────────────────────────
 
 	describe('recall trace', () => {
 		it('includes visual_fusion phase in trace when enabled', async () => {

@@ -7,7 +7,7 @@ import {
 } from 'react'
 import type { StoredChatMessage } from '@/chat/types'
 import { StreamClient, type EventRow } from '@/lib/stream'
-import type { SessionStats } from '@/lib/chat/session-stats'
+import type { BranchStats } from '@/lib/chat/branch-stats'
 import {
 	handleSnapshot,
 	handleAppend,
@@ -29,21 +29,32 @@ interface StreamConnectionResult {
 		}[],
 		speechRef?: string
 	) => Promise<void>
-	clearSession: () => Promise<void>
+	clearBranch: () => Promise<void>
 	retry: () => void
 }
 
-export function useStreamConnection(
-	sessionId: string,
-	upsert: (msgs: StoredChatMessage[]) => void,
-	replaceAll: (msgs: StoredChatMessage[]) => void,
-	resetSessionState: () => void,
-	setSessionStats: (
+export interface StreamConnectionDeps {
+	branchId: string
+	upsert: (msgs: StoredChatMessage[]) => void
+	replaceAll: (msgs: StoredChatMessage[]) => void
+	resetBranchState: () => void
+	setBranchStats: (
 		updater:
-			| SessionStats
-			| ((prev: SessionStats) => SessionStats)
+			| BranchStats
+			| ((prev: BranchStats) => BranchStats)
 	) => void
+}
+
+export function useStreamConnection(
+	deps: StreamConnectionDeps
 ): StreamConnectionResult {
+	const {
+		branchId,
+		upsert,
+		replaceAll,
+		resetBranchState,
+		setBranchStats
+	} = deps
 	const [connectionState, setConnectionState] =
 		useState<ConnectionState>('connecting')
 	const [error, setError] = useState<string | null>(null)
@@ -56,7 +67,7 @@ export function useStreamConnection(
 
 	const getDispatch = useEffectEvent(() => ({
 		setStreamingMessage,
-		setSessionStats,
+		setBranchStats,
 		setIsAgentRunning,
 		upsert,
 		replaceAll,
@@ -66,18 +77,10 @@ export function useStreamConnection(
 	const onStreamSnapshot = useEffectEvent(
 		(
 			events: EventRow[],
-			sessionChanged: boolean,
-			resolvedSessionId: string
+			branchChanged: boolean,
+			_resolvedBranchId: string
 		) => {
-			handleSnapshot(events, sessionChanged, getDispatch())
-			// Update the current-session marker so the next reload knows
-			// which session's cache is valid for "current".
-			if (sessionId === 'current') {
-				localStorage.setItem(
-					'ellie-current-session',
-					resolvedSessionId
-				)
-			}
+			handleSnapshot(events, branchChanged, getDispatch())
 		}
 	)
 
@@ -90,16 +93,16 @@ export function useStreamConnection(
 	)
 
 	useEffect(() => {
-		const stream = new StreamClient(sessionId, {
+		const stream = new StreamClient(branchId, {
 			onSnapshot: (
 				events,
-				sessionChanged,
-				resolvedSessionId
+				branchChanged,
+				resolvedBranchId
 			) =>
 				onStreamSnapshot(
 					events,
-					sessionChanged,
-					resolvedSessionId
+					branchChanged,
+					resolvedBranchId
 				),
 			onAppend: event => onStreamAppend(event),
 			onUpdate: event => onStreamUpdate(event),
@@ -133,7 +136,7 @@ export function useStreamConnection(
 			stream.disconnect()
 			streamRef.current = null
 		}
-	}, [sessionId])
+	}, [branchId])
 
 	const sendMessage = async (
 		text: string,
@@ -160,15 +163,15 @@ export function useStreamConnection(
 		}
 	}
 
-	const clearSession = async () => {
+	const clearBranch = async () => {
 		const stream = streamRef.current
 		if (!stream) return
 		try {
-			await stream.clearSession()
-			resetSessionState()
+			await stream.clearBranch()
+			resetBranchState()
 		} catch (err) {
 			console.error('[chat-db] Clear failed:', err)
-			setError('Failed to clear session')
+			setError('Failed to clear branch')
 		}
 	}
 
@@ -185,7 +188,7 @@ export function useStreamConnection(
 		streamingMessage,
 		isAgentRunning,
 		sendMessage,
-		clearSession,
+		clearBranch,
 		retry
 	}
 }

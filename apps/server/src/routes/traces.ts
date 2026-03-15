@@ -7,20 +7,22 @@ import * as v from 'valibot'
 import type { TraceRecorder } from '@ellie/trace'
 import { errorSchema } from './schemas/common-schemas'
 import { NotFoundError } from './http-errors'
+import { requireLoopback } from './loopback-guard'
 
 const traceIdParamsSchema = v.object({
 	traceId: v.string()
 })
 
-const sessionIdParamsSchema = v.object({
-	sessionId: v.string()
+const branchIdParamsSchema = v.object({
+	branchId: v.string()
 })
 
 export function createTraceRoutes(recorder: TraceRecorder) {
 	return new Elysia({
-		prefix: '/traces',
+		prefix: '/api/traces',
 		tags: ['Traces']
 	})
+		.onBeforeHandle(requireLoopback)
 		.get('/list', () => recorder.listTraces())
 		.get(
 			'/:traceId/events',
@@ -41,15 +43,15 @@ export function createTraceRoutes(recorder: TraceRecorder) {
 			}
 		)
 		.get(
-			'/by-session/:sessionId',
+			'/by-branch/:branchId',
 			({ params }) => {
 				const traces = recorder.findTracesBySession(
-					params.sessionId
+					params.branchId
 				)
 				return traces
 			},
 			{
-				params: sessionIdParamsSchema
+				params: branchIdParamsSchema
 			}
 		)
 }

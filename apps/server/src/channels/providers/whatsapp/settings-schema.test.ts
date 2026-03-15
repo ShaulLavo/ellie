@@ -143,8 +143,6 @@ describe('whatsappSettingsSchema', () => {
 		}
 	})
 
-	// ── Groups schema validation ────────────────────────────────
-
 	test('accepts groups with requireMention only', () => {
 		const result = v.safeParse(whatsappSettingsSchema, {
 			groups: {

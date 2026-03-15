@@ -2,10 +2,10 @@
  * DB Studio — read-only, multi-database SQLite explorer.
  *
  * Discovers `.db` files in DATA_DIR and exposes:
- *   GET /db/databases           — list available databases
- *   GET /db/:database/tables    — list tables/views (system/shadow hidden)
- *   GET /db/:database/:table/schema — column types, constraints, FKs
- *   GET /db/:database/:table    — paginated rows with sort/filter
+ *   GET /api/db/databases           — list available databases
+ *   GET /api/db/:database/tables    — list tables/views (system/shadow hidden)
+ *   GET /api/db/:database/:table/schema — column types, constraints, FKs
+ *   GET /api/db/:database/:table    — paginated rows with sort/filter
  */
 
 import { Database } from 'bun:sqlite'
@@ -28,6 +28,7 @@ import {
 	BadRequestError,
 	NotFoundError
 } from '../http-errors'
+import { requireLoopback } from '../loopback-guard'
 
 function queryTableRows(
 	dataDir: string,
@@ -92,21 +93,12 @@ function queryTableRows(
 	const pg = Number(page)
 	const ps = Number(pageSize)
 
-	let totalRows: number
-	try {
-		const countRow = db
-			.query(
-				`SELECT COUNT(*) as cnt FROM ${quoteId(table)} ${filterClause}`
-			)
-			.get(...filterParams) as { cnt: number }
-		totalRows = countRow.cnt
-	} catch (err) {
-		console.warn(
-			'[db-studio] COUNT query failed:',
-			err instanceof Error ? err.message : err
+	const countRow = db
+		.query(
+			`SELECT COUNT(*) as cnt FROM ${quoteId(table)} ${filterClause}`
 		)
-		totalRows = 0
-	}
+		.get(...filterParams) as { cnt: number }
+	const totalRows = countRow.cnt
 
 	const totalPages = Math.max(1, Math.ceil(totalRows / ps))
 
@@ -115,22 +107,13 @@ function queryTableRows(
 		: ''
 	const offset = (pg - 1) * ps
 
-	let rows: Array<Record<string, unknown>>
-	try {
-		rows = db
-			.query(
-				`SELECT * FROM ${quoteId(table)} ${filterClause} ${orderClause} LIMIT ? OFFSET ?`
-			)
-			.all(...filterParams, ps, offset) as Array<
-			Record<string, unknown>
-		>
-	} catch (err) {
-		console.warn(
-			'[db-studio] SELECT query failed:',
-			err instanceof Error ? err.message : err
+	const rows = db
+		.query(
+			`SELECT * FROM ${quoteId(table)} ${filterClause} ${orderClause} LIMIT ? OFFSET ?`
 		)
-		rows = []
-	}
+		.all(...filterParams, ps, offset) as Array<
+		Record<string, unknown>
+	>
 
 	return {
 		database: params.database,
@@ -150,9 +133,10 @@ export function createDbStudioRoutes(dataDir: string) {
 	const dbCache = new Map<string, Database>()
 
 	return new Elysia({
-		prefix: '/db',
+		prefix: '/api/db',
 		tags: ['DB Studio']
 	})
+		.onBeforeHandle(requireLoopback)
 		.get('/databases', () => {
 			return { databases: discoverDbs(dataDir) }
 		})

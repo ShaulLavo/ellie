@@ -46,8 +46,6 @@ function tusHeaders(
 	}
 }
 
-// ── OPTIONS ─────────────────────────────────────────────────────────────────
-
 describe('OPTIONS', () => {
 	it('returns Tus-Version, Tus-Extension, and CORS headers', async () => {
 		const req = new Request(
@@ -96,8 +94,6 @@ describe('OPTIONS', () => {
 		expect(res.headers.get('Tus-Max-Size')).toBe('1048576')
 	})
 })
-
-// ── POST (create upload) ────────────────────────────────────────────────────
 
 describe('POST create upload', () => {
 	it('creates upload with Upload-Length and returns 201 + Location', async () => {
@@ -184,8 +180,6 @@ describe('POST create upload', () => {
 	})
 })
 
-// ── POST creation-with-upload ───────────────────────────────────────────────
-
 describe('POST creation-with-upload', () => {
 	it('writes body data and returns Upload-Offset', async () => {
 		const data = new Uint8Array(50)
@@ -206,8 +200,6 @@ describe('POST creation-with-upload', () => {
 		expect(res.headers.get('Upload-Offset')).toBe('50')
 	})
 })
-
-// ── HEAD ────────────────────────────────────────────────────────────────────
 
 describe('HEAD status', () => {
 	it('returns Upload-Offset and Upload-Length', async () => {
@@ -313,8 +305,6 @@ describe('HEAD status', () => {
 		expect(res.status).toBe(404)
 	})
 })
-
-// ── PATCH ───────────────────────────────────────────────────────────────────
 
 describe('PATCH append', () => {
 	it('advances upload offset and returns 204', async () => {
@@ -485,8 +475,6 @@ describe('PATCH append', () => {
 	})
 })
 
-// ── Deferred length ─────────────────────────────────────────────────────────
-
 describe('Deferred length flow', () => {
 	it('creates with defer, patches with length declaration, completes', async () => {
 		// Create with deferred length
@@ -542,8 +530,6 @@ describe('Deferred length flow', () => {
 	})
 })
 
-// ── DELETE (termination) ────────────────────────────────────────────────────
-
 describe('DELETE termination', () => {
 	it('removes upload and returns 204', async () => {
 		const createRes = await server.handle(
@@ -583,8 +569,6 @@ describe('DELETE termination', () => {
 		expect(headRes.status).toBe(404)
 	})
 })
-
-// ── Expiration ──────────────────────────────────────────────────────────────
 
 describe('Expiration', () => {
 	it('returns Upload-Expires header on create for incomplete uploads', async () => {
@@ -631,8 +615,6 @@ describe('Expiration', () => {
 		expect(count).toBe(1)
 	})
 })
-
-// ── Tus-Resumable enforcement ───────────────────────────────────────────────
 
 describe('Tus-Resumable enforcement', () => {
 	it('returns 412 when Tus-Resumable header is missing on non-OPTIONS', async () => {

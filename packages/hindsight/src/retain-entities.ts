@@ -12,8 +12,6 @@ import type {
 	PreparedExtractedFact
 } from './retain-extract'
 
-// ── Types ───────────────────────────────────────────────────────────────────
-
 export interface EntityPlan {
 	entityMap: Map<string, Entity>
 	entityById: Map<string, Entity>
@@ -28,8 +26,6 @@ export interface EntityPlan {
 		lastUpdated: number
 	}>
 }
-
-// ── Entity plan builder (batch path) ────────────────────────────────────────
 
 export function processEntityForPlan(
 	ent: ExtractedEntity,
@@ -187,8 +183,6 @@ export function planEntities(
 	}
 }
 
-// ── Entity resolution (single entity, used by retain()) ─────────────────────
-
 export async function resolveOrCreateEntity(
 	hdb: HindsightDatabase,
 	entityVec: EmbeddingStore,
@@ -297,8 +291,6 @@ export async function resolveOrCreateEntity(
 		lastUpdated: now
 	})
 }
-
-// ── Resolve linked entities for batch processing ────────────────────────────
 
 export function resolveLinkedEntities(
 	entities: ExtractedEntity[],

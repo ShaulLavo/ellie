@@ -15,8 +15,6 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync, existsSync } from 'fs'
 
-// ── stripMarkdownForTts ──────────────────────────────────────────────
-
 describe('stripMarkdownForTts', () => {
 	test('removes bold markers', () => {
 		expect(stripMarkdownForTts('**bold** text')).toBe(
@@ -84,8 +82,6 @@ describe('stripMarkdownForTts', () => {
 	})
 })
 
-// ── truncateForTts ───────────────────────────────────────────────────
-
 describe('truncateForTts', () => {
 	test('returns short text unchanged', () => {
 		expect(truncateForTts('Short.', 1500)).toBe('Short.')
@@ -118,8 +114,6 @@ describe('truncateForTts', () => {
 		expect(truncateForTts(shortText)).toBe(shortText)
 	})
 })
-
-// ── synthesizeToPayload ──────────────────────────────────────────────
 
 describe('synthesizeToPayload', () => {
 	let dir: string

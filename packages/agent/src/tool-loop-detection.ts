@@ -13,9 +13,7 @@
  * - Uses JSON.stringify with sorted keys instead of sha256 (sufficient for in-memory comparison)
  */
 
-// ============================================================================
 // Types
-// ============================================================================
 
 export type LoopPattern = 'repeated_call' | 'ping_pong'
 
@@ -52,9 +50,7 @@ export interface ToolLoopDetector {
 	reset(): void
 }
 
-// ============================================================================
 // Internal types
-// ============================================================================
 
 interface ToolCallEntry {
 	toolName: string
@@ -62,9 +58,7 @@ interface ToolCallEntry {
 	resultHash?: string
 }
 
-// ============================================================================
 // Hash utility
-// ============================================================================
 
 /**
  * Deterministic hash of a value using JSON.stringify with sorted keys.
@@ -101,9 +95,7 @@ function sortedReplacer(
 	return value
 }
 
-// ============================================================================
 // Factory
-// ============================================================================
 
 const DEFAULT_OPTIONS: ToolLoopDetectorOptions = {
 	maxRepeatedCalls: 5,
@@ -112,9 +104,7 @@ const DEFAULT_OPTIONS: ToolLoopDetectorOptions = {
 	requireIdenticalResults: true
 }
 
-// ============================================================================
 // Detection algorithms
-// ============================================================================
 
 function checkRepeatedCalls(
 	history: ToolCallEntry[],
@@ -240,9 +230,7 @@ function checkPingPong(
 	}
 }
 
-// ============================================================================
 // Factory
-// ============================================================================
 
 export function createToolLoopDetector(
 	options?: Partial<ToolLoopDetectorOptions>

@@ -7,8 +7,6 @@
  * 3. Fallback defaults: profile="default", project="default"
  */
 
-// ── Types ───────────────────────────────────────────────────────────────────
-
 export interface Scope {
 	profile: string
 	project: string
@@ -23,12 +21,8 @@ export interface ScopeContext {
 
 export type ScopeMode = 'strict' | 'broad'
 
-// ── Constants ───────────────────────────────────────────────────────────────
-
 export const DEFAULT_PROFILE = 'default'
 export const DEFAULT_PROJECT = 'default'
-
-// ── Derivation ──────────────────────────────────────────────────────────────
 
 /**
  * Derive scope tags from a context, applying defaults where missing.
@@ -77,24 +71,16 @@ export function resolveScope(
  */
 export function scopeMatches(
 	memoryScope: {
-		profile: string | null
-		project: string | null
+		profile: string
+		project: string
 	},
 	filterScope: Scope,
 	mode: ScopeMode = 'strict'
 ): boolean {
 	if (mode === 'broad') return true
 
-	// If memory has no scope tags, include it (legacy data)
-	if (!memoryScope.profile && !memoryScope.project)
-		return true
-
-	const profileMatch =
-		!memoryScope.profile ||
-		memoryScope.profile === filterScope.profile
-	const projectMatch =
-		!memoryScope.project ||
+	return (
+		memoryScope.profile === filterScope.profile &&
 		memoryScope.project === filterScope.project
-
-	return profileMatch && projectMatch
+	)
 }

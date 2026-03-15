@@ -27,8 +27,6 @@ import type {
 	RecallCandidate
 } from './types'
 
-// ── Deterministic embedding ───────────────────────────────────────────────
-
 const EVAL_EMBED_DIMS = 16
 
 function deterministicEmbed(
@@ -37,18 +35,22 @@ function deterministicEmbed(
 	return Promise.resolve(hashEmbed(text, EVAL_EMBED_DIMS))
 }
 
-// ── Fixture loading ───────────────────────────────────────────────────────
-
 export function loadFixture(path: string): EvalCase[] {
 	const raw = readFileSync(path, 'utf-8')
 	const lines = raw
 		.trim()
 		.split('\n')
 		.filter(line => line.trim().length > 0)
-	return lines.map(line => JSON.parse(line) as EvalCase)
+	return lines.map((line, i) => {
+		try {
+			return JSON.parse(line) as EvalCase
+		} catch {
+			throw new Error(
+				`Invalid JSON at ${path} line ${i + 1}: ${line.slice(0, 100)}`
+			)
+		}
+	})
 }
-
-// ── Core runner ───────────────────────────────────────────────────────────
 
 export interface RunBaselineOptions {
 	config: EvalRunConfig

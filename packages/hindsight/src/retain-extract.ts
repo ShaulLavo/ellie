@@ -16,8 +16,6 @@ import {
 } from './prompts'
 import { sanitizeText, parseLLMJson } from './sanitize'
 
-// ── Extraction types ────────────────────────────────────────────────────────
-
 // Python parity: only "caused_by" is a valid causal relation type.
 // The extraction prompt instructs the LLM to use "caused_by" exclusively.
 const CAUSAL_LINK_TYPES = new Set(['caused_by'] as const)
@@ -93,8 +91,6 @@ export interface ExpandedBatchContent {
 	project: string | null
 	session: string | null
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 export function parseISOToEpoch(
 	iso: string | null | undefined
@@ -579,8 +575,6 @@ export function normalizeBatchInputs(
 	return normalized
 }
 
-// ── Extraction ──────────────────────────────────────────────────────────────
-
 export async function extractFactsFromContent(
 	adapter: AnyTextAdapter,
 	content: string,
@@ -668,8 +662,6 @@ export async function extractFactsFromContent(
 		return []
 	}
 }
-
-// ── Chunking ────────────────────────────────────────────────────────────────
 
 export function chunkTranscriptTurns(
 	turns: TranscriptTurn[]

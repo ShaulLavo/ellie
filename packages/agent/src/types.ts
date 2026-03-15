@@ -12,9 +12,7 @@ import type {
 } from '@tanstack/ai'
 import type { GenericSchema, InferOutput } from 'valibot'
 
-// ============================================================================
 // Schema-derived types (single source of truth: @ellie/schemas/agent)
-// ============================================================================
 
 export type {
 	TextContent,
@@ -39,9 +37,7 @@ import type {
 
 export type Message = AgentMessage
 
-// ============================================================================
 // Tools
-// ============================================================================
 
 export interface AgentToolResult<TDetails = unknown> {
 	content: (TextContent | ImageContent)[]
@@ -68,9 +64,7 @@ export interface AgentTool<
 	) => Promise<AgentToolResult<TDetails>>
 }
 
-// ============================================================================
 // Agent state & context
-// ============================================================================
 
 export interface AgentState {
 	systemPrompt: string
@@ -89,9 +83,7 @@ export interface AgentContext {
 	tools?: AgentTool[]
 }
 
-// ============================================================================
 // Guardrail policy
-// ============================================================================
 
 export interface AgentRuntimeLimits {
 	/** Maximum wall-clock time in milliseconds. Disabled when unset, 0, or negative. */
@@ -107,9 +99,7 @@ export interface AgentGuardrailPolicy {
 	runtimeLimits?: AgentRuntimeLimits
 }
 
-// ============================================================================
 // Stream function & loop config
-// ============================================================================
 
 export interface StreamCallOptions {
 	adapter: AnyTextAdapter

@@ -21,8 +21,6 @@ mock.module('./reply-tts', () => ({
 		text.length <= max ? text : text.slice(0, max) + '...'
 }))
 
-// ── Mode tests ───────────────────────────────────────────────────────
-
 describe('maybeApplyTtsToPayload — mode tests', () => {
 	test('off mode — no TTS', async () => {
 		const payload: ChannelReplyPayload = {
@@ -102,8 +100,6 @@ describe('maybeApplyTtsToPayload — mode tests', () => {
 	})
 })
 
-// ── Skip-condition tests ─────────────────────────────────────────────
-
 describe('maybeApplyTtsToPayload — skip conditions', () => {
 	test('already has media — skipped', async () => {
 		const payload: ChannelReplyPayload = {
@@ -160,8 +156,6 @@ describe('maybeApplyTtsToPayload — skip conditions', () => {
 		expect(result).toBe(payload)
 	})
 })
-
-// ── Processing tests ─────────────────────────────────────────────────
 
 describe('maybeApplyTtsToPayload — processing', () => {
 	test('strips markdown before synthesis', async () => {

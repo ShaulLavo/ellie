@@ -5,8 +5,6 @@
  * the FE reducers that project raw events into renderable messages.
  */
 
-// ── Content parts ────────────────────────────────────────────────────────────
-
 export type ContentPart =
 	| { type: 'text'; text: string }
 	| {
@@ -89,7 +87,7 @@ export type ContentPart =
 			origin: 'tool_upload' | 'tts' | 'llm_directive'
 			uploadId: string
 			url?: string
-			mime?: string
+			mimeType?: string
 			mediaKind?: 'image' | 'audio' | 'video' | 'file'
 			width?: number
 			height?: number
@@ -125,7 +123,7 @@ export type ContentPart =
 			images?: Array<{
 				uploadId: string
 				url: string
-				mime: string
+				mimeType: string
 				width?: number
 				height?: number
 				hash?: string
@@ -159,8 +157,6 @@ export type ArtifactType =
 	| 'code'
 	| 'image'
 
-// ── Log entry (server → client wire format) ──────────────────────────────────
-
 export type MessageSender =
 	| 'user'
 	| 'agent'
@@ -177,8 +173,6 @@ export interface LogEntry {
 	line: number
 	parentId?: string | null
 }
-
-// ── Chat message (client-side projection) ────────────────────────────────────
 
 export interface ChatMessage {
 	id: string
@@ -199,20 +193,6 @@ export type ConnectionState =
 	| 'connected'
 	| 'error'
 
-export interface SessionInfo {
-	model: string
-	agentName: string
-	contextTokens: number
-	contextWindow: number
-	messageCount: number
-	usage?: {
-		promptTokens: number
-		completionTokens: number
-		totalTokens: number
-	}
-	cost?: number
-}
-
 export interface ProgressInfo {
 	taskId: string
 	taskType: 'image-gen' | 'setup' | 'download'
@@ -224,8 +204,6 @@ export interface ProgressInfo {
 	status: 'started' | 'running' | 'completed' | 'failed'
 	detail?: string
 }
-
-// ── Projection helpers ───────────────────────────────────────────────────────
 
 /** Convert a LogEntry from the server into a client-side ChatMessage. */
 export function toMessage(entry: LogEntry): ChatMessage {
@@ -269,8 +247,6 @@ export function toMessage(entry: LogEntry): ChatMessage {
 		thinking
 	}
 }
-
-// ── Transcript ───────────────────────────────────────────────────────────────
 
 export interface TranscriptEntry {
 	id: string

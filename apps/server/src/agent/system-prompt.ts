@@ -1,15 +1,8 @@
-/**
- * System prompt — assembles the system prompt from workspace files.
- *
- * Reads workspace files in a fixed order and concatenates them
- * into a single system prompt string. BOOTSTRAP.md is excluded
- * from the steady-state prompt (it's delivered via synthetic
- * tool-read in the history instead).
- */
-
 import { readWorkspaceFile } from './workspace'
+import { loadSkills } from './skills/discovery'
+import { formatSkillsForPrompt } from './skills/prompt'
+import type { Skill } from './skills/types'
 
-/** Ordered sections for the system prompt (BOOTSTRAP excluded) */
 const PROMPT_SECTIONS = [
 	'SOUL.md',
 	'IDENTITY.md',
@@ -19,13 +12,10 @@ const PROMPT_SECTIONS = [
 	'HEARTBEAT.md'
 ] as const
 
-/**
- * Build the system prompt from workspace files.
- * Sections that don't exist or are empty are silently skipped.
- */
-export function buildSystemPrompt(
-	workspaceDir: string
-): string {
+export function buildSystemPrompt(workspaceDir: string): {
+	prompt: string
+	skills: Skill[]
+} {
 	const sections: string[] = []
 
 	for (const filename of PROMPT_SECTIONS) {
@@ -38,5 +28,25 @@ export function buildSystemPrompt(
 		}
 	}
 
-	return sections.join('\n\n---\n\n')
+	const { skills, diagnostics } = loadSkills()
+
+	for (const d of diagnostics) {
+		console.warn(
+			`[skills] ${d.type}: ${d.message} (${d.path})`
+		)
+	}
+
+	if (skills.length > 0) {
+		console.log(`[skills] loaded ${skills.length} skill(s)`)
+	}
+
+	const skillsBlock = formatSkillsForPrompt(skills)
+	if (skillsBlock) {
+		sections.push(skillsBlock)
+	}
+
+	return {
+		prompt: sections.join('\n\n---\n\n'),
+		skills
+	}
 }

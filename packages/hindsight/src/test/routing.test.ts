@@ -20,8 +20,6 @@ import {
 } from './setup'
 import { classifyRoute, detectConflict } from '../routing'
 
-// ── Pure classification tests ────────────────────────────────────────────────
-
 describe('classifyRoute', () => {
 	it('returns reinforce for score >= 0.92 with no conflict', () => {
 		expect(classifyRoute(0.92, false)).toBe('reinforce')
@@ -55,8 +53,6 @@ describe('classifyRoute', () => {
 		expect(classifyRoute(0.5, true)).toBe('reconsolidate')
 	})
 })
-
-// ── Conflict detection tests ─────────────────────────────────────────────────
 
 describe('detectConflict', () => {
 	it('returns no conflict for same entity key/value', () => {
@@ -132,8 +128,6 @@ describe('detectConflict', () => {
 		).toBe(false)
 	})
 })
-
-// ── Integration tests ────────────────────────────────────────────────────────
 
 describe('routing integration via retain', () => {
 	let t: TestHindsight

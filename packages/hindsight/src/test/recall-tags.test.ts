@@ -266,8 +266,6 @@ describe('recall with tag filtering', () => {
 		expect(result.memories.length).toBeGreaterThan(0)
 	})
 
-	// ── retain with tags ────────────────────────────────────────────────
-
 	it('retain stores memories with tags', async () => {
 		const result = await t.hs.retain(bankId, 'test', {
 			facts: [{ content: 'Tagged fact for verification' }],
@@ -310,10 +308,6 @@ describe('recall with tag filtering', () => {
 		expect(tags).toContain('doc-tag')
 		expect(tags).toContain('item-tag')
 	})
-
-	// ── reflect with tags ───────────────────────────────────────────────
-
-	// ── Multi-user isolation ──────────────────────────────────────────────
 
 	describe('multi-user isolation via tags', () => {
 		it('user A only sees their tagged memories', async () => {

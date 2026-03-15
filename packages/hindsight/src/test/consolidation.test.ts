@@ -40,8 +40,6 @@ describe('Consolidation', () => {
 		t.cleanup()
 	})
 
-	// ── Helper: query observations from DB ─────────────────────────────────
-
 	function listObservations(bid: string = bankId) {
 		const hdb = (
 			t.hs as unknown as { hdb: HindsightDatabase }
@@ -121,8 +119,6 @@ describe('Consolidation', () => {
 			name: string
 		}>
 	}
-
-	// ── Early-return paths (legit — no LLM involved) ─────────────────────
 
 	describe('early returns', () => {
 		it('returns zero counts for empty bank', async () => {
@@ -255,8 +251,6 @@ describe('Consolidation', () => {
 			expect(sourceIds.length).toBeGreaterThanOrEqual(3)
 		})
 	})
-
-	// ── Basic consolidation (TDD — need verifiable mock adapter) ─────────
 
 	describe('basic consolidation', () => {
 		it('consolidate returns a ConsolidateResult with correct counts', async () => {
@@ -404,8 +398,6 @@ describe('Consolidation', () => {
 			expect(third.observationsCreated).toBe(1)
 		})
 	})
-
-	// ── Observation creation (TDD) ────────────────────────────────────────
 
 	describe('observation creation', () => {
 		it("creates observations with factType 'observation'", async () => {
@@ -556,8 +548,6 @@ describe('Consolidation', () => {
 		})
 	})
 
-	// ── Recall with observation fact type ─────────────────────────────────
-
 	describe('recall with observation fact type', () => {
 		it('recall with observation-only fact type returns observations', async () => {
 			await t.hs.retain(bankId, 'source', {
@@ -671,8 +661,6 @@ describe('Consolidation', () => {
 		})
 	})
 
-	// ── Consolidation disabled ──────────────────────────────────────────
-
 	describe('consolidation disabled', () => {
 		it('respects enableConsolidation=false — auto-trigger from retain is skipped', async () => {
 			// Create a bank with consolidation disabled
@@ -748,8 +736,6 @@ describe('Consolidation', () => {
 			expect(result.skipped).toBe(0)
 		})
 	})
-
-	// ── Tag routing (port of test_consolidation.py scope tests) ───────────
 
 	describe('tag routing', () => {
 		it('same-scope: observation inherits tags from source memories', async () => {
@@ -1058,8 +1044,6 @@ describe('Consolidation', () => {
 		})
 	})
 
-	// ── Temporal range ──────────────────────────────────────────────────
-
 	describe('temporal range expansion', () => {
 		it('expands temporal range when updating observation (LEAST start, GREATEST end)', async () => {
 			const now = Date.now()
@@ -1203,8 +1187,6 @@ describe('Consolidation', () => {
 		})
 	})
 
-	// ── Entity inheritance ──────────────────────────────────────────────
-
 	describe('entity inheritance', () => {
 		it('copies entity links from source facts to observations', async () => {
 			await t.hs.retain(bankId, 'source', {
@@ -1320,8 +1302,6 @@ describe('Consolidation', () => {
 			expect(result.memories).toBeDefined()
 		})
 	})
-
-	// ── Update vs create ────────────────────────────────────────────────
 
 	describe('update existing observations', () => {
 		it("updates existing observation when LLM decides 'update'", async () => {
@@ -1620,8 +1600,6 @@ describe('Consolidation', () => {
 		})
 	})
 
-	// ── Mental model refresh trigger ────────────────────────────────────
-
 	describe('mental model refresh', () => {
 		it('triggers auto-refresh for mental models with matching tags', async () => {
 			// Create auto-refresh mental model with tags
@@ -1771,8 +1749,6 @@ describe('Consolidation', () => {
 		})
 	})
 
-	// ── Observation drill-down ──────────────────────────────────────────
-
 	describe('observation drill-down', () => {
 		it('search observations returns sourceMemoryIds for drill-down', async () => {
 			await t.hs.retain(bankId, 'source', {
@@ -1874,8 +1850,6 @@ describe('Consolidation', () => {
 			}
 		})
 	})
-
-	// ── Hierarchical retrieval ──────────────────────────────────────────
 
 	describe('hierarchical retrieval', () => {
 		it('mental model takes priority over observation in reflect', async () => {

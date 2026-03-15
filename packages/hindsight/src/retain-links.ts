@@ -14,12 +14,8 @@ import type {
 	PreparedExtractedFact
 } from './retain-extract'
 
-// ── Constants ───────────────────────────────────────────────────────────────
-
 export const SEMANTIC_LINK_THRESHOLD = 0.7
 export const SEMANTIC_LINK_TOP_K = 5
-
-// ── Entity links ────────────────────────────────────────────────────────────
 
 export function createEntityLinksFromMemories(
 	hdb: HindsightDatabase,
@@ -95,8 +91,6 @@ export function createEntityLinksFromMemories(
 		})
 	}
 }
-
-// ── Temporal links ──────────────────────────────────────────────────────────
 
 export function getTemporalAnchor(
 	eventDate: number | null,
@@ -333,8 +327,6 @@ export function createTemporalLinksFromMemories(
 	}
 }
 
-// ── Causal links ────────────────────────────────────────────────────────────
-
 export function insertCausalRelations(
 	hdb: HindsightDatabase,
 	bankId: string,
@@ -432,8 +424,6 @@ export function createCausalLinksFromGroups(
 		)
 	}
 }
-
-// ── Semantic links ──────────────────────────────────────────────────────────
 
 export function insertSemanticHitsForMemory(
 	hdb: HindsightDatabase,
@@ -542,8 +532,6 @@ export async function createSemanticLinks(
 	return links
 }
 
-// ── Utility ─────────────────────────────────────────────────────────────────
-
 export function addUniqueLink(
 	result: RetainResult,
 	linkKeys: Set<string>,
@@ -554,8 +542,6 @@ export function addUniqueLink(
 	linkKeys.add(key)
 	result.links.push(link)
 }
-
-// ── Co-occurrence helpers ───────────────────────────────────────────────────
 
 /**
  * Load all co-occurrence data for a bank into a Map<entityId, Set<entityId>>.

@@ -46,9 +46,7 @@ export function toModelMessages(
 	return msgs.map(toModelMessage)
 }
 
-// ============================================================================
 // Internal converters
-// ============================================================================
 
 function userToModelMessage(
 	msg: UserMessage

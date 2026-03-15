@@ -16,9 +16,7 @@ function recordWithOutcome(
 	return detection
 }
 
-// ============================================================================
 // Repeated call detection
-// ============================================================================
 
 describe('repeated call detection', () => {
 	test('does not trigger below threshold', () => {
@@ -164,9 +162,7 @@ describe('repeated call detection', () => {
 	})
 })
 
-// ============================================================================
 // Ping-pong detection
-// ============================================================================
 
 describe('ping-pong detection', () => {
 	test('does not trigger below threshold', () => {
@@ -304,9 +300,7 @@ describe('ping-pong detection', () => {
 	})
 })
 
-// ============================================================================
 // History window
-// ============================================================================
 
 describe('history window', () => {
 	test('old entries are evicted beyond historySize', () => {
@@ -335,9 +329,7 @@ describe('history window', () => {
 	})
 })
 
-// ============================================================================
 // Stable hashing
-// ============================================================================
 
 describe('stable hashing', () => {
 	test('treats equivalent objects with different key order as identical', () => {
@@ -366,9 +358,7 @@ describe('stable hashing', () => {
 	})
 })
 
-// ============================================================================
 // Edge cases
-// ============================================================================
 
 describe('edge cases', () => {
 	test('handles undefined args', () => {

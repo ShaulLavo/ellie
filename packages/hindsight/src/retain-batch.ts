@@ -1,5 +1,6 @@
 import { ulid } from 'fast-ulid'
 import { eq } from 'drizzle-orm'
+import { DEFAULT_PROFILE, DEFAULT_PROJECT } from './scope'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
@@ -62,8 +63,6 @@ import {
 	updateCooccurrences
 } from './retain-links'
 
-// ── Types ───────────────────────────────────────────────────────────────────
-
 interface AppliedDecision {
 	memoryId: string
 	route: RetainRoute
@@ -87,8 +86,6 @@ type MemoryRecordList = Array<{
 	session: string | null
 	sourceText: string
 }>
-
-// ── Decision application ────────────────────────────────────────────────────
 
 async function applyDecisionAction(
 	hdb: HindsightDatabase,
@@ -162,8 +159,6 @@ async function applyDecisionAction(
 	}
 	return null
 }
-
-// ── Batch new-trace processing ──────────────────────────────────────────────
 
 /**
  * Process all new_trace facts in a batch sub-group: plan entities, build memory
@@ -275,8 +270,8 @@ async function processNewTraceMemories(ctx: {
 			lastAccessed: null,
 			encodingStrength: 1.0,
 			gist: generateFallbackGist(item.fact.content),
-			scopeProfile: item.profile ?? null,
-			scopeProject: item.project ?? null,
+			scopeProfile: item.profile ?? DEFAULT_PROFILE,
+			scopeProject: item.project ?? DEFAULT_PROJECT,
 			scopeSession: item.session ?? null,
 			createdAt: now,
 			updatedAt: now
@@ -492,8 +487,6 @@ async function processNewTraceMemories(ctx: {
 	return memoryRecords
 }
 
-// ── Main batch function ─────────────────────────────────────────────────────
-
 export async function retainBatch(
 	hdb: HindsightDatabase,
 	memoryVec: EmbeddingStore,
@@ -635,7 +628,6 @@ export async function retainBatch(
 			flattened.map(item => item.fact.content)
 		)
 
-		// ── Route each fact via reconsolidation engine ──
 		const batchDecisions: RouteDecision[] = []
 		const batchAppliedMemoryIds: AppliedDecision[] = []
 
@@ -747,8 +739,6 @@ export async function retainBatch(
 				memoryIdsToOriginalIndex
 			})
 		}
-
-		// ── Episode tracking ──
 
 		for (const applied of batchAppliedMemoryIds) {
 			const episodeId = resolveEpisode(

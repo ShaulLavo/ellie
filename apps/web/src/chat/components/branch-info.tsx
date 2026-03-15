@@ -15,28 +15,27 @@ import {
 } from 'lucide-react'
 import { formatDateTime } from '@ellie/utils'
 
-interface SessionData {
+interface BranchData {
 	id: string
 	createdAt: number
 	updatedAt: number
 	currentSeq: number
 }
 
-interface SessionInfoProps {
+interface BranchInfoProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	getSessionStats: () => Promise<unknown>
+	getBranchStats: () => Promise<unknown>
 }
 
-export function SessionInfo({
+export function BranchInfo({
 	open,
 	onOpenChange,
-	getSessionStats
-}: SessionInfoProps) {
+	getBranchStats
+}: BranchInfoProps) {
 	const { data: stats, isLoading: loading } = useQuery({
-		queryKey: ['session-stats'],
-		queryFn: () =>
-			getSessionStats() as Promise<SessionData>,
+		queryKey: ['branch-stats'],
+		queryFn: () => getBranchStats() as Promise<BranchData>,
 		enabled: open
 	})
 
@@ -46,7 +45,7 @@ export function SessionInfo({
 				<CredenzaHeader>
 					<CredenzaTitle className="flex items-center gap-2 text-sm">
 						<InfoIcon className="size-4" />
-						Session Info
+						Branch Info
 					</CredenzaTitle>
 				</CredenzaHeader>
 

@@ -11,27 +11,27 @@ import { createElement } from 'react'
 import { downloadTranscript } from '../utils/download-transcript'
 
 interface UseChatCommandsOptions {
-	sessionId: string
+	branchId: string
 	allMessages: StoredChatMessage[]
 	onClear?: () => void
 }
 
 export function useChatCommands({
-	sessionId,
+	branchId,
 	allMessages,
 	onClear
 }: UseChatCommandsOptions) {
 	const confirm = useConfirm()
 
 	const handleDownloadTranscript = () => {
-		downloadTranscript(allMessages, sessionId)
+		downloadTranscript(allMessages, branchId)
 	}
 
 	const handleClearWithConfirm = async () => {
 		const ok = await confirm({
 			title: 'Clear conversation',
 			description:
-				'This will start a new conversation. Your current session will be saved and can be resumed later.',
+				'This will start a new conversation. Your current thread will be saved and can be resumed later.',
 			confirmText: 'Clear',
 			cancelText: 'Cancel'
 		})
@@ -48,28 +48,28 @@ export function useChatCommands({
 			action: () => handleClearWithConfirm()
 		},
 		{
-			name: 'sessions',
-			description: 'List all sessions',
+			name: 'threads',
+			description: 'List all threads',
 			icon: createElement(ListIcon, {
 				className: 'size-4'
 			}),
 			action: () => {
-				/* TODO: session list dialog */
+				/* TODO: thread list dialog */
 			}
 		},
 		{
 			name: 'info',
-			description: 'Show current session info',
+			description: 'Show thread info',
 			icon: createElement(InfoIcon, {
 				className: 'size-4'
 			}),
 			action: () => {
-				/* TODO: session info dialog */
+				/* TODO: branch info dialog */
 			}
 		},
 		{
 			name: 'transcript',
-			description: 'Download session transcript',
+			description: 'Download transcript',
 			icon: createElement(DownloadIcon, {
 				className: 'size-4'
 			}),

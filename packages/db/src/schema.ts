@@ -7,17 +7,44 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 
-// -- Sessions -----------------------------------------------------------------
+// -- Threads ------------------------------------------------------------------
 
-export const sessions = sqliteTable('sessions', {
+export const threads = sqliteTable('threads', {
 	id: text('id').primaryKey().notNull(),
+	agentId: text('agent_id').notNull(),
+	agentType: text('agent_type').notNull(),
+	workspaceId: text('workspace_id').notNull(),
+	title: text('title'),
+	state: text('state').notNull().default('active'),
+	dayKey: text('day_key'),
+	originThreadId: text('origin_thread_id'),
+	originBranchId: text('origin_branch_id'),
+	originRunId: text('origin_run_id'),
+	originAgentId: text('origin_agent_id'),
 	createdAt: integer('created_at').notNull(),
-	updatedAt: integer('updated_at').notNull(),
-	currentSeq: integer('current_seq').notNull().default(0)
+	updatedAt: integer('updated_at').notNull()
 })
 
-export type SessionRow = typeof sessions.$inferSelect
-export type NewSessionRow = typeof sessions.$inferInsert
+export type ThreadRow = typeof threads.$inferSelect
+export type NewThreadRow = typeof threads.$inferInsert
+
+// -- Branches -----------------------------------------------------------------
+
+export const branches = sqliteTable('branches', {
+	id: text('id').primaryKey().notNull(),
+	threadId: text('thread_id')
+		.notNull()
+		.references(() => threads.id, { onDelete: 'cascade' }),
+	parentBranchId: text('parent_branch_id'),
+	forkedFromEventId: integer('forked_from_event_id'),
+	forkedFromSeq: integer('forked_from_seq'),
+	currentSeq: integer('current_seq').notNull().default(0),
+	createdAt: integer('created_at').notNull(),
+	updatedAt: integer('updated_at').notNull()
+})
+
+export type BranchRow = typeof branches.$inferSelect
+export type NewBranchRow = typeof branches.$inferInsert
 
 // -- Events -------------------------------------------------------------------
 
@@ -25,9 +52,9 @@ export const events = sqliteTable(
 	'events',
 	{
 		id: integer('id').primaryKey({ autoIncrement: true }),
-		sessionId: text('session_id')
+		branchId: text('branch_id')
 			.notNull()
-			.references(() => sessions.id, {
+			.references(() => branches.id, {
 				onDelete: 'cascade'
 			}),
 		seq: integer('seq').notNull(),
@@ -38,27 +65,58 @@ export const events = sqliteTable(
 		createdAt: integer('created_at').notNull()
 	},
 	table => [
-		uniqueIndex('idx_events_session_seq').on(
-			table.sessionId,
+		uniqueIndex('idx_events_branch_seq').on(
+			table.branchId,
 			table.seq
 		),
-		index('idx_events_session_type').on(
-			table.sessionId,
+		index('idx_events_branch_type').on(
+			table.branchId,
 			table.type
 		),
-		index('idx_events_session_run_seq').on(
-			table.sessionId,
+		index('idx_events_branch_run_seq').on(
+			table.branchId,
 			table.runId,
 			table.seq
 		),
-		uniqueIndex('idx_events_session_dedupe')
-			.on(table.sessionId, table.dedupeKey)
+		uniqueIndex('idx_events_branch_dedupe')
+			.on(table.branchId, table.dedupeKey)
 			.where(sql`dedupe_key IS NOT NULL`)
 	]
 )
 
 export type EventRow = typeof events.$inferSelect
 export type NewEventRow = typeof events.$inferInsert
+
+// -- Thread Channels ----------------------------------------------------------
+
+export const threadChannels = sqliteTable(
+	'thread_channels',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		threadId: text('thread_id')
+			.notNull()
+			.references(() => threads.id, {
+				onDelete: 'cascade'
+			}),
+		channelId: text('channel_id').notNull(),
+		accountId: text('account_id').notNull(),
+		conversationKey: text('conversation_key').notNull(),
+		attachedAt: integer('attached_at').notNull(),
+		detachedAt: integer('detached_at')
+	},
+	table => [
+		index('idx_thread_channels_active').on(
+			table.channelId,
+			table.accountId,
+			table.conversationKey
+		)
+	]
+)
+
+export type ThreadChannelRow =
+	typeof threadChannels.$inferSelect
+export type NewThreadChannelRow =
+	typeof threadChannels.$inferInsert
 
 // -- Agent Bootstrap State ---------------------------------------------------
 
@@ -69,8 +127,8 @@ export const agentBootstrapState = sqliteTable(
 		status: text('status').notNull().default('pending'),
 		workspaceSeededAt: integer('workspace_seeded_at'),
 		bootstrapInjectedAt: integer('bootstrap_injected_at'),
-		bootstrapInjectedSessionId: text(
-			'bootstrap_injected_session_id'
+		bootstrapInjectedBranchId: text(
+			'bootstrap_injected_branch_id'
 		),
 		onboardingCompletedAt: integer(
 			'onboarding_completed_at'
@@ -106,7 +164,7 @@ export const speechArtifacts = sqliteTable(
 		createdAt: integer('created_at').notNull(),
 		expiresAt: integer('expires_at').notNull(),
 		claimedAt: integer('claimed_at'),
-		claimedBySessionId: text('claimed_by_session_id'),
+		claimedByBranchId: text('claimed_by_branch_id'),
 		claimedByEventId: integer('claimed_by_event_id')
 	},
 	table => [

@@ -92,8 +92,6 @@ afterEach(() => {
 })
 
 describe('Gate 1: Functional Contract', () => {
-	// ── 1. RecallOptions type surface ──────────────────────────────────────────
-
 	describe('RecallOptions supports Phase 3 fields', () => {
 		it('recall accepts tokenBudget option', async () => {
 			await t.hs.retain(bankId, 'seed data', {
@@ -151,8 +149,6 @@ describe('Gate 1: Functional Contract', () => {
 			expect(result).toBeDefined()
 		})
 	})
-
-	// ── 2. Location APIs callable with correct args ───────────────────────────
 
 	describe('locationRecord returns expected schema', () => {
 		it('locationRecord creates path and returns void', async () => {
@@ -272,8 +268,6 @@ describe('Gate 1: Functional Contract', () => {
 		})
 	})
 
-	// ── 3. Hindsight class location methods ──────────────────────────────────
-
 	describe('Hindsight class exposes location APIs', () => {
 		it('hs.locationRecord is callable', async () => {
 			const hdb = getHdb(t.hs)
@@ -304,8 +298,6 @@ describe('Gate 1: Functional Contract', () => {
 			expect(stats).toBeNull()
 		})
 	})
-
-	// ── 4. Scoping helpers deterministic ─────────────────────────────────────
 
 	describe('deriveScopeTagsFromContext deterministic', () => {
 		it('same input produces same output across calls', () => {
@@ -346,8 +338,6 @@ describe('Gate 1: Functional Contract', () => {
 			expect(r1).toEqual(r2)
 		})
 	})
-
-	// ── 5. packContext returns expected PackResult schema ─────────────────────
 
 	describe('packContext schema validation', () => {
 		it('returns PackResult with all required fields', () => {
@@ -397,8 +387,6 @@ describe('Gate 1: Functional Contract', () => {
 			expect(typeof item.tokens).toBe('number')
 		})
 	})
-
-	// ── 6. All Phase 3 exports accessible ────────────────────────────────────
 
 	describe('Phase 3 exports exist', () => {
 		it('location exports are defined', () => {

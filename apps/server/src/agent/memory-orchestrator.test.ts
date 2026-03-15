@@ -17,12 +17,25 @@ import {
 	IMMEDIATE_TURN_CHARS
 } from './memory-orchestrator'
 
-// ============================================================================
 // Test helpers
-// ============================================================================
 
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'memory-orch-test-'))
+}
+
+function makeBranch(store: EventStore, branchId?: string) {
+	const thread = store.createThread(
+		'agent-test',
+		'test',
+		'ws-test'
+	)
+	return store.createBranch(
+		thread.id,
+		undefined,
+		undefined,
+		undefined,
+		branchId
+	)
 }
 
 function createMockHindsight(overrides?: {
@@ -93,12 +106,12 @@ function createMockHindsight(overrides?: {
 
 function appendUserMessage(
 	store: EventStore,
-	sessionId: string,
+	branchId: string,
 	text: string,
 	runId?: string
 ) {
 	return store.append({
-		sessionId,
+		branchId,
 		type: 'user_message',
 		payload: {
 			role: 'user',
@@ -111,12 +124,12 @@ function appendUserMessage(
 
 function appendAssistantMessage(
 	store: EventStore,
-	sessionId: string,
+	branchId: string,
 	text: string,
 	runId?: string
 ) {
 	return store.append({
-		sessionId,
+		branchId,
 		type: 'assistant_message',
 		payload: {
 			message: {
@@ -147,9 +160,7 @@ function appendAssistantMessage(
 	})
 }
 
-// ============================================================================
 // Tests
-// ============================================================================
 
 describe('MemoryOrchestrator', () => {
 	let tmpDir: string
@@ -164,8 +175,6 @@ describe('MemoryOrchestrator', () => {
 		eventStore.close()
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
-
-	// ── Recall ──────────────────────────────────────────────────────────
 
 	describe('recall', () => {
 		test('returns empty recall when no memories found', async () => {
@@ -265,11 +274,9 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: turn count trigger ──────────────────────────────────────
-
 	describe('retain — turn count trigger', () => {
 		test(`triggers when ${MAX_TURNS_PER_CHUNK} turns accumulated`, async () => {
-			eventStore.createSession('s1')
+			makeBranch(eventStore, 's1')
 
 			// Append exactly MAX_TURNS_PER_CHUNK turns
 			for (let i = 0; i < MAX_TURNS_PER_CHUNK; i++) {
@@ -301,7 +308,7 @@ describe('MemoryOrchestrator', () => {
 		})
 
 		test('does not trigger below turn threshold', async () => {
-			eventStore.createSession('s1')
+			makeBranch(eventStore, 's1')
 
 			// Append fewer than MAX_TURNS_PER_CHUNK turns with short text
 			for (let i = 0; i < MAX_TURNS_PER_CHUNK - 1; i++) {
@@ -319,11 +326,9 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: char count trigger ──────────────────────────────────────
-
 	describe('retain — char count trigger', () => {
 		test(`triggers when total chars exceed ${MAX_CHARS_PER_CHUNK}`, async () => {
-			eventStore.createSession('s1')
+			makeBranch(eventStore, 's1')
 
 			// Append 2 turns with enough chars to exceed threshold
 			const longText = 'x'.repeat(
@@ -351,11 +356,9 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: immediate turn trigger ──────────────────────────────────
-
 	describe('retain — immediate turn trigger', () => {
 		test(`triggers for turn >= ${IMMEDIATE_TURN_CHARS} chars`, async () => {
-			eventStore.createSession('s1')
+			makeBranch(eventStore, 's1')
 
 			const hugeText = 'y'.repeat(IMMEDIATE_TURN_CHARS)
 			appendUserMessage(eventStore, 's1', hugeText)
@@ -379,11 +382,9 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: cursor and retry ────────────────────────────────────────
-
 	describe('retain — cursor behavior', () => {
 		test('cursor advances on success, preventing re-processing', async () => {
-			eventStore.createSession('s1')
+			makeBranch(eventStore, 's1')
 
 			for (let i = 0; i < MAX_TURNS_PER_CHUNK; i++) {
 				appendUserMessage(eventStore, 's1', `message ${i}`)
@@ -411,7 +412,7 @@ describe('MemoryOrchestrator', () => {
 		})
 
 		test('cursor stays on bank failure allowing retry', async () => {
-			eventStore.createSession('s1')
+			makeBranch(eventStore, 's1')
 
 			for (let i = 0; i < MAX_TURNS_PER_CHUNK; i++) {
 				appendUserMessage(eventStore, 's1', `message ${i}`)
@@ -431,8 +432,6 @@ describe('MemoryOrchestrator', () => {
 			expect(result).toBeNull()
 		})
 	})
-
-	// ── Bank resolution ─────────────────────────────────────────────────
 
 	describe('bank resolution', () => {
 		test('lazily creates global and project banks', async () => {

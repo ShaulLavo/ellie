@@ -12,30 +12,30 @@ import {
 } from '../utils/message-cache'
 import { snapshotToMessages } from '../utils/snapshot-transform'
 
-function chatMessagesKey(sessionId: string) {
-	return ['chat-messages', sessionId] as const
+function chatMessagesKey(branchId: string) {
+	return ['chat-messages', branchId] as const
 }
 
-export function useChatMessages(sessionId: string) {
+export function useChatMessages(branchId: string) {
 	const queryClient = useQueryClient()
 	// Monotonic epoch: bumped by clear() and replaceAll() so
 	// late-arriving bootstrap fetches from a stale epoch are discarded.
 	const epochRef = useRef(0)
-	// Track which sessionId the epoch belongs to so we reset on switch.
-	const sessionRef = useRef(sessionId)
+	// Track which branchId the epoch belongs to so we reset on switch.
+	const branchRef = useRef(branchId)
 	useEffect(() => {
-		if (sessionRef.current !== sessionId) {
-			sessionRef.current = sessionId
+		if (branchRef.current !== branchId) {
+			branchRef.current = branchId
 			epochRef.current = 0
 		}
-	}, [sessionId])
+	}, [branchId])
 
 	const { data: messages = [] } = useQuery({
-		queryKey: chatMessagesKey(sessionId),
+		queryKey: chatMessagesKey(branchId),
 		queryFn: async () => {
 			const fetchEpoch = epochRef.current
-			const { data, error } = await eden
-				.chat({ sessionId })
+			const { data, error } = await eden.api.chat
+				.branches({ branchId })
 				.events.get()
 			if (error) throw error
 			// If SSE snapshot or clear() bumped the epoch while
@@ -43,7 +43,7 @@ export function useChatMessages(sessionId: string) {
 			if (epochRef.current !== fetchEpoch) {
 				return (
 					queryClient.getQueryData<StoredChatMessage[]>(
-						chatMessagesKey(sessionId)
+						chatMessagesKey(branchId)
 					) ?? []
 				)
 			}
@@ -56,7 +56,7 @@ export function useChatMessages(sessionId: string) {
 	/** Merge messages by id, latest write wins, sorted by seq. */
 	const upsert = (msgs: StoredChatMessage[]) => {
 		queryClient.setQueryData<StoredChatMessage[]>(
-			chatMessagesKey(sessionId),
+			chatMessagesKey(branchId),
 			prev => upsertMessages(prev, msgs)
 		)
 	}
@@ -65,10 +65,10 @@ export function useChatMessages(sessionId: string) {
 	const replaceAll = (msgs: StoredChatMessage[]) => {
 		epochRef.current++
 		queryClient.cancelQueries({
-			queryKey: chatMessagesKey(sessionId)
+			queryKey: chatMessagesKey(branchId)
 		})
 		queryClient.setQueryData<StoredChatMessage[]>(
-			chatMessagesKey(sessionId),
+			chatMessagesKey(branchId),
 			prev => replaceMessages(prev, msgs)
 		)
 	}
@@ -77,10 +77,10 @@ export function useChatMessages(sessionId: string) {
 	const clear = () => {
 		epochRef.current++
 		queryClient.cancelQueries({
-			queryKey: chatMessagesKey(sessionId)
+			queryKey: chatMessagesKey(branchId)
 		})
 		queryClient.setQueryData<StoredChatMessage[]>(
-			chatMessagesKey(sessionId),
+			chatMessagesKey(branchId),
 			[]
 		)
 	}

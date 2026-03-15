@@ -4,11 +4,12 @@ import type {
 	EventType,
 	EventPayloadMap,
 	AgentMessage,
-	SessionRow
+	BranchRow,
+	ThreadRow
 } from '@ellie/db'
 import { isDurableEventType } from '@ellie/db'
 
-export type SessionEvent =
+export type BranchEvent =
 	| { type: 'append'; event: EventRow }
 	| { type: 'update'; event: EventRow }
 
@@ -16,14 +17,15 @@ type Listener<T> = (event: T) => void
 
 const MAX_CLOSED_RUNS = 10_000
 
-export type RotationEvent = {
-	type: 'rotated'
-	previousSessionId: string
-	newSessionId: string
+type AssistantChangeEvent = {
+	type: 'assistant-changed'
+	previousThreadId: string
+	newThreadId: string
+	newBranchId: string
 }
 
-export interface TraceEntry {
-	sessionId: string
+interface TraceEntry {
+	branchId: string
 	/** Free-form type, e.g. 'memory.recall_start', 'controller.prompt_failed' */
 	type: string
 	runId?: string
@@ -37,121 +39,281 @@ export class RealtimeStore {
 		Set<Listener<unknown>>
 	>()
 	readonly #closedRuns = new Set<string>()
-	#currentSessionId: string
 
-	constructor(store: EventStore, initialSessionId: string) {
+	constructor(store: EventStore) {
 		this.#store = store
-		this.#currentSessionId = initialSessionId
-		this.ensureSession(initialSessionId)
-		store.setKv('currentSessionId', initialSessionId)
 	}
 
-	// ── Current session ───────────────────────────────────────────────
-
-	getCurrentSessionId(): string {
-		return this.#currentSessionId
+	get eventStore(): EventStore {
+		return this.#store
 	}
 
-	rotateSession(newSessionId: string): void {
-		const previous = this.#currentSessionId
-		if (previous === newSessionId) return
+	// -- Default assistant thread management ----------------------------------
 
-		this.ensureSession(newSessionId)
-		this.#currentSessionId = newSessionId
-		this.#store.setKv('currentSessionId', newSessionId)
-
-		// Persist a session_rotated event in the new session
-		// Use dedupeKey to prevent duplicates (e.g. from hot-reload recreating Cron)
-		this.appendEvent(
-			newSessionId,
-			'session_rotated',
-			{
-				previousSessionId: previous,
-				message: 'New day, new session'
-			},
-			undefined,
-			`session_rotated:${newSessionId}`
+	getDefaultAssistantThread(): {
+		threadId: string
+		branchId: string
+	} | null {
+		const threadId = this.#store.getKv(
+			'assistant.defaultThreadId'
 		)
-
-		this.#publish<RotationEvent>('current-session', {
-			type: 'rotated',
-			previousSessionId: previous,
-			newSessionId
-		})
-	}
-
-	subscribeToRotation(
-		listener: Listener<RotationEvent>
-	): () => void {
-		return this.#subscribe('current-session', listener)
-	}
-
-	getSession(sessionId: string): SessionRow | undefined {
-		return this.#store.getSession(sessionId)
-	}
-
-	// ── Session CRUD ──────────────────────────────────────────────────────
-
-	ensureSession(sessionId: string): void {
-		try {
-			if (!this.#store.getSession(sessionId)) {
-				this.#store.createSession(sessionId)
-			}
-		} catch (err) {
-			const isConstraintViolation =
-				err instanceof Error &&
-				err.message.includes('UNIQUE constraint')
-			if (!isConstraintViolation) {
-				console.warn(
-					`[RealtimeStore] Unexpected error creating session ${sessionId}:`,
-					err
-				)
-			}
-			// Session may have been created concurrently — verify it exists
-			if (!this.#store.getSession(sessionId))
-				throw new Error(
-					`Failed to ensure session: ${sessionId}`
-				)
+		if (!threadId) return null
+		const thread = this.#store.getThread(threadId)
+		if (!thread) return null
+		const branchList = this.#store.listBranches(threadId)
+		if (branchList.length === 0) return null
+		return {
+			threadId,
+			branchId: branchList[0]!.id
 		}
 	}
 
-	hasSession(sessionId: string): boolean {
-		return this.#store.getSession(sessionId) !== undefined
+	/**
+	 * Idempotent daily thread creation. If a thread already exists
+	 * for this agentId + dayKey, returns it. Otherwise creates a new one.
+	 */
+	resolveOrCreateAssistantThread(
+		agentId: string,
+		workspaceId: string,
+		dayKey: string
+	): { threadId: string; branchId: string } {
+		// Check if thread already exists for this dayKey
+		const existingThreads = this.#store.listThreads({
+			agentType: 'assistant'
+		})
+		for (const t of existingThreads) {
+			if (
+				t.agentId === agentId &&
+				t.dayKey === dayKey &&
+				t.state === 'active'
+			) {
+				const branchList = this.#store.listBranches(t.id)
+				if (branchList.length > 0) {
+					// Ensure KV pointers are set even on early-return
+					this.#store.setKv(
+						'assistant.defaultThreadId',
+						t.id
+					)
+					this.#store.setKv(
+						'assistant.defaultDayKey',
+						dayKey
+					)
+					return {
+						threadId: t.id,
+						branchId: branchList[0]!.id
+					}
+				}
+			}
+		}
+
+		// Create new thread + root branch
+		const thread = this.#store.createThread(
+			agentId,
+			'assistant',
+			workspaceId,
+			undefined,
+			dayKey
+		)
+		const branch = this.#store.createBranch(thread.id)
+
+		this.#store.setKv(
+			'assistant.defaultThreadId',
+			thread.id
+		)
+		this.#store.setKv('assistant.defaultDayKey', dayKey)
+
+		return { threadId: thread.id, branchId: branch.id }
 	}
 
-	deleteSession(sessionId: string): void {
-		// Delete from persistent store (cascades to events)
-		this.#store.deleteSession(sessionId)
+	rotateAssistantThread(
+		agentId: string,
+		workspaceId: string,
+		dayKey: string
+	): { threadId: string; branchId: string } {
+		const previous = this.getDefaultAssistantThread()
 
-		// Clean up in-memory session listeners
-		this.#listeners.delete(`session:${sessionId}`)
+		// Mark old thread as view_only
+		if (previous) {
+			this.#store.updateThread(previous.threadId, {
+				state: 'view_only'
+			})
+			this.#store.detachChannels(previous.threadId)
+		}
 
-		// Clean up closed-run cache for this session
+		const result = this.resolveOrCreateAssistantThread(
+			agentId,
+			workspaceId,
+			dayKey
+		)
+
+		// Persist a thread_created event in the new branch
+		this.appendEvent(
+			result.branchId,
+			'thread_created',
+			{
+				previousThreadId: previous?.threadId,
+				message: 'New day, new thread'
+			},
+			undefined,
+			`thread_created:${result.threadId}`
+		)
+
+		this.#publish<AssistantChangeEvent>(
+			'assistant-current',
+			{
+				type: 'assistant-changed',
+				previousThreadId: previous?.threadId ?? '',
+				newThreadId: result.threadId,
+				newBranchId: result.branchId
+			}
+		)
+
+		return result
+	}
+
+	subscribeToAssistantChange(
+		listener: Listener<AssistantChangeEvent>
+	): () => void {
+		return this.#subscribe('assistant-current', listener)
+	}
+
+	// -- Thread/Branch pass-through methods -----------------------------------
+
+	createThread(
+		agentId: string,
+		agentType: string,
+		workspaceId: string,
+		title?: string,
+		dayKey?: string,
+		origin?: {
+			threadId?: string
+			branchId?: string
+			runId?: string
+			agentId?: string
+		}
+	): ThreadRow {
+		return this.#store.createThread(
+			agentId,
+			agentType,
+			workspaceId,
+			title,
+			dayKey,
+			undefined,
+			origin
+		)
+	}
+
+	getThread(id: string): ThreadRow | undefined {
+		return this.#store.getThread(id)
+	}
+
+	listThreads(filter?: {
+		agentType?: string
+		state?: string
+	}): ThreadRow[] {
+		return this.#store.listThreads(filter)
+	}
+
+	listBranches(threadId: string): BranchRow[] {
+		return this.#store.listBranches(threadId)
+	}
+
+	createThreadWithBranch(
+		agentId: string,
+		agentType: string,
+		workspaceId: string,
+		title?: string,
+		origin?: {
+			threadId?: string
+			branchId?: string
+			runId?: string
+			agentId?: string
+		}
+	): { threadId: string; branchId: string } {
+		const thread = this.#store.createThread(
+			agentId,
+			agentType,
+			workspaceId,
+			title,
+			undefined,
+			undefined,
+			origin
+		)
+		const branch = this.#store.createBranch(thread.id)
+		return { threadId: thread.id, branchId: branch.id }
+	}
+
+	createCodingThread(
+		agentId: string,
+		workspaceId: string,
+		title: string
+	): { threadId: string; branchId: string } {
+		return this.createThreadWithBranch(
+			agentId,
+			'coding',
+			workspaceId,
+			title
+		)
+	}
+
+	forkBranch(
+		branchId: string,
+		fromEventId: number,
+		fromSeq: number
+	): BranchRow {
+		const parent = this.#store.getBranch(branchId)
+		if (!parent) {
+			throw new Error(`Branch not found: ${branchId}`)
+		}
+		return this.#store.createBranch(
+			parent.threadId,
+			branchId,
+			fromEventId,
+			fromSeq
+		)
+	}
+
+	// -- Branch methods -------------------------------------------------------
+
+	getBranch(branchId: string): BranchRow | undefined {
+		return this.#store.getBranch(branchId)
+	}
+
+	ensureBranch(branchId: string): void {
+		if (!this.#store.getBranch(branchId)) {
+			throw new Error(`Branch not found: ${branchId}`)
+		}
+	}
+
+	hasBranch(branchId: string): boolean {
+		return this.#store.getBranch(branchId) !== undefined
+	}
+
+	deleteBranch(branchId: string): void {
+		this.#store.deleteBranch(branchId)
+		this.#listeners.delete(`branch:${branchId}`)
+
 		for (const key of this.#closedRuns) {
-			if (key.startsWith(`${sessionId}:`)) {
+			if (key.startsWith(`${branchId}:`)) {
 				this.#closedRuns.delete(key)
 			}
 		}
 	}
 
-	// ── Ephemeral publish (SSE only, no DB write) ────────────────────────
-
 	/**
 	 * Broadcast an event to SSE subscribers without persisting to the DB.
-	 * Used for high-frequency streaming deltas (message_update) that are
-	 * redundant once the final message_end is persisted.
 	 */
 	publishEphemeral<T extends EventType>(
-		sessionId: string,
+		branchId: string,
 		type: T,
 		payload: EventPayloadMap[T],
 		runId?: string
 	): void {
-		this.#publish(`session:${sessionId}`, {
+		this.#publish(`branch:${branchId}`, {
 			type: 'append',
 			event: {
-				id: -1, // ephemeral — not in DB
-				sessionId,
+				id: -1,
+				branchId,
 				seq: -1,
 				runId: runId ?? null,
 				type,
@@ -159,21 +321,15 @@ export class RealtimeStore {
 				dedupeKey: null,
 				createdAt: Date.now()
 			}
-		} satisfies SessionEvent)
+		} satisfies BranchEvent)
 	}
 
-	// ── Ephemeral trace (SSE only, no disk) ──────────────────────────────
-
-	/**
-	 * Broadcast a structured trace entry as ephemeral SSE only.
-	 * No disk write — canonical trace persistence is handled by TraceRecorder.
-	 */
 	publishTraceEphemeral(entry: TraceEntry): void {
-		this.#publish(`session:${entry.sessionId}`, {
+		this.#publish(`branch:${entry.branchId}`, {
 			type: 'append',
 			event: {
 				id: -1,
-				sessionId: entry.sessionId,
+				branchId: entry.branchId,
 				seq: -1,
 				runId: entry.runId ?? null,
 				type: entry.type,
@@ -181,13 +337,11 @@ export class RealtimeStore {
 				dedupeKey: null,
 				createdAt: Date.now()
 			}
-		} satisfies SessionEvent)
+		} satisfies BranchEvent)
 	}
 
-	// ── Event append (with live notification) ─────────────────────────────
-
 	appendEvent<T extends EventType>(
-		sessionId: string,
+		branchId: string,
 		type: T,
 		payload: EventPayloadMap[T],
 		runId?: string,
@@ -196,7 +350,7 @@ export class RealtimeStore {
 		if (!isDurableEventType(type)) {
 			return {
 				id: -1,
-				sessionId,
+				branchId,
 				seq: -1,
 				runId: runId ?? null,
 				type,
@@ -207,22 +361,20 @@ export class RealtimeStore {
 		}
 
 		const row = this.#store.append({
-			sessionId,
+			branchId,
 			type,
 			payload,
 			runId,
 			dedupeKey
 		})
 
-		// Notify session-level subscribers
-		this.#publish(`session:${sessionId}`, {
+		this.#publish(`branch:${branchId}`, {
 			type: 'append',
 			event: row
-		} satisfies SessionEvent)
+		} satisfies BranchEvent)
 
-		// Track run closure in memory cache
 		if (type === 'run_closed' && runId) {
-			this.#closedRuns.add(this.#runKey(sessionId, runId))
+			this.#closedRuns.add(this.#runKey(branchId, runId))
 			if (this.#closedRuns.size > MAX_CLOSED_RUNS) {
 				this.#closedRuns.clear()
 			}
@@ -231,53 +383,40 @@ export class RealtimeStore {
 		return row
 	}
 
-	// ── Event update (in-place, with live notification) ─────────────────
-
-	/**
-	 * Update an existing event row's payload in place and notify subscribers.
-	 * Used for streaming: the row is INSERT'd via appendEvent, then UPDATE'd
-	 * for every delta and at completion.
-	 */
 	updateEvent(
 		id: number,
 		payload: unknown,
-		sessionId: string
+		branchId: string
 	): EventRow {
 		const row = this.#store.update(id, payload)
 
-		this.#publish(`session:${sessionId}`, {
+		this.#publish(`branch:${branchId}`, {
 			type: 'update',
 			event: row
-		} satisfies SessionEvent)
+		} satisfies BranchEvent)
 
 		return row
 	}
 
-	/**
-	 * Update the runId of an existing event and notify subscribers.
-	 * Used to backfill runId on user_message events after routing.
-	 */
 	updateEventRunId(
 		id: number,
 		runId: string,
-		sessionId: string
+		branchId: string
 	): EventRow {
 		const row = this.#store.updateRunId(id, runId)
 
-		this.#publish(`session:${sessionId}`, {
+		this.#publish(`branch:${branchId}`, {
 			type: 'update',
 			event: row
-		} satisfies SessionEvent)
+		} satisfies BranchEvent)
 
 		return row
 	}
 
-	// ── Agent run lifecycle ───────────────────────────────────────────────
-
-	closeAgentRun(sessionId: string, runId: string): void {
-		if (this.isAgentRunClosed(sessionId, runId)) return
+	closeAgentRun(branchId: string, runId: string): void {
+		if (this.isAgentRunClosed(branchId, runId)) return
 		this.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -285,75 +424,94 @@ export class RealtimeStore {
 	}
 
 	isAgentRunClosed(
-		sessionId: string,
+		branchId: string,
 		runId: string
 	): boolean {
-		// Check in-memory cache first, then fall back to DB for runs closed before this process started
-		if (
-			this.#closedRuns.has(this.#runKey(sessionId, runId))
-		)
+		if (this.#closedRuns.has(this.#runKey(branchId, runId)))
 			return true
 
 		const closedEvents = this.#store.query({
-			sessionId,
+			branchId,
 			runId,
 			types: ['run_closed'],
 			limit: 1
 		})
 		if (closedEvents.length > 0) {
-			this.#closedRuns.add(this.#runKey(sessionId, runId))
+			this.#closedRuns.add(this.#runKey(branchId, runId))
 			return true
 		}
 		return false
 	}
 
-	// ── Session management ───────────────────────────────────────────────
-
-	createSession(id?: string) {
-		return this.#store.createSession(id)
-	}
-
-	listSessions() {
-		return this.#store.listSessions()
-	}
-
-	// ── Query wrappers ────────────────────────────────────────────────────
-
-	listAgentMessages(sessionId: string): AgentMessage[] {
-		return this.#store.getConversationHistory(sessionId)
+	listAgentMessages(branchId: string): AgentMessage[] {
+		return this.#store.getLineageConversationHistory(
+			branchId
+		)
 	}
 
 	queryEvents(
-		sessionId: string,
+		branchId: string,
 		afterSeq?: number,
 		types?: EventType[],
 		limit?: number
 	) {
 		return this.#store.query({
-			sessionId,
+			branchId,
 			afterSeq,
 			types,
 			limit
 		})
 	}
 
-	queryRunEvents(sessionId: string, runId: string) {
-		return this.#store.query({ sessionId, runId })
+	/**
+	 * Lineage-aware event query. For forked branches, includes
+	 * inherited ancestor events so the full history is returned.
+	 */
+	queryLineageEvents(
+		branchId: string,
+		afterSeq?: number,
+		types?: EventType[],
+		limit?: number
+	) {
+		const lineage = this.#store.getBranchLineage(branchId)
+		// Single branch (no forks) — fast path
+		if (lineage.length <= 1) {
+			return this.queryEvents(
+				branchId,
+				afterSeq,
+				types,
+				limit
+			)
+		}
+		let events = this.#store.getLineageHistory(branchId)
+		if (afterSeq !== undefined) {
+			events = events.filter(e => e.seq > afterSeq)
+		}
+		if (types && types.length > 0) {
+			const typeSet = new Set(types)
+			events = events.filter(e =>
+				typeSet.has(e.type as EventType)
+			)
+		}
+		if (limit !== undefined) {
+			events = events.slice(0, limit)
+		}
+		return events
 	}
 
-	// ── Subscriptions ─────────────────────────────────────────────────────
+	queryRunEvents(branchId: string, runId: string) {
+		return this.#store.query({ branchId, runId })
+	}
 
-	subscribeToSession(
-		sessionId: string,
-		listener: Listener<SessionEvent>
+	subscribeToBranch(
+		branchId: string,
+		listener: Listener<BranchEvent>
 	): () => void {
-		return this.#subscribe(`session:${sessionId}`, listener)
+		return this.#subscribe(`branch:${branchId}`, listener)
 	}
 
-	// ── Private ───────────────────────────────────────────────────────────
-
-	#runKey(sessionId: string, runId: string): string {
-		return `${sessionId}:${runId}`
+	#runKey(branchId: string, runId: string): string {
+		return `${branchId}:${runId}`
 	}
 
 	#publish<T>(channel: string, event: T): void {

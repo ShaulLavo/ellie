@@ -14,6 +14,22 @@ function makeTempDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix))
 }
 
+/** Helper: creates a thread + branch in one call. Returns the branch. */
+function makeBranch(store: EventStore, branchId?: string) {
+	const thread = store.createThread(
+		'agent-test',
+		'test',
+		'ws-test'
+	)
+	return store.createBranch(
+		thread.id,
+		undefined,
+		undefined,
+		undefined,
+		branchId
+	)
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // EventStore
 // ════════════════════════════════════════════════════════════════════════════
@@ -34,56 +50,75 @@ describe('EventStore', () => {
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
 
-	// ── Session CRUD ────────────────────────────────────────────────────────
-
-	describe('session CRUD', () => {
-		it('creates a session with auto-generated ID', () => {
-			const session = store.createSession()
-			expect(session.id).toBeDefined()
-			expect(session.id.length).toBeGreaterThan(0)
-			expect(session.currentSeq).toBe(0)
-			expect(session.createdAt).toBeGreaterThan(0)
-			expect(session.updatedAt).toBeGreaterThan(0)
+	describe('branch CRUD', () => {
+		it('creates a branch with auto-generated ID', () => {
+			const branch = makeBranch(store)
+			expect(branch.id).toBeDefined()
+			expect(branch.id.length).toBeGreaterThan(0)
+			expect(branch.currentSeq).toBe(0)
+			expect(branch.createdAt).toBeGreaterThan(0)
+			expect(branch.updatedAt).toBeGreaterThan(0)
 		})
 
-		it('creates a session with explicit ID', () => {
-			const session = store.createSession('my-session')
-			expect(session.id).toBe('my-session')
+		it('creates a branch with explicit ID', () => {
+			const branch = makeBranch(store, 'my-branch')
+			expect(branch.id).toBe('my-branch')
 		})
 
-		it('gets a session', () => {
-			store.createSession('s1')
-			const session = store.getSession('s1')
-			expect(session).toBeDefined()
-			expect(session!.id).toBe('s1')
+		it('gets a branch', () => {
+			makeBranch(store, 's1')
+			const branch = store.getBranch('s1')
+			expect(branch).toBeDefined()
+			expect(branch!.id).toBe('s1')
 		})
 
-		it('returns undefined for non-existent session', () => {
-			expect(store.getSession('nope')).toBeUndefined()
+		it('returns undefined for non-existent branch', () => {
+			expect(store.getBranch('nope')).toBeUndefined()
 		})
 
-		it('lists sessions', () => {
-			store.createSession('a')
-			store.createSession('b')
-			store.createSession('c')
-			const sessions = store.listSessions()
-			expect(sessions).toHaveLength(3)
+		it('lists branches', () => {
+			const thread = store.createThread(
+				'agent-test',
+				'test',
+				'ws-test'
+			)
+			store.createBranch(
+				thread.id,
+				undefined,
+				undefined,
+				undefined,
+				'a'
+			)
+			store.createBranch(
+				thread.id,
+				undefined,
+				undefined,
+				undefined,
+				'b'
+			)
+			store.createBranch(
+				thread.id,
+				undefined,
+				undefined,
+				undefined,
+				'c'
+			)
+			const branches = store.listBranches(thread.id)
+			expect(branches).toHaveLength(3)
 		})
 
-		it('deletes a session', () => {
-			store.createSession('del')
-			store.deleteSession('del')
-			expect(store.getSession('del')).toBeUndefined()
+		it('deletes a branch', () => {
+			makeBranch(store, 'del')
+			store.deleteBranch('del')
+			expect(store.getBranch('del')).toBeUndefined()
 		})
 	})
 
-	// ── Cascade delete ────────────────────────────────────────────────────
-
 	describe('cascade delete', () => {
-		it('deleting session cascades to events', () => {
-			store.createSession('cascade')
+		it('deleting branch cascades to events', () => {
+			makeBranch(store, 'cascade')
 			store.append({
-				sessionId: 'cascade',
+				branchId: 'cascade',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -93,26 +128,24 @@ describe('EventStore', () => {
 			})
 
 			expect(
-				store.query({ sessionId: 'cascade' })
+				store.query({ branchId: 'cascade' })
 			).toHaveLength(1)
 
-			store.deleteSession('cascade')
+			store.deleteBranch('cascade')
 			expect(
-				store.query({ sessionId: 'cascade' })
+				store.query({ branchId: 'cascade' })
 			).toHaveLength(0)
 		})
 	})
 
-	// ── Event append ──────────────────────────────────────────────────────
-
 	describe('append', () => {
 		beforeEach(() => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 		})
 
 		it('appends an event and returns event row', () => {
 			const row = store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -122,14 +155,14 @@ describe('EventStore', () => {
 			})
 
 			expect(row.id).toBeGreaterThan(0)
-			expect(row.sessionId).toBe('s1')
+			expect(row.branchId).toBe('s1')
 			expect(row.seq).toBe(1)
 			expect(row.type).toBe('user_message')
 		})
 
-		it('monotonically increments seq per session', () => {
+		it('monotonically increments seq per branch', () => {
 			const r1 = store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -138,7 +171,7 @@ describe('EventStore', () => {
 				}
 			})
 			const r2 = store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -147,7 +180,7 @@ describe('EventStore', () => {
 				}
 			})
 			const r3 = store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -162,10 +195,10 @@ describe('EventStore', () => {
 		})
 
 		it('updates updatedAt on append', async () => {
-			const before = store.getSession('s1')!.updatedAt
+			const before = store.getBranch('s1')!.updatedAt
 			await Bun.sleep(10) // Ensure timestamp advances past same-millisecond edge case
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -173,14 +206,14 @@ describe('EventStore', () => {
 					timestamp: Date.now()
 				}
 			})
-			const after = store.getSession('s1')!.updatedAt
+			const after = store.getBranch('s1')!.updatedAt
 			expect(after).toBeGreaterThan(before)
 		})
 
-		it('throws for non-existent session', () => {
+		it('throws for non-existent branch', () => {
 			expect(() =>
 				store.append({
-					sessionId: 'nope',
+					branchId: 'nope',
 					type: 'user_message',
 					payload: {
 						role: 'user',
@@ -188,20 +221,18 @@ describe('EventStore', () => {
 						timestamp: Date.now()
 					}
 				})
-			).toThrow('Session not found')
+			).toThrow('Branch not found')
 		})
 	})
 
-	// ── Dedupe ────────────────────────────────────────────────────────────
-
 	describe('dedupe', () => {
 		beforeEach(() => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 		})
 
 		it('returns existing event for duplicate dedupeKey', () => {
 			const r1 = store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -211,7 +242,7 @@ describe('EventStore', () => {
 				dedupeKey: 'msg-1'
 			})
 			const r2 = store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -223,14 +254,14 @@ describe('EventStore', () => {
 
 			expect(r1.id).toBe(r2.id)
 			expect(r1.seq).toBe(r2.seq)
-			expect(store.query({ sessionId: 's1' })).toHaveLength(
+			expect(store.query({ branchId: 's1' })).toHaveLength(
 				1
 			)
 		})
 
 		it('different dedupeKeys create separate events', () => {
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -240,7 +271,7 @@ describe('EventStore', () => {
 				dedupeKey: 'msg-1'
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -250,23 +281,21 @@ describe('EventStore', () => {
 				dedupeKey: 'msg-2'
 			})
 
-			expect(store.query({ sessionId: 's1' })).toHaveLength(
+			expect(store.query({ branchId: 's1' })).toHaveLength(
 				2
 			)
 		})
 	})
 
-	// ── Payload validation ────────────────────────────────────────────────
-
 	describe('payload validation', () => {
 		beforeEach(() => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 		})
 
 		it('rejects invalid payload for user_message', () => {
 			expect(() =>
 				store.append({
-					sessionId: 's1',
+					branchId: 's1',
 					type: 'user_message',
 					payload: {
 						role: 'invalid',
@@ -279,7 +308,7 @@ describe('EventStore', () => {
 		it('accepts valid agent_start payload', () => {
 			expect(() =>
 				store.append({
-					sessionId: 's1',
+					branchId: 's1',
 					type: 'agent_start',
 					payload: {}
 				})
@@ -289,7 +318,7 @@ describe('EventStore', () => {
 		it('accepts valid run_closed payload', () => {
 			expect(() =>
 				store.append({
-					sessionId: 's1',
+					branchId: 's1',
 					type: 'run_closed',
 					payload: { reason: 'completed' }
 				})
@@ -299,7 +328,7 @@ describe('EventStore', () => {
 		it('accepts valid error payload', () => {
 			expect(() =>
 				store.append({
-					sessionId: 's1',
+					branchId: 's1',
 					type: 'error',
 					payload: { message: 'something went wrong' }
 				})
@@ -307,14 +336,12 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Query ─────────────────────────────────────────────────────────────
-
 	describe('query', () => {
 		beforeEach(() => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -324,13 +351,13 @@ describe('EventStore', () => {
 				runId: 'run-1'
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {},
 				runId: 'run-1'
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'assistant_message',
 				payload: {
 					message: {
@@ -360,21 +387,21 @@ describe('EventStore', () => {
 				runId: 'run-1'
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'run_closed',
 				payload: { reason: 'completed' },
 				runId: 'run-1'
 			})
 		})
 
-		it('returns all events for a session', () => {
-			const events = store.query({ sessionId: 's1' })
+		it('returns all events for a branch', () => {
+			const events = store.query({ branchId: 's1' })
 			expect(events).toHaveLength(4)
 		})
 
 		it('filters by afterSeq', () => {
 			const events = store.query({
-				sessionId: 's1',
+				branchId: 's1',
 				afterSeq: 2
 			})
 			expect(events).toHaveLength(2)
@@ -384,23 +411,23 @@ describe('EventStore', () => {
 
 		it('filters by types', () => {
 			const events = store.query({
-				sessionId: 's1',
+				branchId: 's1',
 				types: ['user_message', 'assistant_message']
 			})
 			expect(events).toHaveLength(2)
 		})
 
 		it('filters by runId', () => {
-			store.createSession('s2')
+			makeBranch(store, 's2')
 			store.append({
-				sessionId: 's2',
+				branchId: 's2',
 				type: 'agent_start',
 				payload: {},
 				runId: 'other-run'
 			})
 
 			const events = store.query({
-				sessionId: 's1',
+				branchId: 's1',
 				runId: 'run-1'
 			})
 			expect(events).toHaveLength(4)
@@ -408,7 +435,7 @@ describe('EventStore', () => {
 
 		it('respects limit', () => {
 			const events = store.query({
-				sessionId: 's1',
+				branchId: 's1',
 				limit: 2
 			})
 			expect(events).toHaveLength(2)
@@ -417,14 +444,12 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── assistant_delta absent in DB ──────────────────────────────────────
-
 	describe('assistant_delta not persisted', () => {
 		it('assistant_delta is not a valid event type', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 			expect(() =>
 				store.append({
-					sessionId: 's1',
+					branchId: 's1',
 					type: 'assistant_delta' as never,
 					payload: { delta: 'some text' } as never
 				})
@@ -432,14 +457,12 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── History reconstruction ────────────────────────────────────────────
-
 	describe('getConversationHistory', () => {
 		it('builds history from user_message, assistant_message, tool_execution', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -448,12 +471,12 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'assistant_message',
 				payload: {
 					message: {
@@ -490,7 +513,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'tool_execution',
 				payload: {
 					toolCallId: 'tc1',
@@ -507,7 +530,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'assistant_message',
 				payload: {
 					message: {
@@ -538,7 +561,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_end',
 				payload: { messages: [] }
 			})
@@ -552,20 +575,20 @@ describe('EventStore', () => {
 		})
 
 		it('excludes agent_start, agent_end, turn events from history', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'turn_start',
 				payload: {}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -574,12 +597,12 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'turn_end',
 				payload: {}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_end',
 				payload: { messages: [] }
 			})
@@ -590,14 +613,12 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Stale run recovery ────────────────────────────────────────────────
-
 	describe('findStaleRuns', () => {
 		it('finds runs with agent_start but no run_closed', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {},
 				runId: 'stale-run'
@@ -605,21 +626,21 @@ describe('EventStore', () => {
 
 			const stale = store.findStaleRuns(0)
 			expect(stale).toHaveLength(1)
-			expect(stale[0]!.sessionId).toBe('s1')
+			expect(stale[0]!.branchId).toBe('s1')
 			expect(stale[0]!.runId).toBe('stale-run')
 		})
 
 		it('does not find runs that have been closed', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {},
 				runId: 'closed-run'
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'run_closed',
 				payload: { reason: 'completed' },
 				runId: 'closed-run'
@@ -630,10 +651,10 @@ describe('EventStore', () => {
 		})
 
 		it('appending run_closed for recovered stale run works', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {},
 				runId: 'stale-run'
@@ -643,7 +664,7 @@ describe('EventStore', () => {
 			expect(stale).toHaveLength(1)
 
 			store.append({
-				sessionId: stale[0]!.sessionId,
+				branchId: stale[0]!.branchId,
 				type: 'run_closed',
 				payload: { reason: 'recovered_after_crash' },
 				runId: stale[0]!.runId
@@ -653,15 +674,13 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Session isolation ─────────────────────────────────────────────────
-
-	describe('session isolation', () => {
-		it('events are isolated between sessions', () => {
-			store.createSession('a')
-			store.createSession('b')
+	describe('branch isolation', () => {
+		it('events are isolated between branches', () => {
+			makeBranch(store, 'a')
+			makeBranch(store, 'b')
 
 			store.append({
-				sessionId: 'a',
+				branchId: 'a',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -670,7 +689,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 'b',
+				branchId: 'b',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -679,7 +698,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 'a',
+				branchId: 'a',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -688,25 +707,21 @@ describe('EventStore', () => {
 				}
 			})
 
-			expect(store.query({ sessionId: 'a' })).toHaveLength(
-				2
-			)
-			expect(store.query({ sessionId: 'b' })).toHaveLength(
-				1
-			)
+			expect(store.query({ branchId: 'a' })).toHaveLength(2)
+			expect(store.query({ branchId: 'b' })).toHaveLength(1)
 		})
 
-		it('seq is independent per session', () => {
-			store.createSession('a')
-			store.createSession('b')
+		it('seq is independent per branch', () => {
+			makeBranch(store, 'a')
+			makeBranch(store, 'b')
 
 			const ra = store.append({
-				sessionId: 'a',
+				branchId: 'a',
 				type: 'agent_start',
 				payload: {}
 			})
 			const rb = store.append({
-				sessionId: 'b',
+				branchId: 'b',
 				type: 'agent_start',
 				payload: {}
 			})
@@ -716,13 +731,11 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Recovery (close/reopen) ───────────────────────────────────────────
-
 	describe('recovery', () => {
 		it('survives close and reopen', () => {
-			store.createSession('persist')
+			makeBranch(store, 'persist')
 			store.append({
-				sessionId: 'persist',
+				branchId: 'persist',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -731,7 +744,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 'persist',
+				branchId: 'persist',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -743,7 +756,7 @@ describe('EventStore', () => {
 
 			store = new EventStore(dbPath)
 
-			const events = store.query({ sessionId: 'persist' })
+			const events = store.query({ branchId: 'persist' })
 			expect(events).toHaveLength(2)
 
 			const history =
@@ -752,9 +765,9 @@ describe('EventStore', () => {
 		})
 
 		it('can append after reopen', () => {
-			store.createSession('resume')
+			makeBranch(store, 'resume')
 			store.append({
-				sessionId: 'resume',
+				branchId: 'resume',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -766,7 +779,7 @@ describe('EventStore', () => {
 
 			store = new EventStore(dbPath)
 			store.append({
-				sessionId: 'resume',
+				branchId: 'resume',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -775,22 +788,20 @@ describe('EventStore', () => {
 				}
 			})
 
-			const events = store.query({ sessionId: 'resume' })
+			const events = store.query({ branchId: 'resume' })
 			expect(events).toHaveLength(2)
 			expect(events[1]!.seq).toBe(2)
 		})
 	})
 
-	// ── Performance ───────────────────────────────────────────────────────
-
 	describe('performance', () => {
 		it('appends 1,000 events', () => {
-			store.createSession('bulk')
+			makeBranch(store, 'bulk')
 
 			const start = performance.now()
 			for (let i = 0; i < 1_000; i++) {
 				store.append({
-					sessionId: 'bulk',
+					branchId: 'bulk',
 					type: 'user_message',
 					payload: {
 						role: 'user',
@@ -805,20 +816,18 @@ describe('EventStore', () => {
 				`[perf] 1,000 appends in ${elapsed.toFixed(0)}ms`
 			)
 
-			const events = store.query({ sessionId: 'bulk' })
+			const events = store.query({ branchId: 'bulk' })
 			expect(events).toHaveLength(1_000)
 			// No timing assertion — performance varies by environment
 		})
 	})
 
-	// ── afterSeq catch-up ─────────────────────────────────────────────────
-
 	describe('afterSeq catch-up', () => {
 		it('returns only events after the given seq', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 			for (let i = 0; i < 10; i++) {
 				store.append({
-					sessionId: 's1',
+					branchId: 's1',
 					type: 'user_message',
 					payload: {
 						role: 'user',
@@ -829,7 +838,7 @@ describe('EventStore', () => {
 			}
 
 			const events = store.query({
-				sessionId: 's1',
+				branchId: 's1',
 				afterSeq: 5
 			})
 			expect(events).toHaveLength(5)
@@ -838,22 +847,20 @@ describe('EventStore', () => {
 		})
 
 		it('afterSeq past end returns empty', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'agent_start',
 				payload: {}
 			})
 
 			const events = store.query({
-				sessionId: 's1',
+				branchId: 's1',
 				afterSeq: 999
 			})
 			expect(events).toHaveLength(0)
 		})
 	})
-
-	// ── No audit logging ─────────────────────────────────────────────────
 
 	describe('no audit logging', () => {
 		it('does not create an audit directory when appending events', () => {
@@ -862,9 +869,9 @@ describe('EventStore', () => {
 				join(tmpDir, 'no-audit-test.db')
 			)
 
-			plainStore.createSession('s1')
+			makeBranch(plainStore, 's1')
 			plainStore.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -878,8 +885,6 @@ describe('EventStore', () => {
 			expect(existsSync(auditDir)).toBe(false)
 		})
 	})
-
-	// ── WAL + FK pragmas ──────────────────────────────────────────────────
 
 	describe('pragmas', () => {
 		it('uses WAL mode', () => {
@@ -896,8 +901,6 @@ describe('EventStore', () => {
 			expect(result.foreign_keys).toBe(1)
 		})
 	})
-
-	// ── Key-Value store ───────────────────────────────────────────────────
 
 	describe('kv', () => {
 		it('returns undefined for missing key', () => {
@@ -923,11 +926,9 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Guardrail events ─────────────────────────────────────────────────
-
 	describe('limit_hit event', () => {
 		it('appends and queries a limit_hit event', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 			const payload = {
 				limit: 'max_model_calls' as const,
 				threshold: 50,
@@ -942,7 +943,7 @@ describe('EventStore', () => {
 			}
 
 			const event = store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'limit_hit',
 				payload,
 				runId: 'run_1'
@@ -962,16 +963,16 @@ describe('EventStore', () => {
 		})
 
 		it('queries limit_hit by type filter', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 
 			store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'agent_start',
 				payload: {}
 			})
 
 			store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'limit_hit',
 				payload: {
 					limit: 'max_cost_usd',
@@ -988,7 +989,7 @@ describe('EventStore', () => {
 			})
 
 			const results = store.query({
-				sessionId: session.id,
+				branchId: branch.id,
 				types: ['limit_hit']
 			})
 
@@ -997,11 +998,11 @@ describe('EventStore', () => {
 		})
 
 		it('rejects invalid limit_hit payload', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 
 			expect(() =>
 				store.append({
-					sessionId: session.id,
+					branchId: branch.id,
 					type: 'limit_hit',
 					// Deliberately invalid — testing runtime validation
 					payload: {
@@ -1014,11 +1015,9 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Memory events ───────────────────────────────────────────────────
-
 	describe('memory_recall event', () => {
 		it('appends and queries a memory_recall event', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 			const payload = {
 				parts: [
 					{
@@ -1042,7 +1041,7 @@ describe('EventStore', () => {
 			}
 
 			const event = store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'memory_recall',
 				payload,
 				runId: 'run_1'
@@ -1061,9 +1060,9 @@ describe('EventStore', () => {
 		})
 
 		it('queries memory_recall by type filter', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 			store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -1072,7 +1071,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'memory_recall',
 				payload: {
 					parts: [
@@ -1089,7 +1088,7 @@ describe('EventStore', () => {
 			})
 
 			const results = store.query({
-				sessionId: session.id,
+				branchId: branch.id,
 				types: ['memory_recall']
 			})
 			expect(results).toHaveLength(1)
@@ -1097,10 +1096,10 @@ describe('EventStore', () => {
 		})
 
 		it('rejects invalid memory_recall payload', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 			expect(() =>
 				store.append({
-					sessionId: session.id,
+					branchId: branch.id,
 					type: 'memory_recall',
 					payload: {
 						parts: 'not-an-array',
@@ -1113,7 +1112,7 @@ describe('EventStore', () => {
 
 	describe('memory_retain event', () => {
 		it('appends and queries a memory_retain event', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 			const payload = {
 				parts: [
 					{
@@ -1137,7 +1136,7 @@ describe('EventStore', () => {
 			}
 
 			const event = store.append({
-				sessionId: session.id,
+				branchId: branch.id,
 				type: 'memory_retain',
 				payload,
 				runId: 'run_1'
@@ -1155,10 +1154,10 @@ describe('EventStore', () => {
 		})
 
 		it('rejects invalid memory_retain trigger', () => {
-			const session = store.createSession()
+			const branch = makeBranch(store)
 			expect(() =>
 				store.append({
-					sessionId: session.id,
+					branchId: branch.id,
 					type: 'memory_retain',
 					payload: {
 						parts: [
@@ -1181,10 +1180,10 @@ describe('EventStore', () => {
 
 	describe('getConversationHistory excludes memory events', () => {
 		it('memory_recall and memory_retain are not in conversation history', () => {
-			store.createSession('s1')
+			makeBranch(store, 's1')
 
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'user_message',
 				payload: {
 					role: 'user',
@@ -1193,7 +1192,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'memory_recall',
 				payload: {
 					parts: [
@@ -1209,7 +1208,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'assistant_message',
 				payload: {
 					message: {
@@ -1238,7 +1237,7 @@ describe('EventStore', () => {
 				}
 			})
 			store.append({
-				sessionId: 's1',
+				branchId: 's1',
 				type: 'memory_retain',
 				payload: {
 					parts: [

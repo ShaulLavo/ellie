@@ -1,4 +1,5 @@
 import { ulid } from 'fast-ulid'
+import { DEFAULT_PROFILE, DEFAULT_PROJECT } from './scope'
 import { eq } from 'drizzle-orm'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import type { HindsightDatabase } from './db'
@@ -56,8 +57,6 @@ import {
 export { rowToMemoryUnit, rowToEntity } from './retain-db'
 export { retainBatch } from './retain-batch'
 
-// ── Main ───────────────────────────────────────────────────────────────────
-
 export async function retain(
 	hdb: HindsightDatabase,
 	memoryVec: EmbeddingStore,
@@ -88,7 +87,6 @@ export async function retain(
 	// Sanitize input content
 	const cleanContent = sanitizeText(content)
 
-	// ── Step 1: Get facts (LLM extraction or pre-provided) ──
 	let extracted = await extractFactsFromContent(
 		adapter,
 		cleanContent,
@@ -103,8 +101,6 @@ export async function retain(
 		return { memories: [], entities: [], links: [] }
 	}
 	const extractedOriginal = extracted.slice()
-
-	// ── Step 1b: Route each fact (reinforce / reconsolidate / new_trace) ──
 
 	const dedupThreshold = options.dedupThreshold ?? 0
 	const decisions: RouteDecision[] = []
@@ -279,8 +275,6 @@ export async function retain(
 		})
 	}
 
-	// ── Step 2: Resolve & upsert entities ──
-
 	// Fetch all existing entities + co-occurrences for this bank (single query each)
 	const existingEntities = hdb.db
 		.select()
@@ -328,8 +322,6 @@ export async function retain(
 			.where(eq(schema.entities.id, entityId))
 			.run()
 	}
-
-	// ── Step 3: Store memory units + FTS + embeddings ──
 
 	const memories: MemoryUnit[] = []
 
@@ -380,8 +372,8 @@ export async function retain(
 				lastAccessed: null,
 				encodingStrength: 1.0,
 				gist: generateFallbackGist(fact.content),
-				scopeProfile: options.profile ?? null,
-				scopeProject: options.project ?? null,
+				scopeProfile: options.profile ?? DEFAULT_PROFILE,
+				scopeProject: options.project ?? DEFAULT_PROJECT,
 				scopeSession: options.session ?? null,
 				createdAt: now,
 				updatedAt: now
@@ -433,8 +425,6 @@ export async function retain(
 			updatedAt: now
 		})
 	}
-
-	// ── Step 4: Create entity-based links between co-occurring memories ──
 
 	const links: RetainResult['links'] = []
 
@@ -507,8 +497,6 @@ export async function retain(
 		}
 	}
 
-	// ── Step 5: Create causal links ──
-
 	for (let i = 0; i < extracted.length; i++) {
 		const fact = extracted[i]!
 		for (const rel of fact.causalRelations ?? []) {
@@ -538,8 +526,6 @@ export async function retain(
 		}
 	}
 
-	// ── Step 6: Create temporal links ──
-
 	createTemporalLinksFromMemories(
 		hdb,
 		bankId,
@@ -548,8 +534,6 @@ export async function retain(
 		links
 	)
 
-	// ── Step 7: Create semantic links ──
-
 	const semanticLinks = await createSemanticLinks(
 		hdb,
 		memoryVec,
@@ -557,8 +541,6 @@ export async function retain(
 		memories.map(m => m.id)
 	)
 	links.push(...semanticLinks)
-
-	// ── Step 8: Auto-consolidate (creates observations + refreshes mental models) ──
 
 	const shouldConsolidate = options.consolidate !== false
 
@@ -578,8 +560,6 @@ export async function retain(
 			() => {} // swallow errors — consolidation is best-effort
 		)
 	}
-
-	// ── Step 9: Log new_trace decisions ──
 
 	const originalIndexByNewTraceIndex = new Map<
 		number,
@@ -609,8 +589,6 @@ export async function retain(
 		}
 	}
 
-	// ── Step 10: Load reinforced/reconsolidated memories into result ──
-
 	const allMemories: MemoryUnit[] = []
 	for (const { memoryId } of appliedMemoryIds) {
 		const row = hdb.db
@@ -623,8 +601,6 @@ export async function retain(
 		}
 	}
 	allMemories.push(...memories)
-
-	// ── Step 11: Episode tracking ──
 
 	const profile = options.profile ?? null
 	const project = options.project ?? null
@@ -680,7 +656,6 @@ export async function retain(
 		)
 	}
 
-	// ── Step 8b: Fire-and-forget LLM gist generation ──
 	// Upgrade the deterministic fallback gist with LLM-generated gists asynchronously.
 	scheduleGistUpgrades(adapter, hdb, schema, memories)
 

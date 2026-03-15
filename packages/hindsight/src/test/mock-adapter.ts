@@ -62,12 +62,10 @@ export function createMockAdapter(): MockAdapter {
 	const calls: MockAdapterCall[] = []
 
 	const adapter: MockAdapter = {
-		// ── AnyTextAdapter required properties ──
 		kind: 'text' as const,
 		name: 'mock',
 		model: 'mock-model',
 
-		// ── Mock control API ──
 		calls,
 		get callCount() {
 			return calls.length
@@ -88,7 +86,6 @@ export function createMockAdapter(): MockAdapter {
 			responseQueue = []
 		},
 
-		// ── AnyTextAdapter.chatStream ──
 		// Yields AG-UI protocol events for a text-only response.
 		chatStream(options: unknown) {
 			calls.push({ messages: [], options })
@@ -135,7 +132,6 @@ export function createMockAdapter(): MockAdapter {
 			}
 		},
 
-		// ── AnyTextAdapter.structuredOutput ──
 		structuredOutput(_options: unknown) {
 			calls.push({ messages: [], options: _options })
 			const response =

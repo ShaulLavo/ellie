@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import type { SlashCommand } from './slash-command-menu'
-import type { SessionStats } from '@/lib/chat/session-stats'
+import type { BranchStats } from '@/lib/chat/branch-stats'
 import { SlashCommandMenu } from './slash-command-menu'
 import {
 	PromptInput,
@@ -15,7 +15,7 @@ import { PromptInputAttachments } from './prompt-input-attachments'
 import { DropZoneOverlay } from './drop-zone-overlay'
 import { AttachButton } from './attach-button'
 import { SearchToggleButton } from './search-toggle-button'
-import { SessionContext } from './session-context'
+import { BranchContext } from './branch-context'
 import { usePromptInputLogic } from '../hooks/use-prompt-input-logic'
 
 export function PromptInputWithCommands({
@@ -29,7 +29,7 @@ export function PromptInputWithCommands({
 	onSubmit: (message: PromptInputMessage) => void
 	disabled: boolean
 	speechRefRef?: RefObject<string | null>
-	stats?: SessionStats
+	stats?: BranchStats
 }) {
 	const {
 		inputValue,
@@ -77,7 +77,7 @@ export function PromptInputWithCommands({
 								handleTranscriptionChange
 							}
 						/>
-						{stats && <SessionContext stats={stats} />}
+						{stats && <BranchContext stats={stats} />}
 					</PromptInputTools>
 					<PromptInputSubmit disabled={disabled} />
 				</PromptInputFooter>

@@ -8,15 +8,17 @@ import { PromptInputProvider } from '@/components/ai-elements/prompt-input'
 import { eden } from '@/lib/eden'
 // import { ChatToolbar } from './components/chat-toolbar'
 import { ChatMessageList } from './components/chat-message-list'
-import { SessionInfo } from './components/session-info'
-import { SessionList } from './components/session-list'
+import { BranchInfo } from './components/branch-info'
+import { ThreadList } from './components/thread-list'
 import { PromptInputWithCommands } from './components/prompt-input-with-commands'
 
 export function ChatRoom({
-	sessionId,
+	branchId,
+	threadId,
 	onClear
 }: {
-	sessionId: string
+	branchId: string
+	threadId: string
 	onClear?: () => void
 }) {
 	const { data: status } = useQuery({
@@ -25,14 +27,14 @@ export function ChatRoom({
 	})
 	const needsBootstrap = status?.needsBootstrap ?? false
 
-	const [showSessionList, setShowSessionList] =
+	const [showThreadList, setShowThreadList] =
 		useState(false)
-	const [showSessionInfo, setShowSessionInfo] =
+	const [showBranchInfo, setShowBranchInfo] =
 		useState(false)
 
 	const speechRefRef = useRef<string | null>(null)
 
-	const chat = useChatDB(sessionId)
+	const chat = useChatDB(branchId)
 
 	const {
 		timeline,
@@ -42,9 +44,9 @@ export function ChatRoom({
 	} = useTimeline(chat.messages, chat.streamingMessage)
 
 	const { commands } = useChatCommands({
-		sessionId,
+		branchId,
 		allMessages,
-		onClear: onClear ?? chat.clearSession
+		onClear: onClear ?? chat.clearBranch
 	})
 
 	const { handleSubmit } = useChatSubmit({
@@ -56,25 +58,25 @@ export function ChatRoom({
 	return (
 		<div className="flex h-full w-full flex-col">
 			{/* <ChatToolbar
-				onShowSessions={() => setShowSessionList(true)}
-				onShowInfo={() => setShowSessionInfo(true)}
+				onShowThreads={() => setShowThreadList(true)}
+				onShowInfo={() => setShowBranchInfo(true)}
 			/> */}
 
-			<SessionList
-				open={showSessionList}
-				onOpenChange={setShowSessionList}
-				listSessions={() =>
-					eden.chat.sessions.get().then(r => r.data)
+			<ThreadList
+				open={showThreadList}
+				onOpenChange={setShowThreadList}
+				listThreads={() =>
+					eden.api.threads.get().then(r => r.data)
 				}
 				onResume={async () => {}}
-				currentSessionId={sessionId}
+				currentThreadId={threadId}
 			/>
-			<SessionInfo
-				open={showSessionInfo}
-				onOpenChange={setShowSessionInfo}
-				getSessionStats={() =>
-					eden.chat
-						.sessions({ sessionId })
+			<BranchInfo
+				open={showBranchInfo}
+				onOpenChange={setShowBranchInfo}
+				getBranchStats={() =>
+					eden.api.chat
+						.branches({ branchId })
 						.get()
 						.then(r => r.data)
 				}
@@ -99,7 +101,7 @@ export function ChatRoom({
 						onSubmit={handleSubmit}
 						disabled={chat.connectionState !== 'connected'}
 						speechRefRef={speechRefRef}
-						stats={chat.sessionStats}
+						stats={chat.branchStats}
 					/>
 				</PromptInputProvider>
 			</div>

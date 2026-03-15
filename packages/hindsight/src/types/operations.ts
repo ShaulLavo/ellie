@@ -1,8 +1,6 @@
 import type { ScoredVisualMemory } from './shared'
 import type { RetainContentInput } from './config'
 
-// ── Operation options ──────────────────────────────────────────────────────
-
 /** Options for retain() */
 export interface RetainOptions {
 	/** Provide pre-extracted facts (skips LLM extraction) */
@@ -148,8 +146,6 @@ export interface ReflectOptions {
 	responseSchema?: Record<string, unknown>
 }
 
-// ── Results ────────────────────────────────────────────────────────────────
-
 /** Result from retainBatch(): one RetainResult per input content item */
 export type RetainBatchResult =
 	import('../schemas').RetainResult[]
@@ -192,8 +188,6 @@ export interface RecallChunk {
 	content: string
 	truncated: boolean
 }
-
-// ── Recall Trace ──────────────────────────────────────────────────────────
 
 export interface RecallTraceMetric {
 	phaseName: string
@@ -242,8 +236,6 @@ export interface RecallTrace {
 	selectedMemoryIds: string[]
 	totalDurationMs: number
 }
-
-// ── Consolidation ────────────────────────────────────────────────────────
 
 /** Options for consolidate() */
 export interface ConsolidateOptions {

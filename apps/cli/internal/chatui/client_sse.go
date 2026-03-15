@@ -22,8 +22,8 @@ type (
 // SSEClient connects to the Ellie SSE endpoint and fans events into a
 // Bubble Tea program via tea.Cmd returns from a subscription goroutine.
 type SSEClient struct {
-	baseURL   string
-	sessionID string
+	baseURL  string
+	branchID string
 
 	mu                sync.Mutex
 	lastSeq           int
@@ -39,11 +39,11 @@ const (
 	maxReconnectDelay    = 5 * time.Second
 )
 
-// NewSSEClient creates an SSE client for the given session.
-func NewSSEClient(baseURL, sessionID string) *SSEClient {
+// NewSSEClient creates an SSE client for the given branch.
+func NewSSEClient(baseURL, branchID string) *SSEClient {
 	return &SSEClient{
-		baseURL:   baseURL,
-		sessionID: sessionID,
+		baseURL:  baseURL,
+		branchID: branchID,
 	}
 }
 
@@ -126,7 +126,7 @@ func (s *SSEClient) connectOnce(ctx context.Context, send func(tea.Msg)) error {
 	s.cancelFn = cancel
 	s.mu.Unlock()
 
-	body, err := connectSSE(ctx, s.baseURL, s.sessionID)
+	body, err := connectSSE(ctx, s.baseURL, s.branchID)
 	if err != nil {
 		return err
 	}

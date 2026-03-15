@@ -1,6 +1,6 @@
 import type { AgentToolResult } from '@ellie/agent'
 
-export const MAX_OUTPUT_CHARS = 50_000
+const MAX_OUTPUT_CHARS = 50_000
 
 export const USER_AGENT =
 	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -39,8 +39,6 @@ export function formatBytes(bytes: number): string {
 		return `${(bytes / 1024).toFixed(1)} KB`
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
-
-// ── Error body extraction ────────────────────────────────────────────────
 
 const MAX_ERROR_BODY_CHARS = 2_000
 
@@ -85,8 +83,6 @@ export async function extractErrorBody(
 		return null
 	}
 }
-
-// ── External content wrapping ───────────────────────────────────────────
 
 const MARKER_START = '<<<EXTERNAL_UNTRUSTED_CONTENT>>>'
 const MARKER_END = '<<<END_EXTERNAL_UNTRUSTED_CONTENT>>>'

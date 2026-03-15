@@ -18,8 +18,6 @@ import type {
 import type { EventStore } from '@ellie/db'
 import { createHash } from 'crypto'
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const GLOBAL_BANK_NAME = 'ellie-global'
 
 /** Max turns before triggering a retain flush. */
@@ -36,9 +34,7 @@ const RECALL_MERGE_CAP = 12
 /** Maximum fact texts to include in the retain event for UI compactness. */
 const FACTS_UI_CAP = 8
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-export interface BankSearchResult {
+interface BankSearchResult {
 	bankId: string
 	status: 'ok' | 'error' | 'timeout'
 	error?: string
@@ -46,7 +42,7 @@ export interface BankSearchResult {
 	methodResults?: Record<string, MethodResult>
 }
 
-export interface MemoryRecallPayload {
+interface MemoryRecallPayload {
 	parts: Array<{
 		type: 'memory'
 		text: string
@@ -60,7 +56,7 @@ export interface MemoryRecallPayload {
 	timestamp: number
 }
 
-export interface MemoryRetainPayload {
+interface MemoryRetainPayload {
 	parts: Array<{
 		type: 'memory-retain'
 		factsStored: number
@@ -81,20 +77,18 @@ interface TranscriptTurn {
 	seq: number
 }
 
-export interface MemoryOrchestratorConfig {
+interface MemoryOrchestratorConfig {
 	hindsight: Hindsight
 	eventStore: EventStore
 	workspaceDir: string
 }
-
-// ── Orchestrator ──────────────────────────────────────────────────────────────
 
 export class MemoryOrchestrator {
 	private readonly hindsight: Hindsight
 	private readonly eventStore: EventStore
 	private readonly workspaceDir: string
 	private readonly projectBankName: string
-	/** Guard against concurrent evaluateRetain for the same session. */
+	/** Guard against concurrent evaluateRetain for the same branch. */
 	private retainInFlight = new Set<string>()
 
 	constructor(config: MemoryOrchestratorConfig) {
@@ -103,8 +97,6 @@ export class MemoryOrchestrator {
 		this.workspaceDir = config.workspaceDir
 		this.projectBankName = `ellie-project-${hashWorkspace(config.workspaceDir)}`
 	}
-
-	// ── Recall ──────────────────────────────────────────────────────────────
 
 	/**
 	 * Run recall against both banks in parallel.
@@ -202,8 +194,6 @@ export class MemoryOrchestrator {
 		return { payload, contextBlock: formattedContext }
 	}
 
-	// ── Retain ──────────────────────────────────────────────────────────────
-
 	/**
 	 * Evaluate whether a retain should be triggered, and if so, run it.
 	 *
@@ -212,40 +202,33 @@ export class MemoryOrchestrator {
 	 * retain was triggered, or null if conditions weren't met.
 	 */
 	async evaluateRetain(
-		sessionId: string,
+		branchId: string,
 		force?: boolean
 	): Promise<MemoryRetainPayload | null> {
-		if (this.retainInFlight.has(sessionId)) {
+		if (this.retainInFlight.has(branchId)) {
 			return null
 		}
-		this.retainInFlight.add(sessionId)
+		this.retainInFlight.add(branchId)
 		try {
-			return await this._evaluateRetain(sessionId, force)
+			return await this._evaluateRetain(branchId, force)
 		} finally {
-			this.retainInFlight.delete(sessionId)
+			this.retainInFlight.delete(branchId)
 		}
 	}
 
 	private async _evaluateRetain(
-		sessionId: string,
+		branchId: string,
 		force?: boolean
 	): Promise<MemoryRetainPayload | null> {
 		const bankIds = this.resolveBankIds()
-		const turns = this.collectUnprocessedTurns(sessionId)
+		const turns = this.collectUnprocessedTurns(branchId)
 
-		// Diagnostic: log retain evaluation for debugging
 		const totalChars = turns.reduce(
 			(sum, t) => sum + t.content.length,
 			0
 		)
-		console.log(
-			`[retain] evaluating session=${sessionId} turns=${turns.length} totalChars=${totalChars} force=${!!force}`
-		)
 
 		if (turns.length === 0) {
-			console.log(
-				`[retain] skipped: no unprocessed turns for session=${sessionId}`
-			)
 			return null
 		}
 
@@ -269,10 +252,7 @@ export class MemoryOrchestrator {
 		} else if (hasImmediateTurn) {
 			trigger = 'immediate_turn'
 		} else {
-			console.log(
-				`[retain] skipped: thresholds not met turns=${turns.length}/${MAX_TURNS_PER_CHUNK} chars=${totalChars}/${MAX_CHARS_PER_CHUNK} immediate=${hasImmediateTurn}`
-			)
-			return null // Thresholds not met
+			return null
 		}
 
 		const start = performance.now()
@@ -284,20 +264,12 @@ export class MemoryOrchestrator {
 			role: t.role,
 			content: t.content
 		}))
-		const documentId = `${sessionId}:${seqFrom}-${seqTo}`
+		const documentId = `${branchId}:${seqFrom}-${seqTo}`
 		const content = JSON.stringify(transcript)
 
-		// Extract facts once, then retain into all banks in parallel
-		// (avoids duplicate LLM extraction calls across banks)
-		console.log(
-			`[retain] triggered=${trigger} session=${sessionId} seqRange=${seqFrom}-${seqTo} extracting facts...`
-		)
 		const facts = await this.hindsight.extract(
 			bankIds[0],
 			content
-		)
-		console.log(
-			`[retain] extracted ${facts.length} facts, retaining into ${bankIds.length} banks...`
 		)
 		const results = await Promise.allSettled(
 			bankIds.map(bankId =>
@@ -325,7 +297,7 @@ export class MemoryOrchestrator {
 				if (errMsg.includes('UNIQUE constraint')) {
 					const cursorKey = this.cursorKey(
 						bankIds[i],
-						sessionId
+						branchId
 					)
 					this.eventStore.setKv(cursorKey, String(seqTo))
 					succeededBankIds.push(bankIds[i])
@@ -338,10 +310,7 @@ export class MemoryOrchestrator {
 			}
 
 			succeededBankIds.push(bankIds[i])
-			const cursorKey = this.cursorKey(
-				bankIds[i],
-				sessionId
-			)
+			const cursorKey = this.cursorKey(bankIds[i], branchId)
 			this.eventStore.setKv(cursorKey, String(seqTo))
 			// RetainResult.memories is the array of stored MemoryUnit objects
 			const memories = result.value.memories ?? []
@@ -373,8 +342,6 @@ export class MemoryOrchestrator {
 			timestamp: Date.now()
 		}
 	}
-
-	// ── Internal helpers ────────────────────────────────────────────────────
 
 	/**
 	 * Resolve bank IDs, lazily creating banks if they don't exist.
@@ -409,14 +376,14 @@ export class MemoryOrchestrator {
 	 * Uses the minimum cursor across all banks to determine the starting point.
 	 */
 	private collectUnprocessedTurns(
-		sessionId: string
+		branchId: string
 	): TranscriptTurn[] {
 		const bankIds = this.resolveBankIds()
 
 		// Find the minimum cursor across all banks
 		let minCursor = Infinity
 		for (const bankId of bankIds) {
-			const cursorKey = this.cursorKey(bankId, sessionId)
+			const cursorKey = this.cursorKey(bankId, branchId)
 			const raw = this.eventStore.getKv(cursorKey)
 			const cursor = raw ? Number(raw) : 0
 			if (cursor < minCursor) minCursor = cursor
@@ -425,48 +392,29 @@ export class MemoryOrchestrator {
 
 		// Query unprocessed events (unified types only)
 		const rows = this.eventStore.query({
-			sessionId,
+			branchId,
 			afterSeq: minCursor,
 			types: ['user_message', 'assistant_message']
 		})
 
 		const mapped = rows.map(row => {
-			const turn = rowToTranscriptTurn(row)
-			if (!turn) {
-				const parsed = JSON.parse(row.payload) as Record<
-					string,
-					unknown
-				>
-				console.log(
-					`[retain] filtered out row seq=${row.seq} type=${row.type} streaming=${parsed.streaming}`
-				)
-			}
-			return turn
+			return rowToTranscriptTurn(row)
 		})
 
-		const turns = mapped.filter(
+		return mapped.filter(
 			(t): t is TranscriptTurn =>
 				t !== null && t.content.length > 0
 		)
-
-		console.log(
-			`[retain] collectUnprocessedTurns session=${sessionId} cursor=${minCursor} rawRows=${rows.length} validTurns=${turns.length}`
-		)
-
-		return turns
 	}
 
 	private cursorKey(
 		bankId: string,
-		sessionId: string
+		branchId: string
 	): string {
-		return `memory.cursor.${bankId}:${sessionId}`
+		return `memory.cursor.${bankId}:${branchId}`
 	}
 }
 
-// ── Utility functions ────────────────────────────────────────────────────────
-
-/** Extract text content from a parsed message payload. */
 function extractTextContent(
 	content:
 		| string

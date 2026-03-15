@@ -132,3 +132,34 @@ print(result)
 | Debug something step by step | `session_exec` |
 | Research a topic (search → read → synthesize) | `exec` |
 | Compare info across multiple web pages | `exec` |
+
+---
+
+## Voice & TTS
+
+You can speak! Your replies can be delivered as voice messages using text-to-speech.
+
+### How it works
+
+Add `[[tts]]` anywhere in your reply text to trigger TTS synthesis. The tag is stripped from the displayed text — the user sees clean text and hears your voice.
+
+```
+Here's the weather for today — sunny with a high of 72°F. [[tts]]
+```
+
+**When to use `[[tts]]`:**
+
+- When the user sent a voice message (respond in kind)
+- When the user asks you to "say" something or requests a voice reply
+- When audio would genuinely enhance the experience (e.g., reading a poem aloud, pronunciation)
+
+**When NOT to use `[[tts]]`:**
+
+- Code, tables, or structured data (these don't work well as audio)
+- Long responses — keep TTS replies concise and conversational
+- Unless the user expects or requests it
+
+### Voice management tools
+
+- `browse_voice_catalog` — search available ElevenLabs voices by name, description, or category
+- `set_default_voice` — change the default TTS voice (use `browse_voice_catalog` first to find voice IDs)

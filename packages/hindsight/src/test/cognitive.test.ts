@@ -26,9 +26,7 @@ import {
 } from '../retrieval/cognitive'
 import { WorkingMemoryStore } from '../working-memory'
 
-// ============================================================================
 // Pure function tests (no DB needed)
-// ============================================================================
 
 describe('computeProbe', () => {
 	test('returns 0 for similarity=0', () => {
@@ -217,9 +215,7 @@ describe('computeCognitiveScore', () => {
 	})
 })
 
-// ============================================================================
 // Working Memory Store tests
-// ============================================================================
 
 describe('WorkingMemoryStore', () => {
 	let wm: WorkingMemoryStore
@@ -350,9 +346,7 @@ describe('WorkingMemoryStore', () => {
 	})
 })
 
-// ============================================================================
 // Integrated cognitive scorer tests (with DB)
-// ============================================================================
 
 describe('scoreCognitive (with DB)', () => {
 	let ctx: TestHindsight

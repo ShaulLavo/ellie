@@ -16,8 +16,6 @@ import {
 	listWorkspaceFiles
 } from '../workspace'
 
-// ── Schemas ──────────────────────────────────────────────────────────────
-
 const readParams = v.object({
 	path: v.pipe(
 		v.string(),
@@ -43,8 +41,6 @@ const writeParams = v.object({
 type ReadParams = v.InferOutput<typeof readParams>
 type WriteParams = v.InferOutput<typeof writeParams>
 
-// ── Factory ──────────────────────────────────────────────────────────────
-
 /**
  * Create workspace tools bound to a specific workspace directory.
  */
@@ -56,8 +52,6 @@ export function createWorkspaceTools(
 		createWriteWorkspaceFileTool(workspaceDir)
 	]
 }
-
-// ── read_workspace_file ──────────────────────────────────────────────────
 
 function createReadWorkspaceFileTool(
 	workspaceDir: string
@@ -115,8 +109,6 @@ function createReadWorkspaceFileTool(
 		}
 	}
 }
-
-// ── write_workspace_file ─────────────────────────────────────────────────
 
 function createWriteWorkspaceFileTool(
 	workspaceDir: string

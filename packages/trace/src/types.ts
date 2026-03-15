@@ -6,9 +6,7 @@
  * JSONL journal. Large payloads are stored as TUS-backed blobs via BlobRef.
  */
 
-// ============================================================================
 // Trace kind — fixed vocabulary for root trace classification
-// ============================================================================
 
 export type TraceKind =
 	| 'chat'
@@ -20,9 +18,7 @@ export type TraceKind =
 	| 'hindsight-narrative'
 	| 'speech'
 
-// ============================================================================
 // Trace event envelope
-// ============================================================================
 
 /**
  * Canonical envelope for every trace event. Written to JSONL.
@@ -39,8 +35,10 @@ export interface TraceEventEnvelope {
 	spanId: string
 	/** Parent span — undefined for root spans. */
 	parentSpanId?: string
-	/** Session this trace belongs to, if any. */
-	sessionId?: string
+	/** Thread this trace belongs to, if any. */
+	threadId?: string
+	/** Branch this trace belongs to, if any. */
+	branchId?: string
 	/** Agent run this trace belongs to, if any. */
 	runId?: string
 	/** Root trace classification. */
@@ -59,9 +57,7 @@ export interface TraceEventEnvelope {
 	blobRefs?: BlobRef[]
 }
 
-// ============================================================================
 // Blob reference
-// ============================================================================
 
 /**
  * Pointer to a TUS-stored blob. The `uploadId` is the canonical identity.
@@ -85,9 +81,7 @@ export interface BlobRef {
 	preview?: string
 }
 
-// ============================================================================
 // Blob sink
-// ============================================================================
 
 /** Options for writing a blob. */
 export interface BlobWriteOptions {
@@ -113,9 +107,7 @@ export interface BlobSink {
 	write(opts: BlobWriteOptions): Promise<BlobRef>
 }
 
-// ============================================================================
 // Trace scope
-// ============================================================================
 
 /**
  * Immutable bag of propagation context for a trace span.
@@ -126,7 +118,8 @@ export interface TraceScope {
 	traceId: string
 	spanId: string
 	parentSpanId?: string
-	sessionId?: string
+	threadId?: string
+	branchId?: string
 	runId?: string
 	traceKind: TraceKind
 }

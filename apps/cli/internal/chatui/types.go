@@ -115,7 +115,7 @@ type StoredMessage struct {
 // EventRow mirrors FE EventRow from the SSE stream.
 type EventRow struct {
 	ID        int             `json:"id"`
-	SessionID string          `json:"sessionId"`
+	BranchID string          `json:"branchId"`
 	Seq       int             `json:"seq"`
 	RunID     *string         `json:"runId"`
 	Type      string          `json:"type"`
@@ -124,8 +124,8 @@ type EventRow struct {
 	CreatedAt int64           `json:"createdAt"`
 }
 
-// SessionStats mirrors FE SessionStats.
-type SessionStats struct {
+// BranchStats mirrors FE BranchStats.
+type BranchStats struct {
 	Model            *string `json:"model"`
 	Provider         *string `json:"provider"`
 	MessageCount     int     `json:"messageCount"`
@@ -134,12 +134,23 @@ type SessionStats struct {
 	TotalCost        float64 `json:"totalCost"`
 }
 
-// SessionEntry is a summary of a chat session.
-type SessionEntry struct {
-	ID         string `json:"id"`
-	CurrentSeq int    `json:"currentSeq"`
-	CreatedAt  int64  `json:"createdAt"`
-	UpdatedAt  int64  `json:"updatedAt"`
+// ThreadEntry is a summary of a chat thread.
+type ThreadEntry struct {
+	ID          string  `json:"id"`
+	AgentID     string  `json:"agentId"`
+	AgentType   string  `json:"agentType"`
+	WorkspaceID string  `json:"workspaceId"`
+	Title       *string `json:"title"`
+	State       string  `json:"state"`
+	DayKey      *string `json:"dayKey"`
+	CreatedAt   int64   `json:"createdAt"`
+	UpdatedAt   int64   `json:"updatedAt"`
+}
+
+// AssistantCurrent is the response from GET /api/assistant/current.
+type AssistantCurrent struct {
+	ThreadID string `json:"threadId"`
+	BranchID string `json:"branchId"`
 }
 
 // StatusResponse is the /api/status response shape.
@@ -171,8 +182,8 @@ type DialogKind int
 const (
 	DialogNone DialogKind = iota
 	DialogCommands
-	DialogSessions
-	DialogSessionInfo
+	DialogThreads
+	DialogBranchInfo
 	DialogClearConfirm
 )
 
@@ -184,8 +195,8 @@ type SlashCommand struct {
 
 var Commands = []SlashCommand{
 	{Name: "clear", Description: "Start a new conversation"},
-	{Name: "sessions", Description: "List all sessions"},
-	{Name: "info", Description: "Show current session info"},
-	{Name: "transcript", Description: "Save session transcript"},
+	{Name: "threads", Description: "List all threads"},
+	{Name: "info", Description: "Show current branch info"},
+	{Name: "transcript", Description: "Save branch transcript"},
 	{Name: "theme", Description: "Toggle light/dark mode"},
 }

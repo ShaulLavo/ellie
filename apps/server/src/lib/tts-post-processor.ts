@@ -1,5 +1,5 @@
 /**
- * TtsPostProcessor — watches ALL sessions for ttsDirective flags
+ * TtsPostProcessor — watches ALL branches for ttsDirective flags
  * on assistant replies and synthesizes audio server-side.
  *
  * Supports per-reply voice overrides via [[tts:voiceId=xxx speed=1.1]]
@@ -15,7 +15,7 @@
 
 import type {
 	RealtimeStore,
-	SessionEvent
+	BranchEvent
 } from './realtime-store'
 import type { BlobSink } from '@ellie/trace'
 import {
@@ -38,7 +38,7 @@ import {
  * Example: "voiceId=pMsXgVXv3BLzUgSXRplE stability=0.4 speed=1.1"
  * Returns: { voiceId: "pMsXgVXv3BLzUgSXRplE", voiceSettings: { stability: 0.4, speed: 1.1 } }
  */
-export function parseTtsDirectiveParams(
+function parseTtsDirectiveParams(
 	paramStr: string | undefined
 ): ElevenLabsTtsOverrides {
 	if (!paramStr?.trim()) return {}
@@ -99,7 +99,7 @@ export function parseTtsDirectiveParams(
 	return overrides
 }
 
-export interface TtsPostProcessorOpts {
+interface TtsPostProcessorOpts {
 	store: RealtimeStore
 	blobSink: BlobSink
 	/** Optional pre-resolved TTS config */
@@ -117,7 +117,7 @@ export class TtsPostProcessor {
 	readonly #credentialsPath?: string
 	readonly #dataDir?: string
 	readonly #inflight = new Map<string, Promise<void>>()
-	readonly #watchedSessions = new Set<string>()
+	readonly #watchedBranches = new Set<string>()
 	readonly #unsubscribers: Array<() => void> = []
 
 	constructor(opts: TtsPostProcessorOpts) {
@@ -128,19 +128,19 @@ export class TtsPostProcessor {
 		this.#dataDir = opts.dataDir
 	}
 
-	/** Subscribe to a session's events. Idempotent per sessionId. */
-	watchSession(sessionId: string): void {
-		if (this.#watchedSessions.has(sessionId)) return
-		this.#watchedSessions.add(sessionId)
+	/** Subscribe to a branch's events. Idempotent per branchId. */
+	watchBranch(branchId: string): void {
+		if (this.#watchedBranches.has(branchId)) return
+		this.#watchedBranches.add(branchId)
 
-		const unsub = this.#store.subscribeToSession(
-			sessionId,
-			(event: SessionEvent) => {
+		const unsub = this.#store.subscribeToBranch(
+			branchId,
+			(event: BranchEvent) => {
 				if (event.type !== 'append') return
 				if (event.event.type !== 'run_closed') return
 				const runId = event.event.runId
 				if (!runId) return
-				this.#processRun(runId, sessionId).catch(err => {
+				this.#processRun(runId, branchId).catch(err => {
 					console.error(
 						'[tts-post-processor] processRun failed:',
 						err
@@ -160,14 +160,14 @@ export class TtsPostProcessor {
 	 */
 	processRun(
 		runId: string,
-		sessionId: string
+		branchId: string
 	): Promise<void> {
-		return this.#processRun(runId, sessionId)
+		return this.#processRun(runId, branchId)
 	}
 
 	async #processRun(
 		runId: string,
-		sessionId: string
+		branchId: string
 	): Promise<void> {
 		// Dedup: if already in-flight for this runId, return existing promise
 		const existing = this.#inflight.get(runId)
@@ -175,7 +175,7 @@ export class TtsPostProcessor {
 
 		const promise = this.#doProcess(
 			runId,
-			sessionId
+			branchId
 		).finally(() => {
 			this.#inflight.delete(runId)
 		})
@@ -185,13 +185,10 @@ export class TtsPostProcessor {
 
 	async #doProcess(
 		runId: string,
-		sessionId: string
+		branchId: string
 	): Promise<void> {
 		// 1. Query all run events and find replies with ttsDirective
-		const rows = this.#store.queryRunEvents(
-			sessionId,
-			runId
-		)
+		const rows = this.#store.queryRunEvents(branchId, runId)
 
 		const ttsReplies: Array<{
 			rowId: number
@@ -265,7 +262,7 @@ export class TtsPostProcessor {
 				await this.#synthesizeReply(
 					reply,
 					config,
-					sessionId,
+					branchId,
 					runId
 				)
 			} catch (err) {
@@ -280,7 +277,7 @@ export class TtsPostProcessor {
 	async #synthesizeReply(
 		reply: { rowId: number; text: string; params?: string },
 		config: ElevenLabsTtsConfig,
-		sessionId: string,
+		branchId: string,
 		runId: string
 	): Promise<void> {
 		// Parse directive overrides
@@ -335,7 +332,7 @@ export class TtsPostProcessor {
 
 		// Emit assistant_artifact event (deduped by assistantRowId)
 		this.#store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: reply.rowId,
@@ -343,7 +340,7 @@ export class TtsPostProcessor {
 				origin: 'tts' as const,
 				uploadId: blobRef.uploadId,
 				url: blobRef.url,
-				mime: result.mime,
+				mimeType: result.mime,
 				size: result.audio.length,
 				synthesizedText: ttsText
 			},
@@ -396,6 +393,6 @@ export class TtsPostProcessor {
 	shutdown(): void {
 		for (const unsub of this.#unsubscribers) unsub()
 		this.#unsubscribers.length = 0
-		this.#watchedSessions.clear()
+		this.#watchedBranches.clear()
 	}
 }

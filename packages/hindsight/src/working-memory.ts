@@ -10,19 +10,13 @@
  * Max boost: 0.20
  */
 
-// ── Constants ──────────────────────────────────────────────────────────────
-
 const WM_CAPACITY = 40
 const WM_DECAY_MS = 900_000 // 15 minutes
-
-// ── Types ──────────────────────────────────────────────────────────────────
 
 interface WmEntry {
 	memoryId: string
 	touchedAt: number
 }
-
-// ── Working Memory Store ───────────────────────────────────────────────────
 
 export class WorkingMemoryStore {
 	/** Two-level map: bankId → sessionId → entries (avoids delimiter collisions) */

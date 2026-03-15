@@ -10,6 +10,7 @@ import { staticPlugin } from '@elysiajs/static'
 import { tryValibotSummary } from '@ellie/schemas'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { Elysia } from 'elysia'
+import { stopTei } from './lib/tei'
 import { createAgentRoutes } from './routes/agent'
 import {
 	createAuthRoutes,
@@ -21,7 +22,7 @@ import {
 import { createChatRoutes } from './routes/chat'
 import { errorSchema } from './routes/schemas/common-schemas'
 import { HttpError } from './routes/http-errors'
-import { createSessionRoutes } from './routes/session'
+import { createAssistantRoutes } from './routes/assistant'
 import { createStatusRoutes } from './routes/status'
 import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
@@ -60,23 +61,23 @@ export const app = new Elysia()
 			() => !ctx.isBootstrapInjected()
 		)
 	)
-	.use(createSessionRoutes(ctx.store))
+	.use(createAssistantRoutes(ctx.store, ctx.sseState))
 	.use(
-		createChatRoutes(
-			ctx.store,
-			ctx.sseState,
-			ctx.getAgentController,
-			ctx.ensureBootstrap,
-			ctx.uploadStore,
-			ctx.eventStore
-		)
+		createChatRoutes({
+			store: ctx.store,
+			sseState: ctx.sseState,
+			getAgentController: ctx.getAgentController,
+			ensureBootstrap: ctx.ensureBootstrap,
+			uploadStore: ctx.uploadStore,
+			eventStore: ctx.eventStore
+		})
 	)
 	.use(
-		createAgentRoutes(
-			ctx.store,
-			ctx.getAgentController,
-			ctx.sseState
-		)
+		createAgentRoutes({
+			store: ctx.store,
+			getAgentController: ctx.getAgentController,
+			sseState: ctx.sseState
+		})
 	)
 	.use(
 		createAuthRoutes(
@@ -107,19 +108,19 @@ export const app = new Elysia()
 		})
 	)
 	.use(
-		createSpeechRoutes(
-			ctx.eventStore,
-			ctx.DATA_DIR,
-			ctx.sttBaseUrl,
-			ctx.traceRecorder
-		)
+		createSpeechRoutes({
+			eventStore: ctx.eventStore,
+			dataDir: ctx.DATA_DIR,
+			sttBaseUrl: ctx.sttBaseUrl,
+			traceRecorder: ctx.traceRecorder
+		})
 	)
 	.use(
-		createTtsRoutes(
-			ctx.blobSink,
-			ctx.traceRecorder,
-			ctx.CREDENTIALS_PATH
-		)
+		createTtsRoutes({
+			blobSink: ctx.blobSink,
+			traceRecorder: ctx.traceRecorder,
+			credentialsPath: ctx.CREDENTIALS_PATH
+		})
 	)
 	.use(createDevRoutes(ctx.DATA_DIR))
 	.use(createTraceRoutes(ctx.traceRecorder))
@@ -147,9 +148,7 @@ export const app = new Elysia()
 	.use(
 		(() => {
 			const spaIndex = () =>
-				Bun.file(
-					join(ctx.STUDIO_PUBLIC, 'index.html')
-				)
+				Bun.file(join(ctx.STUDIO_PUBLIC, 'index.html'))
 			const spa = new Elysia()
 			for (const prefix of [
 				'/app',
@@ -211,8 +210,8 @@ console.log(
 	`[server] ✅ all systems ready on port ${ctx.port}`
 )
 
-// ── Graceful shutdown (close WhatsApp sockets before hot-reload / exit) ──
 async function shutdown() {
+	stopTei()
 	await ctx.channelManager.shutdownAll()
 }
 

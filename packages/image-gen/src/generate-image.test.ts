@@ -10,8 +10,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 function makeMockBlobSink(): BlobSink {
 	return {
 		write: async opts => ({
@@ -42,7 +40,7 @@ function makeDeps(
 ): GenerationDeps {
 	return {
 		blobSink: makeMockBlobSink(),
-		sessionId: 'test-session',
+		branchId: 'test-session',
 		runId: 'test-run',
 		dataDir: makeTmpDataDir(),
 		...overrides
@@ -161,7 +159,7 @@ describe('executeImageGeneration — request building (with pre-seeded venv)', (
 		)
 		return {
 			blobSink: makeMockBlobSink(),
-			sessionId: 'test-session',
+			branchId: 'test-session',
 			runId: 'test-run',
 			dataDir
 		}

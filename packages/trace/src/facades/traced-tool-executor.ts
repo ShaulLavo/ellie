@@ -140,8 +140,6 @@ export function createTracedToolWrapper<
 	} as T
 }
 
-// ── Progress tracing ─────────────────────────────────────────────────
-
 /**
  * Wrap an onUpdate callback to also emit tool.progress trace events.
  *

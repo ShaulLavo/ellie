@@ -9,8 +9,6 @@
  * - Verification report structure
  */
 
-// ── Rolling Ingest Dataset ──────────────────────────────────────────────
-
 export interface RollingIngestEvent {
 	/** Unique event identifier */
 	eventId: string
@@ -38,8 +36,6 @@ export interface RollingIngestEvent {
 	tags?: string[]
 }
 
-// ── Temporal Narrative QA Dataset ────────────────────────────────────────
-
 export interface TemporalNarrativeQuestion {
 	/** Unique question identifier */
 	questionId: string
@@ -52,8 +48,6 @@ export interface TemporalNarrativeQuestion {
 	/** Direction for narrative query */
 	direction: 'before' | 'after' | 'both'
 }
-
-// ── Metric Results ──────────────────────────────────────────────────────
 
 export interface DuplicateRatioMetrics {
 	/** Total canonical count across all clusters */
@@ -73,8 +67,6 @@ export interface NarrativeAccuracyMetrics {
 	accuracy: number
 }
 
-// ── Gate Results ─────────────────────────────────────────────────────────
-
 export type GateStatus = 'pass' | 'fail' | 'skip'
 
 export interface GateResult {
@@ -83,8 +75,6 @@ export interface GateResult {
 	description: string
 	details: Record<string, unknown>
 }
-
-// ── Verification Run Output ─────────────────────────────────────────────
 
 export interface Phase2VerificationRun {
 	/** ISO timestamp of the run */
@@ -103,8 +93,6 @@ export interface Phase2VerificationRun {
 		narrativeAccuracy?: NarrativeAccuracyMetrics
 	}
 }
-
-// ── Comparison Report ───────────────────────────────────────────────────
 
 export interface Phase2ComparisonReport {
 	/** Baseline run results */

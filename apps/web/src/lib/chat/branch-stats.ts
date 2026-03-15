@@ -1,4 +1,4 @@
-export interface SessionStats {
+export interface BranchStats {
 	model: string | null
 	provider: string | null
 	messageCount: number
@@ -8,7 +8,7 @@ export interface SessionStats {
 	lastPromptTokens: number
 }
 
-export const EMPTY_STATS: SessionStats = {
+export const EMPTY_STATS: BranchStats = {
 	model: null,
 	provider: null,
 	messageCount: 0,
@@ -37,7 +37,7 @@ function safeParsePayload(
 
 export function computeStatsFromEvents(
 	events: StatsRow[]
-): SessionStats {
+): BranchStats {
 	let model: string | null = null
 	let provider: string | null = null
 	let promptTokens = 0
@@ -103,7 +103,7 @@ interface MessageLike {
 
 export function computeStatsFromMessages(
 	messages: MessageLike[]
-): SessionStats {
+): BranchStats {
 	let model: string | null = null
 	let provider: string | null = null
 	let promptTokens = 0

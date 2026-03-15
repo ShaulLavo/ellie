@@ -11,7 +11,7 @@ export interface ProjectedEvent {
 	type: string
 	traceId: string
 	spanId: string
-	sessionId?: string
+	branchId?: string
 	runId?: string
 	ts: number
 	payload: unknown
@@ -58,7 +58,7 @@ export function projectTraceToEvents(
 			type: eventType,
 			traceId: envelope.traceId,
 			spanId: envelope.spanId,
-			sessionId: envelope.sessionId,
+			branchId: envelope.branchId,
 			runId: envelope.runId,
 			ts: envelope.ts,
 			payload: envelope.payload

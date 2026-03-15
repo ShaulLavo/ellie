@@ -10,7 +10,6 @@ import { readFileSync, existsSync } from 'fs'
 import { describe } from 'bun:test'
 import { loadCredentialMap } from '@ellie/ai/credentials'
 
-// ── Load pre-generated embeddings fixture ────────────────────────────────────
 //
 // Real embeddings from nomic-embed-text (768 dims) generated via:
 //   bun run generate-embeddings
@@ -40,8 +39,6 @@ const HAS_REAL_EMBEDDINGS =
  */
 export { EMBEDDING_FIXTURE }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 export const EMBED_DIMS = HAS_REAL_EMBEDDINGS ? 768 : 16
 export const EXTRACTION_TEST_MODE =
 	process.env.HINDSIGHT_EXTRACTION_TEST_MODE ??
@@ -52,8 +49,6 @@ export const EXTRACTION_TEST_CANONICAL_TIMEZONE =
 export function useRealLLMExtractionTests(): boolean {
 	return EXTRACTION_TEST_MODE === 'real-llm'
 }
-
-// ── Credential detection ─────────────────────────────────────────────────────
 
 /**
  * Find the .credentials.json file by walking up from the repo root.

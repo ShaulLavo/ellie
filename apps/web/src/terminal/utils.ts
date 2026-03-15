@@ -1,7 +1,5 @@
 import type { Terminal as GhosttyTerminal } from 'ghostty-web'
 
-// ── Terminal themes ──────────────────────────────────────────
-
 export const darkTermTheme = {
 	background: '#0a0a0a',
 	foreground: '#e4e4e7',

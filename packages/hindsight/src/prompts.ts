@@ -1,5 +1,3 @@
-// ── Fact Extraction (Python parity) ────────────────────────────────────────
-
 export const EXTRACTION_CANONICAL_TIMEZONE =
 	'Asia/Jerusalem'
 
@@ -128,8 +126,6 @@ export const EXTRACT_FACTS_VERBOSE_SYSTEM =
 		VERBOSE_GUIDELINES
 	)
 
-// ── Extraction mode selector ───────────────────────────────────────────────
-
 export function getExtractionPrompt(
 	mode: 'concise' | 'verbose' | 'custom',
 	customGuidelines?: string
@@ -144,8 +140,6 @@ export function getExtractionPrompt(
 	}
 	return EXTRACT_FACTS_SYSTEM
 }
-
-// ── User message ───────────────────────────────────────────────────────────
 
 export interface ExtractFactsUserPromptInput {
 	text: string
@@ -180,8 +174,6 @@ Context: ${input.context?.trim() || 'none'}
 
 Text:
 ${input.text}`
-
-// ── Consolidation ─────────────────────────────────────────────────────────
 
 export const CONSOLIDATION_SYSTEM = `You are a memory consolidation engine. Your job is to convert raw facts into durable knowledge (observations).
 
@@ -273,8 +265,6 @@ export function getConsolidationUserPrompt(
 	return prompt
 }
 
-// ── Reflect Agent (3-tier) ─────────────────────────────────────────────────
-
 import type { ReflectBudget } from './types'
 
 const BUDGET_GUIDANCE: Record<ReflectBudget, string> = {
@@ -341,8 +331,6 @@ FORMATTING:
 - Cite specific facts when possible
 - Only say "I don't have information" if the retrieved data is truly unrelated to the question`
 }
-
-// ── Directive Injection ──────────────────────────────────────────────────
 
 import type { Directive } from './types'
 

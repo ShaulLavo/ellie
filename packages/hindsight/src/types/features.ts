@@ -1,16 +1,12 @@
 import type { ReflectResult } from './shared'
 import type { DispositionTraits } from '../schemas'
 
-// ── Bank Profile ─────────────────────────────────────────────────────────
-
 /** Bank profile passed to reflect for prompt injection */
 export interface BankProfile {
 	name: string
 	mission: string
 	disposition: DispositionTraits
 }
-
-// ── Mental Models ────────────────────────────────────────────────────────
 
 /** A mental model (user-curated summary with freshness) */
 export interface MentalModel {
@@ -66,8 +62,6 @@ export interface RefreshMentalModelResult {
 	reflectResult: ReflectResult
 }
 
-// ── Directives ────────────────────────────────────────────────────────────
-
 /** A behavioral directive (hard rule for reflect) */
 export interface Directive {
 	id: string
@@ -98,8 +92,6 @@ export interface UpdateDirectiveOptions {
 	isActive?: boolean
 	tags?: string[] | null
 }
-
-// ── Reflect 3-tier result types ─────────────────────────────────────────
 
 /** Return shape from search_mental_models tool (Tier 1) */
 export interface MentalModelSearchResult {
@@ -135,8 +127,6 @@ export interface RawFactSearchResult {
 	occurredAt: number | null
 }
 
-// ── Reconsolidation Routing ─────────────────────────────────────────────
-
 /** Route decision for ingest-time reconsolidation. */
 export type ReconRoute =
 	| 'reinforce'
@@ -157,8 +147,6 @@ export interface RouteDecision {
 	/** Entity|attribute keys that conflicted */
 	conflictKeys: string[]
 }
-
-// ── Episodes ────────────────────────────────────────────────────────────
 
 export type EpisodeBoundaryReason =
 	| 'time_gap'
@@ -194,8 +182,6 @@ export interface ListEpisodesResult {
 	cursor: string | null
 }
 
-// ── Narrative ───────────────────────────────────────────────────────────
-
 /** Default number of narrative steps when not specified. */
 export const NARRATIVE_STEPS_DEFAULT = 12
 /** Maximum allowed narrative steps (clamped in consumers). */
@@ -225,8 +211,6 @@ export interface NarrativeResult {
 	events: NarrativeEvent[]
 	anchorMemoryId: string
 }
-
-// ── Phase 4: Visual Semantics ─────────────────────────────────────────────
 
 /** Input for retaining a visual description. */
 export interface VisualRetainInput {

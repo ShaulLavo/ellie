@@ -12,13 +12,9 @@ import type {
 import { loadElevenLabsCredential } from '@ellie/ai/credentials'
 import * as v from 'valibot'
 
-// ── Constants ────────────────────────────────────────────────────────────
-
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io'
 const CACHE_TTL_MS = 15 * 60_000
 const DEFAULT_TIMEOUT_MS = 15_000
-
-// ── Schema ───────────────────────────────────────────────────────────────
 
 const browseVoiceCatalogParams = v.object({
 	query: v.optional(
@@ -56,8 +52,6 @@ type BrowseVoiceCatalogParams = v.InferOutput<
 	typeof browseVoiceCatalogParams
 >
 
-// ── ElevenLabs API types ─────────────────────────────────────────────────
-
 interface ElevenLabsVoice {
 	voice_id: string
 	name: string
@@ -80,12 +74,8 @@ interface ElevenLabsVoicesResponse {
 	total_count?: number
 }
 
-// ── Cache ────────────────────────────────────────────────────────────────
-
 let cachedVoices: ElevenLabsVoice[] | undefined
 let cacheExpiresAt = 0
-
-// ── Helpers ──────────────────────────────────────────────────────────────
 
 function errorResult(msg: string): AgentToolResult {
 	return {
@@ -166,8 +156,6 @@ async function fetchVoiceCatalog(
 
 	return allVoices
 }
-
-// ── Tool factory ─────────────────────────────────────────────────────────
 
 export function createBrowseVoiceCatalogTool(
 	credentialsPath?: string

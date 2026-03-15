@@ -28,8 +28,6 @@ describe('Bank management', () => {
 		t.cleanup()
 	})
 
-	// ── Create ──────────────────────────────────────────────────────────────
-
 	describe('createBank', () => {
 		it('creates a bank with name', () => {
 			const bank = t.hs.createBank('test-bank')
@@ -83,8 +81,6 @@ describe('Bank management', () => {
 		})
 	})
 
-	// ── Get ─────────────────────────────────────────────────────────────────
-
 	describe('getBank', () => {
 		it('retrieves a bank by name', () => {
 			const created = t.hs.createBank('findme')
@@ -112,8 +108,6 @@ describe('Bank management', () => {
 		})
 	})
 
-	// ── List ────────────────────────────────────────────────────────────────
-
 	describe('listBanks', () => {
 		it('returns empty array when no banks', () => {
 			expect(t.hs.listBanks()).toHaveLength(0)
@@ -126,8 +120,6 @@ describe('Bank management', () => {
 			expect(t.hs.listBanks()).toHaveLength(3)
 		})
 	})
-
-	// ── Delete ──────────────────────────────────────────────────────────────
 
 	describe('deleteBank', () => {
 		it('deletes a bank', () => {
@@ -143,8 +135,6 @@ describe('Bank management', () => {
 			expect(t.hs.getBankById(bank1.id)).toBeDefined()
 		})
 	})
-
-	// ── Update name/description ──────────────────────────────────────────
 
 	describe('updateBank name/description', () => {
 		it.todo('updates bank name and is reflected in getBank')
@@ -178,8 +168,6 @@ describe('Bank management', () => {
 			)
 		})
 	})
-
-	// ── Update config ────────────────────────────────────────────────────
 
 	describe('updateBankConfig', () => {
 		it('updates extraction mode', () => {

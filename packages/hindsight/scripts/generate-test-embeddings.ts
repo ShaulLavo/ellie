@@ -25,7 +25,6 @@ const MODEL = 'nomic-embed-text'
 const BASE_URL = 'http://localhost:11434'
 const BATCH_SIZE = 50
 
-// ── All unique texts that flow through the embedding pipeline in tests ──────
 //
 // Organized by category. Duplicates are removed after merging.
 // Keep this list in sync with the test files.
@@ -149,8 +148,6 @@ const MENTAL_MODEL_QUERIES = [
 	'q3'
 ]
 
-// ── Deduplicate ─────────────────────────────────────────────────────────────
-
 const ALL_TEXTS = [
 	...CONTENT_STRINGS,
 	...QUERY_STRINGS,
@@ -161,8 +158,6 @@ const ALL_TEXTS = [
 const uniqueTexts = [...new Set(ALL_TEXTS)].sort((a, b) =>
 	a.localeCompare(b)
 )
-
-// ── Ollama API ──────────────────────────────────────────────────────────────
 
 interface OllamaEmbedResponse {
 	model: string
@@ -194,8 +189,6 @@ async function embedBatch(
 	}
 	return data.embeddings
 }
-
-// ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
 	console.log(

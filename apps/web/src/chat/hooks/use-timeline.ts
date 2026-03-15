@@ -7,8 +7,6 @@ import {
 
 export type { ToolResultPart, TimelineItem }
 
-// ── Hook ──────────────────────────────────────────────────────
-
 export function useTimeline(
 	messages: StoredChatMessage[],
 	streamingMessage?: StoredChatMessage | null

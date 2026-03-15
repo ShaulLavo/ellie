@@ -1,6 +1,6 @@
 /**
  * In-memory group history buffer for unmentioned messages.
- * Matching OpenCLAW's groupHistories pattern — volatile (lost on restart).
+ * Volatile (lost on restart).
  *
  * When a group message doesn't trigger the bot (no mention), it's stored
  * in the buffer. When the bot IS triggered, the buffer is consumed and

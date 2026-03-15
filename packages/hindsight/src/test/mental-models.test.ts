@@ -48,8 +48,6 @@ describe('Mental models', () => {
 		t.cleanup()
 	})
 
-	// ── Create ──────────────────────────────────────────────────────────────
-
 	describe('createMentalModel', () => {
 		it('creates a mental model with required fields', async () => {
 			const model = await t.hs.createMentalModel(bankId, {
@@ -121,8 +119,6 @@ describe('Mental models', () => {
 		})
 	})
 
-	// ── Get ─────────────────────────────────────────────────────────────────
-
 	describe('getMentalModel', () => {
 		it('retrieves a mental model by ID', async () => {
 			const created = await t.hs.createMentalModel(bankId, {
@@ -154,8 +150,6 @@ describe('Mental models', () => {
 			).toBeUndefined()
 		})
 	})
-
-	// ── List ────────────────────────────────────────────────────────────────
 
 	describe('listMentalModels', () => {
 		it('returns empty array when none exist', () => {
@@ -225,8 +219,6 @@ describe('Mental models', () => {
 			)
 		})
 	})
-
-	// ── Update ──────────────────────────────────────────────────────────────
 
 	describe('updateMentalModel', () => {
 		it('updates the name', async () => {
@@ -323,8 +315,6 @@ describe('Mental models', () => {
 		})
 	})
 
-	// ── Delete ──────────────────────────────────────────────────────────────
-
 	describe('deleteMentalModel', () => {
 		it('deletes a mental model', async () => {
 			const model = await t.hs.createMentalModel(bankId, {
@@ -358,8 +348,6 @@ describe('Mental models', () => {
 			).toBeUndefined()
 		})
 	})
-
-	// ── Refresh (TDD — calls reflect which needs agentic mock) ────────────
 
 	describe('refreshMentalModel', () => {
 		it('refreshes content via reflect() and updates model content', async () => {
@@ -517,8 +505,6 @@ describe('Mental models', () => {
 			expect(result.model.lastRefreshedAt).not.toBeNull()
 		})
 	})
-
-	// ── Mental models in reflect ──────────────────────────────────────────
 
 	describe('mental models used in reflect', () => {
 		it('reflect searches mental models when they exist', async () => {
@@ -733,8 +719,6 @@ describe('Mental models', () => {
 		)
 	})
 
-	// ── Tag security boundaries ───────────────────────────────────────────
-
 	describe('tag security', () => {
 		it.todo(
 			'mental model refresh respects tag boundaries (requires real-LLM tool-calling)'
@@ -806,8 +790,6 @@ describe('Mental models', () => {
 			})
 		})
 	})
-
-	// ── Custom ID (port of test_reflections.py) ──────────────────────────
 
 	describe('custom ID', () => {
 		it('creates mental model with custom ID', async () => {

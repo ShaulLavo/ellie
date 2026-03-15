@@ -18,8 +18,6 @@ const groupPolicySchema = v.picklist([
 	'disabled'
 ])
 
-// ── Tool policy schemas (matching OpenCLAW's ToolPolicyConfig) ──────────
-
 const toolPolicySchema = v.union([
 	v.picklist(['all', 'none']),
 	v.object({
@@ -27,8 +25,6 @@ const toolPolicySchema = v.union([
 		deny: v.optional(v.array(v.string()))
 	})
 ])
-
-// ── Per-group config schema (matching OpenCLAW's ChannelGroupConfig) ────
 
 const groupConfigSchema = v.object({
 	requireMention: v.optional(v.boolean()),
@@ -68,7 +64,3 @@ export const whatsappSettingsSchema = v.pipe(
 		'dmPolicy "open" requires allowFrom to include "*"'
 	)
 )
-
-export type ValidatedWhatsAppSettings = v.InferOutput<
-	typeof whatsappSettingsSchema
->

@@ -21,8 +21,6 @@ import type {
 } from '@ellie/trace'
 import { createChildScope } from '@ellie/trace'
 
-// ── Types ───────────────────────────────────────────────────────────────
-
 /** Trace dependencies for recording nested tool calls in the REPL. */
 export interface ReplTraceDeps {
 	recorder: TraceRecorder
@@ -45,7 +43,7 @@ export interface ReplEvalResult {
 	elapsedMs: number
 }
 
-export interface ReplSessionInfo {
+interface ReplSessionInfo {
 	sessionId: string
 	pid: number | null
 	alive: boolean
@@ -53,14 +51,10 @@ export interface ReplSessionInfo {
 	lastEvalAt: number | null
 }
 
-// ── Constants ───────────────────────────────────────────────────────────
-
 const SENTINEL_PREFIX = '__ELLIE_REPL_SENTINEL_'
 const COMMIT_MARKER = '__ELLIE_COMMIT__'
 const DEFAULT_TIMEOUT_MS = 180_000
 const MAX_OUTPUT_BYTES = 262_144
-
-// ── Helpers ─────────────────────────────────────────────────────────────
 
 type ReplProc = {
 	pid: number
@@ -147,8 +141,6 @@ process.stderr.write = function(...args) {
 `
 	return `${callTool}\n${wrappers}\n${printHelper}\nundefined;\n`
 }
-
-// ── REPL Runtime ────────────────────────────────────────────────────────
 
 export class ReplRuntime {
 	readonly sessionId: string
@@ -413,8 +405,6 @@ process.stdout.write(JSON.stringify({ __committed: globalThis.${COMMIT_MARKER}, 
 	get alive(): boolean {
 		return this.#alive
 	}
-
-	// ── Private ──────────────────────────────────────────────────────────
 
 	/**
 	 * Send raw code to stdin and capture output until sentinel.

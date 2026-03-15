@@ -10,10 +10,10 @@ import * as path from 'node:path'
 /** Build ordered reply payloads from completed assistant messages in a run. */
 export function extractReplyPayloads(
 	store: RealtimeStore,
-	sessionId: string,
+	branchId: string,
 	runId: string
 ): ExtractedReplyPayload[] {
-	const rows = store.queryRunEvents(sessionId, runId)
+	const rows = store.queryRunEvents(branchId, runId)
 	const replies = projectReplies(rows)
 	return replies.map((reply, i) => ({
 		assistantRowId: reply.assistantRowId,
@@ -31,7 +31,7 @@ export function extractReplyPayloads(
 	}))
 }
 
-export function extractAssistantMessageText(
+function extractAssistantMessageText(
 	payload: Record<string, unknown>
 ): string | null {
 	const message = payload.message as
@@ -81,9 +81,7 @@ export function mediaLocalRoots(
 	return roots
 }
 
-// ── Live-text streaming helpers ─────────────────────────────────────────
-
-export interface StreamingRowSnapshot {
+interface StreamingRowSnapshot {
 	assistantRowId: number
 	text: string
 	streaming: boolean
@@ -97,10 +95,10 @@ export interface StreamingRowSnapshot {
  */
 export function extractStreamingRow(
 	store: RealtimeStore,
-	sessionId: string,
+	branchId: string,
 	runId: string
 ): StreamingRowSnapshot | null {
-	const rows = store.queryRunEvents(sessionId, runId)
+	const rows = store.queryRunEvents(branchId, runId)
 
 	// Walk backwards to find the latest assistant_message row
 	for (let i = rows.length - 1; i >= 0; i--) {

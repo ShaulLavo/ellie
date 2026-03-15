@@ -101,10 +101,10 @@ func renderStatusLine(m *Model, width int) string {
 		connIndicator = disconnectedStyle.Render("○ disconnected")
 	}
 
-	sessionInfo := dimStyle.Render(fmt.Sprintf("session: %s", truncateID(m.sessionID)))
+	branchInfo := dimStyle.Render(fmt.Sprintf("branch: %s", truncateID(m.branchID)))
 
 	left := connIndicator
-	right := sessionInfo
+	right := branchInfo
 	padding := width - lipgloss.Width(left) - lipgloss.Width(right) - 2
 	if padding < 1 {
 		padding = 1
@@ -355,7 +355,7 @@ func renderPart(part ContentPart, tg ToolGrouping, width int, anims map[string]*
 	case PartCheckpoint:
 		msg := part.Message
 		if msg == "" {
-			msg = "New day, new session"
+			msg = "New day, new thread"
 		}
 		label := "  ☀ " + msg + " "
 		lineLen := width - lipgloss.Width(label)
@@ -478,7 +478,7 @@ func renderAttachmentBar(attachments []PendingAttachment, cursor int, selected b
 }
 
 // formatModelName strips common prefixes/suffixes for display.
-// Mirrors FE session-status-bar.tsx behavior.
+// Mirrors FE branch-status-bar.tsx behavior.
 func formatModelName(model string) string {
 	s := model
 	s = strings.TrimPrefix(s, "claude-")

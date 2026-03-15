@@ -1,4 +1,4 @@
-import type { SessionStats } from '@/lib/chat/session-stats'
+import type { BranchStats } from '@/lib/chat/branch-stats'
 
 import {
 	Context,
@@ -27,10 +27,10 @@ function getMaxTokens(model: string | null): number {
 	}
 }
 
-export function SessionContext({
+export function BranchContext({
 	stats
 }: {
-	stats: SessionStats
+	stats: BranchStats
 }) {
 	if (stats.messageCount === 0) return null
 

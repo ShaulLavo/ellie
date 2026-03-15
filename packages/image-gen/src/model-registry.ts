@@ -8,8 +8,6 @@ import type {
 	SchedulerName
 } from '@ellie/schemas/generation'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export interface ModelPreset {
 	/** HuggingFace model ID for from_pretrained() loading */
 	hfModelId?: string
@@ -67,16 +65,12 @@ export interface LoraPreset {
 	tips?: string
 }
 
-// ── Default positive prompts ─────────────────────────────────────────────────
-
 export const DEFAULT_POSITIVE_SD15 =
 	'sharp focus, hyper realistic, lifelike texture, rich colors, ' +
 	'film grain, camera f1.6 lens, nikon d850, kodak portra 400'
 
 export const DEFAULT_POSITIVE_SDXL =
 	'high quality, detailed, sharp focus, professional photography'
-
-// ── Default negative prompts ─────────────────────────────────────────────────
 
 export const DEFAULT_NEGATIVE_SD15 =
 	'(worst quality, low quality:1.4), (blurry:1.2), jpeg artifacts, compression artifacts, ' +
@@ -93,8 +87,6 @@ export const DEFAULT_NEGATIVE_SDXL =
 	'signature, logo, (cartoon, anime, illustration, painting, drawing, sketch:1.3), ' +
 	'3d render, cgi, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, ' +
 	'extra limbs, cloned face, missing arms, missing legs, fused fingers, too many fingers, long neck'
-
-// ── Model presets ────────────────────────────────────────────────────────────
 
 export const MODEL_PRESETS: Record<string, ModelPreset> = {
 	sd15: {
@@ -395,8 +387,6 @@ export const MODEL_PRESETS: Record<string, ModelPreset> = {
 	}
 }
 
-// ── LoRA presets ──────────────────────────────────────────────────────────────
-
 export const LORA_PRESETS: Record<string, LoraPreset> = {
 	perfection: {
 		filename: 'perfection_style_sd15.safetensors',
@@ -411,8 +401,6 @@ export const LORA_PRESETS: Record<string, LoraPreset> = {
 	}
 }
 
-// ── Textual Inversion presets ─────────────────────────────────────────────────
-
 export const TI_PRESETS: Record<
 	string,
 	TextualInversionPreset
@@ -426,8 +414,6 @@ export const TI_PRESETS: Record<
 			'Negative embedding tuned for CyberRealistic. Dramatically reduces artifacts and improves realism when used in negative prompt.'
 	}
 }
-
-// ── ELLA config ──────────────────────────────────────────────────────────────
 
 export const ELLA_DEFAULTS = {
 	ellaModel: 'ella-sd1.5-tsc-t5xl.safetensors',

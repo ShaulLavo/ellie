@@ -1,14 +1,15 @@
 import type { StoredChatMessage } from '@/chat/types'
 import type { EventRow } from '@/lib/stream'
 import {
-	type SessionStats,
+	type BranchStats,
 	computeStatsFromEvents
-} from '@/lib/chat/session-stats'
+} from '@/lib/chat/branch-stats'
 import {
 	AGENT_START_TYPES,
 	AGENT_END_TYPES,
 	isAgentRunOpen,
-	eventToStored
+	eventToStored,
+	parsePayload
 } from '../event-transforms'
 import {
 	RENDERABLE_TYPES,
@@ -22,27 +23,19 @@ import { snapshotToMessages } from './snapshot-transform'
 import type { EventType } from '@ellie/schemas/events'
 
 function extractInputTokens(event: EventRow): number {
-	try {
-		const parsed =
-			typeof event.payload === 'string'
-				? JSON.parse(event.payload)
-				: event.payload
-		const msg = (parsed as Record<string, unknown>)
-			.message as Record<string, unknown> | undefined
-		const usage = msg?.usage as
-			| { input?: number }
-			| undefined
-		return usage?.input ?? 0
-	} catch {
-		return 0
-	}
+	const parsed = parsePayload(event.payload)
+	const msg = parsed.message as
+		| Record<string, unknown>
+		| undefined
+	const usage = msg?.usage as { input?: number } | undefined
+	return usage?.input ?? 0
 }
 
-/** Merge a delta into previous session stats. */
+/** Merge a delta into previous branch stats. */
 export function mergeStats(
-	prev: SessionStats,
-	delta: SessionStats
-): SessionStats {
+	prev: BranchStats,
+	delta: BranchStats
+): BranchStats {
 	return {
 		model: delta.model ?? prev.model,
 		provider: delta.provider ?? prev.provider,
@@ -60,10 +53,10 @@ export interface StreamDispatch {
 	setStreamingMessage: (
 		msg: StoredChatMessage | null
 	) => void
-	setSessionStats: (
+	setBranchStats: (
 		updater:
-			| SessionStats
-			| ((prev: SessionStats) => SessionStats)
+			| BranchStats
+			| ((prev: BranchStats) => BranchStats)
 	) => void
 	setIsAgentRunning: (running: boolean) => void
 	upsert: (msgs: StoredChatMessage[]) => void
@@ -73,13 +66,13 @@ export interface StreamDispatch {
 
 export function handleSnapshot(
 	events: EventRow[],
-	sessionChanged: boolean,
+	branchChanged: boolean,
 	dispatch: StreamDispatch
 ) {
 	const msgs = snapshotToMessages(events)
 	const nextStats = computeStatsFromEvents(events)
 
-	if (sessionChanged) {
+	if (branchChanged) {
 		dispatch.setStreamingMessage(null)
 		dispatch.setIsAgentRunning(false)
 	}
@@ -91,11 +84,11 @@ export function handleSnapshot(
 		dispatch.setStreamingMessage(
 			toStreamingAssistantMessage(streamingEvent)
 		)
-	} else if (!sessionChanged) {
+	} else if (!branchChanged) {
 		dispatch.setStreamingMessage(null)
 	}
 
-	dispatch.setSessionStats(nextStats)
+	dispatch.setBranchStats(nextStats)
 	dispatch.setIsAgentRunning(isAgentRunOpen(events))
 }
 
@@ -123,7 +116,7 @@ export function handleAppend(
 			)
 			const inputTokens = extractInputTokens(event)
 			if (inputTokens > 0) {
-				dispatch.setSessionStats(prev => ({
+				dispatch.setBranchStats(prev => ({
 					...prev,
 					lastPromptTokens: inputTokens
 				}))
@@ -138,9 +131,7 @@ export function handleAppend(
 		}
 
 		const delta = computeStatsFromEvents([event])
-		dispatch.setSessionStats(prev =>
-			mergeStats(prev, delta)
-		)
+		dispatch.setBranchStats(prev => mergeStats(prev, delta))
 		return
 	}
 
@@ -160,9 +151,7 @@ export function handleAppend(
 
 	if (event.type === 'user_message') {
 		const delta = computeStatsFromEvents([event])
-		dispatch.setSessionStats(prev =>
-			mergeStats(prev, delta)
-		)
+		dispatch.setBranchStats(prev => mergeStats(prev, delta))
 	}
 
 	if (!RENDERABLE_TYPES.includes(event.type as EventType))
@@ -184,7 +173,7 @@ export function handleUpdate(
 			)
 			const inputTokens = extractInputTokens(event)
 			if (inputTokens > 0) {
-				dispatch.setSessionStats(prev => ({
+				dispatch.setBranchStats(prev => ({
 					...prev,
 					lastPromptTokens: inputTokens
 				}))
@@ -199,9 +188,7 @@ export function handleUpdate(
 		}
 
 		const delta = computeStatsFromEvents([event])
-		dispatch.setSessionStats(prev =>
-			mergeStats(prev, delta)
-		)
+		dispatch.setBranchStats(prev => mergeStats(prev, delta))
 		return
 	}
 

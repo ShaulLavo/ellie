@@ -1,7 +1,4 @@
-/**
- * Pairing reply message templates.
- * Adapted from openclaw's pairing flow.
- */
+/** Pairing reply message templates. */
 
 export function buildPairingReply(params: {
 	senderE164: string

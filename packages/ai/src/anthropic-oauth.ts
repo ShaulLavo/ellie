@@ -16,8 +16,6 @@ import {
 import type { AnyTextAdapter } from '@tanstack/ai'
 import type { NormalizedOAuthCredential } from './credentials'
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
 const REDIRECT_URI =
 	'https://console.anthropic.com/oauth/code/callback'
@@ -33,8 +31,6 @@ const OAUTH_BETA_HEADER =
 	'claude-code-20250219,oauth-2025-04-20'
 
 export type OAuthMode = 'max' | 'console'
-
-// ── PKCE ─────────────────────────────────────────────────────────────────────
 
 async function generatePKCE(): Promise<{
 	verifier: string
@@ -60,8 +56,6 @@ function base64url(bytes: Uint8Array): string {
 		.replace(/=+$/, '')
 }
 
-// ── Adapter factories ────────────────────────────────────────────────────────
-
 /**
  * Create an Anthropic adapter using an OAuth access token.
  */
@@ -80,8 +74,6 @@ export function anthropicOAuth(
 		} as Record<string, unknown>
 	)
 }
-
-// ── OAuth flow helpers ───────────────────────────────────────────────────────
 
 export interface OAuthAuthorizeResult {
 	verifier: string
@@ -248,8 +240,6 @@ export function tokensToCredential(
 		expires: tokens.expiresAt
 	}
 }
-
-// ── Token refresh ────────────────────────────────────────────────────────────
 
 /**
  * Refresh an OAuth token using the refresh_token grant.

@@ -12,36 +12,38 @@ import { ListIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@ellie/utils'
 
-interface SessionEntry {
+interface ThreadEntry {
 	id: string
+	agentType: string
+	title: string | null
+	state: string
+	dayKey: string | null
 	createdAt: number
 	updatedAt: number
-	currentSeq: number
 }
 
-interface SessionListProps {
+interface ThreadListProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	listSessions: () => Promise<unknown>
-	onResume: (sessionId: string) => Promise<void>
-	currentSessionId?: string
+	listThreads: () => Promise<unknown>
+	onResume: (threadId: string) => Promise<void>
+	currentThreadId?: string
 }
 
-export function SessionList({
+export function ThreadList({
 	open,
 	onOpenChange,
-	listSessions,
+	listThreads,
 	onResume,
-	currentSessionId
-}: SessionListProps) {
+	currentThreadId
+}: ThreadListProps) {
 	const {
-		data: sessions = [],
+		data: threads = [],
 		isLoading: loading,
 		error: queryError
 	} = useQuery({
-		queryKey: ['sessions'],
-		queryFn: () =>
-			listSessions() as Promise<SessionEntry[]>,
+		queryKey: ['threads'],
+		queryFn: () => listThreads() as Promise<ThreadEntry[]>,
 		enabled: open
 	})
 
@@ -51,10 +53,10 @@ export function SessionList({
 	const error =
 		resumeError ?? (queryError ? String(queryError) : null)
 
-	const handleResume = async (session: SessionEntry) => {
+	const handleResume = async (thread: ThreadEntry) => {
 		try {
 			setResumeError(null)
-			await onResume(session.id)
+			await onResume(thread.id)
 			onOpenChange(false)
 		} catch (err) {
 			setResumeError(String(err))
@@ -67,17 +69,17 @@ export function SessionList({
 				<CredenzaHeader>
 					<CredenzaTitle className="flex items-center gap-2 text-sm">
 						<ListIcon className="size-4" />
-						Sessions
+						Threads
 					</CredenzaTitle>
 					<CredenzaDescription className="text-xs">
-						Switch between conversation sessions
+						Switch between conversation threads
 					</CredenzaDescription>
 				</CredenzaHeader>
 
 				<CredenzaBody className="overflow-y-auto min-h-0">
 					{loading && (
 						<p className="py-8 text-center text-sm text-muted-foreground">
-							Loading sessions...
+							Loading threads...
 						</p>
 					)}
 					{error && (
@@ -85,21 +87,21 @@ export function SessionList({
 							{error}
 						</p>
 					)}
-					{!loading && sessions.length === 0 && (
+					{!loading && threads.length === 0 && (
 						<p className="py-8 text-center text-sm text-muted-foreground">
-							No sessions found.
+							No threads found.
 						</p>
 					)}
-					{!loading && sessions.length > 0 && (
+					{!loading && threads.length > 0 && (
 						<div className="space-y-1 pr-2">
-							{sessions.map(session => {
+							{threads.map(thread => {
 								const isCurrent =
-									session.id === currentSessionId
+									thread.id === currentThreadId
 								return (
 									<button
-										key={session.id}
+										key={thread.id}
 										type="button"
-										onClick={() => handleResume(session)}
+										onClick={() => handleResume(thread)}
 										className={cn(
 											'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent',
 											isCurrent && 'bg-primary/5'
@@ -108,7 +110,7 @@ export function SessionList({
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-2">
 												<span className="font-medium truncate font-mono text-[11px]">
-													{session.id.slice(0, 8)}
+													{thread.id.slice(0, 8)}
 												</span>
 												{isCurrent && (
 													<span className="text-[9px] px-1 py-0 rounded bg-primary/10 text-primary">
@@ -119,11 +121,16 @@ export function SessionList({
 											<div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
 												<span>
 													{formatDateTime(
-														new Date(session.createdAt)
+														new Date(thread.createdAt)
 													)}
 												</span>
-												<span>
-													{session.currentSeq} events
+												{thread.title && (
+													<span className="truncate">
+														{thread.title}
+													</span>
+												)}
+												<span className="text-muted-foreground/60">
+													{thread.state}
 												</span>
 											</div>
 										</div>

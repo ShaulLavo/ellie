@@ -13,9 +13,7 @@ import type {
 	ToolResultMessage
 } from '../src/types'
 
-// ============================================================================
 // Helpers
-// ============================================================================
 
 function makeUser(
 	text: string,
@@ -114,9 +112,7 @@ function makeToolResult(
 	}
 }
 
-// ============================================================================
 // estimateMessageTokens
-// ============================================================================
 
 describe('estimateMessageTokens', () => {
 	test('estimates text message tokens', () => {
@@ -179,9 +175,7 @@ describe('estimateMessageTokens', () => {
 	})
 })
 
-// ============================================================================
 // estimateTokens
-// ============================================================================
 
 describe('estimateTokens', () => {
 	test('uses real API token counts when available', () => {
@@ -231,9 +225,7 @@ describe('estimateTokens', () => {
 	})
 })
 
-// ============================================================================
 // trimMessages
-// ============================================================================
 
 describe('trimMessages', () => {
 	const defaultOpts: ContextRecoveryOptions = {
@@ -368,9 +360,7 @@ describe('trimMessages', () => {
 	})
 })
 
-// ============================================================================
 // isApproachingLimit
-// ============================================================================
 
 describe('isApproachingLimit', () => {
 	test('returns false when well within budget', () => {
@@ -417,9 +407,7 @@ describe('isApproachingLimit', () => {
 	})
 })
 
-// ============================================================================
 // Orphan prevention edge cases
-// ============================================================================
 
 describe('orphan prevention', () => {
 	test('keeps assistant with text even when tool results are missing', () => {

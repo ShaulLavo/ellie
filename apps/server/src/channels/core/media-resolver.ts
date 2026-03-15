@@ -2,20 +2,16 @@ import { stat, realpath } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 
-export type MediaKind =
-	| 'audio'
-	| 'image'
-	| 'video'
-	| 'document'
+type MediaKind = 'audio' | 'image' | 'video' | 'document'
 
-export interface ResolvedMedia {
+interface ResolvedMedia {
 	buffer: Buffer
 	mimetype: string
 	fileName: string
 	kind: MediaKind
 }
 
-export interface MediaResolverOptions {
+interface MediaResolverOptions {
 	/**
 	 * Allowed root directories for local file paths.
 	 * Refs outside these roots are rejected.
@@ -90,11 +86,9 @@ export async function resolveMedia(
 	const localRoots = options.localRoots ?? [os.tmpdir()]
 	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
 
-	// 1. Normalize and resolve symlinks
 	const resolved = path.resolve(ref)
 	const realPath = await realpath(resolved)
 
-	// 2. Validate against localRoots (also resolve roots to handle symlinks like /var → /private/var)
 	const realRoots = await Promise.all(
 		localRoots.map(async root => {
 			try {
@@ -119,7 +113,6 @@ export async function resolveMedia(
 		)
 	}
 
-	// 3. Check file size
 	const fileStat = await stat(realPath)
 	if (fileStat.size > maxBytes) {
 		throw new Error(
@@ -127,20 +120,16 @@ export async function resolveMedia(
 		)
 	}
 
-	// 4. Read buffer
 	const buffer = Buffer.from(
 		await Bun.file(realPath).arrayBuffer()
 	)
 
-	// 5. Detect MIME type
 	const ext = path.extname(realPath).slice(1).toLowerCase()
 	const mimetype =
 		MIME_MAP[ext] ?? 'application/octet-stream'
 
-	// 6. Classify kind
 	const kind = classifyKind(mimetype)
 
-	// 7. Return
 	return {
 		buffer,
 		mimetype,

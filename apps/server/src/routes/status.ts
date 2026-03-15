@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import { statusSchema } from './common'
+import { requireLoopback } from './loopback-guard'
 
 export function createStatusRoutes(
 	getConnectedClients: () => number,
@@ -8,16 +9,18 @@ export function createStatusRoutes(
 	return new Elysia({
 		prefix: '/api',
 		tags: ['Status']
-	}).get(
-		'/status',
-		() => {
-			return {
-				connectedClients: getConnectedClients(),
-				needsBootstrap: getNeedsBootstrap()
+	})
+		.onBeforeHandle(requireLoopback)
+		.get(
+			'/status',
+			() => {
+				return {
+					connectedClients: getConnectedClients(),
+					needsBootstrap: getNeedsBootstrap()
+				}
+			},
+			{
+				response: statusSchema
 			}
-		},
-		{
-			response: statusSchema
-		}
-	)
+		)
 }

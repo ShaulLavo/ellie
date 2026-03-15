@@ -15,8 +15,6 @@ import type {
 	Scenario
 } from './types'
 
-// ── Generic scoring helpers ───────────────────────────────────────────────
-
 /**
  * Check if a candidate's content contains a substring (case-insensitive).
  */
@@ -64,8 +62,6 @@ function meanReciprocalRank(
 	}
 	return rrSum / mustInclude.length
 }
-
-// ── Scenario-specific scorers ─────────────────────────────────────────────
 
 function scoreFollowUpRecall(
 	evalCase: EvalCase,
@@ -262,8 +258,6 @@ function scoreTokenBudgetPacking(
 		budgetUtilization
 	}
 }
-
-// ── Main scorer dispatch ──────────────────────────────────────────────────
 
 const SCORERS: Record<
 	Scenario,

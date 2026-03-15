@@ -18,8 +18,6 @@ import type {
 	TextOptions
 } from '@tanstack/ai'
 
-// ── Config ──────────────────────────────────────────────────────────────────
-
 export interface OpenAICompatConfig {
 	baseUrl: string
 	apiKey: string
@@ -27,8 +25,6 @@ export interface OpenAICompatConfig {
 	timeout?: number
 	defaultHeaders?: Record<string, string>
 }
-
-// ── OpenAI API types ────────────────────────────────────────────────────────
 
 interface OpenAIMessage {
 	role: 'system' | 'user' | 'assistant' | 'tool'
@@ -98,8 +94,6 @@ interface OpenAIResponse {
 	}
 }
 
-// ── Adapter ─────────────────────────────────────────────────────────────────
-
 export class OpenAICompatTextAdapter<
 	TModel extends string
 > extends BaseTextAdapter<
@@ -129,8 +123,6 @@ export class OpenAICompatTextAdapter<
 		this.timeout = compat.timeout ?? 120_000
 		this.defaultHeaders = compat.defaultHeaders ?? {}
 	}
-
-	// ── chatStream ──────────────────────────────────────────────────────────
 
 	async *chatStream(
 		options: TextOptions<Record<string, unknown>>
@@ -250,8 +242,6 @@ export class OpenAICompatTextAdapter<
 		} as StreamChunk
 	}
 
-	// ── structuredOutput ────────────────────────────────────────────────────
-
 	async structuredOutput(
 		options: StructuredOutputOptions<
 			Record<string, unknown>
@@ -319,8 +309,6 @@ export class OpenAICompatTextAdapter<
 			)
 		}
 	}
-
-	// ── stream helpers ───────────────────────────────────────────────────────
 
 	/** Parse SSE lines into OpenAI stream chunks, skipping non-data lines. */
 	private *parseSSEChunks(
@@ -452,8 +440,6 @@ export class OpenAICompatTextAdapter<
 			delta: tc.function.arguments
 		} as StreamChunk
 	}
-
-	// ── message formatting helpers ──────────────────────────────────────────
 
 	private formatMessages(
 		options: TextOptions<Record<string, unknown>>
@@ -654,8 +640,6 @@ export class OpenAICompatTextAdapter<
 		return mapped
 	}
 }
-
-// ── Factory functions ───────────────────────────────────────────────────────
 
 export function createOpenAICompatChat<
 	TModel extends string

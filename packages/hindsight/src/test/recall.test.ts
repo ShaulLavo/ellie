@@ -56,8 +56,6 @@ describe('recall', () => {
 		t.cleanup()
 	})
 
-	// ── Basic recall ────────────────────────────────────────────────────────
-
 	it('returns RecallResult with memories and query', async () => {
 		const result = await t.hs.recall(bankId, 'hiking')
 		expect(result.query).toBe('hiking')
@@ -89,8 +87,6 @@ describe('recall', () => {
 			).toBeGreaterThanOrEqual(result.memories[i]!.score)
 		}
 	})
-
-	// ── Filtering ───────────────────────────────────────────────────────────
 
 	describe('filtering', () => {
 		it('respects limit parameter', async () => {
@@ -147,8 +143,6 @@ describe('recall', () => {
 			expect(result.memories.length).toBeLessThanOrEqual(1)
 		})
 	})
-
-	// ── Source tracking ─────────────────────────────────────────────────────
 
 	describe('source tracking', () => {
 		it('tracks retrieval sources', async () => {
@@ -216,8 +210,6 @@ describe('recall', () => {
 		})
 	})
 
-	// ── Method selection ────────────────────────────────────────────────────
-
 	describe('retrieval methods', () => {
 		it('supports selecting specific methods', async () => {
 			const result = await t.hs.recall(bankId, 'hiking', {
@@ -237,8 +229,6 @@ describe('recall', () => {
 			}
 		})
 	})
-
-	// ── Entity filter ───────────────────────────────────────────────────────
 
 	describe('entity filtering', () => {
 		it('filters by entity names', async () => {
@@ -265,8 +255,6 @@ describe('recall', () => {
 			}
 		})
 	})
-
-	// ── Search trace (port of test_search_trace.py) ────────────────────────
 
 	describe('search trace', () => {
 		async function recallWithTrace(maxTokens?: number) {
@@ -525,8 +513,6 @@ describe('recall', () => {
 			expect(result.trace).toBeUndefined()
 		})
 	})
-
-	// ── Time range ──────────────────────────────────────────────────────────
 
 	describe('time range filtering', () => {
 		it('filters by explicit time range', async () => {

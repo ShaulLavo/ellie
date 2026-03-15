@@ -16,8 +16,6 @@ import type { DataStore } from './data-store'
 import type { CancellationContext } from './locker'
 import type { Upload } from './upload'
 
-// ── StreamLimiter ───────────────────────────────────────────────────────────
-
 class StreamLimiter extends Transform {
 	private maxSize: number
 	private currentSize = 0
@@ -49,8 +47,6 @@ class StreamLimiter extends Transform {
 		}
 	}
 }
-
-// ── writeToStore ────────────────────────────────────────────────────────────
 
 export function writeToStore(
 	store: DataStore,
@@ -118,8 +114,6 @@ export function writeToStore(
 			})
 	})
 }
-
-// ── calculateMaxBodySize ────────────────────────────────────────────────────
 
 export function calculateMaxBodySize(
 	req: Request,

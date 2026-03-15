@@ -5,6 +5,19 @@ import type {
 import type { StoredChatMessage } from '@/chat/types'
 import type { EventRow } from '@/lib/stream'
 
+/** Parse an event payload that may be a JSON string or already-parsed object. */
+export function parsePayload(
+	payload: unknown
+): Record<string, unknown> {
+	try {
+		return typeof payload === 'string'
+			? (JSON.parse(payload) as Record<string, unknown>)
+			: (payload as Record<string, unknown>)
+	} catch {
+		return {}
+	}
+}
+
 /** Agent lifecycle event types */
 export const AGENT_START_TYPES = new Set(['agent_start'])
 export const AGENT_END_TYPES = new Set([
@@ -158,7 +171,7 @@ function extractImageGenParts(
 						| Array<{
 								uploadId: string
 								url: string
-								mime: string
+								mimeType: string
 								width?: number
 								height?: number
 								hash?: string
@@ -291,18 +304,7 @@ function classifyUploadId(
 export function eventToStored(
 	row: EventRow
 ): StoredChatMessage {
-	let parsed: Record<string, unknown>
-	try {
-		parsed =
-			typeof row.payload === 'string'
-				? (JSON.parse(row.payload) as Record<
-						string,
-						unknown
-					>)
-				: (row.payload as Record<string, unknown>)
-	} catch {
-		parsed = {}
-	}
+	const parsed = parsePayload(row.payload)
 
 	// Dispatch to the right helper based on event type
 	let parts: ContentPart[]
@@ -335,14 +337,14 @@ export function eventToStored(
 		row.type === 'memory_retain'
 	) {
 		parts = extractMemoryParts(parsed)
-	} else if (row.type === 'session_rotated') {
+	} else if (row.type === 'thread_created') {
 		parts = [
 			{
 				type: 'checkpoint',
 				message:
 					typeof parsed.message === 'string'
 						? parsed.message
-						: 'New day, new session'
+						: 'New thread started'
 			}
 		]
 	} else if (row.type === 'error') {
@@ -365,7 +367,7 @@ export function eventToStored(
 					url:
 						(parsed.url as string) ??
 						`/api/uploads-rpc/${encodeURIComponent(uploadId)}/content`,
-					mime: parsed.mime as string | undefined,
+					mimeType: parsed.mimeType as string | undefined,
 					mediaKind:
 						kind === 'audio'
 							? 'audio'
@@ -480,7 +482,7 @@ export function eventToStored(
 		sender = 'agent'
 	} else if (parsed.role === 'system') {
 		sender = 'system'
-	} else if (row.type === 'session_rotated') {
+	} else if (row.type === 'thread_created') {
 		sender = 'system'
 	} else if (row.type === 'error') {
 		sender = 'agent'

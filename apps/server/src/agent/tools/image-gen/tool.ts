@@ -23,8 +23,6 @@ import {
 	type ProgressFn
 } from '@ellie/image-gen'
 
-// ── Schema ──────────────────────────────────────────────────────────────
-
 const modelKeys = Object.keys(MODEL_PRESETS) as [
 	string,
 	...string[]
@@ -220,12 +218,10 @@ const imageGenParams = v.object({
 	)
 })
 
-// ── Factory ─────────────────────────────────────────────────────────────
-
-export interface ImageGenToolDeps {
+interface ImageGenToolDeps {
 	blobSink: BlobSink
 	dataDir: string
-	getSessionId: () => string | null
+	getBranchId: () => string | null
 	getRunId: () => string | null
 	credentialsPath?: string
 }
@@ -264,14 +260,14 @@ export function createImageGenTool(
 			_signal,
 			onUpdate
 		): Promise<AgentToolResult> => {
-			const sessionId = deps.getSessionId()
+			const branchId = deps.getBranchId()
 			const runId = deps.getRunId()
-			if (!sessionId || !runId) {
+			if (!branchId || !runId) {
 				return {
 					content: [
 						{
 							type: 'text',
-							text: 'Error: No active session or run'
+							text: 'Error: No active branch or run'
 						}
 					],
 					details: { success: false }
@@ -292,7 +288,7 @@ export function createImageGenTool(
 				rawParams as GenerateImageRequest,
 				{
 					blobSink: deps.blobSink,
-					sessionId,
+					branchId,
 					runId,
 					dataDir: deps.dataDir,
 					civitaiToken,
@@ -335,43 +331,41 @@ export function createImageGenTool(
 				}))
 			}
 
-			const imageCount = result.images?.length ?? 1
-			const uploadIds =
-				result.images?.map(i => i.uploadId) ??
-				(result.uploadId ? [result.uploadId] : [])
+			const images = result.images ?? []
+			const imageCount = images.length
+			const uploadIds = images.map(i => i.uploadId)
 			const imageParts = await loadToolResultImages(
 				uploadIds,
 				deps.dataDir,
-				result.images?.[0]?.mime ??
-					result.mime ??
-					'image/png'
+				images[0]?.mimeType ?? 'image/png'
 			)
 
 			// Enrich images with dimensions and thumbhash
-			const imagesWithDimensions = result.images
-				? await Promise.all(
-						result.images.map(async img => {
-							const filePath = join(
-								deps.dataDir,
-								'uploads',
-								img.uploadId
-							)
-							let hash: string | undefined
-							try {
-								const buf = Buffer.from(
-									await Bun.file(filePath).arrayBuffer()
+			const imagesWithDimensions =
+				images.length > 0
+					? await Promise.all(
+							images.map(async img => {
+								const filePath = join(
+									deps.dataDir,
+									'uploads',
+									img.uploadId
 								)
-								hash = await generateThumbHash(buf)
-							} catch {}
-							return {
-								...img,
-								width: webRecipe.width,
-								height: webRecipe.height,
-								...(hash && { hash })
-							}
-						})
-					)
-				: undefined
+								let hash: string | undefined
+								try {
+									const buf = Buffer.from(
+										await Bun.file(filePath).arrayBuffer()
+									)
+									hash = await generateThumbHash(buf)
+								} catch {}
+								return {
+									...img,
+									width: webRecipe.width,
+									height: webRecipe.height,
+									...(hash && { hash })
+								}
+							})
+						)
+					: undefined
 
 			return {
 				content: [
@@ -393,8 +387,6 @@ export function createImageGenTool(
 					success: true,
 					prompt: r.prompt,
 					recipe: webRecipe,
-					uploadId: result.uploadId,
-					url: result.url,
 					images: imagesWithDimensions,
 					elapsedMs: result.durationMs,
 					entries: progressSnapshot.entries,
@@ -442,8 +434,6 @@ async function loadToolResultImages(
 
 	return imageParts
 }
-
-// ── Progress adapter ─────────────────────────────────────────────────
 
 const DENOISING_THROTTLE_MS = 250
 

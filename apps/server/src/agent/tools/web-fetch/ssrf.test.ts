@@ -8,8 +8,6 @@ import {
 	type LookupFn
 } from './ssrf'
 
-// ── normalizeHostname ───────────────────────────────────────────────
-
 describe('normalizeHostname', () => {
 	test('lowercases and trims', () => {
 		expect(normalizeHostname('  Example.COM  ')).toBe(
@@ -25,8 +23,6 @@ describe('normalizeHostname', () => {
 		expect(normalizeHostname('[::1]')).toBe('::1')
 	})
 })
-
-// ── isBlockedHostname ───────────────────────────────────────────────
 
 describe('isBlockedHostname', () => {
 	test('blocks localhost', () => {
@@ -56,8 +52,6 @@ describe('isBlockedHostname', () => {
 		expect(isBlockedHostname('google.com')).toBe(false)
 	})
 })
-
-// ── isPrivateIpAddress ──────────────────────────────────────────────
 
 describe('isPrivateIpAddress', () => {
 	// IPv4 private ranges
@@ -146,8 +140,6 @@ describe('isPrivateIpAddress', () => {
 		expect(isPrivateIpAddress(':::invalid')).toBe(true)
 	})
 })
-
-// ── validateHostname ────────────────────────────────────────────────
 
 describe('validateHostname', () => {
 	const mockLookup = (async (

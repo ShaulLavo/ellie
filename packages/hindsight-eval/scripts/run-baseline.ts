@@ -44,8 +44,6 @@ const outputDir =
 		? resolve(args[outputDirArg + 1])
 		: DEFAULT_OUTPUT_DIR
 
-// ── Run ───────────────────────────────────────────────────────────────────
-
 const config: EvalRunConfig = {
 	datasetPath: DEFAULT_FIXTURE,
 	mode: 'hybrid',
@@ -73,8 +71,6 @@ console.log(
 	`Completed ${cases.length} cases in ${totalDurationMs}ms`
 )
 
-// ── Get metadata ──────────────────────────────────────────────────────────
-
 let gitSha = 'unknown'
 try {
 	const proc = Bun.spawnSync(['git', 'rev-parse', 'HEAD'])
@@ -84,8 +80,6 @@ try {
 }
 
 const bunVersion = Bun.version
-
-// ── Generate report ───────────────────────────────────────────────────────
 
 // Store relative paths in the committed report (relative to package root)
 const reportConfig: EvalRunConfig = {
@@ -101,8 +95,6 @@ const report = generateReport({
 	bunVersion,
 	totalDurationMs
 })
-
-// ── Write output ──────────────────────────────────────────────────────────
 
 const dateDir = new Date()
 	.toISOString()

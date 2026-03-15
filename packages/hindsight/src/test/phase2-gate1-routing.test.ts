@@ -18,8 +18,6 @@ import {
 import type { ReconRoute } from '../types'
 
 describe('Gate 1: Routing Decision Correctness', () => {
-	// ── Threshold constants verification ────────────────────────────────────
-
 	it('REINFORCE_THRESHOLD is exactly 0.92', () => {
 		expect(REINFORCE_THRESHOLD).toBe(0.92)
 	})
@@ -27,8 +25,6 @@ describe('Gate 1: Routing Decision Correctness', () => {
 	it('RECONSOLIDATE_THRESHOLD is exactly 0.78', () => {
 		expect(RECONSOLIDATE_THRESHOLD).toBe(0.78)
 	})
-
-	// ── Edge-case routing at exact threshold boundaries ─────────────────────
 
 	describe('exact threshold edge cases', () => {
 		it('score 0.92, no conflict => reinforce', () => {
@@ -59,8 +55,6 @@ describe('Gate 1: Routing Decision Correctness', () => {
 			expect(classifyRoute(0.0, false)).toBe('new_trace')
 		})
 	})
-
-	// ── Conflict override — any score with conflict => reconsolidate ────────
 
 	describe('conflict overrides to reconsolidate regardless of score', () => {
 		it('score 1.0 with conflict => reconsolidate', () => {
@@ -100,8 +94,6 @@ describe('Gate 1: Routing Decision Correctness', () => {
 		})
 	})
 
-	// ── Boundary sweep ─────────────────────────────────────────────────────
-
 	describe('boundary sweep across all zones', () => {
 		const noConflictCases: Array<[number, ReconRoute]> = [
 			[1.0, 'reinforce'],
@@ -128,8 +120,6 @@ describe('Gate 1: Routing Decision Correctness', () => {
 			})
 		}
 	})
-
-	// ── Custom policy thresholds ───────────────────────────────────────────
 
 	describe('respects custom policy thresholds', () => {
 		it('custom reinforceThreshold lowers reinforce boundary', () => {

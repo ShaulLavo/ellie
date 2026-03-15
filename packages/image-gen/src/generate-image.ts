@@ -24,6 +24,7 @@ import type { ProgressFn } from './auto-setup'
 import { initImageTrace, imageTrace } from './image-trace'
 import { ensureImageGenService } from './service-supervisor'
 import { serviceGenerate } from './service-client'
+import type { BlobRef } from '@ellie/trace'
 import type {
 	GenerateImageRequest,
 	ResolvedGenerationConfig,
@@ -37,11 +38,9 @@ export type {
 	GenerationResult
 }
 
-// ── Dependencies ────────────────────────────────────────────────────────────
-
 export interface GenerationDeps {
 	blobSink: BlobSink
-	sessionId: string
+	branchId: string
 	runId: string
 	dataDir: string
 	civitaiToken?: string
@@ -49,13 +48,10 @@ export interface GenerationDeps {
 	onProgress?: ProgressFn
 }
 
-// ── Generation lock ─────────────────────────────────────────────────────────
 // Only one generation at a time. Concurrent calls queue up and run sequentially.
 
 let generationLock: Promise<void> = Promise.resolve()
 let generationInProgress = false
-
-// ── Core execution ──────────────────────────────────────────────────────────
 
 export async function executeImageGeneration(
 	args: GenerateImageRequest,
@@ -93,7 +89,7 @@ async function doGenerate(
 	args: GenerateImageRequest,
 	deps: GenerationDeps
 ): Promise<GenerationResult> {
-	const { blobSink, sessionId, runId, dataDir } = deps
+	const { blobSink, branchId, runId, dataDir } = deps
 
 	initImageTrace(dataDir)
 
@@ -270,7 +266,7 @@ async function doGenerate(
 			const durationMs = Date.now() - startTime
 			imageTrace({
 				type: 'generation_failed',
-				sessionId,
+				branchId,
 				error: `Service setup failed: ${String(err)}`,
 				durationMs,
 				recipe: resolved as unknown as Record<
@@ -404,11 +400,7 @@ async function doGenerate(
 			`Saving ${batchImages.length} generated image(s)...`
 		)
 
-		const uploadedImages: Array<{
-			uploadId: string
-			url: string
-			mime: string
-		}> = []
+		const uploadedImages: BlobRef[] = []
 
 		for (const img of batchImages) {
 			const imageFile = Bun.file(img.imagePath)
@@ -425,11 +417,7 @@ async function doGenerate(
 				ext: 'png'
 			})
 
-			uploadedImages.push({
-				uploadId: blobRef.uploadId,
-				url: blobRef.url,
-				mime
-			})
+			uploadedImages.push(blobRef)
 
 			// Clean up temp file
 			try {
@@ -458,9 +446,9 @@ async function doGenerate(
 
 		imageTrace({
 			type: 'generation_success',
-			sessionId,
+			branchId,
 			uploadId: primaryUpload.uploadId,
-			mime,
+			mimeType: primaryUpload.mimeType,
 			durationMs,
 			recipe: resolved as unknown as Record<string, unknown>
 		})
@@ -468,9 +456,6 @@ async function doGenerate(
 		return {
 			success: true,
 			request: resolved,
-			uploadId: primaryUpload.uploadId,
-			url: primaryUpload.url,
-			mime,
 			images: uploadedImages,
 			durationMs
 		}
@@ -478,7 +463,7 @@ async function doGenerate(
 		const durationMs = Date.now() - startTime
 		imageTrace({
 			type: 'generation_failed',
-			sessionId,
+			branchId,
 			error: String(err),
 			durationMs,
 			recipe: resolved as unknown as Record<string, unknown>
@@ -492,8 +477,6 @@ async function doGenerate(
 		}
 	}
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildEmptyConfig(
 	args: GenerateImageRequest,

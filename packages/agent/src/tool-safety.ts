@@ -17,9 +17,7 @@ import type {
 } from '@ellie/trace'
 import type { AgentToolResult } from './types'
 
-// ============================================================================
 // Types
-// ============================================================================
 
 export interface ToolSafetyOptions {
 	/** Max chars for a single tool result. Default 50_000. Per-invocation. */
@@ -40,9 +38,7 @@ const MIN_KEEP_CHARS = 2_000
 const TRUNCATION_SUFFIX =
 	'\n\n---\n [Output truncated — showing first portion of result. Total output exceeded the maximum size limit.]'
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 /**
  * Check if a tool result exceeds the max character limit.
@@ -151,9 +147,7 @@ export async function truncateToolResultWithBlob(
 	}
 }
 
-// ============================================================================
 // Internals
-// ============================================================================
 
 /**
  * Count total text characters in a tool result.

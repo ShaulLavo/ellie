@@ -9,10 +9,8 @@ import {
 } from '../utils'
 
 type TerminalWS = ReturnType<
-	typeof eden.ws.terminal.subscribe
+	typeof eden.api.ws.terminal.subscribe
 >
-
-// ── Keyboard & paste handlers (registered before term.open()) ────────────
 
 function createKeydownHandler(
 	getWS: () => TerminalWS | null
@@ -48,8 +46,6 @@ function createPasteHandler(
 	}
 }
 
-// ── Mouse wheel → SGR mouse sequences ───────────────────────────────────
-
 function createWheelHandler(
 	getTerm: () => GhosttyTerminal | null,
 	getWS: () => TerminalWS | null
@@ -83,8 +79,6 @@ function createWheelHandler(
 	}
 }
 
-// ── Clipboard overlay ───────────────────────────────────────────────────
-
 function createClipboardOverlay(
 	container: HTMLDivElement
 ): HTMLDivElement {
@@ -102,8 +96,6 @@ function createClipboardOverlay(
 	)
 	return clipDiv
 }
-
-// ── Hook ────────────────────────────────────────────────────────────────
 
 export function useTerminal(
 	containerRef: RefObject<HTMLDivElement | null>
@@ -140,7 +132,7 @@ export function useTerminal(
 			if (disposed || !term) return
 			term.write('\x1b[2J\x1b[H')
 
-			const newWS = eden.ws.terminal.subscribe()
+			const newWS = eden.api.ws.terminal.subscribe()
 			ws = newWS
 
 			newWS.on('open', () => {

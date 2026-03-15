@@ -16,32 +16,31 @@ import { Elysia, sse } from 'elysia'
 import type { AgentController } from '../agent/controller'
 import type {
 	RealtimeStore,
-	SessionEvent
+	BranchEvent
 } from '../lib/realtime-store'
 import {
-	sessionParamsSchema,
-	sessionRunParamsSchema,
+	branchParamsSchema,
+	branchRunParamsSchema,
 	parseAgentActionBody,
 	requireController,
-	resolveSessionId,
 	toStreamGenerator,
 	type SseState
 } from './common'
 import { errorSchema } from './schemas/common-schemas'
-import { BadRequestError, HttpError } from './http-errors'
+import { requireLoopback } from './loopback-guard'
 
 function createRunSseStream(
 	store: RealtimeStore,
 	sseState: SseState,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	request: Request
 ) {
-	return toStreamGenerator<SessionEvent>(
+	return toStreamGenerator<BranchEvent>(
 		request,
 		sseState,
 		listener =>
-			store.subscribeToSession(sessionId, event => {
+			store.subscribeToBranch(branchId, event => {
 				if (event.event.runId !== runId) return
 				listener(event)
 			}),
@@ -60,73 +59,62 @@ function createRunSseStream(
 		},
 		{
 			event: 'snapshot',
-			data: store.queryRunEvents(sessionId, runId)
+			data: store.queryRunEvents(branchId, runId)
 		}
 	)
 }
 
-export function createAgentRoutes(
-	store: RealtimeStore,
-	getAgentController: () => Promise<AgentController | null>,
+interface AgentRoutesDeps {
+	store: RealtimeStore
+	getAgentController: () => Promise<AgentController | null>
 	sseState: SseState
-) {
-	return new Elysia({ prefix: '/agent', tags: ['Agent'] })
+}
+
+export function createAgentRoutes(deps: AgentRoutesDeps) {
+	const { store, getAgentController, sseState } = deps
+	return new Elysia({
+		prefix: '/api/agent',
+		tags: ['Agent']
+	})
+		.onBeforeHandle(requireLoopback)
 		.get(
-			'/:sessionId/events/:runId',
+			'/:branchId/events/:runId',
 			({ params }) => {
-				const sessionId = resolveSessionId(
-					store,
-					params.sessionId
-				)
-				return store.queryRunEvents(sessionId, params.runId)
+				const branchId = params.branchId
+				return store.queryRunEvents(branchId, params.runId)
 			},
-			{ params: sessionRunParamsSchema }
+			{ params: branchRunParamsSchema }
 		)
 		.get(
-			'/:sessionId/events/:runId/sse',
+			'/:branchId/events/:runId/sse',
 			({ params, request }) => {
-				const sessionId = resolveSessionId(
-					store,
-					params.sessionId
-				)
+				const branchId = params.branchId
 				return sse(
 					createRunSseStream(
 						store,
 						sseState,
-						sessionId,
+						branchId,
 						params.runId,
 						request
 					)
 				)
 			},
-			{ params: sessionRunParamsSchema }
+			{ params: branchRunParamsSchema }
 		)
 		.post(
-			'/:sessionId/steer',
+			'/:branchId/steer',
 			async ({ params, body }) => {
 				const controller = await requireController(
 					getAgentController
 				)
 
-				const sessionId = resolveSessionId(
-					store,
-					params.sessionId
-				)
+				const branchId = params.branchId
 				const message = parseAgentActionBody(body)
-				try {
-					controller.steer(sessionId, message)
-				} catch (err) {
-					if (err instanceof HttpError) throw err
-					throw new BadRequestError(
-						err instanceof Error
-							? err.message
-							: 'Steer failed'
-					)
-				}
+				controller.steer(branchId, message)
 				return { status: `queued` as const }
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				body: agentSteerInputSchema,
 				response: {
 					200: agentSteerOutputSchema,
@@ -136,30 +124,18 @@ export function createAgentRoutes(
 			}
 		)
 		.post(
-			'/:sessionId/abort',
+			'/:branchId/abort',
 			async ({ params }) => {
 				const controller = await requireController(
 					getAgentController
 				)
 
-				const sessionId = resolveSessionId(
-					store,
-					params.sessionId
-				)
-				try {
-					controller.abort(sessionId)
-				} catch (err) {
-					if (err instanceof HttpError) throw err
-					throw new BadRequestError(
-						err instanceof Error
-							? err.message
-							: 'Abort failed'
-					)
-				}
+				const branchId = params.branchId
+				controller.abort(branchId)
 				return { status: `aborted` as const }
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				body: agentAbortInputSchema,
 				response: {
 					200: agentAbortOutputSchema,
@@ -169,22 +145,19 @@ export function createAgentRoutes(
 			}
 		)
 		.get(
-			'/:sessionId/history',
+			'/:branchId/history',
 			async ({ params }) => {
 				const controller = await requireController(
 					getAgentController
 				)
 
-				const sessionId = resolveSessionId(
-					store,
-					params.sessionId
-				)
+				const branchId = params.branchId
 				return {
-					messages: controller.loadHistory(sessionId)
+					messages: controller.loadHistory(branchId)
 				}
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				response: {
 					200: agentHistoryOutputSchema,
 					503: errorSchema

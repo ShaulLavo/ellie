@@ -16,8 +16,6 @@ import { execSync } from 'child_process'
 import { join, resolve } from 'path'
 import { runPhase2Verification } from '../src/phase2-runner'
 
-// ── Parse args ──────────────────────────────────────────────────────────
-
 const args = process.argv.slice(2)
 const outputDirArg = args.find(a =>
 	a.startsWith('--output-dir=')
@@ -38,8 +36,6 @@ const outputDir = outputDirVal
 const runIdVal = runIdArg?.split('=')[1]?.trim()
 const runId = runIdVal || `run-${Date.now()}`
 
-// ── Get git SHA ──────────────────────────────────────────────────────────
-
 let gitSha = 'unknown'
 try {
 	gitSha = execSync('git rev-parse --short HEAD', {
@@ -48,8 +44,6 @@ try {
 } catch {
 	// Not in a git repo
 }
-
-// ── Main ─────────────────────────────────────────────────────────────────
 
 async function main() {
 	console.log('='.repeat(60))

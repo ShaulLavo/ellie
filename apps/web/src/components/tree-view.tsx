@@ -408,7 +408,7 @@ export function TreeView({
 									<div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
 										<MessageSquareIcon className="size-8 opacity-20" />
 										<p className="text-sm">
-											No entries in this session
+											No entries found
 										</p>
 									</div>
 								) : (

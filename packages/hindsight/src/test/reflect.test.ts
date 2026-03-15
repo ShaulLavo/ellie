@@ -41,8 +41,6 @@ describe('reflect', () => {
 		t.cleanup()
 	})
 
-	// ── Basic reflect ──────────────────────────────────────────────────────
-
 	describe('basic reflect', () => {
 		it('returns ReflectResult with answer, memories, observations', async () => {
 			const result = await t.hs.reflect(
@@ -69,8 +67,6 @@ describe('reflect', () => {
 		})
 	})
 
-	// ── Reflect without prior context ────────────────────────────────────
-
 	describe('reflect without context (port of test_think.py)', () => {
 		it('handles query when bank has no memories (returns graceful answer)', async () => {
 			t.adapter.setResponse(
@@ -87,8 +83,6 @@ describe('reflect', () => {
 			expect(Array.isArray(result.memories)).toBe(true)
 		})
 	})
-
-	// ── Reflect with memories ───────────────────────────────────────────────
 
 	describe('reflect with memories', () => {
 		it('uses stored memories when answering (answer references seeded facts)', async () => {
@@ -119,8 +113,6 @@ describe('reflect', () => {
 			expect(result.answer.trim().length).toBeGreaterThan(0)
 		})
 	})
-
-	// ── Budget controls ───────────────────────────────────────────────────
 
 	describe('budget controls', () => {
 		// Budget maps to maxIterations for the agentic loop:
@@ -175,8 +167,6 @@ describe('reflect', () => {
 		})
 	})
 
-	// ── Observation saving (these test real code paths) ────────────────────
-
 	describe('observation saving', () => {
 		it('saves answer as observation by default', async () => {
 			const result = await t.hs.reflect(
@@ -200,7 +190,6 @@ describe('reflect', () => {
 		})
 	})
 
-	// ── based_on format (port of test_reflect_empty_based_on.py) ────────────
 	//
 	// The Python API returns based_on as:
 	//   { memories: [], mental_models: [], directives: [] }
@@ -221,8 +210,6 @@ describe('reflect', () => {
 		)
 	})
 
-	// ── Result structure ─────────────────────────────────────────────────
-
 	describe('result structure', () => {
 		it('memories is an array', async () => {
 			const result = await t.hs.reflect(bankId, 'test')
@@ -237,8 +224,6 @@ describe('reflect', () => {
 			}
 		})
 	})
-
-	// ── Context injection ──────────────────────────────────────────────
 
 	describe('context injection', () => {
 		it('passes additional context to the agent (verified via adapter call inspection)', async () => {
@@ -257,8 +242,6 @@ describe('reflect', () => {
 			expect(messagesStr).toContain(contextStr)
 		})
 	})
-
-	// ── Tag propagation ───────────────────────────────────────────────────
 
 	describe('tag propagation', () => {
 		it('propagates tags to all tier searches', async () => {
@@ -341,8 +324,6 @@ describe('reflect', () => {
 			}
 		})
 	})
-
-	// ── Recall integration (port of test_reflections.py) ──────────────────
 
 	describe('recall integration', () => {
 		it("recall includes observations in results when factTypes includes 'observation'", async () => {
@@ -470,7 +451,6 @@ describe('reflect', () => {
 	})
 })
 
-// ── Real LLM reflect tests ───────────────────────────────────────────────
 //
 // These tests require a real Anthropic adapter to drive the agentic tool loop.
 // Skipped when ANTHROPIC_API_KEY is not set.

@@ -1,7 +1,7 @@
 import type { EventRow, EventStore } from '@ellie/db'
 import type {
 	RealtimeStore,
-	SessionEvent
+	BranchEvent
 } from '../../lib/realtime-store'
 import type { ChannelDeliveryTarget } from './types'
 import type { ChannelProvider } from './provider'
@@ -35,8 +35,6 @@ import {
 	type DeliveryTtsDeps
 } from './delivery-tts'
 
-export type { TtsConfig } from './delivery-helpers'
-
 /**
  * In-memory registry that tracks channel-triggered runs and routes
  * assistant replies back through the originating channel provider.
@@ -65,7 +63,7 @@ export class ChannelDeliveryRegistry {
 	) => ChannelProvider | undefined
 	readonly #dataDir?: string
 	readonly #ttsDeps: DeliveryTtsDeps
-	readonly #watchedSessions = new Set<string>()
+	readonly #watchedBranches = new Set<string>()
 	readonly #unsubscribers: Array<() => void> = []
 
 	constructor(opts: {
@@ -96,7 +94,7 @@ export class ChannelDeliveryRegistry {
 	/** Register a delivery target for a channel-triggered run. Additive — multiple targets per run are supported. */
 	register(
 		runId: string,
-		sessionId: string,
+		branchId: string,
 		target: ChannelDeliveryTarget
 	): void {
 		const key = targetKey(target)
@@ -112,7 +110,7 @@ export class ChannelDeliveryRegistry {
 		}
 
 		this.#pending.set(runId, {
-			sessionId,
+			branchId,
 			targets: new Map([
 				[
 					key,
@@ -135,11 +133,11 @@ export class ChannelDeliveryRegistry {
 	 */
 	registerPending(
 		rowId: number,
-		sessionId: string,
+		branchId: string,
 		target: ChannelDeliveryTarget
 	): void {
 		this.#pendingByRow.set(rowId, {
-			sessionId,
+			branchId,
 			target,
 			createdAt: Date.now()
 		})
@@ -157,27 +155,27 @@ export class ChannelDeliveryRegistry {
 		}
 	}
 
-	/** Subscribe to a session's events for run_closed detection and runId backfill. Idempotent per sessionId. */
-	watchSession(sessionId: string): void {
-		if (this.#watchedSessions.has(sessionId)) return
-		this.#watchedSessions.add(sessionId)
+	/** Subscribe to a branch's events for run_closed detection and runId backfill. Idempotent per branchId. */
+	watchBranch(branchId: string): void {
+		if (this.#watchedBranches.has(branchId)) return
+		this.#watchedBranches.add(branchId)
 
-		const unsub = this.#store.subscribeToSession(
-			sessionId,
-			(event: SessionEvent) => {
+		const unsub = this.#store.subscribeToBranch(
+			branchId,
+			(event: BranchEvent) => {
 				if (event.type === 'update') {
 					this.#promotePendingRow(event.event)
-					this.#handleLiveRowEvent(event.event, sessionId)
+					this.#handleLiveRowEvent(event.event, branchId)
 					return
 				}
 
 				if (event.type !== 'append') return
-				this.#handleLiveRowEvent(event.event, sessionId)
+				this.#handleLiveRowEvent(event.event, branchId)
 
 				if (event.event.type !== 'run_closed') return
 				const runId = event.event.runId
 				if (!runId) return
-				this.#handleRunClosed(runId, sessionId).catch(
+				this.#handleRunClosed(runId, branchId).catch(
 					err => {
 						console.error(
 							'[delivery] handleRunClosed failed:',
@@ -197,14 +195,14 @@ export class ChannelDeliveryRegistry {
 		this.#pendingByRow.delete(row.id)
 		this.register(
 			row.runId,
-			pending.sessionId,
+			pending.branchId,
 			pending.target
 		)
 	}
 
 	#handleLiveRowEvent(
 		row: EventRow,
-		sessionId: string
+		branchId: string
 	): void {
 		if (!row.runId) return
 		if (row.type === 'run_closed') return
@@ -221,7 +219,7 @@ export class ChannelDeliveryRegistry {
 			// Streaming row update — attempt live text
 			this.#handleLiveTextUpdate(
 				row.runId,
-				sessionId,
+				branchId,
 				row.id
 			)
 			this.#sendComposingForRun(row.runId)
@@ -229,12 +227,12 @@ export class ChannelDeliveryRegistry {
 		}
 
 		// Row finalized — finalize live text, then run normal delivery
-		this.#handleLiveTextFinalize(row.runId, sessionId)
+		this.#handleLiveTextFinalize(row.runId, branchId)
 		this.#sendComposingForRun(row.runId)
 		this.#queueRunDelivery(row.runId, async () => {
 			await this.#deliverPendingReplies(
 				row.runId!,
-				sessionId,
+				branchId,
 				false
 			)
 		}).catch(err => {
@@ -260,12 +258,7 @@ export class ChannelDeliveryRegistry {
 		if (!delivery) return Promise.resolve()
 
 		const next = delivery.inFlight.then(task, task)
-		delivery.inFlight = next.catch(err => {
-			console.error(
-				`[delivery] queued delivery failed for ${runId}:`,
-				err
-			)
-		})
+		delivery.inFlight = next.catch(() => {})
 		return next
 	}
 
@@ -290,35 +283,27 @@ export class ChannelDeliveryRegistry {
 			targetState.lastComposingAt = now
 			provider
 				.sendComposing(targetState.target)
-				.catch(err => {
-					console.warn(
-						`[delivery] sendComposing failed for ${targetState.target.channelId}:`,
-						err
-					)
-				})
+				.catch(() => {})
 		}
 	}
 
 	async #handleRunClosed(
 		runId: string,
-		sessionId: string
+		branchId: string
 	): Promise<void> {
 		if (!this.#pending.has(runId)) {
-			console.log(
-				`[delivery] run_closed but not in pending map: runId=${runId} sessionId=${sessionId}`
-			)
-			return // Not a channel-triggered run
+			return
 		}
 
 		// Finalize any still-streaming live text before final delivery
-		this.#handleLiveTextFinalize(runId, sessionId)
+		this.#handleLiveTextFinalize(runId, branchId)
 
 		await this.#queueRunDelivery(runId, async () => {
 			// Wait for live text finalization to complete
 			await this.#awaitLiveEdits(runId)
 			await this.#deliverPendingReplies(
 				runId,
-				sessionId,
+				branchId,
 				true
 			)
 		})
@@ -344,8 +329,6 @@ export class ChannelDeliveryRegistry {
 			await Promise.allSettled(chains)
 		}
 	}
-
-	// ── Core delivery loop (per-item checkpointing) ──────────────────────
 
 	/**
 	 * Heuristic check: is a reply fully delivered based on the raw
@@ -386,7 +369,7 @@ export class ChannelDeliveryRegistry {
 
 	async #deliverPendingReplies(
 		runId: string,
-		sessionId: string,
+		branchId: string,
 		isRunClosed: boolean
 	): Promise<void> {
 		const delivery = this.#pending.get(runId)
@@ -394,15 +377,8 @@ export class ChannelDeliveryRegistry {
 
 		const replyPayloads = extractReplyPayloads(
 			this.#store,
-			sessionId,
+			branchId,
 			runId
-		)
-		console.log(
-			`[delivery] extractReplyPayloads: runId=${runId}`,
-			JSON.stringify({
-				replyCount: replyPayloads.length,
-				isRunClosed
-			})
 		)
 		if (replyPayloads.length === 0) return
 
@@ -454,7 +430,7 @@ export class ChannelDeliveryRegistry {
 					if (!payloads) {
 						payloads = await preparePayloadsForDelivery(
 							reply.payload,
-							sessionId,
+							branchId,
 							runId,
 							targetState.target.inboundMediaType?.startsWith(
 								'audio/'
@@ -483,7 +459,7 @@ export class ChannelDeliveryRegistry {
 						if (!sent) continue
 
 						this.#persistCheckpoint(
-							sessionId,
+							branchId,
 							runId,
 							targetState.target,
 							item,
@@ -531,7 +507,7 @@ export class ChannelDeliveryRegistry {
 
 	/** Persist a delivery checkpoint for a single outbound item (idempotent via dedupeKey). */
 	#persistCheckpoint(
-		sessionId: string,
+		branchId: string,
 		runId: string,
 		target: ChannelDeliveryTarget,
 		item: OutboundItem,
@@ -539,7 +515,7 @@ export class ChannelDeliveryRegistry {
 	): void {
 		try {
 			this.#store.appendEvent(
-				sessionId,
+				branchId,
 				'channel_delivered',
 				{
 					channelId: target.channelId,
@@ -555,15 +531,10 @@ export class ChannelDeliveryRegistry {
 				runId,
 				`channel_delivered:${runId}:${targetKey(target)}:r${item.replyIndex}:p${item.payloadIndex}:a${item.attachmentIndex}`
 			)
-		} catch (err) {
-			console.warn(
-				'[delivery] Failed to persist checkpoint:',
-				err
-			)
+		} catch {
+			// Best-effort — checkpoint dedup prevents double delivery
 		}
 	}
-
-	// ── Live-text streaming orchestration ────────────────────────────────
 
 	#liveStateKey(
 		runId: string,
@@ -576,7 +547,7 @@ export class ChannelDeliveryRegistry {
 	/** Push a live-text update for all targets of a run. */
 	#handleLiveTextUpdate(
 		runId: string,
-		sessionId: string,
+		branchId: string,
 		_rowId: number
 	): void {
 		const delivery = this.#pending.get(runId)
@@ -584,7 +555,7 @@ export class ChannelDeliveryRegistry {
 
 		const snapshot = extractStreamingRow(
 			this.#store,
-			sessionId,
+			branchId,
 			runId
 		)
 		if (!snapshot) return
@@ -625,7 +596,7 @@ export class ChannelDeliveryRegistry {
 							)
 							ls.handle = result.handle
 							this.#persistLiveDelivery(
-								sessionId,
+								branchId,
 								runId,
 								targetState.target,
 								ls
@@ -655,11 +626,8 @@ export class ChannelDeliveryRegistry {
 								existing.handle,
 								text
 							)
-						} catch (err) {
-							console.warn(
-								'[delivery] updateLiveText failed:',
-								err
-							)
+						} catch {
+							// Best-effort — next delta will retry
 						}
 					})
 					.catch(() => {})
@@ -670,14 +638,14 @@ export class ChannelDeliveryRegistry {
 	/** Finalize live text for all targets of a run. */
 	#handleLiveTextFinalize(
 		runId: string,
-		sessionId: string
+		branchId: string
 	): void {
 		const delivery = this.#pending.get(runId)
 		if (!delivery) return
 
 		const snapshot = extractStreamingRow(
 			this.#store,
-			sessionId,
+			branchId,
 			runId
 		)
 
@@ -705,7 +673,7 @@ export class ChannelDeliveryRegistry {
 							)
 							ls.lastSentText = finalText
 							this.#persistLiveDelivery(
-								sessionId,
+								branchId,
 								runId,
 								targetState.target,
 								ls
@@ -724,7 +692,7 @@ export class ChannelDeliveryRegistry {
 
 	/** Persist a live-delivery event (separate from channel_delivered). */
 	#persistLiveDelivery(
-		sessionId: string,
+		branchId: string,
 		runId: string,
 		target: ChannelDeliveryTarget,
 		ls: LiveTextState
@@ -741,17 +709,14 @@ export class ChannelDeliveryRegistry {
 				updatedAt: Date.now()
 			}
 			this.#store.appendEvent(
-				sessionId,
+				branchId,
 				'live_delivery',
 				payload,
 				runId,
 				`live_delivery:${runId}:${targetKey(target)}:${ls.assistantRowId}:${ls.status}`
 			)
-		} catch (err) {
-			console.warn(
-				'[delivery] Failed to persist live delivery:',
-				err
-			)
+		} catch {
+			// Best-effort persistence
 		}
 	}
 
@@ -790,10 +755,6 @@ export class ChannelDeliveryRegistry {
 			eventStore.findCandidateChannelRuns(maxAgeMs)
 		if (candidates.length === 0) return 0
 
-		console.log(
-			`[delivery] Evaluating ${candidates.length} candidate channel run(s) for recovery`
-		)
-
 		let recovered = 0
 		for (const row of candidates) {
 			try {
@@ -806,7 +767,7 @@ export class ChannelDeliveryRegistry {
 				// Load existing checkpoints for this run+target
 				const checkpoints =
 					eventStore.findDeliveryCheckpoints(
-						row.sessionId,
+						row.branchId,
 						row.runId,
 						row.channelId,
 						row.accountId,
@@ -818,7 +779,7 @@ export class ChannelDeliveryRegistry {
 
 				const replyPayloads = extractReplyPayloads(
 					this.#store,
-					row.sessionId,
+					row.branchId,
 					row.runId
 				)
 				if (replyPayloads.length === 0) continue
@@ -834,7 +795,7 @@ export class ChannelDeliveryRegistry {
 				] of replyPayloads.entries()) {
 					const payloads = await preparePayloadsForDelivery(
 						reply.payload,
-						row.sessionId,
+						row.branchId,
 						row.runId,
 						false,
 						reply.isLastAssistantReply,
@@ -861,12 +822,7 @@ export class ChannelDeliveryRegistry {
 				if (remaining.length === 0) continue
 
 				const provider = this.#getProvider(target.channelId)
-				if (!provider) {
-					console.warn(
-						`[delivery] Provider ${target.channelId} not available, skipping`
-					)
-					continue
-				}
+				if (!provider) continue
 
 				let sentAny = false
 				for (const { item, assistantRowId } of remaining) {
@@ -877,7 +833,7 @@ export class ChannelDeliveryRegistry {
 					)
 					if (!sent) continue
 					this.#persistCheckpoint(
-						row.sessionId,
+						row.branchId,
 						row.runId,
 						target,
 						item,
@@ -895,11 +851,6 @@ export class ChannelDeliveryRegistry {
 			}
 		}
 
-		if (recovered > 0) {
-			console.log(
-				`[delivery] Recovered ${recovered} delivery(ies)`
-			)
-		}
 		return recovered
 	}
 
@@ -924,9 +875,6 @@ export class ChannelDeliveryRegistry {
 		}
 		if (liveRows.length === 0) return
 
-		console.log(
-			`[delivery] Recovering ${liveRows.length} partial live message(s)`
-		)
 		for (const row of liveRows) {
 			const provider = this.#getProvider(row.channelId)
 			if (!provider?.failLiveText) continue
@@ -943,7 +891,7 @@ export class ChannelDeliveryRegistry {
 				)
 				// Persist the failed status so we don't retry
 				this.#store.appendEvent(
-					row.sessionId,
+					row.branchId,
 					'live_delivery',
 					{
 						channelId: row.channelId,
@@ -958,11 +906,8 @@ export class ChannelDeliveryRegistry {
 					row.runId,
 					`live_delivery:${row.runId}:${targetKey(target)}:${row.assistantRowId}:failed`
 				)
-			} catch (err) {
-				console.warn(
-					`[delivery] Live recovery failed for run ${row.runId}:`,
-					err
-				)
+			} catch {
+				// Best-effort — already-sent text remains visible
 			}
 		}
 	}
@@ -970,7 +915,7 @@ export class ChannelDeliveryRegistry {
 	shutdown(): void {
 		for (const unsub of this.#unsubscribers) unsub()
 		this.#unsubscribers.length = 0
-		this.#watchedSessions.clear()
+		this.#watchedBranches.clear()
 		this.#pending.clear()
 		this.#pendingByRow.clear()
 		this.#liveState.clear()

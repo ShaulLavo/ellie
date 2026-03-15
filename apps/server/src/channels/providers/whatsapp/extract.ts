@@ -1,8 +1,7 @@
 /**
  * Unified message content extraction for WhatsApp inbound pipeline.
- * Matches OpenCLAW's extract.ts — pulls text, media placeholders,
- * context info, mentioned JIDs, reply context, and location data
- * from Baileys WAMessage.message objects.
+ * Pulls text, media placeholders, context info, mentioned JIDs,
+ * reply context, and location data from Baileys WAMessage.message objects.
  */
 
 import {
@@ -10,8 +9,6 @@ import {
 	type JidToE164Options
 } from './normalize'
 import { parseVcard } from './vcard'
-
-// ── Context info extraction ──────────────────────────────────────────
 
 /** Message types that carry contextInfo */
 const CONTEXT_INFO_KEYS = [
@@ -58,8 +55,6 @@ export function extractContextInfo(
 	return undefined
 }
 
-// ── Text extraction ──────────────────────────────────────────────────
-
 /**
  * Extract text content from a Baileys message.
  * Handles conversation, extendedText, media captions, and contact placeholders.
@@ -94,8 +89,6 @@ export function extractText(
 	return null
 }
 
-// ── Media placeholder ────────────────────────────────────────────────
-
 /**
  * When there's no text or caption, return a typed placeholder
  * so the agent knows media was received.
@@ -113,8 +106,6 @@ export function extractMediaPlaceholder(
 	return undefined
 }
 
-// ── Mentioned JIDs ───────────────────────────────────────────────────
-
 /**
  * Extract mentioned JIDs from a message's contextInfo, deduped.
  */
@@ -128,9 +119,7 @@ export function extractMentionedJids(
 	return [...new Set(jids)]
 }
 
-// ── Reply context (quoted-message) ───────────────────────────────────
-
-export type ReplyContext = {
+type ReplyContext = {
 	/** stanzaId of the quoted message */
 	id?: string
 	/** Text of the quoted message */
@@ -185,8 +174,6 @@ export function describeReplyContext(
 		senderE164
 	}
 }
-
-// ── Contact placeholder ──────────────────────────────────────────────
 
 /**
  * Extract contact placeholder text from vCard messages.
@@ -243,11 +230,9 @@ function extractContactPlaceholder(
 	return undefined
 }
 
-// ── Location extraction ──────────────────────────────────────────────
+type LocationSource = 'pin' | 'place' | 'live'
 
-export type LocationSource = 'pin' | 'place' | 'live'
-
-export type NormalizedLocation = {
+type NormalizedLocation = {
 	latitude: number
 	longitude: number
 	accuracy?: number

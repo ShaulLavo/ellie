@@ -15,9 +15,7 @@ import type {
 } from '@tanstack/ai'
 import * as v from 'valibot'
 
-// ============================================================================
 // Test helpers
-// ============================================================================
 
 /** Create a mock StreamFn that yields predetermined AG-UI events */
 function createMockStreamFn(
@@ -140,9 +138,7 @@ async function collectEvents(
 	return events
 }
 
-// ============================================================================
 // Tests
-// ============================================================================
 
 describe('agentLoop', () => {
 	test('basic text response emits correct event sequence', async () => {
@@ -792,9 +788,7 @@ describe('transformContext', () => {
 	})
 })
 
-// ============================================================================
 // Runtime guardrail tests
-// ============================================================================
 
 describe('runtime guardrails', () => {
 	test('max model calls limit triggers limit_hit and ends run', async () => {

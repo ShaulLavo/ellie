@@ -6,9 +6,7 @@ import {
 } from '../src/retry'
 import type { RetryOptions } from '../src/retry'
 
-// ============================================================================
 // calculateDelay
-// ============================================================================
 
 describe('calculateDelay', () => {
 	const baseOpts: RetryOptions = {
@@ -95,9 +93,7 @@ describe('calculateDelay', () => {
 	})
 })
 
-// ============================================================================
 // abortableSleep
-// ============================================================================
 
 describe('abortableSleep', () => {
 	test('resolves to true after duration', async () => {
@@ -126,9 +122,7 @@ describe('abortableSleep', () => {
 	})
 })
 
-// ============================================================================
 // withRetry
-// ============================================================================
 
 describe('withRetry', () => {
 	test('returns result on first success', async () => {

@@ -10,8 +10,6 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { desc, sql } from 'drizzle-orm'
 
-// ── Banks ──────────────────────────────────────────────────────────────────
-
 export const banks = sqliteTable('hs_banks', {
 	id: text('id').primaryKey(),
 	name: text('name').notNull().unique(),
@@ -22,8 +20,6 @@ export const banks = sqliteTable('hs_banks', {
 	createdAt: integer('created_at').notNull(),
 	updatedAt: integer('updated_at').notNull()
 })
-
-// ── Documents ──────────────────────────────────────────────────────────────
 
 export const documents = sqliteTable(
 	'hs_documents',
@@ -46,8 +42,6 @@ export const documents = sqliteTable(
 	]
 )
 
-// ── Chunks ─────────────────────────────────────────────────────────────────
-
 export const chunks = sqliteTable(
 	'hs_chunks',
 	{
@@ -69,8 +63,6 @@ export const chunks = sqliteTable(
 		index('idx_hs_chunk_doc').on(table.documentId)
 	]
 )
-
-// ── Memory Units ───────────────────────────────────────────────────────────
 
 export const memoryUnits = sqliteTable(
 	'hs_memory_units',
@@ -157,8 +149,6 @@ export const memoryUnits = sqliteTable(
 	]
 )
 
-// ── Entities ───────────────────────────────────────────────────────────────
-
 export const entities = sqliteTable(
 	'hs_entities',
 	{
@@ -188,8 +178,6 @@ export const entities = sqliteTable(
 	]
 )
 
-// ── Memory ↔ Entity junction ───────────────────────────────────────────────
-
 export const memoryEntities = sqliteTable(
 	'hs_memory_entities',
 	{
@@ -211,8 +199,6 @@ export const memoryEntities = sqliteTable(
 		index('idx_hs_me_entity').on(table.entityId)
 	]
 )
-
-// ── Memory Links ───────────────────────────────────────────────────────────
 
 export const memoryLinks = sqliteTable(
 	'hs_memory_links',
@@ -251,8 +237,6 @@ export const memoryLinks = sqliteTable(
 	]
 )
 
-// ── Entity Co-occurrences ──────────────────────────────────────────────────
-
 export const entityCooccurrences = sqliteTable(
 	'hs_entity_cooccurrences',
 	{
@@ -283,8 +267,6 @@ export const entityCooccurrences = sqliteTable(
 	]
 )
 
-// ── Mental Models ─────────────────────────────────────────────────────────
-
 export const mentalModels = sqliteTable(
 	'hs_mental_models',
 	{
@@ -313,8 +295,6 @@ export const mentalModels = sqliteTable(
 	]
 )
 
-// ── Directives ──────────────────────────────────────────────────────────
-
 export const directives = sqliteTable(
 	'hs_directives',
 	{
@@ -338,8 +318,6 @@ export const directives = sqliteTable(
 		)
 	]
 )
-
-// ── Async Operations ──────────────────────────────────────────────────────
 
 export const asyncOperations = sqliteTable(
 	'hs_async_operations',
@@ -365,8 +343,6 @@ export const asyncOperations = sqliteTable(
 		)
 	]
 )
-
-// ── Memory Versions ─────────────────────────────────────────────────────
 
 export const memoryVersions = sqliteTable(
 	'hs_memory_versions',
@@ -396,8 +372,6 @@ export const memoryVersions = sqliteTable(
 		)
 	]
 )
-
-// ── Reconsolidation Decisions ───────────────────────────────────────────
 
 /**
  * Audit log for reconsolidation routing decisions.
@@ -435,8 +409,6 @@ export const reconsolidationDecisions = sqliteTable(
 	]
 )
 
-// ── Episodes ────────────────────────────────────────────────────────────
-
 export const episodes = sqliteTable(
 	'hs_episodes',
 	{
@@ -466,8 +438,6 @@ export const episodes = sqliteTable(
 		)
 	]
 )
-
-// ── Episode Events ──────────────────────────────────────────────────────
 
 export const episodeEvents = sqliteTable(
 	'hs_episode_events',
@@ -505,8 +475,6 @@ export const episodeEvents = sqliteTable(
 	]
 )
 
-// ── Episode Temporal Links ──────────────────────────────────────────────
-
 export const episodeTemporalLinks = sqliteTable(
 	'hs_episode_temporal_links',
 	{
@@ -535,8 +503,6 @@ export const episodeTemporalLinks = sqliteTable(
 	]
 )
 
-// ── Location Paths ────────────────────────────────────────────────────────
-
 export const locationPaths = sqliteTable(
 	'hs_location_paths',
 	{
@@ -564,8 +530,6 @@ export const locationPaths = sqliteTable(
 		)
 	]
 )
-
-// ── Location Access Contexts ──────────────────────────────────────────────
 
 export const locationAccessContexts = sqliteTable(
 	'hs_location_access_contexts',
@@ -604,8 +568,6 @@ export const locationAccessContexts = sqliteTable(
 	]
 )
 
-// ── Location Associations ─────────────────────────────────────────────────
-
 export const locationAssociations = sqliteTable(
 	'hs_location_associations',
 	{
@@ -642,8 +604,6 @@ export const locationAssociations = sqliteTable(
 	]
 )
 
-// ── Visual Memories (Phase 4) ─────────────────────────────────────────────
-
 export const visualMemories = sqliteTable(
 	'hs_visual_memories',
 	{
@@ -672,8 +632,6 @@ export const visualMemories = sqliteTable(
 	]
 )
 
-// ── Visual Access History (Phase 4) ──────────────────────────────────────
-
 export const visualAccessHistory = sqliteTable(
 	'hs_visual_access_history',
 	{
@@ -697,8 +655,6 @@ export const visualAccessHistory = sqliteTable(
 		)
 	]
 )
-
-// ── Type exports ───────────────────────────────────────────────────────────
 
 export type BankRow = typeof banks.$inferSelect
 export type NewBankRow = typeof banks.$inferInsert

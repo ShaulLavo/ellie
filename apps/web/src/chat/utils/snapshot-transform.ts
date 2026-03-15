@@ -18,7 +18,7 @@ export function snapshotToMessages(
 ): StoredChatMessage[] {
 	let lastRotatedIdx = -1
 	for (let i = events.length - 1; i >= 0; i--) {
-		if (events[i].type === 'session_rotated') {
+		if (events[i].type === 'thread_created') {
 			lastRotatedIdx = events[i].seq
 			break
 		}

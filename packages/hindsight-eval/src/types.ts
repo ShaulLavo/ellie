@@ -5,16 +5,12 @@
  * and report structures used throughout the harness.
  */
 
-// ── Scenario Families ─────────────────────────────────────────────────────
-
 export type Scenario =
 	| 'follow_up_recall'
 	| 'temporal_narrative'
 	| 'dedup_conflict'
 	| 'code_location_recall'
 	| 'token_budget_packing'
-
-// ── Eval Case ─────────────────────────────────────────────────────────────
 
 export interface SeedFact {
 	content: string
@@ -52,8 +48,6 @@ export interface EvalCase {
 	}
 }
 
-// ── Run Config ────────────────────────────────────────────────────────────
-
 export interface EvalRunConfig {
 	datasetPath: string
 	mode: 'hybrid'
@@ -65,8 +59,6 @@ export interface EvalRunConfig {
 	topK: number
 	outputDir: string
 }
-
-// ── Scored Result (per case) ──────────────────────────────────────────────
 
 export interface RecallCandidate {
 	memoryId: string
@@ -86,8 +78,6 @@ export interface EvalCaseResult {
 	/** Scenario-specific metric scores */
 	metrics: Record<string, number>
 }
-
-// ── Scenario Metrics ──────────────────────────────────────────────────────
 
 export interface FollowUpRecallMetrics {
 	'recall@1': number
@@ -126,8 +116,6 @@ export interface TokenBudgetPackingMetrics {
 	truncationLossRate: number
 	budgetUtilization: number
 }
-
-// ── Aggregate Report ──────────────────────────────────────────────────────
 
 export interface ScenarioSummary {
 	scenario: Scenario

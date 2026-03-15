@@ -1,13 +1,20 @@
 {
 	"cSpell.words": [
+		"adetailer",
+		"civitai",
 		"Comlink",
 		"defuddle",
 		"defuddled",
+		"denoise",
+		"denoising",
 		"Elysia",
 		"ghostty",
 		"libsqlite",
 		"lipgloss",
+		"Loras",
 		"Renderable",
+		"safetensors",
+		"sdxl",
 		"timespan"
 	]
 }

@@ -6,8 +6,6 @@
 import { readJsonLines } from './jsonl-reader'
 import type { ProgressFn } from './auto-setup'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export interface ServiceGenerateImage {
 	imagePath: string
 	width: number
@@ -21,8 +19,6 @@ export interface ServiceGenerateResult {
 	seed: number
 	images: ServiceGenerateImage[]
 }
-
-// ── Client ───────────────────────────────────────────────────────────────────
 
 /**
  * Send a generate request to the service and stream progress events.

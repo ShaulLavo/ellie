@@ -34,8 +34,6 @@ describe('retain', () => {
 		t.cleanup()
 	})
 
-	// ── Basic retain ────────────────────────────────────────────────────────
-
 	describe('with pre-provided facts', () => {
 		it('stores facts and returns RetainResult', async () => {
 			const result = await t.hs.retain(
@@ -146,8 +144,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Entity extraction ─────────────────────────────────────────────────
-
 	describe('entity extraction', () => {
 		it('extracts entities from pre-provided facts', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
@@ -190,8 +186,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Tag attachment ──────────────────────────────────────────────────────
-
 	describe('tag attachment', () => {
 		it('attaches tags from options', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
@@ -221,8 +215,6 @@ describe('retain', () => {
 			expect(result.memories[0]!.tags).toContain('tag-b')
 		})
 	})
-
-	// ── Deduplication ─────────────────────────────────────────────────────
 
 	describe('deduplication', () => {
 		it('reinforces duplicate facts (returns existing memory)', async () => {
@@ -309,8 +301,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Semantic link creation ──────────────────────────────────────────────
-
 	describe('semantic links', () => {
 		it('creates semantic links between similar memories', async () => {
 			// First retain
@@ -339,8 +329,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Causal linking ──────────────────────────────────────────────────────
-
 	describe('causal links', () => {
 		it('creates causal links from causalRelations', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
@@ -361,8 +349,6 @@ describe('retain', () => {
 			expect(result).toBeDefined()
 		})
 	})
-
-	// ── Temporal fields ───────────────────────────────────────────────────
 
 	describe('temporal fields', () => {
 		it('stores occurredStart and occurredEnd from facts', async () => {
@@ -446,8 +432,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Metadata ──────────────────────────────────────────────────────────
-
 	describe('metadata', () => {
 		it('attaches metadata from options', async () => {
 			const result = await t.hs.retain(bankId, 'test', {
@@ -462,8 +446,6 @@ describe('retain', () => {
 			})
 		})
 	})
-
-	// ── Context preservation (needs LLM extraction) ─────────────────────
 
 	describe('context preservation', () => {
 		it('preserves context and makes it retrievable via recall', async () => {
@@ -542,8 +524,6 @@ describe('retain', () => {
 			}
 		})
 	})
-
-	// ── Batch edge cases (needs LLM extraction) ─────────────────────────
 
 	describe('batch edge cases', () => {
 		it('handles empty batch gracefully', async () => {
@@ -666,8 +646,6 @@ describe('retain', () => {
 			expect(chunkB!.text).toContain('Bob documented')
 		})
 	})
-
-	// ── Temporal link creation (needs LLM extraction) ───────────────────
 
 	describe('temporal links', () => {
 		it('creates temporal links between facts with nearby event dates', async () => {
@@ -861,8 +839,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── All link types together (needs LLM extraction) ──────────────────
-
 	describe('all link types together', () => {
 		it('creates temporal, semantic, and entity links in a single operation', async () => {
 			const baseTime = Date.now()
@@ -929,8 +905,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Intra-batch links (needs LLM extraction) ───────────────────────
-
 	describe('intra-batch links', () => {
 		it('creates semantic links between facts in the same batch', async () => {
 			// First seed some existing memories so the batch can form semantic links to them
@@ -992,8 +966,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── User-provided entities (needs LLM extraction) ──────────────────
-
 	describe('user-provided entities', () => {
 		it('merges user-provided entities with LLM-extracted entities', async () => {
 			// Retain with user-provided entities in the facts
@@ -1031,8 +1003,6 @@ describe('retain', () => {
 			expect(entityLinks.length).toBeGreaterThanOrEqual(1)
 		})
 	})
-
-	// ── Custom extraction mode (needs LLM extraction) ──────────────────
 
 	describe('custom extraction mode', () => {
 		it('uses custom extraction guidelines from config', async () => {
@@ -1083,8 +1053,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Per-item tags on document (needs LLM extraction) ────────────────
-
 	describe('per-item tags on document', () => {
 		it('stores per-item tags on the document record', async () => {
 			await t.hs.retainBatch(
@@ -1108,8 +1076,6 @@ describe('retain', () => {
 			expect(document!.tags).toContain('app-type:taste-ai')
 		})
 	})
-
-	// ── Mention count (needs LLM extraction) ────────────────────────────
 
 	describe('mention count', () => {
 		it('accurately tracks mention count across multiple retain calls', async () => {
@@ -1274,8 +1240,6 @@ describe('retain', () => {
 		})
 	})
 
-	// ── Temporal fields (event_date, mentioned_at, occurred_start/end) ──────
-
 	describe('temporal fields', () => {
 		it('stores event_date as mentioned_at on retained facts', async () => {
 			const eventDate = 1_700_000_000_000 // fixed timestamp
@@ -1341,8 +1305,6 @@ describe('retain', () => {
 			)
 		})
 	})
-
-	// ── Retain → recall round-trip ───────────────────────────────────────
 
 	describe('retain → recall round-trip', () => {
 		it('retained content is surfaced by recall with non-empty results', async () => {
