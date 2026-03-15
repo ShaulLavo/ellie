@@ -194,15 +194,19 @@ function resolveConfig(): ServerConfig {
 		process.env.CREDENTIALS_PATH ??
 		resolve(import.meta.dir, '../../../.credentials.json')
 
+	const isDev = process.env.NODE_ENV !== 'production'
 	const { dir: STUDIO_PUBLIC } = resolveStudioPublic({
-		candidates: [
-			// Bundle layout: dist/release/web
-			resolve(import.meta.dir, 'web'),
-			// Source layout: apps/web/dist (pre-built)
-			resolve(import.meta.dir, '../../web/dist'),
-			// Source layout: apps/web/public (dev, Bun serves with HMR)
-			resolve(import.meta.dir, '../../web/public')
-		]
+		candidates: isDev
+			? [
+					// Dev: always use live source (Bun bundles on the fly)
+					resolve(import.meta.dir, '../../web/public')
+				]
+			: [
+					// Prod bundle layout: dist/release/web
+					resolve(import.meta.dir, 'web'),
+					// Prod source layout: apps/web/dist (pre-built)
+					resolve(import.meta.dir, '../../web/dist')
+				]
 	})
 
 	return { port, CREDENTIALS_PATH, STUDIO_PUBLIC }
