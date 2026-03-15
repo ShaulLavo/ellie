@@ -146,9 +146,10 @@ export const app = new Elysia()
 		})
 	)
 	.use(
-		(() => {
-			const spaIndex = () =>
-				Bun.file(join(ctx.STUDIO_PUBLIC, 'index.html'))
+		await (async () => {
+			const htmlBundle = await import(
+				join(ctx.STUDIO_PUBLIC, 'index.html')
+			)
 			const spa = new Elysia()
 			for (const prefix of [
 				'/app',
@@ -157,8 +158,8 @@ export const app = new Elysia()
 				'/terminal',
 				'/code'
 			]) {
-				spa.get(prefix, spaIndex)
-				spa.get(`${prefix}/*`, spaIndex)
+				spa.get(prefix, htmlBundle.default)
+				spa.get(`${prefix}/*`, htmlBundle.default)
 			}
 			return spa
 		})()

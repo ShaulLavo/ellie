@@ -2,5 +2,6 @@
 	"extends": "@repo/typescript-config/base.json",
 	"compilerOptions": {
 		"types": ["bun-types"]
-	}
+	},
+	"exclude": ["public"]
 }

@@ -194,19 +194,15 @@ function resolveConfig(): ServerConfig {
 		process.env.CREDENTIALS_PATH ??
 		resolve(import.meta.dir, '../../../.credentials.json')
 
-	const isDev = process.env.NODE_ENV !== 'production'
 	const { dir: STUDIO_PUBLIC } = resolveStudioPublic({
-		candidates: isDev
-			? [
-					// Dev: always use live source (Bun bundles on the fly)
-					resolve(import.meta.dir, '../../web/public')
-				]
-			: [
-					// Prod bundle layout: dist/release/web
-					resolve(import.meta.dir, 'web'),
-					// Prod source layout: apps/web/dist (pre-built)
-					resolve(import.meta.dir, '../../web/dist')
-				]
+		candidates: [
+			// Prod bundle layout: dist/release/web
+			resolve(import.meta.dir, 'web'),
+			// Pre-built web assets (CI / manual build)
+			resolve(import.meta.dir, '../../web/dist'),
+			// Dev: symlink apps/server/public → apps/web/public
+			resolve(import.meta.dir, '../public')
+		]
 	})
 
 	return { port, CREDENTIALS_PATH, STUDIO_PUBLIC }
