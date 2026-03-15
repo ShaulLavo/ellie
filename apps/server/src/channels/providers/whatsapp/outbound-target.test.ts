@@ -2,8 +2,6 @@ import { describe, test, expect } from 'bun:test'
 import { resolveOutboundTarget } from './outbound-target'
 
 describe('resolveOutboundTarget', () => {
-	// ── Basic normalization ──────────────────────────────────────────
-
 	test('normalizes bare phone to E.164', () => {
 		const result = resolveOutboundTarget({
 			to: '15550001111'
@@ -86,8 +84,6 @@ describe('resolveOutboundTarget', () => {
 		})
 	})
 
-	// ── Invalid targets ──────────────────────────────────────────────
-
 	test('rejects empty string', () => {
 		const result = resolveOutboundTarget({ to: '' })
 		expect(result.ok).toBe(false)
@@ -106,8 +102,6 @@ describe('resolveOutboundTarget', () => {
 		})
 		expect(result.ok).toBe(false)
 	})
-
-	// ── Mode-aware allowlist checks ─────────────────────────────────
 
 	test('explicit mode allows any normalized target', () => {
 		const result = resolveOutboundTarget({
@@ -166,9 +160,7 @@ describe('resolveOutboundTarget', () => {
 		})
 	})
 
-	// ── OpenCLAW behavior: empty/missing allowFrom allows any target ──
-
-	test('implicit mode: empty allowFrom allows any target (OpenCLAW)', () => {
+	test('implicit mode: empty allowFrom allows any target', () => {
 		const result = resolveOutboundTarget({
 			to: '+15550001111',
 			allowFrom: [],
@@ -177,7 +169,7 @@ describe('resolveOutboundTarget', () => {
 		expect(result).toEqual({ ok: true, to: '+15550001111' })
 	})
 
-	test('implicit mode: no allowFrom allows any target (OpenCLAW)', () => {
+	test('implicit mode: no allowFrom allows any target', () => {
 		const result = resolveOutboundTarget({
 			to: '+15550001111',
 			mode: 'implicit'
@@ -185,7 +177,7 @@ describe('resolveOutboundTarget', () => {
 		expect(result).toEqual({ ok: true, to: '+15550001111' })
 	})
 
-	test('heartbeat mode: no allowFrom allows any target (OpenCLAW)', () => {
+	test('heartbeat mode: no allowFrom allows any target', () => {
 		const result = resolveOutboundTarget({
 			to: '+15550001111',
 			mode: 'heartbeat'

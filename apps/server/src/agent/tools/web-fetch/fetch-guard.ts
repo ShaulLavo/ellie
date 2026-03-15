@@ -2,8 +2,6 @@
  * SSRF-guarded fetch — validates hostname and DNS before every request,
  * follows redirects manually with per-hop re-validation.
  *
- * Adapted from OpenClaw's fetch-guard.ts for Bun (no undici DNS pinning).
- *
  * DNS rebinding mitigation:
  *   For HTTP URLs, the hostname is rewritten to the validated IP address
  *   and the original hostname is sent via the Host header. This pins the
@@ -13,8 +11,7 @@
  *   requires the original hostname for SNI). The pre-flight DNS check still
  *   blocks direct private IP access, but a DNS rebinding attack between
  *   validation and fetch is theoretically possible. This is an accepted
- *   limitation — undici DNS pinning (which OpenClaw uses) is not available
- *   in Bun's fetch.
+ *   limitation — undici DNS pinning is not available in Bun's fetch.
  */
 
 import {
@@ -29,7 +26,7 @@ type FetchLike = (
 	init?: RequestInit
 ) => Promise<Response>
 
-export type GuardedFetchOptions = {
+type GuardedFetchOptions = {
 	fetchImpl?: FetchLike
 	init?: RequestInit
 	maxRedirects?: number
@@ -39,7 +36,7 @@ export type GuardedFetchOptions = {
 	lookupFn?: LookupFn
 }
 
-export type GuardedFetchResult = {
+type GuardedFetchResult = {
 	response: Response
 	finalUrl: string
 }

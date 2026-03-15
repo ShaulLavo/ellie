@@ -341,7 +341,7 @@ export async function startStt(): Promise<boolean> {
 }
 
 /** Kill the STT child process. Called on server shutdown. */
-export function stopStt(): void {
+function stopStt(): void {
 	if (sttProcess) {
 		sttProcess.kill()
 		sttProcess = undefined

@@ -9,8 +9,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-// ── Trace event types ────────────────────────────────────────────────────────
-
 export type ImageTraceEvent =
 	| {
 			type: 'recipe_built'
@@ -20,7 +18,7 @@ export type ImageTraceEvent =
 			type: 'generation_success'
 			sessionId: string
 			uploadId: string
-			mime: string
+			mimeType: string
 			durationMs: number
 			recipe: Record<string, unknown>
 	  }
@@ -31,8 +29,6 @@ export type ImageTraceEvent =
 			durationMs: number
 			recipe?: Record<string, unknown>
 	  }
-
-// ── Trace function ───────────────────────────────────────────────────────────
 
 let tracePath: string | null = null
 

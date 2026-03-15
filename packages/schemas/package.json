@@ -18,6 +18,7 @@
 		"check-types": "tsgo --noEmit"
 	},
 	"dependencies": {
+		"@ellie/trace": "workspace:*",
 		"valibot": "^1.2.0"
 	},
 	"devDependencies": {

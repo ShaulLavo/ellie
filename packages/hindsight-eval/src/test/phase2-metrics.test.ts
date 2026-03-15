@@ -11,8 +11,6 @@ import {
 	evaluateGate7
 } from '../phase2-metrics'
 
-// ── Gate 6: Duplicate Ratio ──────────────────────────────────────────────
-
 describe('computeDuplicateRatio', () => {
 	it('returns 0 for empty cluster counts', () => {
 		const result = computeDuplicateRatio(new Map())
@@ -94,8 +92,6 @@ describe('evaluateGate6', () => {
 		expect(result.reductionPercent).toBeLessThan(0)
 	})
 })
-
-// ── Gate 7: Narrative Accuracy ───────────────────────────────────────────
 
 describe('isNarrativeQuestionCorrect', () => {
 	it('returns true for empty expected IDs', () => {

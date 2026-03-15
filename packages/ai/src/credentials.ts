@@ -1,9 +1,7 @@
 /**
  * Credential loading for multi-provider authentication.
  *
- * Supports two formats:
- * 1. Legacy single-provider: { type: "oauth", ... } or { type: "api_key", key: "..." }
- * 2. Multi-provider: { anthropic: { ... }, groq: { ... } }
+ * Format: { anthropic: { ... }, groq: { ... } }
  *
  * Anthropic credential shapes (persisted):
  *   API key:  { "type": "api_key", "key": "..." }
@@ -12,9 +10,6 @@
  *
  * Groq credential shapes (persisted):
  *   API key:  { "type": "api_key", "key": "..." }
- *
- * Legacy field aliases accepted on read:
- *   access_token → access, refresh_token → refresh, expires_at → expires
  */
 
 import { chmod } from 'node:fs/promises'
@@ -60,39 +55,8 @@ export type CivitaiCredential = ApiKeyCredential
 
 export type CredentialMap = Record<string, unknown>
 
-function isMultiProvider(
-	json: unknown
-): json is Record<string, unknown> {
-	return (
-		typeof json === 'object' &&
-		json !== null &&
-		!('type' in json)
-	)
-}
-
-function stringField(
-	raw: Record<string, unknown>,
-	...keys: string[]
-): string | null {
-	for (const k of keys) {
-		if (typeof raw[k] === 'string') return raw[k]
-	}
-	return null
-}
-
-function numberField(
-	raw: Record<string, unknown>,
-	...keys: string[]
-): number | null {
-	for (const k of keys) {
-		if (typeof raw[k] === 'number') return raw[k]
-	}
-	return null
-}
-
 /**
- * Normalize a raw anthropic credential object, accepting legacy field aliases.
- * Accepts: access/access_token, refresh/refresh_token, expires/expires_at.
+ * Normalize a raw anthropic credential object.
  */
 export function normalizeAnthropicCredential(
 	raw: Record<string, unknown>
@@ -108,24 +72,17 @@ export function normalizeAnthropicCredential(
 				: undefined
 		return { type: 'token', token: raw.token, expires }
 	}
-	if (type === 'oauth') {
-		const access = stringField(
-			raw,
-			'access',
-			'access_token'
-		)
-		const refresh = stringField(
-			raw,
-			'refresh',
-			'refresh_token'
-		)
-		const expires = numberField(
-			raw,
-			'expires',
-			'expires_at'
-		)
-		if (access && refresh && expires !== null) {
-			return { type: 'oauth', access, refresh, expires }
+	if (
+		type === 'oauth' &&
+		typeof raw.access === 'string' &&
+		typeof raw.refresh === 'string' &&
+		typeof raw.expires === 'number'
+	) {
+		return {
+			type: 'oauth',
+			access: raw.access,
+			refresh: raw.refresh,
+			expires: raw.expires
 		}
 	}
 	return null
@@ -153,7 +110,6 @@ export async function loadCredentialMap(
 
 /**
  * Read the normalized anthropic credential from the credential map.
- * Handles legacy field aliases.
  */
 export async function loadAnthropicCredential(
 	path: string
@@ -161,24 +117,14 @@ export async function loadAnthropicCredential(
 	const map = await loadCredentialMap(path)
 	if (!map) return null
 
-	// Multi-provider format: look under "anthropic" key
-	if (isMultiProvider(map)) {
-		const raw = map.anthropic
-		if (raw && typeof raw === 'object' && 'type' in raw) {
-			return normalizeAnthropicCredential(
-				raw as Record<string, unknown>
-			)
-		}
-		return null
+	const raw = map.anthropic
+	if (raw && typeof raw === 'object' && 'type' in raw) {
+		return normalizeAnthropicCredential(
+			raw as Record<string, unknown>
+		)
 	}
-
-	// Legacy single-provider format
-	return normalizeAnthropicCredential(
-		map as Record<string, unknown>
-	)
+	return null
 }
-
-// ── Generic provider credential ops ──────────────────────────────────────────
 
 /**
  * Load an API-key-only provider credential from the multi-provider map.
@@ -189,7 +135,6 @@ async function loadApiKeyProvider(
 ): Promise<ApiKeyCredential | null> {
 	const map = await loadCredentialMap(path)
 	if (!map) return null
-	if (!isMultiProvider(map)) return null
 
 	const raw = map[providerKey]
 	if (
@@ -305,8 +250,6 @@ async function clearProviderCredential(
 		return false
 	}
 }
-
-// ── Provider-specific exports ────────────────────────────────────────────────
 
 export const loadGroqCredential = (path: string) =>
 	loadApiKeyProvider(path, 'groq')

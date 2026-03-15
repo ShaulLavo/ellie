@@ -39,8 +39,6 @@ describe('Gate 5: API Contract Verification', () => {
 		t.cleanup()
 	})
 
-	// ── listEpisodes ───────────────────────────────────────────────────────
-
 	describe('listEpisodes', () => {
 		it('returns episodes sorted by last_event_at DESC', async () => {
 			// Create episodes with different sessions to force separate episodes
@@ -314,8 +312,6 @@ describe('Gate 5: API Contract Verification', () => {
 			expect(result2.limit).toBeLessThanOrEqual(100)
 		})
 	})
-
-	// ── narrative ──────────────────────────────────────────────────────────
 
 	describe('narrative', () => {
 		it('returns empty events for non-existent anchor', async () => {

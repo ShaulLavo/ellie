@@ -1,7 +1,5 @@
 import * as v from 'valibot'
 
-// ── Chat response schemas ───────────────────────────────────────────────────
-
 export const sessionSchema = v.object({
 	id: v.string(),
 	createdAt: v.number(),
@@ -11,7 +9,7 @@ export const sessionSchema = v.object({
 
 export const sessionListSchema = v.array(sessionSchema)
 
-export const eventRowSchema = v.object({
+const eventRowSchema = v.object({
 	id: v.number(),
 	sessionId: v.string(),
 	seq: v.number(),

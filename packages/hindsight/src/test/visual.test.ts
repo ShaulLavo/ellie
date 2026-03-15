@@ -37,8 +37,6 @@ describe('Phase 4: Visual Semantics', () => {
 		t.cleanup()
 	})
 
-	// ── Ingest validation ──────────────────────────────────────────────
-
 	describe('retainVisual', () => {
 		it('stores a visual description', async () => {
 			const result = await t.hs.retainVisual({
@@ -123,8 +121,6 @@ describe('Phase 4: Visual Semantics', () => {
 		})
 	})
 
-	// ── Stats ─────────────────────────────────────────────────────────
-
 	describe('visualStats', () => {
 		it('returns zero counts for empty bank', () => {
 			const stats = t.hs.visualStats(bankId)
@@ -146,8 +142,6 @@ describe('Phase 4: Visual Semantics', () => {
 			expect(stats.totalVisualMemories).toBe(2)
 		})
 	})
-
-	// ── Find ──────────────────────────────────────────────────────────
 
 	describe('visualFind', () => {
 		it('finds visual memories by query', async () => {
@@ -176,8 +170,6 @@ describe('Phase 4: Visual Semantics', () => {
 			expect(results).toEqual([])
 		})
 	})
-
-	// ── Fusion cap logic ─────────────────────────────────────────────
 
 	describe('recall with visual fusion', () => {
 		it('returns visual memories when includeVisual=true', async () => {
@@ -324,8 +316,6 @@ describe('Phase 4: Visual Semantics', () => {
 		})
 	})
 
-	// ── Access history ───────────────────────────────────────────────
-
 	describe('visual access history', () => {
 		it('records access events when visual memories are returned', async () => {
 			// Retain enough text memories so recall has results
@@ -394,8 +384,6 @@ describe('Phase 4: Visual Semantics', () => {
 		})
 	})
 
-	// ── Deterministic ordering ───────────────────────────────────────
-
 	describe('deterministic ordering', () => {
 		it('produces stable sort under equal scores', async () => {
 			// Retain visual memories with identical descriptions
@@ -426,8 +414,6 @@ describe('Phase 4: Visual Semantics', () => {
 			)
 		})
 	})
-
-	// ── Bank deletion cleanup ────────────────────────────────────────
 
 	describe('bank deletion', () => {
 		it('cleans up visual memories when bank is deleted', async () => {

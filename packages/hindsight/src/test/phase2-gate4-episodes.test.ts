@@ -24,8 +24,6 @@ import {
 import { detectBoundary, EPISODE_GAP_MS } from '../episodes'
 import type { EpisodeRow } from '../schema'
 
-// ── Helper: create a fake episode row ─────────────────────────────────────
-
 function fakeEpisode(
 	overrides: Partial<EpisodeRow> = {}
 ): EpisodeRow {
@@ -46,8 +44,6 @@ function fakeEpisode(
 }
 
 describe('Gate 4: Episode Boundary + Linking', () => {
-	// ── Boundary trigger rules (pure function) ──────────────────────────────
-
 	describe('boundary trigger rules', () => {
 		it('no last episode => initial boundary', () => {
 			const result = detectBoundary(
@@ -174,8 +170,6 @@ describe('Gate 4: Episode Boundary + Linking', () => {
 		})
 	})
 
-	// ── Precedence: phrase > scope > time gap ──────────────────────────────
-
 	describe('boundary precedence', () => {
 		it('phrase boundary takes precedence over scope change', () => {
 			const now = Date.now()
@@ -230,8 +224,6 @@ describe('Gate 4: Episode Boundary + Linking', () => {
 			expect(result.reason).toBe('scope_change')
 		})
 	})
-
-	// ── Exactness: 45 min boundary ─────────────────────────────────────────
 
 	describe('45-minute boundary exactness', () => {
 		it('gap exactly 45 min (45*60*1000 ms) does NOT trigger', () => {
@@ -298,8 +290,6 @@ describe('Gate 4: Episode Boundary + Linking', () => {
 		})
 	})
 
-	// ── No boundary within gap and same scope ──────────────────────────────
-
 	describe('no boundary cases', () => {
 		it('same scope within 45 min => no boundary', () => {
 			const now = Date.now()
@@ -330,8 +320,6 @@ describe('Gate 4: Episode Boundary + Linking', () => {
 			expect(result.reason).toBeNull()
 		})
 	})
-
-	// ── Integration: temporal links ─────────────────────────────────────────
 
 	describe('temporal links on boundary transitions', () => {
 		let t: TestHindsight

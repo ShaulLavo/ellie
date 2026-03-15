@@ -6,6 +6,7 @@ import {
 	BadRequestError,
 	ServiceUnavailableError
 } from './http-errors'
+import { requireLoopback } from './loopback-guard'
 import {
 	ELEVENLABS_MODELS,
 	elevenLabsTTS,
@@ -77,15 +78,19 @@ const ttsConvertResponseSchema = v.object({
 	})
 })
 
-export function createTtsRoutes(
-	blobSink: BlobSink,
-	traceRecorder?: TraceRecorder,
+interface TtsRoutesDeps {
+	blobSink: BlobSink
+	traceRecorder?: TraceRecorder
 	credentialsPath?: string
-) {
+}
+
+export function createTtsRoutes(deps: TtsRoutesDeps) {
+	const { blobSink, traceRecorder, credentialsPath } = deps
 	return new Elysia({
 		prefix: '/api/tts',
 		tags: ['Speech']
 	})
+		.onBeforeHandle(requireLoopback)
 		.get(
 			'/status',
 			async () => {
@@ -219,7 +224,15 @@ export function createTtsRoutes(
 					traceRecorder?.record(scope, 'tts.error', 'tts', {
 						message
 					})
-					throw new BadRequestError(message)
+					if (
+						error instanceof BadRequestError ||
+						error instanceof ServiceUnavailableError
+					) {
+						throw error
+					}
+					throw new ServiceUnavailableError(
+						`TTS synthesis failed: ${message}`
+					)
 				}
 			},
 			{

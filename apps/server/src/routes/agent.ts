@@ -28,7 +28,7 @@ import {
 	type SseState
 } from './common'
 import { errorSchema } from './schemas/common-schemas'
-import { BadRequestError, HttpError } from './http-errors'
+import { requireLoopback } from './loopback-guard'
 
 function createRunSseStream(
 	store: RealtimeStore,
@@ -65,12 +65,19 @@ function createRunSseStream(
 	)
 }
 
-export function createAgentRoutes(
-	store: RealtimeStore,
-	getAgentController: () => Promise<AgentController | null>,
+interface AgentRoutesDeps {
+	store: RealtimeStore
+	getAgentController: () => Promise<AgentController | null>
 	sseState: SseState
-) {
-	return new Elysia({ prefix: '/agent', tags: ['Agent'] })
+}
+
+export function createAgentRoutes(deps: AgentRoutesDeps) {
+	const { store, getAgentController, sseState } = deps
+	return new Elysia({
+		prefix: '/api/agent',
+		tags: ['Agent']
+	})
+		.onBeforeHandle(requireLoopback)
 		.get(
 			'/:sessionId/events/:runId',
 			({ params }) => {
@@ -113,16 +120,7 @@ export function createAgentRoutes(
 					params.sessionId
 				)
 				const message = parseAgentActionBody(body)
-				try {
-					controller.steer(sessionId, message)
-				} catch (err) {
-					if (err instanceof HttpError) throw err
-					throw new BadRequestError(
-						err instanceof Error
-							? err.message
-							: 'Steer failed'
-					)
-				}
+				controller.steer(sessionId, message)
 				return { status: `queued` as const }
 			},
 			{
@@ -146,16 +144,7 @@ export function createAgentRoutes(
 					store,
 					params.sessionId
 				)
-				try {
-					controller.abort(sessionId)
-				} catch (err) {
-					if (err instanceof HttpError) throw err
-					throw new BadRequestError(
-						err instanceof Error
-							? err.message
-							: 'Abort failed'
-					)
-				}
+				controller.abort(sessionId)
 				return { status: `aborted` as const }
 			},
 			{

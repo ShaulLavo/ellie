@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export interface ResolvedStudioPublic {
+interface ResolvedStudioPublic {
 	dir: string
 	source: 'env' | 'found' | 'fallback'
 }

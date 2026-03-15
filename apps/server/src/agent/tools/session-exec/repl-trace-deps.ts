@@ -12,7 +12,7 @@ import type {
 } from '@ellie/trace'
 import type { ReplTraceDeps } from '../../repl/repl-runtime'
 
-export interface ReplTraceDepsResult {
+interface ReplTraceDepsResult {
 	replTraceDeps: ReplTraceDeps | undefined
 	setActiveReplScope:
 		| ((scope: TraceScope | undefined) => void)

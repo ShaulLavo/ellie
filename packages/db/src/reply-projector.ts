@@ -1,13 +1,11 @@
 import type { EventRow } from './schema'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export interface NormalizedArtifact {
 	kind: 'media' | 'audio' | 'file'
 	origin: 'tool_upload' | 'tts' | 'llm_directive'
 	uploadId: string
 	url?: string
-	mime?: string
+	mimeType?: string
 }
 
 export interface NormalizedReply {
@@ -22,8 +20,6 @@ export interface NormalizedReply {
 	createdAt: number
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 function parsePayload(raw: string | unknown): unknown {
 	if (typeof raw === 'string') {
 		try {
@@ -34,8 +30,6 @@ function parsePayload(raw: string | unknown): unknown {
 	}
 	return raw
 }
-
-// ── Projector ────────────────────────────────────────────────────────────────
 
 /**
  * Walk event rows and produce normalized reply data.
@@ -101,7 +95,7 @@ export function projectReplies(
 				origin?: string
 				uploadId?: string
 				url?: string
-				mime?: string
+				mimeType?: string
 			}
 
 			const targetId = payload.assistantRowId
@@ -116,7 +110,7 @@ export function projectReplies(
 					payload.origin as NormalizedArtifact['origin'],
 				uploadId: payload.uploadId ?? '',
 				url: payload.url,
-				mime: payload.mime
+				mimeType: payload.mimeType
 			})
 		}
 	}

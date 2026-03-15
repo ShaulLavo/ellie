@@ -18,8 +18,6 @@ import type {
 } from './agent'
 import type { ContentPart } from './chat'
 
-// ── Payload map ─────────────────────────────────────────────────────────────
-
 export interface EventPayloadMap {
 	// --- Core messages ---
 	user_message: UserMessage
@@ -56,7 +54,7 @@ export interface EventPayloadMap {
 		origin: 'tool_upload' | 'tts' | 'llm_directive'
 		uploadId: string
 		url?: string
-		mime?: string
+		mimeType?: string
 		size?: number
 		width?: number
 		height?: number
@@ -219,8 +217,6 @@ export interface EventPayloadMap {
 		updatedAt: number
 	}
 }
-
-// ── Derived helpers ─────────────────────────────────────────────────────────
 
 /** Union of all valid event type strings. */
 export type EventType = keyof EventPayloadMap

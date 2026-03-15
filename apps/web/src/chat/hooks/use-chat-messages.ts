@@ -34,7 +34,7 @@ export function useChatMessages(sessionId: string) {
 		queryKey: chatMessagesKey(sessionId),
 		queryFn: async () => {
 			const fetchEpoch = epochRef.current
-			const { data, error } = await eden
+			const { data, error } = await eden.api
 				.chat({ sessionId })
 				.events.get()
 			if (error) throw error

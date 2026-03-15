@@ -16,8 +16,6 @@ import {
 } from '../../../lib/tts-preferences'
 import * as v from 'valibot'
 
-// ── Schema ───────────────────────────────────────────────────────────────
-
 const setDefaultVoiceParams = v.object({
 	voiceId: v.pipe(
 		v.string(),
@@ -68,8 +66,6 @@ const setDefaultVoiceParams = v.object({
 type SetDefaultVoiceParams = v.InferOutput<
 	typeof setDefaultVoiceParams
 >
-
-// ── Tool factory ─────────────────────────────────────────────────────────
 
 export function createSetDefaultVoiceTool(
 	dataDir: string

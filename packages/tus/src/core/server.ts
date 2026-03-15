@@ -32,8 +32,6 @@ import { Uid } from './uid'
 import { extractFileId, generateUploadUrl } from './url'
 import { validateHeader } from './validator'
 
-// ── Types ───────────────────────────────────────────────────────────────────
-
 export type TusServerOptions = {
 	path: string
 	datastore: DataStore
@@ -63,8 +61,6 @@ export type TusServerOptions = {
 		uploadId: string
 	) => Promise<void>
 }
-
-// ── TusServer ───────────────────────────────────────────────────────────────
 
 export class TusServer {
 	private store: DataStore
@@ -239,8 +235,6 @@ export class TusServer {
 		}
 		return this.store.deleteExpired()
 	}
-
-	// ── Method Handlers ───────────────────────────────────────────────────
 
 	private handleOptions(headers: Headers): Response {
 		const maxSize = this.opts.maxSize
@@ -630,8 +624,6 @@ export class TusServer {
 			headers
 		})
 	}
-
-	// ── Internal Helpers ────────────────────────────────────────────────────
 
 	private isUploadExpired(upload: Upload): boolean {
 		if (

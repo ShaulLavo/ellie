@@ -73,8 +73,6 @@ function insertTestMemory(
 }
 
 describe('Gate 5: Determinism / Reproducibility', () => {
-	// ── Pure function determinism ──────────────────────────────────────────────
-
 	describe('pure function determinism', () => {
 		it('normalizePath is deterministic across 100 runs', () => {
 			const inputs = [
@@ -142,8 +140,8 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 				},
 				{
 					mem: {
-						profile: null as string | null,
-						project: null as string | null
+						profile: 'default',
+						project: 'default'
 					},
 					filter: { profile: 'a', project: 'p1' }
 				}
@@ -205,8 +203,6 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			}
 		})
 	})
-
-	// ── packContext determinism ────────────────────────────────────────────────
 
 	describe('packContext determinism', () => {
 		function makeDataset(): PackCandidate[] {
@@ -278,8 +274,6 @@ describe('Gate 5: Determinism / Reproducibility', () => {
 			}
 		})
 	})
-
-	// ── DB-dependent determinism ──────────────────────────────────────────────
 
 	describe('DB-dependent determinism', () => {
 		let t: TestHindsight

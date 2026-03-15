@@ -26,8 +26,6 @@ import {
 } from './setup-fixtures'
 import { mockEmbed } from './setup-mocks'
 
-// ── Test Hindsight factory ──────────────────────────────────────────────────
-
 export interface TestHindsight {
 	hs: Hindsight
 	adapter: MockAdapter
@@ -82,8 +80,6 @@ export function createTestHindsight(
 
 	return { hs, adapter, dbPath, cleanup }
 }
-
-// ── Real LLM test factory ───────────────────────────────────────────────────
 
 export interface RealTestHindsight {
 	hs: Hindsight

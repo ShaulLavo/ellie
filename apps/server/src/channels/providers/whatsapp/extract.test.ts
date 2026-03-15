@@ -9,8 +9,6 @@ import {
 	formatLocationText
 } from './extract'
 
-// ── extractText ──────────────────────────────────────────────────────
-
 describe('extractText', () => {
 	test('returns null for null message', () => {
 		expect(extractText(null)).toBeNull()
@@ -128,8 +126,6 @@ describe('extractText', () => {
 	})
 })
 
-// ── extractMediaPlaceholder ──────────────────────────────────────────
-
 describe('extractMediaPlaceholder', () => {
 	test('returns undefined for null', () => {
 		expect(extractMediaPlaceholder(null)).toBeUndefined()
@@ -185,8 +181,6 @@ describe('extractMediaPlaceholder', () => {
 	})
 })
 
-// ── extractContextInfo ───────────────────────────────────────────────
-
 describe('extractContextInfo', () => {
 	test('returns undefined for null', () => {
 		expect(extractContextInfo(null)).toBeUndefined()
@@ -231,8 +225,6 @@ describe('extractContextInfo', () => {
 	})
 })
 
-// ── extractMentionedJids ─────────────────────────────────────────────
-
 describe('extractMentionedJids (extract.ts)', () => {
 	test('returns undefined when no context info', () => {
 		expect(
@@ -258,8 +250,6 @@ describe('extractMentionedJids (extract.ts)', () => {
 		])
 	})
 })
-
-// ── describeReplyContext ─────────────────────────────────────────────
 
 describe('describeReplyContext', () => {
 	test('returns null when not a reply', () => {
@@ -349,8 +339,6 @@ describe('describeReplyContext', () => {
 	})
 })
 
-// ── extractLocationData ──────────────────────────────────────────────
-
 describe('extractLocationData', () => {
 	test('returns null for null message', () => {
 		expect(extractLocationData(null)).toBeNull()
@@ -416,8 +404,6 @@ describe('extractLocationData', () => {
 		expect(extractLocationData(msg)).toBeNull()
 	})
 })
-
-// ── formatLocationText ───────────────────────────────────────────────
 
 describe('formatLocationText', () => {
 	test('returns null for null', () => {

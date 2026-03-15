@@ -38,8 +38,6 @@ describeWithLLM(
 			t.cleanup()
 		})
 
-		// ── retain ────────────────────────────────────────────────────────────────
-
 		it('extracts at least one fact from a paragraph', async () => {
 			const result = await t.hs.retain(
 				bankId,
@@ -86,8 +84,6 @@ describeWithLLM(
 			)
 		}, 120_000)
 
-		// ── recall ────────────────────────────────────────────────────────────────
-
 		it('recalls seeded facts by query', async () => {
 			// First seed some facts directly
 			await t.hs.retain(bankId, 'test', {
@@ -115,8 +111,6 @@ describeWithLLM(
 				1
 			)
 		}, 30_000)
-
-		// ── reflect ───────────────────────────────────────────────────────────────
 
 		it('produces a non-empty answer from reflect', async () => {
 			// Seed facts
@@ -159,8 +153,6 @@ describeWithLLM(
 			expect(result.answer.trim().length).toBeGreaterThan(0)
 		}, 120_000)
 
-		// ── consolidate ───────────────────────────────────────────────────────────
-
 		it('consolidation completes without throwing', async () => {
 			// Seed some raw facts to consolidate
 			await t.hs.retain(bankId, 'test', {
@@ -184,8 +176,6 @@ describeWithLLM(
 			)
 			expect(typeof result.skipped).toBe('number')
 		}, 120_000)
-
-		// ── retain with real extraction (no pre-seeded facts) ─────────────────────
 
 		it('full pipeline: retain → recall → reflect', async () => {
 			// Step 1: Retain real content

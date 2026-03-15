@@ -1,7 +1,7 @@
 /**
  * SSRF protection — hostname and IP validation.
  *
- * Adapted from OpenClaw's ssrf.ts. Covers:
+ * Covers:
  *   - Blocked hostnames (localhost, .local, .internal, metadata endpoints)
  *   - Private/internal IPv4 ranges (10.x, 127.x, 169.254.x, 172.16-31.x, 192.168.x, 100.64-127.x)
  *   - IPv6 loopback, link-local, unique-local, site-local
@@ -9,13 +9,11 @@
  *   - Hostname allowlist for opt-in exceptions
  *   - DNS resolution check (all resolved IPs must be public)
  *
- * Skipped from OpenClaw: undici DNS pinning (Bun's fetch doesn't support undici dispatchers).
+ * Note: undici DNS pinning is not available (Bun's fetch doesn't support undici dispatchers).
  * Pre-flight DNS validation still catches the vast majority of SSRF.
  */
 
 import { lookup as dnsLookup } from 'node:dns/promises'
-
-// ── Error ───────────────────────────────────────────────────────────
 
 export class SsrFBlockedError extends Error {
 	constructor(message: string) {
@@ -24,15 +22,11 @@ export class SsrFBlockedError extends Error {
 	}
 }
 
-// ── Policy ──────────────────────────────────────────────────────────
-
 export type SsrFPolicy = {
 	allowPrivateNetwork?: boolean
 	allowedHostnames?: string[]
 	hostnameAllowlist?: string[]
 }
-
-// ── Hostname normalization (inlined from hostname.ts) ───────────────
 
 export function normalizeHostname(
 	hostname: string
@@ -49,8 +43,6 @@ export function normalizeHostname(
 	}
 	return normalized
 }
-
-// ── Blocked hostnames ───────────────────────────────────────────────
 
 const BLOCKED_HOSTNAMES = new Set([
 	'localhost',
@@ -69,8 +61,6 @@ export function isBlockedHostname(
 		normalized.endsWith('.internal')
 	)
 }
-
-// ── Hostname allowlist ──────────────────────────────────────────────
 
 function normalizeHostnameAllowlist(
 	values?: string[]
@@ -109,8 +99,6 @@ function matchesHostnameAllowlist(
 	)
 }
 
-// ── IPv4 parsing & private range check ──────────────────────────────
-
 function parseIpv4(address: string): number[] | null {
 	const parts = address.split('.')
 	if (parts.length !== 4) return null
@@ -135,8 +123,6 @@ function isPrivateIpv4(parts: number[]): boolean {
 		return true // CGN
 	return false
 }
-
-// ── IPv6 parsing ────────────────────────────────────────────────────
 
 function stripIpv6ZoneId(address: string): string {
 	const index = address.indexOf('%')
@@ -201,8 +187,6 @@ function parseIpv6Hextets(
 	}
 	return hextets
 }
-
-// ── IPv6-embedded IPv4 extraction ───────────────────────────────────
 
 function decodeIpv4FromHextets(
 	high: number,
@@ -280,8 +264,6 @@ function extractIpv4FromEmbeddedIpv6(
 	return null
 }
 
-// ── Public IP check ─────────────────────────────────────────────────
-
 export function isPrivateIpAddress(
 	address: string
 ): boolean {
@@ -326,8 +308,6 @@ export function isPrivateIpAddress(
 	if (!ipv4) return false
 	return isPrivateIpv4(ipv4)
 }
-
-// ── Hostname validation with DNS resolution ─────────────────────────
 
 export type LookupFn = typeof dnsLookup
 

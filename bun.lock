@@ -300,6 +300,7 @@
       "name": "@ellie/schemas",
       "version": "0.1.0",
       "dependencies": {
+        "@ellie/trace": "workspace:*",
         "valibot": "^1.2.0",
       },
       "devDependencies": {

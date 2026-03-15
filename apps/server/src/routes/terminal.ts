@@ -14,7 +14,8 @@
  *   server → client: raw terminal output strings
  */
 
-import { Elysia, t } from 'elysia'
+import { Elysia } from 'elysia'
+import * as v from 'valibot'
 import type { Subprocess } from 'bun'
 import { resolve } from 'node:path'
 
@@ -71,21 +72,21 @@ export function createTerminalRoutes(paths?: {
 		paths?.cli ?? resolve(CLI_DIR, 'bin/ellie')
 
 	return new Elysia({ tags: ['Terminal'] }).ws(
-		'/ws/terminal',
+		'/api/ws/terminal',
 		{
-			body: t.Union([
-				t.Object({
-					type: t.Literal('input'),
-					data: t.String()
+			body: v.union([
+				v.object({
+					type: v.literal('input'),
+					data: v.string()
 				}),
-				t.Object({
-					type: t.Literal('resize'),
-					cols: t.Number(),
-					rows: t.Number()
+				v.object({
+					type: v.literal('resize'),
+					cols: v.number(),
+					rows: v.number()
 				})
 			]),
 
-			response: t.String(),
+			response: v.string(),
 
 			async open(ws) {
 				await devBuildReady

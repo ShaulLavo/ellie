@@ -22,8 +22,6 @@ import {
 	writeFileSync
 } from 'fs'
 
-// ── Mock TTS synthesis so no real API calls are made ────────────────────
-
 const mockSynthesize = mock(() => {
 	const tmpDir = tmpdir()
 	const fakeAudioPath = join(
@@ -42,8 +40,6 @@ const mockSynthesize = mock(() => {
 mock.module('../../lib/tts', () => ({
 	elevenLabsTTS: mockSynthesize
 }))
-
-// ── Helpers ─────────────────────────────────────────────────────────────
 
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'e2e-tts-test-'))
@@ -88,8 +84,6 @@ function makeAssistantPayload(
 		streaming: false
 	}
 }
-
-// ── E2E Tests ───────────────────────────────────────────────────────────
 
 describe('E2E: TTS pipeline through delivery registry', () => {
 	let dir: string
@@ -467,7 +461,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 				kind: 'media',
 				origin: 'tool_upload',
 				uploadId,
-				mime: 'audio/ogg; codecs=opus'
+				mimeType: 'audio/ogg; codecs=opus'
 			},
 			runId
 		)
@@ -535,7 +529,7 @@ describe('E2E: TTS pipeline through delivery registry', () => {
 				kind: 'media',
 				origin: 'tool_upload',
 				uploadId,
-				mime: 'image/png'
+				mimeType: 'image/png'
 			},
 			runId
 		)

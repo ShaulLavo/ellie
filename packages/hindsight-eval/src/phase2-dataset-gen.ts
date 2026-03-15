@@ -17,8 +17,6 @@ import type {
 	TemporalNarrativeQuestion
 } from './phase2-types'
 
-// ── Deterministic PRNG ──────────────────────────────────────────────────
-
 /**
  * Simple seeded PRNG (Mulberry32) for deterministic dataset generation.
  */
@@ -31,8 +29,6 @@ function mulberry32(seed: number): () => number {
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 	}
 }
-
-// ── Rolling Ingest Dataset ──────────────────────────────────────────────
 
 const ENTITIES = [
 	'Alice',
@@ -271,8 +267,6 @@ export function generateRollingIngestDataset(
 	return events
 }
 
-// ── Temporal Narrative QA Dataset ────────────────────────────────────────
-
 /**
  * Generate temporal narrative QA questions.
  *
@@ -370,8 +364,6 @@ export function generateTemporalNarrativeDataset(
 
 	return questions
 }
-
-// ── Serialization ───────────────────────────────────────────────────────
 
 /**
  * Serialize a dataset to JSONL format.

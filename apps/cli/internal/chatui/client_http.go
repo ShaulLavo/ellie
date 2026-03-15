@@ -51,9 +51,9 @@ func (c *HTTPClient) GetStatus(ctx context.Context) (*StatusResponse, error) {
 	return &out, nil
 }
 
-// ListSessions fetches GET /chat/sessions.
+// ListSessions fetches GET /api/chat/sessions.
 func (c *HTTPClient) ListSessions(ctx context.Context) ([]SessionEntry, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/chat/sessions", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/chat/sessions", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create sessions request: %w", err)
 	}
@@ -72,7 +72,7 @@ func (c *HTTPClient) ListSessions(ctx context.Context) ([]SessionEntry, error) {
 	return out, nil
 }
 
-// GetCurrentSession fetches GET /chat/sessions/current (resolves to the current session entry).
+// GetCurrentSession fetches GET /api/chat/sessions/current (resolves to the current session entry).
 func (c *HTTPClient) GetCurrentSession(ctx context.Context) (*SessionEntry, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/chat/sessions/current", nil)
 	if err != nil {
@@ -103,7 +103,7 @@ func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string,
 		payload["attachments"] = attachments
 	}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/"+sessionID+"/messages", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat/"+sessionID+"/messages", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create send request: %w", err)
 	}
@@ -227,9 +227,9 @@ func (c *HTTPClient) DownloadMedia(ctx context.Context, uploadID string) ([]byte
 	return data, nil
 }
 
-// ClearSession clears the current session via POST /chat/:sessionId/clear.
+// ClearSession clears the current session via POST /api/chat/:sessionId/clear.
 func (c *HTTPClient) ClearSession(ctx context.Context, sessionID string) error {
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/"+sessionID+"/clear", nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat/"+sessionID+"/clear", nil)
 	if err != nil {
 		return fmt.Errorf("create clear request: %w", err)
 	}

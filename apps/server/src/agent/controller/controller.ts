@@ -46,38 +46,38 @@ import {
 } from './stream-persistence'
 import { handleControllerError } from './error-handler'
 
-// ── Config ───────────────────────────────────────────────────────────────────
+const EMPTY_USAGE = {
+	input: 0,
+	output: 0,
+	cacheRead: 0,
+	cacheWrite: 0,
+	totalTokens: 0,
+	cost: {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		total: 0
+	}
+} as const
 
-export interface AgentControllerOptions {
-	/** TanStack AI adapter for LLM calls */
+interface AgentControllerOptions {
 	adapter: AnyTextAdapter
-	/** Workspace directory path for system prompt assembly */
 	workspaceDir: string
-	/** Data directory for session artifacts and snapshots */
 	dataDir: string
-	/** Additional AgentOptions passed to the Agent */
 	agentOptions?: Partial<AgentOptions>
-	/** Memory orchestrator for recall/retain integration */
 	memory?: MemoryOrchestrator
-	/** Trace recorder for structured trace events */
 	traceRecorder?: TraceRecorder
-	/** Blob sink for overflow storage */
 	blobSink?: BlobSink
-	/** Event store for tool result caching */
 	eventStore?: EventStore
-	/** Path to .credentials.json for API key loading */
 	credentialsPath?: string
 }
-
-// ── Queued cross-session message ─────────────────────────────────────────────
 
 interface QueuedMessage {
 	sessionId: string
 	text: string
 	userMessageRowId?: number
 }
-
-// ── Controller ───────────────────────────────────────────────────────────────
 
 export class AgentController {
 	private agent: Agent
@@ -167,15 +167,11 @@ export class AgentController {
 		})
 	}
 
-	// ── Adapter hot-swap ────────────────────────────────────────────────────
-
 	/** Swap the adapter (e.g. after OAuth token refresh) without destroying the agent. */
 	updateAdapter(adapter: AnyTextAdapter): void {
 		this.agent.adapter = adapter
 		this.options = { ...this.options, adapter }
 	}
-
-	// ── Lock ─────────────────────────────────────────────────────────────────
 
 	/** Hand-rolled async mutex: each caller chains onto the previous promise,
 	 *  serialising execution without a queue data structure. */
@@ -198,11 +194,9 @@ export class AgentController {
 		}
 	}
 
-	// ── Session binding ─────────────────────────────────────────────────────
-
 	private bindToSession(sessionId: string): void {
 		this.store.ensureSession(sessionId)
-		const history = this.loadHistoryForAgent(sessionId)
+		const history = this.loadHistory(sessionId)
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
 		this.boundSessionId = sessionId
@@ -214,7 +208,7 @@ export class AgentController {
 			return this.agent.state.messages.length > 0
 		}
 		if (this.agent.state.messages.length === 0) {
-			const history = this.loadHistoryForAgent(sessionId)
+			const history = this.loadHistory(sessionId)
 			if (history.length > 0) {
 				this.agent.replaceMessages(history)
 				return true
@@ -222,8 +216,6 @@ export class AgentController {
 		}
 		return false
 	}
-
-	// ── Message routing (core) ───────────────────────────────────────────────
 
 	async handleMessage(
 		sessionId: string,
@@ -326,7 +318,7 @@ export class AgentController {
 			// is called. Reload history so the agent has the full
 			// content parts (including image data from attachments).
 			{
-				const history = this.loadHistoryForAgent(sessionId)
+				const history = this.loadHistory(sessionId)
 				this.agent.replaceMessages(history)
 			}
 			this.agent.continue().catch(err => {
@@ -343,8 +335,6 @@ export class AgentController {
 
 		return { runId, routed, activeRunId, traceId }
 	}
-
-	// ── Control passthrough ──────────────────────────────────────────────────
 
 	steer(
 		sessionId: string,
@@ -429,8 +419,6 @@ export class AgentController {
 		return { traceId }
 	}
 
-	// ── Queries ──────────────────────────────────────────────────────────────
-
 	loadHistory(sessionId: string): AgentMessage[] {
 		return this.store.listAgentMessages(sessionId)
 	}
@@ -438,16 +426,6 @@ export class AgentController {
 	hasSession(sessionId: string): boolean {
 		return this.store.hasSession(sessionId)
 	}
-
-	// ── Internal: source note injection ──────────────────────────────────────
-
-	private loadHistoryForAgent(
-		sessionId: string
-	): AgentMessage[] {
-		return this.loadHistory(sessionId)
-	}
-
-	// ── Internal: dependency bundles for extracted modules ────────────────────
 
 	private get memoryDeps(): MemoryDeps {
 		if (this.#memoryDeps === null) {
@@ -481,8 +459,6 @@ export class AgentController {
 		}
 	}
 
-	// ── Internal: trace helper ──────────────────────────────────────────────
-
 	private trace(
 		type: string,
 		payload: Record<string, unknown>
@@ -501,8 +477,6 @@ export class AgentController {
 			console.warn('[controller] trace failed:', err)
 		}
 	}
-
-	// ── Internal: event persistence ──────────────────────────────────────────
 
 	private handleEvent(event: AgentEvent): void {
 		const sessionId = this.boundSessionId
@@ -627,8 +601,6 @@ export class AgentController {
 		})
 	}
 
-	// ── Internal: cross-session queue processing ─────────────────────────────
-
 	private drainQueuedFollowUps(sessionId: string): void {
 		this.withLock(async () => {
 			if (
@@ -721,8 +693,6 @@ export class AgentController {
 		})
 	}
 
-	// ── Internal: error events ───────────────────────────────────────────────
-
 	private writeErrorEvent(
 		sessionId: string,
 		runId: string,
@@ -752,20 +722,7 @@ export class AgentController {
 						],
 						provider: 'system',
 						model: 'system',
-						usage: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							totalTokens: 0,
-							cost: {
-								input: 0,
-								output: 0,
-								cacheRead: 0,
-								cacheWrite: 0,
-								total: 0
-							}
-						},
+						usage: EMPTY_USAGE,
 						stopReason: 'error' as const,
 						errorMessage,
 						timestamp: Date.now()

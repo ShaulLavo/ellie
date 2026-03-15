@@ -86,8 +86,6 @@ describe('ChannelManager', () => {
 		rmSync(dir, { recursive: true, force: true })
 	})
 
-	// ── Provider registry ────────────────────────────────────
-
 	test('register + getProvider', () => {
 		const provider = createMockProvider(
 			'test',
@@ -109,8 +107,6 @@ describe('ChannelManager', () => {
 		expect(list).toHaveLength(2)
 		expect(list.map(p => p.id).sort()).toEqual(['a', 'b'])
 	})
-
-	// ── Settings persistence ────────────────────────────────
 
 	test('saveSettings + loadSettings round-trip', async () => {
 		const settings = {
@@ -161,8 +157,6 @@ describe('ChannelManager', () => {
 		).toBeNull()
 	})
 
-	// ── Boot ─────────────────────────────────────────────────
-
 	test('bootAll calls provider.boot when settings exist', async () => {
 		const provider = createMockProvider('test', 'Test')
 		manager.register(provider)
@@ -198,8 +192,6 @@ describe('ChannelManager', () => {
 		await manager.bootAll()
 	})
 
-	// ── Multiple providers ───────────────────────────────────
-
 	test('multiple providers both get booted', async () => {
 		const p1 = createMockProvider('wa', 'WhatsApp')
 		const p2 = createMockProvider('tg', 'Telegram')
@@ -214,8 +206,6 @@ describe('ChannelManager', () => {
 		expect(p1.bootCalls).toHaveLength(1)
 		expect(p2.bootCalls).toHaveLength(1)
 	})
-
-	// ── Ingestion ────────────────────────────────────────────
 
 	test('ingestMessage creates user_message with source field', async () => {
 		const handleMessageCalls: Array<{

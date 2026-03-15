@@ -93,8 +93,6 @@ export interface ChannelProvider {
 	 */
 	waitForReady?(timeoutMs?: number): Promise<void>
 
-	// ── Live-text streaming (optional) ───────────────────────────────
-
 	/** Send the first live text message. Returns an opaque handle for subsequent edits. */
 	beginLiveText?(
 		target: ChannelDeliveryTarget,

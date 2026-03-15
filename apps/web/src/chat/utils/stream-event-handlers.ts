@@ -1,7 +1,10 @@
 import type { EventType } from '@ellie/schemas/events'
 import type { StoredChatMessage } from '@/chat/types'
 import type { EventRow } from '@/lib/stream'
-import { eventToStored } from '../event-transforms'
+import {
+	eventToStored,
+	parsePayload
+} from '../event-transforms'
 
 /** Event types that produce renderable chat messages. */
 export const RENDERABLE_TYPES: EventType[] = [
@@ -20,17 +23,7 @@ export function isStreamingAssistantEvent(event: {
 	payload: unknown
 }): boolean {
 	if (event.type !== 'assistant_message') return false
-	try {
-		const parsed =
-			typeof event.payload === 'string'
-				? JSON.parse(event.payload)
-				: event.payload
-		return (
-			(parsed as Record<string, unknown>).streaming === true
-		)
-	} catch {
-		return false
-	}
+	return parsePayload(event.payload).streaming === true
 }
 
 export function isRenderableMessage(

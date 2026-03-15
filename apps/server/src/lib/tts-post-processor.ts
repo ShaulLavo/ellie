@@ -38,7 +38,7 @@ import {
  * Example: "voiceId=pMsXgVXv3BLzUgSXRplE stability=0.4 speed=1.1"
  * Returns: { voiceId: "pMsXgVXv3BLzUgSXRplE", voiceSettings: { stability: 0.4, speed: 1.1 } }
  */
-export function parseTtsDirectiveParams(
+function parseTtsDirectiveParams(
 	paramStr: string | undefined
 ): ElevenLabsTtsOverrides {
 	if (!paramStr?.trim()) return {}
@@ -99,7 +99,7 @@ export function parseTtsDirectiveParams(
 	return overrides
 }
 
-export interface TtsPostProcessorOpts {
+interface TtsPostProcessorOpts {
 	store: RealtimeStore
 	blobSink: BlobSink
 	/** Optional pre-resolved TTS config */
@@ -343,7 +343,7 @@ export class TtsPostProcessor {
 				origin: 'tts' as const,
 				uploadId: blobRef.uploadId,
 				url: blobRef.url,
-				mime: result.mime,
+				mimeType: result.mime,
 				size: result.audio.length,
 				synthesizedText: ttsText
 			},

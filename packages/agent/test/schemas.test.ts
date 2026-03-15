@@ -11,9 +11,7 @@ import type {
 	AgentEvent
 } from '../src/types'
 
-// ============================================================================
 // Message round-trip tests
-// ============================================================================
 
 describe('agentMessageSchema', () => {
 	test('round-trips UserMessage with text', () => {
@@ -224,9 +222,7 @@ describe('agentMessageSchema', () => {
 	})
 })
 
-// ============================================================================
 // Agent event round-trip tests
-// ============================================================================
 
 describe('agentEventSchema', () => {
 	test('round-trips agent_start', () => {

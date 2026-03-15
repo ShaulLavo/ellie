@@ -15,22 +15,16 @@ import { chat, streamToText } from './traced-chat'
 import type { AnyTextAdapter } from '@tanstack/ai'
 import { generateFallbackGist } from './context-pack'
 
-// ── Constants ───────────────────────────────────────────────────────────────
-
 /** Content length threshold for eager vs async gist generation. */
 export const EAGER_GIST_THRESHOLD = 2000
 
 /** Maximum gist length in characters. */
 export const MAX_GIST_LENGTH = 280
 
-// ── Types ───────────────────────────────────────────────────────────────────
-
 export interface GistResult {
 	gist: string
 	mode: 'eager' | 'async' | 'fallback'
 }
-
-// ── LLM-based gist generation ───────────────────────────────────────────────
 
 const GIST_SYSTEM_PROMPT = `You are a memory compression engine. Given a piece of stored knowledge, produce a gist that:
 - Is at most 280 characters

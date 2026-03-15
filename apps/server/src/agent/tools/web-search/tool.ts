@@ -1,7 +1,6 @@
 /**
  * Web search tool — Brave Search API.
  *
- * Adapted from OpenClaw's web-search.ts (Brave provider).
  * Supports region-specific / localized search, freshness filtering,
  * and in-memory caching with configurable TTL.
  */
@@ -17,8 +16,6 @@ import {
 } from './schema'
 import { wrapExternalContent } from '../web-fetch/common'
 
-// ── Constants ────────────────────────────────────────────────────────────
-
 const BRAVE_SEARCH_ENDPOINT =
 	'https://api.search.brave.com/res/v1/web/search'
 
@@ -28,8 +25,6 @@ const DEFAULT_TIMEOUT_MS = 30_000
 
 const CACHE_TTL_MS = 15 * 60_000 // 15 minutes
 const CACHE_MAX_ENTRIES = 100
-
-// ── Freshness normalization ──────────────────────────────────────────────
 
 const BRAVE_FRESHNESS_SHORTCUTS = new Set([
 	'pd',
@@ -81,8 +76,6 @@ function normalizeFreshness(
 	return `${start}to${end}`
 }
 
-// ── In-memory cache ──────────────────────────────────────────────────────
-
 type CacheEntry = {
 	value: Record<string, unknown>
 	expiresAt: number
@@ -120,8 +113,6 @@ function writeCache(
 	})
 }
 
-// ── Brave API types ──────────────────────────────────────────────────────
-
 type BraveSearchResult = {
 	title?: string
 	url?: string
@@ -134,8 +125,6 @@ type BraveSearchResponse = {
 		results?: BraveSearchResult[]
 	}
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────
 
 function resolveSiteName(
 	url: string | undefined
@@ -164,8 +153,6 @@ function errorResult(msg: string): AgentToolResult {
 		details: { success: false, error: msg }
 	}
 }
-
-// ── Core search ──────────────────────────────────────────────────────────
 
 async function runBraveSearch(params: {
 	query: string
@@ -252,8 +239,6 @@ async function runBraveSearch(params: {
 	writeCache(cacheKey, payload)
 	return payload
 }
-
-// ── Tool factory ─────────────────────────────────────────────────────────
 
 /**
  * Create the web search tool.
@@ -374,10 +359,3 @@ export function createWebSearchTool(
 		}
 	}
 }
-
-export const __testing = {
-	normalizeFreshness,
-	isValidIsoDate,
-	resolveCount,
-	normalizeCacheKey
-} as const

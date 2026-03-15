@@ -30,8 +30,6 @@ import type {
 	MemoryUnitDetail
 } from '../types'
 
-// ── Test server setup ────────────────────────────────────────────────────
-
 let server: ReturnType<typeof Bun.serve>
 let rpc: ReturnType<typeof createHindsightClient>
 let baseUrl: string
@@ -296,14 +294,10 @@ afterAll(() => {
 	t.cleanup()
 })
 
-// ── Unique bank name helper ──────────────────────────────────────────────
-
 let counter = 0
 function uniqueName(prefix: string): string {
 	return `${prefix}-${++counter}-${Date.now()}`
 }
-
-// ── Typed RPC helpers ────────────────────────────────────────────────────
 
 async function createBank(
 	name: string,
@@ -346,8 +340,6 @@ async function reflect(
 ) {
 	return rpc.reflect({ bankId, input: { query, options } })
 }
-
-// ── Bank CRUD ────────────────────────────────────────────────────────────
 
 describe('Hindsight HTTP Server Integration', () => {
 	describe('Bank CRUD', () => {
@@ -481,8 +473,6 @@ describe('Hindsight HTTP Server Integration', () => {
 		})
 	})
 
-	// ── Retain ───────────────────────────────────────────────────────────
-
 	describe('Retain', () => {
 		let bankId: string
 
@@ -571,8 +561,6 @@ describe('Hindsight HTTP Server Integration', () => {
 		})
 	})
 
-	// ── Recall ───────────────────────────────────────────────────────────
-
 	describe('Recall', () => {
 		let bankId: string
 
@@ -656,8 +644,6 @@ describe('Hindsight HTTP Server Integration', () => {
 		})
 	})
 
-	// ── Reflect ──────────────────────────────────────────────────────────
-
 	describe('Reflect', () => {
 		let bankId: string
 
@@ -707,8 +693,6 @@ describe('Hindsight HTTP Server Integration', () => {
 			expect(typeof result.answer).toBe('string')
 		})
 	})
-
-	// ── Memory Units ─────────────────────────────────────────────────────
 
 	describe('Memory Units', () => {
 		let bankId: string
@@ -795,8 +779,6 @@ describe('Hindsight HTTP Server Integration', () => {
 		})
 	})
 
-	// ── Entities ─────────────────────────────────────────────────────────
-
 	describe('Entities', () => {
 		let bankId: string
 
@@ -853,8 +835,6 @@ describe('Hindsight HTTP Server Integration', () => {
 		})
 	})
 
-	// ── Bank Stats ───────────────────────────────────────────────────────
-
 	describe('Bank Stats', () => {
 		it('returns stats via GET /banks/:bankId/stats', async () => {
 			const bank = (await createBank(
@@ -871,8 +851,6 @@ describe('Hindsight HTTP Server Integration', () => {
 		})
 	})
 
-	// ── Server Lifecycle ─────────────────────────────────────────────────
-
 	describe('Server Lifecycle', () => {
 		it('server starts and serves requests', async () => {
 			const res = await fetch(`${baseUrl}/banks`, {
@@ -881,8 +859,6 @@ describe('Hindsight HTTP Server Integration', () => {
 			expect(res.ok).toBe(true)
 		})
 	})
-
-	// ── Error Handling ───────────────────────────────────────────────────
 
 	describe('Error Handling', () => {
 		it('returns 404 for unknown routes', async () => {
@@ -957,8 +933,6 @@ describe('Hindsight HTTP Server Integration', () => {
 			expect(res.status).toBe(400)
 		})
 	})
-
-	// ── Full Workflow ────────────────────────────────────────────────────
 
 	describe('Full Workflow', () => {
 		it('create bank → retain (×3 + batch) → recall → reflect', async () => {

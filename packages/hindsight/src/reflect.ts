@@ -109,8 +109,6 @@ export async function reflect(
 		}
 	}
 
-	// ── Tier 1: search_mental_models ──
-
 	const searchMentalModelsDef = toolDefinition({
 		name: 'search_mental_models',
 		description:
@@ -150,8 +148,6 @@ export async function reflect(
 			)
 		}
 	)
-
-	// ── Tier 2: search_observations ──
 
 	const searchObservationsDef = toolDefinition({
 		name: 'search_observations',
@@ -239,8 +235,6 @@ export async function reflect(
 			)
 		}
 	)
-
-	// ── Tier 3: recall / search_memories alias ──
 
 	const recallInputSchema = v.object({
 		reason: v.optional(
@@ -358,8 +352,6 @@ export async function reflect(
 			)
 	)
 
-	// ── Utility: get_entity ──
-
 	const getEntityDef = toolDefinition({
 		name: 'get_entity',
 		description:
@@ -432,8 +424,6 @@ export async function reflect(
 			}
 		})
 	})
-
-	// ── Utility: expand (chunk/document context) ──
 
 	const expandDef = toolDefinition({
 		name: 'expand',
@@ -567,8 +557,6 @@ export async function reflect(
 		})
 	})
 
-	// ── Run the agentic loop ──
-
 	const userMessage = options.context
 		? `${query}\n\nAdditional context: ${options.context}`
 		: query
@@ -653,8 +641,6 @@ export async function reflect(
 		)
 		answer = cleanReflectAnswer(forcedAnswer)
 	}
-
-	// ── Optionally save as observation (stored as memory_unit with factType="observation") ──
 
 	const observationTexts: string[] = []
 	if (options.saveObservations !== false && answer.trim()) {
@@ -915,8 +901,6 @@ function normalizeExpandDepth(
 		? 'document'
 		: 'chunk'
 }
-
-// ── Final forced-text prompt (matches Python FINAL_SYSTEM_PROMPT) ──
 
 const FINAL_REFLECT_SYSTEM_PROMPT = `CRITICAL: You MUST ONLY use information from retrieved tool results. NEVER make up names, people, events, or entities.
 

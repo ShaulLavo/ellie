@@ -20,8 +20,6 @@ import {
 } from './setup'
 
 describe('Multilingual support', () => {
-	// ── CJK support — not yet prioritized ──────────────────────────────────
-
 	describe('Chinese content', () => {
 		it.todo(
 			'retains Chinese text and extracts Chinese facts'
@@ -40,8 +38,6 @@ describe('Multilingual support', () => {
 		it.todo('recalls Japanese content')
 		it.todo('handles kanji, hiragana, and katakana')
 	})
-
-	// ── Language preservation ──────────────────────────────────────────────
 
 	describe('Language preservation', () => {
 		let t: TestHindsight
@@ -76,8 +72,6 @@ describe('Multilingual support', () => {
 		)
 		it.todo('Extraction language matches input language')
 	})
-
-	// ── Cross-language retrieval — not yet prioritized ────────────────────
 
 	describe('Cross-language retrieval', () => {
 		it.todo('semantic search works across languages')

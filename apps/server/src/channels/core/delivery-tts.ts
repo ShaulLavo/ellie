@@ -45,7 +45,7 @@ export async function preparePayloadsForDelivery(
 	return [autoTtsPayload]
 }
 
-export async function prepareExplicitTtsPayloads(
+async function prepareExplicitTtsPayloads(
 	payload: ChannelReplyPayload,
 	useRunTtsPostProcessor: boolean,
 	runId: string,
@@ -97,7 +97,7 @@ export async function prepareExplicitTtsPayloads(
 	return [basePayload]
 }
 
-export async function resolveTtsConfig(
+async function resolveTtsConfig(
 	credentialsPath: string | undefined
 ): Promise<ElevenLabsTtsConfig> {
 	const config = resolveElevenLabsTtsConfig()
@@ -108,7 +108,7 @@ export async function resolveTtsConfig(
 	return config
 }
 
-export function extractAssistantAudioPayload(
+function extractAssistantAudioPayload(
 	store: RealtimeStore,
 	sessionId: string,
 	runId: string,
@@ -144,7 +144,7 @@ export function extractAssistantAudioPayload(
 }
 
 /** Apply auto-TTS to a payload if configured. Non-fatal on error. */
-export async function applyAutoTts(
+async function applyAutoTts(
 	payload: ChannelReplyPayload,
 	inboundAudio: boolean,
 	deps: Pick<

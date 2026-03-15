@@ -64,7 +64,7 @@ export function ChatRoom({
 				open={showSessionList}
 				onOpenChange={setShowSessionList}
 				listSessions={() =>
-					eden.chat.sessions.get().then(r => r.data)
+					eden.api.chat.sessions.get().then(r => r.data)
 				}
 				onResume={async () => {}}
 				currentSessionId={sessionId}
@@ -73,7 +73,7 @@ export function ChatRoom({
 				open={showSessionInfo}
 				onOpenChange={setShowSessionInfo}
 				getSessionStats={() =>
-					eden.chat
+					eden.api.chat
 						.sessions({ sessionId })
 						.get()
 						.then(r => r.data)

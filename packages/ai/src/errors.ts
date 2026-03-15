@@ -9,9 +9,7 @@
  * structured Anthropic SDK errors.
  */
 
-// ============================================================================
 // Types
-// ============================================================================
 
 export type ErrorClass =
 	| 'rate_limit'
@@ -35,9 +33,7 @@ export interface ClassifiedError {
 	retryAfterMs?: number
 }
 
-// ============================================================================
 // Error patterns (ported from openclaw ERROR_PATTERNS)
-// ============================================================================
 
 type ErrorPattern = RegExp | string
 
@@ -99,9 +95,7 @@ const ERROR_PATTERNS = {
 	] as readonly ErrorPattern[]
 } as const
 
-// ============================================================================
 // Context overflow patterns (subsumes overflow.ts)
-// ============================================================================
 
 const OVERFLOW_PATTERNS: RegExp[] = [
 	/request_too_large/i,
@@ -117,9 +111,7 @@ const OVERFLOW_PATTERNS: RegExp[] = [
 	/request size exceeds/i
 ]
 
-// ============================================================================
 // Transient HTTP codes (from openclaw)
-// ============================================================================
 
 const TRANSIENT_HTTP_ERROR_CODES = new Set([
 	429, 500, 502, 503, 521, 522, 523, 524, 529
@@ -128,9 +120,7 @@ const TRANSIENT_HTTP_ERROR_CODES = new Set([
 const HTTP_STATUS_PREFIX_RE =
 	/^(?:http\s*)?(\d{3})\s*[:\s]/i
 
-// ============================================================================
 // Pattern matching
-// ============================================================================
 
 function matchesErrorPatterns(
 	raw: string,
@@ -145,9 +135,7 @@ function matchesErrorPatterns(
 	)
 }
 
-// ============================================================================
 // Individual detectors
-// ============================================================================
 
 export function isRateLimitError(msg: string): boolean {
 	return matchesErrorPatterns(msg, ERROR_PATTERNS.rateLimit)
@@ -228,9 +216,7 @@ export function getOverflowPatterns(): RegExp[] {
 	return [...OVERFLOW_PATTERNS]
 }
 
-// ============================================================================
 // Retry-After extraction
-// ============================================================================
 
 /** Parse a retry-after header value (string or number) into milliseconds. */
 function parseRetryHeaderValue(
@@ -284,9 +270,7 @@ export function parseRetryAfter(
 	return parseRetryHeaderValue(retryHeader)
 }
 
-// ============================================================================
 // Master classifier
-// ============================================================================
 
 /**
  * Classify an error message string into an ErrorClass.

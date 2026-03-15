@@ -35,8 +35,6 @@ import {
 	type DeliveryTtsDeps
 } from './delivery-tts'
 
-export type { TtsConfig } from './delivery-helpers'
-
 /**
  * In-memory registry that tracks channel-triggered runs and routes
  * assistant replies back through the originating channel provider.
@@ -260,12 +258,7 @@ export class ChannelDeliveryRegistry {
 		if (!delivery) return Promise.resolve()
 
 		const next = delivery.inFlight.then(task, task)
-		delivery.inFlight = next.catch(err => {
-			console.error(
-				`[delivery] queued delivery failed for ${runId}:`,
-				err
-			)
-		})
+		delivery.inFlight = next.catch(() => {})
 		return next
 	}
 
@@ -290,12 +283,7 @@ export class ChannelDeliveryRegistry {
 			targetState.lastComposingAt = now
 			provider
 				.sendComposing(targetState.target)
-				.catch(err => {
-					console.warn(
-						`[delivery] sendComposing failed for ${targetState.target.channelId}:`,
-						err
-					)
-				})
+				.catch(() => {})
 		}
 	}
 
@@ -304,10 +292,7 @@ export class ChannelDeliveryRegistry {
 		sessionId: string
 	): Promise<void> {
 		if (!this.#pending.has(runId)) {
-			console.log(
-				`[delivery] run_closed but not in pending map: runId=${runId} sessionId=${sessionId}`
-			)
-			return // Not a channel-triggered run
+			return
 		}
 
 		// Finalize any still-streaming live text before final delivery
@@ -344,8 +329,6 @@ export class ChannelDeliveryRegistry {
 			await Promise.allSettled(chains)
 		}
 	}
-
-	// ── Core delivery loop (per-item checkpointing) ──────────────────────
 
 	/**
 	 * Heuristic check: is a reply fully delivered based on the raw
@@ -396,13 +379,6 @@ export class ChannelDeliveryRegistry {
 			this.#store,
 			sessionId,
 			runId
-		)
-		console.log(
-			`[delivery] extractReplyPayloads: runId=${runId}`,
-			JSON.stringify({
-				replyCount: replyPayloads.length,
-				isRunClosed
-			})
 		)
 		if (replyPayloads.length === 0) return
 
@@ -555,15 +531,10 @@ export class ChannelDeliveryRegistry {
 				runId,
 				`channel_delivered:${runId}:${targetKey(target)}:r${item.replyIndex}:p${item.payloadIndex}:a${item.attachmentIndex}`
 			)
-		} catch (err) {
-			console.warn(
-				'[delivery] Failed to persist checkpoint:',
-				err
-			)
+		} catch {
+			// Best-effort — checkpoint dedup prevents double delivery
 		}
 	}
-
-	// ── Live-text streaming orchestration ────────────────────────────────
 
 	#liveStateKey(
 		runId: string,
@@ -655,11 +626,8 @@ export class ChannelDeliveryRegistry {
 								existing.handle,
 								text
 							)
-						} catch (err) {
-							console.warn(
-								'[delivery] updateLiveText failed:',
-								err
-							)
+						} catch {
+							// Best-effort — next delta will retry
 						}
 					})
 					.catch(() => {})
@@ -747,11 +715,8 @@ export class ChannelDeliveryRegistry {
 				runId,
 				`live_delivery:${runId}:${targetKey(target)}:${ls.assistantRowId}:${ls.status}`
 			)
-		} catch (err) {
-			console.warn(
-				'[delivery] Failed to persist live delivery:',
-				err
-			)
+		} catch {
+			// Best-effort persistence
 		}
 	}
 
@@ -789,10 +754,6 @@ export class ChannelDeliveryRegistry {
 		const candidates =
 			eventStore.findCandidateChannelRuns(maxAgeMs)
 		if (candidates.length === 0) return 0
-
-		console.log(
-			`[delivery] Evaluating ${candidates.length} candidate channel run(s) for recovery`
-		)
 
 		let recovered = 0
 		for (const row of candidates) {
@@ -861,12 +822,7 @@ export class ChannelDeliveryRegistry {
 				if (remaining.length === 0) continue
 
 				const provider = this.#getProvider(target.channelId)
-				if (!provider) {
-					console.warn(
-						`[delivery] Provider ${target.channelId} not available, skipping`
-					)
-					continue
-				}
+				if (!provider) continue
 
 				let sentAny = false
 				for (const { item, assistantRowId } of remaining) {
@@ -895,11 +851,6 @@ export class ChannelDeliveryRegistry {
 			}
 		}
 
-		if (recovered > 0) {
-			console.log(
-				`[delivery] Recovered ${recovered} delivery(ies)`
-			)
-		}
 		return recovered
 	}
 
@@ -924,9 +875,6 @@ export class ChannelDeliveryRegistry {
 		}
 		if (liveRows.length === 0) return
 
-		console.log(
-			`[delivery] Recovering ${liveRows.length} partial live message(s)`
-		)
 		for (const row of liveRows) {
 			const provider = this.#getProvider(row.channelId)
 			if (!provider?.failLiveText) continue
@@ -958,11 +906,8 @@ export class ChannelDeliveryRegistry {
 					row.runId,
 					`live_delivery:${row.runId}:${targetKey(target)}:${row.assistantRowId}:failed`
 				)
-			} catch (err) {
-				console.warn(
-					`[delivery] Live recovery failed for run ${row.runId}:`,
-					err
-				)
+			} catch {
+				// Best-effort — already-sent text remains visible
 			}
 		}
 	}

@@ -19,7 +19,7 @@ const MEDIA_DEFAULTS: Record<string, string> = {
 
 const MEDIA_KEYS = Object.keys(MEDIA_DEFAULTS)
 
-export type DownloadedMedia = {
+type DownloadedMedia = {
 	buffer: Buffer
 	mimetype: string
 	fileName?: string

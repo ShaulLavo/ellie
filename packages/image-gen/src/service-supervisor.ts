@@ -14,8 +14,6 @@ import { existsSync } from 'node:fs'
 import { ensureDiffusersReady } from './auto-setup'
 import type { ProgressFn } from './auto-setup'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export interface ServiceConfig {
 	dataDir: string
 	onProgress?: ProgressFn
@@ -26,8 +24,6 @@ export interface ServiceState {
 	baseUrl: string
 	proc: { kill(): void; exited: Promise<number> }
 }
-
-// ── Singleton state ──────────────────────────────────────────────────────────
 
 let activeService: ServiceState | null = null
 let startLock: Promise<ServiceState> | null = null
@@ -40,8 +36,6 @@ const PYTHON_PACKAGE_DIR = join(
 
 const HEALTH_TIMEOUT_MS = 30_000
 const HEALTH_POLL_MS = 300
-
-// ── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Ensure the FastAPI image generation service is running.
@@ -90,8 +84,6 @@ export async function stopImageGenService(): Promise<void> {
 	} catch {}
 	activeService = null
 }
-
-// ── Internal ─────────────────────────────────────────────────────────────────
 
 async function doStart(
 	config: ServiceConfig

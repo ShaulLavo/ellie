@@ -23,7 +23,7 @@ type sseEvent struct {
 // connectSSE opens an SSE connection and returns the response body.
 // The caller is responsible for closing it.
 func connectSSE(ctx context.Context, baseURL, sessionID string) (io.ReadCloser, error) {
-	url := fmt.Sprintf("%s/chat/%s/events/sse", baseURL, sessionID)
+	url := fmt.Sprintf("%s/api/chat/%s/events/sse", baseURL, sessionID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

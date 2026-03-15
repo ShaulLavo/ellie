@@ -8,6 +8,7 @@
 
 import { ulid } from 'fast-ulid'
 import { eq, and } from 'drizzle-orm'
+import { DEFAULT_PROFILE, DEFAULT_PROJECT } from './scope'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
 import type {
@@ -17,8 +18,6 @@ import type {
 	VisualFindHit,
 	ScoredVisualMemory
 } from './types'
-
-// ── Ingest ──────────────────────────────────────────────────────────────
 
 /**
  * Store a visual description and its embedding.
@@ -46,8 +45,8 @@ export async function retainVisual(
 			bankId: input.bankId,
 			sourceId: input.sourceId ?? null,
 			description,
-			scopeProfile: input.scope?.profile ?? null,
-			scopeProject: input.scope?.project ?? null,
+			scopeProfile: input.scope?.profile ?? DEFAULT_PROFILE,
+			scopeProject: input.scope?.project ?? DEFAULT_PROJECT,
 			scopeSession: input.scope?.session ?? null,
 			createdAt: now,
 			updatedAt: now
@@ -64,8 +63,6 @@ export async function retainVisual(
 		createdAt: now
 	}
 }
-
-// ── Retrieval ────────────────────────────────────────────────────────────
 
 /** Minimum relevance threshold — visual candidates below this are discarded. */
 const VISUAL_RELEVANCE_THRESHOLD = 0.3
@@ -125,8 +122,6 @@ export async function searchVisual(
 	return results
 }
 
-// ── Access History ────────────────────────────────────────────────────────
-
 /**
  * Record access events for visual memories returned to the caller.
  * Appends new rows (no overwrite) per the spec.
@@ -154,8 +149,6 @@ export function recordVisualAccess(
 	}
 }
 
-// ── Stats ────────────────────────────────────────────────────────────────
-
 /**
  * Get stats for visual memories in a bank.
  */
@@ -181,8 +174,6 @@ export function getVisualStats(
 		totalAccessEvents: accessCount?.count ?? 0
 	}
 }
-
-// ── Find ─────────────────────────────────────────────────────────────────
 
 /**
  * Find visual memories by semantic search.
@@ -230,8 +221,6 @@ export async function visualFind(
 
 	return results
 }
-
-// ── Cleanup ──────────────────────────────────────────────────────────────
 
 /**
  * Delete all visual memories and their embeddings for a bank.

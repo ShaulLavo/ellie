@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 
-// ── Auth schemas ─────────────────────────────────────────────────────────────
+// --- Anthropic-specific schemas (supports oauth/token/api_key) ---
 
 export const authStatusResponseSchema = v.object({
 	mode: v.nullable(
@@ -65,94 +65,63 @@ export const authOAuthExchangeResponseSchema = v.object({
 	message: v.string()
 })
 
-// ── Groq auth schemas ────────────────────────────────────────────────────────
+// --- Generic provider schemas (api_key only) ---
 
-export const groqAuthStatusResponseSchema = v.object({
+export const providerAuthStatusResponseSchema = v.object({
 	mode: v.nullable(v.literal('api_key')),
 	source: v.picklist(['env_api_key', 'file', 'none']),
 	configured: v.boolean(),
 	preview: v.optional(v.string())
 })
 
-export const groqAuthClearResponseSchema = v.object({
+export const providerAuthClearResponseSchema = v.object({
 	cleared: v.boolean()
 })
 
-export const groqAuthApiKeyBodySchema = v.object({
+export const providerAuthApiKeyBodySchema = v.object({
 	key: v.pipe(v.string(), v.nonEmpty()),
 	validate: v.optional(v.boolean())
 })
 
-export const groqAuthApiKeyResponseSchema = v.object({
+export const providerAuthApiKeyResponseSchema = v.object({
 	ok: v.literal(true),
 	mode: v.literal('api_key')
 })
 
-// ── Brave auth schemas ──────────────────────────────────────────────────────
+// --- Legacy aliases for backward compat with any external imports ---
 
-export const braveAuthStatusResponseSchema = v.object({
-	mode: v.nullable(v.literal('api_key')),
-	source: v.picklist(['env_api_key', 'file', 'none']),
-	configured: v.boolean(),
-	preview: v.optional(v.string())
-})
+export const groqAuthStatusResponseSchema =
+	providerAuthStatusResponseSchema
+export const groqAuthClearResponseSchema =
+	providerAuthClearResponseSchema
+export const groqAuthApiKeyBodySchema =
+	providerAuthApiKeyBodySchema
+export const groqAuthApiKeyResponseSchema =
+	providerAuthApiKeyResponseSchema
 
-export const braveAuthClearResponseSchema = v.object({
-	cleared: v.boolean()
-})
+export const braveAuthStatusResponseSchema =
+	providerAuthStatusResponseSchema
+export const braveAuthClearResponseSchema =
+	providerAuthClearResponseSchema
+export const braveAuthApiKeyBodySchema =
+	providerAuthApiKeyBodySchema
+export const braveAuthApiKeyResponseSchema =
+	providerAuthApiKeyResponseSchema
 
-export const braveAuthApiKeyBodySchema = v.object({
-	key: v.pipe(v.string(), v.nonEmpty()),
-	validate: v.optional(v.boolean())
-})
+export const elevenlabsAuthStatusResponseSchema =
+	providerAuthStatusResponseSchema
+export const elevenlabsAuthClearResponseSchema =
+	providerAuthClearResponseSchema
+export const elevenlabsAuthApiKeyBodySchema =
+	providerAuthApiKeyBodySchema
+export const elevenlabsAuthApiKeyResponseSchema =
+	providerAuthApiKeyResponseSchema
 
-export const braveAuthApiKeyResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.literal('api_key')
-})
-
-// ── ElevenLabs auth schemas ─────────────────────────────────────────────────
-
-export const elevenlabsAuthStatusResponseSchema = v.object({
-	mode: v.nullable(v.literal('api_key')),
-	source: v.picklist(['env_api_key', 'file', 'none']),
-	configured: v.boolean(),
-	preview: v.optional(v.string())
-})
-
-export const elevenlabsAuthClearResponseSchema = v.object({
-	cleared: v.boolean()
-})
-
-export const elevenlabsAuthApiKeyBodySchema = v.object({
-	key: v.pipe(v.string(), v.nonEmpty()),
-	validate: v.optional(v.boolean())
-})
-
-export const elevenlabsAuthApiKeyResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.literal('api_key')
-})
-
-// ── CivitAI auth schemas ────────────────────────────────────────────────────
-
-export const civitaiAuthStatusResponseSchema = v.object({
-	mode: v.nullable(v.literal('api_key')),
-	source: v.picklist(['env_api_key', 'file', 'none']),
-	configured: v.boolean(),
-	preview: v.optional(v.string())
-})
-
-export const civitaiAuthClearResponseSchema = v.object({
-	cleared: v.boolean()
-})
-
-export const civitaiAuthApiKeyBodySchema = v.object({
-	key: v.pipe(v.string(), v.nonEmpty()),
-	validate: v.optional(v.boolean())
-})
-
-export const civitaiAuthApiKeyResponseSchema = v.object({
-	ok: v.literal(true),
-	mode: v.literal('api_key')
-})
+export const civitaiAuthStatusResponseSchema =
+	providerAuthStatusResponseSchema
+export const civitaiAuthClearResponseSchema =
+	providerAuthClearResponseSchema
+export const civitaiAuthApiKeyBodySchema =
+	providerAuthApiKeyBodySchema
+export const civitaiAuthApiKeyResponseSchema =
+	providerAuthApiKeyResponseSchema

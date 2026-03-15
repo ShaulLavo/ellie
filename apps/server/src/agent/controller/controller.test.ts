@@ -18,9 +18,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync } from 'fs'
 
-// ============================================================================
 // Test helpers
-// ============================================================================
 
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'controller-test-'))
@@ -144,9 +142,7 @@ function createMockMemory(
 	} as unknown as MemoryOrchestrator
 }
 
-// ============================================================================
 // Tests
-// ============================================================================
 
 describe('AgentController', () => {
 	let tmpDir: string

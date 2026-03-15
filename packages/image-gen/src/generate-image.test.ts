@@ -10,8 +10,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 function makeMockBlobSink(): BlobSink {
 	return {
 		write: async opts => ({

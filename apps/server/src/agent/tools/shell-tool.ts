@@ -11,8 +11,6 @@ import type {
 	AgentToolResult
 } from '@ellie/agent'
 
-// ── Schema ──────────────────────────────────────────────────────────────
-
 const shellParams = v.object({
 	command: v.pipe(
 		v.string(),
@@ -38,12 +36,8 @@ const shellParams = v.object({
 
 type ShellParams = v.InferOutput<typeof shellParams>
 
-// ── Constants ───────────────────────────────────────────────────────────
-
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_OUTPUT_CHARS = 50_000
-
-// ── Factory ─────────────────────────────────────────────────────────────
 
 /**
  * Create the shell tool with a default working directory.

@@ -7,10 +7,8 @@ import {
 } from './http-errors'
 import type { MessageInput } from './schemas/common-schemas'
 
-// Re-export schemas for consumers that import from common.ts
 export {
 	messageInputSchema,
-	type MessageInput,
 	sessionParamsSchema,
 	sessionRunParamsSchema,
 	afterSeqQuerySchema,
@@ -18,16 +16,9 @@ export {
 	statusSchema
 } from './schemas/common-schemas'
 
-// ── Agent controller guard ───────────────────────────────────────────────────
-
 const AGENT_UNAVAILABLE_ERROR =
 	'Agent routes unavailable: no ANTHROPIC_API_KEY configured'
 
-/**
- * Resolve the agent controller or throw a 503 ServiceUnavailableError.
- * Callers no longer need to check for `null` — the error is caught by
- * the global onError handler.
- */
 export async function requireController(
 	getAgentController: () => Promise<AgentController | null>
 ): Promise<AgentController> {
@@ -40,11 +31,6 @@ export async function requireController(
 	return controller
 }
 
-export { AGENT_UNAVAILABLE_ERROR }
-
-// ── Session helpers ──────────────────────────────────────────────────────────
-
-/** Resolve the virtual 'current' session ID to the actual one. */
 export function resolveSessionId(
 	store: RealtimeStore,
 	raw: string
@@ -53,8 +39,6 @@ export function resolveSessionId(
 		? store.getCurrentSessionId()
 		: raw
 }
-
-// ── Message helpers ──────────────────────────────────────────────────────────
 
 export function normalizeMessageInput(
 	body: MessageInput
@@ -86,8 +70,6 @@ export function parseAgentActionBody(body: {
 
 	return value.content
 }
-
-// ── SSE utilities ────────────────────────────────────────────────────────────
 
 export interface SseState {
 	activeClients: number

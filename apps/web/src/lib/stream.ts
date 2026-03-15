@@ -97,7 +97,7 @@ export class StreamClient {
 		}[],
 		speechRef?: string
 	): Promise<void> {
-		const { error } = await eden
+		const { error } = await eden.api
 			.chat({
 				sessionId: this.sessionId
 			})
@@ -115,15 +115,13 @@ export class StreamClient {
 
 	/** Clear session (delete + recreate) */
 	async clearSession(): Promise<void> {
-		const { error } = await eden
+		const { error } = await eden.api
 			.chat({
 				sessionId: this.sessionId
 			})
 			.clear.post()
 		if (error) throw error
 	}
-
-	// ── Internal ──────────────────────────────────────────────────────────
 
 	private openSSE(): void {
 		this.closeSSE()

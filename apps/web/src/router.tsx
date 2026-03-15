@@ -5,7 +5,7 @@ import {
 	Outlet
 } from '@tanstack/react-router'
 import App from './App'
-import { DbStudioPage } from './db-studio'
+import { DbStudioPage } from './db-studio/components/db-studio-page'
 import { ObservePage } from './observe/observe-page'
 import { TerminalPage } from './terminal/terminal-page'
 import { CodePage } from './code/code-page'

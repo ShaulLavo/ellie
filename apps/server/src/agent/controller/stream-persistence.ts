@@ -27,7 +27,7 @@ export interface PendingArtifact {
 	uploadId: string
 	kind: 'media' | 'file'
 	origin: 'tool_upload'
-	mime?: string
+	mimeType?: string
 	width?: number
 	height?: number
 	hash?: string
@@ -69,6 +69,99 @@ export function resetStreamState(state: StreamState): void {
 	state.pendingArtifacts.length = 0
 }
 
+interface ToolUploadImage {
+	uploadId: string
+	mimeType?: string
+	width?: number
+	height?: number
+	hash?: string
+}
+
+interface ToolUploadDetails {
+	success: boolean
+	uploadId?: string
+	images?: ToolUploadImage[]
+	recipe?: { width?: number; height?: number }
+}
+
+/**
+ * Safely extract upload details from a tool execution result.
+ * Returns undefined if the shape doesn't match expectations.
+ */
+function parseToolUploadDetails(
+	result: unknown
+): ToolUploadDetails | undefined {
+	if (
+		result == null ||
+		typeof result !== 'object' ||
+		!('details' in result)
+	)
+		return undefined
+
+	const details = (result as Record<string, unknown>)
+		.details
+	if (
+		details == null ||
+		typeof details !== 'object' ||
+		!('success' in details)
+	)
+		return undefined
+
+	const d = details as Record<string, unknown>
+	if (typeof d.success !== 'boolean' || !d.success)
+		return undefined
+
+	const parsed: ToolUploadDetails = { success: true }
+
+	if (typeof d.uploadId === 'string')
+		parsed.uploadId = d.uploadId
+
+	if (d.recipe != null && typeof d.recipe === 'object') {
+		const r = d.recipe as Record<string, unknown>
+		parsed.recipe = {
+			...(typeof r.width === 'number' && {
+				width: r.width
+			}),
+			...(typeof r.height === 'number' && {
+				height: r.height
+			})
+		}
+	}
+
+	if (Array.isArray(d.images)) {
+		const images: ToolUploadImage[] = []
+		for (const item of d.images) {
+			if (
+				item != null &&
+				typeof item === 'object' &&
+				'uploadId' in item &&
+				typeof (item as Record<string, unknown>)
+					.uploadId === 'string'
+			) {
+				const i = item as Record<string, unknown>
+				images.push({
+					uploadId: i.uploadId as string,
+					...(typeof i.mimeType === 'string' && {
+						mimeType: i.mimeType
+					}),
+					...(typeof i.width === 'number' && {
+						width: i.width
+					}),
+					...(typeof i.height === 'number' && {
+						height: i.height
+					}),
+					...(typeof i.hash === 'string' && {
+						hash: i.hash
+					})
+				})
+			}
+		}
+		if (images.length > 0) parsed.images = images
+	}
+
+	return parsed
+}
+
 /** TTS directive regex: captures optional params after the colon */
 const TTS_DIRECTIVE_RE = /\[\[tts(?::([^\]]*))?\]\]/gi
 
@@ -81,17 +174,20 @@ const MEDIA_LINE_RE = /^\s*MEDIA:\s*.+$/i
  */
 function stripTtsDirective(text: string): {
 	cleaned: string
+	matched: boolean
 	params: string | undefined
 } {
+	let matched = false
 	let params: string | undefined
 	const cleaned = text.replace(
 		TTS_DIRECTIVE_RE,
 		(_match, p1) => {
+			matched = true
 			if (p1 !== undefined) params = p1
 			return ''
 		}
 	)
-	return { cleaned: cleaned.trim(), params }
+	return { cleaned: cleaned.trim(), matched, params }
 }
 
 /**
@@ -187,7 +283,7 @@ export function flushPendingArtifacts(
 				kind: artifact.kind,
 				origin: artifact.origin,
 				uploadId: artifact.uploadId,
-				mime: artifact.mime,
+				mimeType: artifact.mimeType,
 				...(artifact.width != null && {
 					width: artifact.width
 				}),
@@ -277,34 +373,26 @@ export function handleStreamingEvent(
 			'assistant_message (final)',
 			'update_failed',
 			() => {
-				let message = normalizeAssistantMessage(
+				const raw = normalizeAssistantMessage(
 					event.message as AssistantMessage
 				)
 
-				// 1. Strip [[tts:...]] directives from text parts
-				let ttsDirective: { params: string } | undefined
-				message = {
-					...message,
-					content: message.content.map(part => {
+				// Strip [[tts:...]] directives and MEDIA: lines in a single pass
+				let ttsDirective:
+					| { params: string | undefined }
+					| undefined
+				const message = {
+					...raw,
+					content: raw.content.map(part => {
 						if (part.type !== 'text') return part
-						const { cleaned, params } = stripTtsDirective(
-							part.text
-						)
-						if (params !== undefined) {
+						const { cleaned, matched, params } =
+							stripTtsDirective(part.text)
+						if (matched) {
 							ttsDirective = { params }
 						}
-						return { ...part, text: cleaned }
-					})
-				}
-
-				// 2. Strip MEDIA: lines from text (legacy LLM behavior)
-				message = {
-					...message,
-					content: message.content.map(part => {
-						if (part.type !== 'text') return part
 						return {
 							...part,
-							text: stripMediaLines(part.text)
+							text: stripMediaLines(cleaned)
 						}
 					})
 				}
@@ -326,18 +414,11 @@ export function handleStreamingEvent(
 
 				// 5. Emit assistant_artifact events for pending artifacts
 				if (state.pendingArtifacts.length > 0) {
-					console.log(
-						`[stream-persist] message_end: emitting ${state.pendingArtifacts.length} artifact event(s)`
-					)
 					flushPendingArtifacts(
 						deps,
 						state,
 						sessionId,
 						runId
-					)
-				} else {
-					console.log(
-						'[stream-persist] message_end: no pending artifacts'
 					)
 				}
 			}
@@ -443,36 +524,15 @@ export function handleStreamingEvent(
 
 		// Track successful tool uploads as pending artifacts
 		if (!event.isError) {
-			const details = (
-				event.result as {
-					details?: {
-						success?: boolean
-						uploadId?: string
-						images?: Array<{
-							uploadId: string
-							mime?: string
-							width?: number
-							height?: number
-							hash?: string
-						}>
-						recipe?: {
-							width?: number
-							height?: number
-						}
-					}
-				}
-			)?.details
-			console.log(
-				`[stream-persist] tool_execution_end: toolName=${event.toolName} success=${details?.success} uploadId=${details?.uploadId} images=${details?.images?.length ?? 0}`
-			)
-			if (details?.success) {
+			const details = parseToolUploadDetails(event.result)
+			if (details) {
 				if (details.images && details.images.length > 0) {
 					for (const img of details.images) {
 						state.pendingArtifacts.push({
 							uploadId: img.uploadId,
 							kind: 'media',
 							origin: 'tool_upload',
-							mime: img.mime,
+							mimeType: img.mimeType,
 							width: img.width ?? details.recipe?.width,
 							height: img.height ?? details.recipe?.height,
 							hash: img.hash

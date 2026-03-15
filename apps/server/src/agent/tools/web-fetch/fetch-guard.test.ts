@@ -61,8 +61,6 @@ describe('guardedFetch', () => {
 		'redirect-evil.com': '93.184.216.35'
 	})
 
-	// ── Blocked URLs ──────────────────────────────────────────────
-
 	test('blocks URL resolving to private IP', async () => {
 		const mockFetch = createMockFetch(() => ({
 			status: 200,
@@ -112,8 +110,6 @@ describe('guardedFetch', () => {
 		).rejects.toThrow('Invalid URL: must be http or https')
 	})
 
-	// ── Allowed URLs ──────────────────────────────────────────────
-
 	test('allows public URL', async () => {
 		const mockFetch = createMockFetch(() => ({
 			status: 200,
@@ -132,8 +128,6 @@ describe('guardedFetch', () => {
 		expect(result.finalUrl).toBe('https://example.com')
 		expect(await result.response.text()).toBe('hello')
 	})
-
-	// ── Redirects ─────────────────────────────────────────────────
 
 	test('follows safe redirects', async () => {
 		const mockFetch = createMockFetch(url => {
@@ -230,8 +224,6 @@ describe('guardedFetch', () => {
 		).rejects.toThrow('Too many redirects (limit: 2)')
 	})
 
-	// ── Wildcard allowlist ────────────────────────────────────────
-
 	test('allows hostname matching wildcard allowlist', async () => {
 		const mockFetch = createMockFetch(() => ({
 			status: 200,
@@ -267,8 +259,6 @@ describe('guardedFetch', () => {
 			})
 		).rejects.toThrow(SsrFBlockedError)
 	})
-
-	// ── HTTP IP pinning ──────────────────────────────────────────
 
 	test('rewrites HTTP URL to resolved IP with Host header', async () => {
 		let capturedUrl = ''

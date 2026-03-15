@@ -43,8 +43,6 @@ import type { BankProfile } from './types'
 import { safeJsonParse } from './util'
 import { ftsInsert, ftsReplace, ftsDelete } from './fts'
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
 function getOccurredStart(
 	row: typeof import('./schema').memoryUnits.$inferSelect
 ): number | null {
@@ -66,8 +64,6 @@ function getEventDate(
 		row.mentionedAt
 	)
 }
-
-// ── Valibot schema for LLM consolidation response ───────────────────────
 
 const ConsolidationActionSchema = v.array(
 	v.union([
@@ -94,8 +90,6 @@ const ConsolidationActionSchema = v.array(
 		})
 	])
 )
-
-// ── Main consolidation job ──────────────────────────────────────────────
 
 /**
  * Process all unconsolidated memories in a bank, creating/updating observations.
@@ -187,8 +181,6 @@ export async function consolidate(
 
 	return result
 }
-
-// ── Per-memory consolidation helpers ─────────────────────────────────────
 
 /** Safely parse memory tags from JSON, returning [] on malformed data. */
 function parseMemoryTags(
@@ -318,8 +310,6 @@ async function applyConsolidationAction(
 	}
 }
 
-// ── Find related observations ───────────────────────────────────────────
-
 interface RelatedObservation {
 	id: string
 	content: string
@@ -415,8 +405,6 @@ function resolveObservationHit(
 		mentionedAt: row.mentionedAt
 	}
 }
-
-// ── LLM consolidation call ──────────────────────────────────────────────
 
 async function consolidateWithLLM(
 	adapter: AnyTextAdapter,
@@ -531,8 +519,6 @@ function asStringArray(value: unknown): string[] {
 		.filter((item): item is string => Boolean(item))
 }
 
-// ── Execute create action ───────────────────────────────────────────────
-
 async function executeCreateAction(
 	hdb: HindsightDatabase,
 	memoryVec: EmbeddingStore,
@@ -575,8 +561,6 @@ async function executeCreateAction(
 	await memoryVec.upsert(obsId, action.text)
 	return 'created'
 }
-
-// ── Execute update action ───────────────────────────────────────────────
 
 async function executeUpdateAction(
 	hdb: HindsightDatabase,
@@ -798,8 +782,6 @@ async function executeMergeAction(
 	return 'merged'
 }
 
-// ── Mental model refresh helpers ─────────────────────────────────────────
-
 /**
  * SECURITY: Determines whether a mental model should be refreshed based on tag boundaries.
  *
@@ -823,8 +805,6 @@ function shouldRefreshModel(
 	// Tagged memories consolidated + tagged model → only if tags overlap
 	return modelTags.some(t => consolidatedTags.has(t))
 }
-
-// ── Mental model refresh trigger ────────────────────────────────────────
 
 /**
  * Trigger refreshes for auto-refresh mental models after consolidation.
@@ -887,8 +867,6 @@ async function triggerMentalModelRefreshes(
 
 	return refreshed
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────────
 
 function mergeObservationHistories(
 	observations: Array<

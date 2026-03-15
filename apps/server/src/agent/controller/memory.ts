@@ -46,7 +46,7 @@ export interface MemoryDeps {
  * Wraps the orchestrator with a traced facade and runs the
  * operation inside the hindsight trace store when trace deps are available.
  */
-async function withTracedMemory<T>(
+function withTracedMemory<T>(
 	deps: MemoryDeps,
 	fn: (memory: MemoryOrchestrator) => Promise<T>
 ): Promise<T> {
@@ -160,8 +160,6 @@ export async function runRetain(
 	}
 }
 
-// ── Hindsight LLM trace context ──────────────────────────────────────
-
 /**
  * Create a HindsightTraceContext that emits memory.chat.* events
  * for every internal LLM call (extraction, consolidation, reflection, gist).
@@ -181,12 +179,17 @@ function createMemoryTraceCtx(
 				llmScopes.get(event.callId) ??
 				createChildScope(scope)
 			llmScopes.set(event.callId, llmScope)
-			const eventName =
-				event.phase === 'start'
-					? 'memory.chat.start'
-					: event.phase === 'end'
-						? 'memory.chat.end'
-						: 'memory.chat.error'
+			let eventName: string
+			switch (event.phase) {
+				case 'start':
+					eventName = 'memory.chat.start'
+					break
+				case 'end':
+					eventName = 'memory.chat.end'
+					break
+				default:
+					eventName = 'memory.chat.error'
+			}
 			recorder.record(llmScope, eventName, 'memory', event)
 			if (event.phase !== 'start') {
 				llmScopes.delete(event.callId)

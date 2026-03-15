@@ -14,8 +14,6 @@ import {
 	checkBotMention
 } from './mention-detection'
 
-// ── extractMentionedJids ─────────────────────────────────────────────
-
 describe('extractMentionedJids', () => {
 	test('extracts from extendedTextMessage', () => {
 		const msg = {
@@ -97,8 +95,6 @@ describe('extractMentionedJids', () => {
 	})
 })
 
-// ── extractReplyToSenderJid ──────────────────────────────────────────
-
 describe('extractReplyToSenderJid', () => {
 	test('extracts participant from quoted message', () => {
 		const msg = {
@@ -127,8 +123,6 @@ describe('extractReplyToSenderJid', () => {
 		expect(extractReplyToSenderJid(null)).toBeUndefined()
 	})
 })
-
-// ── checkBotMention ──────────────────────────────────────────────────
 
 describe('checkBotMention', () => {
 	const selfJid = '15550001111@s.whatsapp.net'
@@ -250,8 +244,6 @@ describe('checkBotMention', () => {
 		expect(result.wasMentioned).toBe(true)
 		expect(result.implicitMention).toBe(true)
 	})
-
-	// ── Phase 7 edge cases ──────────────────────────────────────────
 
 	test('mentioned in quoted message (not direct) is not a mention', () => {
 		// Bot's JID appears only in quotedMessage, not in mentionedJid

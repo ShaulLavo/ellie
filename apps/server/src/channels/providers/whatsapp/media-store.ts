@@ -35,7 +35,7 @@ function mimeToExt(mimetype?: string): string {
 	return 'bin'
 }
 
-export type SaveMediaParams = {
+type SaveMediaParams = {
 	buffer: Buffer
 	mimetype?: string
 	fileName?: string
@@ -44,7 +44,7 @@ export type SaveMediaParams = {
 	maxBytes?: number
 }
 
-export type SaveMediaResult = {
+type SaveMediaResult = {
 	path: string
 }
 

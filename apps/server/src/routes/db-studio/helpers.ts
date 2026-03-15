@@ -6,8 +6,6 @@ import {
 	NotFoundError
 } from '../http-errors'
 
-// ── System / shadow table detection ─────────────────────────────────────────
-
 const SYSTEM_PATTERNS = [/^sqlite_/, /^_cf_/]
 
 const FTS_SHADOW_SUFFIXES = [
@@ -56,14 +54,10 @@ function isInternalTable(
 	return INTERNAL_PATTERNS.some(p => p.test(name))
 }
 
-// ── SQL helpers ─────────────────────────────────────────────────────────────
-
 /** Double-quote an identifier to prevent injection. */
 export function quoteId(name: string): string {
 	return `"${name.replace(/"/g, '""')}"`
 }
-
-// ── Filter parsing ──────────────────────────────────────────────────────────
 
 type FilterOp = 'eq' | 'contains' | 'gt' | 'lt'
 
@@ -116,8 +110,6 @@ export function buildFilterClause(filter: ParsedFilter): {
 		}
 	}
 }
-
-// ── Database operations ─────────────────────────────────────────────────────
 
 export function discoverDbs(dataDir: string): Array<{
 	name: string

@@ -26,8 +26,6 @@ import { tmpdir } from 'os'
 
 puppeteer.use(StealthPlugin())
 
-// ── PID file for orphan cleanup ──────────────────────────────────────
-
 const PID_FILE = join(tmpdir(), 'ellie-browser.pid')
 
 /** Kill an orphaned browser process from a previous run. */
@@ -73,8 +71,6 @@ function removePidFile(): void {
 		// ignore
 	}
 }
-
-// ── Chrome finder (adapted from @agent-infra/browser-finder) ────────────
 
 function findChromeOnDarwin(): string | null {
 	// Standard Chrome installations
@@ -178,8 +174,6 @@ function findChrome(): string {
 	return path
 }
 
-// ── Browser singleton ──────────────────────────────────────────────────
-
 const USER_AGENT =
 	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
 	'(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
@@ -231,8 +225,6 @@ function getBrowser(): Promise<Browser> {
 	return browserLaunchPromise
 }
 
-// ── HTML safety guards ──────────────────────────────────────────────────
-
 const MAX_DEFUDDLE_CHARS = 2_000_000 // 2 MB — Defuddle handles well
 const MAX_READABILITY_CHARS = 20_000_000 // 20 MB — Readability handles well
 const MAX_NESTING_DEPTH = 3_000
@@ -258,7 +250,6 @@ const VOID_TAGS = new Set([
  * Cheap heuristic to detect pathologically nested HTML that could
  * blow up the stack in Defuddle/Readability/linkedom.
  * Not a parser — tuned to catch attacker-controlled "<div><div>..." cases.
- * Adapted from OpenClaw.
  */
 function exceedsNestingDepth(
 	html: string,
@@ -329,8 +320,6 @@ function stripHtmlToText(html: string): string {
 		.replace(/\s+/g, ' ')
 		.trim()
 }
-
-// ── Content extraction ──────────────────────────────────────────────────
 
 const MIN_WORD_COUNT = 10
 
@@ -406,8 +395,6 @@ async function parseHtml(html: string, url: string) {
 	// 2–20 MB or Defuddle fallback — Readability only
 	return parseWithReadability(html, url)
 }
-
-// ── Worker API ─────────────────────────────────────────────────────────
 
 const api = {
 	/** Navigate to URL with headless Chrome, extract readable content. */

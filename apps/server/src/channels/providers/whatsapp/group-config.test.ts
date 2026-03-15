@@ -100,8 +100,6 @@ describe('resolveRequireMention', () => {
 	})
 })
 
-// ── resolveToolsBySender (matching OpenCLAW) ────────────────────────
-
 describe('resolveToolsBySender', () => {
 	test('matches by senderId', () => {
 		const result = resolveToolsBySender({
@@ -205,8 +203,6 @@ describe('resolveToolsBySender', () => {
 		expect(result).toEqual({ deny: ['web'] })
 	})
 })
-
-// ── resolveGroupToolsPolicy (matching OpenCLAW) ─────────────────────
 
 describe('resolveGroupToolsPolicy', () => {
 	test('uses group-specific tools', () => {

@@ -73,7 +73,7 @@ export function stripMarkdownForTts(text: string): string {
  * Truncate text to a maximum character length for TTS synthesis.
  * Tries to break at sentence boundaries.
  *
- * OpenCLAW defaults: 1500 chars normal, 4096 max.
+ * Defaults: 1500 chars normal, 4096 max.
  */
 export function truncateForTts(
 	text: string,
@@ -106,20 +106,16 @@ export function truncateForTts(
  * Synthesize text via TTS and return a ChannelReplyPayload
  * with the audio file as a media reference.
  *
- * Writes the audio to a temp file (matching OpenCLAW pattern)
- * so the normal media-resolver path can pick it up.
+ * Writes the audio to a temp file so the normal
+ * media-resolver path can pick it up.
  */
 export async function synthesizeToPayload(
 	text: string,
 	options: TtsPayloadOptions = {}
 ): Promise<ChannelReplyPayload> {
-	// 1. Strip markdown
 	const clean = stripMarkdownForTts(text)
-
-	// 2. Truncate
 	const truncated = truncateForTts(clean)
 
-	// 3. Build overrides
 	const overrides: ElevenLabsTtsOverrides = {
 		...options.overrides
 	}
@@ -127,7 +123,6 @@ export async function synthesizeToPayload(
 	if (options.preferOpus && !overrides.outputFormat)
 		overrides.outputFormat = 'opus_16000'
 
-	// 4. Synthesize
 	const synthStart = Date.now()
 	const result = await elevenLabsTTS({
 		text: truncated,
@@ -140,18 +135,15 @@ export async function synthesizeToPayload(
 		format: result.outputFormat
 	})
 
-	// 5. Write to temp file
 	const tmpDir = options.tmpDir ?? os.tmpdir()
 	const fileName = `ellie-tts-${Date.now()}.${result.extension}`
 	const tempPath = path.join(tmpDir, fileName)
 	await Bun.write(tempPath, new Uint8Array(result.audio))
 
-	// 6. Schedule cleanup
 	setTimeout(() => {
 		unlink(tempPath).catch(() => {})
 	}, TEMP_FILE_TTL)
 
-	// 7. Return payload
 	return {
 		mediaRefs: [tempPath],
 		audioAsVoice: true

@@ -16,13 +16,13 @@ export function useChatDB(sessionId: string) {
 		clearSessionStats()
 	}
 
-	const stream = useStreamConnection(
+	const stream = useStreamConnection({
 		sessionId,
 		upsert,
 		replaceAll,
 		resetSessionState,
 		setSessionStats
-	)
+	})
 
 	return {
 		messages,

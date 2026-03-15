@@ -33,17 +33,28 @@ interface StreamConnectionResult {
 	retry: () => void
 }
 
-export function useStreamConnection(
-	sessionId: string,
-	upsert: (msgs: StoredChatMessage[]) => void,
-	replaceAll: (msgs: StoredChatMessage[]) => void,
-	resetSessionState: () => void,
+export interface StreamConnectionDeps {
+	sessionId: string
+	upsert: (msgs: StoredChatMessage[]) => void
+	replaceAll: (msgs: StoredChatMessage[]) => void
+	resetSessionState: () => void
 	setSessionStats: (
 		updater:
 			| SessionStats
 			| ((prev: SessionStats) => SessionStats)
 	) => void
+}
+
+export function useStreamConnection(
+	deps: StreamConnectionDeps
 ): StreamConnectionResult {
+	const {
+		sessionId,
+		upsert,
+		replaceAll,
+		resetSessionState,
+		setSessionStats
+	} = deps
 	const [connectionState, setConnectionState] =
 		useState<ConnectionState>('connecting')
 	const [error, setError] = useState<string | null>(null)

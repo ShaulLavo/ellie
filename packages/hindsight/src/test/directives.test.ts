@@ -36,8 +36,6 @@ describe('Directives', () => {
 		t.cleanup()
 	})
 
-	// ── Create ──────────────────────────────────────────────────────────────
-
 	describe('createDirective', () => {
 		it('creates a directive with required fields', () => {
 			const directive = t.hs.createDirective(bankId, {
@@ -105,8 +103,6 @@ describe('Directives', () => {
 		})
 	})
 
-	// ── Get ─────────────────────────────────────────────────────────────────
-
 	describe('getDirective', () => {
 		it('retrieves a directive by ID', () => {
 			const created = t.hs.createDirective(bankId, {
@@ -126,8 +122,6 @@ describe('Directives', () => {
 			).toBeUndefined()
 		})
 	})
-
-	// ── List ────────────────────────────────────────────────────────────────
 
 	describe('listDirectives', () => {
 		it('returns empty array when none exist', () => {
@@ -188,8 +182,6 @@ describe('Directives', () => {
 			expect(directives[2]!.name).toBe('Low')
 		})
 	})
-
-	// ── Update ──────────────────────────────────────────────────────────────
 
 	describe('updateDirective', () => {
 		it('updates the name', () => {
@@ -274,8 +266,6 @@ describe('Directives', () => {
 		})
 	})
 
-	// ── Delete ──────────────────────────────────────────────────────────────
-
 	describe('deleteDirective', () => {
 		it('deletes a directive', () => {
 			const directive = t.hs.createDirective(bankId, {
@@ -289,8 +279,6 @@ describe('Directives', () => {
 			).toBeUndefined()
 		})
 	})
-
-	// ── Tag-based loading for reflect ────────────────────────────────────
 
 	describe('loadDirectivesForReflect', () => {
 		it('returns only tagless directives when no session tags', () => {
@@ -381,8 +369,6 @@ describe('Directives', () => {
 			expect(result[0]!.name).toBe('Scoped')
 		})
 	})
-
-	// ── Directives in reflect (TDD — need agentic mock to verify prompt content) ─
 
 	describe('directives in reflect', () => {
 		it('reflect includes active directives in system prompt (verified via adapter call)', async () => {

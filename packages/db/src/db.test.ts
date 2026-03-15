@@ -34,8 +34,6 @@ describe('EventStore', () => {
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
 
-	// ── Session CRUD ────────────────────────────────────────────────────────
-
 	describe('session CRUD', () => {
 		it('creates a session with auto-generated ID', () => {
 			const session = store.createSession()
@@ -77,8 +75,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Cascade delete ────────────────────────────────────────────────────
-
 	describe('cascade delete', () => {
 		it('deleting session cascades to events', () => {
 			store.createSession('cascade')
@@ -102,8 +98,6 @@ describe('EventStore', () => {
 			).toHaveLength(0)
 		})
 	})
-
-	// ── Event append ──────────────────────────────────────────────────────
 
 	describe('append', () => {
 		beforeEach(() => {
@@ -192,8 +186,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Dedupe ────────────────────────────────────────────────────────────
-
 	describe('dedupe', () => {
 		beforeEach(() => {
 			store.createSession('s1')
@@ -256,8 +248,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Payload validation ────────────────────────────────────────────────
-
 	describe('payload validation', () => {
 		beforeEach(() => {
 			store.createSession('s1')
@@ -306,8 +296,6 @@ describe('EventStore', () => {
 			).not.toThrow()
 		})
 	})
-
-	// ── Query ─────────────────────────────────────────────────────────────
 
 	describe('query', () => {
 		beforeEach(() => {
@@ -417,8 +405,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── assistant_delta absent in DB ──────────────────────────────────────
-
 	describe('assistant_delta not persisted', () => {
 		it('assistant_delta is not a valid event type', () => {
 			store.createSession('s1')
@@ -431,8 +417,6 @@ describe('EventStore', () => {
 			).toThrow()
 		})
 	})
-
-	// ── History reconstruction ────────────────────────────────────────────
 
 	describe('getConversationHistory', () => {
 		it('builds history from user_message, assistant_message, tool_execution', () => {
@@ -590,8 +574,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Stale run recovery ────────────────────────────────────────────────
-
 	describe('findStaleRuns', () => {
 		it('finds runs with agent_start but no run_closed', () => {
 			store.createSession('s1')
@@ -653,8 +635,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Session isolation ─────────────────────────────────────────────────
-
 	describe('session isolation', () => {
 		it('events are isolated between sessions', () => {
 			store.createSession('a')
@@ -715,8 +695,6 @@ describe('EventStore', () => {
 			expect(rb.seq).toBe(1)
 		})
 	})
-
-	// ── Recovery (close/reopen) ───────────────────────────────────────────
 
 	describe('recovery', () => {
 		it('survives close and reopen', () => {
@@ -781,8 +759,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── Performance ───────────────────────────────────────────────────────
-
 	describe('performance', () => {
 		it('appends 1,000 events', () => {
 			store.createSession('bulk')
@@ -810,8 +786,6 @@ describe('EventStore', () => {
 			// No timing assertion — performance varies by environment
 		})
 	})
-
-	// ── afterSeq catch-up ─────────────────────────────────────────────────
 
 	describe('afterSeq catch-up', () => {
 		it('returns only events after the given seq', () => {
@@ -853,8 +827,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── No audit logging ─────────────────────────────────────────────────
-
 	describe('no audit logging', () => {
 		it('does not create an audit directory when appending events', () => {
 			const auditDir = join(tmpDir, 'audit')
@@ -879,8 +851,6 @@ describe('EventStore', () => {
 		})
 	})
 
-	// ── WAL + FK pragmas ──────────────────────────────────────────────────
-
 	describe('pragmas', () => {
 		it('uses WAL mode', () => {
 			const result = store.sqlite
@@ -896,8 +866,6 @@ describe('EventStore', () => {
 			expect(result.foreign_keys).toBe(1)
 		})
 	})
-
-	// ── Key-Value store ───────────────────────────────────────────────────
 
 	describe('kv', () => {
 		it('returns undefined for missing key', () => {
@@ -922,8 +890,6 @@ describe('EventStore', () => {
 			expect(store.getKv('persist')).toBe('yes')
 		})
 	})
-
-	// ── Guardrail events ─────────────────────────────────────────────────
 
 	describe('limit_hit event', () => {
 		it('appends and queries a limit_hit event', () => {
@@ -1013,8 +979,6 @@ describe('EventStore', () => {
 			).toThrow()
 		})
 	})
-
-	// ── Memory events ───────────────────────────────────────────────────
 
 	describe('memory_recall event', () => {
 		it('appends and queries a memory_recall event', () => {

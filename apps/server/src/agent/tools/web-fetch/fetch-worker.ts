@@ -92,8 +92,6 @@ export function callWorker<T>(
 	})
 }
 
-// ── Process lifecycle cleanup ────────────────────────────────────────
-
 // Close browser in worker on exit — covers clean shutdowns
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 	process.on(signal, () => {

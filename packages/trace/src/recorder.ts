@@ -161,8 +161,6 @@ export class TraceRecorder {
 		return results.sort((a, b) => a.ts - b.ts)
 	}
 
-	// ── Path resolution ─────────────────────────────────────────────────
-
 	/**
 	 * Resolve the absolute file path for a trace. On first write for a traceId,
 	 * assigns a day-partitioned path and updates the index.
@@ -222,8 +220,6 @@ export class TraceRecorder {
 
 		return absPath
 	}
-
-	// ── Index loading / rebuilding ──────────────────────────────────────
 
 	#loadOrRebuildIndex(): void {
 		const indexPath = join(this.#traceDir, INDEX_FILENAME)
@@ -303,8 +299,6 @@ export class TraceRecorder {
 			'utf-8'
 		)
 	}
-
-	// ── Helpers ─────────────────────────────────────────────────────────
 
 	/** Get the next monotonic sequence number for a trace. */
 	#nextSeq(traceId: string): number {

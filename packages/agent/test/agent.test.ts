@@ -11,9 +11,7 @@ import type {
 	AnyTextAdapter
 } from '@tanstack/ai'
 
-// ============================================================================
 // Test helpers
-// ============================================================================
 
 function textResponseStream(text: string): StreamChunk[] {
 	return [
@@ -65,9 +63,7 @@ function createMockStreamFn(
 
 const mockAdapter = {} as AnyTextAdapter
 
-// ============================================================================
 // Tests
-// ============================================================================
 
 describe('Agent', () => {
 	test('default state has anthropic model', () => {

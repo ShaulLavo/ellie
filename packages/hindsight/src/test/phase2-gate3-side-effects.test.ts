@@ -46,8 +46,6 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 		t.cleanup()
 	})
 
-	// ── Helper: count rows in tables ────────────────────────────────────────
-
 	function countMemoryUnits(): number {
 		const hdb = getHdb(t.hs)
 		const row = hdb.sqlite
@@ -93,8 +91,6 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 			)
 			.get(bankId) as Record<string, unknown> | undefined
 	}
-
-	// ── new_trace side effects ─────────────────────────────────────────────
 
 	describe('new_trace side effects', () => {
 		it('inserts exactly one new canonical memory row', async () => {
@@ -157,8 +153,6 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 			expect(decision!.route).toBe('new_trace')
 		})
 	})
-
-	// ── reinforce side effects ─────────────────────────────────────────────
 
 	describe('reinforce side effects', () => {
 		it('does not create a new memory row', async () => {
@@ -309,7 +303,6 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 		})
 	})
 
-	// ── reconsolidate side effects ─────────────────────────────────────────
 	// Note: reconsolidate requires a candidate with moderate similarity (0.78-0.92)
 	// or a conflict. Since we use hash-based embeddings, exact same content
 	// yields 1.0 similarity => reinforce. We test the applyReconsolidate
@@ -360,8 +353,6 @@ describe('Gate 3: Route Side-Effect Invariants', () => {
 			]).toContain(decisions[1]!.route)
 		})
 	})
-
-	// ── policyVersion tracking ─────────────────────────────────────────────
 
 	describe('decision audit trail', () => {
 		it('all decisions have policyVersion=v1', async () => {

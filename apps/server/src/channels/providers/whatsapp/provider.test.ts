@@ -189,8 +189,6 @@ describe('WhatsAppProvider', () => {
 		expect(result.reason).toBe('account-not-found')
 	})
 
-	// ── Phase 7: Additional provider tests ───────────────────────────
-
 	test('getStatus returns disconnected state for unknown account', () => {
 		const status = provider.getStatus('nonexistent')
 		expect(status.state).toBe('disconnected')

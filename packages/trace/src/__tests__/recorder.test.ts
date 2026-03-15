@@ -197,8 +197,6 @@ describe('TraceRecorder', () => {
 		expect(event.payload).toEqual({ data: true })
 	})
 
-	// ── Day-partitioned layout tests ────────────────────────────────
-
 	test('trace files are created under YYYY-MM-DD subdirectories', () => {
 		const scope = createRootScope({
 			traceKind: 'chat'

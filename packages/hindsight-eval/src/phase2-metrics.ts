@@ -15,8 +15,6 @@ import type {
 	NarrativeAccuracyMetrics
 } from './phase2-types'
 
-// ── Gate 6: Duplicate Ratio ──────────────────────────────────────────────
-
 /**
  * Compute the duplicate ratio for a set of ingest events and their
  * resulting canonical memory cluster counts.
@@ -80,8 +78,6 @@ export function evaluateGate6(
 		reductionPercent
 	}
 }
-
-// ── Gate 7: Narrative Accuracy ───────────────────────────────────────────
 
 /**
  * Evaluate whether a single narrative question is answered correctly.

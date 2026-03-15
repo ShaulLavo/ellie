@@ -1,4 +1,4 @@
-import { ChatRoom } from './chat'
+import { ChatRoom } from './chat/chat-room'
 
 function App() {
 	return (

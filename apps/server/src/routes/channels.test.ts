@@ -84,8 +84,6 @@ describe('channel routes', () => {
 		rmSync(dataDir, { recursive: true, force: true })
 	})
 
-	// ── Pairing routes ──────────────────────────────────────────────
-
 	describe('pairing routes', () => {
 		test('GET /pairing/list returns empty for new account', async () => {
 			const res = await app.handle(
@@ -150,8 +148,6 @@ describe('channel routes', () => {
 			expect(allowed).toContain('+15551234567')
 		})
 	})
-
-	// ── AllowFrom routes ────────────────────────────────────────────
 
 	describe('allowFrom routes', () => {
 		test('POST /allow/add normalizes and persists', async () => {
@@ -242,8 +238,6 @@ describe('channel routes', () => {
 		})
 	})
 
-	// ── Settings validation ─────────────────────────────────────────
-
 	describe('settings validation', () => {
 		test('POST /login/start with invalid settings returns 400', async () => {
 			const res = await app.handle(
@@ -288,8 +282,6 @@ describe('channel routes', () => {
 			expect(res.status).toBe(200)
 		})
 	})
-
-	// ── Channel listing ─────────────────────────────────────────────
 
 	describe('channel listing', () => {
 		test('GET / returns provider list', async () => {

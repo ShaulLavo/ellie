@@ -9,7 +9,6 @@
  * - setup-factories: factory functions for test Hindsight instances
  */
 
-// ── Fixtures & constants ─────────────────────────────────────────────────────
 export {
 	EMBED_DIMS,
 	EXTRACTION_TEST_MODE,
@@ -24,10 +23,8 @@ export {
 	describeWithLLM
 } from './setup-fixtures'
 
-// ── Mocks ────────────────────────────────────────────────────────────────────
 export { mockEmbed } from './setup-mocks'
 
-// ── Factories ────────────────────────────────────────────────────────────────
 export type {
 	TestHindsight,
 	RealLLMTestHindsight,

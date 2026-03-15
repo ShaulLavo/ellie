@@ -39,8 +39,6 @@ export type ReflectFn = (
 	bankProfile?: BankProfile
 ) => Promise<ReflectResult>
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
 function rowToMentalModel(
 	row: MentalModelRow
 ): MentalModel {
@@ -61,8 +59,6 @@ function rowToMentalModel(
 		updatedAt: row.updatedAt
 	}
 }
-
-// ── CRUD ───────────────────────────────────────────────────────────────────
 
 export async function createMentalModel(
 	hdb: HindsightDatabase,
@@ -234,8 +230,6 @@ export function deleteMentalModel(
 	modelVec.delete(id)
 }
 
-// ── Refresh ────────────────────────────────────────────────────────────────
-
 export async function refreshMentalModel(
 	hdb: HindsightDatabase,
 	memoryVec: EmbeddingStore,
@@ -323,8 +317,6 @@ export async function refreshMentalModel(
 	}
 }
 
-// ── Semantic Matching ──────────────────────────────────────────────────────
-
 const DEFAULT_MATCH_THRESHOLD = 0.85
 
 /**
@@ -363,8 +355,6 @@ export async function findMatchingModels(
 
 	return models
 }
-
-// ── Tiered Search (for reflect 3-tier tools) ────────────────────────────
 
 const SEARCH_THRESHOLD = 0.5
 const STALE_DAYS = 7

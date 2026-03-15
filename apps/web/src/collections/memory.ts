@@ -36,7 +36,6 @@ export interface BankStats {
 const PAGE_SIZE = 30
 const MAX_CACHED_PAGES = 20
 
-// ── Pagination totals ──────────────────────────────────────────────────────
 const factsTotals = new Map<string, number>()
 const entitiesTotals = new Map<number, number>()
 
@@ -58,8 +57,6 @@ export function getEntitiesTotal(
 ): number | undefined {
 	return entitiesTotals.get(page)
 }
-
-// ── API helpers ─────────────────────────────────────────────────────────────
 
 async function fetchFacts(
 	bankId: string,
@@ -122,8 +119,6 @@ export async function fetchBankStats(
 	return data as unknown as BankStats
 }
 
-// ── Facts collections (paginated) ──────────────────────────────────────────
-
 type FactsCollectionKey =
 	`facts-${string}-${number}-${string}`
 const factsCollections = new Map<
@@ -173,8 +168,6 @@ export function getFactsCollection(
 	}
 	return collection
 }
-
-// ── Entities collections (paginated) ───────────────────────────────────────
 
 const entitiesCollections = new Map<
 	string,

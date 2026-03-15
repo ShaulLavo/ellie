@@ -1,7 +1,5 @@
 import { eden } from '@/lib/eden'
 
-// ── Unwrap Eden response ─────────────────────────────────────────────────────
-
 function unwrap<T>(result: {
 	data: T | null
 	error: { value: unknown } | null
@@ -20,15 +18,13 @@ function unwrap<T>(result: {
 	return result.data as T
 }
 
-// ── API helpers (Eden RPC) ───────────────────────────────────────────────────
-
 export async function fetchDatabases() {
-	const res = await eden.db.databases.get()
+	const res = await eden.api.db.databases.get()
 	return unwrap(res)
 }
 
 export async function fetchTables(database: string) {
-	const res = await eden.db({ database }).tables.get()
+	const res = await eden.api.db({ database }).tables.get()
 	return unwrap(res)
 }
 
@@ -36,7 +32,7 @@ export async function fetchSchema(
 	database: string,
 	table: string
 ) {
-	const res = await eden
+	const res = await eden.api
 		.db({ database })({ table })
 		.schema.get()
 	return unwrap(res)
@@ -53,7 +49,7 @@ export async function fetchRows(
 		filter?: string
 	} = {}
 ) {
-	const res = await eden
+	const res = await eden.api
 		.db({ database })({ table })
 		.get({
 			query: {

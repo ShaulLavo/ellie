@@ -35,8 +35,6 @@ import {
 } from '../../repl/repl-runtime'
 import { createReplTraceDeps } from './repl-trace-deps'
 
-// ── Schema ──────────────────────────────────────────────────────────────
-
 const sessionExecParams = v.object({
 	code: v.pipe(
 		v.string(),
@@ -57,8 +55,6 @@ const sessionExecParams = v.object({
 type SessionExecParams = v.InferOutput<
 	typeof sessionExecParams
 >
-
-// ── Factory ─────────────────────────────────────────────────────────────
 
 /**
  * Create the session_exec tool with a persistent REPL session.

@@ -126,7 +126,6 @@ describe('Causal relation storage', () => {
 	})
 })
 
-// ── Causal relation extraction (real LLM) ───────────────────────────────────
 //
 // Port of test_causal_relations.py::TestCausalRelationsValidation (LLM tests)
 //       + test_causal_relationships.py::TestCausalRelationships

@@ -3,7 +3,7 @@
  * Extracts name and phone numbers from vCard 3.0/4.0 format.
  */
 
-export type ParsedVcard = {
+type ParsedVcard = {
 	name?: string
 	phones: string[]
 }

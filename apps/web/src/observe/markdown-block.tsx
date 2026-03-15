@@ -35,8 +35,9 @@ export function MarkdownBlock({
 			<Streamdown
 				className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-2"
 				plugins={streamdownPlugins}
-				content={value}
-			/>
+			>
+				{value}
+			</Streamdown>
 		</div>
 	)
 }

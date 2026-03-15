@@ -44,8 +44,6 @@ import { SpeechArtifactStore } from './speech-store'
 
 export type { AgentMessage, EventType }
 
-// ── Input/output types ──────────────────────────────────────────────────────
-
 export interface AppendInput<
 	T extends EventType = EventType
 > {
@@ -64,13 +62,9 @@ export interface QueryInput {
 	limit?: number
 }
 
-// ── Resolved path ───────────────────────────────────────────────────────────
-
 const MIGRATIONS_DIR =
 	process.env.ELLIE_DB_MIGRATIONS_DIR ??
 	join(import.meta.dir, '..', 'drizzle')
-
-// ── EventStore ──────────────────────────────────────────────────────────────
 
 export class EventStore {
 	readonly db: ReturnType<typeof drizzle>
@@ -88,8 +82,6 @@ export class EventStore {
 
 		this.speechArtifacts = new SpeechArtifactStore(this.db)
 	}
-
-	// ── Session CRUD ────────────────────────────────────────────────────────
 
 	createSession(id?: string): SessionRow {
 		const now = Date.now()
@@ -135,8 +127,6 @@ export class EventStore {
 			.where(eq(sessions.id, id))
 			.run()
 	}
-
-	// ── Event append ────────────────────────────────────────────────────────
 
 	append<T extends EventType>(
 		input: AppendInput<T>
@@ -208,8 +198,6 @@ export class EventStore {
 		return result
 	}
 
-	// ── Event update (in-place payload replacement) ─────────────────────────
-
 	/**
 	 * Update the payload of an existing event row in place.
 	 * Used for streaming: the row is INSERT'd on start, then UPDATE'd
@@ -253,8 +241,6 @@ export class EventStore {
 		return result
 	}
 
-	// ── Event query ─────────────────────────────────────────────────────────
-
 	query(input: QueryInput): EventRow[] {
 		const conditions = [
 			eq(events.sessionId, input.sessionId)
@@ -283,8 +269,6 @@ export class EventStore {
 		return base.all()
 	}
 
-	// ── History reconstruction ────────────────────────────────────────────
-
 	getConversationHistory(
 		sessionId: string
 	): AgentMessage[] {
@@ -311,8 +295,6 @@ export class EventStore {
 		}
 		return reorderToolResults(messages)
 	}
-
-	// ── Stale run recovery ────────────────────────────────────────────────
 
 	/**
 	 * Find runs that started but never closed within the given time window.
@@ -355,8 +337,6 @@ export class EventStore {
 		}>
 	}
 
-	// ── Stale event recovery ─────────────────────────────────────────────
-
 	/**
 	 * Mark any in-flight tool_execution (status='running') as 'error'
 	 * and any in-flight assistant_message (streaming=true) as finalized.
@@ -388,8 +368,6 @@ export class EventStore {
 			messages: msgResult.changes
 		}
 	}
-
-	// ── Channel run recovery ─────────────────────────────────────────────
 
 	/**
 	 * Find channel-originated runs that closed within the age window.
@@ -532,8 +510,6 @@ export class EventStore {
 		}))
 	}
 
-	// ── Bootstrap state ──────────────────────────────────────────────────
-
 	getBootstrapState(
 		agentId: string
 	): AgentBootstrapStateRow | undefined {
@@ -640,8 +616,6 @@ export class EventStore {
 		}
 	}
 
-	// ── Key-Value store ──────────────────────────────────────────────────
-
 	getKv(key: string): string | undefined {
 		const row = this.db
 			.select()
@@ -661,8 +635,6 @@ export class EventStore {
 			})
 			.run()
 	}
-
-	// ── Cleanup ───────────────────────────────────────────────────────────
 
 	close(): void {
 		this.sqlite.close()

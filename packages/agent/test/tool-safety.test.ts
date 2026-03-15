@@ -24,9 +24,7 @@ function makeMultiBlockResult(
 	}
 }
 
-// ============================================================================
 // needsTruncation
-// ============================================================================
 
 describe('needsTruncation', () => {
 	test('returns false for small results', () => {
@@ -76,9 +74,7 @@ describe('needsTruncation', () => {
 	})
 })
 
-// ============================================================================
 // truncateToolResult
-// ============================================================================
 
 describe('truncateToolResult', () => {
 	test('returns unchanged result when within limit', () => {

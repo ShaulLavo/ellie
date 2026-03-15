@@ -16,8 +16,6 @@ import {
 } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 
-// ── Path normalization ──────────────────────────────────────────────────────
-
 /**
  * Normalize a file path for deterministic storage and matching.
  *
@@ -36,8 +34,6 @@ export function normalizePath(raw: string): string {
 	}
 	return p.toLowerCase()
 }
-
-// ── Query signal detection ──────────────────────────────────────────────────
 
 /**
  * Detect location signals in a recall query.
@@ -86,8 +82,6 @@ export function detectLocationSignals(
 export function hasLocationSignals(query: string): boolean {
 	return detectLocationSignals(query).length > 0
 }
-
-// ── Location record/find/stats ──────────────────────────────────────────────
 
 export interface LocationContext {
 	memoryId: string
@@ -394,8 +388,6 @@ export function locationStats(
 	}
 }
 
-// ── Resolve query signals to path IDs ───────────────────────────────────────
-
 /**
  * Given location signals from a query, resolve them to known path IDs in the bank.
  */
@@ -510,8 +502,6 @@ export function resolveSignalsToPaths(
 
 	return result
 }
-
-// ── Retrieval boost computation ─────────────────────────────────────────────
 
 /**
  * Batch-compute location boosts for multiple memory candidates.
@@ -692,8 +682,6 @@ export function getMaxStrengthForPaths(
 
 	return result?.maxStr ?? 0
 }
-
-// ── Internal helpers ────────────────────────────────────────────────────────
 
 function findBySignalFallback(
 	hdb: HindsightDatabase,

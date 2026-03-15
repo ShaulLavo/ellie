@@ -14,14 +14,10 @@ import type { EmbeddingStore } from './embedding'
 import type { RetainRoute, RouteDecision } from './types'
 import { ftsReplace } from './fts'
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 export const REINFORCE_THRESHOLD = 0.92
 export const RECONSOLIDATE_THRESHOLD = 0.78
 const CANDIDATE_SEARCH_K = 5
 const POLICY_VERSION = 'v1'
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 interface ExtractedEntity {
 	name: string
@@ -48,8 +44,6 @@ interface RoutingPolicy {
 	reinforceThreshold?: number
 	reconsolidateThreshold?: number
 }
-
-// ── Normalization helpers ────────────────────────────────────────────────────
 
 function normalizeValue(s: string): string {
 	const normalized = s
@@ -93,8 +87,6 @@ function resolveEntityId(
 	return entityId
 }
 
-// ── Core Classification ─────────────────────────────────────────────────────
-
 export function classifyRoute(
 	similarity: number,
 	conflictDetected: boolean,
@@ -113,8 +105,6 @@ export function classifyRoute(
 	}
 	return 'new_trace'
 }
-
-// ── Conflict Detection ──────────────────────────────────────────────────────
 
 export function detectConflict(
 	candidateEntities: Array<{
@@ -154,8 +144,6 @@ export function detectConflict(
 		conflictKeys
 	}
 }
-
-// ── Candidate Lookup ─────────────────────────────────────────────────────────
 
 function loadCandidateEntities(
 	hdb: HindsightDatabase,
@@ -287,8 +275,6 @@ async function findBestCandidateAsync(
 	return filterBestCandidate(ctx, hits)
 }
 
-// ── Route a single fact ──────────────────────────────────────────────────────
-
 /**
  * Build a RouteDecision from a candidate match (or lack thereof).
  */
@@ -356,8 +342,6 @@ export async function routeFact(
 		policy
 	)
 }
-
-// ── Apply Route Actions ──────────────────────────────────────────────────────
 
 export function applyReinforce(
 	hdb: HindsightDatabase,
@@ -529,8 +513,6 @@ export async function applyReconsolidate(
 		throw error
 	}
 }
-
-// ── Decision Logging ─────────────────────────────────────────────────────────
 
 export function logDecision(
 	hdb: HindsightDatabase,

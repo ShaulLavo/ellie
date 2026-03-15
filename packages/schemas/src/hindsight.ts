@@ -9,9 +9,7 @@
  */
 import * as v from 'valibot'
 
-// ============================================================================
 // Enum Schemas
-// ============================================================================
 
 export const factTypeSchema = v.picklist([
 	`world`,
@@ -71,9 +69,7 @@ export type Freshness = v.InferOutput<
 	typeof freshnessSchema
 >
 
-// ============================================================================
 // Data Object Schemas
-// ============================================================================
 
 export const dispositionTraitsSchema = v.object({
 	skepticism: v.number(),
@@ -182,9 +178,7 @@ export const linkSchema = v.object({
 	linkType: linkTypeSchema
 })
 
-// ============================================================================
 // Input Schemas
-// ============================================================================
 
 export const createBankInputSchema = v.object({
 	name: v.string(),
@@ -359,9 +353,7 @@ export const listEntitiesInputSchema = v.object({
 	offset: v.optional(v.number())
 })
 
-// ============================================================================
 // Output Schemas
-// ============================================================================
 
 export const retainResultSchema = v.object({
 	memories: v.array(memoryUnitSchema),
@@ -541,9 +533,7 @@ export type EntityDetail = v.InferOutput<
 	typeof entityDetailSchema
 >
 
-// ============================================================================
 // Episode Schemas
-// ============================================================================
 
 export const retainRouteSchema = v.picklist([
 	`reinforce`,
@@ -612,9 +602,7 @@ export const narrativeResultSchema = v.object({
 	anchorMemoryId: v.string()
 })
 
-// ============================================================================
 // Utility Schemas (used by router)
-// ============================================================================
 
 export const voidSchema = v.undefined_()
 export const listBanksOutputSchema = v.array(bankSchema)

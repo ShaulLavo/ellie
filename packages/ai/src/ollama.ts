@@ -13,8 +13,6 @@ import {
 
 const DEFAULT_BASE_URL = 'http://localhost:11434'
 
-// ── Timeout + retry with exponential backoff ────────────────────────────────
-
 const MAX_RETRIES = 3
 const BASE_DELAY_MS = 500 // 500ms → 1000ms → 2000ms
 const EMBED_TIMEOUT_MS = 60_000 // 60s — Ollama is local but can be slow on cold start
@@ -72,8 +70,6 @@ async function withRetry<T>(
 	throw lastError!
 }
 
-// ── Chat adapter with timeout ───────────────────────────────────────────────
-
 /**
  * Create an Ollama chat adapter with timeout on structuredOutput.
  *
@@ -107,8 +103,6 @@ export function ollamaAdapter(
 
 	return adapter
 }
-
-// ── Embedding functions ─────────────────────────────────────────────────────
 
 interface OllamaEmbedResponse {
 	model: string

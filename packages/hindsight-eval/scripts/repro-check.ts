@@ -30,8 +30,6 @@ const LATEST_DIR = join(
 	'latest'
 )
 
-// ── Config ────────────────────────────────────────────────────────────────
-
 const config: EvalRunConfig = {
 	datasetPath: DEFAULT_FIXTURE,
 	mode: 'hybrid',
@@ -39,8 +37,6 @@ const config: EvalRunConfig = {
 	topK: 10,
 	outputDir: ''
 }
-
-// ── Run 1 ─────────────────────────────────────────────────────────────────
 
 console.log('Hindsight Eval Reproducibility Check')
 console.log('======================================')
@@ -52,15 +48,11 @@ const casesRun1 = await runBaseline({ config })
 const duration1 = Date.now() - startRun1
 console.log(`  Completed in ${duration1}ms`)
 
-// ── Run 2 ─────────────────────────────────────────────────────────────────
-
 console.log('Run 2 of 2...')
 const startRun2 = Date.now()
 const casesRun2 = await runBaseline({ config })
 const duration2 = Date.now() - startRun2
 console.log(`  Completed in ${duration2}ms`)
-
-// ── Compare runs ──────────────────────────────────────────────────────────
 
 console.log('')
 console.log('Comparing runs...')
@@ -135,8 +127,6 @@ for (
 	}
 }
 
-// ── Optional: compare against committed baseline ──────────────────────────
-
 let baselineMatch = true
 const baselineJsonPath = join(LATEST_DIR, 'results.json')
 if (existsSync(baselineJsonPath)) {
@@ -201,8 +191,6 @@ if (existsSync(baselineJsonPath)) {
 	)
 	baselineMatch = false
 }
-
-// ── Result ────────────────────────────────────────────────────────────────
 
 console.log('')
 if (allMatch) {

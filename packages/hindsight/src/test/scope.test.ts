@@ -148,14 +148,14 @@ describe('scopeMatches', () => {
 		).toBe(true)
 	})
 
-	it('includes legacy memories with null scope (strict)', () => {
+	it('does not match when only profile matches (strict)', () => {
 		expect(
 			scopeMatches(
-				{ profile: null, project: null },
 				{ profile: 'alice', project: 'proj-a' },
+				{ profile: 'alice', project: 'proj-b' },
 				'strict'
 			)
-		).toBe(true)
+		).toBe(false)
 	})
 
 	it('defaults to strict mode', () => {
@@ -165,25 +165,5 @@ describe('scopeMatches', () => {
 				{ profile: 'bob', project: 'proj-a' }
 			)
 		).toBe(false)
-	})
-
-	it('matches when memory has profile but no project (legacy partial)', () => {
-		expect(
-			scopeMatches(
-				{ profile: 'alice', project: null },
-				{ profile: 'alice', project: 'proj-a' },
-				'strict'
-			)
-		).toBe(true)
-	})
-
-	it('matches when memory has project but no profile (legacy partial)', () => {
-		expect(
-			scopeMatches(
-				{ profile: null, project: 'proj-a' },
-				{ profile: 'user-x', project: 'proj-a' },
-				'strict'
-			)
-		).toBe(true)
 	})
 })

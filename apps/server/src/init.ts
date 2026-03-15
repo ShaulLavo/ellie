@@ -1,5 +1,4 @@
 import { resolve } from 'node:path'
-import { rmSync, existsSync } from 'node:fs'
 import { EventStore } from '@ellie/db'
 import { env } from '@ellie/env/server'
 import { Hindsight } from '@ellie/hindsight'
@@ -25,12 +24,13 @@ import type { SseState } from './routes/common'
 import { initTraceRuntime } from './trace/init-trace'
 import {
 	ChannelManager,
-	ChannelDeliveryRegistry
+	ChannelDeliveryRegistry,
+	type ChannelProvider
 } from './channels/core'
 import { WhatsAppProvider } from './channels/providers/whatsapp'
 import { TtsPostProcessor } from './lib/tts-post-processor'
 
-export interface ServerContext {
+interface ServerContext {
 	port: number
 	DATA_DIR: string
 	CREDENTIALS_PATH: string
@@ -54,8 +54,6 @@ export interface ServerContext {
 	channelManager: ChannelManager
 }
 
-// ── Phase sub-context types ──────────────────────────────────────────────
-
 interface StoresContext {
 	eventStore: EventStore
 	store: RealtimeStore
@@ -69,35 +67,12 @@ interface UploadsContext {
 	uploadStore: FileStore
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
 function todaySessionId(): string {
 	const now = new Date()
 	const y = now.getFullYear()
 	const m = String(now.getMonth() + 1).padStart(2, '0')
 	const d = String(now.getDate()).padStart(2, '0')
 	return `session-${y}-${m}-${d}`
-}
-
-/**
- * Delete legacy data directories that are no longer used.
- * Safe to call on every startup — skips directories that don't exist.
- */
-function cleanupLegacyData(dataDir: string): void {
-	const legacyDirs = [
-		'audit',
-		'tool-overflow',
-		'repl-artifacts'
-	]
-	for (const dir of legacyDirs) {
-		const fullPath = `${dataDir}/${dir}`
-		if (existsSync(fullPath)) {
-			rmSync(fullPath, { recursive: true, force: true })
-			console.log(
-				`[server] removed legacy directory: ${fullPath}`
-			)
-		}
-	}
 }
 
 /**
@@ -196,12 +171,13 @@ function initUploads(dataDir: string): UploadsContext {
 	return { uploadStore }
 }
 
-// ── Main init ────────────────────────────────────────────────────────────
+interface ServerConfig {
+	port: number
+	CREDENTIALS_PATH: string
+	STUDIO_PUBLIC: string
+}
 
-export async function init(): Promise<ServerContext> {
-	const { DATA_DIR } = env
-
-	// ── Config ────────────────────────────────────────────────────────────
+function resolveConfig(): ServerConfig {
 	const parsedUrl = new URL(env.API_BASE_URL)
 	const port =
 		parsedUrl.port !== ''
@@ -225,36 +201,77 @@ export async function init(): Promise<ServerContext> {
 		]
 	})
 
-	// ── Legacy cleanup ───────────────────────────────────────────────────
-	cleanupLegacyData(DATA_DIR)
+	return { port, CREDENTIALS_PATH, STUDIO_PUBLIC }
+}
 
-	// ── Stores ────────────────────────────────────────────────────────────
+interface ChannelsContext {
+	channelManager: ChannelManager
+	deliveryRegistry: ChannelDeliveryRegistry
+}
+
+function initChannels(deps: {
+	store: RealtimeStore
+	dataDir: string
+	credentialsPath: string
+	getAgentController: () => Promise<AgentController | null>
+	ensureBootstrap: (
+		sessionId: string,
+		runId: string
+	) => void
+	uploadStore: FileStore
+}): ChannelsContext {
+	const deliveryRegistry: ChannelDeliveryRegistry =
+		new ChannelDeliveryRegistry({
+			store: deps.store,
+			getProvider: (
+				id: string
+			): ChannelProvider | undefined =>
+				channelManager.getProvider(id),
+			dataDir: deps.dataDir,
+			credentialsPath: deps.credentialsPath,
+			getTtsConfig: () => ({ mode: 'tagged' })
+		})
+
+	const channelManager: ChannelManager = new ChannelManager(
+		{
+			dataDir: deps.dataDir,
+			store: deps.store,
+			getAgentController: deps.getAgentController,
+			ensureBootstrap: deps.ensureBootstrap,
+			deliveryRegistry,
+			uploadStore: deps.uploadStore
+		}
+	)
+
+	channelManager.register(new WhatsAppProvider())
+
+	return { channelManager, deliveryRegistry }
+}
+
+export async function init(): Promise<ServerContext> {
+	const { DATA_DIR } = env
+	const { port, CREDENTIALS_PATH, STUDIO_PUBLIC } =
+		resolveConfig()
+
 	const { eventStore, store } = initStores(DATA_DIR)
 
-	// ── Workspace seeding ─────────────────────────────────────────────────
 	const workspaceDir = seedWorkspace(DATA_DIR)
 	eventStore.markWorkspaceSeededOnce('main')
 
-	// ── TEI (embeddings & reranking) ──────────────────────────────────────
 	await startTei()
 
-	// ── STT (speech-to-text) ──────────────────────────────────────────────
 	await startStt()
 
-	// ── Hindsight (memory) ────────────────────────────────────────────────
 	const { hindsight } = await initHindsight(
 		DATA_DIR,
 		CREDENTIALS_PATH
 	)
 
-	// ── Tus uploads ───────────────────────────────────────────────────────
 	const { uploadStore } = initUploads(DATA_DIR)
 
-	// ── Trace runtime ─────────────────────────────────────────────────────
 	const { recorder: traceRecorder, blobSink } =
 		initTraceRuntime(DATA_DIR, uploadStore)
 
-	// ── Agent controller (lazy-init + token refresh) ─────────────────────
 	const controllerFactory = new AgentControllerFactory({
 		store,
 		eventStore,
@@ -272,14 +289,12 @@ export async function init(): Promise<ServerContext> {
 
 	const sseState: SseState = { activeClients: 0 }
 
-	// ── Session rotation cron ─────────────────────────────────────────────
 	new Cron('0 0 * * *', () => {
 		store.rotateSession(todaySessionId())
 	})
 
 	// TODO: speech artifact TTL cleanup (expire stale drafts, delete blobs)
 
-	// ── Bootstrap helper ──────────────────────────────────────────────────
 	const ensureBootstrap = (
 		sessionId: string,
 		runId: string
@@ -292,29 +307,16 @@ export async function init(): Promise<ServerContext> {
 			workspaceDir
 		})
 
-	// ── Channels ─────────────────────────────────────────────────────────
-	const deliveryRegistry: ChannelDeliveryRegistry =
-		new ChannelDeliveryRegistry({
+	const { channelManager, deliveryRegistry } = initChannels(
+		{
 			store,
-			getProvider: (id: string) =>
-				channelManager.getProvider(id),
 			dataDir: DATA_DIR,
 			credentialsPath: CREDENTIALS_PATH,
-			getTtsConfig: () => ({ mode: 'tagged' })
-		})
-
-	const channelManager: ChannelManager = new ChannelManager(
-		{
-			dataDir: DATA_DIR,
-			store,
 			getAgentController: () => controllerFactory.get(),
 			ensureBootstrap,
-			deliveryRegistry,
 			uploadStore
 		}
 	)
-
-	channelManager.register(new WhatsAppProvider())
 
 	// Boot channels (awaited so providers are ready for recovery)
 	try {
@@ -323,27 +325,25 @@ export async function init(): Promise<ServerContext> {
 		console.error('[server] Channel boot error:', err)
 	}
 
-	// Watch current session for channel delivery
-	deliveryRegistry.watchSession(store.getCurrentSessionId())
-	// Re-subscribe on daily session rotation
-	store.subscribeToRotation(event => {
-		deliveryRegistry.watchSession(event.newSessionId)
-		ttsPostProcessor.watchSession(event.newSessionId)
-	})
-
-	// ── TTS post-processor (web frontend [[tts]] → audio) ────────────
 	const ttsPostProcessor = new TtsPostProcessor({
 		store,
 		blobSink,
 		credentialsPath: CREDENTIALS_PATH,
 		dataDir: DATA_DIR
 	})
+
+	// Watch current session for channel delivery
+	deliveryRegistry.watchSession(store.getCurrentSessionId())
 	ttsPostProcessor.watchSession(store.getCurrentSessionId())
+	// Re-subscribe on daily session rotation
+	store.subscribeToRotation(event => {
+		deliveryRegistry.watchSession(event.newSessionId)
+		ttsPostProcessor.watchSession(event.newSessionId)
+	})
 
 	// Let delivery registry await TtsPostProcessor audio instead of racing
 	deliveryRegistry.setTtsPostProcessor(ttsPostProcessor)
 
-	// ── Crash recovery (must run after delivery registry is watching) ───
 	// Wait for channel sockets to be fully connected before delivering
 	try {
 		await channelManager.waitForReady()

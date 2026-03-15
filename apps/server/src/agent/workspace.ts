@@ -36,8 +36,6 @@ const TEMPLATE_FILES = [
 	'BOOTSTRAP.md'
 ] as const
 
-export type TemplateFile = (typeof TEMPLATE_FILES)[number]
-
 /**
  * Seed template files into workspace directory.
  * Only writes files that don't already exist (atomic no-clobber).

@@ -11,8 +11,6 @@ import type {
 } from '@ellie/trace'
 import type { AgentToolResult } from '../types'
 
-// ── Test helpers ────────────────────────────────────────────────────────────
-
 function makeScope(): TraceScope {
 	return {
 		traceId: 'trace-1',
@@ -48,8 +46,6 @@ function makeMockBlobSink(
 		...overrides
 	}
 }
-
-// ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('truncateToolResultWithBlob', () => {
 	test('returns unchanged result when under limit', async () => {

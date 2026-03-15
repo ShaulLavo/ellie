@@ -2,8 +2,6 @@ import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname, resolve } from 'path'
 
-// ── SQLite Manager ──────────────────────────────────────────────────────────
-
 export interface SQLiteManagerConfig {
 	customLibPath?: string
 }
@@ -134,8 +132,6 @@ class SQLiteManager {
 		return db
 	}
 }
-
-// ── Public API ──────────────────────────────────────────────────────────────
 
 export { SQLiteManager }
 

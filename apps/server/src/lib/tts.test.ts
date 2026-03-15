@@ -69,7 +69,7 @@ describe('tts', () => {
 		).toThrow('stability must be between 0 and 1')
 	})
 
-	it('sends the same ElevenLabs request shape as OpenClaw', async () => {
+	it('sends expected ElevenLabs request shape', async () => {
 		let requestUrl = ''
 		let requestInit: RequestInit | undefined
 

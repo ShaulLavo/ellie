@@ -13,8 +13,6 @@ import { generateGistWithLLM } from './gist'
 
 import { safeJsonParse } from './util'
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
 export function runInTransaction(
 	hdb: HindsightDatabase,
 	fn: () => void
@@ -58,8 +56,6 @@ export function upsertChunks(
 		hdb.db.insert(hdb.schema.chunks).values(row).run()
 	}
 }
-
-// ── Row mappers ─────────────────────────────────────────────────────────────
 
 export function rowToMemoryUnit(
 	row: typeof import('./schema').memoryUnits.$inferSelect
@@ -119,8 +115,6 @@ export function rowToEntity(
 		lastUpdated: row.lastUpdated
 	}
 }
-
-// ── Gist upgrades ───────────────────────────────────────────────────────────
 
 /** Max concurrent LLM gist generation requests. */
 const GIST_CONCURRENCY = 3

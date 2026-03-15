@@ -31,7 +31,7 @@ export function extractReplyPayloads(
 	}))
 }
 
-export function extractAssistantMessageText(
+function extractAssistantMessageText(
 	payload: Record<string, unknown>
 ): string | null {
 	const message = payload.message as
@@ -81,9 +81,7 @@ export function mediaLocalRoots(
 	return roots
 }
 
-// ── Live-text streaming helpers ─────────────────────────────────────────
-
-export interface StreamingRowSnapshot {
+interface StreamingRowSnapshot {
 	assistantRowId: number
 	text: string
 	streaming: boolean

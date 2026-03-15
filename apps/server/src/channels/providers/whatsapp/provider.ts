@@ -60,8 +60,6 @@ import {
 import * as v from 'valibot'
 import { whatsappSettingsSchema } from './settings-schema'
 
-// ── Silent logger (satisfies Baileys ILogger without pino dep) ──────────────
-
 const noop = () => {}
 const silentLogger: ILogger = {
 	level: 'silent',
@@ -75,14 +73,12 @@ const silentLogger: ILogger = {
 	error: noop
 }
 
-// ── WhatsApp-specific settings (aligned with openclaw) ──────────────────────
-
-export type DmPolicy =
+type DmPolicy =
 	| 'pairing'
 	| 'allowlist'
 	| 'open'
 	| 'disabled'
-export type GroupPolicy = 'allowlist' | 'open' | 'disabled'
+type GroupPolicy = 'allowlist' | 'open' | 'disabled'
 
 export interface WhatsAppSettings extends ChannelAccountSettings {
 	/** Is the bot running on the owner's personal WhatsApp number? */
@@ -121,7 +117,7 @@ const SETTINGS_DEFAULTS: WhatsAppSettings = {
 }
 
 /** Merge raw settings with defaults so every field is safe to access. */
-export function withDefaults(
+function withDefaults(
 	raw: ChannelAccountSettings
 ): WhatsAppSettings {
 	return {
@@ -129,8 +125,6 @@ export function withDefaults(
 		...raw
 	} as WhatsAppSettings
 }
-
-// ── Per-account runtime state ───────────────────────────────────────────────
 
 interface WhatsAppAccount {
 	sock: WASocket | null
@@ -193,8 +187,6 @@ export class WhatsAppProvider implements ChannelProvider {
 		GroupHistoryEntry[]
 	>()
 	readonly #debouncers = new Map<string, InboundDebouncer>()
-
-	// ── ChannelProvider lifecycle ────────────────────────────────────────
 
 	async boot(manager: ChannelManager): Promise<void> {
 		this.#manager = manager
@@ -467,7 +459,7 @@ export class WhatsAppProvider implements ChannelProvider {
 			)
 		}
 
-		// Typing indicator before reply (matching openclaw)
+		// Typing indicator before reply
 		await account.sock
 			.sendPresenceUpdate(
 				'composing',
@@ -627,8 +619,6 @@ export class WhatsAppProvider implements ChannelProvider {
 			)
 			.catch(() => {})
 	}
-
-	// ── Live-text streaming (message edit) ───────────────────────────
 
 	async beginLiveText(
 		target: ChannelDeliveryTarget,
@@ -802,8 +792,6 @@ export class WhatsAppProvider implements ChannelProvider {
 		await Promise.race([Promise.all(promises), timeout])
 	}
 
-	// ── Internal: socket creation ───────────────────────────────────────
-
 	async #createSocket(
 		accountId: string,
 		account: WhatsAppAccount
@@ -873,8 +861,6 @@ export class WhatsAppProvider implements ChannelProvider {
 
 		return sock
 	}
-
-	// ── Internal: connection lifecycle ───────────────────────────────────
 
 	#handleConnectionUpdate(
 		accountId: string,
@@ -1093,8 +1079,6 @@ export class WhatsAppProvider implements ChannelProvider {
 		account.sock = sock
 	}
 
-	// ── Internal: message handling ──────────────────────────────────────
-
 	#getDebouncer(
 		accountId: string,
 		account: WhatsAppAccount
@@ -1126,7 +1110,7 @@ export class WhatsAppProvider implements ChannelProvider {
 			return
 
 		// Options for jidToE164: pass auth dir so @lid JIDs can be resolved
-		// via Baileys' reverse mapping files (matching openclaw)
+		// via Baileys' reverse mapping files
 		const jidOpts: JidToE164Options | undefined =
 			account.authDir
 				? { authDir: account.authDir }
@@ -1155,7 +1139,6 @@ export class WhatsAppProvider implements ChannelProvider {
 
 			const label = msg.pushName ?? senderE164 ?? senderJid
 
-			// ── Access control (via dedicated module) ─────────────
 			const selfE164 = sock.user?.id
 				? jidToE164(sock.user.id, jidOpts)
 				: null
@@ -1187,7 +1170,6 @@ export class WhatsAppProvider implements ChannelProvider {
 				continue
 			}
 
-			// ── Read receipts ─────────────────────────────────────
 			const sendReceipts =
 				account.settings.sendReadReceipts ?? true
 			if (
@@ -1210,7 +1192,6 @@ export class WhatsAppProvider implements ChannelProvider {
 			// History/offline catch-up: marked read above, but don't trigger agent
 			if (event.type === 'append') continue
 
-			// ── Text extraction (unified pipeline) ────────────────
 			let text = extractText(msg.message)
 
 			// Location augmentation
@@ -1249,7 +1230,6 @@ export class WhatsAppProvider implements ChannelProvider {
 
 			if (!text) continue
 
-			// ── Quoted-message context ────────────────────────────
 			const replyContext = describeReplyContext(
 				msg.message,
 				jidOpts
@@ -1264,7 +1244,6 @@ export class WhatsAppProvider implements ChannelProvider {
 				text = `[Replying to ${quotedLabel}: "${quotedPreview}"]\n${text}`
 			}
 
-			// ── Media download ────────────────────────────────────
 			let mediaPath: string | undefined
 			let mediaType: string | undefined
 			let mediaFileName: string | undefined
@@ -1294,7 +1273,6 @@ export class WhatsAppProvider implements ChannelProvider {
 				)
 			}
 
-			// ── Group mention gating ──────────────────────────────
 			if (isGroup) {
 				const groups = account.settings.groups ?? {}
 				const requireMention = resolveRequireMention(
@@ -1398,8 +1376,6 @@ export class WhatsAppProvider implements ChannelProvider {
 			})
 		}
 	}
-
-	// ── Internal: voice message transcription ──────────────────────────
 
 	async #transcribeAudio(
 		msg: WAMessage

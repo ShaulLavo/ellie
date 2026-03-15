@@ -1,14 +1,3 @@
-/**
- * Capability registry — assembles the tool surface.
- *
- * Organizes tools into three tiers:
- *   1. basicDirectTools — trivial single-call tools (shell, search, file I/O).
- *   2. execTools         — one-shot isolated execution (exec) + persistent REPL (session_exec).
- *
- * The controller composes these into the final model-visible tool set:
- *   basicDirectTools + execTools
- */
-
 import type { AgentTool } from '@ellie/agent'
 import type { EventStore } from '@ellie/db'
 import type { TraceRecorder, BlobSink } from '@ellie/trace'
@@ -21,56 +10,32 @@ import { createShellTool } from './shell-tool'
 import { createRipgrepTool } from './ripgrep-tool'
 import { createWebFetchTool } from './web-fetch/tool'
 import { createWebSearchTool } from './web-search/tool'
-import {
-	createSessionExecTool,
-	createExecTool
-} from './session-exec'
+import { createSessionExecTool } from './session-exec/session-exec-tool'
+import { createExecTool } from './session-exec/exec-tool'
 import { createImageGenTool } from './image-gen/tool'
+import { createBrowseVoiceCatalogTool } from './voice/browse-catalog'
+import { createSetDefaultVoiceTool } from './voice/set-default-voice'
 
-// ── Types ───────────────────────────────────────────────────────────────
-
-export interface ToolRegistryConfig {
-	/** Workspace directory for file I/O tools. */
+interface ToolRegistryConfig {
 	workspaceDir: string
-	/** Data directory for generated artifacts and image-gen tracing. */
 	dataDir: string
-	/** Returns the currently bound session ID (for REPL isolation). */
 	getSessionId: () => string | null
-	/** Returns the currently active run ID. */
 	getRunId: () => string | null
-	/** Trace recorder for wrapping tools with traced facades. */
 	traceRecorder?: TraceRecorder
-	/** Blob sink for traced overflow. */
 	blobSink?: BlobSink
-	/** Returns the active trace scope for the current run. Resolved lazily per-invocation. */
 	getTraceScope?: () =>
 		| import('@ellie/trace').TraceScope
 		| undefined
-	/** Event store for tool result caching (web fetch deduplication). */
 	eventStore?: EventStore
-	/** Path to .credentials.json for API key loading. */
 	credentialsPath?: string
 }
 
 export interface ToolRegistry {
-	/** Simple direct tools — shell, search, workspace read/write. */
 	basicDirectTools: AgentTool[]
-	/** Code execution tools (exec + session_exec). */
 	execTools: AgentTool[]
-	/** All tools combined for model registration. */
 	all: AgentTool[]
 }
 
-// ── Registry factory ────────────────────────────────────────────────────
-
-/**
- * Build the complete tool registry.
- *
- * Tool composition:
- *   - exec and session_exec receive basicDirectTools so they are
- *     available as async functions inside the REPL subprocess.
- *   - Neither exec tool includes itself, preventing recursion.
- */
 export function createToolRegistry(
 	config: ToolRegistryConfig
 ): ToolRegistry {
@@ -85,17 +50,24 @@ export function createToolRegistry(
 		createWebFetchTool(config.eventStore),
 		...(webSearch ? [webSearch] : [])
 	]
-	const rawDirectOnlyTools: AgentTool[] = config.blobSink
-		? [
-				createImageGenTool({
-					blobSink: config.blobSink,
-					dataDir: config.dataDir,
-					getSessionId: config.getSessionId,
-					getRunId: config.getRunId,
-					credentialsPath: config.credentialsPath
-				})
-			]
-		: []
+	const voiceCatalog = createBrowseVoiceCatalogTool(
+		config.credentialsPath
+	)
+	const rawDirectOnlyTools: AgentTool[] = [
+		...(config.blobSink
+			? [
+					createImageGenTool({
+						blobSink: config.blobSink,
+						dataDir: config.dataDir,
+						getSessionId: config.getSessionId,
+						getRunId: config.getRunId,
+						credentialsPath: config.credentialsPath
+					})
+				]
+			: []),
+		createSetDefaultVoiceTool(config.dataDir),
+		...(voiceCatalog ? [voiceCatalog] : [])
+	]
 
 	// Traced versions for direct agent-loop use
 	let basicDirectTools: AgentTool[] = [

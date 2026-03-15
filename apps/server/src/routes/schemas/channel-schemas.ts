@@ -1,8 +1,6 @@
 import * as v from 'valibot'
 
-// ── Channel schemas ─────────────────────────────────────────────────────────
-
-export const channelRuntimeStatusSchema = v.object({
+const channelRuntimeStatusSchema = v.object({
 	state: v.picklist([
 		'disconnected',
 		'connecting',
@@ -21,7 +19,7 @@ export const channelRuntimeStatusSchema = v.object({
 	selfId: v.optional(v.string())
 })
 
-export const channelListItemSchema = v.object({
+const channelListItemSchema = v.object({
 	id: v.string(),
 	displayName: v.string(),
 	status: channelRuntimeStatusSchema

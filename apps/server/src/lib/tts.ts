@@ -48,7 +48,7 @@ export interface ElevenLabsTtsOverrides {
 	outputFormat?: string
 }
 
-export interface ElevenLabsTtsResult {
+interface ElevenLabsTtsResult {
 	audio: Buffer
 	outputFormat: string
 	mime: string
@@ -83,7 +83,7 @@ export function isValidVoiceId(voiceId: string): boolean {
 	return /^[a-zA-Z0-9]{10,40}$/.test(voiceId)
 }
 
-export function normalizeElevenLabsBaseUrl(
+function normalizeElevenLabsBaseUrl(
 	baseUrl: string
 ): string {
 	const trimmed = baseUrl.trim()
@@ -173,7 +173,7 @@ function normalizeSeed(seed?: number): number | undefined {
 	return seed
 }
 
-export function resolveElevenLabsApiKey(
+function resolveElevenLabsApiKey(
 	serverEnv: Pick<ServerEnv, 'ELEVENLABS_API_KEY'> = env
 ): string | undefined {
 	return serverEnv.ELEVENLABS_API_KEY || Bun.env.XI_API_KEY
@@ -266,7 +266,7 @@ export function resolveElevenLabsTtsConfig(
 	}
 }
 
-export function inferExtensionFromOutputFormat(
+function inferExtensionFromOutputFormat(
 	outputFormat: string
 ): string {
 	if (outputFormat.startsWith('mp3')) return 'mp3'
@@ -275,7 +275,7 @@ export function inferExtensionFromOutputFormat(
 	return 'bin'
 }
 
-export function inferMimeTypeFromOutputFormat(
+function inferMimeTypeFromOutputFormat(
 	outputFormat: string
 ): string {
 	if (outputFormat.startsWith('mp3')) return 'audio/mpeg'

@@ -7,9 +7,7 @@ const MONOREPO_ROOT = resolve(
 	'../../..'
 )
 
-// ============================================================================
 // Schema
-// ============================================================================
 
 const ServerEnvSchema = v.object({
 	/** Base URL for the API server (must include protocol). Used to derive the port. */
@@ -57,16 +55,12 @@ const ServerEnvSchema = v.object({
 	/** Python parity fallback for reranker TEI URL. */
 	HINDSIGHT_API_RERANKER_TEI_URL: v.optional(v.string()),
 
-	// ── Agent guardrail limits (disabled when unset, empty, 0, or negative) ──
-
 	/** Maximum wall-clock time per agent run in milliseconds. */
 	AGENT_LIMIT_MAX_WALL_CLOCK_MS: v.optional(v.string()),
 	/** Maximum model invocation attempts (including retries) per agent run. */
 	AGENT_LIMIT_MAX_MODEL_CALLS: v.optional(v.string()),
 	/** Maximum accumulated USD cost per agent run. */
 	AGENT_LIMIT_MAX_COST_USD: v.optional(v.string()),
-
-	// ── Exec-mode: script_exec limits ──
 
 	/** Maximum wall-clock time per script_exec invocation in milliseconds (default: 30000). */
 	AGENT_SCRIPT_EXEC_TIMEOUT_MS: v.optional(v.string()),
@@ -77,8 +71,6 @@ const ServerEnvSchema = v.object({
 		v.string()
 	),
 
-	// ── Exec-mode: session_exec limits ──
-
 	/** Maximum wall-clock time per session_exec evaluation in milliseconds (default: 30000). */
 	AGENT_SESSION_EXEC_TIMEOUT_MS: v.optional(v.string()),
 	/** Maximum raw output size per session_exec evaluation in bytes (default: 262144). */
@@ -86,15 +78,11 @@ const ServerEnvSchema = v.object({
 		v.string()
 	),
 
-	// ── Speech-to-text ──
-
 	/** Base URL of the Rust STT service (default: http://localhost:3456). */
 	STT_BASE_URL: v.optional(
 		v.pipe(v.string(), v.url()),
 		'http://localhost:3456'
 	),
-
-	// ── Text-to-speech (ElevenLabs) ──
 
 	/** ElevenLabs API key. Falls back to XI_API_KEY when unset. */
 	ELEVENLABS_API_KEY: v.optional(v.string()),
@@ -130,9 +118,7 @@ const ServerEnvSchema = v.object({
 	TTS_TIMEOUT_MS: v.optional(v.string())
 })
 
-// ============================================================================
 // Parse & export
-// ============================================================================
 
 export type ServerEnv = v.InferOutput<
 	typeof ServerEnvSchema

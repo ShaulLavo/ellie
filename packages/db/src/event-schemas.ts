@@ -5,8 +5,6 @@ import {
 	channelSourceSchema
 } from '@ellie/schemas'
 
-// ── Event types ─────────────────────────────────────────────────────────────
-
 export const EVENT_TYPES = [
 	'user_message',
 	'agent_start',
@@ -78,8 +76,6 @@ export function isDurableEventType(
 ): boolean {
 	return durableEventTypeSet.has(type)
 }
-
-// ── Per-type payload schemas ────────────────────────────────────────────────
 
 const textContent = v.object({
 	type: v.literal('text'),

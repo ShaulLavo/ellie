@@ -17,12 +17,11 @@ export interface ChannelReplyPayload {
 	/**
 	 * When true, audio media should be sent as a voice note
 	 * (WhatsApp: ptt=true, Telegram: sendVoice).
-	 * Matches OpenCLAW's audioAsVoice flag.
 	 */
 	audioAsVoice?: boolean
 }
 
-export interface DirectiveParseResult {
+interface DirectiveParseResult {
 	/** Text with directive tokens removed */
 	text: string
 	/** Extracted media references (file paths / URLs) */
@@ -38,7 +37,7 @@ const FENCE_RE = /^\s*```/
 /**
  * Parse MEDIA: and [[audio_as_voice]] directives from raw assistant text.
  *
- * Grammar (matches OpenCLAW semantics):
+ * Grammar:
  *   MEDIA:<path-or-upload-ref>      → adds to mediaRefs
  *   [[audio_as_voice]]              → sets audioAsVoice = true
  *

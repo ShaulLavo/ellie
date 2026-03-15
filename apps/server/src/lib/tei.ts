@@ -161,13 +161,3 @@ export function stopTei(): void {
 		}
 	}
 }
-
-// Ensure cleanup on exit
-process.on('SIGINT', () => {
-	stopTei()
-	process.exit(0)
-})
-process.on('SIGTERM', () => {
-	stopTei()
-	process.exit(0)
-})

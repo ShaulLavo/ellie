@@ -15,8 +15,6 @@ import { describe, it, expect } from 'bun:test'
 import { detectConflict } from '../routing'
 
 describe('Gate 2: Conflict Detection v1', () => {
-	// ── Key structure verification ─────────────────────────────────────────
-
 	describe('key structure is entity name + attribute (entity_type)', () => {
 		it('conflict key format is name|entity_type', () => {
 			const candidate = [
@@ -45,8 +43,6 @@ describe('Gate 2: Conflict Detection v1', () => {
 			expect(result.conflictKeys).toHaveLength(0)
 		})
 	})
-
-	// ── Case-insensitive normalization ──────────────────────────────────────
 
 	describe('case-insensitive normalization', () => {
 		it('same value in different case => non-conflict', () => {
@@ -83,8 +79,6 @@ describe('Gate 2: Conflict Detection v1', () => {
 		})
 	})
 
-	// ── Whitespace normalization ────────────────────────────────────────────
-
 	describe('whitespace normalization', () => {
 		it('leading/trailing whitespace is trimmed => non-conflict', () => {
 			const candidate = [
@@ -108,8 +102,6 @@ describe('Gate 2: Conflict Detection v1', () => {
 			expect(result.conflictDetected).toBe(false)
 		})
 	})
-
-	// ── Numeric normalization ──────────────────────────────────────────────
 
 	describe('numeric string normalization', () => {
 		it('01.0 and 1 normalize to same value => non-conflict', () => {
@@ -147,8 +139,6 @@ describe('Gate 2: Conflict Detection v1', () => {
 		})
 	})
 
-	// ── Empty array handling ────────────────────────────────────────────────
-
 	describe('empty entity arrays', () => {
 		it('both empty => no conflict', () => {
 			const result = detectConflict([], [])
@@ -172,8 +162,6 @@ describe('Gate 2: Conflict Detection v1', () => {
 			expect(result.conflictDetected).toBe(false)
 		})
 	})
-
-	// ── Multiple entities ──────────────────────────────────────────────────
 
 	describe('multiple entities', () => {
 		it('detects conflict for one entity among many', () => {
@@ -221,8 +209,6 @@ describe('Gate 2: Conflict Detection v1', () => {
 			expect(result.conflictKeys).toHaveLength(0)
 		})
 	})
-
-	// ── Combined normalization ─────────────────────────────────────────────
 
 	describe('combined normalization (case + whitespace + numeric)', () => {
 		it('all normalizations applied together => non-conflict', () => {

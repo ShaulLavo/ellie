@@ -16,13 +16,13 @@ type Listener<T> = (event: T) => void
 
 const MAX_CLOSED_RUNS = 10_000
 
-export type RotationEvent = {
+type RotationEvent = {
 	type: 'rotated'
 	previousSessionId: string
 	newSessionId: string
 }
 
-export interface TraceEntry {
+interface TraceEntry {
 	sessionId: string
 	/** Free-form type, e.g. 'memory.recall_start', 'controller.prompt_failed' */
 	type: string
@@ -45,8 +45,6 @@ export class RealtimeStore {
 		this.ensureSession(initialSessionId)
 		store.setKv('currentSessionId', initialSessionId)
 	}
-
-	// ── Current session ───────────────────────────────────────────────
 
 	getCurrentSessionId(): string {
 		return this.#currentSessionId
@@ -90,8 +88,6 @@ export class RealtimeStore {
 		return this.#store.getSession(sessionId)
 	}
 
-	// ── Session CRUD ──────────────────────────────────────────────────────
-
 	ensureSession(sessionId: string): void {
 		try {
 			if (!this.#store.getSession(sessionId)) {
@@ -134,8 +130,6 @@ export class RealtimeStore {
 		}
 	}
 
-	// ── Ephemeral publish (SSE only, no DB write) ────────────────────────
-
 	/**
 	 * Broadcast an event to SSE subscribers without persisting to the DB.
 	 * Used for high-frequency streaming deltas (message_update) that are
@@ -162,8 +156,6 @@ export class RealtimeStore {
 		} satisfies SessionEvent)
 	}
 
-	// ── Ephemeral trace (SSE only, no disk) ──────────────────────────────
-
 	/**
 	 * Broadcast a structured trace entry as ephemeral SSE only.
 	 * No disk write — canonical trace persistence is handled by TraceRecorder.
@@ -183,8 +175,6 @@ export class RealtimeStore {
 			}
 		} satisfies SessionEvent)
 	}
-
-	// ── Event append (with live notification) ─────────────────────────────
 
 	appendEvent<T extends EventType>(
 		sessionId: string,
@@ -231,8 +221,6 @@ export class RealtimeStore {
 		return row
 	}
 
-	// ── Event update (in-place, with live notification) ─────────────────
-
 	/**
 	 * Update an existing event row's payload in place and notify subscribers.
 	 * Used for streaming: the row is INSERT'd via appendEvent, then UPDATE'd
@@ -272,8 +260,6 @@ export class RealtimeStore {
 		return row
 	}
 
-	// ── Agent run lifecycle ───────────────────────────────────────────────
-
 	closeAgentRun(sessionId: string, runId: string): void {
 		if (this.isAgentRunClosed(sessionId, runId)) return
 		this.appendEvent(
@@ -307,8 +293,6 @@ export class RealtimeStore {
 		return false
 	}
 
-	// ── Session management ───────────────────────────────────────────────
-
 	createSession(id?: string) {
 		return this.#store.createSession(id)
 	}
@@ -316,8 +300,6 @@ export class RealtimeStore {
 	listSessions() {
 		return this.#store.listSessions()
 	}
-
-	// ── Query wrappers ────────────────────────────────────────────────────
 
 	listAgentMessages(sessionId: string): AgentMessage[] {
 		return this.#store.getConversationHistory(sessionId)
@@ -341,16 +323,12 @@ export class RealtimeStore {
 		return this.#store.query({ sessionId, runId })
 	}
 
-	// ── Subscriptions ─────────────────────────────────────────────────────
-
 	subscribeToSession(
 		sessionId: string,
 		listener: Listener<SessionEvent>
 	): () => void {
 		return this.#subscribe(`session:${sessionId}`, listener)
 	}
-
-	// ── Private ───────────────────────────────────────────────────────────
 
 	#runKey(sessionId: string, runId: string): string {
 		return `${sessionId}:${runId}`

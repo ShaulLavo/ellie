@@ -18,8 +18,6 @@ import type {
 import type { EventStore } from '@ellie/db'
 import { createHash } from 'crypto'
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const GLOBAL_BANK_NAME = 'ellie-global'
 
 /** Max turns before triggering a retain flush. */
@@ -36,9 +34,7 @@ const RECALL_MERGE_CAP = 12
 /** Maximum fact texts to include in the retain event for UI compactness. */
 const FACTS_UI_CAP = 8
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-export interface BankSearchResult {
+interface BankSearchResult {
 	bankId: string
 	status: 'ok' | 'error' | 'timeout'
 	error?: string
@@ -46,7 +42,7 @@ export interface BankSearchResult {
 	methodResults?: Record<string, MethodResult>
 }
 
-export interface MemoryRecallPayload {
+interface MemoryRecallPayload {
 	parts: Array<{
 		type: 'memory'
 		text: string
@@ -60,7 +56,7 @@ export interface MemoryRecallPayload {
 	timestamp: number
 }
 
-export interface MemoryRetainPayload {
+interface MemoryRetainPayload {
 	parts: Array<{
 		type: 'memory-retain'
 		factsStored: number
@@ -81,13 +77,11 @@ interface TranscriptTurn {
 	seq: number
 }
 
-export interface MemoryOrchestratorConfig {
+interface MemoryOrchestratorConfig {
 	hindsight: Hindsight
 	eventStore: EventStore
 	workspaceDir: string
 }
-
-// ── Orchestrator ──────────────────────────────────────────────────────────────
 
 export class MemoryOrchestrator {
 	private readonly hindsight: Hindsight
@@ -103,8 +97,6 @@ export class MemoryOrchestrator {
 		this.workspaceDir = config.workspaceDir
 		this.projectBankName = `ellie-project-${hashWorkspace(config.workspaceDir)}`
 	}
-
-	// ── Recall ──────────────────────────────────────────────────────────────
 
 	/**
 	 * Run recall against both banks in parallel.
@@ -202,8 +194,6 @@ export class MemoryOrchestrator {
 		return { payload, contextBlock: formattedContext }
 	}
 
-	// ── Retain ──────────────────────────────────────────────────────────────
-
 	/**
 	 * Evaluate whether a retain should be triggered, and if so, run it.
 	 *
@@ -233,19 +223,12 @@ export class MemoryOrchestrator {
 		const bankIds = this.resolveBankIds()
 		const turns = this.collectUnprocessedTurns(sessionId)
 
-		// Diagnostic: log retain evaluation for debugging
 		const totalChars = turns.reduce(
 			(sum, t) => sum + t.content.length,
 			0
 		)
-		console.log(
-			`[retain] evaluating session=${sessionId} turns=${turns.length} totalChars=${totalChars} force=${!!force}`
-		)
 
 		if (turns.length === 0) {
-			console.log(
-				`[retain] skipped: no unprocessed turns for session=${sessionId}`
-			)
 			return null
 		}
 
@@ -269,10 +252,7 @@ export class MemoryOrchestrator {
 		} else if (hasImmediateTurn) {
 			trigger = 'immediate_turn'
 		} else {
-			console.log(
-				`[retain] skipped: thresholds not met turns=${turns.length}/${MAX_TURNS_PER_CHUNK} chars=${totalChars}/${MAX_CHARS_PER_CHUNK} immediate=${hasImmediateTurn}`
-			)
-			return null // Thresholds not met
+			return null
 		}
 
 		const start = performance.now()
@@ -287,17 +267,9 @@ export class MemoryOrchestrator {
 		const documentId = `${sessionId}:${seqFrom}-${seqTo}`
 		const content = JSON.stringify(transcript)
 
-		// Extract facts once, then retain into all banks in parallel
-		// (avoids duplicate LLM extraction calls across banks)
-		console.log(
-			`[retain] triggered=${trigger} session=${sessionId} seqRange=${seqFrom}-${seqTo} extracting facts...`
-		)
 		const facts = await this.hindsight.extract(
 			bankIds[0],
 			content
-		)
-		console.log(
-			`[retain] extracted ${facts.length} facts, retaining into ${bankIds.length} banks...`
 		)
 		const results = await Promise.allSettled(
 			bankIds.map(bankId =>
@@ -374,8 +346,6 @@ export class MemoryOrchestrator {
 		}
 	}
 
-	// ── Internal helpers ────────────────────────────────────────────────────
-
 	/**
 	 * Resolve bank IDs, lazily creating banks if they don't exist.
 	 */
@@ -431,29 +401,13 @@ export class MemoryOrchestrator {
 		})
 
 		const mapped = rows.map(row => {
-			const turn = rowToTranscriptTurn(row)
-			if (!turn) {
-				const parsed = JSON.parse(row.payload) as Record<
-					string,
-					unknown
-				>
-				console.log(
-					`[retain] filtered out row seq=${row.seq} type=${row.type} streaming=${parsed.streaming}`
-				)
-			}
-			return turn
+			return rowToTranscriptTurn(row)
 		})
 
-		const turns = mapped.filter(
+		return mapped.filter(
 			(t): t is TranscriptTurn =>
 				t !== null && t.content.length > 0
 		)
-
-		console.log(
-			`[retain] collectUnprocessedTurns session=${sessionId} cursor=${minCursor} rawRows=${rows.length} validTurns=${turns.length}`
-		)
-
-		return turns
 	}
 
 	private cursorKey(
@@ -464,9 +418,6 @@ export class MemoryOrchestrator {
 	}
 }
 
-// ── Utility functions ────────────────────────────────────────────────────────
-
-/** Extract text content from a parsed message payload. */
 function extractTextContent(
 	content:
 		| string

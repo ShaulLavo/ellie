@@ -88,8 +88,6 @@ function insertTestMemory(
 }
 
 describe('Gate 6: Performance Guardrail', () => {
-	// ── Pure function benchmarks ──────────────────────────────────────────────
-
 	describe('packContext performance', () => {
 		it('packContext at 100 candidates completes in < 50ms p95', () => {
 			const candidates: PackCandidate[] = Array.from(
@@ -203,8 +201,6 @@ describe('Gate 6: Performance Guardrail', () => {
 		})
 	})
 
-	// ── DB-dependent benchmarks ───────────────────────────────────────────────
-
 	describe('location boost performance', () => {
 		let t: TestHindsight
 		let bankId: string
@@ -278,8 +274,6 @@ describe('Gate 6: Performance Guardrail', () => {
 			expect(p95).toBeLessThan(100)
 		})
 	})
-
-	// ── estimateTokens performance ────────────────────────────────────────────
 
 	describe('estimateTokens performance', () => {
 		it('100k token estimations complete in < 50ms total', () => {

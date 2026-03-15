@@ -8,7 +8,8 @@ import {
 	AGENT_START_TYPES,
 	AGENT_END_TYPES,
 	isAgentRunOpen,
-	eventToStored
+	eventToStored,
+	parsePayload
 } from '../event-transforms'
 import {
 	RENDERABLE_TYPES,
@@ -22,20 +23,12 @@ import { snapshotToMessages } from './snapshot-transform'
 import type { EventType } from '@ellie/schemas/events'
 
 function extractInputTokens(event: EventRow): number {
-	try {
-		const parsed =
-			typeof event.payload === 'string'
-				? JSON.parse(event.payload)
-				: event.payload
-		const msg = (parsed as Record<string, unknown>)
-			.message as Record<string, unknown> | undefined
-		const usage = msg?.usage as
-			| { input?: number }
-			| undefined
-		return usage?.input ?? 0
-	} catch {
-		return 0
-	}
+	const parsed = parsePayload(event.payload)
+	const msg = parsed.message as
+		| Record<string, unknown>
+		| undefined
+	const usage = msg?.usage as { input?: number } | undefined
+	return usage?.input ?? 0
 }
 
 /** Merge a delta into previous session stats. */

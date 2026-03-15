@@ -33,8 +33,6 @@ function createTestStores(dir: string) {
 	return { eventStore, store }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-
 function makeAssistantPayload(
 	text: string,
 	opts?: {
@@ -357,7 +355,7 @@ describe('ChannelDeliveryRegistry', () => {
 				kind: 'media' as const,
 				origin: 'tool_upload' as const,
 				uploadId,
-				mime: 'image/png'
+				mimeType: 'image/png'
 			},
 			runId
 		)
@@ -483,8 +481,6 @@ describe('ChannelDeliveryRegistry', () => {
 		registry.watchSession('test-session')
 	})
 
-	// ── Multi-target fan-out ──────────────────────────────────────────────
-
 	test('fans out to multiple contributing targets', async () => {
 		const sessionId = 'test-session'
 		const runId = 'run-multi'
@@ -563,8 +559,6 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages).toHaveLength(1)
 	})
 
-	// ── Pending row-based binding ─────────────────────────────────────────
-
 	test('registerPending promotes to run delivery on runId backfill', async () => {
 		const sessionId = 'test-session'
 		const runId = 'run-pending'
@@ -614,8 +608,6 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages[0].text).toBe('Pending resolved')
 		expect(sentMessages[0].target).toEqual(target)
 	})
-
-	// ── Per-item checkpoint persistence ─────────────────────────────────
 
 	test('persists per-item checkpoint events after delivery', async () => {
 		const sessionId = 'test-session'
@@ -788,7 +780,7 @@ describe('ChannelDeliveryRegistry', () => {
 					kind: 'media' as const,
 					origin: 'tool_upload' as const,
 					uploadId: id,
-					mime: 'image/png'
+					mimeType: 'image/png'
 				},
 				runId
 			)
@@ -822,8 +814,6 @@ describe('ChannelDeliveryRegistry', () => {
 			expect(cp.kind).toBe('media')
 		}
 	})
-
-	// ── Recovery / durability ────────────────────────────────────────────
 
 	test('recoverUndelivered re-delivers stranded channel runs', async () => {
 		const sessionId = 'test-session'
@@ -1023,7 +1013,7 @@ describe('ChannelDeliveryRegistry', () => {
 					kind: 'media' as const,
 					origin: 'tool_upload' as const,
 					uploadId: id,
-					mime: 'image/png'
+					mimeType: 'image/png'
 				},
 				runId
 			)
@@ -1125,7 +1115,7 @@ describe('ChannelDeliveryRegistry', () => {
 				kind: 'media' as const,
 				origin: 'tool_upload' as const,
 				uploadId: imageUploadId,
-				mime: 'image/png'
+				mimeType: 'image/png'
 			},
 			runId
 		)
@@ -1142,7 +1132,7 @@ describe('ChannelDeliveryRegistry', () => {
 						origin: 'tts' as const,
 						uploadId: audioUploadId,
 						url: `/api/uploads-rpc/${audioUploadId}/content`,
-						mime: 'audio/ogg',
+						mimeType: 'audio/ogg',
 						size: 23,
 						synthesizedText: 'Here is the bonobo.'
 					},
@@ -1432,8 +1422,6 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages).toHaveLength(0)
 	})
 
-	// ── Composing indicators during tool execution ──────────────────────
-
 	test('sends composing indicator when tool_execution is appended', async () => {
 		const sessionId = 'test-session'
 		const runId = 'run-composing'
@@ -1514,8 +1502,6 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentComposing).toHaveLength(0)
 	})
 
-	// ── Image generation auto-append ─────────────────────────────────────
-
 	test('queues media from multiple tool calls until the next assistant message', async () => {
 		const sessionId = 'test-session'
 		const runId = 'run-multi-step-media'
@@ -1591,7 +1577,7 @@ describe('ChannelDeliveryRegistry', () => {
 				kind: 'media' as const,
 				origin: 'tool_upload' as const,
 				uploadId: 'step-1.png',
-				mime: 'image/png'
+				mimeType: 'image/png'
 			},
 			runId
 		)
@@ -1646,7 +1632,7 @@ describe('ChannelDeliveryRegistry', () => {
 					kind: 'media' as const,
 					origin: 'tool_upload' as const,
 					uploadId,
-					mime: 'image/png'
+					mimeType: 'image/png'
 				},
 				runId
 			)
@@ -1692,7 +1678,7 @@ describe('ChannelDeliveryRegistry', () => {
 					kind: 'media' as const,
 					origin: 'tool_upload' as const,
 					uploadId,
-					mime: 'image/png'
+					mimeType: 'image/png'
 				},
 				runId
 			)
@@ -1820,7 +1806,7 @@ describe('ChannelDeliveryRegistry', () => {
 				kind: 'media' as const,
 				origin: 'tool_upload' as const,
 				uploadId,
-				mime: 'image/png'
+				mimeType: 'image/png'
 			},
 			runId
 		)
@@ -1917,7 +1903,7 @@ describe('ChannelDeliveryRegistry', () => {
 					kind: 'media' as const,
 					origin: 'tool_upload' as const,
 					uploadId,
-					mime: 'image/png'
+					mimeType: 'image/png'
 				},
 				runId
 			)
@@ -1999,8 +1985,6 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages[0].text).toBe('Image failed')
 		expect(sentMedia).toHaveLength(0)
 	})
-
-	// ── Multi-target recovery ───────────────────────────────────────────
 
 	test('one target fully delivered while another resumes from middle', async () => {
 		const sessionId = 'test-session'

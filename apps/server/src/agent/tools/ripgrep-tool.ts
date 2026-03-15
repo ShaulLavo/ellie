@@ -11,8 +11,6 @@ import type {
 	AgentToolResult
 } from '@ellie/agent'
 
-// ── Schema ──────────────────────────────────────────────────────────────
-
 const ripgrepParams = v.object({
 	pattern: v.pipe(
 		v.string(),
@@ -64,13 +62,9 @@ const ripgrepParams = v.object({
 
 type RipgrepParams = v.InferOutput<typeof ripgrepParams>
 
-// ── Constants ───────────────────────────────────────────────────────────
-
 const DEFAULT_MAX_RESULTS = 100
 const DEFAULT_TIMEOUT_MS = 15_000
 const MAX_OUTPUT_CHARS = 50_000
-
-// ── Factory ─────────────────────────────────────────────────────────────
 
 /**
  * Create the ripgrep tool with a default search path.

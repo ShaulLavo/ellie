@@ -6,9 +6,7 @@
 import * as v from 'valibot'
 import { speechMetadataSchema } from './speech'
 
-// ============================================================================
 // Content block schemas
-// ============================================================================
 
 export const textContentSchema = v.object({
 	type: v.literal('text'),
@@ -85,9 +83,7 @@ export const stopReasonSchema = v.picklist([
 	'aborted'
 ])
 
-// ============================================================================
 // Usage / cost schemas
-// ============================================================================
 
 const costSchema = v.object({
 	input: v.number(),
@@ -106,9 +102,7 @@ const usageSchema = v.object({
 	cost: costSchema
 })
 
-// ============================================================================
 // Message schemas
-// ============================================================================
 
 export const channelSourceSchema = v.object({
 	kind: v.string(),
@@ -178,8 +172,6 @@ export const agentMessageSchema = v.variant('role', [
 	toolResultMessageSchema
 ])
 
-// ── Inferred types (canonical — all packages derive from these) ─────────────
-
 // Content blocks
 export type TextContent = v.InferOutput<
 	typeof textContentSchema
@@ -214,9 +206,7 @@ export type AgentMessage = v.InferOutput<
 	typeof agentMessageSchema
 >
 
-// ============================================================================
 // Agent action procedure schemas
-// ============================================================================
 
 export const agentPromptInputSchema = v.object({
 	message: v.string()
@@ -272,9 +262,7 @@ export type AgentHistoryOutput = v.InferOutput<
 	typeof agentHistoryOutputSchema
 >
 
-// ============================================================================
 // Agent event schemas
-// ============================================================================
 
 const agentStartEventSchema = v.object({
 	type: v.literal('agent_start')

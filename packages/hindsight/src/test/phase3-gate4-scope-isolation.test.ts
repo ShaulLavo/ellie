@@ -6,8 +6,7 @@
  *
  * Also validates:
  * - scopeMode='broad' allows cross-project retrieval
- * - Legacy null-scope memories are always included
- * - Partial scope (profile-only, project-only) behaves correctly
+ * - Strict scope matching requires exact profile+project match
  */
 
 import {
@@ -55,8 +54,8 @@ function insertTestMemory(
 			content,
 			factType: 'world',
 			confidence: 1.0,
-			scopeProfile: opts?.profile ?? null,
-			scopeProject: opts?.project ?? null,
+			scopeProfile: opts?.profile ?? DEFAULT_PROFILE,
+			scopeProject: opts?.project ?? DEFAULT_PROJECT,
 			scopeSession: opts?.session ?? null,
 			createdAt: now,
 			updatedAt: now
@@ -139,8 +138,6 @@ afterEach(() => {
 })
 
 describe('Gate 4: Scope Isolation', () => {
-	// ── Primary: BleedRate == 0 ───────────────────────────────────────────────
-
 	describe('strict mode cross-project bleed rate', () => {
 		it('bleed rate is exactly 0 for strict-scoped queries', () => {
 			const hdb = getHdb(t.hs)
@@ -297,8 +294,6 @@ describe('Gate 4: Scope Isolation', () => {
 		})
 	})
 
-	// ── Broad mode sanity ─────────────────────────────────────────────────────
-
 	describe('broad mode allows cross-project retrieval', () => {
 		it('scopeMode=broad returns memories from all projects', () => {
 			const crossProjectScope = {
@@ -337,35 +332,39 @@ describe('Gate 4: Scope Isolation', () => {
 		})
 	})
 
-	// ── Legacy null-scope memories ────────────────────────────────────────────
+	describe('scope matching requires exact match', () => {
+		it('default-scope memories only match default filter', () => {
+			const defaultScope = {
+				profile: DEFAULT_PROFILE,
+				project: DEFAULT_PROJECT
+			}
+			expect(
+				scopeMatches(
+					defaultScope,
+					{
+						profile: DEFAULT_PROFILE,
+						project: DEFAULT_PROJECT
+					},
+					'strict'
+				)
+			).toBe(true)
+			expect(
+				scopeMatches(
+					defaultScope,
+					{ profile: 'alice', project: 'proj-a' },
+					'strict'
+				)
+			).toBe(false)
+		})
 
-	describe('legacy null-scope memories always included', () => {
-		it('null-scope memories match any filter in strict mode', () => {
-			const nullScope = { profile: null, project: null }
-			const filters: Scope[] = [
-				{ profile: 'alice', project: 'proj-a' },
-				{ profile: 'bob', project: 'proj-b' },
+		it('no cross-project bleed with strict matching', () => {
+			const allScopes = [
 				{
 					profile: DEFAULT_PROFILE,
 					project: DEFAULT_PROJECT
-				}
-			]
-
-			for (const filter of filters) {
-				expect(
-					scopeMatches(nullScope, filter, 'strict')
-				).toBe(true)
-			}
-		})
-
-		it('null-scope memories do not count as cross-project bleed', () => {
-			const allScopes = [
-				{
-					profile: null as string | null,
-					project: null as string | null
-				}, // legacy
-				{ profile: 'alice', project: 'proj-a' }, // same project
-				{ profile: 'bob', project: 'proj-b' } // different project
+				},
+				{ profile: 'alice', project: 'proj-a' },
+				{ profile: 'bob', project: 'proj-b' }
 			]
 
 			const filter: Scope = {
@@ -376,43 +375,13 @@ describe('Gate 4: Scope Isolation', () => {
 				scopeMatches(s, filter, 'strict')
 			)
 
-			// Should include: legacy (null) + alice/proj-a
-			expect(hits.length).toBe(2)
-
-			// Cross-project check: only count non-null non-matching as bleed
-			const crossBleed = hits.filter(
-				s =>
-					s.profile !== null &&
-					s.project !== null &&
-					s.project !== 'proj-a'
-			)
-			expect(crossBleed.length).toBe(0)
+			// Should include only alice/proj-a
+			expect(hits.length).toBe(1)
+			expect(hits[0]!.profile).toBe('alice')
 		})
 	})
 
-	// ── Partial scope behavior ────────────────────────────────────────────────
-
-	describe('partial scope matching', () => {
-		it('memory with profile but null project matches any project filter', () => {
-			expect(
-				scopeMatches(
-					{ profile: 'alice', project: null },
-					{ profile: 'alice', project: 'any-project' },
-					'strict'
-				)
-			).toBe(true)
-		})
-
-		it('memory with project but null profile matches any profile filter', () => {
-			expect(
-				scopeMatches(
-					{ profile: null, project: 'proj-a' },
-					{ profile: 'any-profile', project: 'proj-a' },
-					'strict'
-				)
-			).toBe(true)
-		})
-
+	describe('strict scope matching', () => {
 		it('memory with different profile does NOT match', () => {
 			expect(
 				scopeMatches(
@@ -433,8 +402,6 @@ describe('Gate 4: Scope Isolation', () => {
 			).toBe(false)
 		})
 	})
-
-	// ── Location API scope isolation ──────────────────────────────────────────
 
 	describe('location API respects scope', () => {
 		it('locationFind returns only scoped results', () => {
@@ -515,8 +482,6 @@ describe('Gate 4: Scope Isolation', () => {
 			expect(hits.length).toBe(2)
 		})
 	})
-
-	// ── Scope resolution ──────────────────────────────────────────────────────
 
 	describe('scope resolution defaults', () => {
 		it('resolveScope applies defaults for missing fields', () => {

@@ -67,12 +67,21 @@ export function ObservePage() {
 				)}
 			</header>
 			<main className="flex-1 overflow-auto p-4">
-				{events?.map(event => (
-					<TraceEventView
-						key={event.eventId}
-						event={event}
-					/>
-				))}
+				{events?.map(
+					(event: {
+						eventId: string
+						kind: string
+						ts: number
+						seq: number
+						component: string
+						payload: unknown
+					}) => (
+						<TraceEventView
+							key={event.eventId}
+							event={event}
+						/>
+					)
+				)}
 			</main>
 		</div>
 	)

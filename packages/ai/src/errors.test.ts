@@ -15,9 +15,7 @@ import {
 	getOverflowPatterns
 } from './errors'
 
-// ============================================================================
 // Individual detectors
-// ============================================================================
 
 describe('isRateLimitError', () => {
 	test('detects rate limit messages', () => {
@@ -237,9 +235,7 @@ describe('getOverflowPatterns', () => {
 	})
 })
 
-// ============================================================================
 // parseRetryAfter
-// ============================================================================
 
 describe('parseRetryAfter', () => {
 	test('extracts retryAfter as seconds → ms', () => {
@@ -269,9 +265,7 @@ describe('parseRetryAfter', () => {
 	})
 })
 
-// ============================================================================
 // classifyErrorMessage
-// ============================================================================
 
 describe('classifyErrorMessage', () => {
 	test('classifies transient HTTP errors first', () => {
@@ -333,9 +327,7 @@ describe('classifyErrorMessage', () => {
 	})
 })
 
-// ============================================================================
 // classifyError (structured errors)
-// ============================================================================
 
 describe('classifyError', () => {
 	test('classifies plain string', () => {
@@ -465,9 +457,7 @@ describe('classifyError', () => {
 	})
 })
 
-// ============================================================================
 // isRetryable
-// ============================================================================
 
 describe('isRetryable', () => {
 	test('returns true for retryable classified errors', () => {

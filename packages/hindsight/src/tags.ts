@@ -1,7 +1,5 @@
 import type { TagsMatch } from './types'
 
-// ── Tag matching ──────────────────────────────────────────────────────────
-
 /**
  * Check if a memory's tags match the filter tags according to the given mode.
  *

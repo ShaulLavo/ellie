@@ -10,8 +10,6 @@ import {
 	EMBED_DIMS
 } from './setup-fixtures'
 
-// ── Embedding function ───────────────────────────────────────────────────────
-
 /**
  * Hash-based fallback embedding (NOT semantically meaningful).
  * Used when a text is not found in the pre-generated fixture.

@@ -18,9 +18,7 @@ import {
 import { createMemoryAppendDailyTool } from './daily'
 import type { AgentTool } from '@ellie/agent'
 
-// ============================================================================
 // Test helpers
-// ============================================================================
 
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'memory-daily-test-'))
@@ -34,9 +32,7 @@ function todayDateString(): string {
 	return `${y}-${m}-${d}`
 }
 
-// ============================================================================
 // Tests
-// ============================================================================
 
 describe('memory_append_daily tool', () => {
 	let tmpDir: string

@@ -62,8 +62,6 @@ describe('recall cognitive mode', () => {
 		t.cleanup()
 	})
 
-	// ── Mode="hybrid" parity ──────────────────────────────────────────────
-
 	test("mode='hybrid' returns same structure as default", async () => {
 		const defaultResult = await t.hs.recall(
 			bankId,
@@ -85,8 +83,6 @@ describe('recall cognitive mode', () => {
 			expect(Array.isArray(m.sources)).toBe(true)
 		}
 	})
-
-	// ── Mode="cognitive" ─────────────────────────────────────────────────
 
 	test("mode='cognitive' returns scored memories", async () => {
 		const result = await t.hs.recall(bankId, 'hiking', {
@@ -132,8 +128,6 @@ describe('recall cognitive mode', () => {
 		}
 	})
 })
-
-// ── Access write-through ──────────────────────────────────────────────
 
 describe('access write-through on recall', () => {
 	let t: TestHindsight
@@ -344,8 +338,6 @@ describe('access write-through on recall', () => {
 	})
 })
 
-// ── Working memory integration ──────────────────────────────────────────
-
 describe('working memory integration', () => {
 	let t: TestHindsight
 	let bankId: string
@@ -440,8 +432,6 @@ describe('working memory integration', () => {
 		expect(result.memories.length).toBeGreaterThan(0)
 	})
 })
-
-// ── Trace output ────────────────────────────────────────────────────────
 
 describe('cognitive recall trace', () => {
 	let t: TestHindsight

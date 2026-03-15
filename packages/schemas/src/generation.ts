@@ -1,13 +1,3 @@
-/**
- * Image generation types — shared between server and frontend.
- *
- * Canonical sampler/scheduler identifiers, request shapes, and result metadata.
- * Field names use consistent camelCase throughout.
- */
-
-// ── Samplers ────────────────────────────────────────────────────────────────
-
-/** Canonical sampler identifiers that map to Diffusers scheduler classes. */
 export type SamplerName =
 	| 'euler'
 	| 'euler_ancestral'
@@ -22,7 +12,6 @@ export type SamplerName =
 	| 'ddim'
 	| 'uni_pc'
 
-/** All valid sampler names as a runtime array. */
 export const SAMPLER_NAMES: SamplerName[] = [
 	'euler',
 	'euler_ancestral',
@@ -38,9 +27,6 @@ export const SAMPLER_NAMES: SamplerName[] = [
 	'uni_pc'
 ]
 
-// ── Schedulers ──────────────────────────────────────────────────────────────
-
-/** Noise schedule variant applied on top of the sampler. */
 export type SchedulerName = 'normal' | 'karras'
 
 export const SCHEDULER_NAMES: SchedulerName[] = [
@@ -48,11 +34,7 @@ export const SCHEDULER_NAMES: SchedulerName[] = [
 	'karras'
 ]
 
-// ── Model architecture ──────────────────────────────────────────────────────
-
 export type ModelArch = 'sd15' | 'sdxl'
-
-// ── LoRA reference ──────────────────────────────────────────────────────────
 
 export interface LoraRef {
 	name: string
@@ -60,8 +42,6 @@ export interface LoraRef {
 	strengthModel: number
 	strengthClip: number
 }
-
-// ── Generation request (user-facing API) ────────────────────────────────────
 
 export interface GenerateImageRequest {
 	prompt: string
@@ -97,8 +77,6 @@ export interface GenerateImageRequest {
 	}>
 }
 
-// ── Resolved generation config (sent to Python worker) ──────────────────────
-
 export interface ResolvedGenerationConfig {
 	prompt: string
 	negativePrompt: string
@@ -130,30 +108,13 @@ export interface ResolvedGenerationConfig {
 	loras: LoraRef[]
 }
 
-// ── Generation result ───────────────────────────────────────────────────────
-
-export interface GeneratedImage {
-	uploadId: string
-	url: string
-	mime: string
-}
-
 export interface GenerationResult {
 	success: boolean
 	request: ResolvedGenerationConfig
-	/** @deprecated Use `images` array instead */
-	uploadId?: string
-	/** @deprecated Use `images` array instead */
-	url?: string
-	/** @deprecated Use `images` array instead */
-	mime?: string
-	/** All generated images (length matches batchSize) */
-	images?: GeneratedImage[]
+	images?: import('@ellie/trace').BlobRef[]
 	durationMs: number
 	error?: string
 }
-
-// ── Worker protocol messages ────────────────────────────────────────────────
 
 export type WorkerMessageType =
 	| 'init'

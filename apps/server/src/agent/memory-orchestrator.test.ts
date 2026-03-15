@@ -17,9 +17,7 @@ import {
 	IMMEDIATE_TURN_CHARS
 } from './memory-orchestrator'
 
-// ============================================================================
 // Test helpers
-// ============================================================================
 
 function createTempDir(): string {
 	return mkdtempSync(join(tmpdir(), 'memory-orch-test-'))
@@ -147,9 +145,7 @@ function appendAssistantMessage(
 	})
 }
 
-// ============================================================================
 // Tests
-// ============================================================================
 
 describe('MemoryOrchestrator', () => {
 	let tmpDir: string
@@ -164,8 +160,6 @@ describe('MemoryOrchestrator', () => {
 		eventStore.close()
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
-
-	// ── Recall ──────────────────────────────────────────────────────────
 
 	describe('recall', () => {
 		test('returns empty recall when no memories found', async () => {
@@ -265,8 +259,6 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: turn count trigger ──────────────────────────────────────
-
 	describe('retain — turn count trigger', () => {
 		test(`triggers when ${MAX_TURNS_PER_CHUNK} turns accumulated`, async () => {
 			eventStore.createSession('s1')
@@ -319,8 +311,6 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: char count trigger ──────────────────────────────────────
-
 	describe('retain — char count trigger', () => {
 		test(`triggers when total chars exceed ${MAX_CHARS_PER_CHUNK}`, async () => {
 			eventStore.createSession('s1')
@@ -351,8 +341,6 @@ describe('MemoryOrchestrator', () => {
 		})
 	})
 
-	// ── Retain: immediate turn trigger ──────────────────────────────────
-
 	describe('retain — immediate turn trigger', () => {
 		test(`triggers for turn >= ${IMMEDIATE_TURN_CHARS} chars`, async () => {
 			eventStore.createSession('s1')
@@ -378,8 +366,6 @@ describe('MemoryOrchestrator', () => {
 			expect(result!.trigger).toBe('immediate_turn')
 		})
 	})
-
-	// ── Retain: cursor and retry ────────────────────────────────────────
 
 	describe('retain — cursor behavior', () => {
 		test('cursor advances on success, preventing re-processing', async () => {
@@ -431,8 +417,6 @@ describe('MemoryOrchestrator', () => {
 			expect(result).toBeNull()
 		})
 	})
-
-	// ── Bank resolution ─────────────────────────────────────────────────
 
 	describe('bank resolution', () => {
 		test('lazily creates global and project banks', async () => {

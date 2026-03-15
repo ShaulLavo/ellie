@@ -19,8 +19,6 @@ import type { DirectiveRow } from './schema'
 import { matchesTags } from './tags'
 import { safeJsonParse } from './util'
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
 function rowToDirective(row: DirectiveRow): Directive {
 	return {
 		id: row.id,
@@ -34,8 +32,6 @@ function rowToDirective(row: DirectiveRow): Directive {
 		updatedAt: row.updatedAt
 	}
 }
-
-// ── CRUD ───────────────────────────────────────────────────────────────────
 
 export function createDirective(
 	hdb: HindsightDatabase,
@@ -189,8 +185,6 @@ export function deleteDirective(
 		)
 		.run()
 }
-
-// ── Reflect loader ────────────────────────────────────────────────────────
 
 /**
  * Load active directives for injection into reflect() system prompt.
