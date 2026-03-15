@@ -236,8 +236,12 @@ func (d *ThreadListDialog) View(width, height int) string {
 			marker = dialogHighlight.Render(" (current)")
 		}
 
-		line := fmt.Sprintf("%s%s  %s  %d events%s",
-			prefix, id, dialogDim.Render(created), s.CurrentSeq, marker)
+		title := ""
+		if s.Title != nil {
+			title = "  " + *s.Title
+		}
+		line := fmt.Sprintf("%s%s  %s  %s%s%s",
+			prefix, id, dialogDim.Render(created), s.State, title, marker)
 		b.WriteString(line + "\n")
 	}
 

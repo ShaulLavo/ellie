@@ -193,20 +193,6 @@ export type ConnectionState =
 	| 'connected'
 	| 'error'
 
-export interface SessionInfo {
-	model: string
-	agentName: string
-	contextTokens: number
-	contextWindow: number
-	messageCount: number
-	usage?: {
-		promptTokens: number
-		completionTokens: number
-		totalTokens: number
-	}
-	cost?: number
-}
-
 export interface ProgressInfo {
 	taskId: string
 	taskType: 'image-gen' | 'setup' | 'download'

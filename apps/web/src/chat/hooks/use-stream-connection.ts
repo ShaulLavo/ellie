@@ -78,17 +78,9 @@ export function useStreamConnection(
 		(
 			events: EventRow[],
 			branchChanged: boolean,
-			resolvedBranchId: string
+			_resolvedBranchId: string
 		) => {
 			handleSnapshot(events, branchChanged, getDispatch())
-			// Update the current-branch marker so the next reload knows
-			// which branch's cache is valid for "current".
-			if (branchId === 'current') {
-				localStorage.setItem(
-					'ellie-current-branch',
-					resolvedBranchId
-				)
-			}
 		}
 	)
 

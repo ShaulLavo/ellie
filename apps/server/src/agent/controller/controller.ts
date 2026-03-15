@@ -305,7 +305,7 @@ export class AgentController {
 				}
 			}
 
-			// Run memory recall before prompting
+			// TODO: skip recall for skill commands — sending `/skill:foo` to recall is useless
 			await runRecall(
 				this.memoryDeps,
 				branchId,
@@ -319,9 +319,11 @@ export class AgentController {
 				if (expandedText !== text && history.length > 0) {
 					const last = history[history.length - 1]
 					if (last.role === 'user') {
-						last.content = [
-							{ type: 'text', text: expandedText }
-						]
+						last.content = last.content.map(part =>
+							part.type === 'text'
+								? { ...part, text: expandedText }
+								: part
+						)
 					}
 				}
 

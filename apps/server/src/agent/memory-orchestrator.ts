@@ -88,7 +88,7 @@ export class MemoryOrchestrator {
 	private readonly eventStore: EventStore
 	private readonly workspaceDir: string
 	private readonly projectBankName: string
-	/** Guard against concurrent evaluateRetain for the same session. */
+	/** Guard against concurrent evaluateRetain for the same branch. */
 	private retainInFlight = new Set<string>()
 
 	constructor(config: MemoryOrchestratorConfig) {

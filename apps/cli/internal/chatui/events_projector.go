@@ -195,7 +195,7 @@ func EventToStored(row EventRow) StoredMessage {
 	}
 }
 
-// ComputeStatsFromEvents aggregates session stats from raw events.
+// ComputeStatsFromEvents aggregates branch stats from raw events.
 func ComputeStatsFromEvents(events []EventRow) BranchStats {
 	var stats BranchStats
 	for _, ev := range events {

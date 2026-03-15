@@ -23,7 +23,6 @@ import {
 	branchRunParamsSchema,
 	parseAgentActionBody,
 	requireController,
-	resolveBranchId,
 	toStreamGenerator,
 	type SseState
 } from './common'
@@ -81,10 +80,7 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 		.get(
 			'/:branchId/events/:runId',
 			({ params }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				return store.queryRunEvents(branchId, params.runId)
 			},
 			{ params: branchRunParamsSchema }
@@ -92,10 +88,7 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 		.get(
 			'/:branchId/events/:runId/sse',
 			({ params, request }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				return sse(
 					createRunSseStream(
 						store,
@@ -115,10 +108,7 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 					getAgentController
 				)
 
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				const message = parseAgentActionBody(body)
 				controller.steer(branchId, message)
 				return { status: `queued` as const }
@@ -140,10 +130,7 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 					getAgentController
 				)
 
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				controller.abort(branchId)
 				return { status: `aborted` as const }
 			},
@@ -164,10 +151,7 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 					getAgentController
 				)
 
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				return {
 					messages: controller.loadHistory(branchId)
 				}

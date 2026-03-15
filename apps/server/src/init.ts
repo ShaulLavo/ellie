@@ -85,11 +85,16 @@ function initStores(dataDir: string): StoresContext {
 	const store = new RealtimeStore(eventStore)
 
 	// Ensure default assistant thread exists for today
-	store.resolveOrCreateAssistantThread(
-		'assistant',
-		'main',
-		todayDayKey()
+	const today = todayDayKey()
+	const savedDayKey = eventStore.getKv(
+		'assistant.defaultDayKey'
 	)
+	const existing = store.getDefaultAssistantThread()
+
+	if (!existing || savedDayKey !== today) {
+		// Day changed or no thread — rotate (marks old thread view_only)
+		store.rotateAssistantThread('assistant', 'main', today)
+	}
 
 	// Recover stale streaming events (tools stuck as 'running',
 	// messages stuck as 'streaming') from a previous crash.

@@ -45,10 +45,17 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 	// One-shot mode
 	if promptText != "" {
-		return runOneShot(base, promptText, outputFormat)
+		return runOneShot(client, base, promptText, outputFormat)
 	}
 
-	model := chatui.NewModel(base, "current", transcriptDir)
+	// Resolve the current branch from the server
+	current, err := client.GetAssistantCurrent(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Cannot resolve current branch: "+err.Error()))
+		return errSilent
+	}
+
+	model := chatui.NewModel(base, current.BranchID, transcriptDir)
 
 	p := tea.NewProgram(model)
 
@@ -65,7 +72,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runOneShot(baseURL, prompt, format string) error {
+func runOneShot(client *chatui.HTTPClient, baseURL, prompt, format string) error {
 	switch format {
 	case "text", "markdown", "json":
 	default:
@@ -76,9 +83,15 @@ func runOneShot(baseURL, prompt, format string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	current, err := client.GetAssistantCurrent(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, styleErr.Render("Cannot resolve current branch: "+err.Error()))
+		return errSilent
+	}
+
 	cfg := chatui.OneShotConfig{
 		BaseURL:  baseURL,
-		BranchID: "current",
+		BranchID: current.BranchID,
 		Format:   format,
 	}
 

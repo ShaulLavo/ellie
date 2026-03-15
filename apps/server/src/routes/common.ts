@@ -1,6 +1,5 @@
 import { sse } from 'elysia'
 import type { AgentController } from '../agent/controller'
-import type { RealtimeStore } from '../lib/realtime-store'
 import {
 	BadRequestError,
 	ServiceUnavailableError
@@ -29,21 +28,6 @@ export async function requireController(
 		)
 	}
 	return controller
-}
-
-export function resolveBranchId(
-	store: RealtimeStore,
-	raw: string
-): string {
-	if (raw === 'current') {
-		const assistant = store.getDefaultAssistantThread()
-		if (!assistant)
-			throw new BadRequestError(
-				'No default assistant thread'
-			)
-		return assistant.branchId
-	}
-	return raw
 }
 
 export function normalizeMessageInput(

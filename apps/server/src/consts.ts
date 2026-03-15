@@ -13,8 +13,8 @@ export const API_TAGS = [
 		description: 'Anthropic credential management'
 	},
 	{
-		name: 'Session',
-		description: 'Session management'
+		name: 'Assistant',
+		description: 'Assistant thread management'
 	},
 	{
 		name: 'Uploads',

@@ -14,9 +14,12 @@ import { formatDateTime } from '@ellie/utils'
 
 interface ThreadEntry {
 	id: string
+	agentType: string
+	title: string | null
+	state: string
+	dayKey: string | null
 	createdAt: number
 	updatedAt: number
-	currentSeq: number
 }
 
 interface ThreadListProps {
@@ -121,8 +124,13 @@ export function ThreadList({
 														new Date(thread.createdAt)
 													)}
 												</span>
-												<span>
-													{thread.currentSeq} events
+												{thread.title && (
+													<span className="truncate">
+														{thread.title}
+													</span>
+												)}
+												<span className="text-muted-foreground/60">
+													{thread.state}
 												</span>
 											</div>
 										</div>

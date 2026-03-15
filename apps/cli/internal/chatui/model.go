@@ -1094,10 +1094,10 @@ func (m Model) saveTranscript() tea.Cmd {
 	if m.streamingMsg != nil {
 		msgs = append(msgs, *m.streamingMsg)
 	}
-	sid := m.branchID
+	bid := m.branchID
 	dir := m.transcriptDir
 	return func() tea.Msg {
-		path, err := SaveTranscript(msgs, sid, dir)
+		path, err := SaveTranscript(msgs, bid, dir)
 		return transcriptDoneMsg{path: path, err: err}
 	}
 }

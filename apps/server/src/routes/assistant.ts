@@ -57,12 +57,37 @@ export function createAssistantRoutes(
 				() => {
 					const result = store.getDefaultAssistantThread()
 					if (!result) {
-						return { threadId: '', branchId: '' }
+						throw new NotFoundError(
+							'No default assistant thread configured'
+						)
 					}
 					return result
 				},
 				{
-					response: assistantCurrentResponseSchema
+					response: {
+						200: assistantCurrentResponseSchema,
+						404: errorSchema
+					}
+				}
+			)
+
+			// POST /api/assistant/new — rotate to a new assistant thread
+			.post(
+				'/assistant/new',
+				() => {
+					const dayKey = new Date()
+						.toISOString()
+						.slice(0, 10)
+					return store.rotateAssistantThread(
+						'assistant',
+						'main',
+						dayKey
+					)
+				},
+				{
+					response: {
+						200: createThreadResponseSchema
+					}
 				}
 			)
 

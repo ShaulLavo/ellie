@@ -24,7 +24,6 @@ import {
 	eventsQuerySchema,
 	messageInputSchema,
 	normalizeMessageInput,
-	resolveBranchId,
 	toStreamGenerator,
 	type SseState
 } from './common'
@@ -83,10 +82,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.get(
 			'/branches/:branchId',
 			({ params }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				const branch = store.getBranch(branchId)
 				if (!branch) {
 					throw new NotFoundError('Branch not found')
@@ -105,10 +101,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.get(
 			'/branches/:branchId/messages',
 			({ params }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				return store.listAgentMessages(branchId)
 			},
 			{
@@ -122,10 +115,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.post(
 			'/branches/:branchId/messages',
 			async ({ params, body }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				const input = normalizeMessageInput(body)
 				store.ensureBranch(branchId)
 
@@ -318,10 +308,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.delete(
 			'/branches/:branchId/messages',
 			({ params }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				store.deleteBranch(branchId)
 				return new Response(null, { status: 204 })
 			},
@@ -331,10 +318,17 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.post(
 			'/branches/:branchId/fork',
 			({ params, body }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
+				const branch = store.getBranch(branchId)
+				if (!branch) {
+					throw new NotFoundError('Branch not found')
+				}
+				const thread = store.getThread(branch.threadId)
+				if (thread?.agentType === 'assistant') {
+					throw new BadRequestError(
+						'Cannot fork assistant thread branches'
+					)
+				}
 				const child = store.forkBranch(
 					branchId,
 					body.fromEventId,
@@ -357,10 +351,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.get(
 			'/branches/:branchId/events',
 			({ params, query }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				const afterSeq = query.afterSeq
 				const limit = query.limit
 					? Number(query.limit)
@@ -382,11 +373,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.get(
 			'/branches/:branchId/events/sse',
 			({ params, query, request }) => {
-				const isCurrent = params.branchId === 'current'
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				const afterSeq = query.afterSeq
 
 				const existingEvents = store.queryEvents(
@@ -394,36 +381,11 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 					afterSeq
 				)
 
-				// For 'current' connections, create a combined abort
-				// signal that fires on rotation OR client disconnect.
-				let effectiveRequest = request
-				let unsubRotation: (() => void) | undefined
-				if (isCurrent) {
-					const ac = new AbortController()
-					const abort = ac.abort.bind(ac)
-					request.signal.addEventListener('abort', abort, {
-						once: true
-					})
-					unsubRotation =
-						store.subscribeToAssistantChange(abort)
-					effectiveRequest = new Request(request.url, {
-						signal: ac.signal
-					})
-				}
-
 				const stream = toStreamGenerator<BranchEvent>(
-					effectiveRequest,
+					request,
 					sseState,
-					listener => {
-						const unsubBranch = store.subscribeToBranch(
-							branchId,
-							listener
-						)
-						return () => {
-							unsubBranch()
-							unsubRotation?.()
-						}
-					},
+					listener =>
+						store.subscribeToBranch(branchId, listener),
 					event => ({
 						event: event.type,
 						data: event.event
@@ -448,10 +410,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		.post(
 			'/branches/:branchId/clear',
 			({ params }) => {
-				const branchId = resolveBranchId(
-					store,
-					params.branchId
-				)
+				const branchId = params.branchId
 				store.deleteBranch(branchId)
 				store.ensureBranch(branchId)
 				return {

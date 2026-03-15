@@ -14,9 +14,11 @@ import { PromptInputWithCommands } from './components/prompt-input-with-commands
 
 export function ChatRoom({
 	branchId,
+	threadId,
 	onClear
 }: {
 	branchId: string
+	threadId: string
 	onClear?: () => void
 }) {
 	const { data: status } = useQuery({
@@ -67,7 +69,7 @@ export function ChatRoom({
 					eden.api.threads.get().then(r => r.data)
 				}
 				onResume={async () => {}}
-				currentThreadId={branchId}
+				currentThreadId={threadId}
 			/>
 			<BranchInfo
 				open={showBranchInfo}

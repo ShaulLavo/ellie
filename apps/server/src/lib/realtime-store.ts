@@ -89,6 +89,15 @@ export class RealtimeStore {
 			) {
 				const branchList = this.#store.listBranches(t.id)
 				if (branchList.length > 0) {
+					// Ensure KV pointers are set even on early-return
+					this.#store.setKv(
+						'assistant.defaultThreadId',
+						t.id
+					)
+					this.#store.setKv(
+						'assistant.defaultDayKey',
+						dayKey
+					)
 					return {
 						threadId: t.id,
 						branchId: branchList[0]!.id
@@ -247,7 +256,7 @@ export class RealtimeStore {
 		)
 	}
 
-	// -- Branch session-like methods ------------------------------------------
+	// -- Branch methods -------------------------------------------------------
 
 	getBranch(branchId: string): BranchRow | undefined {
 		return this.#store.getBranch(branchId)
@@ -418,7 +427,9 @@ export class RealtimeStore {
 	}
 
 	listAgentMessages(branchId: string): AgentMessage[] {
-		return this.#store.getConversationHistory(branchId)
+		return this.#store.getLineageConversationHistory(
+			branchId
+		)
 	}
 
 	queryEvents(

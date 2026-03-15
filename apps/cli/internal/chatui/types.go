@@ -136,10 +136,15 @@ type BranchStats struct {
 
 // ThreadEntry is a summary of a chat thread.
 type ThreadEntry struct {
-	ID         string `json:"id"`
-	CurrentSeq int    `json:"currentSeq"`
-	CreatedAt  int64  `json:"createdAt"`
-	UpdatedAt  int64  `json:"updatedAt"`
+	ID          string  `json:"id"`
+	AgentID     string  `json:"agentId"`
+	AgentType   string  `json:"agentType"`
+	WorkspaceID string  `json:"workspaceId"`
+	Title       *string `json:"title"`
+	State       string  `json:"state"`
+	DayKey      *string `json:"dayKey"`
+	CreatedAt   int64   `json:"createdAt"`
+	UpdatedAt   int64   `json:"updatedAt"`
 }
 
 // AssistantCurrent is the response from GET /api/assistant/current.

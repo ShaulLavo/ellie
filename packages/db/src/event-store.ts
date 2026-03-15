@@ -501,6 +501,45 @@ export class EventStore {
 	}
 
 	/**
+	 * Load conversation history across the full branch lineage (ancestor chain).
+	 * For forked branches, includes parent events up to fork points.
+	 */
+	getLineageConversationHistory(
+		branchId: string
+	): AgentMessage[] {
+		const lineage = this.getBranchLineage(branchId)
+
+		// Single branch (no forks) — fast path
+		if (lineage.length <= 1) {
+			return this.getConversationHistory(branchId)
+		}
+
+		const rows = this.getLineageHistory(branchId)
+		const conversationTypes = new Set([
+			'user_message',
+			'assistant_message',
+			'tool_execution'
+		])
+		const filtered = rows.filter(r =>
+			conversationTypes.has(r.type)
+		)
+
+		const messages: AgentMessage[] = []
+		for (const row of filtered) {
+			try {
+				const msg = parseEventRow(row)
+				if (msg) messages.push(msg)
+			} catch (err) {
+				console.warn(
+					`[EventStore] malformed payload in event ${row.id} (seq=${row.seq}):`,
+					err
+				)
+			}
+		}
+		return reorderToolResults(messages)
+	}
+
+	/**
 	 * Find runs that started but never closed within the given time window.
 	 */
 	findStaleRuns(
