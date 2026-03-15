@@ -19,7 +19,7 @@ import { createSetDefaultVoiceTool } from './voice/set-default-voice'
 interface ToolRegistryConfig {
 	workspaceDir: string
 	dataDir: string
-	getSessionId: () => string | null
+	getBranchId: () => string | null
 	getRunId: () => string | null
 	traceRecorder?: TraceRecorder
 	blobSink?: BlobSink
@@ -59,7 +59,7 @@ export function createToolRegistry(
 					createImageGenTool({
 						blobSink: config.blobSink,
 						dataDir: config.dataDir,
-						getSessionId: config.getSessionId,
+						getBranchId: config.getBranchId,
 						getRunId: config.getRunId,
 						credentialsPath: config.credentialsPath
 					})
@@ -99,7 +99,7 @@ export function createToolRegistry(
 	let execTools: AgentTool[] = [
 		createExecTool(rawBasicTools, traceDeps),
 		createSessionExecTool(
-			config.getSessionId,
+			config.getBranchId,
 			rawBasicTools,
 			traceDeps
 		)

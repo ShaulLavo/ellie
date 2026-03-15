@@ -16,7 +16,7 @@ export type ImageTraceEvent =
 	  }
 	| {
 			type: 'generation_success'
-			sessionId: string
+			branchId: string
 			uploadId: string
 			mimeType: string
 			durationMs: number
@@ -24,7 +24,7 @@ export type ImageTraceEvent =
 	  }
 	| {
 			type: 'generation_failed'
-			sessionId: string
+			branchId: string
 			error: string
 			durationMs: number
 			recipe?: Record<string, unknown>

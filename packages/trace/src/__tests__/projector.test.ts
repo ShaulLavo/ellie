@@ -104,7 +104,7 @@ describe('projectTraceToEvents', () => {
 				kind: 'tool.end',
 				traceId: 'tr-1',
 				spanId: 'sp-1',
-				sessionId: 'sess-1',
+				branchId: 'sess-1',
 				runId: 'run-1',
 				ts: 12345,
 				payload: { toolName: 'search' }
@@ -113,7 +113,7 @@ describe('projectTraceToEvents', () => {
 		const projected = projectTraceToEvents(events)
 		expect(projected[0].traceId).toBe('tr-1')
 		expect(projected[0].spanId).toBe('sp-1')
-		expect(projected[0].sessionId).toBe('sess-1')
+		expect(projected[0].branchId).toBe('sess-1')
 		expect(projected[0].runId).toBe('run-1')
 		expect(projected[0].ts).toBe(12345)
 		expect(projected[0].payload).toEqual({

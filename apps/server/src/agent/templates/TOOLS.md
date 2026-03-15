@@ -148,11 +148,13 @@ Here's the weather for today — sunny with a high of 72°F. [[tts]]
 ```
 
 **When to use `[[tts]]`:**
+
 - When the user sent a voice message (respond in kind)
 - When the user asks you to "say" something or requests a voice reply
 - When audio would genuinely enhance the experience (e.g., reading a poem aloud, pronunciation)
 
 **When NOT to use `[[tts]]`:**
+
 - Code, tables, or structured data (these don't work well as audio)
 - Long responses — keep TTS replies concise and conversational
 - Unless the user expects or requests it

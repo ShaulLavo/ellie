@@ -23,10 +23,7 @@ interface ChannelManagerOptions {
 	dataDir: string
 	store: RealtimeStore
 	getAgentController: () => Promise<AgentController | null>
-	ensureBootstrap: (
-		sessionId: string,
-		runId: string
-	) => void
+	ensureBootstrap: (branchId: string, runId: string) => void
 	deliveryRegistry: ChannelDeliveryRegistry
 	uploadStore?: FileStore
 }
@@ -47,7 +44,7 @@ export class ChannelManager {
 	readonly #store: RealtimeStore
 	readonly #getAgentController: () => Promise<AgentController | null>
 	readonly #ensureBootstrap: (
-		sessionId: string,
+		branchId: string,
 		runId: string
 	) => void
 	readonly #deliveryRegistry: ChannelDeliveryRegistry
@@ -189,8 +186,12 @@ export class ChannelManager {
 	async ingestMessage(
 		msg: ChannelInboundMessage
 	): Promise<void> {
-		const sessionId = this.#store.getCurrentSessionId()
-		this.#store.ensureSession(sessionId)
+		const assistant =
+			this.#store.getDefaultAssistantThread()
+		if (!assistant)
+			throw new Error('No default assistant thread')
+		const branchId = assistant.branchId
+		this.#store.ensureBranch(branchId)
 
 		// Dedupe key: use externalId (e.g. WhatsApp msg ID) when available,
 		// otherwise fall back to content hash with a 2s window based on message timestamp
@@ -258,7 +259,7 @@ export class ChannelManager {
 		}
 
 		const row = this.#store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user' as const,
@@ -281,12 +282,12 @@ export class ChannelManager {
 		if (!controller) return
 
 		const result = await controller.handleMessage(
-			sessionId,
+			branchId,
 			msg.text,
 			row.id
 		)
 
-		this.#ensureBootstrap(sessionId, result.runId)
+		this.#ensureBootstrap(branchId, result.runId)
 
 		// Register delivery target so reply routes back through this channel
 		const deliveryTarget = {
@@ -302,30 +303,30 @@ export class ChannelManager {
 			// Idle — runId is the actual answering run
 			this.#deliveryRegistry.register(
 				result.runId,
-				sessionId,
+				branchId,
 				deliveryTarget
 			)
 		} else if (result.routed === 'followUp') {
-			// Same-session follow-up — register pending only.
+			// Same-branch follow-up — register pending only.
 			// The drain run will backfill the runId and promote it.
 			// (Don't register against activeRunId — that run may be
 			// answering a different conversation's message.)
 			this.#deliveryRegistry.registerPending(
 				row.id,
-				sessionId,
+				branchId,
 				deliveryTarget
 			)
 		} else {
-			// Queued cross-session — bind when runId is backfilled
+			// Queued cross-branch — bind when runId is backfilled
 			this.#deliveryRegistry.registerPending(
 				row.id,
-				sessionId,
+				branchId,
 				deliveryTarget
 			)
 		}
 
-		// Ensure we're watching this session for run completions + backfills
-		this.#deliveryRegistry.watchSession(sessionId)
+		// Ensure we're watching this branch for run completions + backfills
+		this.#deliveryRegistry.watchBranch(branchId)
 	}
 
 	/**

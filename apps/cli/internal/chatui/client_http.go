@@ -51,51 +51,51 @@ func (c *HTTPClient) GetStatus(ctx context.Context) (*StatusResponse, error) {
 	return &out, nil
 }
 
-// ListSessions fetches GET /api/chat/sessions.
-func (c *HTTPClient) ListSessions(ctx context.Context) ([]SessionEntry, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/chat/sessions", nil)
+// ListThreads fetches GET /api/threads.
+func (c *HTTPClient) ListThreads(ctx context.Context) ([]ThreadEntry, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/threads", nil)
 	if err != nil {
-		return nil, fmt.Errorf("create sessions request: %w", err)
+		return nil, fmt.Errorf("create threads request: %w", err)
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("list sessions failed: %w", err)
+		return nil, fmt.Errorf("list threads failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list sessions returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("list threads returned %d", resp.StatusCode)
 	}
-	var out []SessionEntry
+	var out []ThreadEntry
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("decode sessions: %w", err)
+		return nil, fmt.Errorf("decode threads: %w", err)
 	}
 	return out, nil
 }
 
-// GetCurrentSession fetches GET /api/chat/sessions/current (resolves to the current session entry).
-func (c *HTTPClient) GetCurrentSession(ctx context.Context) (*SessionEntry, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/chat/sessions/current", nil)
+// GetAssistantCurrent fetches GET /api/assistant/current (resolves to the current assistant thread+branch).
+func (c *HTTPClient) GetAssistantCurrent(ctx context.Context) (*AssistantCurrent, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/assistant/current", nil)
 	if err != nil {
-		return nil, fmt.Errorf("create current session request: %w", err)
+		return nil, fmt.Errorf("create assistant current request: %w", err)
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("get current session failed: %w", err)
+		return nil, fmt.Errorf("get assistant current failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get current session returned %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("get assistant current returned %d: %s", resp.StatusCode, body)
 	}
-	var out SessionEntry
+	var out AssistantCurrent
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("decode current session: %w", err)
+		return nil, fmt.Errorf("decode assistant current: %w", err)
 	}
 	return &out, nil
 }
 
-// SendMessage posts a user message to the current session, optionally with attachments.
-func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string, attachments []AttachmentResult) error {
+// SendMessage posts a user message to the given branch, optionally with attachments.
+func (c *HTTPClient) SendMessage(ctx context.Context, branchID, content string, attachments []AttachmentResult) error {
 	payload := map[string]interface{}{
 		"content": content,
 	}
@@ -103,7 +103,7 @@ func (c *HTTPClient) SendMessage(ctx context.Context, sessionID, content string,
 		payload["attachments"] = attachments
 	}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat/"+sessionID+"/messages", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat/branches/"+branchID+"/messages", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create send request: %w", err)
 	}
@@ -227,20 +227,20 @@ func (c *HTTPClient) DownloadMedia(ctx context.Context, uploadID string) ([]byte
 	return data, nil
 }
 
-// ClearSession clears the current session via POST /api/chat/:sessionId/clear.
-func (c *HTTPClient) ClearSession(ctx context.Context, sessionID string) error {
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat/"+sessionID+"/clear", nil)
+// ClearBranch clears the current branch via POST /api/chat/branches/:branchId/clear.
+func (c *HTTPClient) ClearBranch(ctx context.Context, branchID string) error {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat/branches/"+branchID+"/clear", nil)
 	if err != nil {
 		return fmt.Errorf("create clear request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("clear session failed: %w", err)
+		return fmt.Errorf("clear branch failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("clear session returned %d", resp.StatusCode)
+		return fmt.Errorf("clear branch returned %d", resp.StatusCode)
 	}
 	return nil
 }

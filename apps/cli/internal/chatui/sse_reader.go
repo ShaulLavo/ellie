@@ -13,17 +13,17 @@ import (
 // sseEvent is a parsed SSE event used by both the TUI SSE client and
 // the one-shot reader.
 type sseEvent struct {
-	Kind      string     // "snapshot", "append", "update"
-	Row       EventRow   // single event (append/update)
-	Rows      []EventRow // multiple events (snapshot)
-	SessionID string     // resolved session ID (snapshot only)
-	Err       error      // connection/parse error
+	Kind     string     // "snapshot", "append", "update"
+	Row      EventRow   // single event (append/update)
+	Rows     []EventRow // multiple events (snapshot)
+	BranchID string     // resolved branch ID (snapshot only)
+	Err      error      // connection/parse error
 }
 
 // connectSSE opens an SSE connection and returns the response body.
 // The caller is responsible for closing it.
-func connectSSE(ctx context.Context, baseURL, sessionID string) (io.ReadCloser, error) {
-	url := fmt.Sprintf("%s/api/chat/%s/events/sse", baseURL, sessionID)
+func connectSSE(ctx context.Context, baseURL, branchID string) (io.ReadCloser, error) {
+	url := fmt.Sprintf("%s/api/chat/branches/%s/events/sse", baseURL, branchID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -89,10 +89,10 @@ func readSSEStream(ctx context.Context, body io.Reader, onEvent func(sseEvent)) 
 
 // snapshotData matches the server's snapshot envelope:
 //
-//	{ sessionId: string, events: EventRow[] }
+//	{ branchId: string, events: EventRow[] }
 type snapshotData struct {
-	SessionID string     `json:"sessionId"`
-	Events    []EventRow `json:"events"`
+	BranchID string     `json:"branchId"`
+	Events   []EventRow `json:"events"`
 }
 
 // dispatchSSEEvent parses the JSON data for a given SSE event type and
@@ -101,10 +101,10 @@ type snapshotData struct {
 func dispatchSSEEvent(eventType, data string, onEvent func(sseEvent)) {
 	switch eventType {
 	case "snapshot":
-		// Try new format: { sessionId, events } first, then plain array.
+		// Try new format: { branchId, events } first, then plain array.
 		var snap snapshotData
 		if err := json.Unmarshal([]byte(data), &snap); err == nil && snap.Events != nil {
-			onEvent(sseEvent{Kind: "snapshot", Rows: snap.Events, SessionID: snap.SessionID})
+			onEvent(sseEvent{Kind: "snapshot", Rows: snap.Events, BranchID: snap.BranchID})
 			return
 		}
 		var rows []EventRow

@@ -19,7 +19,7 @@ export interface DeliveryTtsDeps {
 
 export async function preparePayloadsForDelivery(
 	payload: ChannelReplyPayload,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	inboundAudio: boolean,
 	useRunTtsPostProcessor: boolean,
@@ -32,7 +32,7 @@ export async function preparePayloadsForDelivery(
 			payload,
 			useRunTtsPostProcessor,
 			runId,
-			sessionId,
+			branchId,
 			deps,
 			assistantRowId
 		)
@@ -49,7 +49,7 @@ async function prepareExplicitTtsPayloads(
 	payload: ChannelReplyPayload,
 	useRunTtsPostProcessor: boolean,
 	runId: string,
-	sessionId: string,
+	branchId: string,
 	deps: DeliveryTtsDeps,
 	assistantRowId?: number
 ): Promise<ChannelReplyPayload[]> {
@@ -68,11 +68,11 @@ async function prepareExplicitTtsPayloads(
 		try {
 			await deps.ttsPostProcessor.processRun(
 				runId,
-				sessionId
+				branchId
 			)
 			const audioPayload = extractAssistantAudioPayload(
 				deps.store,
-				sessionId,
+				branchId,
 				runId,
 				assistantRowId
 			)
@@ -110,11 +110,11 @@ async function resolveTtsConfig(
 
 function extractAssistantAudioPayload(
 	store: RealtimeStore,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	assistantRowId?: number
 ): ChannelReplyPayload | null {
-	const rows = store.queryRunEvents(sessionId, runId)
+	const rows = store.queryRunEvents(branchId, runId)
 	for (const row of rows) {
 		if (row.type !== 'assistant_artifact') continue
 		let parsed: Record<string, unknown>

@@ -2,7 +2,7 @@ export const API_TAGS = [
 	{ name: 'Status', description: 'Server status' },
 	{
 		name: 'Chat',
-		description: 'Chat sessions and messages'
+		description: 'Chat threads and messages'
 	},
 	{
 		name: 'Agent',

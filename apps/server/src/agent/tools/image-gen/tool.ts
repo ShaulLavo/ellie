@@ -221,7 +221,7 @@ const imageGenParams = v.object({
 interface ImageGenToolDeps {
 	blobSink: BlobSink
 	dataDir: string
-	getSessionId: () => string | null
+	getBranchId: () => string | null
 	getRunId: () => string | null
 	credentialsPath?: string
 }
@@ -260,14 +260,14 @@ export function createImageGenTool(
 			_signal,
 			onUpdate
 		): Promise<AgentToolResult> => {
-			const sessionId = deps.getSessionId()
+			const branchId = deps.getBranchId()
 			const runId = deps.getRunId()
-			if (!sessionId || !runId) {
+			if (!branchId || !runId) {
 				return {
 					content: [
 						{
 							type: 'text',
-							text: 'Error: No active session or run'
+							text: 'Error: No active branch or run'
 						}
 					],
 					details: { success: false }
@@ -288,7 +288,7 @@ export function createImageGenTool(
 				rawParams as GenerateImageRequest,
 				{
 					blobSink: deps.blobSink,
-					sessionId,
+					branchId,
 					runId,
 					dataDir: deps.dataDir,
 					civitaiToken,

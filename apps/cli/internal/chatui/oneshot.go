@@ -13,7 +13,7 @@ import (
 // OneShotConfig configures a non-interactive one-shot chat.
 type OneShotConfig struct {
 	BaseURL   string
-	SessionID string
+	BranchID string
 	Format    string // "text", "markdown", "json"
 }
 
@@ -42,7 +42,7 @@ func RunOneShot(ctx context.Context, cfg OneShotConfig, prompt string) (*OneShot
 
 	// Start SSE reader in background.
 	eventCh := make(chan sseEvent, 64)
-	go sseReadEvents(ctx, cfg.BaseURL, cfg.SessionID, eventCh)
+	go sseReadEvents(ctx, cfg.BaseURL, cfg.BranchID, eventCh)
 
 	// Wait for the snapshot before sending the message.
 	var snapshotMaxSeq int
@@ -67,7 +67,7 @@ func RunOneShot(ctx context.Context, cfg OneShotConfig, prompt string) (*OneShot
 	}
 
 	// Send the user message.
-	if err := client.SendMessage(ctx, cfg.SessionID, prompt, nil); err != nil {
+	if err := client.SendMessage(ctx, cfg.BranchID, prompt, nil); err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
@@ -200,10 +200,10 @@ func termWidth() int {
 
 // sseReadEvents opens a single SSE connection and sends parsed events to ch.
 // It closes ch when done. No reconnection — fails fast for one-shot use.
-func sseReadEvents(ctx context.Context, baseURL, sessionID string, ch chan<- sseEvent) {
+func sseReadEvents(ctx context.Context, baseURL, branchID string, ch chan<- sseEvent) {
 	defer close(ch)
 
-	body, err := connectSSE(ctx, baseURL, sessionID)
+	body, err := connectSSE(ctx, baseURL, branchID)
 	if err != nil {
 		ch <- sseEvent{Err: err}
 		return

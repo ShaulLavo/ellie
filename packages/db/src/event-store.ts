@@ -6,6 +6,7 @@ import {
 	gt,
 	inArray,
 	isNotNull,
+	isNull,
 	lte,
 	notExists,
 	sql
@@ -19,11 +20,14 @@ import { ulid } from 'fast-ulid'
 import { openDatabase } from './init'
 import * as schema from './schema'
 import {
-	sessions,
+	threads,
+	branches,
 	events,
+	threadChannels,
 	agentBootstrapState,
 	kv,
-	type SessionRow,
+	type ThreadRow,
+	type BranchRow,
 	type EventRow,
 	type AgentBootstrapStateRow
 } from './schema'
@@ -47,7 +51,7 @@ export type { AgentMessage, EventType }
 export interface AppendInput<
 	T extends EventType = EventType
 > {
-	sessionId: string
+	branchId: string
 	type: T
 	payload: EventPayloadMap[T]
 	runId?: string
@@ -55,7 +59,7 @@ export interface AppendInput<
 }
 
 export interface QueryInput {
-	sessionId: string
+	branchId: string
 	afterSeq?: number
 	types?: EventType[]
 	runId?: string
@@ -83,50 +87,254 @@ export class EventStore {
 		this.speechArtifacts = new SpeechArtifactStore(this.db)
 	}
 
-	createSession(id?: string): SessionRow {
-		const now = Date.now()
-		const sessionId = id ?? ulid()
+	// -- Thread methods -------------------------------------------------------
 
-		if (id) {
-			const existing = this.getSession(id)
-			if (existing)
-				throw new Error(`Session already exists: ${id}`)
-		}
+	createThread(
+		agentId: string,
+		agentType: string,
+		workspaceId: string,
+		title?: string,
+		dayKey?: string,
+		id?: string
+	): ThreadRow {
+		const now = Date.now()
+		const threadId = id ?? ulid()
 
 		return this.db
-			.insert(sessions)
+			.insert(threads)
 			.values({
-				id: sessionId,
+				id: threadId,
+				agentId,
+				agentType,
+				workspaceId,
+				title: title ?? null,
+				state: 'active',
+				dayKey: dayKey ?? null,
 				createdAt: now,
-				updatedAt: now,
-				currentSeq: 0
+				updatedAt: now
 			})
 			.returning()
 			.get()
 	}
 
-	getSession(id: string): SessionRow | undefined {
+	getThread(id: string): ThreadRow | undefined {
 		return this.db
 			.select()
-			.from(sessions)
-			.where(eq(sessions.id, id))
+			.from(threads)
+			.where(eq(threads.id, id))
 			.get()
 	}
 
-	listSessions(): SessionRow[] {
+	listThreads(filter?: {
+		agentType?: string
+		state?: string
+	}): ThreadRow[] {
+		const conditions = []
+		if (filter?.agentType) {
+			conditions.push(
+				eq(threads.agentType, filter.agentType)
+			)
+		}
+		if (filter?.state) {
+			conditions.push(eq(threads.state, filter.state))
+		}
 		return this.db
 			.select()
-			.from(sessions)
-			.orderBy(asc(sessions.createdAt))
+			.from(threads)
+			.where(
+				conditions.length > 0
+					? and(...conditions)
+					: undefined
+			)
+			.orderBy(asc(threads.createdAt))
 			.all()
 	}
 
-	deleteSession(id: string): void {
+	updateThread(
+		id: string,
+		patch: { title?: string; state?: string }
+	): ThreadRow | undefined {
+		const now = Date.now()
+		return this.db
+			.update(threads)
+			.set({ ...patch, updatedAt: now })
+			.where(eq(threads.id, id))
+			.returning()
+			.get()
+	}
+
+	// -- Branch methods -------------------------------------------------------
+
+	createBranch(
+		threadId: string,
+		parentBranchId?: string,
+		forkedFromEventId?: number,
+		forkedFromSeq?: number,
+		id?: string
+	): BranchRow {
+		const now = Date.now()
+		const branchId = id ?? ulid()
+
+		return this.db
+			.insert(branches)
+			.values({
+				id: branchId,
+				threadId,
+				parentBranchId: parentBranchId ?? null,
+				forkedFromEventId: forkedFromEventId ?? null,
+				forkedFromSeq: forkedFromSeq ?? null,
+				currentSeq: 0,
+				createdAt: now,
+				updatedAt: now
+			})
+			.returning()
+			.get()
+	}
+
+	getBranch(id: string): BranchRow | undefined {
+		return this.db
+			.select()
+			.from(branches)
+			.where(eq(branches.id, id))
+			.get()
+	}
+
+	listBranches(threadId: string): BranchRow[] {
+		return this.db
+			.select()
+			.from(branches)
+			.where(eq(branches.threadId, threadId))
+			.orderBy(asc(branches.createdAt))
+			.all()
+	}
+
+	deleteBranch(id: string): void {
 		this.db
-			.delete(sessions)
-			.where(eq(sessions.id, id))
+			.delete(branches)
+			.where(eq(branches.id, id))
 			.run()
 	}
+
+	/**
+	 * Walk the parentBranchId chain to root, returning ordered branch IDs
+	 * with their fork cutoff seqs.
+	 */
+	getBranchLineage(branchId: string): Array<{
+		branchId: string
+		forkedFromSeq: number | null
+	}> {
+		const lineage: Array<{
+			branchId: string
+			forkedFromSeq: number | null
+		}> = []
+		let currentId: string | null = branchId
+
+		while (currentId) {
+			const branch = this.getBranch(currentId)
+			if (!branch) break
+			lineage.unshift({
+				branchId: branch.id,
+				forkedFromSeq: branch.forkedFromSeq ?? null
+			})
+			currentId = branch.parentBranchId
+		}
+
+		return lineage
+	}
+
+	/**
+	 * Load ancestor events up to fork points + current branch events.
+	 * Single source of truth for full conversation history across forks.
+	 */
+	getLineageHistory(branchId: string): EventRow[] {
+		const lineage = this.getBranchLineage(branchId)
+		const allEvents: EventRow[] = []
+
+		for (let i = 0; i < lineage.length; i++) {
+			const segment = lineage[i]!
+			const isLast = i === lineage.length - 1
+			const nextForkSeq = isLast
+				? undefined
+				: (lineage[i + 1]?.forkedFromSeq ?? undefined)
+
+			const conditions = [
+				eq(events.branchId, segment.branchId)
+			]
+
+			if (nextForkSeq !== undefined) {
+				conditions.push(lte(events.seq, nextForkSeq))
+			}
+
+			const rows = this.db
+				.select()
+				.from(events)
+				.where(and(...conditions))
+				.orderBy(asc(events.seq))
+				.all()
+
+			allEvents.push(...rows)
+		}
+
+		return allEvents
+	}
+
+	// -- Thread Channel methods -----------------------------------------------
+
+	attachChannel(
+		threadId: string,
+		channelId: string,
+		accountId: string,
+		conversationKey: string
+	): void {
+		this.db
+			.insert(threadChannels)
+			.values({
+				threadId,
+				channelId,
+				accountId,
+				conversationKey,
+				attachedAt: Date.now()
+			})
+			.run()
+	}
+
+	detachChannels(threadId: string): void {
+		this.db
+			.update(threadChannels)
+			.set({ detachedAt: Date.now() })
+			.where(
+				and(
+					eq(threadChannels.threadId, threadId),
+					isNull(threadChannels.detachedAt)
+				)
+			)
+			.run()
+	}
+
+	findActiveChannelThread(
+		channelId: string,
+		accountId: string,
+		conversationKey: string
+	): string | undefined {
+		const row = this.db
+			.select({ threadId: threadChannels.threadId })
+			.from(threadChannels)
+			.where(
+				and(
+					eq(threadChannels.channelId, channelId),
+					eq(threadChannels.accountId, accountId),
+					eq(
+						threadChannels.conversationKey,
+						conversationKey
+					),
+					isNull(threadChannels.detachedAt)
+				)
+			)
+			.get()
+		return row?.threadId
+	}
+
+	// -- Event methods --------------------------------------------------------
 
 	append<T extends EventType>(
 		input: AppendInput<T>
@@ -141,7 +349,7 @@ export class EventStore {
 		const payloadJson = JSON.stringify(input.payload)
 		const now = Date.now()
 
-		// Run in a Drizzle transaction: load session, bump seq, insert event
+		// Run in a Drizzle transaction: load branch, bump seq, insert event
 		const result = this.db.transaction(tx => {
 			// Dedupe check
 			if (input.dedupeKey) {
@@ -150,7 +358,7 @@ export class EventStore {
 					.from(events)
 					.where(
 						and(
-							eq(events.sessionId, input.sessionId),
+							eq(events.branchId, input.branchId),
 							eq(events.dedupeKey, input.dedupeKey)
 						)
 					)
@@ -158,30 +366,30 @@ export class EventStore {
 				if (existing) return existing
 			}
 
-			// Load and bump session seq
-			const session = tx
+			// Load and bump branch seq
+			const branch = tx
 				.select()
-				.from(sessions)
-				.where(eq(sessions.id, input.sessionId))
+				.from(branches)
+				.where(eq(branches.id, input.branchId))
 				.get()
-			if (!session) {
+			if (!branch) {
 				throw new Error(
-					`Session not found: ${input.sessionId}`
+					`Branch not found: ${input.branchId}`
 				)
 			}
 
-			const nextSeq = session.currentSeq + 1
+			const nextSeq = branch.currentSeq + 1
 
-			tx.update(sessions)
+			tx.update(branches)
 				.set({ currentSeq: nextSeq, updatedAt: now })
-				.where(eq(sessions.id, input.sessionId))
+				.where(eq(branches.id, input.branchId))
 				.run()
 
 			// Insert event and return the inserted row
 			const inserted = tx
 				.insert(events)
 				.values({
-					sessionId: input.sessionId,
+					branchId: input.branchId,
 					seq: nextSeq,
 					runId: input.runId ?? null,
 					type: input.type,
@@ -242,9 +450,7 @@ export class EventStore {
 	}
 
 	query(input: QueryInput): EventRow[] {
-		const conditions = [
-			eq(events.sessionId, input.sessionId)
-		]
+		const conditions = [eq(events.branchId, input.branchId)]
 
 		if (input.afterSeq !== undefined) {
 			conditions.push(gt(events.seq, input.afterSeq))
@@ -269,11 +475,9 @@ export class EventStore {
 		return base.all()
 	}
 
-	getConversationHistory(
-		sessionId: string
-	): AgentMessage[] {
+	getConversationHistory(branchId: string): AgentMessage[] {
 		const rows = this.query({
-			sessionId,
+			branchId,
 			types: [
 				'user_message',
 				'assistant_message',
@@ -301,7 +505,7 @@ export class EventStore {
 	 */
 	findStaleRuns(
 		maxAgeMs: number
-	): Array<{ sessionId: string; runId: string }> {
+	): Array<{ branchId: string; runId: string }> {
 		const cutoff = Date.now() - maxAgeMs
 		const e2 = alias(events, 'e2')
 
@@ -310,7 +514,7 @@ export class EventStore {
 			.from(e2)
 			.where(
 				and(
-					eq(e2.sessionId, events.sessionId),
+					eq(e2.branchId, events.branchId),
 					eq(e2.runId, events.runId),
 					eq(e2.type, 'run_closed')
 				)
@@ -318,7 +522,7 @@ export class EventStore {
 
 		const rows = this.db
 			.selectDistinct({
-				sessionId: events.sessionId,
+				branchId: events.branchId,
 				runId: events.runId
 			})
 			.from(events)
@@ -332,7 +536,7 @@ export class EventStore {
 			)
 			.all()
 		return rows as Array<{
-			sessionId: string
+			branchId: string
 			runId: string
 		}>
 	}
@@ -375,7 +579,7 @@ export class EventStore {
 	 * remain undelivered by comparing against delivery checkpoints.
 	 */
 	findCandidateChannelRuns(maxAgeMs: number): Array<{
-		sessionId: string
+		branchId: string
 		runId: string
 		channelId: string
 		accountId: string
@@ -386,14 +590,14 @@ export class EventStore {
 		const rows = this.sqlite
 			.query(
 				`SELECT DISTINCT
-					um.session_id  AS sessionId,
+					um.branch_id  AS branchId,
 					um.run_id      AS runId,
 					json_extract(um.payload, '$.source.channelId')      AS channelId,
 					json_extract(um.payload, '$.source.accountId')      AS accountId,
 					json_extract(um.payload, '$.source.conversationId') AS conversationId
 				FROM events um
 				INNER JOIN events rc
-					ON rc.session_id = um.session_id
+					ON rc.branch_id = um.branch_id
 					AND rc.run_id    = um.run_id
 					AND rc.type      = 'run_closed'
 				WHERE um.type = 'user_message'
@@ -402,7 +606,7 @@ export class EventStore {
 					AND um.created_at >= ?`
 			)
 			.all(cutoff) as Array<{
-			sessionId: string
+			branchId: string
 			runId: string
 			channelId: string
 			accountId: string
@@ -417,7 +621,7 @@ export class EventStore {
 	 * outbound items have already been sent.
 	 */
 	findDeliveryCheckpoints(
-		sessionId: string,
+		branchId: string,
 		runId: string,
 		channelId: string,
 		accountId: string,
@@ -436,7 +640,7 @@ export class EventStore {
 					json_extract(payload, '$.attachmentIndex') AS attachmentIndex,
 					json_extract(payload, '$.kind')            AS kind
 				FROM events
-				WHERE session_id = ?
+				WHERE branch_id = ?
 					AND run_id = ?
 					AND type = 'channel_delivered'
 					AND json_extract(payload, '$.channelId') = ?
@@ -445,7 +649,7 @@ export class EventStore {
 					AND json_extract(payload, '$.replyIndex') IS NOT NULL`
 			)
 			.all(
-				sessionId,
+				branchId,
 				runId,
 				channelId,
 				accountId,
@@ -464,7 +668,7 @@ export class EventStore {
 	 * Used on crash recovery to fail partial live messages.
 	 */
 	findStreamingLiveDeliveries(maxAgeMs: number): Array<{
-		sessionId: string
+		branchId: string
 		runId: string
 		channelId: string
 		accountId: string
@@ -477,7 +681,7 @@ export class EventStore {
 		const rows = this.sqlite
 			.query(
 				`SELECT
-					session_id AS sessionId,
+					branch_id AS branchId,
 					run_id AS runId,
 					json_extract(payload, '$.channelId') AS channelId,
 					json_extract(payload, '$.accountId') AS accountId,
@@ -492,7 +696,7 @@ export class EventStore {
 				ORDER BY id ASC`
 			)
 			.all(cutoff) as Array<{
-			sessionId: string
+			branchId: string
 			runId: string
 			channelId: string
 			accountId: string
@@ -549,7 +753,7 @@ export class EventStore {
 
 	claimBootstrapInjection(
 		agentId: string,
-		sessionId: string
+		branchId: string
 	): boolean {
 		const now = Date.now()
 		return this.db.transaction(tx => {
@@ -565,7 +769,7 @@ export class EventStore {
 				tx.update(agentBootstrapState)
 					.set({
 						bootstrapInjectedAt: now,
-						bootstrapInjectedSessionId: sessionId,
+						bootstrapInjectedBranchId: branchId,
 						status: 'bootstrap_injected',
 						updatedAt: now
 					})
@@ -577,7 +781,7 @@ export class EventStore {
 						agentId,
 						status: 'bootstrap_injected',
 						bootstrapInjectedAt: now,
-						bootstrapInjectedSessionId: sessionId,
+						bootstrapInjectedBranchId: branchId,
 						updatedAt: now
 					})
 					.run()

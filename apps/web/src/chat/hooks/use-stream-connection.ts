@@ -7,7 +7,7 @@ import {
 } from 'react'
 import type { StoredChatMessage } from '@/chat/types'
 import { StreamClient, type EventRow } from '@/lib/stream'
-import type { SessionStats } from '@/lib/chat/session-stats'
+import type { BranchStats } from '@/lib/chat/branch-stats'
 import {
 	handleSnapshot,
 	handleAppend,
@@ -29,19 +29,19 @@ interface StreamConnectionResult {
 		}[],
 		speechRef?: string
 	) => Promise<void>
-	clearSession: () => Promise<void>
+	clearBranch: () => Promise<void>
 	retry: () => void
 }
 
 export interface StreamConnectionDeps {
-	sessionId: string
+	branchId: string
 	upsert: (msgs: StoredChatMessage[]) => void
 	replaceAll: (msgs: StoredChatMessage[]) => void
-	resetSessionState: () => void
-	setSessionStats: (
+	resetBranchState: () => void
+	setBranchStats: (
 		updater:
-			| SessionStats
-			| ((prev: SessionStats) => SessionStats)
+			| BranchStats
+			| ((prev: BranchStats) => BranchStats)
 	) => void
 }
 
@@ -49,11 +49,11 @@ export function useStreamConnection(
 	deps: StreamConnectionDeps
 ): StreamConnectionResult {
 	const {
-		sessionId,
+		branchId,
 		upsert,
 		replaceAll,
-		resetSessionState,
-		setSessionStats
+		resetBranchState,
+		setBranchStats
 	} = deps
 	const [connectionState, setConnectionState] =
 		useState<ConnectionState>('connecting')
@@ -67,7 +67,7 @@ export function useStreamConnection(
 
 	const getDispatch = useEffectEvent(() => ({
 		setStreamingMessage,
-		setSessionStats,
+		setBranchStats,
 		setIsAgentRunning,
 		upsert,
 		replaceAll,
@@ -77,16 +77,16 @@ export function useStreamConnection(
 	const onStreamSnapshot = useEffectEvent(
 		(
 			events: EventRow[],
-			sessionChanged: boolean,
-			resolvedSessionId: string
+			branchChanged: boolean,
+			resolvedBranchId: string
 		) => {
-			handleSnapshot(events, sessionChanged, getDispatch())
-			// Update the current-session marker so the next reload knows
-			// which session's cache is valid for "current".
-			if (sessionId === 'current') {
+			handleSnapshot(events, branchChanged, getDispatch())
+			// Update the current-branch marker so the next reload knows
+			// which branch's cache is valid for "current".
+			if (branchId === 'current') {
 				localStorage.setItem(
-					'ellie-current-session',
-					resolvedSessionId
+					'ellie-current-branch',
+					resolvedBranchId
 				)
 			}
 		}
@@ -101,16 +101,16 @@ export function useStreamConnection(
 	)
 
 	useEffect(() => {
-		const stream = new StreamClient(sessionId, {
+		const stream = new StreamClient(branchId, {
 			onSnapshot: (
 				events,
-				sessionChanged,
-				resolvedSessionId
+				branchChanged,
+				resolvedBranchId
 			) =>
 				onStreamSnapshot(
 					events,
-					sessionChanged,
-					resolvedSessionId
+					branchChanged,
+					resolvedBranchId
 				),
 			onAppend: event => onStreamAppend(event),
 			onUpdate: event => onStreamUpdate(event),
@@ -144,7 +144,7 @@ export function useStreamConnection(
 			stream.disconnect()
 			streamRef.current = null
 		}
-	}, [sessionId])
+	}, [branchId])
 
 	const sendMessage = async (
 		text: string,
@@ -171,15 +171,15 @@ export function useStreamConnection(
 		}
 	}
 
-	const clearSession = async () => {
+	const clearBranch = async () => {
 		const stream = streamRef.current
 		if (!stream) return
 		try {
-			await stream.clearSession()
-			resetSessionState()
+			await stream.clearBranch()
+			resetBranchState()
 		} catch (err) {
 			console.error('[chat-db] Clear failed:', err)
-			setError('Failed to clear session')
+			setError('Failed to clear branch')
 		}
 	}
 
@@ -196,7 +196,7 @@ export function useStreamConnection(
 		streamingMessage,
 		isAgentRunning,
 		sendMessage,
-		clearSession,
+		clearBranch,
 		retry
 	}
 }

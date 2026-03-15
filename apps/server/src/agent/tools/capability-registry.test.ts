@@ -14,7 +14,7 @@ describe('createToolRegistry', () => {
 		const registry = createToolRegistry({
 			workspaceDir: '/tmp',
 			dataDir: '/tmp',
-			getSessionId: () => 'session-1',
+			getBranchId: () => 'session-1',
 			getRunId: () => 'run-1',
 			blobSink: {
 				write: async () => ({
@@ -38,7 +38,7 @@ describe('createToolRegistry', () => {
 		const registry = createToolRegistry({
 			workspaceDir: '/tmp',
 			dataDir: '/tmp',
-			getSessionId: () => 'session-1',
+			getBranchId: () => 'session-1',
 			getRunId: () => 'run-1'
 		})
 
@@ -55,7 +55,7 @@ describe('createToolRegistry', () => {
 		const registry = createToolRegistry({
 			workspaceDir: '/tmp',
 			dataDir: '/tmp',
-			getSessionId: () => 'session-1',
+			getBranchId: () => 'session-1',
 			getRunId: () => 'run-1',
 			traceRecorder: recorder,
 			blobSink: {
@@ -72,7 +72,7 @@ describe('createToolRegistry', () => {
 			getTraceScope: () =>
 				createRootScope({
 					traceKind: 'chat',
-					sessionId: 'session-1',
+					branchId: 'session-1',
 					runId: 'run-1'
 				})
 		})

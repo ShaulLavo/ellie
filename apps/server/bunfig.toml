@@ -1,2 +1,5 @@
 [serve.static]
-plugins = ["bun-plugin-tailwind", "./src/plugins/react-compiler-plugin.ts"]
+plugins = [
+	"bun-plugin-tailwind",
+	"./src/plugins/react-compiler-plugin.ts"
+]

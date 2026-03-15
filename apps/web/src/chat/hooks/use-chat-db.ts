@@ -1,27 +1,24 @@
 import { useChatMessages } from './use-chat-messages'
-import { useChatSessionStats } from './use-chat-session-stats'
+import { useChatBranchStats } from './use-chat-branch-stats'
 import { useStreamConnection } from './use-stream-connection'
 
-export function useChatDB(sessionId: string) {
+export function useChatDB(branchId: string) {
 	const { messages, upsert, replaceAll, clear } =
-		useChatMessages(sessionId)
-	const {
-		sessionStats,
-		setSessionStats,
-		clearSessionStats
-	} = useChatSessionStats(sessionId)
+		useChatMessages(branchId)
+	const { branchStats, setBranchStats, clearBranchStats } =
+		useChatBranchStats(branchId)
 
-	const resetSessionState = () => {
+	const resetBranchState = () => {
 		clear()
-		clearSessionStats()
+		clearBranchStats()
 	}
 
 	const stream = useStreamConnection({
-		sessionId,
+		branchId,
 		upsert,
 		replaceAll,
-		resetSessionState,
-		setSessionStats
+		resetBranchState,
+		setBranchStats
 	})
 
 	return {
@@ -29,10 +26,10 @@ export function useChatDB(sessionId: string) {
 		streamingMessage: stream.streamingMessage,
 		connectionState: stream.connectionState,
 		error: stream.error,
-		sessionStats,
+		branchStats,
 		isAgentRunning: stream.isAgentRunning,
 		sendMessage: stream.sendMessage,
-		clearSession: stream.clearSession,
+		clearBranch: stream.clearBranch,
 		retry: stream.retry
 	}
 }

@@ -337,14 +337,14 @@ export function eventToStored(
 		row.type === 'memory_retain'
 	) {
 		parts = extractMemoryParts(parsed)
-	} else if (row.type === 'session_rotated') {
+	} else if (row.type === 'thread_created') {
 		parts = [
 			{
 				type: 'checkpoint',
 				message:
 					typeof parsed.message === 'string'
 						? parsed.message
-						: 'New day, new session'
+						: 'New thread started'
 			}
 		]
 	} else if (row.type === 'error') {
@@ -482,7 +482,7 @@ export function eventToStored(
 		sender = 'agent'
 	} else if (parsed.role === 'system') {
 		sender = 'system'
-	} else if (row.type === 'session_rotated') {
+	} else if (row.type === 'thread_created') {
 		sender = 'system'
 	} else if (row.type === 'error') {
 		sender = 'agent'

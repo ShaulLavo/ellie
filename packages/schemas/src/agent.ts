@@ -217,7 +217,7 @@ export type AgentPromptInput = v.InferOutput<
 
 export const agentPromptOutputSchema = v.object({
 	runId: v.string(),
-	sessionId: v.string(),
+	branchId: v.string(),
 	status: v.literal('started')
 })
 export type AgentPromptOutput = v.InferOutput<

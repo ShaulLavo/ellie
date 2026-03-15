@@ -26,11 +26,11 @@ export type MessageInput = v.InferOutput<
 	typeof messageInputSchema
 >
 
-export const sessionParamsSchema = v.object({
-	sessionId: v.string()
+export const branchParamsSchema = v.object({
+	branchId: v.string()
 })
-export const sessionRunParamsSchema = v.object({
-	sessionId: v.string(),
+export const branchRunParamsSchema = v.object({
+	branchId: v.string(),
 	runId: v.string()
 })
 /** Reusable pipe for parsing a non-negative integer from a query string. */

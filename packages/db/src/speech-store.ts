@@ -40,7 +40,7 @@ export class SpeechArtifactStore {
 	claim(
 		id: string,
 		eventId: number,
-		sessionId: string
+		branchId: string
 	): SpeechArtifactRow | undefined {
 		const rows = this.#db
 			.update(speechArtifacts)
@@ -48,7 +48,7 @@ export class SpeechArtifactStore {
 				status: 'claimed',
 				claimedAt: Date.now(),
 				claimedByEventId: eventId,
-				claimedBySessionId: sessionId
+				claimedByBranchId: branchId
 			})
 			.where(
 				and(

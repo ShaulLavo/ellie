@@ -78,7 +78,7 @@ function withTracedMemory<T>(
  */
 export async function runRecall(
 	deps: MemoryDeps,
-	sessionId: string,
+	branchId: string,
 	query: string,
 	runId: string
 ): Promise<void> {
@@ -97,7 +97,7 @@ export async function runRecall(
 
 		// Emit memory_recall event so the client can show recall status
 		deps.store.appendEvent(
-			sessionId,
+			branchId,
 			'memory_recall',
 			result.payload,
 			runId
@@ -105,9 +105,9 @@ export async function runRecall(
 	} catch (err) {
 		handleControllerError(
 			deps.trace,
-			`memory_recall_failed session=${sessionId} runId=${runId}`,
+			`memory_recall_failed branch=${branchId} runId=${runId}`,
 			'controller.memory_recall_failed',
-			{ sessionId, runId },
+			{ branchId, runId },
 			err
 		)
 	}
@@ -119,7 +119,7 @@ export async function runRecall(
  */
 export async function runRetain(
 	deps: MemoryDeps,
-	sessionId: string,
+	branchId: string,
 	sourceRunId: string,
 	force?: boolean
 ): Promise<number> {
@@ -131,18 +131,18 @@ export async function runRetain(
 	}
 
 	console.log(
-		`[retain] runRetain called session=${sessionId} sourceRunId=${sourceRunId}`
+		`[retain] runRetain called branch=${branchId} sourceRunId=${sourceRunId}`
 	)
 
 	try {
 		const result = await withTracedMemory(deps, m =>
-			m.evaluateRetain(sessionId, force)
+			m.evaluateRetain(branchId, force)
 		)
 		if (!result) return 0
 
 		// Retain is a session-level background event, not part of a run.
 		deps.store.appendEvent(
-			sessionId,
+			branchId,
 			'memory_retain',
 			result
 		)
@@ -151,9 +151,9 @@ export async function runRetain(
 	} catch (err) {
 		handleControllerError(
 			deps.trace,
-			`memory_retain_failed session=${sessionId} runId=${sourceRunId}`,
+			`memory_retain_failed branch=${branchId} runId=${sourceRunId}`,
 			'controller.memory_retain_failed',
-			{ sessionId, runId: sourceRunId },
+			{ branchId, runId: sourceRunId },
 			err
 		)
 		return 0

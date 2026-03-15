@@ -22,7 +22,7 @@ import {
 import { createChatRoutes } from './routes/chat'
 import { errorSchema } from './routes/schemas/common-schemas'
 import { HttpError } from './routes/http-errors'
-import { createSessionRoutes } from './routes/session'
+import { createAssistantRoutes } from './routes/assistant'
 import { createStatusRoutes } from './routes/status'
 import { createDbStudioRoutes } from './routes/db-studio'
 import { createDevRoutes } from './routes/dev'
@@ -61,7 +61,7 @@ export const app = new Elysia()
 			() => !ctx.isBootstrapInjected()
 		)
 	)
-	.use(createSessionRoutes(ctx.store))
+	.use(createAssistantRoutes(ctx.store, ctx.sseState))
 	.use(
 		createChatRoutes({
 			store: ctx.store,

@@ -8,13 +8,13 @@ describe('createRootScope', () => {
 		expect(scope.spanId).toBe(scope.traceId)
 	})
 
-	test('includes optional sessionId and runId', () => {
+	test('includes optional branchId and runId', () => {
 		const scope = createRootScope({
 			traceKind: 'chat',
-			sessionId: 'sess-1',
+			branchId: 'sess-1',
 			runId: 'run-1'
 		})
-		expect(scope.sessionId).toBe('sess-1')
+		expect(scope.branchId).toBe('sess-1')
 		expect(scope.runId).toBe('run-1')
 		expect(scope.parentSpanId).toBeUndefined()
 	})
@@ -33,16 +33,16 @@ describe('createRootScope', () => {
 })
 
 describe('createChildScope', () => {
-	test('inherits traceId, sessionId, runId from parent', () => {
+	test('inherits traceId, branchId, runId from parent', () => {
 		const parent = createRootScope({
 			traceKind: 'chat',
-			sessionId: 'sess-1',
+			branchId: 'sess-1',
 			runId: 'run-1'
 		})
 		const child = createChildScope(parent)
 
 		expect(child.traceId).toBe(parent.traceId)
-		expect(child.sessionId).toBe('sess-1')
+		expect(child.branchId).toBe('sess-1')
 		expect(child.runId).toBe('run-1')
 	})
 

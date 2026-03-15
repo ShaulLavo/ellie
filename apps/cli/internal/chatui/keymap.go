@@ -34,7 +34,7 @@ type KeyMap struct {
 	// Global bindings
 	Quit     key.Binding
 	Commands key.Binding
-	Sessions key.Binding
+	Threads key.Binding
 	Info     key.Binding
 	Theme    key.Binding
 	Retry    key.Binding
@@ -52,9 +52,9 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+p"),
 			key.WithHelp("ctrl+p", "commands"),
 		),
-		Sessions: key.NewBinding(
+		Threads: key.NewBinding(
 			key.WithKeys("ctrl+s"),
-			key.WithHelp("ctrl+s", "sessions"),
+			key.WithHelp("ctrl+s", "threads"),
 		),
 		Info: key.NewBinding(
 			key.WithKeys("ctrl+g"),

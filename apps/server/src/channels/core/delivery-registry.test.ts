@@ -26,10 +26,19 @@ function createTempDir(): string {
 
 function createTestStores(dir: string) {
 	const eventStore = new EventStore(`${dir}/events.db`)
-	const store = new RealtimeStore(
-		eventStore,
-		'test-session'
+	const thread = eventStore.createThread(
+		'agent-test',
+		'test',
+		'ws-test'
 	)
+	eventStore.createBranch(
+		thread.id,
+		undefined,
+		undefined,
+		undefined,
+		'test-branch'
+	)
+	const store = new RealtimeStore(eventStore)
 	return { eventStore, store }
 }
 
@@ -182,12 +191,12 @@ describe('ChannelDeliveryRegistry', () => {
 			accountId: 'default',
 			conversationId: 'conv-1'
 		}
-		registry.register('run-1', 'test-session', target)
+		registry.register('run-1', 'test-branch', target)
 		// No error means it stored successfully
 	})
 
 	test('run_closed triggers sendMessage with final assistant text', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-1'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -196,12 +205,12 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		// Register delivery
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Persist an assistant_message for this run
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Hello from Ellie!'),
 			runId
@@ -209,7 +218,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Emit run_closed
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -224,7 +233,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('flushes a finalized assistant update before run_closed', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-live-final'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -232,11 +241,11 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-live-final'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		const row = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Still thinking...', {
 				streaming: true,
@@ -250,7 +259,7 @@ describe('ChannelDeliveryRegistry', () => {
 			makeAssistantPayload(
 				'Here is the finalized message.'
 			),
-			sessionId
+			branchId
 		)
 
 		await new Promise(r => setTimeout(r, 50))
@@ -261,7 +270,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -273,7 +282,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('flushes text immediately, then sends the later image reply once', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-live-image-follow-up'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -288,11 +297,11 @@ describe('ChannelDeliveryRegistry', () => {
 			new Uint8Array(Buffer.from('img:live-follow-up'))
 		)
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Starting the image now.', {
 				stopReason: 'toolUse'
@@ -311,7 +320,7 @@ describe('ChannelDeliveryRegistry', () => {
 		])
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -340,7 +349,7 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentComposing.length).toBeGreaterThan(0)
 
 		const imgRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Here is the image.'),
 			runId
@@ -348,7 +357,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Artifact linking the image to the assistant message
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: imgRow.id,
@@ -377,7 +386,7 @@ describe('ChannelDeliveryRegistry', () => {
 		])
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -401,7 +410,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('run_closed sends completed assistant messages in order', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-last-message'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -409,11 +418,11 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-last'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload(
 				'Let me generate a few options.',
@@ -423,14 +432,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Here are the final options.'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -448,12 +457,12 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('does not deliver for non-channel runs', async () => {
-		const sessionId = 'test-session'
-		registry.watchSession(sessionId)
+		const branchId = 'test-branch'
+		registry.watchBranch(branchId)
 
 		// Emit run_closed without registering any delivery
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			'unregistered-run'
@@ -463,26 +472,26 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages).toHaveLength(0)
 	})
 
-	test('watchSession is idempotent', () => {
-		registry.watchSession('test-session')
-		registry.watchSession('test-session')
+	test('watchBranch is idempotent', () => {
+		registry.watchBranch('test-branch')
+		registry.watchBranch('test-branch')
 		// No error, no duplicate subscriptions
 	})
 
 	test('shutdown clears state', () => {
-		registry.register('run-1', 'test-session', {
+		registry.register('run-1', 'test-branch', {
 			channelId: 'test',
 			accountId: 'default',
 			conversationId: 'conv-1'
 		})
-		registry.watchSession('test-session')
+		registry.watchBranch('test-branch')
 		registry.shutdown()
-		// After shutdown, a new watchSession should work
-		registry.watchSession('test-session')
+		// After shutdown, a new watchBranch should work
+		registry.watchBranch('test-branch')
 	})
 
 	test('fans out to multiple contributing targets', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-multi'
 
 		const target1: ChannelDeliveryTarget = {
@@ -496,19 +505,19 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-2'
 		}
 
-		registry.register(runId, sessionId, target1)
-		registry.register(runId, sessionId, target2)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target1)
+		registry.register(runId, branchId, target2)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Reply to both'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -527,7 +536,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('deduplicates same target registered twice', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-dedup'
 
 		const target: ChannelDeliveryTarget = {
@@ -536,19 +545,19 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-1'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Once only'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -560,7 +569,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('registerPending promotes to run delivery on runId backfill', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-pending'
 
 		const target: ChannelDeliveryTarget = {
@@ -571,7 +580,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Persist a user_message without runId
 		const row = store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -581,22 +590,22 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		// Register pending against the row
-		registry.registerPending(row.id, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.registerPending(row.id, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Backfill the runId — this should promote the pending entry
-		store.updateEventRunId(row.id, runId, sessionId)
+		store.updateEventRunId(row.id, runId, branchId)
 
 		// Now persist assistant reply and close the run
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Pending resolved'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -610,7 +619,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('persists per-item checkpoint events after delivery', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-checkpoints'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -618,18 +627,18 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-checkpoints'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Checkpoint test'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -641,7 +650,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Verify per-item checkpoint was persisted
 		const checkpoints = eventStore.query({
-			sessionId,
+			branchId,
 			types: ['channel_delivered'],
 			runId
 		})
@@ -657,7 +666,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('persists separate checkpoints for multi-reply runs', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-multi-cp'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -665,11 +674,11 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-multi-cp'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('First reply', {
 				stopReason: 'toolUse'
@@ -678,14 +687,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Second reply'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -696,7 +705,7 @@ describe('ChannelDeliveryRegistry', () => {
 		expect(sentMessages).toHaveLength(2)
 
 		const checkpoints = eventStore.query({
-			sessionId,
+			branchId,
 			types: ['channel_delivered'],
 			runId
 		})
@@ -712,7 +721,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('persists per-attachment checkpoints for multi-image reply', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-multi-img-cp'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -733,18 +742,18 @@ describe('ChannelDeliveryRegistry', () => {
 			)
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		const imgMsgRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Here are your images'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -773,7 +782,7 @@ describe('ChannelDeliveryRegistry', () => {
 		// Artifacts linking each image to the assistant message
 		for (const id of uploadIds) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'assistant_artifact',
 				{
 					assistantRowId: imgMsgRow.id,
@@ -787,7 +796,7 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -799,7 +808,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// 3 media checkpoints (one per attachment)
 		const checkpoints = eventStore.query({
-			sessionId,
+			branchId,
 			types: ['channel_delivered'],
 			runId
 		})
@@ -816,12 +825,12 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('recoverUndelivered re-delivers stranded channel runs', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-stranded'
 
 		// Simulate a channel user_message with source metadata
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -841,7 +850,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Simulate assistant reply
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Recovered reply'),
 			runId
@@ -849,7 +858,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Simulate run_closed (but NO checkpoints — crash scenario)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -867,7 +876,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Verify per-item checkpoint was written
 		const checkpoints = eventStore.query({
-			sessionId,
+			branchId,
 			types: ['channel_delivered'],
 			runId
 		})
@@ -878,11 +887,11 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('recoverUndelivered skips fully-checkpointed runs', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-already'
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -901,14 +910,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		const assistantRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Already sent'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -916,7 +925,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Already has a per-item checkpoint
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'channel_delivered',
 			{
 				channelId: 'test',
@@ -939,7 +948,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('recoverUndelivered resumes from exact partial delivery point', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-partial'
 
 		const uploadIds = [
@@ -956,7 +965,7 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -975,14 +984,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		const assistantRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Here are images'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1006,7 +1015,7 @@ describe('ChannelDeliveryRegistry', () => {
 		// Artifacts linking each image to the assistant message
 		for (const id of uploadIds) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'assistant_artifact',
 				{
 					assistantRowId: assistantRow.id,
@@ -1020,7 +1029,7 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1028,7 +1037,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Simulate: first attachment was sent before crash
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'channel_delivered',
 			{
 				channelId: 'test',
@@ -1062,7 +1071,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('recoverUndelivered resumes pending voice note after media already sent', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-partial-media-tts'
 		const imageUploadId = 'partial-media-tts.png'
 		const audioUploadId = 'partial-media-tts.opus'
@@ -1078,7 +1087,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -1097,7 +1106,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		const assistantRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			{
 				...makeAssistantPayload('Here is the bonobo.'),
@@ -1108,7 +1117,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Image artifact (compiled server-side from tool_upload)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: assistantRow.id,
@@ -1124,7 +1133,7 @@ describe('ChannelDeliveryRegistry', () => {
 		registry.setTtsPostProcessor({
 			processRun: async (_rid: string, _sid: string) => {
 				store.appendEvent(
-					sessionId,
+					branchId,
 					'assistant_artifact',
 					{
 						assistantRowId: assistantRow.id,
@@ -1144,7 +1153,7 @@ describe('ChannelDeliveryRegistry', () => {
 		>[0])
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1152,7 +1161,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Simulate: the image payload was already sent before crash.
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'channel_delivered',
 			{
 				channelId: 'test',
@@ -1180,7 +1189,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		const checkpoints = eventStore
 			.query({
-				sessionId,
+				branchId,
 				runId,
 				types: ['channel_delivered']
 			})
@@ -1198,11 +1207,11 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('recoverUndelivered resumes partial multi-reply run', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-partial-multi'
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -1221,7 +1230,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		const reply0 = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('First reply', {
 				stopReason: 'toolUse'
@@ -1230,14 +1239,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Second reply'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1245,7 +1254,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// First reply was already delivered
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'channel_delivered',
 			{
 				channelId: 'test',
@@ -1270,11 +1279,11 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('duplicate recovery calls are idempotent', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-idempotent'
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -1293,14 +1302,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Idempotent test'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1320,11 +1329,11 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('recoverUndelivered skips runs with unavailable provider', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-noprovider'
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -1343,14 +1352,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('No provider'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1363,7 +1372,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('stale run recovery triggers delivery when registry is watching', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-stale'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1372,12 +1381,12 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		// Register target and watch BEFORE the run closes
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Persist assistant reply
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Stale recovery'),
 			runId
@@ -1386,7 +1395,7 @@ describe('ChannelDeliveryRegistry', () => {
 		// Simulate what recoverStaleRuns does at startup:
 		// appends run_closed WHILE registry is watching
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'recovered_after_crash' },
 			runId
@@ -1399,19 +1408,19 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('web/internal runs never deliver externally', async () => {
-		const sessionId = 'test-session'
-		registry.watchSession(sessionId)
+		const branchId = 'test-branch'
+		registry.watchBranch(branchId)
 
 		// Simulate a purely internal run (no register/registerPending)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Internal only'),
 			'internal-run'
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			'internal-run'
@@ -1423,7 +1432,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('sends composing indicator when tool_execution is appended', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-composing'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1431,12 +1440,12 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-composing'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Append a tool_execution event (status=running)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1454,7 +1463,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('sends composing indicator when assistant_message is appended', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-composing-msg'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1462,11 +1471,11 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-composing-msg'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Thinking...', {
 				stopReason: 'toolUse'
@@ -1481,12 +1490,12 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('does not send composing for non-channel runs', async () => {
-		const sessionId = 'test-session'
-		registry.watchSession(sessionId)
+		const branchId = 'test-branch'
+		registry.watchBranch(branchId)
 
 		// Tool execution on a run with no registered targets
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1503,7 +1512,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('queues media from multiple tool calls until the next assistant message', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-multi-step-media'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1527,12 +1536,12 @@ describe('ChannelDeliveryRegistry', () => {
 			)
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Reply 0: text only (no media)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload(
 				'Sure! I will make imgs one by one.',
@@ -1543,7 +1552,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// tool_execution for step-1
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1562,7 +1571,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Reply 1: "Here you go!" with step-1 artifact
 		const reply1 = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Here you go!', {
 				stopReason: 'toolUse'
@@ -1570,7 +1579,7 @@ describe('ChannelDeliveryRegistry', () => {
 			runId
 		)
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: reply1.id,
@@ -1589,7 +1598,7 @@ describe('ChannelDeliveryRegistry', () => {
 			'step-2c.png'
 		]) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'tool_execution',
 				{
 					toolName: 'generate_image',
@@ -1612,7 +1621,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Reply 2: "Made img 2" with step-2a, 2b, 2c artifacts
 		const reply2 = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Made img 2', {
 				stopReason: 'toolUse'
@@ -1625,7 +1634,7 @@ describe('ChannelDeliveryRegistry', () => {
 			'step-2c.png'
 		]) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'assistant_artifact',
 				{
 					assistantRowId: reply2.id,
@@ -1641,7 +1650,7 @@ describe('ChannelDeliveryRegistry', () => {
 		// tool_executions for step-3a, 3b
 		for (const uploadId of ['step-3a.png', 'step-3b.png']) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'tool_execution',
 				{
 					toolName: 'generate_image',
@@ -1664,14 +1673,14 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Reply 3: "Made img 3" with step-3a, 3b artifacts
 		const reply3 = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Made img 3'),
 			runId
 		)
 		for (const uploadId of ['step-3a.png', 'step-3b.png']) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'assistant_artifact',
 				{
 					assistantRowId: reply3.id,
@@ -1685,7 +1694,7 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1744,7 +1753,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('auto-appends generate_image media to reply payload', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-img'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1757,12 +1766,12 @@ describe('ChannelDeliveryRegistry', () => {
 		const imgContent = Buffer.from('fake-png-content')
 		writeFileSync(imgPath, new Uint8Array(imgContent))
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		// Assistant text
 		const assistantRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Here is your image'),
 			runId
@@ -1774,7 +1783,7 @@ describe('ChannelDeliveryRegistry', () => {
 		mkdirSync(join(dir, 'uploads'), { recursive: true })
 		writeFileSync(uploadedPath, new Uint8Array(imgContent))
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1799,7 +1808,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Artifact linking the image to the assistant message
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: assistantRow.id,
@@ -1812,7 +1821,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1833,7 +1842,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('auto-appends every generated image and captions only the first attachment', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-img-multi'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1854,11 +1863,11 @@ describe('ChannelDeliveryRegistry', () => {
 			)
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		const assistantRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload(
 				'Pick the one you want to refine.'
@@ -1867,7 +1876,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1896,7 +1905,7 @@ describe('ChannelDeliveryRegistry', () => {
 		// Artifacts linking each image to the assistant message
 		for (const uploadId of uploadIds) {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'assistant_artifact',
 				{
 					assistantRowId: assistantRow.id,
@@ -1910,7 +1919,7 @@ describe('ChannelDeliveryRegistry', () => {
 		}
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1931,7 +1940,7 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('failed generate_image does not add media', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-img-fail'
 		const target: ChannelDeliveryTarget = {
 			channelId: 'test',
@@ -1939,11 +1948,11 @@ describe('ChannelDeliveryRegistry', () => {
 			conversationId: 'conv-img-fail'
 		}
 
-		registry.register(runId, sessionId, target)
-		registry.watchSession(sessionId)
+		registry.register(runId, branchId, target)
+		registry.watchBranch(branchId)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Image failed'),
 			runId
@@ -1951,7 +1960,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Failed tool_execution
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'tool_execution',
 			{
 				toolName: 'generate_image',
@@ -1972,7 +1981,7 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -1987,11 +1996,11 @@ describe('ChannelDeliveryRegistry', () => {
 	})
 
 	test('one target fully delivered while another resumes from middle', async () => {
-		const sessionId = 'test-session'
+		const branchId = 'test-branch'
 		const runId = 'run-multi-target-partial'
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -2010,7 +2019,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Second user_message from different conversation in same run
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'user_message',
 			{
 				role: 'user',
@@ -2028,14 +2037,14 @@ describe('ChannelDeliveryRegistry', () => {
 		)
 
 		const assistantRow = store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_message',
 			makeAssistantPayload('Reply to both targets'),
 			runId
 		)
 
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'run_closed',
 			{ reason: 'completed' },
 			runId
@@ -2043,7 +2052,7 @@ describe('ChannelDeliveryRegistry', () => {
 
 		// Target A is fully delivered
 		store.appendEvent(
-			sessionId,
+			branchId,
 			'channel_delivered',
 			{
 				channelId: 'test',

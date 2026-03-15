@@ -202,26 +202,26 @@ export class MemoryOrchestrator {
 	 * retain was triggered, or null if conditions weren't met.
 	 */
 	async evaluateRetain(
-		sessionId: string,
+		branchId: string,
 		force?: boolean
 	): Promise<MemoryRetainPayload | null> {
-		if (this.retainInFlight.has(sessionId)) {
+		if (this.retainInFlight.has(branchId)) {
 			return null
 		}
-		this.retainInFlight.add(sessionId)
+		this.retainInFlight.add(branchId)
 		try {
-			return await this._evaluateRetain(sessionId, force)
+			return await this._evaluateRetain(branchId, force)
 		} finally {
-			this.retainInFlight.delete(sessionId)
+			this.retainInFlight.delete(branchId)
 		}
 	}
 
 	private async _evaluateRetain(
-		sessionId: string,
+		branchId: string,
 		force?: boolean
 	): Promise<MemoryRetainPayload | null> {
 		const bankIds = this.resolveBankIds()
-		const turns = this.collectUnprocessedTurns(sessionId)
+		const turns = this.collectUnprocessedTurns(branchId)
 
 		const totalChars = turns.reduce(
 			(sum, t) => sum + t.content.length,
@@ -264,7 +264,7 @@ export class MemoryOrchestrator {
 			role: t.role,
 			content: t.content
 		}))
-		const documentId = `${sessionId}:${seqFrom}-${seqTo}`
+		const documentId = `${branchId}:${seqFrom}-${seqTo}`
 		const content = JSON.stringify(transcript)
 
 		const facts = await this.hindsight.extract(
@@ -297,7 +297,7 @@ export class MemoryOrchestrator {
 				if (errMsg.includes('UNIQUE constraint')) {
 					const cursorKey = this.cursorKey(
 						bankIds[i],
-						sessionId
+						branchId
 					)
 					this.eventStore.setKv(cursorKey, String(seqTo))
 					succeededBankIds.push(bankIds[i])
@@ -310,10 +310,7 @@ export class MemoryOrchestrator {
 			}
 
 			succeededBankIds.push(bankIds[i])
-			const cursorKey = this.cursorKey(
-				bankIds[i],
-				sessionId
-			)
+			const cursorKey = this.cursorKey(bankIds[i], branchId)
 			this.eventStore.setKv(cursorKey, String(seqTo))
 			// RetainResult.memories is the array of stored MemoryUnit objects
 			const memories = result.value.memories ?? []
@@ -379,14 +376,14 @@ export class MemoryOrchestrator {
 	 * Uses the minimum cursor across all banks to determine the starting point.
 	 */
 	private collectUnprocessedTurns(
-		sessionId: string
+		branchId: string
 	): TranscriptTurn[] {
 		const bankIds = this.resolveBankIds()
 
 		// Find the minimum cursor across all banks
 		let minCursor = Infinity
 		for (const bankId of bankIds) {
-			const cursorKey = this.cursorKey(bankId, sessionId)
+			const cursorKey = this.cursorKey(bankId, branchId)
 			const raw = this.eventStore.getKv(cursorKey)
 			const cursor = raw ? Number(raw) : 0
 			if (cursor < minCursor) minCursor = cursor
@@ -395,7 +392,7 @@ export class MemoryOrchestrator {
 
 		// Query unprocessed events (unified types only)
 		const rows = this.eventStore.query({
-			sessionId,
+			branchId,
 			afterSeq: minCursor,
 			types: ['user_message', 'assistant_message']
 		})
@@ -412,9 +409,9 @@ export class MemoryOrchestrator {
 
 	private cursorKey(
 		bankId: string,
-		sessionId: string
+		branchId: string
 	): string {
-		return `memory.cursor.${bankId}:${sessionId}`
+		return `memory.cursor.${bankId}:${branchId}`
 	}
 }
 

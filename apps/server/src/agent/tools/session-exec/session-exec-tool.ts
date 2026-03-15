@@ -67,7 +67,7 @@ type SessionExecParams = v.InferOutput<
  * subprocess via a localhost HTTP server.
  */
 export function createSessionExecTool(
-	getSessionId: () => string | null,
+	getBranchId: () => string | null,
 	baseTools?: AgentTool[],
 	traceDeps?: {
 		recorder: TraceRecorder
@@ -81,7 +81,7 @@ export function createSessionExecTool(
 	const { replTraceDeps, setActiveReplScope } =
 		createReplTraceDeps(traceDeps)
 	let runtime: ReplRuntime | null = null
-	let boundSessionId: string | null = null
+	let boundBranchId: string | null = null
 
 	return {
 		name: 'session_exec',
@@ -97,13 +97,13 @@ export function createSessionExecTool(
 			const params = rawParams as SessionExecParams
 
 			try {
-				const currentSessionId = getSessionId()
+				const currentBranchId = getBranchId()
 
-				// Tear down REPL if the agent rebound to a different session
+				// Tear down REPL if the agent rebound to a different branch
 				if (
 					runtime &&
-					boundSessionId !== null &&
-					currentSessionId !== boundSessionId
+					boundBranchId !== null &&
+					currentBranchId !== boundBranchId
 				) {
 					await runtime.teardown()
 					runtime = null
@@ -112,12 +112,12 @@ export function createSessionExecTool(
 				// Lazy-start the REPL on first call (or after teardown/timeout)
 				if (!runtime || !runtime.alive) {
 					runtime = new ReplRuntime(
-						currentSessionId ?? undefined,
+						currentBranchId ?? undefined,
 						baseTools,
 						replTraceDeps
 					)
 					await runtime.start()
-					boundSessionId = currentSessionId
+					boundBranchId = currentBranchId
 				}
 
 				const result: ReplEvalResult =

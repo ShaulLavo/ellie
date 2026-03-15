@@ -21,10 +21,20 @@ function createTempDir(): string {
 
 function createTestStores(dir: string) {
 	const eventStore = new EventStore(`${dir}/events.db`)
-	const store = new RealtimeStore(
-		eventStore,
-		'test-session'
+	const thread = eventStore.createThread(
+		'agent-test',
+		'assistant',
+		'ws-test'
 	)
+	eventStore.createBranch(
+		thread.id,
+		undefined,
+		undefined,
+		undefined,
+		'test-branch'
+	)
+	eventStore.setKv('assistant.defaultThreadId', thread.id)
+	const store = new RealtimeStore(eventStore)
 	return { eventStore, store }
 }
 
@@ -209,13 +219,13 @@ describe('ChannelManager', () => {
 
 	test('ingestMessage creates user_message with source field', async () => {
 		const handleMessageCalls: Array<{
-			sessionId: string
+			branchId: string
 			text: string
 			eventId: number
 		}> = []
 		const registerCalls: Array<{
 			runId: string
-			sessionId: string
+			branchId: string
 			target: ChannelDeliveryTarget
 		}> = []
 
@@ -226,12 +236,12 @@ describe('ChannelManager', () => {
 			getAgentController: async () =>
 				({
 					handleMessage: async (
-						sessionId: string,
+						branchId: string,
 						text: string,
 						eventId: number
 					) => {
 						handleMessageCalls.push({
-							sessionId,
+							branchId,
 							text,
 							eventId
 						})
@@ -245,17 +255,17 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: (
 					runId: string,
-					sessionId: string,
+					branchId: string,
 					target: ChannelDeliveryTarget
 				) => {
 					registerCalls.push({
 						runId,
-						sessionId,
+						branchId,
 						target
 					})
 				},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 
@@ -285,7 +295,7 @@ describe('ChannelManager', () => {
 
 		// user_message was persisted with source
 		const allEvents = eventStore.query({
-			sessionId: 'test-session'
+			branchId: 'test-branch'
 		})
 		const userMsg = allEvents.find(
 			e => e.type === 'user_message'
@@ -321,7 +331,7 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 
@@ -361,7 +371,7 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 
@@ -406,7 +416,7 @@ describe('ChannelManager', () => {
 			deliveryRegistry: {
 				register: () => {},
 				registerPending: () => {},
-				watchSession: () => {}
+				watchBranch: () => {}
 			} as never
 		})
 

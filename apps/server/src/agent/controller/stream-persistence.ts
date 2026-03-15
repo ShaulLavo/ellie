@@ -240,7 +240,7 @@ function normalizeAssistantMessage(
 /** Persist a DB write with standardized error handling. */
 function persistSafe(
 	deps: StreamPersistenceDeps,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	label: string,
 	errorType: 'persist_failed' | 'update_failed',
@@ -252,9 +252,9 @@ function persistSafe(
 	} catch (err) {
 		handleControllerError(
 			deps.trace,
-			`${errorType} type=${label} session=${sessionId} runId=${runId}`,
+			`${errorType} type=${label} branch=${branchId} runId=${runId}`,
 			`controller.${errorType}`,
-			{ sessionId, runId, dbType: label.split(' ')[0]! },
+			{ branchId, runId, dbType: label.split(' ')[0]! },
 			err,
 			severity
 		)
@@ -268,7 +268,7 @@ function persistSafe(
 export function flushPendingArtifacts(
 	deps: StreamPersistenceDeps,
 	state: StreamState,
-	sessionId: string,
+	branchId: string,
 	runId: string
 ): void {
 	if (state.pendingArtifacts.length === 0) return
@@ -276,7 +276,7 @@ export function flushPendingArtifacts(
 	if (!targetRowId) return
 	for (const artifact of state.pendingArtifacts) {
 		deps.store.appendEvent(
-			sessionId,
+			branchId,
 			'assistant_artifact',
 			{
 				assistantRowId: targetRowId,
@@ -307,14 +307,14 @@ export function handleStreamingEvent(
 	deps: StreamPersistenceDeps,
 	state: StreamState,
 	event: AgentEvent,
-	sessionId: string,
+	branchId: string,
 	runId: string
 ): boolean {
 	if (event.type === 'message_start') {
 		if (event.message.role !== 'assistant') return true
 		persistSafe(
 			deps,
-			sessionId,
+			branchId,
 			runId,
 			'assistant_message',
 			'persist_failed',
@@ -323,7 +323,7 @@ export function handleStreamingEvent(
 					event.message as AssistantMessage
 				)
 				const row = deps.store.appendEvent(
-					sessionId,
+					branchId,
 					'assistant_message',
 					{
 						message,
@@ -342,7 +342,7 @@ export function handleStreamingEvent(
 		if (!state.currentMessageRowId) return true
 		persistSafe(
 			deps,
-			sessionId,
+			branchId,
 			runId,
 			'assistant_message (delta)',
 			'update_failed',
@@ -355,7 +355,7 @@ export function handleStreamingEvent(
 						),
 						streaming: true
 					},
-					sessionId
+					branchId
 				)
 			},
 			'warn'
@@ -368,7 +368,7 @@ export function handleStreamingEvent(
 		if (!state.currentMessageRowId) return true
 		persistSafe(
 			deps,
-			sessionId,
+			branchId,
 			runId,
 			'assistant_message (final)',
 			'update_failed',
@@ -405,7 +405,7 @@ export function handleStreamingEvent(
 						streaming: false,
 						...(ttsDirective && { ttsDirective })
 					},
-					sessionId
+					branchId
 				)
 
 				// 4. Set lastFinalizedMessageRowId before clearing current
@@ -417,7 +417,7 @@ export function handleStreamingEvent(
 					flushPendingArtifacts(
 						deps,
 						state,
-						sessionId,
+						branchId,
 						runId
 					)
 				}
@@ -431,7 +431,7 @@ export function handleStreamingEvent(
 	if (event.type === 'tool_execution_start') {
 		persistSafe(
 			deps,
-			sessionId,
+			branchId,
 			runId,
 			'tool_execution',
 			'persist_failed',
@@ -439,7 +439,7 @@ export function handleStreamingEvent(
 				const srcId =
 					state.lastFinalizedMessageRowId ?? undefined
 				const row = deps.store.appendEvent(
-					sessionId,
+					branchId,
 					'tool_execution',
 					{
 						toolCallId: event.toolCallId,
@@ -466,7 +466,7 @@ export function handleStreamingEvent(
 		if (!entry) return true
 		persistSafe(
 			deps,
-			sessionId,
+			branchId,
 			runId,
 			'tool_execution (delta)',
 			'update_failed',
@@ -481,7 +481,7 @@ export function handleStreamingEvent(
 						status: 'running' as const,
 						sourceAssistantRowId: entry.sourceAssistantRowId
 					},
-					sessionId
+					branchId
 				)
 			},
 			'warn'
@@ -496,7 +496,7 @@ export function handleStreamingEvent(
 		if (entry) {
 			persistSafe(
 				deps,
-				sessionId,
+				branchId,
 				runId,
 				'tool_execution (final)',
 				'update_failed',
@@ -515,7 +515,7 @@ export function handleStreamingEvent(
 							sourceAssistantRowId:
 								entry.sourceAssistantRowId
 						},
-						sessionId
+						branchId
 					)
 				}
 			)

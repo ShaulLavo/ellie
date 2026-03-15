@@ -19,7 +19,7 @@ import type { TraceRecorder } from '../recorder'
 interface MemoryLike {
 	recall(query: string): Promise<unknown>
 	evaluateRetain(
-		sessionId: string,
+		branchId: string,
 		force?: boolean
 	): Promise<unknown>
 }
@@ -148,7 +148,7 @@ export function wrapMemoryOrchestrator<
 
 			if (prop === 'evaluateRetain') {
 				return async (
-					sessionId: string,
+					branchId: string,
 					force?: boolean
 				) => {
 					const scope = createChildScope(opts.parentScope)
@@ -158,12 +158,12 @@ export function wrapMemoryOrchestrator<
 						scope,
 						'memory.retain.start',
 						'memory',
-						{ sessionId, force }
+						{ branchId, force }
 					)
 
 					try {
 						const result = await target.evaluateRetain(
-							sessionId,
+							branchId,
 							force
 						)
 						const elapsedMs = Date.now() - startedAt

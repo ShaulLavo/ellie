@@ -12,7 +12,7 @@ import type { TraceKind, TraceScope } from './types'
  */
 export function createRootScope(opts: {
 	traceKind: TraceKind
-	sessionId?: string
+	branchId?: string
 	runId?: string
 }): TraceScope {
 	const id = ulid()
@@ -20,14 +20,14 @@ export function createRootScope(opts: {
 		traceId: id,
 		spanId: id, // root span shares the trace ID
 		parentSpanId: undefined,
-		sessionId: opts.sessionId,
+		branchId: opts.branchId,
 		runId: opts.runId,
 		traceKind: opts.traceKind
 	}
 }
 
 /**
- * Create a child scope from a parent. Inherits traceId, sessionId, runId, traceKind.
+ * Create a child scope from a parent. Inherits traceId, branchId, runId, traceKind.
  * Gets a fresh spanId and sets parentSpanId to the parent's spanId.
  */
 export function createChildScope(
@@ -37,7 +37,7 @@ export function createChildScope(
 		traceId: parent.traceId,
 		spanId: ulid(),
 		parentSpanId: parent.spanId,
-		sessionId: parent.sessionId,
+		branchId: parent.branchId,
 		runId: parent.runId,
 		traceKind: parent.traceKind
 	}

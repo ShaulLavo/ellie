@@ -46,10 +46,7 @@ interface ServerContext {
 	sttBaseUrl: string
 	getAgentController: () => Promise<AgentController | null>
 	invalidateAgentCache: () => void
-	ensureBootstrap: (
-		sessionId: string,
-		runId: string
-	) => void
+	ensureBootstrap: (branchId: string, runId: string) => void
 	isBootstrapInjected: () => boolean
 	channelManager: ChannelManager
 }
@@ -67,12 +64,12 @@ interface UploadsContext {
 	uploadStore: FileStore
 }
 
-function todaySessionId(): string {
+function todayDayKey(): string {
 	const now = new Date()
 	const y = now.getFullYear()
 	const m = String(now.getMonth() + 1).padStart(2, '0')
 	const d = String(now.getDate()).padStart(2, '0')
-	return `session-${y}-${m}-${d}`
+	return `${y}-${m}-${d}`
 }
 
 /**
@@ -85,11 +82,13 @@ function todaySessionId(): string {
  */
 function initStores(dataDir: string): StoresContext {
 	const eventStore = new EventStore(`${dataDir}/events.db`)
-	const initialSessionId =
-		eventStore.getKv('currentSessionId') ?? todaySessionId()
-	const store = new RealtimeStore(
-		eventStore,
-		initialSessionId
+	const store = new RealtimeStore(eventStore)
+
+	// Ensure default assistant thread exists for today
+	store.resolveOrCreateAssistantThread(
+		'assistant',
+		'main',
+		todayDayKey()
 	)
 
 	// Recover stale streaming events (tools stuck as 'running',
@@ -116,10 +115,10 @@ function recoverStaleRuns(
 	// On startup there is no live worker that can continue an open run,
 	// so every unclosed run is stale immediately.
 	const staleRuns = eventStore.findStaleRuns(0)
-	for (const { sessionId, runId } of staleRuns) {
+	for (const { branchId, runId } of staleRuns) {
 		try {
 			store.appendEvent(
-				sessionId,
+				branchId,
 				'run_closed',
 				{ reason: 'recovered_after_crash' },
 				runId
@@ -127,7 +126,7 @@ function recoverStaleRuns(
 		} catch (err) {
 			console.warn(
 				'[server] failed to recover stale run:',
-				sessionId,
+				branchId,
 				runId,
 				err
 			)
@@ -214,10 +213,7 @@ function initChannels(deps: {
 	dataDir: string
 	credentialsPath: string
 	getAgentController: () => Promise<AgentController | null>
-	ensureBootstrap: (
-		sessionId: string,
-		runId: string
-	) => void
+	ensureBootstrap: (branchId: string, runId: string) => void
 	uploadStore: FileStore
 }): ChannelsContext {
 	const deliveryRegistry: ChannelDeliveryRegistry =
@@ -290,17 +286,21 @@ export async function init(): Promise<ServerContext> {
 	const sseState: SseState = { activeClients: 0 }
 
 	new Cron('0 0 * * *', () => {
-		store.rotateSession(todaySessionId())
+		store.rotateAssistantThread(
+			'assistant',
+			'main',
+			todayDayKey()
+		)
 	})
 
 	// TODO: speech artifact TTL cleanup (expire stale drafts, delete blobs)
 
 	const ensureBootstrap = (
-		sessionId: string,
+		branchId: string,
 		runId: string
 	) =>
 		ensureBootstrapInjected({
-			sessionId,
+			branchId,
 			runId,
 			store,
 			eventStore,
@@ -332,13 +332,16 @@ export async function init(): Promise<ServerContext> {
 		dataDir: DATA_DIR
 	})
 
-	// Watch current session for channel delivery
-	deliveryRegistry.watchSession(store.getCurrentSessionId())
-	ttsPostProcessor.watchSession(store.getCurrentSessionId())
-	// Re-subscribe on daily session rotation
-	store.subscribeToRotation(event => {
-		deliveryRegistry.watchSession(event.newSessionId)
-		ttsPostProcessor.watchSession(event.newSessionId)
+	// Watch current branch for channel delivery
+	const currentAssistant = store.getDefaultAssistantThread()
+	if (currentAssistant) {
+		deliveryRegistry.watchBranch(currentAssistant.branchId)
+		ttsPostProcessor.watchBranch(currentAssistant.branchId)
+	}
+	// Re-subscribe on daily thread rotation
+	store.subscribeToAssistantChange(event => {
+		deliveryRegistry.watchBranch(event.newBranchId)
+		ttsPostProcessor.watchBranch(event.newBranchId)
 	})
 
 	// Let delivery registry await TtsPostProcessor audio instead of racing

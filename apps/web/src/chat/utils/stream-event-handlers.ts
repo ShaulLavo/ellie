@@ -14,7 +14,7 @@ export const RENDERABLE_TYPES: EventType[] = [
 	'tool_execution',
 	'memory_recall',
 	'memory_retain',
-	'session_rotated',
+	'thread_created',
 	'error'
 ]
 
@@ -94,7 +94,7 @@ export function shouldRenderInSnapshot(
 		return false
 	}
 	if (
-		event.type === 'session_rotated' &&
+		event.type === 'thread_created' &&
 		event.seq !== lastRotatedIdx
 	) {
 		return false

@@ -10,12 +10,12 @@ export interface PromptBundle {
 export function buildPromptBundle(
 	workspaceDir: string,
 	eventStore: EventStore,
-	sessionId: string
+	branchId: string
 ): PromptBundle {
 	const { prompt: systemPrompt } =
 		buildSystemPrompt(workspaceDir)
 	const messages = eventStore.getConversationHistory(
-		sessionId
+		branchId
 	) as AgentMessage[]
 
 	return { systemPrompt, messages }

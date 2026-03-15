@@ -117,7 +117,7 @@ function createMockMemory(
 			)
 		},
 		async evaluateRetain(
-			_sessionId: string,
+			_branchId: string,
 			_force?: boolean
 		) {
 			if (retainResult === null) return null
@@ -151,10 +151,26 @@ describe('AgentController', () => {
 	let controller: AgentController
 	let workspaceDir: string
 
+	function makeBranch(branchId: string): void {
+		const thread = eventStore.createThread(
+			'agent-test',
+			'test',
+			'ws-test'
+		)
+		eventStore.createBranch(
+			thread.id,
+			undefined,
+			undefined,
+			undefined,
+			branchId
+		)
+		store.ensureBranch(branchId)
+	}
+
 	beforeEach(() => {
 		tmpDir = createTempDir()
 		eventStore = new EventStore(join(tmpDir, 'events.db'))
-		store = new RealtimeStore(eventStore, 'test-session')
+		store = new RealtimeStore(eventStore)
 		workspaceDir = seedWorkspace(tmpDir)
 		controller = new AgentController(store, {
 			adapter: createMockAdapter(),
@@ -168,19 +184,19 @@ describe('AgentController', () => {
 		rmSync(tmpDir, { recursive: true, force: true })
 	})
 
-	test('hasSession returns false for non-existent session', () => {
-		expect(controller.hasSession('nonexistent')).toBe(false)
+	test('hasBranch returns false for non-existent branch', () => {
+		expect(controller.hasBranch('nonexistent')).toBe(false)
 	})
 
 	test('loadHistory returns empty for new session', () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		const history = controller.loadHistory('session-1')
 		expect(history).toEqual([])
 	})
 
 	test('handleMessage routes to prompt when idle', async () => {
 		// Persist a user message first (like the chat route does)
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -196,7 +212,7 @@ describe('AgentController', () => {
 
 	test('handleMessage routes to followUp when busy on same session', async () => {
 		// Persist user messages
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'First' }],
@@ -225,8 +241,8 @@ describe('AgentController', () => {
 	})
 
 	test('handleMessage queues cross-session when busy', async () => {
-		store.ensureSession('session-1')
-		store.ensureSession('session-2')
+		makeBranch('session-1')
+		makeBranch('session-2')
 
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
@@ -260,17 +276,17 @@ describe('AgentController', () => {
 	test('steer throws for unbound session', () => {
 		expect(() =>
 			controller.steer('nonexistent', 'Hey')
-		).toThrow('Agent not bound to session nonexistent')
+		).toThrow('Agent not bound to branch nonexistent')
 	})
 
 	test('abort throws for unbound session', () => {
 		expect(() => controller.abort('nonexistent')).toThrow(
-			'Agent not bound to session nonexistent'
+			'Agent not bound to branch nonexistent'
 		)
 	})
 
 	test('handleMessage backfills runId on user_message row', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		const row = store.appendEvent(
 			'session-1',
 			'user_message',
@@ -295,14 +311,14 @@ describe('AgentController', () => {
 
 		// Verify runId was backfilled
 		const events = eventStore.query({
-			sessionId: 'session-1',
+			branchId: 'session-1',
 			types: ['user_message']
 		})
 		expect(events[0]!.runId).toBe(runId)
 	})
 
 	test('guardrails do not crash the normal path when limit is not exceeded', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -333,7 +349,7 @@ describe('AgentController', () => {
 			await new Promise(r => setTimeout(r, 500))
 
 			const events = eventStore.query({
-				sessionId: 'session-1'
+				branchId: 'session-1'
 			})
 			const types = events.map(e => e.type)
 
@@ -346,7 +362,7 @@ describe('AgentController', () => {
 	})
 
 	test('memory recall events are persisted to the session DB', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -372,7 +388,7 @@ describe('AgentController', () => {
 			await new Promise(r => setTimeout(r, 500))
 
 			const events = eventStore.query({
-				sessionId: 'session-1'
+				branchId: 'session-1'
 			})
 			const types = events.map(e => e.type)
 
@@ -384,7 +400,7 @@ describe('AgentController', () => {
 	})
 
 	test('memory recall event contains payload with query and parts', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'test query' }],
@@ -407,7 +423,7 @@ describe('AgentController', () => {
 			await new Promise(r => setTimeout(r, 500))
 
 			const recallEvents = eventStore.query({
-				sessionId: 'session-1',
+				branchId: 'session-1',
 				types: ['memory_recall']
 			})
 
@@ -420,7 +436,7 @@ describe('AgentController', () => {
 	})
 
 	test('no memory_retain event when retain returns null', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -443,7 +459,7 @@ describe('AgentController', () => {
 			await new Promise(r => setTimeout(r, 1000))
 
 			const retainEvents = eventStore.query({
-				sessionId: 'session-1',
+				branchId: 'session-1',
 				types: ['memory_retain']
 			})
 
@@ -454,7 +470,7 @@ describe('AgentController', () => {
 	})
 
 	test('memory_retain event is persisted when retain triggers', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -477,7 +493,7 @@ describe('AgentController', () => {
 			await new Promise(r => setTimeout(r, 1000))
 
 			const retainEvents = eventStore.query({
-				sessionId: 'session-1',
+				branchId: 'session-1',
 				types: ['memory_retain']
 			})
 
@@ -491,7 +507,7 @@ describe('AgentController', () => {
 	})
 
 	test('retain completes before the next run starts', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		const firstUserRow = store.appendEvent(
 			'session-1',
 			'user_message',
@@ -543,7 +559,7 @@ describe('AgentController', () => {
 			)
 			for (let attempt = 0; attempt < 20; attempt++) {
 				const closedRuns = eventStore.query({
-					sessionId: 'session-1',
+					branchId: 'session-1',
 					types: ['run_closed']
 				})
 				if (closedRuns.length > 0) break
@@ -581,7 +597,7 @@ describe('AgentController', () => {
 			await new Promise(resolve => setTimeout(resolve, 250))
 
 			const events = eventStore.query({
-				sessionId: 'session-1'
+				branchId: 'session-1'
 			})
 			const retainEvent = events.find(
 				event => event.type === 'memory_retain'
@@ -603,7 +619,7 @@ describe('AgentController', () => {
 	})
 
 	test('controller works normally without memory orchestrator', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -620,7 +636,7 @@ describe('AgentController', () => {
 		await new Promise(r => setTimeout(r, 500))
 
 		const events = eventStore.query({
-			sessionId: 'session-1'
+			branchId: 'session-1'
 		})
 		const types = events.map(e => e.type)
 
@@ -632,7 +648,7 @@ describe('AgentController', () => {
 	})
 
 	test('guardrail diagnostics stay out of the durable session DB', async () => {
-		store.ensureSession('session-1')
+		makeBranch('session-1')
 		store.appendEvent('session-1', 'user_message', {
 			role: 'user',
 			content: [{ type: 'text', text: 'Hello' }],
@@ -678,7 +694,7 @@ describe('AgentController', () => {
 			await new Promise(r => setTimeout(r, 1500))
 
 			const events = eventStore.query({
-				sessionId: 'session-1'
+				branchId: 'session-1'
 			})
 			const types = events.map(e => e.type)
 

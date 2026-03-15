@@ -23,7 +23,7 @@ type DialogAction int
 const (
 	ActionNone DialogAction = iota
 	ActionClose
-	ActionClearSession
+	ActionClearBranch
 	ActionSelectCommand
 	ActionRetry
 )
@@ -161,31 +161,31 @@ func (d *CommandPaletteDialog) Selected() *SlashCommand {
 	return d.selected
 }
 
-// ─── Session List Dialog ──────────────────────────────────────────
+// ─── Thread List Dialog ───────────────────────────────────────────
 
-// SessionListDialog shows the list of sessions (read-only in v1).
-type SessionListDialog struct {
-	sessions  []SessionEntry
+// ThreadListDialog shows the list of threads (read-only in v1).
+type ThreadListDialog struct {
+	threads   []ThreadEntry
 	currentID string
 	cursor    int
 	loading   bool
 }
 
-// NewSessionListDialog creates a session list dialog.
-func NewSessionListDialog(currentID string) *SessionListDialog {
-	return &SessionListDialog{
+// NewThreadListDialog creates a thread list dialog.
+func NewThreadListDialog(currentID string) *ThreadListDialog {
+	return &ThreadListDialog{
 		currentID: currentID,
 		loading:   true,
 	}
 }
 
-// SetSessions updates the dialog with fetched sessions.
-func (d *SessionListDialog) SetSessions(sessions []SessionEntry) {
-	d.sessions = sessions
+// SetThreads updates the dialog with fetched threads.
+func (d *ThreadListDialog) SetThreads(threads []ThreadEntry) {
+	d.threads = threads
 	d.loading = false
 }
 
-func (d *SessionListDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogAction) {
+func (d *ThreadListDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogAction) {
 	km, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return d, ActionNone
@@ -199,16 +199,16 @@ func (d *SessionListDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogActi
 			d.cursor--
 		}
 	case key.Matches(km, keys.Chat.Down):
-		if d.cursor < len(d.sessions)-1 {
+		if d.cursor < len(d.threads)-1 {
 			d.cursor++
 		}
 	}
 	return d, ActionNone
 }
 
-func (d *SessionListDialog) View(width, height int) string {
+func (d *ThreadListDialog) View(width, height int) string {
 	var b strings.Builder
-	b.WriteString(dialogTitle.Render("Sessions"))
+	b.WriteString(dialogTitle.Render("Threads"))
 	b.WriteString("\n\n")
 
 	if d.loading {
@@ -217,13 +217,13 @@ func (d *SessionListDialog) View(width, height int) string {
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
-	if len(d.sessions) == 0 {
-		b.WriteString(dialogDim.Render("  No sessions found"))
+	if len(d.threads) == 0 {
+		b.WriteString(dialogDim.Render("  No threads found"))
 		maxW := clampDialogWidth(width, 60)
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
-	for i, s := range d.sessions {
+	for i, s := range d.threads {
 		prefix := "  "
 		if i == d.cursor {
 			prefix = dialogHighlight.Render("> ")
@@ -245,28 +245,28 @@ func (d *SessionListDialog) View(width, height int) string {
 	return dialogBorder.Width(maxW).Render(b.String())
 }
 
-// ─── Session Info Dialog ──────────────────────────────────────────
+// ─── Branch Info Dialog ───────────────────────────────────────────
 
-// SessionInfoDialog shows details for the current session.
-type SessionInfoDialog struct {
-	session *SessionEntry
-	stats   SessionStats
+// BranchInfoDialog shows details for the current branch.
+type BranchInfoDialog struct {
+	branch  *AssistantCurrent
+	stats   BranchStats
 	loading bool
 }
 
-// NewSessionInfoDialog creates a session info dialog.
-func NewSessionInfoDialog() *SessionInfoDialog {
-	return &SessionInfoDialog{loading: true}
+// NewBranchInfoDialog creates a branch info dialog.
+func NewBranchInfoDialog() *BranchInfoDialog {
+	return &BranchInfoDialog{loading: true}
 }
 
-// SetData updates the dialog with session info.
-func (d *SessionInfoDialog) SetData(session *SessionEntry, stats SessionStats) {
-	d.session = session
+// SetData updates the dialog with branch info.
+func (d *BranchInfoDialog) SetData(branch *AssistantCurrent, stats BranchStats) {
+	d.branch = branch
 	d.stats = stats
 	d.loading = false
 }
 
-func (d *SessionInfoDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogAction) {
+func (d *BranchInfoDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogAction) {
 	km, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return d, ActionNone
@@ -277,9 +277,9 @@ func (d *SessionInfoDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogActi
 	return d, ActionNone
 }
 
-func (d *SessionInfoDialog) View(width, height int) string {
+func (d *BranchInfoDialog) View(width, height int) string {
 	var b strings.Builder
-	b.WriteString(dialogTitle.Render("Session Info"))
+	b.WriteString(dialogTitle.Render("Branch Info"))
 	b.WriteString("\n\n")
 
 	if d.loading {
@@ -288,18 +288,14 @@ func (d *SessionInfoDialog) View(width, height int) string {
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
-	if d.session == nil {
-		b.WriteString(dialogDim.Render("  No session data"))
+	if d.branch == nil {
+		b.WriteString(dialogDim.Render("  No branch data"))
 		maxW := clampDialogWidth(width, 50)
 		return dialogBorder.Width(maxW).Render(b.String())
 	}
 
-	b.WriteString(fmt.Sprintf("  Session ID:   %s\n", d.session.ID))
-	b.WriteString(fmt.Sprintf("  Events:       %d\n", d.session.CurrentSeq))
-	b.WriteString(fmt.Sprintf("  Created:      %s\n",
-		time.UnixMilli(d.session.CreatedAt).Format("2006-01-02 15:04:05")))
-	b.WriteString(fmt.Sprintf("  Updated:      %s\n",
-		time.UnixMilli(d.session.UpdatedAt).Format("2006-01-02 15:04:05")))
+	b.WriteString(fmt.Sprintf("  Thread ID:    %s\n", d.branch.ThreadID))
+	b.WriteString(fmt.Sprintf("  Branch ID:    %s\n", d.branch.BranchID))
 
 	if d.stats.Model != nil {
 		b.WriteString(fmt.Sprintf("  Model:        %s\n", *d.stats.Model))
@@ -320,7 +316,7 @@ func (d *SessionInfoDialog) View(width, height int) string {
 
 // ─── Clear Confirmation Dialog ────────────────────────────────────
 
-// ClearConfirmDialog asks for confirmation before clearing the session.
+// ClearConfirmDialog asks for confirmation before clearing the branch.
 type ClearConfirmDialog struct{}
 
 func NewClearConfirmDialog() *ClearConfirmDialog {
@@ -337,7 +333,8 @@ func (d *ClearConfirmDialog) Update(msg tea.Msg, keys KeyMap) (Dialog, DialogAct
 		key.Matches(km, key.NewBinding(key.WithKeys("n", "N"))):
 		return nil, ActionClose
 	case key.Matches(km, key.NewBinding(key.WithKeys("y", "Y"))):
-		return nil, ActionClearSession
+		return nil, ActionClearBranch
+
 	}
 	return d, ActionNone
 }
@@ -347,7 +344,7 @@ func (d *ClearConfirmDialog) View(width, height int) string {
 	b.WriteString(dialogTitle.Render("Clear conversation"))
 	b.WriteString("\n\n")
 	b.WriteString("  This will start a new conversation.\n")
-	b.WriteString("  Your current session will be saved.\n\n")
+	b.WriteString("  Your current conversation will be saved.\n\n")
 	b.WriteString(fmt.Sprintf("  %s / %s",
 		dialogHighlight.Render("[Y]es"),
 		dialogDim.Render("[N]o")))

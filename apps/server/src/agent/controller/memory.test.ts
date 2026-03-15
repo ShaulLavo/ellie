@@ -30,14 +30,14 @@ describe('runRecall tracing', () => {
 		const recorder = new TraceRecorder(traceDir)
 		const scope = createRootScope({
 			traceKind: 'chat',
-			sessionId: 'session-1',
+			branchId: 'branch-1',
 			runId: 'run-1'
 		})
 		const deps = {
 			store: {
 				appendEvent: () => ({
 					id: -1,
-					sessionId: 'session-1',
+					branchId: 'branch-1',
 					seq: -1,
 					runId: null,
 					type: 'memory_recall',
@@ -125,7 +125,7 @@ describe('runRecall tracing', () => {
 			getTraceScope: () => scope
 		}
 
-		await runRecall(deps, 'session-1', 'alpha', 'run-1')
+		await runRecall(deps, 'branch-1', 'alpha', 'run-1')
 
 		const events = recorder.readTrace(scope.traceId)
 		const start = events.find(

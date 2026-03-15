@@ -28,7 +28,7 @@ describe('createTracedReplTool', () => {
 		const recorder = new TraceRecorder(traceDir)
 		const rootScope = createRootScope({
 			traceKind: 'chat',
-			sessionId: 'session-1'
+			branchId: 'session-1'
 		})
 		const outputText = 'x'.repeat(70_000)
 		const tool = createTracedReplTool(

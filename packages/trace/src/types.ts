@@ -36,7 +36,7 @@ export interface TraceEventEnvelope {
 	/** Parent span — undefined for root spans. */
 	parentSpanId?: string
 	/** Session this trace belongs to, if any. */
-	sessionId?: string
+	branchId?: string
 	/** Agent run this trace belongs to, if any. */
 	runId?: string
 	/** Root trace classification. */
@@ -116,7 +116,7 @@ export interface TraceScope {
 	traceId: string
 	spanId: string
 	parentSpanId?: string
-	sessionId?: string
+	branchId?: string
 	runId?: string
 	traceKind: TraceKind
 }

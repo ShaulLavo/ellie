@@ -77,9 +77,9 @@ func runOneShot(baseURL, prompt, format string) error {
 	defer cancel()
 
 	cfg := chatui.OneShotConfig{
-		BaseURL:   baseURL,
-		SessionID: "current",
-		Format:    format,
+		BaseURL:  baseURL,
+		BranchID: "current",
+		Format:   format,
 	}
 
 	result, err := chatui.RunOneShot(ctx, cfg, prompt)

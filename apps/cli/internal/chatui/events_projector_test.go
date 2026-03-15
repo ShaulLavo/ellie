@@ -13,7 +13,7 @@ func mustJSON(v interface{}) json.RawMessage {
 func TestEventToStored_AssistantMessage(t *testing.T) {
 	row := EventRow{
 		ID:        1,
-		SessionID: "sess-1",
+		BranchID: "sess-1",
 		Seq:       10,
 		Type:      "assistant_message",
 		Payload: mustJSON(map[string]interface{}{
@@ -396,8 +396,8 @@ func TestComputeStatsFromEvents(t *testing.T) {
 
 func TestMergeStats(t *testing.T) {
 	m := "model-a"
-	prev := SessionStats{MessageCount: 5, PromptTokens: 100}
-	delta := SessionStats{
+	prev := BranchStats{MessageCount: 5, PromptTokens: 100}
+	delta := BranchStats{
 		Model:            &m,
 		MessageCount:     1,
 		PromptTokens:     20,

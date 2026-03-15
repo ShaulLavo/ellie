@@ -9,8 +9,8 @@ import type { MessageInput } from './schemas/common-schemas'
 
 export {
 	messageInputSchema,
-	sessionParamsSchema,
-	sessionRunParamsSchema,
+	branchParamsSchema,
+	branchRunParamsSchema,
 	afterSeqQuerySchema,
 	eventsQuerySchema,
 	statusSchema
@@ -31,13 +31,19 @@ export async function requireController(
 	return controller
 }
 
-export function resolveSessionId(
+export function resolveBranchId(
 	store: RealtimeStore,
 	raw: string
 ): string {
-	return raw === 'current'
-		? store.getCurrentSessionId()
-		: raw
+	if (raw === 'current') {
+		const assistant = store.getDefaultAssistantThread()
+		if (!assistant)
+			throw new BadRequestError(
+				'No default assistant thread'
+			)
+		return assistant.branchId
+	}
+	return raw
 }
 
 export function normalizeMessageInput(

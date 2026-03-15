@@ -21,10 +21,14 @@ export {
 } from './reply-projector'
 export * as schema from './schema'
 export type {
-	SessionRow,
-	NewSessionRow,
+	ThreadRow,
+	NewThreadRow,
+	BranchRow,
+	NewBranchRow,
 	EventRow,
 	NewEventRow,
+	ThreadChannelRow,
+	NewThreadChannelRow,
 	AgentBootstrapStateRow,
 	NewAgentBootstrapStateRow,
 	SpeechArtifactRow,

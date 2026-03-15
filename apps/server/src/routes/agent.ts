@@ -16,14 +16,14 @@ import { Elysia, sse } from 'elysia'
 import type { AgentController } from '../agent/controller'
 import type {
 	RealtimeStore,
-	SessionEvent
+	BranchEvent
 } from '../lib/realtime-store'
 import {
-	sessionParamsSchema,
-	sessionRunParamsSchema,
+	branchParamsSchema,
+	branchRunParamsSchema,
 	parseAgentActionBody,
 	requireController,
-	resolveSessionId,
+	resolveBranchId,
 	toStreamGenerator,
 	type SseState
 } from './common'
@@ -33,15 +33,15 @@ import { requireLoopback } from './loopback-guard'
 function createRunSseStream(
 	store: RealtimeStore,
 	sseState: SseState,
-	sessionId: string,
+	branchId: string,
 	runId: string,
 	request: Request
 ) {
-	return toStreamGenerator<SessionEvent>(
+	return toStreamGenerator<BranchEvent>(
 		request,
 		sseState,
 		listener =>
-			store.subscribeToSession(sessionId, event => {
+			store.subscribeToBranch(branchId, event => {
 				if (event.event.runId !== runId) return
 				listener(event)
 			}),
@@ -60,7 +60,7 @@ function createRunSseStream(
 		},
 		{
 			event: 'snapshot',
-			data: store.queryRunEvents(sessionId, runId)
+			data: store.queryRunEvents(branchId, runId)
 		}
 	)
 }
@@ -79,52 +79,52 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 	})
 		.onBeforeHandle(requireLoopback)
 		.get(
-			'/:sessionId/events/:runId',
+			'/:branchId/events/:runId',
 			({ params }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
-				return store.queryRunEvents(sessionId, params.runId)
+				return store.queryRunEvents(branchId, params.runId)
 			},
-			{ params: sessionRunParamsSchema }
+			{ params: branchRunParamsSchema }
 		)
 		.get(
-			'/:sessionId/events/:runId/sse',
+			'/:branchId/events/:runId/sse',
 			({ params, request }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
 				return sse(
 					createRunSseStream(
 						store,
 						sseState,
-						sessionId,
+						branchId,
 						params.runId,
 						request
 					)
 				)
 			},
-			{ params: sessionRunParamsSchema }
+			{ params: branchRunParamsSchema }
 		)
 		.post(
-			'/:sessionId/steer',
+			'/:branchId/steer',
 			async ({ params, body }) => {
 				const controller = await requireController(
 					getAgentController
 				)
 
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
 				const message = parseAgentActionBody(body)
-				controller.steer(sessionId, message)
+				controller.steer(branchId, message)
 				return { status: `queued` as const }
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				body: agentSteerInputSchema,
 				response: {
 					200: agentSteerOutputSchema,
@@ -134,21 +134,21 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 			}
 		)
 		.post(
-			'/:sessionId/abort',
+			'/:branchId/abort',
 			async ({ params }) => {
 				const controller = await requireController(
 					getAgentController
 				)
 
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
-				controller.abort(sessionId)
+				controller.abort(branchId)
 				return { status: `aborted` as const }
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				body: agentAbortInputSchema,
 				response: {
 					200: agentAbortOutputSchema,
@@ -158,22 +158,22 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 			}
 		)
 		.get(
-			'/:sessionId/history',
+			'/:branchId/history',
 			async ({ params }) => {
 				const controller = await requireController(
 					getAgentController
 				)
 
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
 				return {
-					messages: controller.loadHistory(sessionId)
+					messages: controller.loadHistory(branchId)
 				}
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				response: {
 					200: agentHistoryOutputSchema,
 					503: errorSchema

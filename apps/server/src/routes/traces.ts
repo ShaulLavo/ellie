@@ -13,8 +13,8 @@ const traceIdParamsSchema = v.object({
 	traceId: v.string()
 })
 
-const sessionIdParamsSchema = v.object({
-	sessionId: v.string()
+const branchIdParamsSchema = v.object({
+	branchId: v.string()
 })
 
 export function createTraceRoutes(recorder: TraceRecorder) {
@@ -43,15 +43,15 @@ export function createTraceRoutes(recorder: TraceRecorder) {
 			}
 		)
 		.get(
-			'/by-session/:sessionId',
+			'/by-branch/:branchId',
 			({ params }) => {
 				const traces = recorder.findTracesBySession(
-					params.sessionId
+					params.branchId
 				)
 				return traces
 			},
 			{
-				params: sessionIdParamsSchema
+				params: branchIdParamsSchema
 			}
 		)
 }

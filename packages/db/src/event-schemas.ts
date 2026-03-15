@@ -36,8 +36,8 @@ export const EVENT_TYPES = [
 	// Memory events
 	'memory_recall',
 	'memory_retain',
-	// Session lifecycle
-	'session_rotated',
+	// Thread lifecycle
+	'thread_created',
 	// Channel delivery confirmation
 	'channel_delivered',
 	// Reply-bound artifacts
@@ -59,7 +59,7 @@ export const DURABLE_EVENT_TYPES = [
 	'tool_execution',
 	'agent_start',
 	'run_closed',
-	'session_rotated',
+	'thread_created',
 	'memory_recall',
 	'memory_retain',
 	'channel_delivered',
@@ -294,9 +294,9 @@ export const payloadSchemas: Record<
 		),
 		timestamp: v.number()
 	}),
-	// Session lifecycle
-	session_rotated: v.object({
-		previousSessionId: v.string(),
+	// Thread lifecycle
+	thread_created: v.object({
+		previousThreadId: v.optional(v.string()),
 		message: v.string()
 	}),
 	// Channel delivery checkpoint (per outbound item)

@@ -29,7 +29,7 @@ export interface TraceIndexEntry {
 	relativePath: string
 	createdAt: number
 	traceKind: TraceKind
-	sessionId?: string
+	branchId?: string
 	runId?: string
 }
 
@@ -67,7 +67,7 @@ export class TraceRecorder {
 			traceId: scope.traceId,
 			spanId: scope.spanId,
 			parentSpanId: scope.parentSpanId,
-			sessionId: scope.sessionId,
+			branchId: scope.branchId,
 			runId: scope.runId,
 			traceKind: scope.traceKind,
 			kind,
@@ -137,7 +137,7 @@ export class TraceRecorder {
 	/**
 	 * Find traces that belong to a specific session.
 	 */
-	findTracesBySession(sessionId: string): Array<{
+	findTracesBySession(branchId: string): Array<{
 		traceId: string
 		ts: number
 		traceKind: TraceKind
@@ -149,7 +149,7 @@ export class TraceRecorder {
 		}> = []
 
 		for (const entry of this.#index.values()) {
-			if (entry.sessionId === sessionId) {
+			if (entry.branchId === branchId) {
 				results.push({
 					traceId: entry.traceId,
 					ts: entry.createdAt,
@@ -204,7 +204,7 @@ export class TraceRecorder {
 			relativePath: relPath,
 			createdAt: Date.now(),
 			traceKind: scope.traceKind,
-			sessionId: scope.sessionId,
+			branchId: scope.branchId,
 			runId: scope.runId
 		}
 
@@ -282,7 +282,7 @@ export class TraceRecorder {
 				relativePath: relPath,
 				createdAt: firstEvent.ts,
 				traceKind: firstEvent.traceKind as TraceKind,
-				sessionId: firstEvent.sessionId,
+				branchId: firstEvent.branchId,
 				runId: firstEvent.runId
 			}
 			this.#index.set(entry.traceId, entry)

@@ -262,7 +262,7 @@ func TestSSEClient_AlwaysFullSnapshot(t *testing.T) {
 	<-ctx.Done()
 
 	// After removing afterSeq (always full snapshot), the URL should have no query params.
-	if requestedURL != "/api/chat/current/events/sse" {
+	if requestedURL != "/api/chat/branches/current/events/sse" {
 		t.Errorf("expected no afterSeq in URL, got %q", requestedURL)
 	}
 }

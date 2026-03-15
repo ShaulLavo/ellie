@@ -1,5 +1,5 @@
 /**
- * Chat routes — sessions, messages, and SSE event streams.
+ * Chat routes — branches, messages, and SSE event streams.
  *
  * Security: This application runs exclusively on localhost. No authentication
  * is required — all routes are accessible only from the local machine.
@@ -10,7 +10,7 @@ import { hash } from 'ohash'
 import * as v from 'valibot'
 import type {
 	RealtimeStore,
-	SessionEvent
+	BranchEvent
 } from '../lib/realtime-store'
 import type { AgentController } from '../agent/controller'
 import type { EventStore } from '@ellie/db'
@@ -19,22 +19,21 @@ import {
 	type UserMessage
 } from '@ellie/schemas/agent'
 import {
-	sessionParamsSchema,
+	branchParamsSchema,
 	afterSeqQuerySchema,
 	eventsQuerySchema,
 	messageInputSchema,
 	normalizeMessageInput,
-	resolveSessionId,
+	resolveBranchId,
 	toStreamGenerator,
 	type SseState
 } from './common'
 import { errorSchema } from './schemas/common-schemas'
 import {
-	sessionSchema,
-	sessionListSchema,
+	branchSchema,
 	eventRowListSchema,
 	postMessageResponseSchema,
-	clearSessionResponseSchema
+	clearBranchResponseSchema
 } from './schemas/chat-schemas'
 import {
 	BadRequestError,
@@ -62,7 +61,7 @@ export interface ChatRoutesDeps {
 	sseState: SseState
 	getAgentController?: () => Promise<AgentController | null>
 	ensureBootstrap?: (
-		sessionId: string,
+		branchId: string,
 		runId: string
 	) => void
 	uploadStore?: FileStore
@@ -81,60 +80,39 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 	return new Elysia({ prefix: '/api/chat', tags: ['Chat'] })
 		.onBeforeHandle(requireLoopback)
 
-		.post(
-			'/sessions',
-			() => {
-				const session = store.createSession()
-				return session
-			},
-			{
-				response: { 200: sessionSchema }
-			}
-		)
-
 		.get(
-			'/sessions',
-			() => {
-				return store.listSessions()
-			},
-			{
-				response: { 200: sessionListSchema }
-			}
-		)
-
-		.get(
-			'/sessions/:sessionId',
+			'/branches/:branchId',
 			({ params }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
-				const session = store.getSession(sessionId)
-				if (!session) {
-					throw new NotFoundError('Session not found')
+				const branch = store.getBranch(branchId)
+				if (!branch) {
+					throw new NotFoundError('Branch not found')
 				}
-				return session
+				return branch
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				response: {
-					200: sessionSchema,
+					200: branchSchema,
 					404: errorSchema
 				}
 			}
 		)
 
 		.get(
-			'/:sessionId/messages',
+			'/branches/:branchId/messages',
 			({ params }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
-				return store.listAgentMessages(sessionId)
+				return store.listAgentMessages(branchId)
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				response: {
 					200: v.array(agentMessageSchema)
 				}
@@ -142,14 +120,14 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		)
 
 		.post(
-			'/:sessionId/messages',
+			'/branches/:branchId/messages',
 			async ({ params, body }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
 				const input = normalizeMessageInput(body)
-				store.ensureSession(sessionId)
+				store.ensureBranch(branchId)
 
 				// Build content parts: text + attachments
 				const contentParts: UserMessage['content'] = []
@@ -239,15 +217,13 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 
 				// Persist user message BEFORE bootstrap so the client
 				// sees the user bubble first, then the synthetic tool call.
-				// Dedupe key: reject rapid-fire duplicate POSTs with the
-				// same content (e.g. key repeat on Enter). Window ~ 2s.
 				const dedupeWindow = Math.floor(Date.now() / 2000)
 				const contentHash = hash(input.content)
-				const dedupeKey = `user_msg:${sessionId}:${dedupeWindow}:${contentHash}`
+				const dedupeKey = `user_msg:${branchId}:${dedupeWindow}:${contentHash}`
 
 				const beforeAppend = Date.now()
 				const row = store.appendEvent(
-					sessionId,
+					branchId,
 					'user_message',
 					{
 						role: 'user',
@@ -264,28 +240,26 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 					const claimed = eventStore.speechArtifacts.claim(
 						speechMeta.ref,
 						row.id,
-						sessionId
+						branchId
 					)
 					if (!claimed) {
 						console.warn(
-							`[chat] Speech artifact claim race: ref=${speechMeta.ref} sessionId=${sessionId} eventId=${row.id} — artifact was already claimed or expired`
+							`[chat] Speech artifact claim race: ref=${speechMeta.ref} branchId=${branchId} eventId=${row.id} — artifact was already claimed or expired`
 						)
 					}
 				}
 
 				// Dedupe hit: appendEvent returned an existing row
-				// (createdAt will be older than our beforeAppend timestamp)
 				if (row.createdAt < beforeAppend) {
 					return {
 						id: row.id,
 						seq: row.seq,
-						sessionId: row.sessionId,
+						branchId: row.branchId,
 						deduplicated: true
 					}
 				}
 
 				// Route the message directly to the agent controller.
-				// handleMessage backfills the runId on the user_message row.
 				let result:
 					| {
 							runId: string
@@ -301,7 +275,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 						)
 					}
 					result = await controller.handleMessage(
-						sessionId,
+						branchId,
 						input.content,
 						row.id
 					)
@@ -315,13 +289,13 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				}
 
 				if (result) {
-					ensureBootstrap?.(sessionId, result.runId)
+					ensureBootstrap?.(branchId, result.runId)
 				}
 
 				return {
 					id: row.id,
 					seq: row.seq,
-					sessionId: row.sessionId,
+					branchId: row.branchId,
 					...(result
 						? {
 								runId: result.runId,
@@ -332,7 +306,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				}
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				body: messageInputSchema,
 				response: {
 					200: postMessageResponseSchema,
@@ -342,62 +316,86 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 		)
 
 		.delete(
-			'/:sessionId/messages',
+			'/branches/:branchId/messages',
 			({ params }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
-				store.deleteSession(sessionId)
+				store.deleteBranch(branchId)
 				return new Response(null, { status: 204 })
 			},
-			{ params: sessionParamsSchema }
+			{ params: branchParamsSchema }
+		)
+
+		.post(
+			'/branches/:branchId/fork',
+			({ params, body }) => {
+				const branchId = resolveBranchId(
+					store,
+					params.branchId
+				)
+				const child = store.forkBranch(
+					branchId,
+					body.fromEventId,
+					body.fromSeq
+				)
+				return child
+			},
+			{
+				params: branchParamsSchema,
+				body: v.object({
+					fromEventId: v.number(),
+					fromSeq: v.number()
+				}),
+				response: {
+					200: branchSchema
+				}
+			}
 		)
 
 		.get(
-			'/:sessionId/events',
+			'/branches/:branchId/events',
 			({ params, query }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
 				const afterSeq = query.afterSeq
 				const limit = query.limit
 					? Number(query.limit)
 					: undefined
 				return store.queryEvents(
-					sessionId,
+					branchId,
 					afterSeq,
 					undefined,
 					limit
 				)
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				query: eventsQuerySchema,
 				response: { 200: eventRowListSchema }
 			}
 		)
 
 		.get(
-			'/:sessionId/events/sse',
+			'/branches/:branchId/events/sse',
 			({ params, query, request }) => {
-				const isCurrent = params.sessionId === 'current'
-				const sessionId = resolveSessionId(
+				const isCurrent = params.branchId === 'current'
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
 				const afterSeq = query.afterSeq
 
 				const existingEvents = store.queryEvents(
-					sessionId,
+					branchId,
 					afterSeq
 				)
 
 				// For 'current' connections, create a combined abort
 				// signal that fires on rotation OR client disconnect.
-				// This wakes toStreamGenerator's blocking wait so the
-				// client reconnects to the new session.
 				let effectiveRequest = request
 				let unsubRotation: (() => void) | undefined
 				if (isCurrent) {
@@ -406,25 +404,23 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 					request.signal.addEventListener('abort', abort, {
 						once: true
 					})
-					unsubRotation = store.subscribeToRotation(abort)
+					unsubRotation =
+						store.subscribeToAssistantChange(abort)
 					effectiveRequest = new Request(request.url, {
 						signal: ac.signal
 					})
 				}
 
-				const stream = toStreamGenerator<SessionEvent>(
+				const stream = toStreamGenerator<BranchEvent>(
 					effectiveRequest,
 					sseState,
 					listener => {
-						const unsubSession = store.subscribeToSession(
-							sessionId,
+						const unsubBranch = store.subscribeToBranch(
+							branchId,
 							listener
 						)
-						// Bundle rotation cleanup with session
-						// unsubscribe so both are cleaned up by
-						// toStreamGenerator's finally block.
 						return () => {
-							unsubSession()
+							unsubBranch()
 							unsubRotation?.()
 						}
 					},
@@ -435,7 +431,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 					{
 						event: 'snapshot',
 						data: {
-							sessionId,
+							branchId,
 							events: existingEvents
 						}
 					}
@@ -444,29 +440,29 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				return sse(stream)
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				query: afterSeqQuerySchema
 			}
 		)
 
 		.post(
-			'/:sessionId/clear',
+			'/branches/:branchId/clear',
 			({ params }) => {
-				const sessionId = resolveSessionId(
+				const branchId = resolveBranchId(
 					store,
-					params.sessionId
+					params.branchId
 				)
-				store.deleteSession(sessionId)
-				const session = store.createSession(sessionId)
+				store.deleteBranch(branchId)
+				store.ensureBranch(branchId)
 				return {
-					sessionId: session.id,
+					branchId,
 					cleared: true
 				}
 			},
 			{
-				params: sessionParamsSchema,
+				params: branchParamsSchema,
 				response: {
-					200: clearSessionResponseSchema
+					200: clearBranchResponseSchema
 				}
 			}
 		)

@@ -27,7 +27,7 @@ export interface OutboundItem {
 }
 
 export interface PendingDelivery {
-	sessionId: string
+	branchId: string
 	targets: Map<string, PendingTargetDelivery>
 	inFlight: Promise<void>
 }
@@ -40,7 +40,7 @@ export interface PendingTargetDelivery {
 }
 
 export interface PendingRowEntry {
-	sessionId: string
+	branchId: string
 	target: ChannelDeliveryTarget
 	createdAt: number
 }

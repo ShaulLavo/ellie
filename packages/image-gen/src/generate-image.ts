@@ -40,7 +40,7 @@ export type {
 
 export interface GenerationDeps {
 	blobSink: BlobSink
-	sessionId: string
+	branchId: string
 	runId: string
 	dataDir: string
 	civitaiToken?: string
@@ -89,7 +89,7 @@ async function doGenerate(
 	args: GenerateImageRequest,
 	deps: GenerationDeps
 ): Promise<GenerationResult> {
-	const { blobSink, sessionId, runId, dataDir } = deps
+	const { blobSink, branchId, runId, dataDir } = deps
 
 	initImageTrace(dataDir)
 
@@ -266,7 +266,7 @@ async function doGenerate(
 			const durationMs = Date.now() - startTime
 			imageTrace({
 				type: 'generation_failed',
-				sessionId,
+				branchId,
 				error: `Service setup failed: ${String(err)}`,
 				durationMs,
 				recipe: resolved as unknown as Record<
@@ -446,7 +446,7 @@ async function doGenerate(
 
 		imageTrace({
 			type: 'generation_success',
-			sessionId,
+			branchId,
 			uploadId: primaryUpload.uploadId,
 			mimeType: primaryUpload.mimeType,
 			durationMs,
@@ -463,7 +463,7 @@ async function doGenerate(
 		const durationMs = Date.now() - startTime
 		imageTrace({
 			type: 'generation_failed',
-			sessionId,
+			branchId,
 			error: String(err),
 			durationMs,
 			recipe: resolved as unknown as Record<string, unknown>

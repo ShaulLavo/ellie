@@ -34,7 +34,7 @@ describe('TraceRecorder', () => {
 	test('record writes JSONL and readTrace returns events', () => {
 		const scope = createRootScope({
 			traceKind: 'chat',
-			sessionId: 's1',
+			branchId: 's1',
 			runId: 'r1'
 		})
 
@@ -48,7 +48,7 @@ describe('TraceRecorder', () => {
 		expect(events[0].component).toBe('test')
 		expect(events[0].traceId).toBe(scope.traceId)
 		expect(events[0].spanId).toBe(scope.spanId)
-		expect(events[0].sessionId).toBe('s1')
+		expect(events[0].branchId).toBe('s1')
 		expect(events[0].runId).toBe('r1')
 		expect(events[0].payload).toEqual({
 			key: 'value'
@@ -144,18 +144,18 @@ describe('TraceRecorder', () => {
 		expect(ids).toContain(scope2.traceId)
 	})
 
-	test('findTracesBySession filters by sessionId', () => {
+	test('findTracesBySession filters by branchId', () => {
 		const scope1 = createRootScope({
 			traceKind: 'chat',
-			sessionId: 's1'
+			branchId: 's1'
 		})
 		const scope2 = createRootScope({
 			traceKind: 'chat',
-			sessionId: 's2'
+			branchId: 's2'
 		})
 		const scope3 = createRootScope({
 			traceKind: 'follow-up',
-			sessionId: 's1'
+			branchId: 's1'
 		})
 
 		recorder.record(scope1, 'a', 'test', {})
@@ -216,7 +216,7 @@ describe('TraceRecorder', () => {
 	test('_index.jsonl is created with correct entries', () => {
 		const scope = createRootScope({
 			traceKind: 'chat',
-			sessionId: 's1'
+			branchId: 's1'
 		})
 		recorder.record(scope, 'test', 'test', {})
 
@@ -230,7 +230,7 @@ describe('TraceRecorder', () => {
 		const entry = JSON.parse(lines[lines.length - 1])
 		expect(entry.traceId).toBe(scope.traceId)
 		expect(entry.traceKind).toBe('chat')
-		expect(entry.sessionId).toBe('s1')
+		expect(entry.branchId).toBe('s1')
 		expect(entry.relativePath).toMatch(
 			/^\d{4}-\d{2}-\d{2}\/\d{2}-\d{2}-\d{2}-chat-/
 		)
@@ -239,7 +239,7 @@ describe('TraceRecorder', () => {
 	test('findTracesBySession returns traceKind', () => {
 		const scope = createRootScope({
 			traceKind: 'hindsight-recall',
-			sessionId: 's1'
+			branchId: 's1'
 		})
 		recorder.record(scope, 'test', 'test', {})
 
@@ -251,7 +251,7 @@ describe('TraceRecorder', () => {
 	test('index rebuild works when _index.jsonl is deleted', () => {
 		const scope = createRootScope({
 			traceKind: 'chat',
-			sessionId: 's1'
+			branchId: 's1'
 		})
 		recorder.record(scope, 'test', 'test', {})
 
@@ -272,7 +272,7 @@ describe('TraceRecorder', () => {
 	test('readTrace works after process restart via index', () => {
 		const scope = createRootScope({
 			traceKind: 'follow-up',
-			sessionId: 's1',
+			branchId: 's1',
 			runId: 'r1'
 		})
 		recorder.record(scope, 'test.event', 'test', {

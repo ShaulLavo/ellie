@@ -6,7 +6,7 @@ import type { StoredChatMessage } from '@/chat/types'
 
 export function downloadTranscript(
 	allMessages: StoredChatMessage[],
-	sessionId: string
+	branchId: string
 ) {
 	if (allMessages.length === 0) return
 
@@ -21,7 +21,7 @@ export function downloadTranscript(
 	const url = URL.createObjectURL(blob)
 	const a = document.createElement('a')
 	a.href = url
-	a.download = `transcript-${sessionId}-${new Date().toISOString().slice(0, 10)}.txt`
+	a.download = `transcript-${branchId}-${new Date().toISOString().slice(0, 10)}.txt`
 	document.body.append(a)
 	a.click()
 	a.remove()
