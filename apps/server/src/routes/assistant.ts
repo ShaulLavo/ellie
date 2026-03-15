@@ -18,6 +18,7 @@ import {
 import { errorSchema } from './schemas/common-schemas'
 import { toStreamGenerator, type SseState } from './common'
 import { NotFoundError } from './http-errors'
+import { todayDayKey } from '../init'
 
 const assistantCurrentResponseSchema = v.object({
 	threadId: v.string(),
@@ -75,13 +76,10 @@ export function createAssistantRoutes(
 			.post(
 				'/assistant/new',
 				() => {
-					const dayKey = new Date()
-						.toISOString()
-						.slice(0, 10)
 					return store.rotateAssistantThread(
 						'assistant',
 						'main',
-						dayKey
+						todayDayKey()
 					)
 				},
 				{

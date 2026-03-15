@@ -119,6 +119,17 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				const input = normalizeMessageInput(body)
 				store.ensureBranch(branchId)
 
+				// Reject writes to view_only threads
+				const branch = store.getBranch(branchId)
+				if (branch) {
+					const thread = store.getThread(branch.threadId)
+					if (thread?.state === 'view_only') {
+						throw new BadRequestError(
+							'Cannot post to a view-only thread'
+						)
+					}
+				}
+
 				// Build content parts: text + attachments
 				const contentParts: UserMessage['content'] = []
 				const trimmed = input.content.trim()
@@ -356,7 +367,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				const limit = query.limit
 					? Number(query.limit)
 					: undefined
-				return store.queryEvents(
+				return store.queryLineageEvents(
 					branchId,
 					afterSeq,
 					undefined,
@@ -376,7 +387,9 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				const branchId = params.branchId
 				const afterSeq = query.afterSeq
 
-				const existingEvents = store.queryEvents(
+				// Use lineage-aware query so forked branches
+				// include inherited ancestor events in the snapshot
+				const existingEvents = store.queryLineageEvents(
 					branchId,
 					afterSeq
 				)
@@ -411,10 +424,22 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 			'/branches/:branchId/clear',
 			({ params }) => {
 				const branchId = params.branchId
+				const branch = store.getBranch(branchId)
+				if (!branch) {
+					throw new NotFoundError('Branch not found')
+				}
 				store.deleteBranch(branchId)
-				store.ensureBranch(branchId)
+				// Recreate the branch in the same thread
+				// with the same ID so SSE subscribers stay valid
+				const newBranch = store.eventStore.createBranch(
+					branch.threadId,
+					undefined,
+					undefined,
+					undefined,
+					branchId
+				)
 				return {
-					branchId,
+					branchId: newBranch.id,
 					cleared: true
 				}
 			},

@@ -446,6 +446,42 @@ export class RealtimeStore {
 		})
 	}
 
+	/**
+	 * Lineage-aware event query. For forked branches, includes
+	 * inherited ancestor events so the full history is returned.
+	 */
+	queryLineageEvents(
+		branchId: string,
+		afterSeq?: number,
+		types?: EventType[],
+		limit?: number
+	) {
+		const lineage = this.#store.getBranchLineage(branchId)
+		// Single branch (no forks) — fast path
+		if (lineage.length <= 1) {
+			return this.queryEvents(
+				branchId,
+				afterSeq,
+				types,
+				limit
+			)
+		}
+		let events = this.#store.getLineageHistory(branchId)
+		if (afterSeq !== undefined) {
+			events = events.filter(e => e.seq > afterSeq)
+		}
+		if (types && types.length > 0) {
+			const typeSet = new Set(types)
+			events = events.filter(e =>
+				typeSet.has(e.type as EventType)
+			)
+		}
+		if (limit !== undefined) {
+			events = events.slice(0, limit)
+		}
+		return events
+	}
+
 	queryRunEvents(branchId: string, runId: string) {
 		return this.#store.query({ branchId, runId })
 	}
