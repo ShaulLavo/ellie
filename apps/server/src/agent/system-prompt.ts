@@ -1,4 +1,7 @@
 import { readWorkspaceFile } from './workspace'
+import { loadSkills } from './skills/discovery'
+import { formatSkillsForPrompt } from './skills/prompt'
+import type { Skill } from './skills/types'
 
 const PROMPT_SECTIONS = [
 	'SOUL.md',
@@ -9,9 +12,10 @@ const PROMPT_SECTIONS = [
 	'HEARTBEAT.md'
 ] as const
 
-export function buildSystemPrompt(
-	workspaceDir: string
-): string {
+export function buildSystemPrompt(workspaceDir: string): {
+	prompt: string
+	skills: Skill[]
+} {
 	const sections: string[] = []
 
 	for (const filename of PROMPT_SECTIONS) {
@@ -24,5 +28,25 @@ export function buildSystemPrompt(
 		}
 	}
 
-	return sections.join('\n\n---\n\n')
+	const { skills, diagnostics } = loadSkills()
+
+	for (const d of diagnostics) {
+		console.warn(
+			`[skills] ${d.type}: ${d.message} (${d.path})`
+		)
+	}
+
+	if (skills.length > 0) {
+		console.log(`[skills] loaded ${skills.length} skill(s)`)
+	}
+
+	const skillsBlock = formatSkillsForPrompt(skills)
+	if (skillsBlock) {
+		sections.push(skillsBlock)
+	}
+
+	return {
+		prompt: sections.join('\n\n---\n\n'),
+		skills
+	}
 }

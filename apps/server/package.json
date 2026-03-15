@@ -47,7 +47,8 @@
 		"puppeteer-extra-plugin-stealth": "^2.11.2",
 		"sharp": "^0.34.5",
 		"turndown": "^7.2.2",
-		"valibot": "^1.2.0"
+		"valibot": "^1.2.0",
+		"yaml": "^2.8.2"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.29.0",

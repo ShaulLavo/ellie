@@ -29,6 +29,8 @@ import type { AnyTextAdapter } from '@tanstack/ai'
 import { ulid } from 'fast-ulid'
 import type { RealtimeStore } from '../../lib/realtime-store'
 import { buildSystemPrompt } from '../system-prompt'
+import { expandSkillCommand } from '../skills/expand'
+import type { Skill } from '../skills/types'
 import type { MemoryOrchestrator } from '../memory-orchestrator'
 import { createToolRegistry } from '../tools/capability-registry'
 import { mapAgentEventToDb } from './event-mapper'
@@ -86,6 +88,7 @@ export class AgentController {
 	private options: AgentControllerOptions
 	private memory: MemoryOrchestrator | null
 	private baseSystemPrompt: string
+	private skills: Skill[]
 	private traceRecorder: TraceRecorder | undefined
 	private blobSink: BlobSink | undefined
 	/** Active trace scope for the current run */
@@ -119,10 +122,10 @@ export class AgentController {
 		this.traceRecorder = options.traceRecorder
 		this.blobSink = options.blobSink
 
-		const systemPrompt = buildSystemPrompt(
-			options.workspaceDir
-		)
+		const { prompt: systemPrompt, skills } =
+			buildSystemPrompt(options.workspaceDir)
 		this.baseSystemPrompt = systemPrompt
+		this.skills = skills
 		const registry = createToolRegistry({
 			workspaceDir: options.workspaceDir,
 			dataDir: options.dataDir,
@@ -174,7 +177,7 @@ export class AgentController {
 	}
 
 	/** Hand-rolled async mutex: each caller chains onto the previous promise,
-	 *  serialising execution without a queue data structure. */
+	 *  serializing execution without a queue data structure. */
 	private async withLock(
 		fn: () => Promise<void>
 	): Promise<void> {
@@ -229,6 +232,12 @@ export class AgentController {
 	}> {
 		this.store.ensureSession(sessionId)
 
+		// Expand /skill:name commands before any routing
+		const expandedText = expandSkillCommand(
+			text,
+			this.skills
+		)
+
 		const runId = ulid()
 		let routed: 'prompt' | 'followUp' | 'queued' = 'prompt'
 		let activeRunId: string | undefined
@@ -240,7 +249,7 @@ export class AgentController {
 				if (this.boundSessionId === sessionId) {
 					this.agent.followUp({
 						role: 'user',
-						content: [{ type: 'text', text }],
+						content: [{ type: 'text', text: expandedText }],
 						timestamp: Date.now()
 					})
 					routed = 'followUp'
@@ -319,6 +328,19 @@ export class AgentController {
 			// content parts (including image data from attachments).
 			{
 				const history = this.loadHistory(sessionId)
+
+				// If the text was expanded (skill command), patch
+				// the last user message so the agent sees the full
+				// skill content instead of the raw /skill:name command.
+				if (expandedText !== text && history.length > 0) {
+					const last = history[history.length - 1]
+					if (last.role === 'user') {
+						last.content = [
+							{ type: 'text', text: expandedText }
+						]
+					}
+				}
+
 				this.agent.replaceMessages(history)
 			}
 			this.agent.continue().catch(err => {

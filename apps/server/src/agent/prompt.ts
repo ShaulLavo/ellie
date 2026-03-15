@@ -12,7 +12,8 @@ export function buildPromptBundle(
 	eventStore: EventStore,
 	sessionId: string
 ): PromptBundle {
-	const systemPrompt = buildSystemPrompt(workspaceDir)
+	const { prompt: systemPrompt } =
+		buildSystemPrompt(workspaceDir)
 	const messages = eventStore.getConversationHistory(
 		sessionId
 	) as AgentMessage[]
