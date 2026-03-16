@@ -7,6 +7,8 @@
  * - rrfFusion: Reciprocal Rank Fusion over per-pattern score maps
  */
 
+import { rrfCore } from '../fusion'
+
 export type MpfpEdgeType =
 	| 'semantic'
 	| 'temporal'
@@ -287,7 +289,7 @@ export function rrfFusion(
 ): Array<[string, number]> {
 	if (results.length === 0 || topK <= 0) return []
 
-	const fused = new Map<string, number>()
+	const rankedLists: string[][] = []
 	for (const result of results) {
 		const entries = Object.entries(result.scores)
 			.filter(
@@ -295,15 +297,10 @@ export function rrfFusion(
 			)
 			.sort((a, b) => b[1] - a[1])
 		if (entries.length === 0) continue
-
-		for (let rank = 0; rank < entries.length; rank++) {
-			const [nodeId] = entries[rank]!
-			const rrf = 1 / (k + rank + 1)
-			fused.set(nodeId, (fused.get(nodeId) ?? 0) + rrf)
-		}
+		rankedLists.push(entries.map(([id]) => id))
 	}
 
-	return [...fused.entries()]
+	return [...rrfCore(rankedLists, k).entries()]
 		.sort((a, b) => b[1] - a[1])
 		.slice(0, topK)
 }

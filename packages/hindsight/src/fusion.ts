@@ -1,6 +1,27 @@
 import type { RetrievalHit } from './retrieval/semantic'
 
-const K = 60 // Standard RRF constant
+const DEFAULT_K = 60 // Standard RRF constant
+
+/**
+ * Low-level RRF accumulation: given ranked ID lists, returns fused scores.
+ *
+ * Each list is an array of IDs in rank order. Score for each ID =
+ * sum of 1/(k + rank + 1) across all lists it appears in.
+ */
+export function rrfCore(
+	rankedLists: string[][],
+	k: number = DEFAULT_K
+): Map<string, number> {
+	const fused = new Map<string, number>()
+	for (const list of rankedLists) {
+		for (let rank = 0; rank < list.length; rank++) {
+			const id = list[rank]!
+			const rrfScore = 1 / (k + rank + 1)
+			fused.set(id, (fused.get(id) ?? 0) + rrfScore)
+		}
+	}
+	return fused
+}
 
 /**
  * Reciprocal Rank Fusion: merges multiple ranked lists into a single scored list.
@@ -12,45 +33,30 @@ export function reciprocalRankFusion(
 	resultSets: RetrievalHit[][],
 	limit: number
 ): Array<{ id: string; score: number; sources: string[] }> {
-	const fused = new Map<
-		string,
-		{ score: number; sources: Set<string> }
-	>()
-
+	// Build source tracking alongside core fusion
+	const sourceMap = new Map<string, Set<string>>()
 	for (const results of resultSets) {
-		for (let rank = 0; rank < results.length; rank++) {
-			const hit = results[rank]!
-			accumulateRrfScore(fused, hit, rank)
+		for (const hit of results) {
+			const existing = sourceMap.get(hit.id)
+			if (existing) {
+				existing.add(hit.source)
+			} else {
+				sourceMap.set(hit.id, new Set([hit.source]))
+			}
 		}
 	}
 
+	const rankedLists = resultSets.map(results =>
+		results.map(h => h.id)
+	)
+	const fused = rrfCore(rankedLists)
+
 	return Array.from(fused.entries())
-		.map(([id, { score, sources }]) => ({
+		.map(([id, score]) => ({
 			id,
 			score,
-			sources: Array.from(sources)
+			sources: Array.from(sourceMap.get(id)!)
 		}))
 		.sort((a, b) => b.score - a.score)
 		.slice(0, limit)
-}
-
-function accumulateRrfScore(
-	fused: Map<
-		string,
-		{ score: number; sources: Set<string> }
-	>,
-	hit: RetrievalHit,
-	rank: number
-): void {
-	const rrfScore = 1 / (K + rank + 1)
-	const existing = fused.get(hit.id)
-	if (existing) {
-		existing.score += rrfScore
-		existing.sources.add(hit.source)
-	} else {
-		fused.set(hit.id, {
-			score: rrfScore,
-			sources: new Set([hit.source])
-		})
-	}
 }

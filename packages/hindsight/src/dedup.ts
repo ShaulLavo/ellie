@@ -5,7 +5,7 @@
  * existing memories in the same bank using embedding similarity.
  */
 
-import { eq } from 'drizzle-orm'
+import { eq, inArray, and } from 'drizzle-orm'
 import type { HindsightDatabase } from './db'
 import type { EmbeddingStore } from './embedding'
 
@@ -46,28 +46,48 @@ export async function findDuplicates(
 		)
 	)
 
+	// Collect all unique candidate IDs across every fact's hits
+	const allCandidateIds = new Set<string>()
+	for (const hits of allHits) {
+		for (const hit of hits) {
+			allCandidateIds.add(hit.id)
+		}
+	}
+	if (allCandidateIds.size === 0) {
+		return facts.map(() => false)
+	}
+
+	// Single batch query: fetch metadata for all candidates in this bank
+	const rows = hdb.db
+		.select({
+			id: hdb.schema.memoryUnits.id,
+			eventDate: hdb.schema.memoryUnits.eventDate,
+			occurredStart: hdb.schema.memoryUnits.occurredStart,
+			occurredEnd: hdb.schema.memoryUnits.occurredEnd,
+			mentionedAt: hdb.schema.memoryUnits.mentionedAt,
+			createdAt: hdb.schema.memoryUnits.createdAt
+		})
+		.from(hdb.schema.memoryUnits)
+		.where(
+			and(
+				inArray(hdb.schema.memoryUnits.id, [
+					...allCandidateIds
+				]),
+				eq(hdb.schema.memoryUnits.bankId, bankId)
+			)
+		)
+		.all()
+
+	const rowMap = new Map(rows.map(r => [r.id, r]))
+
 	return allHits.map((hits, factIndex) => {
 		const anchor = facts[factIndex]?.temporalAnchor ?? null
 		for (const hit of hits) {
 			const similarity = 1 - hit.distance
 			if (similarity < threshold) break // hits are sorted by distance; no point continuing
 
-			// Verify the hit is in the same bank
-			const row = hdb.db
-				.select({
-					bankId: hdb.schema.memoryUnits.bankId,
-					eventDate: hdb.schema.memoryUnits.eventDate,
-					occurredStart:
-						hdb.schema.memoryUnits.occurredStart,
-					occurredEnd: hdb.schema.memoryUnits.occurredEnd,
-					mentionedAt: hdb.schema.memoryUnits.mentionedAt,
-					createdAt: hdb.schema.memoryUnits.createdAt
-				})
-				.from(hdb.schema.memoryUnits)
-				.where(eq(hdb.schema.memoryUnits.id, hit.id))
-				.get()
-
-			if (!row || row.bankId !== bankId) continue
+			const row = rowMap.get(hit.id)
+			if (!row) continue
 			if (anchor == null) return true
 
 			const candidateAnchor =

@@ -188,27 +188,15 @@ export class AgentController {
 		}
 	}
 
-	private bindToBranch(branchId: string): void {
-		this.store.ensureBranch(branchId)
+	private ensureBinding(branchId: string): AgentMessage[] {
+		if (this.boundBranchId !== branchId) {
+			this.store.ensureBranch(branchId)
+			this.boundBranchId = branchId
+		}
 		const history = this.loadHistory(branchId)
 		this.agent.state.systemPrompt = this.baseSystemPrompt
 		this.agent.replaceMessages(history)
-		this.boundBranchId = branchId
-	}
-
-	private ensureBinding(branchId: string): boolean {
-		if (this.boundBranchId !== branchId) {
-			this.bindToBranch(branchId)
-			return this.agent.state.messages.length > 0
-		}
-		if (this.agent.state.messages.length === 0) {
-			const history = this.loadHistory(branchId)
-			if (history.length > 0) {
-				this.agent.replaceMessages(history)
-				return true
-			}
-		}
-		return false
+		return history
 	}
 
 	async handleMessage(
@@ -259,8 +247,8 @@ export class AgentController {
 				return
 			}
 
-			// Agent idle — bind if needed
-			this.ensureBinding(branchId)
+			// Agent idle — bind if needed (single loadHistory)
+			const history = this.ensureBinding(branchId)
 
 			this.agent.runId = runId
 
@@ -316,20 +304,16 @@ export class AgentController {
 				runId
 			)
 
-			{
-				const history = this.loadHistory(branchId)
-
-				if (expandedText !== text && history.length > 0) {
-					const last = history[history.length - 1]
-					if (last.role === 'user') {
-						last.content = last.content.map(part =>
-							part.type === 'text'
-								? { ...part, text: expandedText }
-								: part
-						)
-					}
+			// Apply skill expansion to the last user message in-place
+			if (expandedText !== text && history.length > 0) {
+				const last = history[history.length - 1]
+				if (last.role === 'user') {
+					last.content = last.content.map(part =>
+						part.type === 'text'
+							? { ...part, text: expandedText }
+							: part
+					)
 				}
-
 				this.agent.replaceMessages(history)
 			}
 			this.agent.continue().catch(err => {

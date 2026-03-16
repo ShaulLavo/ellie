@@ -102,59 +102,63 @@ function rowToEpisodeSummary(
 	}
 }
 
-function getAdjacentEpisodeId(
-	hdb: HindsightDatabase,
-	episodeId: string,
-	direction: 'before' | 'after'
-): string | null {
-	if (direction === 'before') {
-		const row = hdb.sqlite
-			.prepare(
-				`SELECT from_episode_id AS episodeId
-         FROM hs_episode_temporal_links
-         WHERE to_episode_id = ?
-         ORDER BY created_at DESC, id DESC
-         LIMIT 1`
-			)
-			.get(episodeId) as { episodeId: string } | undefined
-		return row?.episodeId ?? null
-	}
-
-	const row = hdb.sqlite
-		.prepare(
-			`SELECT to_episode_id AS episodeId
-       FROM hs_episode_temporal_links
-       WHERE from_episode_id = ?
-       ORDER BY created_at ASC, id ASC
-       LIMIT 1`
-		)
-		.get(episodeId) as { episodeId: string } | undefined
-	return row?.episodeId ?? null
-}
-
 function collectEpisodeChain(
 	hdb: HindsightDatabase,
 	anchorEpisodeId: string,
 	direction: 'before' | 'after',
 	maxSteps: number
 ): string[] {
-	const chain: string[] = [anchorEpisodeId]
-	const seen = new Set<string>([anchorEpisodeId])
-	let cursor = anchorEpisodeId
+	if (maxSteps <= 0) return [anchorEpisodeId]
 
-	for (let i = 0; i < maxSteps; i++) {
-		const nextId = getAdjacentEpisodeId(
-			hdb,
-			cursor,
-			direction
+	// Walk the temporal link chain in one recursive CTE instead of N+1 queries.
+	// "after": from_episode_id → to_episode_id
+	// "before": to_episode_id → from_episode_id
+	const isAfter = direction === 'after'
+	const srcCol = isAfter
+		? 'from_episode_id'
+		: 'to_episode_id'
+	const dstCol = isAfter
+		? 'to_episode_id'
+		: 'from_episode_id'
+	const timeOrder = isAfter ? 'ASC' : 'DESC'
+	const idOrder = isAfter ? 'ASC' : 'DESC'
+
+	const rows = hdb.sqlite
+		.prepare(
+			`WITH RECURSIVE chain(episode_id, depth) AS (
+				SELECT ?, 0
+				UNION ALL
+				SELECT (
+					SELECT l.${dstCol}
+					FROM hs_episode_temporal_links l
+					WHERE l.${srcCol} = chain.episode_id
+					ORDER BY l.created_at ${timeOrder}, l.id ${idOrder}
+					LIMIT 1
+				), chain.depth + 1
+				FROM chain
+				WHERE chain.depth < ?
+				  AND (
+					SELECT l.${dstCol}
+					FROM hs_episode_temporal_links l
+					WHERE l.${srcCol} = chain.episode_id
+					ORDER BY l.created_at ${timeOrder}, l.id ${idOrder}
+					LIMIT 1
+				  ) IS NOT NULL
+			)
+			SELECT episode_id AS episodeId FROM chain`
 		)
-		if (!nextId) break
-		if (seen.has(nextId)) break
-		chain.push(nextId)
-		seen.add(nextId)
-		cursor = nextId
-	}
+		.all(anchorEpisodeId, maxSteps) as Array<{
+		episodeId: string
+	}>
 
+	// Deduplicate to prevent cycles (same guard as the original loop)
+	const seen = new Set<string>()
+	const chain: string[] = []
+	for (const row of rows) {
+		if (seen.has(row.episodeId)) break
+		seen.add(row.episodeId)
+		chain.push(row.episodeId)
+	}
 	return chain
 }
 

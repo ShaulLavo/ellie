@@ -26,15 +26,35 @@ const REFRESH_BUFFER_MS = 5 * 60 * 1000
 export class AgentControllerFactory {
 	private cached: AgentController | null | undefined
 	private readonly deps: ControllerFactoryDeps
+	/** Serialise concurrent get() calls to prevent double-resolve / refresh races */
+	private inflight: Promise<AgentController | null> | null =
+		null
 
 	constructor(deps: ControllerFactoryDeps) {
 		this.deps = deps
 	}
 
 	async get(): Promise<AgentController | null> {
-		await this.ensureTokenFresh()
-		if (this.cached !== undefined) return this.cached
+		if (this.inflight) return this.inflight
+		this.inflight = this.resolve().finally(() => {
+			this.inflight = null
+		})
+		return this.inflight
+	}
 
+	invalidate(): void {
+		this.cached = undefined
+	}
+
+	private async resolve(): Promise<AgentController | null> {
+		// If we already have a controller, just refresh the token if needed
+		if (this.cached) {
+			await this.ensureTokenFresh()
+			return this.cached
+		}
+		if (this.cached === null) return null
+
+		// First-time creation — resolveAgentAdapter handles refresh internally
 		const {
 			store,
 			eventStore,
@@ -70,10 +90,6 @@ export class AgentControllerFactory {
 				})
 			: null
 		return this.cached
-	}
-
-	invalidate(): void {
-		this.cached = undefined
 	}
 
 	private async ensureTokenFresh(): Promise<void> {

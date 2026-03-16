@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@ellie/schemas'
+export { reorderToolResults } from '@ellie/schemas/agent'
 import type { EventRow } from './schema'
 
 /**
@@ -64,79 +65,4 @@ export function parseEventRow(
 		return null
 	}
 	return msg
-}
-
-/**
- * Reorder messages so each toolResult comes after its parent assistant message.
- *
- * During a multi-turn run, tool_execution events are persisted before the
- * assistant message finalizes because tools execute during the stream.
- * Loading by seq gives [toolResult, assistant] — but the API expects
- * [assistant, toolResult].
- */
-export function reorderToolResults(
-	messages: AgentMessage[]
-): AgentMessage[] {
-	const result: AgentMessage[] = []
-	const deferred: AgentMessage[] = []
-	const seenToolCallIds = new Set<string>()
-
-	for (const msg of messages) {
-		if (msg.role === 'assistant') {
-			result.push(msg)
-			for (const id of extractToolCallIds(msg)) {
-				seenToolCallIds.add(id)
-			}
-			flushDeferred(deferred, seenToolCallIds, result)
-		} else if (msg.role === 'toolResult') {
-			const toolCallId = (msg as { toolCallId: string })
-				.toolCallId
-			if (seenToolCallIds.has(toolCallId)) {
-				result.push(msg)
-			} else {
-				deferred.push(msg)
-			}
-		} else {
-			result.push(msg)
-		}
-	}
-
-	// Append any remaining deferred (orphans — shouldn't happen normally)
-	result.push(...deferred)
-
-	return result
-}
-
-function extractToolCallIds(msg: AgentMessage): string[] {
-	const ids: string[] = []
-	for (const block of msg.content) {
-		if (block.type === 'toolCall') {
-			ids.push(
-				(block as { type: 'toolCall'; id: string }).id
-			)
-		}
-	}
-	return ids
-}
-
-function flushDeferred(
-	deferred: AgentMessage[],
-	seenToolCallIds: Set<string>,
-	result: AgentMessage[]
-): void {
-	const stillDeferred: AgentMessage[] = []
-	for (const d of deferred) {
-		const isReady =
-			d.role === 'toolResult' &&
-			seenToolCallIds.has(
-				(d as { toolCallId: string }).toolCallId
-			)
-		if (isReady) {
-			result.push(d)
-		} else {
-			stillDeferred.push(d)
-		}
-	}
-	deferred.length = 0
-	deferred.push(...stillDeferred)
 }

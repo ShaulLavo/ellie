@@ -451,3 +451,66 @@ export type AssistantStreamEvent = v.InferOutput<
 export type AgentEvent = v.InferOutput<
 	typeof agentEventSchema
 >
+
+// ── Message reordering ──────────────────────────────────
+
+/**
+ * Reorder messages so each toolResult comes after its parent assistant message.
+ *
+ * During a multi-turn run, tool_execution events are persisted before the
+ * assistant message finalizes because tools execute during the stream.
+ * Loading by seq gives [toolResult, assistant] — but the API expects
+ * [assistant, toolResult].
+ */
+export function reorderToolResults(
+	messages: AgentMessage[]
+): AgentMessage[] {
+	const result: AgentMessage[] = []
+	const deferred: AgentMessage[] = []
+	const seenToolCallIds = new Set<string>()
+
+	for (const msg of messages) {
+		if (msg.role === 'assistant') {
+			result.push(msg)
+			for (const block of msg.content) {
+				if (block.type === 'toolCall') {
+					seenToolCallIds.add(block.id)
+				}
+			}
+			flushDeferred(deferred, seenToolCallIds, result)
+		} else if (msg.role === 'toolResult') {
+			if (seenToolCallIds.has(msg.toolCallId)) {
+				result.push(msg)
+			} else {
+				deferred.push(msg)
+			}
+		} else {
+			result.push(msg)
+		}
+	}
+
+	// Append any remaining deferred (orphans — shouldn't happen normally)
+	result.push(...deferred)
+
+	return result
+}
+
+function flushDeferred(
+	deferred: AgentMessage[],
+	seenToolCallIds: Set<string>,
+	result: AgentMessage[]
+): void {
+	const stillDeferred: AgentMessage[] = []
+	for (const d of deferred) {
+		if (
+			d.role === 'toolResult' &&
+			seenToolCallIds.has(d.toolCallId)
+		) {
+			result.push(d)
+		} else {
+			stillDeferred.push(d)
+		}
+	}
+	deferred.length = 0
+	deferred.push(...stillDeferred)
+}

@@ -18,6 +18,7 @@ import type {
 	AssistantMessage,
 	ToolResultMessage
 } from './types'
+import { reorderToolResults } from '@ellie/schemas/agent'
 
 // Types
 
@@ -361,88 +362,4 @@ function cleanOrphanedAssistant(
 				? 'stop'
 				: assistantMsg.stopReason
 	} as AssistantMessage
-}
-
-/**
- * Reorder messages so each toolResult comes after its parent assistant message.
- *
- * During TanStack multi-turn runs, tool_execution results are pushed to
- * context.messages before the assistant turn is finalized (RUN_STARTED
- * triggers finalizePartial). This produces [toolResult, assistant] ordering
- * but the API expects [assistant, toolResult]. Orphaned tool results
- * (no matching assistant) are dropped.
- */
-function reorderToolResults(
-	messages: AgentMessage[]
-): AgentMessage[] {
-	// Track which toolCallIds have been seen in assistant messages
-	const seenToolCallIds = new Set<string>()
-	const result: AgentMessage[] = []
-	const deferred: AgentMessage[] = []
-
-	for (const msg of messages) {
-		if (msg.role === 'assistant') {
-			result.push(msg)
-			collectToolCallIds(msg, seenToolCallIds)
-			// Flush any deferred tool results whose assistant is now seen
-			flushDeferred(deferred, seenToolCallIds, result)
-			continue
-		}
-
-		if (msg.role === 'toolResult') {
-			const toolCallId = (msg as ToolResultMessage)
-				.toolCallId
-			if (seenToolCallIds.has(toolCallId)) {
-				result.push(msg)
-			} else {
-				deferred.push(msg)
-			}
-			continue
-		}
-
-		result.push(msg)
-	}
-
-	// Drop remaining deferred — these are true orphans with no
-	// matching assistant message. removeOrphans will clean them
-	// up anyway, but dropping here prevents positional errors.
-
-	return result
-}
-
-/** Extract all toolCall IDs from an assistant message's content blocks. */
-function collectToolCallIds(
-	msg: AgentMessage,
-	ids: Set<string>
-): void {
-	for (const block of msg.content) {
-		if (block.type !== 'toolCall') continue
-		ids.add((block as { type: 'toolCall'; id: string }).id)
-	}
-}
-
-/**
- * Move deferred tool results whose parent assistant has been seen
- * into the result array. Leaves un-matched items in deferred.
- */
-function flushDeferred(
-	deferred: AgentMessage[],
-	seenToolCallIds: Set<string>,
-	result: AgentMessage[]
-): void {
-	const stillDeferred: AgentMessage[] = []
-	for (const d of deferred) {
-		if (
-			d.role === 'toolResult' &&
-			seenToolCallIds.has(
-				(d as ToolResultMessage).toolCallId
-			)
-		) {
-			result.push(d)
-		} else {
-			stillDeferred.push(d)
-		}
-	}
-	deferred.length = 0
-	deferred.push(...stillDeferred)
 }
