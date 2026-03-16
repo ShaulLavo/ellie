@@ -10,7 +10,7 @@
 
 import type { EventStore } from '@ellie/db'
 import type { RealtimeStore } from '../lib/realtime-store'
-import { readWorkspaceFile } from './workspace'
+import { readWorkspaceFile } from '@ellie/agent/workspace'
 
 const AGENT_ID = 'main'
 

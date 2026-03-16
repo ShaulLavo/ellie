@@ -14,7 +14,7 @@ import type {
 } from './types'
 import type { ChannelDeliveryRegistry } from './delivery-registry'
 import type { RealtimeStore } from '../../lib/realtime-store'
-import type { AgentController } from '../../agent/controller'
+import type { BranchRuntimeHost } from '../../agent/runtime'
 import type { FileStore } from '@ellie/tus'
 import { Upload } from '@ellie/tus'
 import type { UserMessage } from '@ellie/schemas/agent'
@@ -22,7 +22,9 @@ import type { UserMessage } from '@ellie/schemas/agent'
 interface ChannelManagerOptions {
 	dataDir: string
 	store: RealtimeStore
-	getAgentController: () => Promise<AgentController | null>
+	getBranchRuntimeHost: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>
 	ensureBootstrap: (branchId: string, runId: string) => void
 	deliveryRegistry: ChannelDeliveryRegistry
 	uploadStore?: FileStore
@@ -42,7 +44,9 @@ export class ChannelManager {
 	readonly #providers = new Map<string, ChannelProvider>()
 	readonly #dataDir: string
 	readonly #store: RealtimeStore
-	readonly #getAgentController: () => Promise<AgentController | null>
+	readonly #getBranchRuntimeHost: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>
 	readonly #ensureBootstrap: (
 		branchId: string,
 		runId: string
@@ -55,7 +59,7 @@ export class ChannelManager {
 	constructor(opts: ChannelManagerOptions) {
 		this.#dataDir = opts.dataDir
 		this.#store = opts.store
-		this.#getAgentController = opts.getAgentController
+		this.#getBranchRuntimeHost = opts.getBranchRuntimeHost
 		this.#ensureBootstrap = opts.ensureBootstrap
 		this.#deliveryRegistry = opts.deliveryRegistry
 		this.#uploadStore = opts.uploadStore
@@ -313,7 +317,8 @@ export class ChannelManager {
 			dedupeKey
 		)
 
-		const controller = await this.#getAgentController()
+		const controller =
+			await this.#getBranchRuntimeHost(branchId)
 		if (!controller) return
 
 		const result = await controller.handleMessage(

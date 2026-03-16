@@ -38,6 +38,15 @@ export type { ToolSafetyOptions } from './tool-safety'
 export { createToolLoopDetector } from './tool-loop-detection'
 export type { ToolLoopDetector } from './tool-loop-detection'
 
+// Contracts (AgentDefinition, AgentHostServices, etc.)
+export type {
+	AgentDefinition,
+	AgentContextSnapshot,
+	AgentHostServices,
+	AgentRunHooks,
+	NormalizedUserInput
+} from './contracts'
+
 // Types
 export type {
 	// Content blocks

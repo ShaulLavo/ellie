@@ -1,0 +1,46 @@
+{
+	"name": "@ellie/assistant-agent",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"check-types": "tsgo --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@ellie/agent": "workspace:*",
+		"@ellie/ai": "workspace:*",
+		"@ellie/db": "workspace:*",
+		"@ellie/hindsight": "workspace:*",
+		"@ellie/image-gen": "workspace:*",
+		"@ellie/schemas": "workspace:*",
+		"@ellie/trace": "workspace:*",
+		"@ellie/utils": "workspace:*",
+		"@mozilla/readability": "^0.6.0",
+		"@opendocsg/pdf2md": "^0.2.3",
+		"@types/mozilla-readability": "^0.2.1",
+		"@types/turndown": "^5.0.6",
+		"@valibot/to-json-schema": "^1.5.0",
+		"comlink": "^4.4.2",
+		"defuddle": "github:ShaulLavo/defuddle",
+		"drizzle-orm": "^0.45.1",
+		"fast-ulid": "^1.2.1",
+		"linkedom": "^0.18.12",
+		"puppeteer-core": "^24.0.0",
+		"puppeteer-extra": "^3.3.6",
+		"puppeteer-extra-plugin-stealth": "^2.11.2",
+		"sharp": "^0.34.5",
+		"turndown": "^7.2.2",
+		"valibot": "^1.2.0",
+		"yaml": "^2.8.2"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "workspace:*",
+		"typescript": "^5.0.0"
+	}
+}

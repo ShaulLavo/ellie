@@ -14,6 +14,8 @@
 	},
 	"dependencies": {
 		"@ellie/agent": "workspace:*",
+		"@ellie/assistant-agent": "workspace:*",
+		"@ellie/coding-agent": "workspace:*",
 		"@ellie/ai": "workspace:*",
 		"@ellie/db": "workspace:*",
 		"@ellie/env": "workspace:*",

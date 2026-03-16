@@ -12,7 +12,7 @@ import type {
 	RealtimeStore,
 	BranchEvent
 } from '../lib/realtime-store'
-import type { AgentController } from '../agent/controller'
+import type { BranchRuntimeHost } from '../agent/runtime'
 import type { EventStore } from '@ellie/db'
 import {
 	agentMessageSchema,
@@ -59,7 +59,9 @@ function buildUploadUrl(uploadId: string): string {
 export interface ChatRoutesDeps {
 	store: RealtimeStore
 	sseState: SseState
-	getAgentController?: () => Promise<AgentController | null>
+	getRuntimeHost?: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>
 	ensureBootstrap?: (
 		branchId: string,
 		runId: string
@@ -72,7 +74,7 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 	const {
 		store,
 		sseState,
-		getAgentController,
+		getRuntimeHost,
 		ensureBootstrap,
 		uploadStore,
 		eventStore
@@ -265,12 +267,13 @@ export function createChatRoutes(deps: ChatRoutesDeps) {
 				let result:
 					| {
 							runId: string
-							routed: 'prompt' | 'followUp' | 'queued'
+							routed: 'prompt' | 'followUp'
 							traceId?: string
 					  }
 					| undefined
 				try {
-					const controller = await getAgentController?.()
+					const controller =
+						await getRuntimeHost?.(branchId)
 					if (!controller) {
 						throw new ServiceUnavailableError(
 							'Agent is not available — check API credentials'

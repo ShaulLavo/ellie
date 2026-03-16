@@ -66,7 +66,7 @@ export const app = new Elysia()
 		createChatRoutes({
 			store: ctx.store,
 			sseState: ctx.sseState,
-			getAgentController: ctx.getAgentController,
+			getRuntimeHost: ctx.getRuntimeHost,
 			ensureBootstrap: ctx.ensureBootstrap,
 			uploadStore: ctx.uploadStore,
 			eventStore: ctx.eventStore
@@ -75,26 +75,26 @@ export const app = new Elysia()
 	.use(
 		createAgentRoutes({
 			store: ctx.store,
-			getAgentController: ctx.getAgentController,
+			getRuntimeHost: ctx.getRuntimeHost,
 			sseState: ctx.sseState
 		})
 	)
 	.use(
 		createAuthRoutes(
 			ctx.CREDENTIALS_PATH,
-			ctx.invalidateAgentCache
+			ctx.invalidateRuntimeCache
 		)
 	)
 	.use(
 		createGroqAuthRoutes(
 			ctx.CREDENTIALS_PATH,
-			ctx.invalidateAgentCache
+			ctx.invalidateRuntimeCache
 		)
 	)
 	.use(
 		createBraveAuthRoutes(
 			ctx.CREDENTIALS_PATH,
-			ctx.invalidateAgentCache
+			ctx.invalidateRuntimeCache
 		)
 	)
 	.use(createElevenLabsAuthRoutes(ctx.CREDENTIALS_PATH))

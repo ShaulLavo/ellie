@@ -13,7 +13,7 @@ import {
 	agentSteerOutputSchema
 } from '@ellie/schemas/agent'
 import { Elysia, sse } from 'elysia'
-import type { AgentController } from '../agent/controller'
+import type { BranchRuntimeHost } from '../agent/runtime'
 import type {
 	RealtimeStore,
 	BranchEvent
@@ -66,12 +66,14 @@ function createRunSseStream(
 
 interface AgentRoutesDeps {
 	store: RealtimeStore
-	getAgentController: () => Promise<AgentController | null>
+	getRuntimeHost: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>
 	sseState: SseState
 }
 
 export function createAgentRoutes(deps: AgentRoutesDeps) {
-	const { store, getAgentController, sseState } = deps
+	const { store, getRuntimeHost, sseState } = deps
 	return new Elysia({
 		prefix: '/api/agent',
 		tags: ['Agent']
@@ -104,11 +106,11 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 		.post(
 			'/:branchId/steer',
 			async ({ params, body }) => {
-				const controller = await requireController(
-					getAgentController
-				)
-
 				const branchId = params.branchId
+				const controller = await requireController(
+					getRuntimeHost,
+					branchId
+				)
 				const message = parseAgentActionBody(body)
 				controller.steer(branchId, message)
 				return { status: `queued` as const }
@@ -126,11 +128,11 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 		.post(
 			'/:branchId/abort',
 			async ({ params }) => {
-				const controller = await requireController(
-					getAgentController
-				)
-
 				const branchId = params.branchId
+				const controller = await requireController(
+					getRuntimeHost,
+					branchId
+				)
 				controller.abort(branchId)
 				return { status: `aborted` as const }
 			},
@@ -147,11 +149,11 @@ export function createAgentRoutes(deps: AgentRoutesDeps) {
 		.get(
 			'/:branchId/history',
 			async ({ params }) => {
-				const controller = await requireController(
-					getAgentController
-				)
-
 				const branchId = params.branchId
+				const controller = await requireController(
+					getRuntimeHost,
+					branchId
+				)
 				return {
 					messages: controller.loadHistory(branchId)
 				}

@@ -1,5 +1,5 @@
 import { sse } from 'elysia'
-import type { AgentController } from '../agent/controller'
+import type { BranchRuntimeHost } from '../agent/runtime'
 import {
 	BadRequestError,
 	ServiceUnavailableError
@@ -19,9 +19,12 @@ const AGENT_UNAVAILABLE_ERROR =
 	'Agent routes unavailable: no ANTHROPIC_API_KEY configured'
 
 export async function requireController(
-	getAgentController: () => Promise<AgentController | null>
-): Promise<AgentController> {
-	const controller = await getAgentController()
+	getBranchRuntimeHost: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>,
+	branchId: string
+): Promise<BranchRuntimeHost> {
+	const controller = await getBranchRuntimeHost(branchId)
 	if (!controller) {
 		throw new ServiceUnavailableError(
 			AGENT_UNAVAILABLE_ERROR

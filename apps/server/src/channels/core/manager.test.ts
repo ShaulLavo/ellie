@@ -85,7 +85,8 @@ describe('ChannelManager', () => {
 		manager = new ChannelManager({
 			dataDir: dir,
 			store,
-			getAgentController: async () => null,
+			getBranchRuntimeHost: async (_branchId: string) =>
+				null,
 			ensureBootstrap: () => {},
 			deliveryRegistry: registry
 		})
@@ -233,7 +234,7 @@ describe('ChannelManager', () => {
 		const testManager = new ChannelManager({
 			dataDir: dir,
 			store,
-			getAgentController: async () =>
+			getBranchRuntimeHost: async (_branchId: string) =>
 				({
 					handleMessage: async (
 						branchId: string,
@@ -317,7 +318,7 @@ describe('ChannelManager', () => {
 		const testManager = new ChannelManager({
 			dataDir: dir,
 			store,
-			getAgentController: async () =>
+			getBranchRuntimeHost: async (_branchId: string) =>
 				({
 					handleMessage: async () => {
 						handleCount++
@@ -357,7 +358,7 @@ describe('ChannelManager', () => {
 		const testManager = new ChannelManager({
 			dataDir: dir,
 			store,
-			getAgentController: async () =>
+			getBranchRuntimeHost: async (_branchId: string) =>
 				({
 					handleMessage: async () => {
 						handleCount++
@@ -402,7 +403,7 @@ describe('ChannelManager', () => {
 		const testManager = new ChannelManager({
 			dataDir: dir,
 			store,
-			getAgentController: async () =>
+			getBranchRuntimeHost: async (_branchId: string) =>
 				({
 					handleMessage: async () => {
 						handleCount++
@@ -438,7 +439,7 @@ describe('ChannelManager', () => {
 	})
 
 	test('ingestMessage drops message when agent not available', async () => {
-		// Default manager has getAgentController returning null
+		// Default manager has getBranchRuntimeHost returning null
 		// Should not throw, just log warning
 		await manager.ingestMessage({
 			channelId: 'test',

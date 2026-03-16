@@ -8,13 +8,20 @@ import type {
 } from '@ellie/trace'
 import { FileStore, SqliteKvStore } from '@ellie/tus'
 import { Cron } from 'croner'
-import type { AgentController } from './agent/controller'
-import { AgentControllerFactory } from './agent/controller'
+import {
+	createAssistantAgentDefinition,
+	seedWorkspace
+} from '@ellie/assistant-agent'
+import { createCodingAgentDefinition } from '@ellie/coding-agent'
+import {
+	AgentDefinitionRegistry,
+	BranchRuntimeRegistry,
+	type BranchRuntimeHost
+} from './agent/runtime'
 import {
 	ensureBootstrapInjected,
 	isBootstrapInjected
 } from './agent/bootstrap'
-import { seedWorkspace } from './agent/workspace'
 import { RealtimeStore } from './lib/realtime-store'
 import { startTei } from './lib/tei'
 import { resolveStudioPublic } from './lib/studio-public'
@@ -44,8 +51,10 @@ interface ServerContext {
 	blobSink: TusBlobSink
 	sseState: SseState
 	sttBaseUrl: string
-	getAgentController: () => Promise<AgentController | null>
-	invalidateAgentCache: () => void
+	getRuntimeHost: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>
+	invalidateRuntimeCache: () => void
 	ensureBootstrap: (branchId: string, runId: string) => void
 	isBootstrapInjected: () => boolean
 	channelManager: ChannelManager
@@ -72,19 +81,10 @@ export function todayDayKey(): string {
 	return `${y}-${m}-${d}`
 }
 
-/**
- * Creates EventStore + RealtimeStore and recovers stale streaming
- * state (tools stuck as 'running', messages stuck as 'streaming').
- *
- * NOTE: Stale run recovery (appending run_closed events) is deferred
- * to recoverStaleRuns() so it runs after the delivery registry is
- * watching — enabling channel delivery for crash-recovered runs.
- */
 function initStores(dataDir: string): StoresContext {
 	const eventStore = new EventStore(`${dataDir}/events.db`)
 	const store = new RealtimeStore(eventStore)
 
-	// Ensure default assistant thread exists for today
 	const today = todayDayKey()
 	const savedDayKey = eventStore.getKv(
 		'assistant.defaultDayKey'
@@ -92,12 +92,9 @@ function initStores(dataDir: string): StoresContext {
 	const existing = store.getDefaultAssistantThread()
 
 	if (!existing || savedDayKey !== today) {
-		// Day changed or no thread — rotate (marks old thread view_only)
 		store.rotateAssistantThread('assistant', 'main', today)
 	}
 
-	// Recover stale streaming events (tools stuck as 'running',
-	// messages stuck as 'streaming') from a previous crash.
 	const recovered = eventStore.recoverStaleStreamingEvents()
 	if (recovered.tools || recovered.messages) {
 		console.log(
@@ -108,17 +105,10 @@ function initStores(dataDir: string): StoresContext {
 	return { eventStore, store }
 }
 
-/**
- * Close runs that were still open when the server last exited.
- * Called AFTER the delivery registry is watching so that the
- * emitted run_closed events trigger channel delivery.
- */
 function recoverStaleRuns(
 	eventStore: EventStore,
 	store: RealtimeStore
 ): void {
-	// On startup there is no live worker that can continue an open run,
-	// so every unclosed run is stale immediately.
 	const staleRuns = eventStore.findStaleRuns(0)
 	for (const { branchId, runId } of staleRuns) {
 		try {
@@ -144,9 +134,6 @@ function recoverStaleRuns(
 	}
 }
 
-/**
- * Resolves the LLM adapter and creates the Hindsight memory system.
- */
 async function initHindsight(
 	dataDir: string,
 	credentialsPath: string
@@ -163,9 +150,6 @@ async function initHindsight(
 	return { hindsight }
 }
 
-/**
- * Creates the tus FileStore backed by a SQLite config store.
- */
 function initUploads(dataDir: string): UploadsContext {
 	const uploadStore = new FileStore({
 		directory: `${dataDir}/uploads`,
@@ -196,11 +180,8 @@ function resolveConfig(): ServerConfig {
 
 	const { dir: STUDIO_PUBLIC } = resolveStudioPublic({
 		candidates: [
-			// Prod bundle layout: dist/release/web
 			resolve(import.meta.dir, 'web'),
-			// Pre-built web assets (CI / manual build)
 			resolve(import.meta.dir, '../../web/dist'),
-			// Dev: symlink apps/server/public → apps/web/public
 			resolve(import.meta.dir, '../public')
 		]
 	})
@@ -217,7 +198,9 @@ function initChannels(deps: {
 	store: RealtimeStore
 	dataDir: string
 	credentialsPath: string
-	getAgentController: () => Promise<AgentController | null>
+	getRuntimeHost: (
+		branchId: string
+	) => Promise<BranchRuntimeHost | null>
 	ensureBootstrap: (branchId: string, runId: string) => void
 	uploadStore: FileStore
 }): ChannelsContext {
@@ -237,7 +220,7 @@ function initChannels(deps: {
 		{
 			dataDir: deps.dataDir,
 			store: deps.store,
-			getAgentController: deps.getAgentController,
+			getBranchRuntimeHost: deps.getRuntimeHost,
 			ensureBootstrap: deps.ensureBootstrap,
 			deliveryRegistry,
 			uploadStore: deps.uploadStore
@@ -273,20 +256,30 @@ export async function init(): Promise<ServerContext> {
 	const { recorder: traceRecorder, blobSink } =
 		initTraceRuntime(DATA_DIR, uploadStore)
 
-	const controllerFactory = new AgentControllerFactory({
+	// Build definition registry
+	const definitionRegistry = new AgentDefinitionRegistry()
+	definitionRegistry.register(
+		createAssistantAgentDefinition({
+			hindsight,
+			eventStore
+		})
+	)
+	definitionRegistry.register(createCodingAgentDefinition())
+
+	const runtimeRegistry = new BranchRuntimeRegistry({
 		store,
 		eventStore,
-		hindsight,
 		credentialsPath: CREDENTIALS_PATH,
 		workspaceDir,
 		dataDir: DATA_DIR,
 		env,
 		traceRecorder,
-		blobSink
+		blobSink,
+		definitionRegistry
 	})
 
-	// Eagerly resolve once at startup
-	await controllerFactory.get()
+	// Eagerly resolve adapter at startup
+	// (no branch needed yet — adapter is shared)
 
 	const sseState: SseState = { activeClients: 0 }
 
@@ -297,8 +290,6 @@ export async function init(): Promise<ServerContext> {
 			todayDayKey()
 		)
 	})
-
-	// TODO: speech artifact TTL cleanup (expire stale drafts, delete blobs)
 
 	const ensureBootstrap = (
 		branchId: string,
@@ -317,13 +308,13 @@ export async function init(): Promise<ServerContext> {
 			store,
 			dataDir: DATA_DIR,
 			credentialsPath: CREDENTIALS_PATH,
-			getAgentController: () => controllerFactory.get(),
+			getRuntimeHost: (branchId: string) =>
+				runtimeRegistry.get(branchId),
 			ensureBootstrap,
 			uploadStore
 		}
 	)
 
-	// Boot channels (awaited so providers are ready for recovery)
 	try {
 		await channelManager.bootAll()
 	} catch (err) {
@@ -337,32 +328,24 @@ export async function init(): Promise<ServerContext> {
 		dataDir: DATA_DIR
 	})
 
-	// Watch current branch for channel delivery
 	const currentAssistant = store.getDefaultAssistantThread()
 	if (currentAssistant) {
 		deliveryRegistry.watchBranch(currentAssistant.branchId)
 		ttsPostProcessor.watchBranch(currentAssistant.branchId)
 	}
-	// Re-subscribe on daily thread rotation
 	store.subscribeToAssistantChange(event => {
 		deliveryRegistry.watchBranch(event.newBranchId)
 		ttsPostProcessor.watchBranch(event.newBranchId)
 	})
 
-	// Let delivery registry await TtsPostProcessor audio instead of racing
 	deliveryRegistry.setTtsPostProcessor(ttsPostProcessor)
 
-	// Wait for channel sockets to be fully connected before delivering
 	try {
 		await channelManager.waitForReady()
 	} catch (err) {
 		console.warn('[server] Channel readiness timeout:', err)
 	}
-	// Phase 1: Close stale runs — run_closed events trigger delivery
-	// via the subscription above (handles crash-during-agent-run)
 	recoverStaleRuns(eventStore, store)
-	// Phase 2: Re-deliver runs that closed before the crash but
-	// whose delivery never completed (handles crash-during-delivery)
 	deliveryRegistry
 		.recoverUndelivered(eventStore)
 		.catch((err: unknown) => {
@@ -386,9 +369,10 @@ export async function init(): Promise<ServerContext> {
 		blobSink,
 		sseState,
 		sttBaseUrl: env.STT_BASE_URL,
-		getAgentController: () => controllerFactory.get(),
-		invalidateAgentCache: () =>
-			controllerFactory.invalidate(),
+		getRuntimeHost: (branchId: string) =>
+			runtimeRegistry.get(branchId),
+		invalidateRuntimeCache: () =>
+			runtimeRegistry.invalidate(),
 		ensureBootstrap,
 		isBootstrapInjected: () =>
 			isBootstrapInjected(eventStore),
