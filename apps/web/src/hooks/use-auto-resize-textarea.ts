@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 
 interface UseAutoResizeTextareaProps {
 	minHeight: number
@@ -11,32 +11,29 @@ export function useAutoResizeTextarea({
 }: UseAutoResizeTextareaProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-	const adjustHeight = useCallback(
-		(reset?: boolean) => {
-			const textarea = textareaRef.current
-			if (!textarea) return
+	const adjustHeight = (reset?: boolean) => {
+		const textarea = textareaRef.current
+		if (!textarea) return
 
-			if (reset) {
-				textarea.style.height = `${minHeight}px`
-				return
-			}
-
-			// Temporarily shrink to get the right scrollHeight
+		if (reset) {
 			textarea.style.height = `${minHeight}px`
+			return
+		}
 
-			// Calculate new height
-			const newHeight = Math.max(
-				minHeight,
-				Math.min(
-					textarea.scrollHeight,
-					maxHeight ?? Number.POSITIVE_INFINITY
-				)
+		// Temporarily shrink to get the right scrollHeight
+		textarea.style.height = `${minHeight}px`
+
+		// Calculate new height
+		const newHeight = Math.max(
+			minHeight,
+			Math.min(
+				textarea.scrollHeight,
+				maxHeight ?? Number.POSITIVE_INFINITY
 			)
+		)
 
-			textarea.style.height = `${newHeight}px`
-		},
-		[minHeight, maxHeight]
-	)
+		textarea.style.height = `${newHeight}px`
+	}
 
 	useEffect(() => {
 		// Set initial height

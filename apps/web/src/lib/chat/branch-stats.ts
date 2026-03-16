@@ -8,6 +8,8 @@ export interface BranchStats {
 	lastPromptTokens: number
 }
 
+import { parsePayload } from '@/chat/event-transforms'
+
 export const EMPTY_STATS: BranchStats = {
 	model: null,
 	provider: null,
@@ -21,18 +23,6 @@ export const EMPTY_STATS: BranchStats = {
 interface StatsRow {
 	type: string
 	payload: string | Record<string, unknown>
-}
-
-function safeParsePayload(
-	row: StatsRow
-): Record<string, unknown> | null {
-	try {
-		return typeof row.payload === 'string'
-			? (JSON.parse(row.payload) as Record<string, unknown>)
-			: (row.payload as Record<string, unknown>)
-	} catch {
-		return null
-	}
 }
 
 export function computeStatsFromEvents(
@@ -54,8 +44,7 @@ export function computeStatsFromEvents(
 
 		// Count completed assistant_message events
 		if (row.type === 'assistant_message') {
-			const parsed = safeParsePayload(row)
-			if (!parsed) continue
+			const parsed = parsePayload(row.payload)
 			if (parsed.streaming === true) continue // skip in-flight
 			messageCount++
 			const msg = parsed.message as

@@ -11,7 +11,7 @@
 
 import { Elysia } from 'elysia'
 import { join } from 'node:path'
-import { mkdirSync, existsSync } from 'node:fs'
+import { mkdirSync, existsSync, unlinkSync } from 'node:fs'
 import { ulid } from 'fast-ulid'
 import type { EventStore } from '@ellie/db'
 import {
@@ -256,7 +256,6 @@ export function createSpeechRoutes(deps: SpeechRoutesDeps) {
 			} catch (err) {
 				// Best-effort cleanup of the orphaned blob
 				try {
-					const { unlinkSync } = await import('node:fs')
 					unlinkSync(blobPath)
 				} catch {
 					// ignore cleanup errors

@@ -74,8 +74,6 @@ export async function findDuplicates(
 				row.eventDate ??
 				row.occurredStart ??
 				row.occurredEnd ??
-				row.occurredStart ??
-				row.occurredEnd ??
 				row.mentionedAt ??
 				row.createdAt
 			if (Math.abs(anchor - candidateAnchor) <= windowMs)

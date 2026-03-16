@@ -8,10 +8,6 @@ import {
 } from 'fs'
 import { dirname } from 'path'
 import { constants } from 'fs'
-
-// Pre-allocated newline byte — avoids per-append allocation
-const NEWLINE = new Uint8Array([0x0a])
-
 /**
  * JSONL log file writer/reader.
  *
@@ -51,11 +47,12 @@ export class LogFile {
 	} {
 		const bytePos = this.currentSize
 
-		// Two writeSync calls are safe: writeSync blocks the event loop,
-		// so no other JS can interleave in this single-threaded process.
-		writeSync(this.fd, data)
-		writeSync(this.fd, NEWLINE)
-		this.currentSize += data.length + 1
+		// Single writeSync for atomicity — avoids partial records on crash
+		const combined = new Uint8Array(data.length + 1)
+		combined.set(data)
+		combined[data.length] = 0x0a
+		writeSync(this.fd, combined)
+		this.currentSize += combined.length
 
 		return { bytePos, length: data.length }
 	}

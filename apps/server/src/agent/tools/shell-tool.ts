@@ -70,9 +70,12 @@ export function createShellTool(
 					}
 				)
 
+				let timeoutId:
+					| ReturnType<typeof setTimeout>
+					| undefined
 				const timeoutPromise = new Promise<never>(
 					(_, reject) => {
-						setTimeout(() => {
+						timeoutId = setTimeout(() => {
 							proc.kill()
 							reject(
 								new Error(
@@ -83,10 +86,15 @@ export function createShellTool(
 					}
 				)
 
-				const exitCode = await Promise.race([
-					proc.exited,
-					timeoutPromise
-				])
+				let exitCode: number
+				try {
+					exitCode = await Promise.race([
+						proc.exited,
+						timeoutPromise
+					])
+				} finally {
+					clearTimeout(timeoutId)
+				}
 
 				const stdout = await new Response(
 					proc.stdout

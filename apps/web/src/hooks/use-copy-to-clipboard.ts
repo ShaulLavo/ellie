@@ -1,9 +1,4 @@
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState
-} from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface UseCopyToClipboardOptions {
 	timeout?: number
@@ -19,7 +14,7 @@ export function useCopyToClipboard(
 	const [isCopied, setIsCopied] = useState(false)
 	const timeoutRef = useRef<number>(0)
 
-	const copy = useCallback(async () => {
+	const copy = async () => {
 		if (
 			typeof window === 'undefined' ||
 			!navigator?.clipboard?.writeText
@@ -43,7 +38,7 @@ export function useCopyToClipboard(
 		} catch (error) {
 			onError?.(error as Error)
 		}
-	}, [getText, onCopy, onError, timeout, isCopied])
+	}
 
 	useEffect(
 		() => () => {

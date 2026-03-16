@@ -34,7 +34,7 @@ export function BranchInfo({
 	getBranchStats
 }: BranchInfoProps) {
 	const { data: stats, isLoading: loading } = useQuery({
-		queryKey: ['branch-stats'],
+		queryKey: ['branch-stats', getBranchStats],
 		queryFn: () => getBranchStats() as Promise<BranchData>,
 		enabled: open
 	})

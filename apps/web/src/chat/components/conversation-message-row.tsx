@@ -18,8 +18,7 @@ export function ConversationMessageRow({
 	toolResults?: Map<string, ToolResultPart>
 	consumedToolCallIds?: Set<string>
 }) {
-	const isUser =
-		message.sender === 'human' || message.sender === 'user'
+	const isUser = message.sender === 'user'
 	const visibleParts = getVisibleParts(
 		message.parts,
 		consumedToolCallIds

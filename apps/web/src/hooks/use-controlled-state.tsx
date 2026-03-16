@@ -23,13 +23,10 @@ export function useControlledState<
 		if (value !== undefined) setInternalState(value)
 	}, [value])
 
-	const setState = React.useCallback(
-		(next: T, ...args: Rest) => {
-			setInternalState(next)
-			onChange?.(next, ...args)
-		},
-		[onChange]
-	)
+	const setState = (next: T, ...args: Rest) => {
+		setInternalState(next)
+		onChange?.(next, ...args)
+	}
 
 	return [state, setState] as const
 }

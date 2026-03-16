@@ -31,7 +31,8 @@ interface DirectiveParseResult {
 }
 
 const MEDIA_RE = /^\s*media:\s*/i
-const AUDIO_TAG_RE = /\[\[audio_as_voice\]\]/gi
+const AUDIO_TAG_TEST_RE = /\[\[audio_as_voice\]\]/i
+const AUDIO_TAG_REPLACE_RE = /\[\[audio_as_voice\]\]/gi
 const FENCE_RE = /^\s*```/
 
 /**
@@ -82,9 +83,11 @@ export function parseReplyDirectives(
 		}
 
 		// Check for [[audio_as_voice]] tag
-		if (AUDIO_TAG_RE.test(line)) {
+		if (AUDIO_TAG_TEST_RE.test(line)) {
 			audioAsVoice = true
-			const cleaned = line.replace(AUDIO_TAG_RE, '').trim()
+			const cleaned = line
+				.replace(AUDIO_TAG_REPLACE_RE, '')
+				.trim()
 			if (cleaned) {
 				outputLines.push(cleaned)
 			}

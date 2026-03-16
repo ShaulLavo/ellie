@@ -831,6 +831,7 @@ interface DayColumnProps {
 	slotClassName?: string
 }
 
+/* eslint-disable react-hooks/refs -- ref access during render needed for ghost position calculation; will be fixed when DayColumn is refactored into its own file with a proper hook */
 function DayColumn({
 	dayIndex,
 	colIndex,
@@ -922,7 +923,6 @@ function DayColumn({
 			top: `${((newStart - startOffset) / totalMinutes) * 100}%`,
 			height: `${(duration / totalMinutes) * 100}%`
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		context?.activeId,
 		context?.deltaY,
@@ -1051,6 +1051,7 @@ function DayColumn({
 		</div>
 	)
 }
+/* eslint-enable react-hooks/refs */
 
 interface DraggableTimeSpanProps {
 	span: TimeSpan

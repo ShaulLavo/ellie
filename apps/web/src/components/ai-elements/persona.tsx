@@ -231,7 +231,7 @@ export const Persona: FC<PersonaProps> = memo(
 			'asleep'
 		)
 
-		/* eslint-disable react-hooks/immutability -- Rive state machine inputs are mutable by design */
+		/* eslint-disable react-compiler/react-compiler, react-hooks/immutability -- Rive state machine inputs are mutable by design */
 		useEffect(() => {
 			if (listeningInput)
 				listeningInput.value = state === 'listening'
@@ -248,7 +248,7 @@ export const Persona: FC<PersonaProps> = memo(
 			speakingInput,
 			asleepInput
 		])
-		/* eslint-enable react-hooks/immutability */
+		/* eslint-enable react-compiler/react-compiler, react-hooks/immutability */
 
 		const Component = source.hasModel
 			? PersonaWithModel

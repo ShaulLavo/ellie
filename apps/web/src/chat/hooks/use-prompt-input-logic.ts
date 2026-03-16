@@ -25,9 +25,9 @@ export function usePromptInputLogic(
 	const handleAudioRecorded = async (audioBlob: Blob) => {
 		try {
 			const result = await transcribeAudio(audioBlob)
-			if (speechRefRef) {
+			// eslint-disable-next-line react-compiler/react-compiler -- writing to a passed-in ref is intentional
+			if (speechRefRef)
 				speechRefRef.current = result.speechRef
-			}
 			return result.text
 		} catch (err) {
 			console.error(

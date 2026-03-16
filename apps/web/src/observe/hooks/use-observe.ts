@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTraceList } from './use-trace-list'
 import { useTraceEvents } from './use-trace-events'
 
@@ -7,32 +7,32 @@ export function useObserve() {
 		useTraceList()
 	const [index, setIndex] = useState(-1)
 
-	// Start at the last trace once loaded
-	useEffect(() => {
-		if (traces && traces.length > 0 && index === -1) {
-			setIndex(traces.length - 1)
-		}
-	}, [traces, index])
+	// Derive effective index — no effect needed
+	const effectiveIndex =
+		index === -1 && traces && traces.length > 0
+			? traces.length - 1
+			: index
 
-	const currentTrace = traces?.[index]
+	const currentTrace = traces?.[effectiveIndex]
 	const { data: events, isLoading: eventsLoading } =
 		useTraceEvents(currentTrace?.traceId)
 
-	const hasPrev = index > 0
-	const hasNext = !!traces && index < traces.length - 1
+	const hasPrev = effectiveIndex > 0
+	const hasNext =
+		!!traces && effectiveIndex < traces.length - 1
 
 	const prev = () => {
-		if (hasPrev) setIndex(i => i - 1)
+		if (hasPrev) setIndex(effectiveIndex - 1)
 	}
 	const next = () => {
-		if (hasNext) setIndex(i => i + 1)
+		if (hasNext) setIndex(effectiveIndex + 1)
 	}
 
 	return {
 		traces,
 		currentTrace,
 		events,
-		index,
+		index: effectiveIndex,
 		total: traces?.length ?? 0,
 		hasPrev,
 		hasNext,

@@ -1,4 +1,3 @@
-import { memo } from 'react'
 import type {
 	TimelineItem,
 	ToolResultPart
@@ -12,7 +11,7 @@ function getTimelineItemKey(item: TimelineItem): string {
 	return item.message.id
 }
 
-function TimelineContentImpl({
+export function TimelineContent({
 	timeline,
 	toolResults,
 	consumedToolCallIds,
@@ -47,28 +46,3 @@ function TimelineContentImpl({
 		</>
 	)
 }
-
-export const TimelineContent = memo(
-	TimelineContentImpl,
-	(prev, next) => {
-		const hasMessages =
-			prev.timeline.length > 0 && next.timeline.length > 0
-
-		if (!hasMessages) {
-			return (
-				prev.timeline === next.timeline &&
-				prev.toolResults === next.toolResults &&
-				prev.consumedToolCallIds ===
-					next.consumedToolCallIds &&
-				prev.needsBootstrap === next.needsBootstrap &&
-				prev.connectionState === next.connectionState
-			)
-		}
-
-		return (
-			prev.timeline === next.timeline &&
-			prev.toolResults === next.toolResults &&
-			prev.consumedToolCallIds === next.consumedToolCallIds
-		)
-	}
-)

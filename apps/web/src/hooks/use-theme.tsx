@@ -1,9 +1,7 @@
 import {
 	createContext,
-	useCallback,
 	useContext,
 	useEffect,
-	useMemo,
 	useState,
 	type ReactNode
 } from 'react'
@@ -82,18 +80,15 @@ export function ThemeProvider({
 	const theme =
 		preference === 'system' ? systemTheme : preference
 
-	const setPreference = useCallback(
-		(next: ThemePreference) => {
-			setPreferenceState(next)
-			if (next === 'system') {
-				localStorage.removeItem(STORAGE_KEY)
-			} else {
-				localStorage.setItem(STORAGE_KEY, next)
-			}
-			applyTheme(resolveTheme(next))
-		},
-		[]
-	)
+	const setPreference = (next: ThemePreference) => {
+		setPreferenceState(next)
+		if (next === 'system') {
+			localStorage.removeItem(STORAGE_KEY)
+		} else {
+			localStorage.setItem(STORAGE_KEY, next)
+		}
+		applyTheme(resolveTheme(next))
+	}
 
 	// Listen for OS-level theme changes
 	useEffect(() => {
@@ -112,10 +107,7 @@ export function ThemeProvider({
 		applyTheme(theme)
 	}, [theme])
 
-	const value = useMemo(
-		() => ({ theme, preference, setPreference }),
-		[theme, preference, setPreference]
-	)
+	const value = { theme, preference, setPreference }
 
 	return (
 		<ThemeContext.Provider value={value}>
